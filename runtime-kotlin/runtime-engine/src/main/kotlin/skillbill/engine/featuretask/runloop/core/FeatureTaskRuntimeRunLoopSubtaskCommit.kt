@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.durablePhaseAttemptCount
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -79,6 +80,7 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
                 ?: FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID,
             branch = branch,
             phaseId = phaseId,
+            attemptCount = durablePhaseAttemptCount(state, phaseId),
             loopId = null,
             generation = FeatureTaskRuntimeRunLoopCheckpoint.checkpointGeneration(state, null),
             parentSha = ledger.commitSha,

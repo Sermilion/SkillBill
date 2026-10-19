@@ -45,6 +45,15 @@ internal class GoalRunnerControlCoordinator(
       unitOfWork.goalRunnerControls.persistControlState(parentWorkflowId, state)
     }
 
+  fun updateControlState(
+    parentWorkflowId: String,
+    update: (GoalRunnerControlState) -> GoalRunnerControlState,
+  ): GoalRunnerControlState =
+    database.transaction { unitOfWork ->
+      val current = unitOfWork.goalRunnerControls.controlState(parentWorkflowId)
+      unitOfWork.goalRunnerControls.persistControlState(parentWorkflowId, update(current))
+    }
+
   fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState =
     database.transaction { unitOfWork ->
       unitOfWork.goalRunnerControls.clearRunnerInterruptedPause(parentWorkflowId)
@@ -57,13 +66,15 @@ internal class GoalRunnerControlCoordinator(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String?,
+    expectedOwnerGeneration: Long?,
     beforeMutation: (UnitOfWork) -> Unit = {},
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (unitOfWork.goalRunnerControls.controlState(
-          parentWorkflowId,
-        ).executionLease?.ownerToken != expectedOwnerToken
-      ) {
+      val currentLease = unitOfWork.goalRunnerControls.controlState(parentWorkflowId).executionLease
+      if (currentLease?.ownerToken != expectedOwnerToken) {
+        return@transaction false
+      }
+      if (expectedOwnerGeneration != null && currentLease?.generation != expectedOwnerGeneration) {
         return@transaction false
       }
       if (unitOfWork.workflowStates.get(

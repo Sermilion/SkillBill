@@ -77,6 +77,7 @@ data class IdeStatusWorkPolicyFacts(
   val pauseRequested: Boolean = false,
   val observedAt: Instant? = null,
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  val successfulGoalCompletion: Boolean = false,
 )
 
 enum class IdeStatusLiveSection { NEEDS_YOU, GOALS, PHASES }
@@ -200,14 +201,20 @@ object IdeStatusPolicy {
     val liveSection = liveSection(facts, goal)
     val displayGroup = displayGroup(facts, goal)
     val recent = windowed(facts, RECENT_PHASE_WINDOW, displayGroup == IdeStatusDisplayGroup.PHASES)
-    val done = windowed(facts, DONE_WINDOW, facts.lifecycle == IdeStatusLifecycleState.TERMINAL)
+    val done =
+      windowed(
+        facts,
+        DONE_WINDOW,
+        facts.lifecycle == IdeStatusLifecycleState.TERMINAL && facts.successfulGoalCompletion,
+      )
     return IdeStatusWorkPolicy(
       liveSection = liveSection,
       controlEligible = controlEligible,
       pauseEligible = controlEligible && !facts.pauseRequested,
       requiresAttention =
         facts.lifecycle in setOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED) ||
-          facts.awaitingOperatorDecision,
+          facts.awaitingOperatorDecision ||
+          (goal && facts.lifecycle == IdeStatusLifecycleState.IDLE && facts.finishedAt == null),
       displayGroup = displayGroup,
       displayPriority = displayPriority(facts),
       running = liveSection == IdeStatusLiveSection.GOALS || liveSection == IdeStatusLiveSection.PHASES,
@@ -245,6 +252,7 @@ object IdeStatusPolicy {
         IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED, IdeStatusLifecycleState.PAUSED ->
           IdeStatusLiveSection.NEEDS_YOU
         IdeStatusLifecycleState.ACTIVE -> if (goal) IdeStatusLiveSection.GOALS else IdeStatusLiveSection.PHASES
+        IdeStatusLifecycleState.IDLE -> IdeStatusLiveSection.NEEDS_YOU.takeIf { goal }
         else -> null
       }
     }

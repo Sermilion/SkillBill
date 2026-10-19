@@ -120,9 +120,11 @@ not discover an executable or invoke work commands. Shared status projection
 supplies lifecycle, identity, planning, and ownership facts to the desktop. The
 current Room board and detail paths then call `IdeStatusService` through a
 separate JDBC read. They do not assemble both sets of facts in one Room snapshot.
-Shared control admission compares the repository, goal, execution, revision, and
-lease fence in one write transaction. An accepted request does not claim
-completion.
+Shared Stop and Pause admission compares the database identity, repository, goal,
+execution identity, and lease fence in one write transaction. Progress revisions,
+timestamps, and lease heartbeats may advance after the user reads the goal.
+Changing the database, execution, or runner owner still rejects the request.
+An accepted request does not claim completion.
 
 Needs you, live goals, live phases, History, and recent completions have separate
 desktop queries. Search runs in SQL before the ten-row result limit. The desktop

@@ -259,6 +259,7 @@ class FeatureTaskRuntimeWorkflowPersistence
       record: WorkflowStateSnapshot,
       patch: Map<String, Any?>,
       advance: WorkflowRowAdvance = WorkflowRowAdvance.keepFrom(record),
+      acceptedSnapshotMutation: Boolean = false,
     ) {
       if (SERIAL_REPAIR_ARTIFACT_FAMILIES.any { family -> family.label() in patch }) {
         throw invalidWorkflowStateSchemaError(
@@ -284,11 +285,16 @@ class FeatureTaskRuntimeWorkflowPersistence
               ),
             artifactsPatch = WorkflowArtifactPatch.from(patch),
             sessionId = record.sessionId.orEmpty(),
+            acceptedSnapshotMutation = acceptedSnapshotMutation,
           ),
         )
       workflowSnapshotValidator.validate(updated, updated.workflowName)
       validateSerialArtifacts(updated.artifacts)
-      workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+      if (acceptedSnapshotMutation) {
+        workflowStates.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, updated)
+      } else {
+        workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+      }
     }
 
     internal fun persistAcquiredRepairAdoption(

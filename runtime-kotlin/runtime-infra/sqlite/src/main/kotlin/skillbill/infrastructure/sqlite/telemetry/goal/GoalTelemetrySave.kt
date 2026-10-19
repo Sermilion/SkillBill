@@ -263,7 +263,10 @@ internal fun saveGoalIssueFinished(
         WHEN COALESCE(status, '') != ? THEN 0
         ELSE state_entered_at_estimated
       END
-    WHERE parent_workflow_id = ? AND issue_key = ? AND finished_event_emitted_at IS NULL
+    WHERE parent_workflow_id = ?
+      AND issue_key = ?
+      AND finished_at IS NULL
+      AND COALESCE(status, '') NOT IN ('completed', 'completed_no_change', 'failed', 'abandoned')
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
@@ -285,7 +288,7 @@ internal fun saveGoalIssueFinished(
     val updated = statement.executeUpdate() > 0
     return GoalIssueFinishedSaveOutcome(
       persisted = updated,
-      suppressionReason = if (updated) null else "issue terminal event was already emitted",
+      suppressionReason = if (updated) null else "issue finish already recorded",
     )
   }
 }

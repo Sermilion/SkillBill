@@ -8,7 +8,10 @@ internal object AuditPlanFixPromptSections {
       "from the latest persisted audit. Inspect the current source " +
       "and original feature plan before proposing changes. Do not edit files, spawn subagents, compile, " +
       "build, run tests, format, lint, or run repository checks. This step plans repairs; the runtime " +
-      "saves the plan before audit_implement_fix executes it. Split independent gaps under one " +
+      "saves the plan before audit_implement_fix executes it. The latest named gap is an example of a " +
+      "remaining defect class, not the whole plan. Inspect current source for sibling production paths " +
+      "of the same forbidden pattern under this criterion and plan every remaining sibling in this step. " +
+      "Split independent gaps under one " +
       "criterion into separate plan items. For each item, identify the missing behavior, actual " +
       "consumer and owning production paths, exact changes and their execution order, dependencies " +
       "on other items, and source evidence that will prove closure. Preserve completed work and " +
@@ -27,7 +30,8 @@ internal object AuditPlanFixPromptSections {
           (
             currentCriterion?.let {
               "\n\nRuntime-selected authored criterion and retained budget:\n$it\nKeep this plan " +
-                "focused on this criterion."
+                "on this criterion. The latest gap is an example of its remaining defect class; " +
+                "plan every remaining sibling of that class in this step."
             } ?: (
               "\n\nThe runtime did not provide a selected authored criterion. " +
                 "Do not plan a broad repair; report the missing runtime context."
@@ -37,7 +41,8 @@ internal object AuditPlanFixPromptSections {
         "Write the repair plan as prose in execution order. Explain each reported production gap, " +
           "the production paths involved, the changes needed, and any dependencies between fixes. " +
           "Describe how the changes close each gap. Account for completed edits in the current " +
-          "tree. Shared prerequisite edits are allowed, but other criteria need their own audit. " +
+          "tree. Cover every remaining sibling of the selected criterion's defect class, not only " +
+          "the last named gap. Shared prerequisite edits are allowed, but other criteria need their own audit. " +
           "This value is the persisted plan delivered to audit_implement_fix; no repair happens " +
           "in this step.",
     )

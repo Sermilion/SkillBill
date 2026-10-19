@@ -21,6 +21,7 @@ data class WorkflowUpdateInput(
   val sessionId: String,
   val replaceArtifacts: Boolean = false,
   val terminalInstant: Instant? = null,
+  val acceptedSnapshotMutation: Boolean = false,
 )
 
 data class WorkflowStateSnapshot(

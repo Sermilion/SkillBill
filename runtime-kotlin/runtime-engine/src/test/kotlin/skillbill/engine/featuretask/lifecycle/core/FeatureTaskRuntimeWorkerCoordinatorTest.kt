@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.persistence.UnitOfWork
@@ -42,6 +43,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         FakeWorkerSupervisor(FeatureTaskRuntimeProcessInspection.NotRunning),
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -64,6 +66,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         FakeWorkerSupervisor(FeatureTaskRuntimeProcessInspection.NotRunning),
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -87,6 +90,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         supervisor,
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ -> Unit }
@@ -101,7 +105,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
     repository.seedWorkerOwnership(ownership())
     val supervisor =
       FakeWorkerSupervisor(
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process."),
+        FeatureTaskRuntimeProcessInspection.PidReused,
       )
     execution.seed(repository, WORKFLOW_ID)
     val coordinator =
@@ -110,6 +114,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         supervisor,
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     val failure =
@@ -127,7 +132,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
     repository.seedWorkerOwnership(ownership(expiresAt = "2000-01-01T00:00:30Z"))
     val supervisor =
       FakeWorkerSupervisor(
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process."),
+        FeatureTaskRuntimeProcessInspection.PidReused,
       )
     execution.seed(repository, WORKFLOW_ID)
     val coordinator =
@@ -136,6 +141,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         supervisor,
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -163,6 +169,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         supervisor,
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -180,7 +187,15 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
     val repository = InMemoryRuntimeWorkflowRepository()
     val stale = ownership()
     repository.seedWorkerOwnership(stale)
-    assertTrue(repository.reserveFeatureTaskRuntimeWorkerTakeover(WORKFLOW_ID, stale.ownerToken, stale.generation))
+    repository.beforeReserveTakeover = { workflowId ->
+      val current = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(workflowId))
+      repository.seedWorkerOwnership(
+        current.copy(
+          ownerToken = "other-recovery-owner-0001",
+          leaseState = FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED,
+        ),
+      )
+    }
     execution.seed(repository, WORKFLOW_ID)
     val coordinator =
       FeatureTaskRuntimeWorkerCoordinator(
@@ -188,6 +203,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         FakeWorkerSupervisor(FeatureTaskRuntimeProcessInspection.NotRunning),
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     val failure =
@@ -210,6 +226,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         supervisor,
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -236,6 +253,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         supervisor,
         testHarnessClock,
         execution.admission,
+        NoopRuntimeDiagnostics,
       )
 
     val failure =

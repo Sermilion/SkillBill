@@ -865,7 +865,7 @@ class IdeStatusServiceBranchScopingTest {
         goalOnlyDatabase(completionRecorded = true),
         manifestStore =
           StubGoalManifestStore(
-            completedGoalManifestState(fixture, identity),
+            completedGoalManifestState(fixture, identity, goalCompletedAt = ideStatusObservedAt.toString()),
             lease = liveLease(),
           ),
       )
@@ -941,6 +941,7 @@ class IdeStatusServiceBranchScopingTest {
   private fun completedGoalManifestState(
     fixture: Path,
     identity: String,
+    goalCompletedAt: String? = null,
   ): GoalRunnerManifestState {
     val base = goalManifestState(fixture, identity, childWorkflowId = "w-child")
     return base.copy(
@@ -949,6 +950,7 @@ class IdeStatusServiceBranchScopingTest {
           currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 0, action = "complete"),
           subtasks = base.manifest.subtasks.map { it.copy(status = "complete", lastResumableStep = null) },
         ),
+      controlState = base.controlState.copy(goalCompletedAt = goalCompletedAt),
     )
   }
 

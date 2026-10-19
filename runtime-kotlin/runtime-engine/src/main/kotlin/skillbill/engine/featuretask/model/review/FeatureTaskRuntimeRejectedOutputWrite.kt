@@ -8,4 +8,6 @@ internal sealed class FeatureTaskRuntimeRejectedOutputWrite {
   data class Degraded(
     val failureClass: FeatureTaskRuntimeDiagnosticFailureClass,
   ) : FeatureTaskRuntimeRejectedOutputWrite()
+
+  data object OwnershipRejected : FeatureTaskRuntimeRejectedOutputWrite()
 }

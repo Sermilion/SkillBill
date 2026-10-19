@@ -83,7 +83,7 @@ internal class SQLiteUnitOfWork(
   override val databaseFileObservation: DatabaseFileObservation? = null,
 ) : UnitOfWork {
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
-    SqliteFeatureTaskPhaseSettlementStore(connection)
+    SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
@@ -99,7 +99,7 @@ internal class SQLiteUnitOfWork(
   override val telemetryOutbox: TelemetryOutboxRepository = TelemetryOutboxStore(connection, runtimeVersion)
   override val workflowStates: WorkflowStateRepository =
     WorkflowStateStore(connection, clock, workflowSnapshotValidator, diagnostics, transactionActive)
-  override val workList: WorkListRepository = SQLiteWorkListRepository(connection)
+  override val workList: WorkListRepository = SQLiteWorkListRepository(connection, diagnostics)
   override val goalPlanningPreparations: GoalPlanningPreparationRepository =
     GoalPlanningPreparationStore(connection)
   override val goalRunnerControls: GoalRunnerControlRepository =

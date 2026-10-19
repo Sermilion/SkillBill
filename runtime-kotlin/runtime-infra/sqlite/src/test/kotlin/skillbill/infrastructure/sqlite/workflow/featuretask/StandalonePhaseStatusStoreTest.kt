@@ -245,6 +245,24 @@ class StandalonePhaseStatusStoreTest {
   }
 
   @Test
+  fun `a monitor blocked before creating a worktree retains its exact target after reopening the store`() {
+    val directory = Files.createTempDirectory("standalone-monitor-admission-failure")
+    val started = Instant.parse("2026-10-18T08:41:00Z")
+    val registration =
+      targetRegistration("blocked", 7, started, started.plusSeconds(3600)).copy(
+        lifecycleState = "blocked",
+        monitorTarget = targetOf(7).copy(worktreePath = null),
+      )
+    sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1")).transaction {
+      it.standalonePhaseStatuses.register(registration)
+    }
+    val reopened = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val saved = reopened.read { it.standalonePhaseStatuses.readByInvocation(registration.invocationId) }
+    assertEquals(registration.monitorTarget, saved?.monitorTarget)
+    assertEquals("blocked", saved?.lifecycleState)
+  }
+
+  @Test
   fun `monitors of different pull requests sharing a branch stay active and are found from any branch`() {
     val directory = Files.createTempDirectory("standalone-monitor-targets")
     val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))

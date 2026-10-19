@@ -39,17 +39,18 @@ internal fun candidateQuery(section: WorkSection, cutoff: String, through: Strin
     HistoryFilter.GOALS -> "family = 'goal'"
     HistoryFilter.PHASES -> "family <> 'goal'"
   }
-  val goalPhaseFilter = if (section in setOf(WorkSection.PHASES, WorkSection.NEEDS_YOU, WorkSection.GOALS)) """
+  val goalPhaseFilter = """
         AND NOT EXISTS (
           SELECT 1 FROM standalone_phase_status phase JOIN goals goal ON goal.repository = phase.repository_identity
           WHERE candidate.family IN ('phase', 'goal') AND phase.invocation_id = candidate.id
+            AND phase.launch_scope = '${IdeStatusLaunchScope.GOAL.wireValue}'
             AND phase.phase_id IN ('${FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN}', '${FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS}')
             AND (goal.finished_at IS NULL OR julianday(candidate.started_at) <= julianday(goal.finished_at))
             AND goal.repository <> '' AND goal.repository = candidate.repository
             AND TRIM(candidate.issue_key) <> ''
             AND UPPER(TRIM(goal.issue_key)) = UPPER(TRIM(candidate.issue_key))
         )
-  """.trimIndent() else ""
+  """.trimIndent()
   val superseded = """
 EXISTS (
         SELECT 1 FROM standalone_phase_status newer

@@ -2,8 +2,11 @@ package skillbill.infrastructure.sqlite.worklist
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.persistence.DesktopReadSchema
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkBoardCandidateQuery
@@ -14,6 +17,8 @@ import skillbill.ports.work.model.WorkGoalParentCandidate
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.work.model.WorkListListRead
+import skillbill.ports.work.model.WorkListRejectedRow
 import skillbill.ports.work.model.WorkStatusCandidatePage
 import skillbill.ports.work.model.WorkStatusCandidateQuery
 import skillbill.ports.work.model.WorkStoreObservation
@@ -28,6 +33,7 @@ import java.time.Instant
 
 internal class SQLiteWorkListRepository(
   private val connection: Connection,
+  private val diagnostics: RuntimeDiagnostics,
 ) : WorkListRepository {
   override fun boardCandidates(query: WorkBoardCandidateQuery): List<WorkBoardCandidateRow> =
     readWorkBoardCandidates(connection, query)
@@ -93,18 +99,43 @@ internal class SQLiteWorkListRepository(
   override fun statusCandidates(query: WorkStatusCandidateQuery): WorkStatusCandidatePage =
     readWorkStatusCandidates(connection, query)
 
-  override fun list(limit: Int?): List<WorkItem> {
+  override fun list(limit: Int?): WorkListListRead {
     require(limit == null || limit > 0) { "Work-list limit must be positive." }
-    return connection.prepareStatement(query()).use { statement ->
-      statement.bindAll(limit ?: -1)
+    return connection.prepareStatement(listQuery()).use { statement ->
       statement.executeQuery().use { resultSet ->
-        buildList<WorkItem> {
-          while (resultSet.next()) {
-            add(resultSet.toWorkItem())
+        val items = mutableListOf<WorkItem>()
+        val rejected = mutableListOf<WorkListRejectedRow>()
+        var diagnosticsEmitted = 0
+        var diagnosticsTruncated = false
+        while (resultSet.next()) {
+          val parsed = resultSet.tryWorkItemOrReject()
+          if (parsed.item != null) {
+            items += parsed.item
+            if (limit != null && items.size >= limit) break
+          } else if (parsed.rejected != null) {
+            rejected += parsed.rejected
+            if (diagnosticsEmitted < MAX_LIST_ROW_DIAGNOSTICS) {
+              emitListRowSkipDiagnostic(parsed.rejected)
+              diagnosticsEmitted++
+            } else if (!diagnosticsTruncated) {
+              diagnostics.warning(
+                "seam=work_list value_expected=readable_work_list_row value_used=truncated " +
+                  "skipped_diagnostics_cap=$MAX_LIST_ROW_DIAGNOSTICS",
+              )
+              diagnosticsTruncated = true
+            }
           }
         }
+        WorkListListRead(items, rejected)
       }
     }
+  }
+
+  private fun emitListRowSkipDiagnostic(rejected: WorkListRejectedRow) {
+    diagnostics.warning(
+      "seam=work_list value_expected=readable_work_list_row value_used=skipped " +
+        "workflow_id=${rejected.workflowId} error=${rejected.detail}",
+    )
   }
 
   override fun findByWorkflowId(workflowId: String): List<WorkItem> =
@@ -156,14 +187,13 @@ internal class SQLiteWorkListRepository(
     readWorkGoalChildRepositoryIdentity(connection, parentWorkflowId)
 }
 
-private fun query(predicate: String = ""): String =
+private fun listQuery(predicate: String = ""): String =
   """
   SELECT issue_key, workflow_kind, workflow_id, started_at, current_state,
          state_entered_at, state_entered_at_estimated
   FROM ($WORK_ITEM_UNION_SQL)
   $predicate
   ORDER BY unixepoch(started_at) DESC, ${fractionalSecondsSql("started_at")} DESC, workflow_id DESC
-  LIMIT ?
   """.trimIndent()
 
 internal const val WORK_ITEM_UNION_SQL: String =
@@ -200,6 +230,8 @@ internal const val WORK_ITEM_UNION_SQL: String =
     FROM goal_issue_progress
   """
 
+private fun query(predicate: String = ""): String = "${listQuery(predicate)}\nLIMIT ?"
+
 internal fun fractionalSecondsSql(columnName: String): String =
   """
   CASE
@@ -219,6 +251,23 @@ internal fun fractionalSecondsSql(columnName: String): String =
     ) AS REAL)
   END
   """.trimIndent()
+
+private data class ParsedWorkListRow(
+  val item: WorkItem?,
+  val rejected: WorkListRejectedRow?,
+)
+
+private fun ResultSet.tryWorkItemOrReject(): ParsedWorkListRow =
+  try {
+    ParsedWorkListRow(toWorkItem(), null)
+  } catch (error: SkillBillRuntimeException) {
+    if (error.code == WorkflowFailureCode.INVALID_WORK_LIST_ROW) {
+      val workflowId = getString(SharedPayloadKeys.WORKFLOW_ID)?.trim()?.takeIf { it.isNotEmpty() } ?: "<unknown>"
+      ParsedWorkListRow(null, WorkListRejectedRow(workflowId, error.message.orEmpty()))
+    } else {
+      throw error
+    }
+  }
 
 internal fun ResultSet.toWorkItem(): WorkItem {
   val workflowId = required("workflow_id")
@@ -288,6 +337,7 @@ private fun invalid(
 }
 
 private const val MAX_EXACT_WORKFLOW_MATCHES = 3
+private const val MAX_LIST_ROW_DIAGNOSTICS = 32
 
 private val OBSERVED_TOPICS = DesktopReadSchema.TOPICS.joinToString { topic -> "'$topic'" }
 

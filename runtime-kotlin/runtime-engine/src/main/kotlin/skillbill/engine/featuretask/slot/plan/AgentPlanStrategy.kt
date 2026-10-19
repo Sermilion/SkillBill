@@ -165,7 +165,13 @@ class AgentPlanStrategy : PhaseStrategy() {
         Add one spec_subtask_<id>_<slug>.md per subtask (one or more, in ascending dependency order) and
         decomposition-manifest.yaml whose parent spec path names that spec.md and whose
         subtasks list those files in order, each depending only on earlier subtasks. The parent and every subtask
-        spec need an Acceptance Criteria list as the Spec Format Contract requires. Do not write an Implementation
+        spec need an Acceptance Criteria list as the Spec Format Contract requires. Each spec you author must
+        have one to five criteria; preserve an operator-authored parent unchanged even if it exceeds five.
+        Split a subtask needing more than five criteria into the fewest dependency-ordered specs needed
+        to keep each at five or fewer. Balance the counts so they differ by at most one: six criteria
+        become two specs with three each; eleven become three specs with four, four, and three.
+        Cover every upstream requirement without combining unrelated outcomes or hiding criteria in nested lists.
+        Do not write an Implementation
         Details section: the runtime plans each subtask in the plan_subtasks step that follows this one.
         Write nothing outside that directory and never write through a symlink. When resuming, this workflow's
         previously authored manifest and subtask specs may already exist. Inspect them, keep valid content, and

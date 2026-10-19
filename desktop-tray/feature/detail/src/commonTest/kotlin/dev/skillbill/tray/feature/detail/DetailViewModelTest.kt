@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.domain.model.ControlConfirmation
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.ExecutionScope
+import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.RunOptions
@@ -246,6 +247,36 @@ class DetailViewModelTest {
 
     assertEquals(listOf<DetailEffect>(DetailEffect.SelectSuccessor(identity, successor.identity)), vm.effects.take(1).toList())
     assertEquals(ControlState.Idle, vm.state.value.control)
+  }
+
+  @Test
+  fun `a monitor refused during admission replaces the canceled selection without waiting for the launch timeout`() = runTest(dispatcher) {
+    clock.current = fixtureInstant.plus(10.seconds)
+    val canceled = controllable().copy(
+      scope = ExecutionScope.STANDALONE_PHASE,
+      phaseId = "monitor",
+      lifecycle = Lifecycle.CANCELED,
+      startedAt = fixtureInstant,
+    )
+    val vm = viewModel(detail(canceled).copy(runOptions = launchOptions()))
+    vm.onAction(DetailAction.Launch("codex"))
+    runCurrent()
+    emitBoards()
+    runCurrent()
+
+    val blocked = canceled.copy(
+      identity = WorkIdentity("blocked-monitor", identity.repositoryIdentity),
+      lifecycle = Lifecycle.BLOCKED,
+      liveSection = WorkSection.NEEDS_YOU,
+      startedAt = fixtureInstant.plus(11.seconds),
+      summary = "The previous monitor has unpublished commits.",
+    )
+    emitBoards()
+    boards.emit(WorkSection.NEEDS_YOU, Outcome.Value(board(listOf(blocked))))
+    runCurrent()
+
+    assertEquals(ControlState.Idle, vm.state.value.control)
+    assertEquals(listOf<DetailEffect>(DetailEffect.SelectSuccessor(identity, blocked.identity)), vm.effects.take(1).toList())
   }
 
   @Test

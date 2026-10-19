@@ -56,7 +56,18 @@ interface OwnerRegistration : AutoCloseable {
 enum class ControlAction { PAUSE, STOP, CANCEL, LAUNCH }
 
 /** Why the runtime refused a control request, reduced to what the user-facing message distinguishes. */
-enum class ControlRefusal { AGENT_REQUIRED, BRANCH_CHANGED, BRANCH_UNAVAILABLE, TERMINATION_INCOMPLETE, OWNERSHIP_MISMATCH, OTHER }
+enum class ControlRefusal {
+  AGENT_REQUIRED,
+  BRANCH_CHANGED,
+  BRANCH_UNAVAILABLE,
+  TERMINATION_INCOMPLETE,
+  OWNERSHIP_MISMATCH,
+  FOREIGN_HOST,
+  PID_REUSED,
+  UNINSPECTABLE,
+  IDENTITY_MISMATCH,
+  OTHER,
+}
 
 sealed interface ControlResult {
   /** The request was admitted; it makes no claim about the controlled process. */

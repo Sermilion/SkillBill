@@ -86,7 +86,10 @@ internal fun StandaloneMonitorCleanup?.columnValues(): List<String?> =
 internal fun ResultSet.readMonitorTarget(sourceLabel: String): StandaloneMonitorTarget? {
   val values = MONITOR_TARGET_COLUMNS.map(::getString)
   if (values.all { it == null }) return null
-  val missing = MONITOR_TARGET_COLUMNS.filterIndexed { index, _ -> values[index].isNullOrBlank() }
+  val missing =
+    MONITOR_TARGET_COLUMNS.filterIndexed { index, column ->
+      column != MONITOR_WORKTREE_PATH_COLUMN && values[index].isNullOrBlank()
+    }
   if (missing.isNotEmpty()) {
     throw invalidIdeStatusSchemaError(
       sourceLabel,
@@ -102,7 +105,7 @@ internal fun ResultSet.readMonitorTarget(sourceLabel: String): StandaloneMonitor
       headRepository = column(MONITOR_HEAD_REPOSITORY_COLUMN),
       headRef = column(MONITOR_HEAD_REF_COLUMN),
       callerRoot = column(MONITOR_CALLER_ROOT_COLUMN),
-      worktreePath = column(MONITOR_WORKTREE_PATH_COLUMN),
+      worktreePath = getString(MONITOR_WORKTREE_PATH_COLUMN),
     )
   } catch (failure: IllegalArgumentException) {
     throw invalidIdeStatusSchemaError(

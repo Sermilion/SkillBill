@@ -6,6 +6,7 @@ import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.ports.work.model.WorkGoalParentCandidate
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
+import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.work.model.WorkStoreObservation
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 
@@ -40,7 +41,7 @@ interface WorkListRepository : WorkCandidateRepository {
     after: WorkGoalDependencyAnchor? = null,
   ): WorkGoalDependencyPage
 
-  fun list(limit: Int? = null): List<WorkItem>
+  fun list(limit: Int? = null): WorkListListRead
 
   fun findByWorkflowId(workflowId: String): List<WorkItem>
 

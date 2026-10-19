@@ -208,9 +208,23 @@ internal class MonitorOwnedCleanup(
     primaryRoot: Path,
     record: MonitorOwnershipRecord,
   ): String? {
-    val path = record.executionPath?.takeIf { Files.exists(Path.of(it), LinkOption.NOFOLLOW_LINKS) } ?: return null
-    val removal = monitorGit(primaryRoot, "worktree", "remove", path)
-    return if (removal.ok) null else "git worktree remove failed: ${removal.output}"
+    val path = record.executionPath ?: return null
+    val listing = monitorGit(primaryRoot, "worktree", "list", "--porcelain", "-z")
+    if (!listing.ok) return "git worktree list failed: ${listing.output}"
+    val fields =
+      listing.output.split("\u0000\u0000").map { it.split('\u0000') }
+        .firstOrNull { "worktree $path" in it }
+        ?: return if (Files.exists(Path.of(path), LinkOption.NOFOLLOW_LINKS)) {
+          "the worktree path exists without its Git registration"
+        } else {
+          null
+        }
+    return if ("branch refs/heads/${record.executionBranch}" !in fields) {
+      "the worktree registration no longer names the owned branch"
+    } else {
+      val removal = monitorGit(primaryRoot, "worktree", "remove", path)
+      if (removal.ok) null else "git worktree remove failed: ${removal.output}"
+    }
   }
 
   private fun removeBranch(

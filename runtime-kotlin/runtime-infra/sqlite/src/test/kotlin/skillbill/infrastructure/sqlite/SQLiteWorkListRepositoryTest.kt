@@ -1,18 +1,15 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
 import java.sql.Connection
 import java.sql.DriverManager
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class SQLiteWorkListRepositoryTest {
   @Test
@@ -26,18 +23,21 @@ class SQLiteWorkListRepositoryTest {
       insertFeatureVerify(connection, "wfv-tie-z", "2026-05-01T12:00:00.000004Z")
       insertGoalChildRows(connection)
 
-      val repository = SQLiteWorkListRepository(connection)
+      val repository = SQLiteWorkListRepository(connection, NoopRuntimeDiagnostics)
       val all = repository.list()
 
       assertEquals(
         listOf("wfv-tie-z", "wftr-tie-a", "goal-new", "wfv-mid"),
-        all.map { it.workflowId },
+        all.items.map { it.workflowId },
       )
       assertEquals(
         listOf("feature-verify", "feature-task-runtime", "feature-goal", "feature-verify"),
-        all.map { it.workflowKind.wireValue },
+        all.items.map { it.workflowKind.wireValue },
       )
-      assertEquals(listOf("wfv-tie-z", "wftr-tie-a", "goal-new"), repository.list(limit = 3).map { it.workflowId })
+      assertEquals(
+        listOf("wfv-tie-z", "wftr-tie-a", "goal-new"),
+        repository.list(limit = 3).items.map { it.workflowId },
+      )
     }
   }
 
@@ -59,7 +59,8 @@ class SQLiteWorkListRepositoryTest {
         }
       }
 
-      val states = SQLiteWorkListRepository(connection).list().map { it.currentState }.toSet()
+      val states =
+        SQLiteWorkListRepository(connection, NoopRuntimeDiagnostics).list().items.map { it.currentState }.toSet()
 
       assertEquals(declaredStatuses, states)
     }
@@ -69,41 +70,33 @@ class SQLiteWorkListRepositoryTest {
   fun `work list rejects malformed persisted rows at every read boundary`() {
     assertMalformedWorkListRow(
       featureTaskWorkflowRow(FeatureTaskWorkflowRow(workflowId = "NULL")),
-      "missing workflow_id",
     )
     assertMalformedWorkListRow(
       featureTaskWorkflowRow(FeatureTaskWorkflowRow(mode = "unknown", workflowId = "'wf-kind'")),
-      "unknown workflow kind",
     )
     assertMalformedWorkListRow(
       featureTaskWorkflowRow(FeatureTaskWorkflowRow(workflowId = "'wf-state'", workflowStatus = "unknown")),
-      "unknown current state",
     )
     assertMalformedWorkListRow(
       featureTaskWorkflowRow(FeatureTaskWorkflowRow(workflowId = "'wf-estimated'", estimated = 2)),
-      "invalid state_entered_at_estimated",
     )
     assertMalformedWorkListRow(
       featureTaskWorkflowRow(FeatureTaskWorkflowRow(workflowId = "'wf-started'", startedAt = "invalid")),
-      "invalid started_at",
     )
     assertMalformedWorkListRow(
       featureTaskWorkflowRow(FeatureTaskWorkflowRow(workflowId = "'wf-since'", stateEnteredAt = "invalid")),
-      "invalid state_entered_at",
     )
     assertMalformedWorkListRow(
       goalIssueProgressRow(parentWorkflowId = " goal-parent "),
-      "invalid workflow_id",
     )
     assertMalformedWorkListRow(
       goalIssueProgressRow(parentWorkflowId = "goal-state", status = " running "),
-      "invalid current_state",
     )
   }
 
   private fun featureTaskWorkflowRow(row: FeatureTaskWorkflowRow): String =
     "INSERT INTO feature_task_workflows VALUES " +
-      "('SKILL-117', '${row.mode}', ${row.workflowId}, '${row.startedAt}', " +
+      "('SKILL-117', '${row.mode}', ${row.workflowId}, '1.0.0', '${row.startedAt}', " +
       "'${row.workflowStatus}', '${row.stateEnteredAt}', ${row.estimated})"
 
   private fun goalIssueProgressRow(
@@ -113,20 +106,29 @@ class SQLiteWorkListRepositoryTest {
     "INSERT INTO goal_issue_progress VALUES " +
       "('SKILL-117', '$parentWorkflowId', '2026-05-01T12:00:00Z', '$status', '2026-05-01T12:00:00Z', 0)"
 
-  private fun assertMalformedWorkListRow(
-    insert: String,
-    expectedDetail: String,
-  ) {
+  private fun assertMalformedWorkListRow(insert: String) {
     DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
       createWorkListTables(connection)
       connection.createStatement().use { it.executeUpdate(insert) }
 
-      val error =
-        assertFailsWith<SkillBillRuntimeException> {
-          SQLiteWorkListRepository(connection).list()
-        }.also { assertEquals(WorkflowFailureCode.INVALID_WORK_LIST_ROW, it.code) }
+      assertEquals(emptyList(), SQLiteWorkListRepository(connection, NoopRuntimeDiagnostics).list().items)
+    }
+  }
 
-      assertContains(error.message.orEmpty(), expectedDetail)
+  @Test
+  fun `list retains healthy rows when an earlier row is malformed`() {
+    DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
+      createWorkListTables(connection)
+      connection.createStatement().use {
+        it.executeUpdate(
+          goalIssueProgressRow(parentWorkflowId = " goal-parent "),
+        )
+        insertFeatureTask(connection, "wf-readable", "runtime", "2026-05-01T12:00:00Z")
+      }
+
+      val items = SQLiteWorkListRepository(connection, NoopRuntimeDiagnostics).list(limit = 10)
+
+      assertEquals(listOf("wf-readable"), items.items.map { it.workflowId })
     }
   }
 
@@ -134,12 +136,12 @@ class SQLiteWorkListRepositoryTest {
     connection.createStatement().use { statement ->
       statement.executeUpdate(
         "CREATE TABLE feature_task_workflows (" +
-          "issue_key TEXT, mode TEXT, workflow_id TEXT, started_at TEXT, workflow_status TEXT, " +
-          "state_entered_at TEXT, state_entered_at_estimated INTEGER)",
+          "issue_key TEXT, mode TEXT, workflow_id TEXT, contract_version TEXT, started_at TEXT, " +
+          "workflow_status TEXT, state_entered_at TEXT, state_entered_at_estimated INTEGER)",
       )
       statement.executeUpdate(
         "CREATE TABLE feature_verify_workflows (" +
-          "issue_key TEXT, workflow_id TEXT, started_at TEXT, workflow_status TEXT, " +
+          "issue_key TEXT, workflow_id TEXT, contract_version TEXT, started_at TEXT, workflow_status TEXT, " +
           "state_entered_at TEXT, state_entered_at_estimated INTEGER)",
       )
       statement.executeUpdate(
@@ -159,8 +161,9 @@ class SQLiteWorkListRepositoryTest {
     connection.prepareStatement(
       """
       INSERT INTO feature_task_workflows (
-        workflow_id, mode, contract_version, workflow_status, issue_key, started_at, state_entered_at
-      ) VALUES (?, ?, '1.0.0', 'running', 'SKILL-117', ?, ?)
+        workflow_id, mode, contract_version, workflow_status, issue_key, started_at, state_entered_at,
+        state_entered_at_estimated
+      ) VALUES (?, ?, '1.0.0', 'running', 'SKILL-117', ?, ?, 0)
       """.trimIndent(),
     ).use { statement ->
       statement.setString(1, workflowId)

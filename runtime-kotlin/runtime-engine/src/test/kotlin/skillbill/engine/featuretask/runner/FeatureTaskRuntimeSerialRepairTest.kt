@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairLegacyAdoption
@@ -30,7 +31,9 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
@@ -38,6 +41,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phaseartifacts.asPendingForOperatorResume
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
@@ -204,6 +208,83 @@ class FeatureTaskRuntimeSerialRepairTest {
       )
       val order = harness.launchOrder()
       assertEquals("review", order[order.indexOfLast { it == "audit" } + 1], "$order")
+    }
+  }
+
+  @Test
+  fun `audit slot steps run under a worker lease bound to their own phase`() {
+    val repairs = AtomicInteger()
+    val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
+    val launchedPhaseAndLeasePhase = mutableListOf<Pair<String, String?>>()
+    lateinit var harness: RunnerHarness
+    val launcher =
+      serialLauncher(repairs, onPhase = { phase ->
+        val lease = harness.io.database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID) }
+        launchedPhaseAndLeasePhase += phase to lease?.phaseId
+      }) { currentState.get() }
+    harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      currentState.set(scope.snapshot)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+    }
+
+    val auditSlotLaunches = launchedPhaseAndLeasePhase.filter { (phase, _) -> phase.startsWith("audit") }
+    assertEquals(setOf("audit", "audit_plan_fix", "audit_implement_fix"), auditSlotLaunches.map { it.first }.toSet())
+    assertEquals(auditSlotLaunches.map { it.first }, auditSlotLaunches.map { it.second })
+  }
+
+  @Test
+  fun `a worker-owned checkpoint after a completed audit records its identity and refuses a stale attempt`() {
+    val harness = runnerHarness(RuntimeHarnessConfig(codeReviewMode = CodeReviewExecutionMode.INLINE))
+    runOwnedSerial(harness) { admitted, _, _ ->
+      harness.io.database.transaction { unit ->
+        val record = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, WORKFLOW_ID))
+        val audit =
+          FeatureTaskRuntimePhaseRecord(
+            phaseId = "audit",
+            status = WorkflowStepStatus.COMPLETED,
+            attemptCount = 2,
+            startedAt = testHarnessClock.instant(),
+            resolvedAgentId = "codex",
+          )
+        unit.workflowStates.save(
+          WorkflowFamily.TASK_RUNTIME,
+          record.copy(
+            artifacts =
+              DurableWorkflowArtifacts.fromMap(
+                record.artifacts +
+                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+                    mapOf("audit" to audit.asWorkflowArtifactEntry()),
+                  ),
+              ),
+          ),
+        )
+      }
+      val checkpoint =
+        AppendCheckpointIdentityArgs(
+          workflowId = WORKFLOW_ID,
+          issueKey = "SKILL-1",
+          subtaskId = "1",
+          branch = "feat/SKILL-1",
+          phaseId = "audit",
+          attemptCount = 2,
+          loopId = "audit_repair",
+          generation = 0,
+          parentSha = "a".repeat(40),
+          ownedPaths = listOf("src/Foo.kt"),
+          commitSha = "b".repeat(40),
+        )
+
+      assertFalse(harness.recorder.appendOwnedCheckpointIdentity(checkpoint.copy(attemptCount = 1), admitted))
+      assertTrue(harness.recorder.appendOwnedCheckpointIdentity(checkpoint, admitted))
+      assertEquals(listOf("b".repeat(40)), harness.recorder.loadCheckpointIdentities(WORKFLOW_ID)?.map { it.commitSha })
     }
   }
 
@@ -465,6 +546,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         NoopFeatureTaskRuntimeWorkerSupervisor,
         testHarnessClock,
         admission.admission,
+        NoopRuntimeDiagnostics,
       )
     val inputs =
       admission.creationResolver().resolveInputs(

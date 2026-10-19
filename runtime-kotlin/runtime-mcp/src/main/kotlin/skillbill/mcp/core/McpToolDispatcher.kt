@@ -20,7 +20,13 @@ internal object McpToolDispatcher {
     rawArguments: Map<String, Any?>,
     component: McpComponent,
   ): Map<String, Any?> =
-    runCatching { mcpToolResult(invoke(toolName, rawArguments, component), isError = false) }
+    runCatching {
+      val payload = invoke(toolName, rawArguments, component)
+      mcpToolResult(
+        payload - McpToolPayloadKeys.IS_ERROR,
+        isError = payload[McpToolPayloadKeys.IS_ERROR] == true,
+      )
+    }
       .getOrElse { error ->
         when {
           error is CancellationException -> throw error

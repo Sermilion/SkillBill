@@ -60,6 +60,8 @@ import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PhaseStandaloneMonitorExecutionTest {
@@ -176,6 +178,29 @@ class PhaseStandaloneMonitorExecutionTest {
     assertTrue("Worktree: $worktree" in blocked.targetReport, blocked.targetReport.toString())
     val cleanup = blocked.targetReport.single { it.startsWith("Cleanup:") }
     assertTrue(cleanup.startsWith("Cleanup: retained (untracked_files)") && worktree.toString() in cleanup, cleanup)
+  }
+
+  @Test
+  fun `a retained repair blocks retry with a persisted attempt on the pull request branch before launching an agent`() {
+    failingHeads += headSha
+    repairOutcome = UNRESOLVED
+    assertIs<PhaseRunResult.Blocked>(run())
+    val launches = launcher.requests.size
+
+    val result = assertIs<PhaseRunResult.Blocked>(run())
+
+    assertTrue("retained" in result.reason, result.reason)
+    assertEquals(launches, launcher.requests.size)
+    val record = assertNotNull(database.read { it.standalonePhaseStatuses.readByInvocation(result.invocationId) })
+    assertEquals("blocked", record.lifecycleState)
+    assertEquals("monitor", record.currentStep)
+    assertEquals(result.reason, record.terminalResult)
+    assertEquals(FEATURE_BRANCH, record.branchCorrelation)
+    assertEquals("main", git(caller, "branch", "--show-current"))
+    val target = assertNotNull(record.monitorTarget)
+    assertEquals(PULL_REQUEST_URL, target.pullRequestUrl)
+    assertNull(target.worktreePath)
+    assertTrue(Files.exists(repairCwds.single()))
   }
 
   @Test

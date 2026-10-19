@@ -267,8 +267,8 @@ class GovernedReviewEvidenceEndpoint private constructor(
         rollbackGovernedReviewBindArtifacts(channel, socketPath, directory)
         failure = error
       } catch (error: SkillBillRuntimeException) {
-        error.rethrowUnless(error.isShellContentContractFailure())
         rollbackGovernedReviewBindArtifacts(channel, socketPath, directory)
+        error.rethrowUnless(error.isShellContentContractFailure())
         failure = error
       }
       failure?.let { throw it }

@@ -69,7 +69,7 @@ interface GoalRunnerManifestQueries {
   fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance>
 }
 
-interface GoalRunnerManifestExecutionCommands {
+interface GoalRunnerManifestPauseCommands {
   fun requestPause(parentWorkflowId: String): GoalRunnerControlState?
 
   fun pauseNow(
@@ -87,17 +87,32 @@ interface GoalRunnerManifestExecutionCommands {
   fun resume(parentWorkflowId: String): GoalRunnerManifestState?
 
   fun pauseAtBoundary(state: GoalRunnerManifestState): GoalRunnerManifestState
+}
 
+interface GoalRunnerManifestLeaseCommands {
   fun acquireExecutionLease(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String? = null,
   ): Boolean
 
+  fun acquireExecutionLeaseFenced(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwner: GoalRunnerExecutionLease?,
+  ): Boolean
+
   fun acquireExecutionLeaseWithChildAdmission(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String?,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+  ): Boolean
+
+  fun acquireExecutionLeaseWithChildAdmissionFenced(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwner: GoalRunnerExecutionLease?,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean
 
@@ -120,6 +135,10 @@ interface GoalRunnerManifestExecutionCommands {
   ): Boolean
 }
 
+interface GoalRunnerManifestExecutionCommands :
+  GoalRunnerManifestPauseCommands,
+  GoalRunnerManifestLeaseCommands
+
 interface GoalRunnerManifestControlWrites {
   fun bindRepositoryIdentity(
     parentWorkflowId: String,
@@ -141,6 +160,11 @@ interface GoalRunnerManifestControlWrites {
   fun persistControlState(
     parentWorkflowId: String,
     state: GoalRunnerControlState,
+  ): GoalRunnerControlState
+
+  fun updateControlState(
+    parentWorkflowId: String,
+    update: (GoalRunnerControlState) -> GoalRunnerControlState,
   ): GoalRunnerControlState
 
   fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState

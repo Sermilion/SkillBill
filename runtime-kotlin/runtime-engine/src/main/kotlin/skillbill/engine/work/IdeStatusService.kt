@@ -3,7 +3,6 @@ package skillbill.engine.work
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
-import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
@@ -21,23 +20,28 @@ import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.observation.workerOwnership
+import skillbill.engine.work.pagination.AggregateSkipDiagnostics
 import skillbill.engine.work.pagination.CANDIDATE_ROW_LOOKUPS
 import skillbill.engine.work.pagination.GoalPageRead
+import skillbill.engine.work.pagination.IDE_STATUS_STATUS_SEAM
 import skillbill.engine.work.pagination.ProjectedDetailItem
 import skillbill.engine.work.pagination.RuntimePhasePageRead
 import skillbill.engine.work.pagination.STATUS_READ_ATTEMPTS
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.engine.work.pagination.detailNextAnchors
+import skillbill.engine.work.pagination.emit
 import skillbill.engine.work.pagination.includesDetailList
 import skillbill.engine.work.pagination.invalidWorkPaginationRequest
 import skillbill.engine.work.pagination.readStatusStandaloneRecords
 import skillbill.engine.work.pagination.readStatusWorkItems
+import skillbill.engine.work.pagination.skipIncompatibleBoardItem
 import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
 import skillbill.engine.work.pagination.workDetailPagedResult
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
@@ -50,6 +54,7 @@ import skillbill.idestatus.model.IdeStatusRepositoryIdentityPolicy
 import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
@@ -105,6 +110,7 @@ class IdeStatusService(
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
   private val goalRunnerStatusService: GoalRunnerStatusService,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun status(request: IdeStatusRequest): IdeStatusResult {
     val observedAt = request.observedAt ?: clock.instant()
@@ -228,6 +234,7 @@ class IdeStatusService(
       }
       val finishedFrom = observedAt.minus(request.finishedWithin.duration)
       val diagnostics = mutableListOf<WorkBoardDiagnostic>()
+      val skipDiagnostics = AggregateSkipDiagnostics()
       val items = mutableListOf<WorkBoardItem>()
       var afterKey = position.afterKey
       var exhausted = false
@@ -244,7 +251,13 @@ class IdeStatusService(
           consumed++
           examined++
           afterKey = row.key
-          projectBoardCandidate(row.id, unitOfWork, observedAt, finishedFrom, diagnostics)?.let(items::add)
+          unitOfWork.projectBoardCandidate(
+            row.id,
+            observedAt,
+            finishedFrom,
+            diagnostics,
+            skipDiagnostics,
+          )?.let(items::add)
           if (items.size == request.pageSize) break
         }
         exhausted = consumed == rows.size
@@ -266,39 +279,45 @@ class IdeStatusService(
     }
   }
 
-  private fun projectBoardCandidate(
+  private fun UnitOfWork.projectBoardCandidate(
     id: String,
-    unit: UnitOfWork,
     observedAt: Instant,
     finishedFrom: Instant,
     diagnostics: MutableList<WorkBoardDiagnostic>,
-  ): WorkBoardItem? {
-    val found = detailMatch(id, unit) as? WorkDetailMatch.Found ?: return null
-    val identity = found.standalone?.repositoryIdentity ?: found.work?.repositoryIdentity
-    val root = identity?.let(::decodeRepositoryRoot)
-    if (identity == null || root == null) {
-      diagnostics += repositoryIdentityDiagnostic(identity, workflowId = id)
-      return null
+    skipDiagnostics: AggregateSkipDiagnostics,
+  ): WorkBoardItem? =
+    try {
+      val found = detailMatch(id, this) as? WorkDetailMatch.Found ?: return null
+      val identity = found.standalone?.repositoryIdentity ?: found.work?.repositoryIdentity
+      val root = identity?.let(::decodeRepositoryRoot)
+      if (identity == null || root == null) {
+        diagnostics += repositoryIdentityDiagnostic(identity, workflowId = id)
+        return null
+      }
+      val work = listOfNotNull(found.work)
+      val candidates =
+        collectCandidates(
+          this,
+          IdeStatusRepositoryResolution.Ok(identity, root),
+          null,
+          observedAt,
+          CandidateRead(
+            ResolvedWorkCandidates(work, listOfNotNull(found.standalone)),
+            skipDiagnostics = skipDiagnostics,
+          ),
+        )
+      candidates.singleOrNull()?.let { candidate ->
+        projectRetainedBoardItem(
+          candidate,
+          IdeStatusProjectionContext(this, identity, null, observedAt, root),
+          work,
+          finishedFrom,
+          diagnostics,
+        )
+      }
+    } catch (error: SkillBillRuntimeException) {
+      skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this@IdeStatusService.diagnostics, id)
     }
-    val work = listOfNotNull(found.work)
-    val candidates =
-      collectCandidates(
-        unit,
-        IdeStatusRepositoryResolution.Ok(identity, root),
-        null,
-        observedAt,
-        CandidateRead(ResolvedWorkCandidates(work, listOfNotNull(found.standalone))),
-      )
-    return candidates.singleOrNull()?.let { candidate ->
-      projectRetainedBoardItem(
-        candidate,
-        IdeStatusProjectionContext(unit, identity, null, observedAt, root),
-        work,
-        finishedFrom,
-        diagnostics,
-      )
-    }
-  }
 
   fun projectBoardSelection(
     ids: List<String>,
@@ -308,6 +327,7 @@ class IdeStatusService(
     val observedAt = request.observedAt ?: clock.instant()
     return database.read { unitOfWork ->
       val diagnostics = mutableListOf<WorkBoardDiagnostic>()
+      val skipDiagnostics = AggregateSkipDiagnostics()
       val items =
         ids.distinct().mapNotNull { id ->
           val found = selectedMatch(id, unitOfWork)
@@ -320,18 +340,35 @@ class IdeStatusService(
             return@mapNotNull null
           }
           val candidates =
-            collectCandidates(
-              unitOfWork,
-              IdeStatusRepositoryResolution.Ok(identity, root),
-              null,
-              observedAt,
-              CandidateRead(ResolvedWorkCandidates(listOfNotNull(work), listOfNotNull(standalone))),
-            )
+            try {
+              collectCandidates(
+                unitOfWork,
+                IdeStatusRepositoryResolution.Ok(identity, root),
+                null,
+                observedAt,
+                CandidateRead(
+                  ResolvedWorkCandidates(listOfNotNull(work), listOfNotNull(standalone)),
+                  skipDiagnostics = skipDiagnostics,
+                ),
+              )
+            } catch (error: SkillBillRuntimeException) {
+              return@mapNotNull skipIncompatibleBoardItem(
+                error,
+                diagnostics,
+                skipDiagnostics,
+                this.diagnostics,
+                id,
+              )
+            }
           val candidate =
             candidates.singleOrNull()
               ?: throw invalidWorkListRowError("Selected work candidate cannot be projected.")
           val context = IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
-          projectBoardItem(candidate, context, listOfNotNull(work))
+          try {
+            projectBoardItem(candidate, context, listOfNotNull(work))
+          } catch (error: SkillBillRuntimeException) {
+            skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
+          }
         }
       WorkBoardResult(
         observedAt,
@@ -403,7 +440,13 @@ class IdeStatusService(
       }
     val superseded = supersededPhase(candidate.standaloneStatus, context.unitOfWork, context.observedAt)
     val finishedAt = completion.first ?: candidate.standaloneStatus?.updatedAt?.takeIf { superseded }
-    val windowed = workPolicy(snapshot, finishedAt, context.observedAt)
+    val windowed =
+      workPolicy(
+        snapshot,
+        finishedAt,
+        context.observedAt,
+        successfulGoalCompletion = completion.second == WorkBoardCompletionSource.GOAL_COMPLETION,
+      )
     return WorkBoardItem(
       snapshot,
       context.repoRoot.toString(),
@@ -887,13 +930,7 @@ class IdeStatusService(
           null
         } else {
           if (resolved == null) repeat(CANDIDATE_ROW_LOOKUPS) { queryWork?.statement() }
-          toCandidate(
-            item,
-            unitOfWork,
-            repository,
-            branch,
-            resolved?.work?.firstOrNull { it.item.workflowId == item.workflowId },
-          )
+          toCandidateOrSkip(item, unitOfWork, repository, branch, read)
         }
       }
     val standaloneRecords =
@@ -932,6 +969,27 @@ class IdeStatusService(
     return workflowCandidates.filterNot { it.workflowId in standaloneWorkflowIds } + standaloneCandidates
   }
 
+  private fun toCandidateOrSkip(
+    item: WorkItem,
+    unitOfWork: UnitOfWork,
+    repository: IdeStatusRepositoryResolution.Ok,
+    branch: String?,
+    read: CandidateRead,
+  ): IdeStatusCandidate? =
+    try {
+      toCandidate(
+        item,
+        unitOfWork,
+        repository,
+        branch,
+        read.resolved?.work?.firstOrNull { it.item.workflowId == item.workflowId },
+      )
+    } catch (error: SkillBillRuntimeException) {
+      if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
+      read.skipDiagnostics.emit(diagnostics, IDE_STATUS_STATUS_SEAM, item.workflowId, null, error)
+      null
+    }
+
   private fun projectStandaloneLease(
     record: StandalonePhaseStatusRecord,
     observedAt: Instant,
@@ -943,7 +1001,8 @@ class IdeStatusService(
       record.workerOwnership()?.let { owner ->
         when (workerSupervisor.inspect(owner)) {
           FeatureTaskRuntimeProcessInspection.NotRunning,
-          is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
+          FeatureTaskRuntimeProcessInspection.ForeignHost,
+          FeatureTaskRuntimeProcessInspection.PidReused,
           -> true
           FeatureTaskRuntimeProcessInspection.ExactLive,
           is FeatureTaskRuntimeProcessInspection.Unsupported,
@@ -968,7 +1027,7 @@ class IdeStatusService(
   ): IdeStatusCandidate? {
     val repositoryIdentity = repository.identity
     val repositoryCorrelation = IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity)
-    val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork, repositoryIdentity)
+    val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork)
     val family = item.workflowKind.toIdeFamily()
     val lifecycle =
       family?.let { candidateFamily ->
@@ -1078,49 +1137,6 @@ class IdeStatusService(
   }
 }
 
-internal fun resolveRepositoryIdentity(
-  repoRootArg: String,
-  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-): IdeStatusRepositoryResolution {
-  val resolvedStart =
-    runCatching {
-      repositoryEnclosingRootPort.canonicalPath(Path.of(repoRootArg))
-    }.getOrNull()
-      ?: return IdeStatusRepositoryResolution.Invalid("Repository root cannot be resolved: $repoRootArg")
-  val gitRoot =
-    findGitRoot(resolvedStart, repositoryEnclosingRootPort)
-      ?: return IdeStatusRepositoryResolution.Invalid("Path is not inside a Git repository: $repoRootArg")
-  val canonicalGitRoot = repositoryEnclosingRootPort.canonicalPath(gitRoot)
-  val identity = goalRepositoryIdentity(canonicalGitRoot, repositoryEnclosingRootPort)
-  return if (
-    identity.isBlank() ||
-    !identity.startsWith(FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX)
-  ) {
-    IdeStatusRepositoryResolution.Missing(
-      "Could not form canonical repository identity for: $repoRootArg",
-    )
-  } else {
-    val primaryRoot = repositoryEnclosingRootPort.primaryRepositoryRoot(canonicalGitRoot)
-    IdeStatusRepositoryResolution.Ok(
-      identity = identity,
-      repoRoot = canonicalGitRoot,
-      monitorIdentity = goalRepositoryIdentity(primaryRoot, repositoryEnclosingRootPort),
-    )
-  }
-}
-
-private fun findGitRoot(
-  start: Path,
-  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-): Path? {
-  var candidate: Path? = start
-  while (candidate != null) {
-    if (repositoryEnclosingRootPort.optionalRealPath(candidate.resolve(".git")) != null) return candidate
-    candidate = candidate.parent
-  }
-  return null
-}
-
 private fun decodeRepositoryRoot(identity: String): Path? =
   try {
     val prefix = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX
@@ -1139,6 +1155,7 @@ private data class ResolvedWorkItem(
 private data class CandidateRead(
   val resolved: ResolvedWorkCandidates? = null,
   val queryWork: IdeStatusQueryWork? = null,
+  val skipDiagnostics: AggregateSkipDiagnostics = AggregateSkipDiagnostics(),
 )
 
 private data class ResolvedWorkCandidates(

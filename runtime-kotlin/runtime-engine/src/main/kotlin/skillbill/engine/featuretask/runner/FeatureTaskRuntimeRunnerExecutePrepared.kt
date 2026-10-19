@@ -10,7 +10,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
-import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairResumeEvidence
+import skillbill.engine.featuretask.persist.acceptance.restoreAcceptanceRepairResumeEvidence
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -28,6 +28,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.shellcontent.featureTaskRuntimeOperatorDecisionRejected
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -49,7 +50,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
   private val launchOutcomes: FeatureTaskRuntimeLaunchOutcomes,
   private val phaseSettlementService: FeatureTaskPhaseSettlementService,
   private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
-  private val acceptanceResumeEvidence: AcceptanceCriterionRepairResumeEvidence,
+  private val database: DatabaseSessionFactory,
 ) {
   internal fun acceptanceRepairSteps(plan: ResolvedPhaseExecutionPlan): AcceptanceCriterionRepairStepRoles? {
     val audit = plan.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
@@ -84,8 +85,13 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
         specSource,
         executionPlan,
         strategies,
-        DurablePhaseRunGoal(goalContinuationRecorder),
-        DurablePhaseRunSettlements(phaseSettlementService),
+        DurablePhaseRunGoal(goalContinuationRecorder, requireNotNull(runRequest.admittedExecution)),
+        DurablePhaseRunSettlements(
+          database,
+          requireNotNull(runRequest.admittedExecution),
+          clock,
+          phaseSettlementService,
+        ),
         DurablePhaseRunCheckpoints(gitOperations),
         durableLaunch,
         clock,
@@ -98,6 +104,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
             workflowId = runRequest.workflowId,
             gitOperations = gitOperations,
             repoRoot = runRequest.repoRoot,
+            admitted = requireNotNull(runRequest.admittedExecution),
           )
       ) {
         is RemediationBaseBlocked ->
@@ -153,11 +160,12 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
       initialRetainedOutputs =
         history.outputs +
           listOfNotNull(
-            acceptanceResumeEvidence.restore(
+            phaseSettlementService.restoreAcceptanceRepairResumeEvidence(
               runRequest,
               acceptanceRepairSteps(executionPlan),
               records,
               ledger,
+              diagnostics,
             ),
           ),
       initialMonitorRepairFailures = history.failedRepairs,

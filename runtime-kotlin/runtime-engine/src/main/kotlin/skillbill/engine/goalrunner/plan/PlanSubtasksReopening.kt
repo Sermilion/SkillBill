@@ -36,7 +36,13 @@ class PlanSubtasksReopening(
 ) {
   private val engine = WorkflowEngine()
 
-  fun rebasePlanBundle(replan: PlanSubtasksReplan) {
+  fun reopenWithRebasedBundle(replan: PlanSubtasksReplan): Boolean {
+    if (!reopenAtPlanSubtasks(replan.planWorkflowId)) return false
+    rebasePlanBundle(replan)
+    return true
+  }
+
+  private fun rebasePlanBundle(replan: PlanSubtasksReplan) {
     val bundle = planBundles.loadPlanBundle(replan.planWorkflowId) ?: return
     PlanBundleSnapshots(decompositionPlanner)
       .rebase(replan.repoRoot, replan.issueKey, bundle, replan.settledSubtaskIds)
@@ -68,7 +74,7 @@ class PlanSubtasksReopening(
             snapshot,
             update.copy(workflowStatus = WorkflowStatus.PENDING),
           )
-        unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+        unitOfWork.workflowStates.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, updated)
         true
       }
     }

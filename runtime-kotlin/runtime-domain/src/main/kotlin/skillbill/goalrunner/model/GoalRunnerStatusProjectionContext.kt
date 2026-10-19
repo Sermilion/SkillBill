@@ -83,6 +83,7 @@ internal fun assembleGoalRunnerStatusProjection(
     latestWorktreeEdit = extras.latestWorktreeEdit,
     auditAcRetryCount = extras.auditAcRetryCount,
     noChangeStatus = extras.noChangeStatus,
+    goalCompletedAt = extras.goalCompletedAt,
   )
 }
 

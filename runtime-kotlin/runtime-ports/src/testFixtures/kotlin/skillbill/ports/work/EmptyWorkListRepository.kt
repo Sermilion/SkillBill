@@ -8,6 +8,7 @@ import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.ports.work.model.WorkGoalParentCandidate
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
+import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.work.model.WorkStatusCandidatePage
 import skillbill.ports.work.model.WorkStatusCandidateQuery
 import skillbill.ports.work.model.WorkStoreObservation
@@ -55,7 +56,7 @@ object EmptyWorkListRepository : WorkListRepository {
 
   override fun statusCandidates(query: WorkStatusCandidateQuery) = WorkStatusCandidatePage(emptyList(), null)
 
-  override fun list(limit: Int?): List<WorkItem> = emptyList()
+  override fun list(limit: Int?): WorkListListRead = WorkListListRead(emptyList())
 
   override fun findByWorkflowId(workflowId: String): List<WorkItem> = emptyList()
 }

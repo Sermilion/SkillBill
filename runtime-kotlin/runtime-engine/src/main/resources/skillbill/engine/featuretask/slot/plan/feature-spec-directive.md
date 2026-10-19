@@ -8,9 +8,20 @@ A subtask pays the whole ceremony: preplan, plan, implement, review, validate, o
 cost barely moves between a two-file change and a twenty-file one, so decomposition exists to cut
 work too large for a single pass, not to give each layer, file, or logical unit its own ticket.
 
-Default to one subtask. Split only when one implement pass cannot carry the work to a reviewable
-end, a later part cannot be specified until an earlier contract or schema lands, or the parts ship
-separately. Not reasons to split: layer order, one file or symbol each, "add the field, then read
+Every spec you author must have one to five acceptance criteria. When a candidate subtask needs
+more than five, use the fewest subtask specs needed to stay within the limit and distribute the
+criteria as evenly as possible. For a split caused by criterion count, the largest and smallest
+specs differ by at most one criterion. Six criteria become two specs with three each; eleven become
+three specs with four, four, and three. Keep related outcomes together and record their dependency
+order when assigning criteria to the balanced specs.
+
+Keep each criterion focused on one observable production outcome. Never drop requirements, hide extra
+criteria in nested lists, or combine unrelated outcomes to fit the limit. Preserve every requirement
+across the bundle and record dependencies between the resulting subtasks.
+
+Default to one subtask when its scope fits within five criteria. Also split when one implement pass
+cannot carry the work to a reviewable end, a later part cannot be specified until an earlier contract
+or schema lands, or the parts ship separately. Not reasons to split: layer order, one file or symbol each, "add the field, then read
 the field", tests on their own, or a narrative of steps one agent would finish in a sitting.
 
 Breadth is never a reason. A subtask has no cap on files or diff size, and one coherent twenty-file
@@ -19,8 +30,12 @@ together. Since each subtask is one commit, the only shape that matters is wheth
 stands alone: a commit that deletes a path whose replacement lands later, or adds a field nothing
 reads, belongs in the commit that finishes the change.
 
-Floor: a candidate that reads as "change X so it does Y" is below the cost of its own cycle. Two or
-three subtasks is a normal decomposition; name the condition behind each extra split.
+Keep related work together within the five-criterion limit. There is no fixed limit on the number
+of subtasks; create as many as the acceptance criteria and execution boundaries require.
+
+An authored parent spec has at most five feature-level outcome criteria; the subtask specs carry
+the detailed outcomes. An existing operator-authored parent is immutable input and may contain
+more than five criteria. Preserve it and distribute all of its requirements across compliant subtasks.
 
 ## Service / Spec Source Mode
 
@@ -117,7 +132,8 @@ contract or the runtime fails the run with "must list at least one criterion":
 - Each criterion MUST be its own list item: a numbered item (`1. ...`) or a
   bullet (`- ...`, optionally a `- [ ]` checkbox). Do not place criteria in
   prose paragraphs under the heading.
-- At least one criterion is required in every spec the runtime will execute.
+- One to five criteria are required in every authored parent and executable subtask spec.
+  An existing operator-authored parent retains its original criteria unchanged.
 - Each criterion MUST be observable in the phase that currently consumes the
   spec. Do not require a later phase's result as an acceptance criterion:
   no validate quality-check receipt, review clearance, commit sha, or PR URL

@@ -62,7 +62,14 @@ class FeatureTaskRuntimeStatusHistoryTest {
     val compact = statusPhaseHistory(harness.recorder.phaseQuery, id, records, harness.service.history)
     assertTrue(compact.size <= 4, "Retained ${compact.size} entries for one phase and one loop.")
     val request = FeatureTaskRuntimeStatusRequest(id)
-    val expected = harness.service.buildStatusProjection(request, records, null, ledger)
+    val expected =
+      harness.service.buildStatusProjection(
+        request,
+        records,
+        null,
+        ledger,
+        harness.recorder.phaseQuery.currentStepId(id),
+      )
     assertEquals(expected, harness.service.status(request))
     assertEquals("process_retry", expected.phases.single { it.phaseId == "implement" }.continuationKind)
   }

@@ -1354,6 +1354,7 @@ internal class GoalRunnerRepairLeaseClearanceTest : GoalRunnerRepairFixtures() {
           store,
           issue342StaleParentControlState(),
           manifestStore = manifestStore,
+          workerSupervisor = DeadProcessSupervisor,
         ),
       )
 
@@ -1596,8 +1597,7 @@ internal class GoalRunnerRepairLeaseClearanceTest : GoalRunnerRepairFixtures() {
     override fun currentProcess(): FeatureTaskRuntimeProcessIdentity =
       FeatureTaskRuntimeProcessIdentity("host", "boot", 1, "birth")
 
-    override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) =
-      FeatureTaskRuntimeProcessInspection.OwnershipMismatch("the existing process owner is ambiguous")
+    override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ForeignHost
 
     override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
@@ -2032,6 +2032,31 @@ internal abstract class GoalRunnerRepairFixtures {
           recoveryStatus.takeIf { it == WorkflowGitOperationStatus.OK }
             ?.let { request.toRecoveredBaseline(recoveredSha) },
       )
+  }
+
+  protected object DeadProcessSupervisor : FeatureTaskRuntimeWorkerSupervisor {
+    override fun currentProcess(): FeatureTaskRuntimeProcessIdentity =
+      FeatureTaskRuntimeProcessIdentity("host", "boot", 1, "birth")
+
+    override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.NotRunning
+
+    override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
+    override fun awaitExit(
+      ownership: FeatureTaskRuntimeWorkerOwnership,
+      timeout: Duration,
+    ) = Unit
+
+    override fun terminateGracefully(ownership: FeatureTaskRuntimeWorkerOwnership) = true
+
+    override fun terminateForcibly(ownership: FeatureTaskRuntimeWorkerOwnership) = true
+
+    override fun pause(durationMillis: Long) = Unit
+
+    override fun startHeartbeat(
+      plan: FeatureTaskRuntimeHeartbeatPlan,
+      heartbeat: () -> FeatureTaskRuntimeHeartbeatTick,
+    ) = NoopFeatureTaskRuntimeHeartbeat
   }
 
   protected object LiveProcessSupervisor : FeatureTaskRuntimeWorkerSupervisor {

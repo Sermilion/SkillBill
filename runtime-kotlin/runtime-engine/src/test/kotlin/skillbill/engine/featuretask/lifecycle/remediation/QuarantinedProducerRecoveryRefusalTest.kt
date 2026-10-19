@@ -253,6 +253,7 @@ class QuarantinedProducerRecoveryRefusalTest {
             subtaskId = "2",
             branch = "feat/SKILL-384",
             phaseId = "review",
+            attemptCount = 1,
             loopId = null,
             generation = 0,
             parentSha = "a".repeat(40),
@@ -346,7 +347,7 @@ class QuarantinedProducerRecoveryRefusalTest {
       recorder.appendCheckpointIdentity(
         AppendCheckpointIdentityArgs(
           workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-          phaseId = "review", loopId = null, generation = 0, parentSha = "a".repeat(40),
+          phaseId = "review", attemptCount = 1, loopId = null, generation = 0, parentSha = "a".repeat(40),
           ownedPaths = listOf("src/Changed.kt"), commitSha = "b".repeat(40),
         ),
       ),
@@ -417,7 +418,7 @@ class QuarantinedProducerRecoveryRefusalTest {
         recorder.appendCheckpointIdentity(
           AppendCheckpointIdentityArgs(
             workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-            phaseId = case.producer, loopId = null, generation = 0, parentSha = "a".repeat(40),
+            phaseId = case.producer, attemptCount = 1, loopId = null, generation = 0, parentSha = "a".repeat(40),
             ownedPaths = listOf("src/Changed.kt"), commitSha = "b".repeat(40),
           ),
         ),
@@ -461,7 +462,7 @@ class QuarantinedProducerRecoveryRefusalTest {
           recorder.appendCheckpointIdentity(
             AppendCheckpointIdentityArgs(
               workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-              phaseId = "write_history", loopId = null, generation = 0, parentSha = "c".repeat(40),
+              phaseId = "write_history", attemptCount = 1, loopId = null, generation = 0, parentSha = "c".repeat(40),
               ownedPaths = listOf("src/Other.kt"), commitSha = "d".repeat(40),
             ),
           ),
@@ -552,19 +553,22 @@ class QuarantinedProducerRecoveryRefusalTest {
           ),
         )
       } else {
-        assertTrue(
-          recorder.recordPhaseState(
-            FeatureTaskRuntimePhaseStateRequest(
-              workflowId = workflowId,
-              phaseId = phase,
-              status = case.finalizationStatus,
-              attemptCount = 2,
-              resolvedAgentId = "original-finalizer",
-              finished = case.finalizationStatus == "completed",
-              outputArtifact = "retained-finalization-output",
+        val statuses = listOf("running", case.finalizationStatus).distinct()
+        statuses.forEach { status ->
+          assertTrue(
+            recorder.recordPhaseState(
+              FeatureTaskRuntimePhaseStateRequest(
+                workflowId = workflowId,
+                phaseId = phase,
+                status = status,
+                attemptCount = 2,
+                resolvedAgentId = "original-finalizer",
+                finished = status == "completed",
+                outputArtifact = "retained-finalization-output",
+              ),
             ),
-          ),
-        )
+          )
+        }
       }
     }
   }

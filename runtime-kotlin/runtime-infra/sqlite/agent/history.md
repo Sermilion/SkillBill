@@ -1,3 +1,13 @@
+## [2026-10-18] SKILL-422 subtask 3: SQLite maintenance and audit closure
+Areas: runtime-infra/sqlite test fixtures and tests; runtime-cli installer repoTests; runtime-application uninstall tests; SKILL-422 audit docs (inventory, matrix, findings register, evidence, audit-coverage)
+- No production maintenance change. Source review found install.sh pre-install cleanup already keeps *.db, -wal, -shm, -journal, backups and the baseline manifest, and explicit shell and application uninstall stay destructive.
+- Regressions assert PRAGMA integrity_check plus exact workflow, phase and progress rows after reopen, never file presence alone: SqliteMaintenanceRecoveryRegressionTest (T3-02/03/05), InstallerShellMaintenanceRecoveryTest (T3-01/04), SkillBillUninstallDestructiveSemanticsTest (T3-04).
+- reusable: SqliteTestDatabaseFixtures.seedMaintenanceWorkflowHistory, integrity and WAL helpers, snapshot readers, seedRunningRuntimeWorkflow; InstallerShellDelegationTestSupport.seedStateDirForMaintenanceRecovery.
+- Findings F13-F15 are verified no-finding rows. EL-422-WAL records the historical WAL incident as unavailable evidence; lost history was not reconstructed.
+- audit-coverage.md maps upstream scope, the seven deliverable groups and SKILL-414/417/418 state items to sources, tests or limitations.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented (validate ran full check green)
+
 ## [2026-10-09] SKILL-412 upgrade existing databases for phase strategy telemetry
 Areas: runtime-kotlin/runtime-infra/sqlite migration registry, core migration area, and migration regression tests
 - Added append-only migration v49 for the two phase-strategy telemetry columns on existing databases.

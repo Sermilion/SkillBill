@@ -53,7 +53,8 @@ class FeatureTaskRuntimeStatusService(
     val records = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords() ?: return null
     val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
     val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
-    return buildStatusProjection(request, records, decomposeTerminal, ledger)
+    val workflowCurrentStepId = recorder.phaseQuery.currentStepId(request.workflowId)
+    return buildStatusProjection(request, records, decomposeTerminal, ledger, workflowCurrentStepId)
   }
 
   fun phasePage(
@@ -95,6 +96,7 @@ class FeatureTaskRuntimeStatusService(
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
     decomposeTerminal: FeatureTaskRuntimeDecomposeTerminal?,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    workflowCurrentStepId: String?,
   ): FeatureTaskRuntimeStatusProjection {
     val statelessAuditInputs =
       history.normalize(
@@ -124,7 +126,7 @@ class FeatureTaskRuntimeStatusService(
         normalizedLedger,
         FeatureTaskRuntimePhaseWorkflowQueries.loopOnlyPhaseIds(
           recorder.loadGoalContinuation(request.workflowId)?.qualityGateSelection ?: LEGACY_QUALITY_GATE_SELECTION,
-        ),
+        ) - setOfNotNull(workflowCurrentStepId),
       )
     val gateRunCount = gateRunCountFor(request, currentPhaseId)
     return statusProjectionFrom(

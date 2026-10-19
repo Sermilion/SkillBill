@@ -25,7 +25,8 @@ interface StandaloneMonitorResources {
   /**
    * Takes the cross-process admission lock for the target and writes acquiring metadata before any ref or path
    * exists. A held lock, stale metadata, retained work, or corrupt metadata is reported as a blocked result;
-   * a live owner is never superseded or signalled.
+   * a live owner is never superseded or signalled. An abandoned owner's unknown publication may be rechecked
+   * against the resolved target after same-host positive process-death evidence; unresolved retained work blocks.
    */
   fun acquire(request: MonitorAcquireRequest): MonitorAcquisition
 

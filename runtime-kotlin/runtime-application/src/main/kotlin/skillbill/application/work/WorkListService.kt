@@ -6,7 +6,6 @@ import skillbill.application.work.model.WorkListItemKind
 import skillbill.application.work.model.WorkListResult
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -28,11 +27,12 @@ class WorkListService(
   fun list(limit: Int? = null): WorkListResult {
     require(limit == null || limit > 0) { "--limit must be a positive integer." }
     return database.read { unitOfWork ->
-      val persistedWork = unitOfWork.workList.list(limit)
+      val persistedWork = unitOfWork.workList.list(limit = null).items
       val readable = retainReadableWork(unitOfWork, persistedWork)
+      val limited = limit?.let { readable.take(it) } ?: readable
       WorkListResult(
         dbPath = unitOfWork.dbPath.toString(),
-        work = readable.map(WorkItem::toApplicationItem),
+        work = limited.map(WorkItem::toApplicationItem),
       )
     }
   }
@@ -51,9 +51,14 @@ class WorkListService(
       val family = workflowFamily(item) ?: return@mapNotNull item
       val snapshot =
         snapshotsByFamily.getValue(family)[item.workflowId]
-          ?: throw invalidWorkListRowError(
-            "Work-list row '${item.workflowId}' has no matching ${item.workflowKind.wireValue} workflow snapshot.",
-          )
+          ?: run {
+            runtimeDiagnostics.warning(
+              "seam=work_list value_expected=readable_workflow_row value_used=skipped " +
+                "workflow_id=${item.workflowId} error=Work-list row '${item.workflowId}' has no matching " +
+                "${item.workflowKind.wireValue} workflow snapshot.",
+            )
+            return@mapNotNull null
+          }
       try {
         workflowSnapshotValidator.validate(snapshot, family.definition.workflowName)
         workflowEngine.summaryView(family.definition, snapshot)

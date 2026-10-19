@@ -1,11 +1,13 @@
 package dev.skillbill.tray.core.data.store
 
 import dev.skillbill.tray.core.domain.model.WorkSection
+import dev.skillbill.tray.core.domain.model.HistoryFilter
 import org.junit.jupiter.api.Test
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
@@ -45,10 +47,13 @@ class WorkCandidateQueriesTest {
           repository, "main", " skill-428 ", null, "related-phase", FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN, "related-execution",
           "paused", "runner_interrupted", now, "phase-owner", 1, now.plusSeconds(300),
         )
-        unit.standalonePhaseStatuses.register(related)
+        unit.standalonePhaseStatuses.register(related.copy(launchScope = IdeStatusLaunchScope.GOAL))
         unit.standalonePhaseStatuses.register(
           related.copy(phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
-            invocationId = "replan", executionId = "replan-execution"),
+            invocationId = "replan", executionId = "replan-execution", launchScope = IdeStatusLaunchScope.GOAL),
+        )
+        unit.standalonePhaseStatuses.register(
+          related.copy(invocationId = "operator-plan", executionId = "operator-plan-execution"),
         )
         unit.standalonePhaseStatuses.register(
           related.copy(phaseId = "monitor", invocationId = "independent-monitor", executionId = "monitor-execution"),
@@ -74,7 +79,7 @@ class WorkCandidateQueriesTest {
         assertEquals(StandalonePhaseStatusUpdateResult.ACCEPTED, update)
       }
 
-      val unrelated = setOf("other-task", "other-repository", "keyless", "independent-monitor")
+      val unrelated = setOf("other-task", "other-repository", "keyless", "independent-monitor", "operator-plan")
       assertEquals(unrelated, fixture.connection.candidates(WorkSection.PHASES, now))
       assertEquals(unrelated + "goal", fixture.connection.candidates(WorkSection.NEEDS_YOU, now))
       assertEquals(setOf("goal"), fixture.connection.candidates(WorkSection.GOALS, now))
@@ -98,12 +103,63 @@ class WorkCandidateQueriesTest {
       }
       assertEquals(unrelated + "later-phase", fixture.connection.candidates(WorkSection.PHASES, now.plusSeconds(2)))
       fixture.connection.createStatement().use { it.executeUpdate("DELETE FROM goal_issue_progress WHERE parent_workflow_id = 'goal'") }
-      assertEquals(unrelated + setOf("related-phase", "replan", "later-phase"), fixture.connection.candidates(WorkSection.PHASES, now.plusSeconds(2)))
+      assertEquals(unrelated + "later-phase", fixture.connection.candidates(WorkSection.PHASES, now.plusSeconds(2)))
+      assertEquals(setOf("replan"), fixture.connection.candidates(WorkSection.GOALS, now.plusSeconds(2)))
     }
   }
 
-  private fun Connection.candidates(section: WorkSection, observedAt: Instant): Set<String> {
-    val query = candidateQuery(section, observedAt.minusSeconds(3600).toString(), observedAt.toString(), null, null, "", 100)
+  @Test
+  fun `completed goal planning stops appearing as a separate finished run once its goal exists`() {
+    establishTemporarySchemaReadiness("desktop-completed-goal-plan").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      val repository = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}"
+      factory.transaction { unit ->
+        val registration = StandalonePhaseStatusRegistration(
+          repository, "main", " skill-419 ", null, "goal-plan", FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+          "goal-plan-execution", "active", "preplan", now.minusSeconds(60), "phase-owner", 1, now.plusSeconds(300),
+          launchScope = IdeStatusLaunchScope.GOAL,
+        )
+        for (input in listOf(registration, registration.copy(
+          repositoryIdentity = "$repository/other", invocationId = "other-repository", executionId = "other-execution",
+        ))) {
+          val record = unit.standalonePhaseStatuses.register(input)
+          assertEquals(StandalonePhaseStatusUpdateResult.ACCEPTED, unit.standalonePhaseStatuses.update(
+            StandalonePhaseStatusUpdate(
+              record.executionId, record.statusRevision, record.leaseOwner, record.leaseGeneration,
+              "terminal", "plan_subtasks", null, now.minusSeconds(1), finishedAt = now.minusSeconds(1), terminalResult = "completed",
+            ),
+          ))
+        }
+      }
+      for (section in listOf(WorkSection.RECENT, WorkSection.HISTORY)) {
+        assertEquals(setOf("goal-plan", "other-repository"), fixture.connection.candidates(section, now))
+      }
+      fixture.connection.prepareStatement(
+        "INSERT INTO goal_issue_progress (parent_workflow_id, issue_key, first_started_at, status, state_entered_at) " +
+          "VALUES ('goal', 'SKILL-419', ?, 'running', ?)",
+      ).use { statement ->
+        statement.setString(1, now.toString())
+        statement.setString(2, now.toString())
+        statement.executeUpdate()
+      }
+      factory.transaction { unit ->
+        unit.goalRunnerControls.persistControlState("goal", GoalRunnerControlState(repositoryIdentity = repository))
+      }
+      for (section in listOf(WorkSection.RECENT, WorkSection.HISTORY)) {
+        assertEquals(setOf("other-repository"), fixture.connection.candidates(section, now))
+        assertEquals(setOf("other-repository"), fixture.connection.candidates(section, now, HistoryFilter.GOALS))
+      }
+      fixture.connection.createStatement().use { statement ->
+        statement.executeUpdate("UPDATE goal_issue_progress SET status = 'completed', state_entered_at = '$now' WHERE parent_workflow_id = 'goal'")
+      }
+      for (section in listOf(WorkSection.RECENT, WorkSection.HISTORY)) {
+        assertEquals(setOf("goal", "other-repository"), fixture.connection.candidates(section, now))
+      }
+    }
+  }
+
+  private fun Connection.candidates(section: WorkSection, observedAt: Instant, historyFilter: HistoryFilter = HistoryFilter.ALL): Set<String> {
+    val query = candidateQuery(section, observedAt.minusSeconds(3600).toString(), observedAt.toString(), null, null, "", 100, historyFilter)
     return prepareStatement(query.sql).use { statement ->
       var index = 1
       statement.setString(index++, observedAt.toString())

@@ -20,9 +20,10 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import skillbill.workflow.engine.model.isTerminalStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import java.nio.file.Path
@@ -91,15 +92,13 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
     issueKey: String,
     subtaskId: Int,
   ): GoalRunnerStoredOutcome? {
-    val ownership = workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
+    val ownership = workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) ?: return null
     val row =
-      ownership?.let { workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME) }
+      workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME) ?: return null
     val continuation =
-      row
-        ?.takeIf { it.workflowStatus.workflowStatus() == WorkflowStatus.RUNNING }
-        ?.let { DurableWorkflowArtifacts.fromMap(it.toSnapshot().artifacts).goalContinuation() }
+      DurableWorkflowArtifacts.fromMap(row.toSnapshot().artifacts).goalContinuation()
         ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
-    if (ownership == null || row == null || continuation == null) return null
+        ?: return null
     return crashReconcileExpiredWorkerToResumable(
       CrashReconcileExpiredWorkerRequest(
         workflowStates = workflowStates,
@@ -131,32 +130,22 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
         (existingOutcome == null || existingOutcome.commitSha.isNullOrBlank()) &&
           commitShaFrom(artifacts).isNullOrBlank()
       if (needsBackfill) {
-        val updated =
-          engine.updateRecord(
-            family.definition,
-            record,
-            WorkflowUpdateInput(
-              workflowStatus = record.workflowStatus,
-              currentStepId = record.currentStepId,
-              stepUpdates = null,
-              artifactsPatch =
-                WorkflowArtifactPatch.from(
-                  mapOf(
-                    WorkflowWirePayloadKeys.GOAL_CONTINUATION_OUTCOME to
-                      mapOf(
-                        SharedPayloadKeys.ISSUE_KEY to issueKey,
-                        SharedPayloadKeys.SUBTASK_ID to subtaskId,
-                        SharedPayloadKeys.STATUS to "complete",
-                        SharedPayloadKeys.WORKFLOW_ID to workflowId,
-                        "commit_sha" to outcome.commitSha,
-                        "last_resumable_step" to (outcome.lastResumableStep ?: "commit_push"),
-                      ),
-                  ),
-                ),
-              sessionId = record.sessionId.orEmpty(),
-            ),
-          )
-        workflowStates.save(family, updated)
+        engine.saveRunnerArtifactPatch(
+          workflowStates,
+          family,
+          record,
+          mapOf(
+            WorkflowWirePayloadKeys.GOAL_CONTINUATION_OUTCOME to
+              mapOf(
+                SharedPayloadKeys.ISSUE_KEY to issueKey,
+                SharedPayloadKeys.SUBTASK_ID to subtaskId,
+                SharedPayloadKeys.STATUS to "complete",
+                SharedPayloadKeys.WORKFLOW_ID to workflowId,
+                "commit_sha" to outcome.commitSha,
+                "last_resumable_step" to (outcome.lastResumableStep ?: "commit_push"),
+              ),
+          ),
+        )
       }
     }
   }
@@ -227,3 +216,31 @@ internal fun WorkflowGitOperationResult.measuredCommitSha(): String? =
     is WorkflowGitOperationResult.Ok -> value.trim().takeIf(String::isNotBlank)
     is WorkflowGitOperationResult.Failed -> null
   }
+
+internal fun WorkflowEngine.saveRunnerArtifactPatch(
+  workflowStates: WorkflowStateRepository,
+  family: WorkflowFamily,
+  record: WorkflowStateSnapshot,
+  patch: Map<String, Any?>,
+): WorkflowStateSnapshot {
+  val terminal = family.definition.isTerminalStatus(record.workflowStatus)
+  val updated =
+    updateRecord(
+      family.definition,
+      record,
+      WorkflowUpdateInput(
+        workflowStatus = record.workflowStatus,
+        currentStepId = record.currentStepId,
+        stepUpdates = null,
+        artifactsPatch = WorkflowArtifactPatch.from(patch),
+        sessionId = record.sessionId,
+        acceptedSnapshotMutation = terminal,
+      ),
+    )
+  if (terminal) {
+    workflowStates.saveAcceptedSnapshotMutation(family, updated)
+  } else {
+    workflowStates.save(family, updated)
+  }
+  return updated
+}

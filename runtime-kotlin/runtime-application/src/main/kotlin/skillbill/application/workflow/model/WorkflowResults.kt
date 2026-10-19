@@ -1,5 +1,6 @@
 package skillbill.application.workflow.model
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.workflow.engine.model.WorkflowContinueView
 import skillbill.workflow.engine.model.WorkflowInputProjection
 import skillbill.workflow.engine.model.WorkflowResumeView
@@ -28,7 +29,12 @@ sealed interface WorkflowUpdateResult {
     val launchProjection: WorkflowInputProjection? = null,
   ) : WorkflowUpdateResult
 
-  data class Error(val workflowId: String, val error: String, val dbPath: String? = null) : WorkflowUpdateResult
+  data class Error(
+    val workflowId: String,
+    val error: String,
+    val dbPath: String? = null,
+    val diagnosticCode: RuntimeFailureCode? = null,
+  ) : WorkflowUpdateResult
 }
 
 sealed interface WorkflowGetResult {

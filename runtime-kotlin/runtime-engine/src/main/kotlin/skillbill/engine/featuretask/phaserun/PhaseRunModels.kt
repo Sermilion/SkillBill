@@ -87,7 +87,7 @@ class StandalonePhaseRunners(
   private val monitor: StandaloneMonitorExecutionPreparer,
   private val qa: QaStandalonePhaseRun,
 ) {
-  fun prepareMonitor(request: MonitorPreparationRequest): MonitorPreparation = monitor.prepare(request)
+  internal fun prepareMonitor(request: MonitorPreparationRequest): MonitorPreparation = monitor.prepare(request)
 
   fun runQa(
     request: PhaseRunRequest,

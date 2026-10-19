@@ -119,7 +119,7 @@ class BlockedWorkerCrashRecoveryTest {
     withDatabase { database ->
       listOf(
         FeatureTaskRuntimeProcessInspection.ExactLive,
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("pid reuse"),
+        FeatureTaskRuntimeProcessInspection.PidReused,
         FeatureTaskRuntimeProcessInspection.Unsupported("process probe unavailable"),
         FeatureTaskRuntimeProcessInspection.NotRunning,
       ).forEachIndexed { index, inspection ->

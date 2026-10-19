@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.lifecycle.remediation
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationArtifactPatcher
 import skillbill.engine.featuretask.lifecycle.continuation.continuationFromArtifacts
 import skillbill.engine.featuretask.lifecycle.continuation.reviewStateFromArtifacts
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.subtask.PersistHealedRemediationBaseRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherenceResult
@@ -13,6 +14,7 @@ import skillbill.engine.featuretask.model.subtask.RemediationReconciliationApply
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationCoherent
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationHeal
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
@@ -44,6 +46,7 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
     workflowId: String,
     gitOperations: WorkflowGitOperations,
     repoRoot: Path,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): RemediationBaseCoherenceResult {
     val snapshot =
       when (val read = readRemediationSnapshot(workflowId)) {
@@ -56,6 +59,7 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
       workflowId = workflowId,
       gitOperations = gitOperations,
       repoRoot = repoRoot,
+      admitted = admitted,
     )
   }
 
@@ -92,9 +96,15 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
   internal fun appendRemediationRollbackDegradationEvidence(
     workflowId: String,
     signal: RemediationDegradationSignal,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ) {
     database.transaction { unitOfWork ->
       val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction
+      if (admitted != null &&
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+      ) {
+        return@transaction
+      }
       val artifacts = record.artifacts
       val goalBranch = continuationFromArtifacts(artifacts)?.goalBranch.orEmpty()
       val evidenceEntry =
@@ -142,6 +152,7 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.reconcileFromSnapshot(
   workflowId: String,
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
+  admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 ): RemediationBaseCoherenceResult {
   if (snapshot.state.remediationBaseSha == null &&
     snapshot.checkpoints.none { it.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID }
@@ -169,6 +180,7 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.reconcileFromSnapshot(
       gitOperations = gitOperations,
       repoRoot = repoRoot,
       latestRemediationResolved = latestRemediationResolved,
+      admitted = admitted,
     ),
   )
 }
@@ -209,6 +221,7 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.applyRemediationReconci
           gitOperations = request.gitOperations,
           repoRoot = request.repoRoot,
           latestRemediationResolved = request.latestRemediationResolved,
+          admitted = request.admitted,
         ),
       )
   }
@@ -240,6 +253,7 @@ private fun FeatureTaskRuntimeRemediationBaseReconciler.healRemediationBaseFromR
         valueExpected = "remediation_base_sha reachable from the goal branch",
         cause = "no review_fix checkpoint ref resolved; recovered the nearest reachable base from the goal branch",
       ),
+    admitted = request.admitted,
   )
   val healed =
     persistHealedRemediationBaseState(
@@ -251,6 +265,7 @@ private fun FeatureTaskRuntimeRemediationBaseReconciler.healRemediationBaseFromR
         continuation = continuation,
         gitOperations = request.gitOperations,
         repoRoot = request.repoRoot,
+        admitted = request.admitted,
       ),
     )
   return RemediationBaseCoherent(healed ?: state)
@@ -288,6 +303,7 @@ private fun FeatureTaskRuntimeRemediationBaseReconciler.blockRemediationBaseReco
         valueExpected = "resolvable review_fix checkpoint ref commit",
         cause = remediationBlockedCause(stored, storedResolves, failedRef),
       ),
+    admitted = request.admitted,
   )
   return RemediationBaseBlocked(guidance)
 }
@@ -316,6 +332,7 @@ private fun FeatureTaskRuntimeRemediationBaseReconciler.healRemediationBase(
           valueExpected = "resolvable remediation_base_sha commit",
           cause = "stored remediation base did not resolve; reconciled through checkpoint ref",
         ),
+      admitted = request.admitted,
     )
   }
   val healed =
@@ -328,6 +345,7 @@ private fun FeatureTaskRuntimeRemediationBaseReconciler.healRemediationBase(
         continuation = request.continuation,
         gitOperations = request.gitOperations,
         repoRoot = request.repoRoot,
+        admitted = request.admitted,
       ),
     )
   return RemediationBaseCoherent(healed ?: request.state)
@@ -370,9 +388,15 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.appendRemediationBaseRe
   workflowId: String,
   recovery: RemediationBaseRecovery,
   signal: RemediationDegradationSignal,
+  admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 ) {
   database.transaction { unitOfWork ->
     val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction
+    if (admitted != null &&
+      !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+    ) {
+      return@transaction
+    }
     val artifacts = record.artifacts
     val evidenceEntry = remediationBaseRecoveryEvidenceEntry(recovery, signal)
     val priorEvidence =

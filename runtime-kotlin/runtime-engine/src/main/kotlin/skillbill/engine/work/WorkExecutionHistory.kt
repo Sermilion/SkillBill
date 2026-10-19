@@ -34,7 +34,7 @@ internal fun StandalonePhaseStatusRecord.monitorTargetDetail(): String? =
       "repository ${target.pullRequestKey.substringBefore('#')}",
       "branch ${target.headRef} (${target.headRepository})",
       "invocation $invocationId",
-      "worktree ${target.worktreePath}",
+      target.worktreePath?.let { "worktree $it" },
       monitorCleanup?.let { cleanup -> "cleanup ${cleanup.describe()}" },
     ).joinToString("; ", prefix = "[", postfix = "]")
   }

@@ -179,9 +179,7 @@ class IdeStatusProjector(
           includeCompletedSubtaskValidation = false,
         ),
       )
-    val completionRecorded =
-      context.unitOfWork.goalRunnerControls.controlState(manifestState.parentWorkflowId).goalCompletedAt != null &&
-        projection?.hasUnfinishedSubtasks() != true
+    val completionRecorded = projection?.admittedParentComplete() == true
     val goalCandidate =
       candidate.copy(
         workflowId = manifestState.parentWorkflowId,
@@ -190,8 +188,8 @@ class IdeStatusProjector(
         lifecycleState = IdeStatusLifecycleState.ACTIVE,
       )
     val preliminaryLifecycle = goalLifecycle(goalCandidate, projection, completionRecorded)
-    val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
-    if (!goalShowsOpenCiMonitor(projection, completionRecorded, preliminaryLifecycle) && !liveFinalization) {
+    val liveFinalization = goalProjectsLiveFinalizationStep(projection)
+    if (!goalShowsOpenCiMonitor(projection, preliminaryLifecycle) && !liveFinalization) {
       return null
     }
     return assembleGoalStatusSnapshot(goalCandidate, context, issueKey, projection)
@@ -222,17 +220,15 @@ class IdeStatusProjector(
     issueKey: String,
     projection: GoalRunnerStatusProjection?,
   ): IdeStatusProjection {
-    val completionRecorded =
-      context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalCompletedAt != null &&
-        projection?.hasUnfinishedSubtasks() != true
+    val completionRecorded = projection?.admittedParentComplete() == true
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
     val planningStep =
       livePlanningOverlay(planning, projection?.currentStep, lifecycle, childContext.currentPhaseId)
-    val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
-    val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
+    val openCiMonitor = goalShowsOpenCiMonitor(projection, lifecycle)
+    val liveFinalization = goalProjectsLiveFinalizationStep(projection)
     val pauseReason =
       goalPauseReason(
         lifecycle,
@@ -325,7 +321,7 @@ class IdeStatusProjector(
     completionRecorded: Boolean,
   ): IdeStatusLifecycleState {
     if (candidate.lifecycleState == IdeStatusLifecycleState.CANCELED) return IdeStatusLifecycleState.CANCELED
-    val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
+    val liveFinalization = goalProjectsLiveFinalizationStep(projection)
     val candidateLifecycle =
       if (candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL &&
         (projection?.hasUnfinishedSubtasks() == true || liveFinalization)

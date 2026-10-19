@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.model.subtask
 
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
@@ -13,6 +14,7 @@ data class RemediationReconciliationApplyRequest(
   val gitOperations: WorkflowGitOperations,
   val repoRoot: Path,
   val latestRemediationResolved: ResolvedReviewFixCheckpoint?,
+  val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 )
 
 data class RemediationBaseHealRequest(
@@ -25,6 +27,7 @@ data class RemediationBaseHealRequest(
   val gitOperations: WorkflowGitOperations,
   val repoRoot: Path,
   val latestRemediationResolved: ResolvedReviewFixCheckpoint?,
+  val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 )
 
 data class PersistHealedRemediationBaseRequest(
@@ -35,6 +38,7 @@ data class PersistHealedRemediationBaseRequest(
   val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
   val gitOperations: WorkflowGitOperations,
   val repoRoot: Path,
+  val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 )
 
 data class RemediationReconcileSnapshot(

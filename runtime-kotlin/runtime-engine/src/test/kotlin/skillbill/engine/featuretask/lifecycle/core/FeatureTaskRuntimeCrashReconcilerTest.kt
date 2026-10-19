@@ -50,7 +50,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
   fun `only NotRunning is confirmed dead while ExactLive and ambiguous evidence stay conservative`() {
     assertTrue(FeatureTaskRuntimeProcessInspection.NotRunning.isConfirmedDead())
     assertFalse(FeatureTaskRuntimeProcessInspection.ExactLive.isConfirmedDead())
-    assertFalse(FeatureTaskRuntimeProcessInspection.OwnershipMismatch("pid reuse").isConfirmedDead())
+    assertFalse(FeatureTaskRuntimeProcessInspection.PidReused.isConfirmedDead())
     assertFalse(FeatureTaskRuntimeProcessInspection.Unsupported("no probe").isConfirmedDead())
   }
 
@@ -187,7 +187,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
   @Test
   fun `ambiguous liveness evidence never reconciles`() {
     listOf(
-      FeatureTaskRuntimeProcessInspection.OwnershipMismatch("pid reuse"),
+      FeatureTaskRuntimeProcessInspection.PidReused,
       FeatureTaskRuntimeProcessInspection.Unsupported("no probe"),
     ).forEach { inspection ->
       val repository = crashCandidateRepository(execution)

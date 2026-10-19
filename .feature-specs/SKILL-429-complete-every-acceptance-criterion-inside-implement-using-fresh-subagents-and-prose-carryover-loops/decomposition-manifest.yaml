@@ -1,0 +1,24 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-429"
+feature_name: "complete-every-acceptance-criterion-inside-implement-using-fresh-subagents-and-prose-carryover-loops"
+parent_spec_path: ".feature-specs/SKILL-429-complete-every-acceptance-criterion-inside-implement-using-fresh-subagents-and-prose-carryover-loops/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-429-complete-every-acceptance-criterion-inside-implement-using-fresh-subagents-and-prose-carryover-loops"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Complete implementation requirements through fresh workers"
+  spec_path: ".feature-specs/SKILL-429-complete-every-acceptance-criterion-inside-implement-using-fresh-subagents-and-prose-carryover-loops/spec_subtask_1_implementation_completion.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []

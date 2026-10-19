@@ -124,9 +124,8 @@ internal class LifecycleTelemetryGoalSessionAdapter(
     record: GoalIssueFinishedRecord,
     level: String,
   ) {
-    if (saveGoalIssueFinished(connection, record, diagnostics).persisted) {
-      val goal = GoalIssueIdentity(record.parentWorkflowId, record.issueKey)
-      emitGoalIssueFinished(connection, runtimeVersion, goal, level, diagnostics)
-    }
+    saveGoalIssueFinished(connection, record, diagnostics)
+    val goal = GoalIssueIdentity(record.parentWorkflowId, record.issueKey)
+    emitGoalIssueFinished(connection, runtimeVersion, goal, level, diagnostics)
   }
 }

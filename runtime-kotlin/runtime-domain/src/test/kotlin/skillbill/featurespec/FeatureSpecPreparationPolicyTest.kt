@@ -59,6 +59,21 @@ class FeatureSpecPreparationPolicyTest {
   }
 
   @Test
+  fun `six criteria require decomposition even when intake requests single_spec`() {
+    val criteria = (1..6).map { "Production outcome $it." }
+    val intake = validIntake().copy(intendedOutcome = "single_spec", acceptanceCriteria = criteria)
+
+    val decision = FeatureSpecPreparationPolicy.prepare(intake)
+
+    assertEquals(FeatureSpecPreparationMode.DECOMPOSED, decision.mode)
+    assertEquals(criteria, decision.acceptanceCriteria)
+    assertEquals(
+      FeatureSpecPreparationMode.SINGLE_SPEC,
+      FeatureSpecPreparationPolicy.prepare(intake.copy(acceptanceCriteria = criteria.take(5))).mode,
+    )
+  }
+
+  @Test
   fun `prepare classifies decomposed when intent signals resumable subtasks`() {
     val decision =
       FeatureSpecPreparationPolicy.prepare(

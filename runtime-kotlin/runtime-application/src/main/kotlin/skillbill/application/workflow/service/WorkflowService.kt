@@ -39,6 +39,7 @@ import skillbill.application.workflow.persist.withGoalObservabilityArtifacts
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
@@ -52,6 +53,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.WorkflowStateWriteResult
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.decomposition.runtime.isGoalContinuationChildWorkflow
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
@@ -240,8 +242,11 @@ class WorkflowService(
       )
     val updatedRecord = engine.updateRecord(family.definition, existing, effectiveInput)
     workflowSnapshotValidator.validate(updatedRecord, family.definition.workflowName)
-    unitOfWork.workflowStates.save(family, updatedRecord)
-    val updated = unitOfWork.workflowStates.get(family, request.workflowId) ?: updatedRecord
+    val updated =
+      when (val saved = saveOrdinaryUpdate(family, request.workflowId, existing, updatedRecord, unitOfWork)) {
+        is OrdinaryWorkflowSave.Rejected -> return saved.persistence
+        is OrdinaryWorkflowSave.Saved -> saved.snapshot
+      }
     if (runtimeInput.updated) {
       engine.syncDecompositionParentRuntime(
         family,
@@ -584,9 +589,53 @@ class WorkflowService(
       DecompositionManifestProjectionOutcome.Absent -> Unit
     }
   }
+
+  private fun saveOrdinaryUpdate(
+    family: WorkflowFamily,
+    workflowId: String,
+    existing: WorkflowStateSnapshot,
+    updatedRecord: WorkflowStateSnapshot,
+    unitOfWork: UnitOfWork,
+  ): OrdinaryWorkflowSave {
+    if (updatedRecord == existing) {
+      return OrdinaryWorkflowSave.Saved(existing)
+    }
+    return when (unitOfWork.workflowStates.saveOrdinary(family, updatedRecord)) {
+      WorkflowStateWriteResult.Accepted -> {
+        val persisted = unitOfWork.workflowStates.get(family, workflowId)
+        if (persisted == null) {
+          OrdinaryWorkflowSave.Rejected(
+            WorkflowUpdatePersistence(
+              WorkflowUpdateResult.Error(workflowId, "Workflow update was not persisted."),
+              pendingProjection = null,
+            ),
+          )
+        } else {
+          OrdinaryWorkflowSave.Saved(persisted)
+        }
+      }
+      WorkflowStateWriteResult.TerminalRefused ->
+        OrdinaryWorkflowSave.Rejected(
+          WorkflowUpdatePersistence(
+            WorkflowUpdateResult.Error(
+              workflowId,
+              "Workflow update conflicts with the current terminal state.",
+              diagnosticCode = WorkflowFailureCode.TERMINAL_WORKFLOW_WRITE_REFUSED,
+            ),
+            pendingProjection = null,
+          ),
+        )
+    }
+  }
 }
 
 private data class WorkflowUpdatePersistence(
   val result: WorkflowUpdateResult,
   val pendingProjection: PendingDecompositionProjection?,
 )
+
+private sealed interface OrdinaryWorkflowSave {
+  data class Saved(val snapshot: WorkflowStateSnapshot) : OrdinaryWorkflowSave
+
+  data class Rejected(val persistence: WorkflowUpdatePersistence) : OrdinaryWorkflowSave
+}

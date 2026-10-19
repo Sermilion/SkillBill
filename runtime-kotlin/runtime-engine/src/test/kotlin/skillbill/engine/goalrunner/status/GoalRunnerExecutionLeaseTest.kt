@@ -101,7 +101,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-clear",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-02T10:00:10Z")),
+          lease.renewedAt(Instant.parse("2026-08-02T10:00:10Z")),
         ),
       )
       val paused = store.controlState("parent-clear")
@@ -136,13 +136,13 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-clock",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-07T18:22:10Z")),
+          lease.renewedAt(Instant.parse("2026-08-07T18:22:10Z")),
         ),
       )
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-clock",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-07T18:22:20Z")),
+          lease.renewedAt(Instant.parse("2026-08-07T18:22:20Z")),
         ),
       )
       assertEquals(20_000, store.controlState("parent-clock").activeDurationMs)
@@ -150,7 +150,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-clock",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-08T06:31:00Z")),
+          lease.renewedAt(Instant.parse("2026-08-07T18:22:45Z")),
         ),
       )
       assertEquals(40_000, store.controlState("parent-clock").activeDurationMs)
@@ -158,7 +158,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-clock",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-08T06:31:10Z")),
+          lease.renewedAt(Instant.parse("2026-08-07T18:22:55Z")),
         ),
       )
       assertEquals(50_000, store.controlState("parent-clock").activeDurationMs)
@@ -175,7 +175,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-late",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-07T18:22:20.001Z")),
+          lease.renewedAt(Instant.parse("2026-08-07T18:22:20.001Z")),
         ),
       )
       assertEquals(20_000, store.controlState("parent-late").activeDurationMs)
@@ -192,7 +192,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-reacquire",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-07T18:22:10Z")),
+          lease.renewedAt(Instant.parse("2026-08-07T18:22:10Z")),
         ),
       )
       assertTrue(store.releaseExecutionLease("parent-reacquire", lease.ownerToken, lease.generation))
@@ -209,7 +209,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-reacquire",
-          nextDay.copy(heartbeatAt = Instant.parse("2026-08-08T06:31:05Z")),
+          nextDay.renewedAt(Instant.parse("2026-08-08T06:31:05Z")),
         ),
       )
       assertEquals(15_000, store.controlState("parent-reacquire").activeDurationMs)
@@ -227,7 +227,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-dual",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-07T18:22:10Z")),
+          lease.renewedAt(Instant.parse("2026-08-07T18:22:10Z")),
         ),
       )
       val state = store.controlState("parent-dual")
@@ -250,7 +250,7 @@ class GoalRunnerExecutionLeaseTest {
       assertTrue(
         store.heartbeatExecutionLease(
           "parent-clear-subtask",
-          lease.copy(heartbeatAt = Instant.parse("2026-08-02T10:00:10Z")),
+          lease.renewedAt(Instant.parse("2026-08-02T10:00:10Z")),
         ),
       )
       store.persistControlState(
@@ -272,6 +272,9 @@ class GoalRunnerExecutionLeaseTest {
       assertEquals("2026-08-02T10:00:10Z", cleared.subtaskActiveDurationAsOf)
     }
   }
+
+  private fun GoalRunnerExecutionLease.renewedAt(heartbeatAt: Instant): GoalRunnerExecutionLease =
+    copy(heartbeatAt = heartbeatAt, expiresAt = heartbeatAt.plusSeconds(30))
 
   private fun leaseFixture(
     generation: Long,

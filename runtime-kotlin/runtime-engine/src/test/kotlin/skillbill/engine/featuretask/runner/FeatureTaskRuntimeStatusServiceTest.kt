@@ -866,6 +866,22 @@ class FeatureTaskRuntimeStatusAttributionTest {
   }
 
   @Test
+  fun `a pending audit fix step the workflow row names as current stays current instead of advancing to review`() {
+    val harness = statusHarness()
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
+    harness.advanceWorkflowRowTo("audit_plan_fix")
+
+    val projection =
+      requireNotNull(
+        harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
+      )
+
+    assertEquals("audit_plan_fix", projection.currentPhaseId)
+  }
+
+  @Test
   fun `legacy blocked audit gap record projects pending not blocked`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
@@ -1264,6 +1280,7 @@ internal fun statusHarness(): StatusHarness {
         StatusNoopSnapshotValidator,
         featureTaskRuntimeWireArtifactValidatorForTest(),
       ),
+      testHarnessClock,
     )
   return StatusHarness(
     recorder,
@@ -1310,35 +1327,41 @@ internal class StatusHarness(
     phaseId: String,
     attemptCount: Int,
     resolvedAgentId: String = "claude",
-  ) = recorder.recordPhaseState(
-    FeatureTaskRuntimePhaseStateRequest(
-      workflowId = WORKFLOW_ID,
-      phaseId = phaseId,
-      status = "completed",
-      attemptCount = attemptCount,
-      resolvedAgentId = resolvedAgentId,
-      finished = true,
-      outputArtifact = """{"contract_version":"0.1"}""",
-    ),
-  )
+  ): Boolean {
+    recordRunning(phaseId, attemptCount, resolvedAgentId)
+    return recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = WORKFLOW_ID,
+        phaseId = phaseId,
+        status = "completed",
+        attemptCount = attemptCount,
+        resolvedAgentId = resolvedAgentId,
+        finished = true,
+        outputArtifact = """{"contract_version":"0.1"}""",
+      ),
+    )
+  }
 
   fun recordBlocked(
     phaseId: String,
     attemptCount: Int,
     blockedReason: String,
     resolvedAgentId: String = "claude",
-  ) = recorder.recordPhaseState(
-    FeatureTaskRuntimePhaseStateRequest(
-      workflowId = WORKFLOW_ID,
-      phaseId = phaseId,
-      status = "blocked",
-      attemptCount = attemptCount,
-      resolvedAgentId = resolvedAgentId,
-      finished = false,
-      outputArtifact = null,
-      blockedReason = blockedReason,
-    ),
-  )
+  ): Boolean {
+    recordRunning(phaseId, attemptCount, resolvedAgentId)
+    return recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = WORKFLOW_ID,
+        phaseId = phaseId,
+        status = "blocked",
+        attemptCount = attemptCount,
+        resolvedAgentId = resolvedAgentId,
+        finished = false,
+        outputArtifact = null,
+        blockedReason = blockedReason,
+      ),
+    )
+  }
 
   fun recordLedger(
     action: FeatureTaskRuntimePhaseLedgerAction,
@@ -1390,6 +1413,11 @@ internal class StatusHarness(
       edgeIteration = edgeIteration,
     ),
   )
+
+  fun advanceWorkflowRowTo(stepId: String) {
+    val row = requireNotNull(repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
+    repository.saveFeatureTaskWorkflow(row.copy(currentStepId = stepId), RUNTIME)
+  }
 
   fun seedDiagnosticSignals(vararg signals: FeatureTaskRuntimeDiagnosticSignal) {
     seedDiagnosticSignalsArtifact(signals.map { it.asWorkflowArtifactEntry() })
@@ -1481,6 +1509,8 @@ internal class StatusInMemoryWorkflowRepository : WorkflowStateRepositoryDefault
     workflowId: String,
     mode: FeatureTaskWorkflowMode,
   ): WorkflowStateRecord? = taskRuntimeRows[workflowId]
+
+  override fun getFeatureTaskWorkflow(workflowId: String): WorkflowStateRecord? = taskRuntimeRows[workflowId]
 
   override fun listFeatureTaskWorkflows(
     mode: FeatureTaskWorkflowMode,

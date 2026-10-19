@@ -53,6 +53,7 @@ data class AppendCheckpointIdentityArgs(
   val subtaskId: String,
   val branch: String,
   val phaseId: String,
+  val attemptCount: Int,
   val loopId: String?,
   val generation: Int,
   val parentSha: String?,

@@ -67,6 +67,12 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
 
   override fun requestPause(parentWorkflowId: String): GoalRunnerControlState? = null
 
+  override fun updateControlState(
+    parentWorkflowId: String,
+    update: (GoalRunnerControlState) -> GoalRunnerControlState,
+  ): GoalRunnerControlState =
+    update(controlState(parentWorkflowId)).let { state -> persistControlState(parentWorkflowId, state) }
+
   override fun pauseNow(
     parentWorkflowId: String,
     reason: String,
@@ -89,6 +95,25 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
     expectedOwnerToken: String?,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean = acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
+
+  override fun acquireExecutionLeaseFenced(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwner: GoalRunnerExecutionLease?,
+  ): Boolean {
+    if (executionLease(parentWorkflowId) != expectedOwner) return false
+    return acquireExecutionLease(parentWorkflowId, lease, expectedOwner?.ownerToken)
+  }
+
+  override fun acquireExecutionLeaseWithChildAdmissionFenced(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwner: GoalRunnerExecutionLease?,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+  ): Boolean {
+    if (executionLease(parentWorkflowId) != expectedOwner) return false
+    return acquireExecutionLeaseWithChildAdmission(parentWorkflowId, lease, expectedOwner?.ownerToken, childAdmission)
+  }
 
   override fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease? = null
 

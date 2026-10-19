@@ -3,12 +3,14 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.review.RejectedOutputDiagnosticDegradeRequest
 import skillbill.engine.featuretask.model.review.RejectedOutputDiagnosticPersistRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
@@ -74,24 +76,78 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     ) : DiagnosticWriteOutcome<Nothing>()
   }
 
+  fun recordOwnedRejectedOutput(
+    request: RejectedOutputDiagnosticRequest,
+    producerGeneration: Int,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): FeatureTaskRuntimeRejectedOutputWrite {
+    val evidence = producerOutputEvidenceFromRequest(request, producerGeneration)
+    val degradeRequest =
+      RejectedOutputDiagnosticDegradeRequest(
+        workflowId = request.workflowId,
+        operation = "record-rejected-output",
+        conflictingKey = evidence.evidenceKey(),
+        phaseId = request.phaseId,
+        attempt = request.attempt,
+        repairTurn = request.repairTurn,
+        generation = producerGeneration,
+      )
+    return when (
+      val outcome =
+        degradeDiagnosticFailure(degradeRequest, admitted) {
+          database.transaction { unitOfWork ->
+            if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+              return@transaction null
+            }
+            val service = diagnosticService(unitOfWork)
+            service.retainProducerOutput(evidence)
+            when (val recording = service.record(request)) {
+              is RejectedOutputDiagnosticRecording.Recorded -> Unit
+              is RejectedOutputDiagnosticRecording.Conflict -> throw conflictFailure(recording.identity)
+              is RejectedOutputDiagnosticRecording.InvalidRequest -> throw invalidRequestFailure(recording.reason)
+            }
+            recordRejectionMeasurement(unitOfWork, request)
+            RejectedOutputDiagnosticService.stableIdentity(
+              request.workflowId,
+              request.phaseId,
+              request.attempt,
+              request.repairTurn,
+            )
+          }
+        }
+    ) {
+      is DiagnosticWriteOutcome.Written<*> ->
+        when (val identity = outcome.value as String?) {
+          null -> FeatureTaskRuntimeRejectedOutputWrite.OwnershipRejected
+          else -> FeatureTaskRuntimeRejectedOutputWrite.Written(identity)
+        }
+      is DiagnosticWriteOutcome.Degraded -> FeatureTaskRuntimeRejectedOutputWrite.Degraded(outcome.failureClass)
+    }
+  }
+
+  private fun producerOutputEvidenceFromRequest(
+    request: RejectedOutputDiagnosticRequest,
+    producerGeneration: Int,
+  ): ProducerOutputEvidence =
+    ProducerOutputEvidence(
+      workflowId = request.workflowId,
+      phaseId = request.phaseId,
+      attempt = request.attempt,
+      agentId = request.agentId,
+      model = request.model,
+      recordedAt = clock.instant(),
+      byteSize = request.observedByteSize,
+      sha256 = request.observedSha256,
+      payload = request.rawResponse.takeUnless { request.truncated },
+      generation = producerGeneration,
+      repairTurn = request.repairTurn,
+    )
+
   fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
     producerGeneration: Int,
   ): FeatureTaskRuntimeRejectedOutputWrite {
-    val evidence =
-      ProducerOutputEvidence(
-        workflowId = request.workflowId,
-        phaseId = request.phaseId,
-        attempt = request.attempt,
-        agentId = request.agentId,
-        model = request.model,
-        recordedAt = clock.instant(),
-        byteSize = request.observedByteSize,
-        sha256 = request.observedSha256,
-        payload = request.rawResponse.takeUnless { request.truncated },
-        generation = producerGeneration,
-        repairTurn = request.repairTurn,
-      )
+    val evidence = producerOutputEvidenceFromRequest(request, producerGeneration)
     return when (
       val outcome =
         degradeDiagnosticFailure(
@@ -147,6 +203,31 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
           exhaustedFixLoop = request.exhaustedFixLoop,
         ),
       )
+    }
+  }
+
+  fun retainOwnedProducerOutput(
+    evidence: ProducerOutputEvidence,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ) {
+    degradeDiagnosticFailure(
+      RejectedOutputDiagnosticDegradeRequest(
+        workflowId = evidence.workflowId,
+        operation = "retain-producer-output",
+        conflictingKey = evidence.evidenceKey(),
+        phaseId = evidence.phaseId,
+        attempt = evidence.attempt,
+        repairTurn = evidence.repairTurn,
+        generation = evidence.generation,
+      ),
+      admitted,
+    ) {
+      database.transaction { unitOfWork ->
+        if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, evidence.workflowId, clock)) {
+          return@transaction
+        }
+        diagnosticService(unitOfWork).retainProducerOutput(evidence)
+      }
     }
   }
 
@@ -214,6 +295,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
 
   private fun <T> degradeDiagnosticFailure(
     request: RejectedOutputDiagnosticDegradeRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
     block: () -> T,
   ): DiagnosticWriteOutcome<T> {
     fun degrade(failureClass: FeatureTaskRuntimeDiagnosticFailureClass): DiagnosticWriteOutcome<T> {
@@ -228,6 +310,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
           generation = request.generation,
           failureClass = failureClass,
         ),
+        admitted,
       )
       return DiagnosticWriteOutcome.Degraded(failureClass)
     }
@@ -244,7 +327,10 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     }
   }
 
-  private fun persistDegradedDiagnostic(request: RejectedOutputDiagnosticPersistRequest) {
+  private fun persistDegradedDiagnostic(
+    request: RejectedOutputDiagnosticPersistRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  ) {
     val signal =
       FeatureTaskRuntimeDiagnosticSignal(
         operation = request.operation,
@@ -256,7 +342,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
         generation = request.generation.coerceAtLeast(0),
         recordedAt = clock.instant().toString(),
       )
-    persistDiagnosticSignal(request.workflowId, signal)
+    persistDiagnosticSignal(request.workflowId, signal, admitted)
     recordDegradationMeasurement(request.workflowId, signal)
   }
 
@@ -285,9 +371,16 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
   private fun persistDiagnosticSignal(
     workflowId: String,
     signal: FeatureTaskRuntimeDiagnosticSignal,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ) {
     runCatching {
       database.transaction { unitOfWork ->
+        if (
+          admitted != null &&
+          !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        ) {
+          return@transaction
+        }
         val record =
           unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
             ?: return@transaction

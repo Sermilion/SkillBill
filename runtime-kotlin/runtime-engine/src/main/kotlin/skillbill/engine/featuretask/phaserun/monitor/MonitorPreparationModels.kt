@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phaserun.monitor
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
+import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorSettlement
 import java.nio.file.Path
 
@@ -26,7 +27,14 @@ enum class MonitorBlockKind {
   BASE_MOVED,
 }
 
-sealed interface MonitorPreparation {
+internal data class MonitorAttemptTarget(
+  val target: MonitorResolvedTarget,
+  val callerRoot: Path,
+  val primaryRoot: Path,
+  val worktreePath: Path? = null,
+)
+
+internal sealed interface MonitorPreparation {
   data class Prepared(
     val context: MonitorExecutionContext,
     val cleanup: MonitorCleanupOwnership,
@@ -40,6 +48,7 @@ sealed interface MonitorPreparation {
     val pullRequest: MonitorPullRequestIdentity?,
     val path: Path? = null,
     val settlement: MonitorSettlement? = null,
+    val attempt: MonitorAttemptTarget? = null,
   ) : MonitorPreparation
 
   data class Refused(
@@ -52,5 +61,6 @@ sealed interface MonitorPreparation {
     val reason: String,
     val pullRequest: MonitorPullRequestIdentity? = null,
     val settlement: MonitorSettlement? = null,
+    val attempt: MonitorAttemptTarget? = null,
   ) : MonitorPreparation
 }

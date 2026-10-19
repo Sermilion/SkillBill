@@ -561,7 +561,7 @@ class WorkRunControlsTest {
   fun `cancel terminates only the exact recorded owner and refuses an identity mismatch`() {
     listOf(
       FeatureTaskRuntimeProcessInspection.ExactLive,
-      FeatureTaskRuntimeProcessInspection.OwnershipMismatch("PID belongs to another process"),
+      FeatureTaskRuntimeProcessInspection.PidReused,
     ).forEach { initial ->
       establishTemporarySchemaReadiness("owned-phase-cancel").use { fixture ->
         val component = component(fixture.tempDir, fixture.dbPath)
@@ -608,7 +608,7 @@ class WorkRunControlsTest {
             component.ideStatusService.detail(WorkDetailRequest("interrupted")).item?.snapshot?.lifecycleState,
           )
         } else {
-          assertEquals(WorkControlResult.Rejected(WorkControlRejection.OWNERSHIP_MISMATCH), result)
+          assertEquals(WorkControlResult.Rejected(WorkControlRejection.PID_REUSED), result)
           assertEquals(0, stopped)
           assertEquals(
             IdeStatusLifecycleState.PAUSED,

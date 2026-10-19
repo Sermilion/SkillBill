@@ -164,8 +164,12 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     val text = readOrNull(repoRoot.resolve(subtask.specPath).normalize()) ?: return subtask
     val scopeSha256 = sha256HexUtf8(PlanBundleSpecText.scopeOf(text))
     val details = PlanBundleSpecText.detailsOf(text)
+    val editedDetails =
+      details != null && sha256HexUtf8(
+        details,
+      ) != subtask.detailsSha256 && PlanBundleSpecText.governedSubSpecReady(text)
     return when {
-      settled && details != null ->
+      (settled || editedDetails) && details != null ->
         subtask.copy(scopeSha256 = scopeSha256, detailsSha256 = sha256HexUtf8(details), planText = details)
       scopeSha256 != subtask.scopeSha256 ->
         subtask.copy(scopeSha256 = scopeSha256, detailsSha256 = null, planText = null)

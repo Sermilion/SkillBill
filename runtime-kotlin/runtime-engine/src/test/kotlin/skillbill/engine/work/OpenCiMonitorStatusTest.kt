@@ -11,17 +11,21 @@ import kotlin.test.assertTrue
 class OpenCiMonitorStatusTest {
   @Test
   fun `finished subtasks with no goal completion still owe ci monitor`() {
-    assertTrue(goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0), false))
+    assertTrue(goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0)))
   }
 
   @Test
   fun `an unfinished subtask does not owe ci monitor`() {
-    assertFalse(goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 2, blocked = 0), false))
+    assertFalse(goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 2, blocked = 0)))
   }
 
   @Test
   fun `a recorded goal completion does not owe ci monitor`() {
-    assertFalse(goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0), true))
+    assertFalse(
+      goalStaysOnOpenCiMonitor(
+        projection(complete = 1, pending = 0, blocked = 0).copy(goalCompletedAt = "2026-08-06T09:00:00Z"),
+      ),
+    )
   }
 
   @Test
@@ -58,7 +62,6 @@ class OpenCiMonitorStatusTest {
       goalProjectsLiveFinalizationStep(
         projection(complete = 1, pending = 0, blocked = 0)
           .copy(executionLiveness = ExecutionLiveness.LIVE, currentStep = "monitor"),
-        false,
       ),
     )
   }
@@ -69,7 +72,6 @@ class OpenCiMonitorStatusTest {
       goalProjectsLiveFinalizationStep(
         projection(complete = 0, pending = 1, blocked = 0)
           .copy(executionLiveness = ExecutionLiveness.LIVE, currentStep = "implement"),
-        false,
       ),
     )
   }
@@ -77,7 +79,7 @@ class OpenCiMonitorStatusTest {
   @Test
   fun `a paused goal does not stay on ci monitor`() {
     assertFalse(
-      goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0).copy(paused = true), false),
+      goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0).copy(paused = true)),
     )
   }
 
