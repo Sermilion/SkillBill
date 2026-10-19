@@ -47,10 +47,13 @@ class WorkCandidateQueriesTest {
           repository, "main", " skill-428 ", null, "related-phase", FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN, "related-execution",
           "paused", "runner_interrupted", now, "phase-owner", 1, now.plusSeconds(300),
         )
-        unit.standalonePhaseStatuses.register(related)
+        unit.standalonePhaseStatuses.register(related.copy(launchScope = IdeStatusLaunchScope.GOAL))
         unit.standalonePhaseStatuses.register(
           related.copy(phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
-            invocationId = "replan", executionId = "replan-execution"),
+            invocationId = "replan", executionId = "replan-execution", launchScope = IdeStatusLaunchScope.GOAL),
+        )
+        unit.standalonePhaseStatuses.register(
+          related.copy(invocationId = "operator-plan", executionId = "operator-plan-execution"),
         )
         unit.standalonePhaseStatuses.register(
           related.copy(phaseId = "monitor", invocationId = "independent-monitor", executionId = "monitor-execution"),
@@ -76,7 +79,7 @@ class WorkCandidateQueriesTest {
         assertEquals(StandalonePhaseStatusUpdateResult.ACCEPTED, update)
       }
 
-      val unrelated = setOf("other-task", "other-repository", "keyless", "independent-monitor")
+      val unrelated = setOf("other-task", "other-repository", "keyless", "independent-monitor", "operator-plan")
       assertEquals(unrelated, fixture.connection.candidates(WorkSection.PHASES, now))
       assertEquals(unrelated + "goal", fixture.connection.candidates(WorkSection.NEEDS_YOU, now))
       assertEquals(setOf("goal"), fixture.connection.candidates(WorkSection.GOALS, now))
@@ -100,7 +103,8 @@ class WorkCandidateQueriesTest {
       }
       assertEquals(unrelated + "later-phase", fixture.connection.candidates(WorkSection.PHASES, now.plusSeconds(2)))
       fixture.connection.createStatement().use { it.executeUpdate("DELETE FROM goal_issue_progress WHERE parent_workflow_id = 'goal'") }
-      assertEquals(unrelated + setOf("related-phase", "replan", "later-phase"), fixture.connection.candidates(WorkSection.PHASES, now.plusSeconds(2)))
+      assertEquals(unrelated + "later-phase", fixture.connection.candidates(WorkSection.PHASES, now.plusSeconds(2)))
+      assertEquals(setOf("replan"), fixture.connection.candidates(WorkSection.GOALS, now.plusSeconds(2)))
     }
   }
 
