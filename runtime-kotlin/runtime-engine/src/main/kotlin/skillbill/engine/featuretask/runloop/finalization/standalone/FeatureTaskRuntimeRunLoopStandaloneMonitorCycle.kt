@@ -152,12 +152,12 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
         run,
         iteration,
         "The failing checks belong to ${outcome.headSha ?: "an unknown commit"}, not the head $head this " +
-          "invocation last published.",
+          "invocation is monitoring.",
       )
     }
     val checks = failingChecksProse(outcome.failingChecks)
     val confirmsPublishedRepair =
-      ledger.publishedRepairs.isNotEmpty() && head !in progress.monitorFailedRepairCommitShas
+      ledger.publishedRepairs.any { it.commitSha == head } && head !in progress.monitorFailedRepairCommitShas
     return routeToRepair(
       run,
       iteration,

@@ -106,6 +106,11 @@ private class RecordingResources : StandaloneMonitorResources {
     worktree: MonitorWorktree,
   ) = step("markPrepared") { Unit }
 
+  override fun adoptHead(
+    fence: MonitorFence,
+    headSha: String,
+  ): String? = step("adoptHead") { null }
+
   override fun settle(request: MonitorSettleRequest): MonitorSettlement =
     step("settle") {
       settleFailure?.let { throw it }

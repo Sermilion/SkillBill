@@ -320,6 +320,33 @@ class PhaseStandaloneMonitorExecutionTest {
   }
 
   @Test
+  fun `a teammate push on a published repair is adopted and its failure does not spend the repair budget`() {
+    var teammateHead: String? = null
+    val checks = { sha: String ->
+      if (repairCount == 2 && teammateHead == null) {
+        val teammate = root.resolve("teammate")
+        git(root, "clone", "-q", "-b", FEATURE_BRANCH, fork.toString(), teammate.toString())
+        configureIdentity(teammate)
+        commit(teammate, "Teammate.kt", "class Teammate\n")
+        git(teammate, "push", "-q", "origin", FEATURE_BRANCH)
+        teammateHead = git(teammate, "rev-parse", "HEAD")
+        PullRequestChecks.Reported(listOf(PullRequestCheck("build", CheckBucket.PENDING, CHECK_URL)))
+      } else {
+        failing()
+      }
+    }
+
+    val result = run(checks = checks)
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    val adopted = assertNotNull(teammateHead)
+    assertEquals(MAX_REPAIRS + 1, repairCwds.size, "the teammate commit's failure must not count as a failed repair")
+    assertFalse(adopted in blocked.reason, "the teammate commit is not a failed repair: ${blocked.reason}")
+    assertTrue(isAncestor(adopted, forkHead()), "later repairs must build on the teammate commit")
+    assertOwnedWorktreeRemoved(blocked.targetReport)
+  }
+
+  @Test
   fun `standalone bindings refuse foreign steps, foreign strategies and expired lifetimes before any effect`() {
     val operations = CountingOperations()
     val inspection =

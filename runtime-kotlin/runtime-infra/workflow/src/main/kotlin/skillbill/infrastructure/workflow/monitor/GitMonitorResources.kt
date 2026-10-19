@@ -218,6 +218,49 @@ class GitMonitorResources(
     )
   }
 
+  override fun adoptHead(
+    fence: MonitorFence,
+    headSha: String,
+  ): String? {
+    val target = requireFence(fence).target ?: return "The pull request head was never fetched."
+    val record = MonitorAdmissionFiles.read(fence.directory) ?: throw fenceLost(fence)
+    val worktree = record.executionPath?.let(Path::of) ?: return "The owned worktree was never prepared."
+    return adoptionRefusal(Path.of(record.primaryRoot), worktree, target, fence.ownerToken, headSha)
+      ?: resetToAdopted(fence, worktree, headSha)
+  }
+
+  private fun resetToAdopted(
+    fence: MonitorFence,
+    worktree: Path,
+    headSha: String,
+  ): String? {
+    val reset = monitorGit(worktree, "reset", "--keep", headSha)
+    if (!reset.ok) return "The owned worktree could not move to $headSha: ${reset.output}"
+    val current = MonitorAdmissionFiles.read(fence.directory) ?: throw fenceLost(fence)
+    persist(fence, current.copy(lastPublishedSha = headSha, updatedAt = monitorNow(clock, current)))
+    return null
+  }
+
+  private fun adoptionRefusal(
+    primary: Path,
+    worktree: Path,
+    target: MonitorResolvedTarget,
+    ownerToken: String,
+    headSha: String,
+  ): String? {
+    val headRef = "${monitorRefNamespace(ownerToken)}/head"
+    val fetch = monitorFetchBranch(primary, target.head.fetchUrl, target.head.tip.ref, headRef)
+    val fetched = tipOf(primary, fetch, headRef)
+    val tracked = monitorGit(worktree, "status", "--porcelain", "--untracked-files=no")
+    return when {
+      fetched == null -> "The new head could not be fetched: ${fetch.output}"
+      fetched != headSha -> "The head moved again to $fetched while adopting $headSha."
+      !tracked.ok -> "The owned worktree status could not be read: ${tracked.output}"
+      tracked.output.isNotBlank() -> "The owned worktree has uncommitted changes, so it cannot move to $headSha."
+      else -> null
+    }
+  }
+
   override fun settle(request: MonitorSettleRequest): MonitorSettlement {
     val fence = request.fence
     val ownership = held[fence.directory]?.takeIf { it.matches(fence) }

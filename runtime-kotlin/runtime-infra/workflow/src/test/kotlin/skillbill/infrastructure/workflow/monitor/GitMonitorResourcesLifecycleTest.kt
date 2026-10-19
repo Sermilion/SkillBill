@@ -237,6 +237,38 @@ class GitMonitorResourcesLifecycleTest {
   }
 
   @Test
+  fun `a head pushed by someone else moves the clean owned worktree and is released as published`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile("teammate.txt", "teammate")
+    runGit(fixture.caller, "push", "origin", FEATURE_BRANCH)
+    val pushed = runGit(fixture.caller, "rev-parse", "HEAD")
+
+    assertEquals(null, resources.adoptHead(fence, pushed))
+
+    assertEquals(pushed, runGit(worktree.path, "rev-parse", "HEAD"))
+    assertEquals(worktree.branch, runGit(worktree.path, "symbolic-ref", "--short", "HEAD"))
+    assertEquals(MonitorSettlement.Released, resources.settle(fence))
+  }
+
+  @Test
+  fun `a head is not adopted over tracked changes in the owned worktree`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile("teammate.txt", "teammate")
+    runGit(fixture.caller, "push", "origin", FEATURE_BRANCH)
+    Files.writeString(worktree.path.resolve("feature.txt"), "repair in progress")
+
+    val refusal = assertNotNull(resources.adoptHead(fence, runGit(fixture.caller, "rev-parse", "HEAD")))
+
+    assertTrue("uncommitted changes" in refusal, refusal)
+    assertEquals(fixture.headSha, runGit(worktree.path, "rev-parse", "HEAD"))
+    assertEquals("repair in progress", Files.readString(worktree.path.resolve("feature.txt")))
+  }
+
+  @Test
   fun `a duplicate admission from a linked worktree reports the live owner and never supersedes it`() {
     val fixture = fixture()
     val linked = temp.toRealPath().resolve("linked")

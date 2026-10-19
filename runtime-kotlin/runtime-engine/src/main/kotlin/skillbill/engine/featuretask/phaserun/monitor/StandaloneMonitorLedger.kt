@@ -43,6 +43,16 @@ internal class StandaloneMonitorLedger(
     pendingRepair = pendingRepair?.copy(completed = true)
   }
 
+  fun adopt(headSha: String): String? =
+    if (pendingRepair != null) {
+      "A repair is pending on $acknowledgedHeadSha."
+    } else {
+      cleanup.adoptHead(headSha) ?: run {
+        heads += headSha
+        null
+      }
+    }
+
   fun acknowledge(commitSha: String) {
     receipts += StandalonePublishedRepair(commitSha)
     heads += commitSha

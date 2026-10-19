@@ -35,6 +35,8 @@ class StandalonePullRequestWatcherTest {
   private var lookupFailure: String? = null
   private var cancelled = false
   private val running = mutableListOf<List<String>>()
+  private val adopted = mutableListOf<String>()
+  private var adoptionRefusal: String? = null
   private val checks =
     object : MonitorCheckSource {
       override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks =
@@ -74,7 +76,11 @@ class StandalonePullRequestWatcherTest {
         clock = clock.plus(duration)
       },
       cancelled = { cancelled },
-    ).watch(identity(PR_NUMBER), StandaloneWatchHeads(expected, superseded)) { _, pending ->
+    ).watch(
+      identity(PR_NUMBER),
+      StandaloneWatchHeads(expected, superseded),
+      { sha -> adoptionRefusal.also { if (it == null) adopted += sha } },
+    ) { _, pending ->
       running += pending.map(PullRequestCheck::name)
     }
 
@@ -107,13 +113,23 @@ class StandalonePullRequestWatcherTest {
   }
 
   @Test
-  fun `a head moved by someone else blocks instead of judging that commit's checks`() {
+  fun `a head pushed by someone else is adopted and its own checks are judged`() {
     heads += FOREIGN
-    reported = PullRequestChecks.Reported(listOf(PullRequestCheck("build", CheckBucket.FAIL, "")))
+    val failing = check("build", CheckBucket.FAIL)
+    reported = reports(failing)
+
+    assertEquals(PullRequestCiOutcome.Failed(listOf(failing), FOREIGN), watch())
+    assertEquals(listOf(FOREIGN), adopted)
+  }
+
+  @Test
+  fun `a head the monitor cannot follow blocks with the refusal`() {
+    heads += FOREIGN
+    adoptionRefusal = "The owned worktree has uncommitted changes."
 
     val outcome = assertIs<PullRequestCiOutcome.Blocked>(watch())
 
-    assertTrue(FOREIGN in outcome.reason, outcome.reason)
+    assertTrue(FOREIGN in outcome.reason && "uncommitted changes" in outcome.reason, outcome.reason)
   }
 
   @Test

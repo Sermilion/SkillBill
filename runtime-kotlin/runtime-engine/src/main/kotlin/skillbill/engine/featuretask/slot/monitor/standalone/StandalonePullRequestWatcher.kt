@@ -33,26 +33,34 @@ internal class StandalonePullRequestWatcher(
 
     data class Open(val pullRequest: MonitorPullRequest, val headSha: String) : Observation
 
+    data class Moved(val headSha: String) : Observation
+
     data object NotYetVisible : Observation
   }
 
   private data class Progress(val at: Instant? = null, val names: List<String>? = null)
 
-  private class WatchState(var ciStarted: Boolean = false, var progress: Progress = Progress())
+  private class WatchState(
+    var heads: StandaloneWatchHeads,
+    val adoptHead: (String) -> String?,
+    var ciStarted: Boolean = false,
+    var progress: Progress = Progress(),
+  )
 
   fun watch(
     pullRequest: MonitorPullRequestIdentity,
     heads: StandaloneWatchHeads,
+    adoptHead: (String) -> String?,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
   ): PullRequestCiOutcome {
     val startedAt = now()
-    val state = WatchState()
+    val state = WatchState(heads, adoptHead)
     while (true) {
       val outcome =
         if (cancelled()) {
           PullRequestCiOutcome.Blocked(CANCELLED_REASON)
         } else {
-          poll(pullRequest, heads, onCiRunning, state) ?: startTimeout(startedAt, state)
+          poll(pullRequest, onCiRunning, state) ?: startTimeout(startedAt, state)
         }
       if (outcome != null) return outcome
       sleep(pollInterval)
@@ -61,26 +69,39 @@ internal class StandalonePullRequestWatcher(
 
   private fun poll(
     pullRequest: MonitorPullRequestIdentity,
-    heads: StandaloneWatchHeads,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     state: WatchState,
   ): PullRequestCiOutcome? =
-    when (val observation = observe(pullRequest, heads)) {
+    when (val observation = observe(pullRequest, state.heads)) {
       is Observation.Settled -> observation.outcome
       Observation.NotYetVisible -> null
-      is Observation.Open -> pollChecks(pullRequest, heads, observation.headSha, onCiRunning, state)
+      is Observation.Moved -> adopt(observation.headSha, state)
+      is Observation.Open -> pollChecks(pullRequest, observation.headSha, onCiRunning, state)
     }
+
+  private fun adopt(
+    headSha: String,
+    state: WatchState,
+  ): PullRequestCiOutcome? {
+    val refusal = state.adoptHead(headSha)
+    if (refusal != null) {
+      return PullRequestCiOutcome.Blocked(
+        "The pull request head moved to $headSha and monitoring could not follow it: $refusal",
+      )
+    }
+    state.heads = StandaloneWatchHeads(headSha, state.heads.superseded + state.heads.expected)
+    return null
+  }
 
   private fun pollChecks(
     pullRequest: MonitorPullRequestIdentity,
-    heads: StandaloneWatchHeads,
     headSha: String,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     state: WatchState,
   ): PullRequestCiOutcome? {
     val reported = checks.checks(pullRequest)
     if (reported is PullRequestChecks.Unavailable) {
-      return confirmed(pullRequest, heads, PullRequestCiOutcome.Unavailable(reported.reason))
+      return confirmed(pullRequest, state.heads, PullRequestCiOutcome.Unavailable(reported.reason))
     }
     val reportedChecks = (reported as? PullRequestChecks.Reported)?.checks.orEmpty()
     if (reportedChecks.isNotEmpty()) state.ciStarted = true
@@ -89,7 +110,7 @@ internal class StandalonePullRequestWatcher(
       state.progress = reportRunning(pullRequest, reportedChecks, onCiRunning, state.progress)
       return null
     }
-    return confirmed(pullRequest, heads, verdict)
+    return confirmed(pullRequest, state.heads, verdict)
   }
 
   private fun startTimeout(
@@ -122,12 +143,7 @@ internal class StandalonePullRequestWatcher(
       headSha == heads.expected && pullRequest.conflicting -> Observation.Settled(PullRequestCiOutcome.Conflicted)
       headSha == heads.expected -> Observation.Open(pullRequest, headSha)
       headSha in heads.superseded -> Observation.NotYetVisible
-      else ->
-        Observation.Settled(
-          PullRequestCiOutcome.Blocked(
-            "The pull request head moved to $headSha while monitoring expected ${heads.expected}.",
-          ),
-        )
+      else -> Observation.Moved(headSha)
     }
   }
 
@@ -135,11 +151,12 @@ internal class StandalonePullRequestWatcher(
     pullRequest: MonitorPullRequestIdentity,
     heads: StandaloneWatchHeads,
     observed: PullRequestCiOutcome,
-  ): PullRequestCiOutcome =
+  ): PullRequestCiOutcome? =
     when (val latest = observe(pullRequest, heads)) {
       is Observation.Settled -> latest.outcome
       Observation.NotYetVisible ->
         PullRequestCiOutcome.Unavailable("The pull request head changed while its checks were being observed.")
+      is Observation.Moved -> null
       is Observation.Open -> observed
     }
 
