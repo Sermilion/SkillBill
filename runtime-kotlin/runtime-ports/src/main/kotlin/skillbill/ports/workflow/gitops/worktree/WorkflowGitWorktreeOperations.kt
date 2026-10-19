@@ -12,6 +12,9 @@ interface WorkflowGitWorktreeOperations {
 
   fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult
 
+  /** Names the unfinished merge, rebase, cherry-pick, or revert in the worktree; empty when none is in progress. */
+  fun inProgressOperation(repoRoot: Path): WorkflowGitOperationResult
+
   fun worktreeActivity(repoRoot: Path): WorkflowWorktreeActivityResult
 
   fun selectedDiffHunks(

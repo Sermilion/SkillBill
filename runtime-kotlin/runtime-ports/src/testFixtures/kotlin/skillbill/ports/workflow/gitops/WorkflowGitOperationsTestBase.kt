@@ -28,6 +28,9 @@ abstract class WorkflowGitOperationsTestBase :
 
   override fun stageAll(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
 
+  override fun inProgressOperation(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = "")
+
   override fun commitCountAhead(
     repoRoot: Path,
     baseRevision: String,

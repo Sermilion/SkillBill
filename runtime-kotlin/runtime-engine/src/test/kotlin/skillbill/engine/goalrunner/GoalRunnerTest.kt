@@ -1870,6 +1870,42 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
+  fun `finalize refuses to commit an unfinished merge left by an interrupted monitor repair`() {
+    val repoRoot = Files.createTempDirectory("goal-unfinished-merge-finalize")
+    val git =
+      CommitAllRecordingGitOperations(
+        dirtyPorcelain = "M  src/Merged.kt",
+        currentBranch = "feat/SKILL-56-goal",
+        inProgressOperation = "merge",
+      )
+    val pullRequests = RecordingPullRequestPort()
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = pullRequests,
+        ).copy(
+          gitOperations = git,
+        ),
+      )
+
+    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(linearRunRequest(repoRoot)))
+    assertEquals(GoalRunnerStopReason.PULL_REQUEST_FAILED, stopped.stop.reason)
+    assertContains(stopped.stop.blockedReason, "unfinished git merge")
+    assertContains(stopped.stop.blockedReason, "git merge --abort")
+    assertTrue(git.stagePathsCalls.isEmpty())
+    assertTrue(git.commitMessages.isEmpty())
+    assertTrue(git.pushedBranches.isEmpty())
+    assertEquals(0, pullRequests.openCount)
+  }
+
+  @Test
   fun `finalize commit-all blocks when the feature branch is protected`() {
     val repoRoot = Files.createTempDirectory("goal-protected-finalize")
     val git = CommitAllRecordingGitOperations(dirtyPorcelain = " M leftover.kt", currentBranch = "main")
@@ -2268,6 +2304,7 @@ private class CommitAllRecordingGitOperations(
   private val unpushedCommits: Boolean = false,
   private val pushError: String? = null,
   private val commitResult: WorkflowGitCommitResult? = null,
+  private val inProgressOperation: String = "",
 ) : GoalReviewReadyGitOperations() {
   var stageAllCalls: Int = 0
   val stagePathsCalls: MutableList<List<String>> = mutableListOf()
@@ -2364,6 +2401,9 @@ private class CommitAllRecordingGitOperations(
 
   override fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = porcelain)
+
+  override fun inProgressOperation(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = inProgressOperation)
 
   override fun worktreeActivity(repoRoot: Path): WorkflowWorktreeActivityResult =
     WorkflowWorktreeActivityResult(status = WorkflowGitOperationStatus.OK)
