@@ -94,3 +94,13 @@ On 2026-10-11, the operator removed the rule that blocked plan settlement when
 other files changed during planning. Shared worktrees can receive concurrent edits.
 The plan still verifies its authored bundle and rejects bundle paths that escape
 its directory. Unrelated worktree changes do not determine bundle readiness.
+
+## [2026-10-19] Purge names sibling-worktree goal state instead of deleting it
+Context: Repository identity is the worktree path, so another worktree of the same repository keeps its own goal state for the issue.
+Decision: Purge leaves that state alone and names the worktree that owns it.
+Reason: The sibling worktree may hold an active goal run. Reporting it lets the operator purge from that worktree without this purge reaching across repository identities.
+
+## [2026-10-19] Refuse to conclude an unfinished git operation at finalization
+Context: 0AC-65's goal monitor started `monitor_fix` after main moved. The agent began merging main into the feature worktree, and the run died before the merge was committed or validated. On resume, finalization commit-all staged the tree and concluded the merge, then the push was rejected because the PR branch had a commit pushed from elsewhere.
+Decision: Before staging, finalization asks the git port for an in-progress merge, rebase, cherry-pick, or revert and stops with PULL_REQUEST_FAILED naming the operation and its `--abort` command. It does not finish or abort the operation itself.
+Reason: Commit-all sweeps leftover files, but an unfinished operation is half-done repair work that no phase validated. Resume cannot re-enter `monitor_fix` directly because the goal monitor is an in-memory skeleton that reaches repair only from a fresh CI observation. Aborting would discard work the operator may want to keep, so the operator decides. After an abort, the next resume reaches the monitor, which sees the conflict and runs the repair again.

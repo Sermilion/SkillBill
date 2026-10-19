@@ -19,6 +19,9 @@ internal object NoopWorkflowGitWorktreeOperations : WorkflowGitWorktreeOperation
     return WorkflowGitOperationResult.Ok(value = "")
   }
 
+  override fun inProgressOperation(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = "")
+
   override fun worktreeActivity(repoRoot: Path): WorkflowWorktreeActivityResult {
     return WorkflowWorktreeActivityResult(
       status = WorkflowGitOperationStatus.OK,

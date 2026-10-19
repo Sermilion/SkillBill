@@ -44,6 +44,9 @@ abstract class WorkflowGitOperationsTestBase :
     worktree: Path,
   ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
 
+  override fun inProgressOperation(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = "")
+
   override fun commitCountAhead(
     repoRoot: Path,
     baseRevision: String,

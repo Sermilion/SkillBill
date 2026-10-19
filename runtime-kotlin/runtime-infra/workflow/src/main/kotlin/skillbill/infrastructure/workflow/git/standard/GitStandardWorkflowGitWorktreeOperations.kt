@@ -10,12 +10,26 @@ import skillbill.ports.workflow.gitops.model.WorkflowWorktreeNumstatResult
 import skillbill.ports.workflow.gitops.worktree.WorkflowGitWorktreeOperations
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.exists
 
 internal object GitStandardWorkflowGitWorktreeOperations : WorkflowGitWorktreeOperations {
   override fun stageAll(repoRoot: Path): WorkflowGitOperationResult = runGitCommand(repoRoot, "add", "-A")
 
   override fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult =
     runGitCommand(repoRoot, "status", "--porcelain", "-uall")
+
+  override fun inProgressOperation(repoRoot: Path): WorkflowGitOperationResult {
+    val markers = InProgressOperationMarker.entries
+    val markerPaths =
+      runGitCommand(repoRoot, listOf("rev-parse") + markers.flatMap { listOf("--git-path", it.gitPath) })
+    if (markerPaths !is WorkflowGitOperationResult.Ok) return markerPaths
+    val active =
+      markers
+        .zip(markerPaths.value.lines())
+        .firstOrNull { (_, markerPath) -> markerPath.isNotBlank() && repoRoot.resolve(markerPath).exists() }
+        ?.first
+    return WorkflowGitOperationResult.Ok(value = active?.operation.orEmpty())
+  }
 
   override fun worktreeActivity(repoRoot: Path): WorkflowWorktreeActivityResult =
     GitRepositoryFingerprintOperations.worktreeActivity(repoRoot)
@@ -63,4 +77,12 @@ internal object GitStandardWorkflowGitWorktreeOperations : WorkflowGitWorktreeOp
     }
     return runGitCommand(repoRoot, "worktree", "prune")
   }
+}
+
+private enum class InProgressOperationMarker(val gitPath: String, val operation: String) {
+  MERGE("MERGE_HEAD", "merge"),
+  REBASE_MERGE("rebase-merge", "rebase"),
+  REBASE_APPLY("rebase-apply", "rebase"),
+  CHERRY_PICK("CHERRY_PICK_HEAD", "cherry-pick"),
+  REVERT("REVERT_HEAD", "revert"),
 }
