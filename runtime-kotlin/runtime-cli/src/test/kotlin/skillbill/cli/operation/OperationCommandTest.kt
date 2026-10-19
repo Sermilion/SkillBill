@@ -125,6 +125,28 @@ class OperationCommandTest {
   }
 
   @Test
+  fun `qa reaches verify once and is a usage error elsewhere, repeated, conflicting, or unknown`() {
+    assertEquals("on", OperationInvocationParser.parse("verify", listOf("spec:docs/spec.md", "qa:on")).arguments.qa)
+    listOf(
+      "release" to listOf("bump:minor", "qa:on"),
+      "verify" to listOf("qa:on", "qa:on"),
+      "verify" to listOf("qa:on", "qa:off"),
+    ).forEach { (name, tokens) ->
+      assertFailsWith<UsageError>(tokens.toString()) { OperationInvocationParser.parse(name, tokens) }
+    }
+    val result =
+      CliRuntime.run(
+        listOf("--db", dbPath.toString(), "operation", "verify", "spec:docs/spec.md", "qa:auto"),
+        CliRuntimeContext(userHome = tempDir, repositoryRoot = tempDir),
+      )
+    val output = result.stdout + result.stderr
+
+    assertNotEquals(0, result.exitCode, output)
+    assertContains(output, "Unknown qa:auto; expected on|off.")
+    assertEquals(0, rowCount("feature_verify_workflows"))
+  }
+
+  @Test
   fun `awaiting confirmation exits with a code no other command uses and help documents it`() {
     assertEquals(4, OPERATION_EXIT_AWAITING_CONFIRMATION)
     val help = CliRuntime.run(listOf("operation", "--help"), CliRuntimeContext(userHome = tempDir))

@@ -8,11 +8,12 @@ internal object VerifyWorkflow {
   const val CODE_REVIEW = "code_review"
   const val UNIT_TEST_VALUE_CHECK = "unit_test_value_check"
   const val COMPLETENESS_AUDIT = "completeness_audit"
+  const val QA = "qa"
   const val VERDICT = "verdict"
   const val FINISH = "finish"
 
   val CONFIRMED_STEPS: List<String> =
-    listOf(GATHER_DIFF, FEATURE_FLAG_AUDIT, CODE_REVIEW, UNIT_TEST_VALUE_CHECK, COMPLETENESS_AUDIT, VERDICT, FINISH)
+    listOf(GATHER_DIFF, FEATURE_FLAG_AUDIT, CODE_REVIEW, UNIT_TEST_VALUE_CHECK, COMPLETENESS_AUDIT, QA, VERDICT, FINISH)
 
   const val INPUT_CONTEXT = "input_context"
   const val CRITERIA_SUMMARY = "criteria_summary"
@@ -25,6 +26,8 @@ internal object VerifyWorkflow {
   const val CODE_REVIEW_RECEIPT = "code_review_receipt"
   const val UNIT_TEST_VALUE_RECEIPT = "unit_test_value_receipt"
   const val COMPLETENESS_AUDIT_RECEIPT = "completeness_audit_receipt"
+  const val QA_RECEIPT = "qa_receipt"
+  const val QA_OUTCOME = "qa_outcome"
   const val VERDICT_RESULT = "verdict_result"
   const val SESSION_NOTES = "session_notes"
 
@@ -35,6 +38,7 @@ internal object VerifyWorkflow {
   const val BASE_REVISION = "base_revision"
   const val HEAD_REVISION = "head_revision"
   const val REVIEW_MODE = "review_mode"
+  const val QA_SELECTION = "qa_selection"
   const val ISSUE_KEY = "issue_key"
   const val SUPERSEDED_BY = "superseded_by"
 

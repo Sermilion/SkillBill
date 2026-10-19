@@ -58,6 +58,7 @@ class VerifyOperationTest {
           "code_review" to "completed",
           "unit_test_value_check" to "completed",
           "completeness_audit" to "completed",
+          "qa" to "skipped",
           "verdict" to "completed",
           "finish" to "completed",
         ),

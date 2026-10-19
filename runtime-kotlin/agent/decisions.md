@@ -1,5 +1,20 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-19] SKILL-419: verify QA runs in a detached worktree at the target head
+Context: Verify audits a resolved target while the operator's checkout may be dirty or on another revision, and QA must test exactly the target head without touching the operator's tree.
+Decision: qa:on creates a detached worktree under the git common dir (skill-bill/verify-qa/<workflowId>) at target.headRevision, removing any stale one first for resume. The receipt must carry that clean checkout's tree identity. A finally block always removes the worktree; a removal failure adds a retained resource and manual guidance to the receipt and a diagnostics warning, without changing the QA outcome.
+Reason: The monitor's owned-worktree helper is fenced and branch-based, so two small port methods were the smallest fit. Testing the operator tree could pass QA on code that is not the target.
+
+## [2026-10-19] SKILL-419: the runtime hands qa_receipt to the verdict, not the static projection
+Context: The workflow definition supports only static required artifacts, but the verdict needs qa_receipt only when a QA selection is stored.
+Decision: The verdict's static requirements and projection stay unchanged. When a selection is stored, the runtime fails the verdict if qa_receipt is missing, and passes the receipt and Mobile QA rules into the directive only for qa:on. An unqualified APPROVE against open findings fails the verdict step, because no malformed-verdict retry path exists.
+Reason: Pre-QA workflows keep resolving, and qa:off reaches its verdict with unchanged rules.
+
+## [2026-10-19] SKILL-419: the verify QA selection enum lives in runtime-domain
+Context: runtime-mcp needed the on/off selection, but RuntimeEngineInboundApiTest forbids MCP from referencing engine-internal types, including QaPolicy.
+Decision: VerifyQaSelection lives in runtime-domain's skillbill.workflow.verify.model package. The engine keeps only the confirmedQaSelection helper, and engine and MCP both import the domain enum.
+Reason: Placing it in a model package satisfies the layer-boundary rule without adding to the guard's pinned allowlist.
+
 ## [2026-10-19] SKILL-419: reject a qa_fix without repair state during reconstruction
 Context: Workflow persistence rejected a completed qa_fix with no qa-repair state, but naming PHASE_QA_FIX in shared persistence breaks the feature-task step-identity architecture rule.
 Decision: Persistence keeps only the slot-neutral check, a QA receipt without repair state. Run-state reconstruction in the QA slot rejects a completed qa_fix that has no persisted repair state.

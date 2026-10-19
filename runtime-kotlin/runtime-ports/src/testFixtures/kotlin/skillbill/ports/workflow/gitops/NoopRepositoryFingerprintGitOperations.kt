@@ -11,6 +11,11 @@ internal object NoopRepositoryFingerprintGitOperations : RepositoryFingerprintGi
   override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = NOOP_REPOSITORY_TREE_IDENTITY)
 
+  override fun revisionTreeIdentity(
+    repoRoot: Path,
+    revision: String,
+  ): WorkflowGitOperationResult = repositoryTreeIdentity(repoRoot)
+
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,

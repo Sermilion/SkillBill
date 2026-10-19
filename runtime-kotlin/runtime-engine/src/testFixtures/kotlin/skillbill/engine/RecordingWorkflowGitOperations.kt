@@ -401,6 +401,11 @@ class RecordingWorkflowGitOperations(
 
   override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult = repositoryFingerprint(repoRoot)
 
+  override fun revisionTreeIdentity(
+    repoRoot: Path,
+    revision: String,
+  ): WorkflowGitOperationResult = repositoryFingerprint(repoRoot)
+
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,

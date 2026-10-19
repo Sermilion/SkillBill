@@ -18,7 +18,13 @@ import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
+import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
+import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
+import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
+import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -34,6 +40,7 @@ import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
@@ -43,15 +50,18 @@ import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
+import skillbill.scaffold.model.PlatformManifest
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -74,7 +84,38 @@ internal class VerifyOperationHarness : AutoCloseable {
   val delegatedReviews = mutableListOf<ParallelCodeReviewRequest>()
   var reviewFindings: List<ParallelReviewMergedFinding> = emptyList()
   var inlineQualityRubric: String? = null
+  val qaWorkspaces = InMemoryQaWorkspaces()
+  val qaLeases = RecordingQaLeases()
+  var qaManifests: List<PlatformManifest> = emptyList()
+  var failWorktreeRemoval = false
+  val warnings = mutableListOf<String>()
   private val git = GitWorkflowGitOperations()
+  private val qaGit =
+    object : WorkflowGitOperations by git {
+      override fun removeWorktree(
+        repoRoot: Path,
+        worktree: Path,
+      ): WorkflowGitOperationResult =
+        if (failWorktreeRemoval) {
+          WorkflowGitOperationResult.Failed("worktree is locked")
+        } else {
+          git.removeWorktree(repoRoot, worktree)
+        }
+    }
+  private val recordingDiagnostics =
+    object : RuntimeDiagnostics {
+      override fun warning(
+        message: String,
+        error: Throwable?,
+      ) {
+        warnings += message
+      }
+
+      override fun error(
+        message: String,
+        error: Throwable?,
+      ) = Unit
+    }
   private val clock = Clock.systemUTC()
   private val database =
     SQLiteDatabaseSessionFactory(
@@ -143,6 +184,7 @@ internal class VerifyOperationHarness : AutoCloseable {
         clock,
         testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics),
         CheckedOutBranchSource { "main" },
+        qaStep(),
       )
     val proposals = SqliteOperationProposalRepository(database)
     executor =
@@ -158,12 +200,32 @@ internal class VerifyOperationHarness : AutoCloseable {
   fun propose(
     mode: String? = null,
     instructions: String? = null,
-  ): OperationOutcome = invoke(OperationArguments(spec = SPEC, target = range, mode = mode), instructions)
+    qa: String? = null,
+  ): OperationOutcome = invoke(OperationArguments(spec = SPEC, target = range, mode = mode, qa = qa), instructions)
 
   fun confirm(
     token: String,
     target: String? = null,
-  ): OperationOutcome = invoke(OperationArguments(confirm = token, target = target))
+    qa: String? = null,
+  ): OperationOutcome = invoke(OperationArguments(confirm = token, target = target, qa = qa))
+
+  fun qaWorktree(workflowId: String): Path = repo.toRealPath().resolve(".git/skill-bill/verify-qa/$workflowId")
+
+  fun treeIdentity(path: Path): String =
+    (git.repositoryTreeIdentity(path) as WorkflowGitOperationResult.Ok).value.trim()
+
+  fun dirtyGreeter() = write("src/main/kotlin/Greeter.kt", DIRTY_GREETER)
+
+  private fun qaStep(): VerifyQaStep {
+    val validator = QaReceiptValidator(QaReceiptSchemaValidator())
+    return VerifyQaStep(
+      testQaExecutionLifecycle(git, qaWorkspaces, qaLeases, QaCapabilityResolver { qaManifests }),
+      QaReceiptSettlement(validator, qaWorkspaces, NoopRuntimeDiagnostics),
+      validator,
+      qaGit,
+      recordingDiagnostics,
+    )
+  }
 
   fun invoke(
     arguments: OperationArguments,
@@ -339,6 +401,8 @@ internal class VerifyOperationHarness : AutoCloseable {
     const val REVIEW_REGISTER = "Verdict: approved\n"
     const val SKILL_SESSION_ID = "fvr-skill"
     const val DELEGATED_ROUTED_SKILL = "bill-kotlin-code-review"
+    const val DIRTY_GREETER = "fun greet() = \"operator draft\"\n"
+    const val QA_INVOCATION = "qa-test-invocation"
   }
 
   fun localQualityFinding() =
@@ -406,6 +470,7 @@ internal class VerifyScriptedRunner : PhaseRunner {
         VerifyPromptSections.CODE_REVIEW_STEP to VerifyOperationHarness.REVIEW_REGISTER,
         UnitTestValueCheckPromptRules.REVIEW_STEP to "GreeterTest.kt: no assertions.\n",
         VerifyPromptSections.COMPLETENESS_AUDIT_STEP to "[PASS] 1. Greets by name.\n",
+        VerifyPromptSections.QA_STEP to "QA receipt written.\n",
         VerifyPromptSections.VERDICT_STEP to "--- VERDICT ---\nAPPROVE\n",
       )
   }

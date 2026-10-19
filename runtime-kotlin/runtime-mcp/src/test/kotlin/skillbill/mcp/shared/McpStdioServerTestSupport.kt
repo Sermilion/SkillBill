@@ -53,6 +53,7 @@ private fun assertFeatureVerifySchemaCoverage(tools: List<*>) {
       "code_review",
       "unit_test_value_check",
       "completeness_audit",
+      "qa",
       "verdict",
       "finish",
     ),

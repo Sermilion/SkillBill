@@ -30,6 +30,8 @@ object LifecycleTelemetryPayloadKeys {
   const val HISTORY_HELPFULNESS: String = "history_helpfulness"
   const val SPEC_SUMMARY: String = "spec_summary"
   const val GAPS_FOUND: String = "gaps_found"
+  const val QA_OUTCOME: String = "qa_outcome"
+  const val QA_REASON: String = "qa_reason"
   const val COMMIT_COUNT: String = "commit_count"
   const val FILES_CHANGED_COUNT: String = "files_changed_count"
   const val WAS_EDITED_BY_USER: String = "was_edited_by_user"

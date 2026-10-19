@@ -41,6 +41,7 @@ import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.model.WorkflowContinueStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.verify.model.VerifyQaSelection
 import java.nio.file.Path
 import java.time.Clock
 
@@ -55,17 +56,21 @@ class VerifyOperation(
   private val clock: Clock,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val branchSource: CheckedOutBranchSource,
+  qaStep: VerifyQaStep,
 ) : SelfConfirmingOperation {
   override val id: String = "verify"
 
   private val store = VerifyWorkflowStore(workflows)
   private val sequence =
-    VerifyStepSequence(store, gitOperations, telemetry, VerifyCodeReviewStep(delegatedReviewer), clock)
+    VerifyStepSequence(store, gitOperations, telemetry, VerifyCodeReviewStep(delegatedReviewer), qaStep, clock)
 
   override fun pre(context: OperationContext): OperationRefusal? {
     val arguments = context.arguments
     arguments.mode?.let { mode ->
       if (VerifyReviewMode.fromWire(mode) == null) return invalidArgument("mode", mode, "inline|delegated")
+    }
+    arguments.qa?.let { qa ->
+      if (VerifyQaSelection.fromWire(qa.trim()) == null) return invalidArgument("qa", qa, VerifyQaSelection.EXPECTED)
     }
     if (!context.confirming && arguments.spec.isNullOrBlank() && context.instructions.isNullOrBlank()) {
       return missingIntake(id, INTAKE)
@@ -117,6 +122,7 @@ class VerifyOperation(
         VerifyWorkflow.HEAD_REVISION to target.headRevision,
         VerifyWorkflow.COMPARISON_SCOPE to target.comparisonScope,
         VerifyWorkflow.REVIEW_MODE to mode.wireValue,
+        VerifyWorkflow.QA_SELECTION to VerifyQaSelection.requested(context.arguments.qa).wireValue,
       ) + listOfNotNull(issueKey?.let { VerifyWorkflow.ISSUE_KEY to it })
     val started =
       store.write(
@@ -161,6 +167,7 @@ class VerifyOperation(
     return OperationOutcome.AwaitingConfirmation(
       workflowId,
       "Verify criteria for ${intake.label} against ${target.label}:\n\n${criteria.summary()}\n\n" +
+        "QA: ${VerifyQaSelection.requested(context.arguments.qa).wireValue}\n\n" +
         "Confirm or adjust the criteria before the review runs.",
     )
   }
@@ -217,7 +224,8 @@ class VerifyOperation(
     val intake = VerifyIntake.stored(inputContext)?.label.orEmpty()
     val storedIssueKey = VerifyWorkflow.string(inputContext, VerifyWorkflow.ISSUE_KEY)
     val attempts = snapshot.steps.associate { step -> step.stepId to step.attemptCount }
-    val run = VerifyRun(context, workflowId, snapshot.sessionId, intake, target, mode, criteria, clock.instant())
+    val qa = confirmedQaSelection(workflowId, inputContext, context.arguments.qa) { return it }
+    val run = VerifyRun(context, workflowId, snapshot.sessionId, intake, target, mode, criteria, clock.instant(), qa)
     if (snapshot.currentStepId in PARKED_STEPS) {
       return if (criteriaArtifact == null) {
         OperationOutcome.Failed(
@@ -228,8 +236,7 @@ class VerifyOperation(
         confirmParked(run, attempts)
       }
     }
-    refreshStaleCheckpoint(run, snapshot)?.let { failure -> return failure }
-    val start = resumeStep(workflowId) { failure -> return failure }
+    val start = resumeStep(run, snapshot) { failure -> return failure }
     registerWorkflowStatus(context, workflowId, storedIssueKey)
     return sequence.run(run, start, attempts)
   }
@@ -334,9 +341,12 @@ class VerifyOperation(
   }
 
   private inline fun resumeStep(
-    workflowId: String,
+    run: VerifyRun,
+    snapshot: WorkflowSnapshotView,
     onFailure: (OperationOutcome) -> Nothing,
   ): String {
+    refreshStaleCheckpoint(run, snapshot)?.let(onFailure)
+    val workflowId = run.workflowId
     val view =
       when (val continued = workflows.continueWorkflow(WorkflowFamilyKind.VERIFY, workflowId)) {
         is WorkflowContinueResult.Standard -> continued.view
@@ -355,7 +365,7 @@ class VerifyOperation(
           ),
         )
       else ->
-        step.takeIf { it in VerifyWorkflow.CONFIRMED_STEPS }
+        step.takeIf { it in run.steps }
           ?: onFailure(OperationOutcome.Failed("Verify workflow '$workflowId' cannot resume at '$step'."))
     }
   }

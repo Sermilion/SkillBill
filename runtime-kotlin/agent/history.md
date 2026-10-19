@@ -1,3 +1,16 @@
+## [2026-10-19] SKILL-419 subtask 3: verify qa:on|off integration
+Areas: runtime-kotlin domain (verify definition, VerifyQaSelection model), engine operation/verify and core, CLI operation, MCP workflow tools, application and sqlite telemetry, ports and infra git worktree; orchestration/contracts; skills/skill-bill; docs
+- MEDIUM feature. `operation:verify` accepts `qa:on|off` (default off) from the CLI and the four MCP verify workflow tools. The selection is stored in input_context.qa_selection, named in the proposal, and a confirm with a different value is refused.
+- Verify gains a `qa` step between completeness_audit and verdict (verdict is now Step 9). Workflows created before QA have no stored selection and skip the step entirely.
+- qa:off writes a disabled_policy skip receipt with no capability probe, lease, worktree or agent. qa:on runs the shared QaExecutionLifecycle in a detached temp worktree at the target head and removes it in a finally block.
+- New report-only OperationStepRunner policy (single session, non-mutating, fingerprint guarded). reusable for other read-only operation steps.
+- Git port gains addDetachedWorktree/removeWorktree. reusable
+- Verdict reads the stored qa_receipt. With qa:on, QA findings join the consolidated findings and skipped or incomplete QA is listed as untested coverage. An unqualified APPROVE against open findings fails the verdict step.
+- Outcome (not_selected, attempted, passed, findings, skipped, incomplete) appears in report text and as optional qa_outcome/qa_reason on feature_verify_finished. The telemetry contract stays 1.12.0.
+- Limits: capability resolves on the worktree's tracked paths, not the target's changed paths. The verdict's static projection is unchanged; the runtime enforces qa_receipt itself.
+Feature flag: N/A (operator selection `qa:on|off`, default off)
+Acceptance criteria: 7/7 implemented
+
 ## [2026-10-19] SKILL-419 subtask 2: feature-task qa and qa_fix slot
 Areas: runtime-kotlin domain, contracts, ports, engine, infra (contracts, sqlite, workflow, launcher, skills), core and CLI; orchestration/contracts; skills/skill-bill; docs
 - MEDIUM feature. `PhaseSlot.QA` (qa, qa_fix) sits between audit and code review in FEATURE_RUN_SLOTS. qa needs a SATISFIED audit; findings route to qa_fix (3 attempts per subtask, then BLOCK), and qa_fix returns to audit, then qa.

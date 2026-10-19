@@ -37,6 +37,7 @@ internal class VerifyWorkflowStore(
     currentStepId: String,
     steps: List<Map<String, Any?>>,
     sessionId: String,
+    artifacts: Map<String, Any?>? = null,
   ): VerifyWrite =
     update(
       WorkflowUpdateRequest(
@@ -44,7 +45,7 @@ internal class VerifyWorkflowStore(
         workflowStatus = WorkflowStatus.RUNNING.wireValue,
         currentStepId = currentStepId,
         stepUpdates = WorkflowStepUpdates.from(steps),
-        artifactsPatch = WorkflowArtifactPatch.from(null),
+        artifactsPatch = WorkflowArtifactPatch.from(artifacts),
         sessionId = sessionId,
       ),
     )

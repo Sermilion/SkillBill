@@ -47,4 +47,20 @@ internal object NoopWorkflowGitWorktreeOperations : WorkflowGitWorktreeOperation
 
   override fun worktreeNumstat(repoRoot: Path): WorkflowWorktreeNumstatResult =
     WorkflowWorktreeNumstatResult(status = WorkflowGitOperationStatus.OK, files = emptyList())
+
+  override fun linkedWorktreePath(
+    repoRoot: Path,
+    commonDirRelativePath: String,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Failed(error = "No linked worktree was supplied.")
+
+  override fun addDetachedWorktree(
+    repoRoot: Path,
+    commonDirRelativePath: String,
+    revision: String,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Failed(error = "No linked worktree was supplied.")
+
+  override fun removeWorktree(
+    repoRoot: Path,
+    worktree: Path,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
 }

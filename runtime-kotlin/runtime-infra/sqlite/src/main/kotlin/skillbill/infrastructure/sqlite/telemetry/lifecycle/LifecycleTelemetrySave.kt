@@ -60,6 +60,8 @@ private fun updateFeatureVerifyFinished(
       history_relevance = ?,
       history_helpfulness = ?,
       gaps_found = ?,
+      qa_outcome = ?,
+      qa_reason = ?,
       finished_at = CURRENT_TIMESTAMP
     WHERE session_id = ?
       AND (finished_event_emitted_at IS NULL OR completion_status = 'stale')
@@ -80,8 +82,8 @@ private fun insertFeatureVerifyFinished(
     INSERT INTO feature_verify_sessions (
       session_id, feature_flag_audit_performed, review_iterations,
       audit_result, completion_status, history_relevance,
-      history_helpfulness, gaps_found, finished_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      history_helpfulness, gaps_found, qa_outcome, qa_reason, finished_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(featureVerifyFinishedValues(record, gapsFoundJson, includeSessionFirst = true))

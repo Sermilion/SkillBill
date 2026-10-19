@@ -217,6 +217,7 @@ $defs:
       - code_review
       - unit_test_value_check
       - completeness_audit
+      - qa
       - verdict
       - finish
   workflowStepStatusEnum:
@@ -789,6 +790,20 @@ $defs:
           - "null"
       duration_seconds_availability:
         $ref: "#/$defs/telemetryMeasurementAvailabilityEnum"
+      # Optional. Rows written before verify QA existed omit both fields.
+      qa_outcome:
+        type: string
+        enum:
+          - not_selected
+          - attempted
+          - passed
+          - findings
+          - skipped
+          - incomplete
+      qa_reason:
+        type:
+          - string
+          - "null"
 
   featureVerifyWorkflowContinueEvent:
     type: object
@@ -804,6 +819,10 @@ $defs:
         const: "1.12.0"
       workflow_id:
         type: string
+      qa:
+        type: string
+        description: >
+          Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.
 
   featureVerifyWorkflowGetEvent:
     type: object
@@ -870,6 +889,10 @@ $defs:
         pattern: "^repo-root-realpath-v1:/"
       governed_spec_path:
         type: string
+      qa:
+        type: string
+        description: >
+          Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.
 
   featureVerifyWorkflowResumeEvent:
     type: object
@@ -885,6 +908,10 @@ $defs:
         const: "1.12.0"
       workflow_id:
         type: string
+      qa:
+        type: string
+        description: >
+          Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.
 
   featureVerifyWorkflowUpdateEvent:
     type: object
@@ -914,6 +941,10 @@ $defs:
         $ref: "#/$defs/freeObjectShape"
       session_id:
         type: string
+      qa:
+        type: string
+        description: >
+          Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.
 
   # SKILL-65 Subtask 4 (AC3): EXPERIMENTAL feature-task-runtime workflow-family
   # branches. Payload fields mirror McpToolRegistry.inputSchemas for each tool.

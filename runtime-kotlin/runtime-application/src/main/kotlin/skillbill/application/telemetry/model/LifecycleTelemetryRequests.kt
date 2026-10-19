@@ -92,6 +92,8 @@ data class FeatureVerifyFinishedRequest(
   val rolloutRelevant: Boolean,
   val specSummary: String,
   val durationSeconds: Int,
+  val qaOutcome: String? = null,
+  val qaReason: String? = null,
 )
 
 data class PrDescriptionGeneratedRequest(

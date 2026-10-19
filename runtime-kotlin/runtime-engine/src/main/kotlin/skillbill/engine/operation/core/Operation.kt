@@ -86,6 +86,7 @@ data class OperationArguments(
   val replies: String? = null,
   val spec: String? = null,
   val target: String? = null,
+  val qa: String? = null,
   val includePrereleases: Boolean = false,
   val format: OperationOutputFormat = OperationOutputFormat.TEXT,
 )

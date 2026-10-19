@@ -30,22 +30,28 @@ internal fun workflowOpen(
       repositoryIdentity = arguments.optionalString(McpToolPayloadKeys.REPOSITORY_IDENTITY),
       governedSpecPath = arguments.optionalString(McpToolPayloadKeys.GOVERNED_SPEC_PATH),
       routeScope = FeatureTaskRouteScope.STANDALONE,
+      initialArtifacts =
+        WorkflowArtifactPatch.from(verifyQaInitialArtifacts(arguments.verifyQaSelection()))
+          ?: WorkflowArtifactPatch.EMPTY,
     ),
   ).toMcpMap()
 
 internal fun workflowUpdate(
   arguments: McpToolArguments,
   component: McpComponent,
-): Map<String, Any?> =
-  component.workflowService.update(
+): Map<String, Any?> {
+  val workflowId = arguments.string(SharedPayloadKeys.WORKFLOW_ID)
+  return component.workflowService.update(
     VERIFY,
     arguments.optionalMap(McpToolPayloadKeys.ARTIFACTS_PATCH).let { artifactsPatch ->
       WorkflowUpdateRequest(
-        workflowId = arguments.string(SharedPayloadKeys.WORKFLOW_ID),
+        workflowId = workflowId,
         workflowStatus = arguments.string(WorkflowWirePayloadKeys.WORKFLOW_STATUS),
         currentStepId = arguments.string(WorkflowWirePayloadKeys.CURRENT_STEP_ID),
         stepUpdates = arguments.optionalListMap(McpToolPayloadKeys.STEP_UPDATES)?.let(WorkflowStepUpdates::from),
-        artifactsPatch = artifactsPatch?.let(WorkflowArtifactPatch::from),
+        artifactsPatch =
+          arguments.verifyQaArtifactsPatch(component, workflowId, artifactsPatch)
+            ?.let(WorkflowArtifactPatch::from),
         planningResult =
           artifactsPatch?.get(WorkflowArtifactKeys.PLAN)
             ?.let(JsonCodec::anyToStringAnyMap)
@@ -54,6 +60,7 @@ internal fun workflowUpdate(
       )
     },
   ).toMcpMap()
+}
 
 internal fun workflowGet(
   arguments: McpToolArguments,
@@ -72,15 +79,17 @@ internal fun workflowLatest(component: McpComponent): Map<String, Any?> =
 internal fun workflowResume(
   arguments: McpToolArguments,
   component: McpComponent,
-): Map<String, Any?> =
-  component.workflowService.resume(VERIFY, arguments.string(SharedPayloadKeys.WORKFLOW_ID)).toMcpMap()
+): Map<String, Any?> {
+  val workflowId = arguments.string(SharedPayloadKeys.WORKFLOW_ID)
+  arguments.guardStoredVerifyQa(component, workflowId)
+  return component.workflowService.resume(VERIFY, workflowId).toMcpMap()
+}
 
 internal fun workflowContinue(
   arguments: McpToolArguments,
   component: McpComponent,
-): Map<String, Any?> =
-  component.workflowService.continueWorkflow(
-    VERIFY,
-    arguments.string(SharedPayloadKeys.WORKFLOW_ID),
-    subtaskId = null,
-  ).toMcpMap()
+): Map<String, Any?> {
+  val workflowId = arguments.string(SharedPayloadKeys.WORKFLOW_ID)
+  arguments.guardStoredVerifyQa(component, workflowId)
+  return component.workflowService.continueWorkflow(VERIFY, workflowId, subtaskId = null).toMcpMap()
+}

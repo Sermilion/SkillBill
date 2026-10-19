@@ -8,6 +8,11 @@ interface RepositoryFingerprintGitOperations {
 
   fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult
 
+  fun revisionTreeIdentity(
+    repoRoot: Path,
+    revision: String,
+  ): WorkflowGitOperationResult
+
   fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,
