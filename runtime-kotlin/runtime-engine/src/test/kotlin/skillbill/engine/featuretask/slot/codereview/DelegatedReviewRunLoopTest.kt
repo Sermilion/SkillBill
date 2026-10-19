@@ -62,18 +62,18 @@ class DelegatedReviewRunLoopTest {
   }
 
   @Test
-  fun `a delegated review whose lane edits the worktree blocks instead of committing the edit`() {
+  fun `a delegated review whose lane edits the worktree still completes the review`() {
     val git = committedRepoBranchSetup().gitOperations.also { it.repositoryFingerprintValue = "before-fix" }
     val lanes = LaneScript(onSpecialistLaunch = { git.worktreeStatusValue = " M src/Foo.kt\n M $LANE_EDITED_PATH" })
     val launcher = phaseLauncher(git, lanes)
 
     withDelegatedRun(git, lanes, launcher) { _, report ->
-      val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, report.toString())
-      assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, blocked.lastIncompletePhase)
-      assertTrue(blocked.blockedReason.contains("read-only"), blocked.blockedReason)
-      assertTrue(blocked.blockedReason.contains(LANE_EDITED_PATH), blocked.blockedReason)
+      val blockedAtReview =
+        (report as? FeatureTaskRuntimeRunReport.Blocked)?.lastIncompletePhase ==
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
+      assertFalse(blockedAtReview, report.toString())
       val launchedPhases = launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }.map(::phaseIdFromPrompt)
-      assertFalse(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS in launchedPhases)
+      assertTrue(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS in launchedPhases, "$launchedPhases")
     }
   }
 

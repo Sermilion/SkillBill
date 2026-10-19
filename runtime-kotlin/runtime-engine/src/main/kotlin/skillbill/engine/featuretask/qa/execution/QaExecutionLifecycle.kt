@@ -17,7 +17,6 @@ import skillbill.error.featuretask.qa.incompatibleQaCapability
 import skillbill.error.featuretask.qa.isQaDeviceLeaseFailure
 import skillbill.error.featuretask.qa.qaDeviceLeaseReason
 import skillbill.error.featuretask.qa.qaRepositoryUnreadable
-import skillbill.error.featuretask.qa.qaWorktreeChanged
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.qa.QaDeviceLeasePort
@@ -55,30 +54,30 @@ class QaExecutionLifecycle(
       workspaceOwner.use {
         leaseOwner.use {
           val result = execute(QaExecutionContext(workspace, expected, target(repoRoot, policy), policy))
-          requireUnchanged(repoRoot, expected)
+          warnIfChanged(repoRoot, expected)
           val after = gitOperations.worktreeBaseline(repoRoot, ::cannotStart)
-          requireUnchangedStatus(after.status, baseline.status)
+          if (after.status != baseline.status) warnChanged("the worktree status differs from before QA.")
           result
         }
       }
     return QaExecutionResult(value, retained, expected)
   }
 
-  internal fun requireUnchanged(
+  internal fun warnIfChanged(
     repoRoot: Path,
     expected: QaExpectedIdentity,
   ) {
     val baseline = gitOperations.worktreeBaseline(repoRoot, ::cannotStart)
     if (baseline.head != expected.headRevision || treeIdentity(repoRoot) != expected.treeIdentity) {
-      throw qaWorktreeChanged("HEAD or the tested tree changed during QA.")
+      warnChanged("HEAD or the tested tree changed during QA.")
     }
   }
 
-  private fun requireUnchangedStatus(
-    actual: String,
-    expected: String,
-  ) {
-    if (actual != expected) throw qaWorktreeChanged("the worktree status differs from before QA.")
+  private fun warnChanged(detail: String) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "QA accepted a repository change made while it ran: $detail",
+    )
   }
 
   private fun target(

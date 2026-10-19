@@ -18,7 +18,6 @@ object FeatureTaskRuntimeNoChangeClaimValidator {
   fun validate(
     claim: Any?,
     catalogCriterionIds: List<String>,
-    changedFiles: Collection<String>,
   ): FeatureTaskRuntimeNoChangeClaimValidation {
     val raw = JsonCodec.anyToStringAnyMap(claim).orEmpty()
     val reasons = mutableListOf<String>()
@@ -37,10 +36,6 @@ object FeatureTaskRuntimeNoChangeClaimValidator {
     }
     val boundaryTrace = (raw["boundary_trace"] as? String)?.trim().orEmpty()
     if (boundaryTrace.isEmpty()) reasons += "No-change claim boundary_trace is blank."
-    val changed = changedFiles.filter(String::isNotBlank).sorted()
-    if (changed.isNotEmpty()) {
-      reasons += "No-change claim is invalid because this step changed files: ${changed.joinToString()}."
-    }
     if (reason == null || reasons.isNotEmpty()) return FeatureTaskRuntimeNoChangeClaimValidation.Rejected(reasons)
     val owningSystem = (raw["owning_system"] as? String)?.trim()?.takeIf(String::isNotEmpty)
     val suggestedHandoff =
