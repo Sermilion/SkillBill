@@ -15,6 +15,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -341,17 +342,28 @@ class FeatureTaskRuntimeWorkerCoordinator(
   private fun heartbeat(base: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeHeartbeatTick {
     val now = clock.instant()
     val updated = base.copy(heartbeatAt = now.toString(), expiresAt = now.plus(LEASE_DURATION).toString())
-    val persisted =
-      database.transaction {
-        it.workflowStates.heartbeatFeatureTaskRuntimeWorker(updated)
+    return database.transaction { unit ->
+      when {
+        unit.workflowStates.heartbeatFeatureTaskRuntimeWorker(updated) -> FeatureTaskRuntimeHeartbeatTick.Renewed
+        finishedUnderOwnership(unit.workflowStates, base) -> FeatureTaskRuntimeHeartbeatTick.WorkflowFinished
+        else ->
+          FeatureTaskRuntimeHeartbeatTick.FencingLost(
+            "worker lease fencing was lost for workflow '${base.workflowId}'",
+          )
       }
-    return if (persisted) {
-      FeatureTaskRuntimeHeartbeatTick.Renewed
-    } else {
-      FeatureTaskRuntimeHeartbeatTick.FencingLost(
-        "worker lease fencing was lost for workflow '${base.workflowId}'",
-      )
     }
+  }
+
+  private fun finishedUnderOwnership(
+    workflowStates: WorkflowStateRepository,
+    base: FeatureTaskRuntimeWorkerOwnership,
+  ): Boolean {
+    val current = workflowStates.getFeatureTaskRuntimeWorkerOwnership(base.workflowId) ?: return false
+    val status = workflowStates.getFeatureTaskWorkflow(base.workflowId)?.workflowStatus ?: return false
+    return current.ownerToken == base.ownerToken &&
+      current.generation == base.generation &&
+      current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE &&
+      status.workflowStatus() in TERMINAL_WORKFLOW_STATUSES
   }
 
   private fun newOwnership(

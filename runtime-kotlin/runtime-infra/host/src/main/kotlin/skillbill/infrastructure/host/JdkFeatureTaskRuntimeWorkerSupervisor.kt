@@ -330,6 +330,7 @@ private class HeartbeatLoop(
     lastRenewalNanos.set(System.nanoTime())
     when (tick) {
       FeatureTaskRuntimeHeartbeatTick.Renewed -> scheduleNext(plan.intervalSeconds)
+      FeatureTaskRuntimeHeartbeatTick.WorkflowFinished -> Unit
       is FeatureTaskRuntimeHeartbeatTick.FencingLost -> {
         fencingLost.set(tick.reason)
         diagnostics.error("Worker heartbeat for '${plan.label}' stopped renewing the lease: ${tick.reason}")

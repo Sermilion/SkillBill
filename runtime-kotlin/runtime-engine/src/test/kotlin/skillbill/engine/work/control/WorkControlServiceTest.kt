@@ -113,7 +113,7 @@ class WorkControlServiceTest {
 
 private class GoalControlsFixture : AutoCloseable {
   private val schema = establishTemporarySchemaReadiness("goal-controls-progress")
-  val root: Path = schema.tempDir
+  val root: Path = schema.tempDir.toRealPath()
   private val database = sqliteSessionFactoryForTests(root, schema.dbPath.toString(), emptyMap())
   private val identity = testGoalRepositoryIdentity(root)
   private val lease =
