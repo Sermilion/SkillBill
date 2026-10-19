@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.slot.audit
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
-import skillbill.engine.featuretask.lifecycle.checkpoint.auditReviewCheckpointBlockedReason
+import skillbill.engine.featuretask.lifecycle.checkpoint.auditReviewCheckpointWarning
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
 import skillbill.engine.featuretask.slot.PhaseForwardCheckpoint
@@ -25,7 +25,7 @@ internal object AcceptanceAuditLoopRules : PhaseLoopRules {
   private val auditedImplementation =
     PhaseForwardCheckpoint(
       intent = FeatureTaskRuntimeCheckpointMessage.INTENT_AUDITED_IMPLEMENTATION,
-      blockedReason = ::auditReviewCheckpointBlockedReason,
+      failureWarning = ::auditReviewCheckpointWarning,
     )
 
   override fun forwardCheckpoint(

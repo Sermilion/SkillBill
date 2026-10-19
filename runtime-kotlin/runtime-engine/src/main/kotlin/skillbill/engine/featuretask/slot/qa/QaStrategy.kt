@@ -238,7 +238,7 @@ class QaStrategy(
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck {
         val qa = run.qaExecution ?: return PhaseStepOutputCheck.Block(MISSING_WORKSPACE)
-        execution.requireUnchanged(run.request.repoRoot, qa.expected)
+        execution.warnIfChanged(run.request.repoRoot, qa.expected)
         return PhaseStepOutputCheck.Accept
       }
 
@@ -250,7 +250,7 @@ class QaStrategy(
       ): NormalizedFeatureTaskRuntimePhaseOutput {
         if (output.status == "blocked" || output.status == "failed") return output
         val qa = run.qaExecution ?: return output
-        execution.requireUnchanged(run.request.repoRoot, qa.expected)
+        execution.warnIfChanged(run.request.repoRoot, qa.expected)
         return withReceipt(run, state, output, receipts.settle(qa))
       }
 

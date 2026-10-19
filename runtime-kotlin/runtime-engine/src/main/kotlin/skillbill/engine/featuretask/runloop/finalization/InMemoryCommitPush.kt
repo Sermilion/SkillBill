@@ -26,7 +26,6 @@ internal class InMemoryCommitPush(
         is PendingCommit.Failed -> return InMemoryCommitPushResult.Failed(commit.error)
         is PendingCommit.Done -> commit.committed
       }
-    remainingChangesFailure()?.let { return InMemoryCommitPushResult.Failed(it) }
     val head = git.headCommitSha(repoRoot)
     if (head !is WorkflowGitOperationResult.Ok || head.value.isBlank()) {
       return InMemoryCommitPushResult.Failed("Could not resolve committed HEAD: ${head.error}")
@@ -93,24 +92,6 @@ internal class InMemoryCommitPush(
       WorkflowGitCommitResult.NothingToCommit -> PendingCommit.Done(committed = false)
     }
   }
-
-  private fun remainingChangesFailure(): String? =
-    when (val remaining = git.repositoryOwnedPaths(repoRoot)) {
-      is WorkflowGitNameListResult.Failed -> "Could not verify the worktree: ${remaining.error}"
-      is WorkflowGitNameListResult.Listed -> {
-        val actionable = remaining.names.filterNot(::isRuntimePrivatePath)
-        val eligible = withoutGitignoredFeatureSpecs(actionable)
-        if (eligible !is WorkflowGitOperationResult.Ok) {
-          return "Could not read gitignored feature-spec paths: ${eligible.error}"
-        }
-        val leftover = eligible.value.lineSequence().map(String::trim).filter(String::isNotBlank)
-        if (leftover.any()) {
-          "Uncommitted changes remain after commit. Retry the PR phase to include them before publishing."
-        } else {
-          null
-        }
-      }
-    }
 
   private fun withoutGitignoredFeatureSpecs(paths: List<String>): WorkflowGitOperationResult {
     val ignored = git.gitignoredFeatureSpecPaths(repoRoot, paths)

@@ -22,6 +22,21 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
   private val progress: FeatureTaskRuntimeRunState,
   private val session: FeatureTaskRuntimeRunLoopSession,
 ) {
+  private var checkpointBlockOverride: ((String) -> Unit)? = null
+
+  /** Runs [action] with checkpoint blocks routed to [onBlock] instead of ending the run. */
+  fun <T> checkpointBlocksAsWarnings(
+    onBlock: (String) -> Unit,
+    action: () -> T,
+  ): T {
+    checkpointBlockOverride = onBlock
+    try {
+      return action()
+    } finally {
+      checkpointBlockOverride = null
+    }
+  }
+
   fun claimResumedInFlightEdge(
     loopId: String,
     edgeIteration: Int,
@@ -151,6 +166,10 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     reason: String,
     resolvedBranch: String?,
   ) {
+    checkpointBlockOverride?.let { override ->
+      override(reason)
+      return
+    }
     transitionTerminalBlocked(
       FeatureTaskRuntimeRunReport.Blocked(
         issueKey = request.issueKey,

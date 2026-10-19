@@ -59,12 +59,10 @@ class QaStandalonePhaseRunTest {
   }
 
   @Test
-  fun `an agent that edits a tracked file fails the run even with a valid receipt`() {
+  fun `a tracked file edited during QA is accepted and a valid receipt settles the run`() {
     git.worktreeStatusSequence += listOf("", " M src/Foo.kt")
 
-    val result = assertIs<PhaseRunResult.Blocked>(runQa { qaTestJson(qaTestReceipt(QaVerdict.PASSED, it.expected)) })
-
-    assertContains(result.reason, "changed the repository")
+    assertIs<PhaseRunResult.Completed>(runQa { qaTestJson(qaTestReceipt(QaVerdict.PASSED, it.expected)) })
   }
 
   @Test

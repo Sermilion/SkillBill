@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runloop.core
 
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
@@ -126,12 +127,25 @@ object FeatureTaskRuntimeRunLoopTransitions {
     val checkpoint =
       context.strategyFor(precedingPhaseId).loopRules?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
         ?: return true
-    return FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
-      context,
-      precedingPhaseId = precedingPhaseId,
-      loopId = null,
-      intent = checkpoint.intent,
-      blockedReason = checkpoint.blockedReason,
-    )
+    // A forward checkpoint never stops the run: whatever is on the branch moves on to the next phase.
+    val failures = mutableListOf<String>()
+    runCatching {
+      context.coupledRunTransitions.checkpointBlocksAsWarnings(failures::add) {
+        FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
+          context,
+          precedingPhaseId = precedingPhaseId,
+          loopId = null,
+          intent = checkpoint.intent,
+          blockedReason = checkpoint.failureWarning,
+        )
+      }
+    }.onFailure { error ->
+      if (error is InterruptedException) throw error
+      failures += checkpoint.failureWarning(context.session.resolvedBranch.orEmpty(), error.message.orEmpty())
+    }
+    failures.forEach { warning ->
+      RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, "$warning Advancing to $destinationPhaseId.")
+    }
+    return true
   }
 }

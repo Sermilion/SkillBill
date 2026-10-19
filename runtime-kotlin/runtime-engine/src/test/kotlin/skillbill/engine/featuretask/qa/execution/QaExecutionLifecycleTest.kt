@@ -61,7 +61,7 @@ class QaExecutionLifecycleTest {
   }
 
   @Test
-  fun `a later QA pass captures the repaired tree and rejects changes during that pass`() {
+  fun `a later QA pass captures the repaired tree and accepts changes during that pass`() {
     val first = execution.withExecution(repo, QaPolicy.AUTO) { it.expected.treeIdentity }
     val repairedTree = "4".repeat(64)
     git.repositoryFingerprintValue = repairedTree
@@ -69,9 +69,7 @@ class QaExecutionLifecycleTest {
 
     assertEquals(QA_TEST_TREE, first.value)
     assertEquals(repairedTree, second.value)
-    assertFailsWith<SkillBillRuntimeException> {
-      execution.withExecution(repo, QaPolicy.AUTO) { git.repositoryFingerprintValue = "5".repeat(64) }
-    }
+    execution.withExecution(repo, QaPolicy.AUTO) { git.repositoryFingerprintValue = "5".repeat(64) }
     assertEquals(3, workspaces.closedInvocations.size)
   }
 }

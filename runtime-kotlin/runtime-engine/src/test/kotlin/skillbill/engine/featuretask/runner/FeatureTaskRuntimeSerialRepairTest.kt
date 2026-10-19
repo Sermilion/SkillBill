@@ -28,6 +28,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -164,6 +165,58 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertContains(harness.launchOrder(), "review")
       assertContains(harness.launchOrder(), "validate")
       assertEquals(null, harness.recorder.loadNoChangePause(WORKFLOW_ID))
+    }
+  }
+
+  @Test
+  fun `a failed audited implementation checkpoint still advances to review`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phase = phaseIdFromPrompt(assertNotNull(request.skillRunRequest.promptOverride))
+        if (phase == "audit") {
+          val state = accounting.get()?.snapshot
+          val output =
+            if (state == null) {
+              serialDiscoveryOutput().replace(
+                "source_unresolved",
+                "source_closed",
+              ).replace("advance", "no_change_confirmed")
+            } else {
+              serialStructuredAuditOutput(2, state, "All authored production criteria are satisfied.")
+                .replace("satisfied\"", "no_change_confirmed\"")
+            }
+          facts(output)
+        } else {
+          facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    harness.seedResolvedBranch("feat/existing-runtime-branch", "main", created = false)
+    var auditCheckpointFailures = 0
+    harness.gitOperations.onStagedPathsRead = {
+      val beforeReview = "review" !in harness.launchOrder()
+      if (beforeReview) auditCheckpointFailures++
+      harness.gitOperations.stagedPathsResult =
+        WorkflowGitNameListResult.Failed("index.lock exists").takeIf { beforeReview }
+    }
+    harness.seedPhase("preplan", "completed", 1, "claude", PREPLAN_OUTPUT)
+    harness.seedPhase("plan", "completed", 1, "claude", PLAN_OUTPUT)
+    harness.seedPhase("implement", "completed", 1, "claude", noChangeImplementationOutput())
+
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+      assertTrue(auditCheckpointFailures > 0)
+      assertContains(harness.launchOrder(), "review")
     }
   }
 
