@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistenc
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
@@ -77,6 +78,7 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
@@ -92,6 +94,46 @@ import kotlin.test.assertTrue
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class FeatureTaskExecutionPlanCreationTest {
+  @Test
+  fun `a new goal child plans without QA while a recorded revision-three child keeps its QA plan`() {
+    val newChild = ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD)
+    val created =
+      newChild.codec.decode(
+        newChild.creationResolver().resolveCreation(
+          FeatureTaskRuntimeExecutionPlanCreationRequest(
+            testRepositoryRoot.path,
+            SkeletonDefinition.GOAL_CHILD,
+            CodeReviewExecutionMode.INLINE,
+            FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+            ValidationDepth.FULL,
+            null,
+          ),
+        ).encoded(),
+      )
+    assertNull(created.qaSelection)
+    assertTrue(created.selectedStepIds.none { it == "qa" || it == "qa_fix" })
+
+    val recordedChild = ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD_REVISION_3)
+    val recordedPlan =
+      recordedChild.strategies.executionPlan(
+        PhaseStrategySelectionFacts(
+          SkeletonDefinition.GOAL_CHILD_REVISION_3,
+          setOf(
+            CodeReviewExecutionMode.INLINE,
+            FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+            FeatureTaskRuntimeQaSelection.OFF,
+          ),
+        ),
+      )
+    val resumed =
+      recordedChild.compatibility.requireSupportedComposition(
+        recordedChild.codec.encodeExecution(recordedPlan, recordedChild.inputs),
+      )
+    assertEquals(3, resumed.definitionSemanticRevision)
+    assertEquals(FeatureTaskRuntimeQaSelection.OFF, resumed.qaSelection)
+    assertTrue("qa" in resumed.selectedStepIds)
+  }
+
   @Test
   fun `standalone descriptor write rejection rolls back the workflow and route identity`() =
     withDatabase { database ->

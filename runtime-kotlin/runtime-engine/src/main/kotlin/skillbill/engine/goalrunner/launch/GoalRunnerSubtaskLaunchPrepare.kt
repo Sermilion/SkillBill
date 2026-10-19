@@ -207,8 +207,8 @@ class GoalRunnerSubtaskLaunchPrepare(
     val qualityGate =
       priorWorkflowId?.let(outcomeStore::recordedQualityGateSelection)
         ?: GoalRunnerQualityGateSelectionResolver.resolve()
-    val qaSelection = request.childQaSelection
-    val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, qaSelection, priorWorkflowId)
+    val qaSelection = recordedChildQaSelection(priorWorkflowId)
+    val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, priorWorkflowId)
     val firstRun = priorWorkflowId == null
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
@@ -262,6 +262,9 @@ class GoalRunnerSubtaskLaunchPrepare(
     }
   }
 
+  private fun recordedChildQaSelection(priorWorkflowId: String?): FeatureTaskRuntimeQaSelection? =
+    priorWorkflowId?.let { outcomeStore.childQaSelection(it, null) }
+
   private fun governedChildSpecPath(
     subtaskId: Int,
     specPath: String,
@@ -313,7 +316,6 @@ class GoalRunnerSubtaskLaunchPrepare(
     request: GoalRunnerRunRequest,
     reviewMode: CodeReviewExecutionMode,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
-    qaSelection: FeatureTaskRuntimeQaSelection,
     priorWorkflowId: String?,
   ): ValidatedFeatureTaskRuntimeExecutionPlan {
     val assignedQualityGate =
@@ -324,7 +326,6 @@ class GoalRunnerSubtaskLaunchPrepare(
         definition = SkeletonDefinition.GOAL_CHILD,
         reviewMode = reviewMode,
         qualityGate = qualityGate,
-        qaSelection = qaSelection,
         validationDepth = ValidationDepth.FULL,
         timeout = request.timeout,
         workflowId = priorWorkflowId,
@@ -335,7 +336,7 @@ class GoalRunnerSubtaskLaunchPrepare(
             facts =
               PhaseStrategySelectionFacts(
                 SkeletonDefinition.GOAL_CHILD,
-                setOfNotNull(reviewMode, assignedQualityGate, qaSelection),
+                setOfNotNull(reviewMode, assignedQualityGate),
               ),
             inputs =
               StepLaunchAssignmentInputs(

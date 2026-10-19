@@ -74,11 +74,17 @@ data class SkeletonDefinition(
         semanticRevision = 2,
       )
     val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", FEATURE_RUN_SLOTS, semanticRevision = 3)
-    val GOAL_CHILD: SkeletonDefinition =
+    val GOAL_CHILD_REVISION_3: SkeletonDefinition =
       SkeletonDefinition(
         "goal-child",
         FEATURE_RUN_SLOTS.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
         semanticRevision = 3,
+      )
+    val GOAL_CHILD: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-child",
+        LEGACY_FEATURE_RUN_SLOTS_REVISION_2.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
+        semanticRevision = 4,
       )
     val REVIEW: SkeletonDefinition =
       SkeletonDefinition(
@@ -153,6 +159,7 @@ data class SkeletonDefinition(
           STANDALONE_REVISION_2,
           GOAL_CHILD_REVISION_2,
           STANDALONE,
+          GOAL_CHILD_REVISION_3,
           GOAL_CHILD,
           REVIEW,
           VALIDATION,

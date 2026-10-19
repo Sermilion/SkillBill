@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Goal children without QA and goal-level selection"
   spec_path: ".feature-specs/SKILL-431-run-qa-once-per-goal-after-all-subtasks-and-before-the-pr/spec_subtask_2_goal-children-without-qa.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261019-185714-ivbo"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

@@ -164,7 +164,7 @@ class SkeletonDefinitionTest {
 
   @Test
   fun `goal-child derives today's declaration without the pull request step`() {
-    assertEquals(todaysDeclaration(goalChildForward), SkeletonDefinition.GOAL_CHILD.declaration())
+    assertEquals(todaysDeclaration(goalChildForward), SkeletonDefinition.GOAL_CHILD_REVISION_3.declaration())
   }
 
   @Test
@@ -183,9 +183,13 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `revision two keeps the pre-QA composition while new lookup selects revision three`() {
-    assertEquals(3, SkeletonDefinition.byId("goal-child").semanticRevision)
-    assertEquals(3, SkeletonDefinition.GOAL_CHILD.semanticRevision)
+  fun `recorded goal-child revisions keep their composition while new lookup selects revision four without QA`() {
+    val current = SkeletonDefinition.byId("goal-child")
+    assertEquals(SkeletonDefinition.GOAL_CHILD, current)
+    assertEquals(4, current.semanticRevision)
+    assertTrue(current.stepIds.none { it == "qa" || it == "qa_fix" })
+    assertEquals(3, SkeletonDefinition.GOAL_CHILD_REVISION_3.semanticRevision)
+    assertTrue(PhaseSlot.QA in SkeletonDefinition.GOAL_CHILD_REVISION_3.slots)
     assertFalse(PhaseSlot.QA in SkeletonDefinition.GOAL_CHILD_REVISION_2.slots)
     assertEquals(2, SkeletonDefinition.GOAL_CHILD_REVISION_2.semanticRevision)
     for (preQa in listOf(SkeletonDefinition.GOAL_CHILD_REVISION_2, SkeletonDefinition.STANDALONE_REVISION_2)) {
@@ -285,10 +289,10 @@ class SkeletonDefinitionTest {
 
   @Test
   fun `an entry step selected for traversal is no longer loop-only`() {
-    val selected =
-      SkeletonDefinition.GOAL_CHILD.stepIds.toSet() - FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
+    val goalChild = SkeletonDefinition.GOAL_CHILD_REVISION_3
+    val selected = goalChild.stepIds.toSet() - FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
     val traversal =
-      SkeletonDefinition.GOAL_CHILD.traversal(
+      goalChild.traversal(
         selected,
         entryStepIds = setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD),
       )

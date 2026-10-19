@@ -1,3 +1,9 @@
+## [2026-10-19] Add goal-child revision 4 instead of editing revision 3
+Context: SKILL-431 removes QA from goal children, but goals in flight have children recorded on goal-child revision 3 with qa and qa_fix steps.
+Decision: GOAL_CHILD becomes revision 4 without the QA slot, and the old definition stays in entries as GOAL_CHILD_REVISION_3. admittedForRun still returns only the newest constant.
+Reason: Recorded plans resolve their definition by id and semantic revision, so keeping rev 3 lets an in-flight child resume with its exact step list while every new child picks rev 4. Editing rev 3 in place would change a recorded child's steps under it.
+Revisit when: No goal with a rev-3 child remains resumable.
+
 ## [2026-10-19] Scope goal-qa loops by step absence
 Context: The goal-qa skeleton needs qa_fix to validate and validate to qa edges, but feature runs also compose qa, qa_fix and validate. composedOnlyWithSteps cannot express that audit must be absent.
 Decision: Add composedOnlyWithoutSteps and key the qa_fix_revalidate and qa_requalify loops on audit. Make validate loop-only in goal-qa through a skeleton-scoped loopOnlyStepIds set that must be a subset of the skeleton's steps.

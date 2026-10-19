@@ -71,8 +71,9 @@ object SkeletonStrategyBindings {
       SkeletonDefinition.GOAL_CHILD_REVISION_2 to goalChildRevision2Bindings,
       SkeletonDefinition.STANDALONE to
         standaloneRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
-      SkeletonDefinition.GOAL_CHILD to
+      SkeletonDefinition.GOAL_CHILD_REVISION_3 to
         goalChildRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
+      SkeletonDefinition.GOAL_CHILD to goalChildRevision2Bindings,
       SkeletonDefinition.REVIEW to
         mapOf(
           PhaseSlot.STANDALONE_REVIEW to

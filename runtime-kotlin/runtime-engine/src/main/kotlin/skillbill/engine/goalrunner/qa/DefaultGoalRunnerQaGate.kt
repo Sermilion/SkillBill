@@ -72,7 +72,7 @@ class DefaultGoalRunnerQaGate(
           timeout = request.timeout,
           agentAddonSelection = request.agentAddonSelection,
           modelAssignment = request.modelAssignment,
-          qaSelection = effectiveSelection(state, request),
+          qaSelection = request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
           acceptanceCriteria = invariants.acceptanceCriteria,
           eventSink = FeatureTaskRuntimeRunEventSink { event -> record(state, request, event) },
           activityOutput = { stepName, activity -> recordActivity(state, request, stepName, activity) },
@@ -94,16 +94,6 @@ class DefaultGoalRunnerQaGate(
           outcomeStore.recordedQaOutcome(workflowId) is GoalSubtaskQaSummary.Recorded
       }
   }
-
-  private fun effectiveSelection(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-  ): FeatureTaskRuntimeQaSelection =
-    request.qaSelection
-      ?: state.manifest.subtasks.asSequence().mapNotNull { subtask ->
-        subtask.workflowId?.takeIf(String::isNotBlank)?.let { outcomeStore.childQaSelection(it, null) }
-      }.firstOrNull()
-      ?: FeatureTaskRuntimeQaSelection.AUTO
 
   private fun record(
     state: GoalRunnerManifestState,

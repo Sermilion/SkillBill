@@ -338,7 +338,7 @@ fun testPhaseStrategyBindings(
             PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
           PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
         ),
-      SkeletonDefinition.GOAL_CHILD to
+      SkeletonDefinition.GOAL_CHILD_REVISION_3 to
         shared +
         mapOf(
           PhaseSlot.QUALITY_GATE to
@@ -371,7 +371,9 @@ fun testPhaseStrategyBindings(
   return bindings +
     mapOf(
       SkeletonDefinition.STANDALONE_REVISION_2 to (bindings.getValue(SkeletonDefinition.STANDALONE) - PhaseSlot.QA),
-      SkeletonDefinition.GOAL_CHILD_REVISION_2 to (bindings.getValue(SkeletonDefinition.GOAL_CHILD) - PhaseSlot.QA),
+      SkeletonDefinition.GOAL_CHILD_REVISION_2 to
+        (bindings.getValue(SkeletonDefinition.GOAL_CHILD_REVISION_3) - PhaseSlot.QA),
+      SkeletonDefinition.GOAL_CHILD to (bindings.getValue(SkeletonDefinition.GOAL_CHILD_REVISION_3) - PhaseSlot.QA),
     )
 }
 

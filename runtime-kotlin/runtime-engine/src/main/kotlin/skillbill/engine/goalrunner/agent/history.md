@@ -1,5 +1,16 @@
 # goalrunner boundary history
 
+## [2026-10-19] SKILL-431 subtask 2: goal children without QA
+Areas: runtime-domain skeleton and goalrunner control model, runtime-engine goalrunner (launch, execution/core, model, manifest, status), featuretask (lifecycle/execution, runloop/durable, runner, slot/skeleton), runtime-infra sqlite goalrunner control codec and launcher agentrun, slotbaseline fixtures
+- GOAL_CHILD is now semantic revision 4: the rev-2 feature-run slots minus PULL_REQUEST and MONITOR, so no qa or qa_fix. The old rev 3 stays in entries as GOAL_CHILD_REVISION_3 with QA. byId and admittedForRun pick rev 4, and admission is id-based, so recorded rev-3 children still resume with their QA steps.
+- New children are planned and continued with a null QA selection. Launch prepare and the launch reconciler read outcomeStore.childQaSelection(priorWorkflowId, null), so a recorded child keeps its plan selection. GoalRunnerRunRequest.childQaSelection is gone; the execution plan resolver defaults AUTO only when the definition has the QA slot.
+- GoalRunnerControlState carries a nullable qaSelection, stored as qa_selection in the SQLite control payload. GoalRunnerRunPreparation.prepareRun takes the persisted value, else the first child's recorded plan selection, writes the effective value (request, else AUTO) once through updateControlState, and threads it into the goal QA gate request.
+- A resume asking for a different selection returns PreparationBlocked BLOCKED "Cannot change QA selection on goal resume" before any policy persistence, so the refusal writes nothing.
+- The launcher writes a blank SKILL_BILL_QA_SELECTION for children with no selection so they don't inherit the parent's env value; blank parses as absent.
+- Limits: qa_selection is a forward-only control key, and an older runtime's strict decoder rejects it. warnIfResumeAssignmentDiffers may log a diagnostic-only warning for resumed rev-3 children. DefaultGoalRunnerQaGate's own AUTO fallback is now redundant but kept. Runner test harness defaults to rev 4; QA runner tests use GOAL_CHILD_REVISION_3.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented (validate passed clean check)
+
 ## [2026-10-19] SKILL-431 subtask 1: goal-level QA run in finalization
 Areas: runtime-domain skeleton and phase/task transitions, runtime-engine goalrunner (qa, execution/core, execution/support, model, persist), featuretask (phaserun, slot/qa, qa/receipt, runloop), runtime-core goal DI, goalrunner and phaserun tests
 - New in-memory goal-qa skeleton (qa, qa_fix, validate; not standalone-invocable, no run harness). validate is loop-only there through the skeleton-scoped loopOnlyStepIds set, so a passing or skipped first QA ends the run and validate runs only after a qa_fix repair.

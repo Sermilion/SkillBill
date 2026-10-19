@@ -1,5 +1,11 @@
 # goalrunner boundary decisions
 
+## [2026-10-19] Pin the goal QA selection on the parent control state
+Context: Children no longer carry a QA selection, so the goal QA gate needs one owner for the selection across resumes, including goals that started before the change.
+Decision: The parent's control state records the effective selection on first run (request, else AUTO). An in-flight goal with none inherits the first child's recorded plan selection. A resume asking for a different value is refused with a QA-specific blocked stop.
+Reason: Without the pin a resume could silently flip an in-flight goal from off to AUTO, or QA under a different selection than the children were planned with. Refusing before any persistence keeps a rejected resume free of side effects.
+Alternatives considered: A dedicated persistQaSelection manifest write, dropped because the transactional updateControlState already gives first-write-wins and the extra method tripped detekt TooManyFunctions.
+
 ## [2026-10-19] Skip goal QA for legacy per-child QA and for a settled tree
 Context: Children still compose QA until SKILL-431 subtask 2, and a blocked or resumed goal re-enters finalization and would run goal QA again.
 Decision: The gate skips when every subtask workflow ran a QA-composed plan with a recorded outcome, or when the parent outcome is passed or skipped on the current tree identity. The legacy skip writes no parent outcome.

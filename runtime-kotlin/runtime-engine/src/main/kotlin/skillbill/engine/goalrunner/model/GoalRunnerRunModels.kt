@@ -29,8 +29,6 @@ data class GoalRunnerRunRequest(
   val intake: String? = null,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
 ) {
-  val childQaSelection: FeatureTaskRuntimeQaSelection get() = qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
-
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
     require(invokedAgentId.isNotBlank()) { "invokedAgentId is required." }

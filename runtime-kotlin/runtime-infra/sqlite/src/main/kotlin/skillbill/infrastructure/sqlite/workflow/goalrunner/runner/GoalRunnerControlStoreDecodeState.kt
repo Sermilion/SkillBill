@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.runner
 
 import skillbill.contracts.JsonCodec
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.time.parsePersistedInstantOrNull
 
 internal fun decodeControlState(raw: String): GoalRunnerControlState {
@@ -32,6 +33,7 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
       "goal_completed_at",
       "goal_pull_request_url",
       GoalRunnerControlPayloadKeys.BLOCKED_REASON,
+      GoalRunnerControlPayloadKeys.QA_SELECTION,
     )
   state.keys.forEach { key ->
     if (key !in allowedKeys) {
@@ -64,5 +66,7 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
         }
       },
     goalPullRequestUrl = state.nullableString("goal_pull_request_url"),
+    qaSelection =
+      state.nullableString(GoalRunnerControlPayloadKeys.QA_SELECTION)?.let(FeatureTaskRuntimeQaSelection::fromWire),
   )
 }
