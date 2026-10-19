@@ -22,17 +22,6 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
   private val progress: FeatureTaskRuntimeRunState,
   private val session: FeatureTaskRuntimeRunLoopSession,
 ) {
-  fun resumeInFlightReentry(
-    fromPhaseId: String,
-    loopId: String,
-    edgeIteration: Int,
-    pendingReentry: PendingReentry,
-  ) {
-    progress.reopenForReentry(fromPhaseId)
-    progress.recordEdgeIteration(loopId, edgeIteration)
-    session.transitionReentryPair(pendingReentry, pendingReentry)
-  }
-
   fun claimResumedInFlightEdge(
     loopId: String,
     edgeIteration: Int,
