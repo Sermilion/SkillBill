@@ -33,9 +33,7 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -383,26 +381,16 @@ internal class WorkflowGoalRunnerReviewBridge(
       if (passNumber != state.emittedPassCount + 1 || passNumber > state.completedPassCount) {
         return@transaction false
       }
-      val updated =
-        engine.updateRecord(
-          WorkflowFamily.TASK_RUNTIME.definition,
-          record,
-          WorkflowUpdateInput(
-            workflowStatus = record.workflowStatus,
-            currentStepId = record.currentStepId,
-            stepUpdates = null,
-            artifactsPatch =
-              WorkflowArtifactPatch.from(
-                mapOf(
-                  DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(
-                    state.acknowledgeSummariesThrough(passNumber).toPersistenceWire(),
-                  ),
-                ),
-              ),
-            sessionId = record.sessionId.orEmpty(),
+      engine.saveRunnerArtifactPatch(
+        unitOfWork.workflowStates,
+        WorkflowFamily.TASK_RUNTIME,
+        record,
+        mapOf(
+          DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(
+            state.acknowledgeSummariesThrough(passNumber).toPersistenceWire(),
           ),
-        )
-      unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+        ),
+      )
       true
     }
 }

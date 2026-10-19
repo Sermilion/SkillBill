@@ -34,8 +34,6 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
-import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.engine.progressToken
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -148,19 +146,7 @@ internal class WorkflowGoalRunnerProgressRecording(
             ),
         )
       validateGoalObservabilityPatch(wireArtifactValidator, observabilityPatch)
-      val updated =
-        engine.updateRecord(
-          family.definition,
-          record,
-          WorkflowUpdateInput(
-            workflowStatus = record.workflowStatus,
-            currentStepId = record.currentStepId,
-            stepUpdates = null,
-            artifactsPatch = WorkflowArtifactPatch.from(observabilityPatch),
-            sessionId = record.sessionId.orEmpty(),
-          ),
-        )
-      unitOfWork.workflowStates.save(family, updated)
+      engine.saveRunnerArtifactPatch(unitOfWork.workflowStates, family, record, observabilityPatch)
       true
     }
 
@@ -236,22 +222,12 @@ internal class WorkflowGoalRunnerProgressRecording(
       val updatedOutcomes =
         (existing + outcomes.map(GoalRunnerWorkerSubtaskRequestOutcome::toPersistenceWire))
           .takeLast(WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT)
-      val updated =
-        engine.updateRecord(
-          family.definition,
-          record,
-          WorkflowUpdateInput(
-            workflowStatus = record.workflowStatus,
-            currentStepId = record.currentStepId,
-            stepUpdates = null,
-            artifactsPatch =
-              WorkflowArtifactPatch.from(
-                mapOf(DurableWorkflowArtifactFamily.WORKER_SUBTASK_REQUEST_OUTCOMES.entry(updatedOutcomes)),
-              ),
-            sessionId = record.sessionId.orEmpty(),
-          ),
-        )
-      unitOfWork.workflowStates.save(family, updated)
+      engine.saveRunnerArtifactPatch(
+        unitOfWork.workflowStates,
+        family,
+        record,
+        mapOf(DurableWorkflowArtifactFamily.WORKER_SUBTASK_REQUEST_OUTCOMES.entry(updatedOutcomes)),
+      )
       true
     }
 
@@ -383,19 +359,7 @@ internal class WorkflowGoalRunnerProgressRecording(
           historyFamily.putInto(this, updatedHistory)
           history.latestFamily?.putInto(this, entryMap)
         }
-      val updated =
-        engine.updateRecord(
-          family.definition,
-          record,
-          WorkflowUpdateInput(
-            workflowStatus = record.workflowStatus,
-            currentStepId = record.currentStepId,
-            stepUpdates = null,
-            artifactsPatch = WorkflowArtifactPatch.from(patch),
-            sessionId = record.sessionId.orEmpty(),
-          ),
-        )
-      unitOfWork.workflowStates.save(family, updated)
+      engine.saveRunnerArtifactPatch(unitOfWork.workflowStates, family, record, patch)
       true
     }
 }
