@@ -25,6 +25,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -116,9 +117,63 @@ class PhaseMonitorRunTest {
       }).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result)
-    assertTrue("did not publish a source or merge change" in blocked.reason, blocked.reason)
+    assertTrue("published no source, merge, or pull request change" in blocked.reason, blocked.reason)
+    assertTrue("validate (https://ci.example/run)" in blocked.reason, blocked.reason)
     assertTrue("CI-confirmed failed repair" !in blocked.reason, blocked.reason)
     assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
+  }
+
+  @Test
+  fun `a repair that only fixes the pull request title is published and monitoring follows the refreshed checks`() {
+    initFeatureBranch()
+    editSourceOnRepair = false
+    var title = "[SKILL-904] Monitor"
+    var headAtRepair: String? = null
+    val repairLauncher =
+      repairLauncher {
+        headAtRepair = git(origin, "rev-parse", FEATURE_BRANCH)
+        title = "fix: [SKILL-904] Monitor"
+      }
+    var observations = 0
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        observations += 1
+        val titleRule = if (title.startsWith("fix:")) CheckBucket.PASS else CheckBucket.FAIL
+        PullRequestChecks.Reported(listOf(PullRequestCheck("danger/danger", titleRule, "https://ci.example/danger")))
+      }
+
+    val result =
+      entry(identity = titledIdentity { title }, checks = checks, agentLauncher = repairLauncher)
+        .runMonitor("SKILL-904")
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds(repairLauncher))
+    assertEquals(2, observations)
+    assertEquals(headAtRepair, git(origin, "rev-parse", FEATURE_BRANCH))
+    assertTrue(result.value.orEmpty().contains("CI passed for published commit '$headAtRepair'"), result.value)
+  }
+
+  @Test
+  fun `pull request edits that keep failing CI each count toward the repair cap even when a title repeats`() {
+    initFeatureBranch()
+    editSourceOnRepair = false
+    var edits = 0
+    val repairLauncher = repairLauncher { edits += 1 }
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        PullRequestChecks.Reported(
+          listOf(PullRequestCheck("danger/danger", CheckBucket.FAIL, "https://ci.example/danger", Instant.now())),
+        )
+      }
+
+    val result =
+      entry(identity = titledIdentity { "title ${edits % 2}" }, checks = checks, agentLauncher = repairLauncher)
+        .runMonitor("SKILL-904")
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue(blocked.reason.contains("after 3 CI-confirmed failed repair commit(s)"), blocked.reason)
+    assertTrue(blocked.reason.contains("CI confirmed a failed published pull request edit"), blocked.reason)
+    assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds(repairLauncher))
   }
 
   @Test
@@ -161,7 +216,7 @@ class PhaseMonitorRunTest {
       }
     val identity: PullRequestIdentityLookup = { _, _ ->
       identityCalls += 1
-      val conflicting = checkCalls == 3 && identityCalls in 7..8
+      val conflicting = checkCalls == 3 && identityCalls in 10..11
       PullRequestIdentity.Found(
         PULL_REQUEST_URL,
         7,
@@ -195,13 +250,14 @@ class PhaseMonitorRunTest {
     val prompt = launcher.requests.first().skillRunRequest.promptOverride.orEmpty()
     assertTrue("Run the full project validation" in prompt, prompt)
     assertTrue("https://ci.example/run" in prompt, prompt)
-    assertTrue("read that failing job's logs first" in prompt, prompt)
+    assertTrue("read that failing job's logs or the check's report first" in prompt, prompt)
     assertTrue("--job <job-id> --log-failed" in prompt, prompt)
-    assertTrue("Identify the failed command, assertion or error" in prompt, prompt)
+    assertTrue("Identify the failed command, assertion, rule or error" in prompt, prompt)
     assertTrue("A passing local rerun does not resolve the recorded CI failure" in prompt, prompt)
     assertTrue("investigate timing, concurrency, isolation, and environment differences" in prompt, prompt)
-    assertTrue("Do not settle completed with an unchanged tree" in prompt, prompt)
-    assertTrue("If investigation cannot establish a repository fix, settle blocked" in prompt, prompt)
+    assertTrue("fix the pull request with `gh pr edit`" in prompt, prompt)
+    assertTrue("Do not settle completed when neither the working tree nor the pull request changed" in prompt, prompt)
+    assertTrue("If investigation cannot establish a repository or pull request fix, settle blocked" in prompt, prompt)
     assertTrue("Local validation is not a claim that CI passed" in prompt, prompt)
     assertTrue("The runtime commits and pushes a completed repair" in prompt, prompt)
     assertTrue(
@@ -385,6 +441,17 @@ class PhaseMonitorRunTest {
       val phase = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
       if (phase == MONITOR_FIX) repair()
       facts(validJsonOutput(phase))
+    }
+
+  private fun titledIdentity(title: () -> String): PullRequestIdentityLookup =
+    { _, _ ->
+      PullRequestIdentity.Found(
+        PULL_REQUEST_URL,
+        7,
+        title(),
+        headSha = git(repoRoot, "rev-parse", "HEAD"),
+        editableFieldsDigest = title(),
+      )
     }
 
   private fun launchedPhaseIds(agentLauncher: RuntimeRecordingLauncher = launcher): List<String> =

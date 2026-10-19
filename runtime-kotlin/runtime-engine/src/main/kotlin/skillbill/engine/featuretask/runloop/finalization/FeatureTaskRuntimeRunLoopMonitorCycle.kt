@@ -7,6 +7,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
+import skillbill.engine.featuretask.phase.core.MonitorRepairPayloadKeys
 import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.core.RepairPublicationAssociation
 import skillbill.engine.featuretask.phase.core.auditProseValue
@@ -25,6 +26,7 @@ import skillbill.engine.featuretask.slot.attempt.blockAndPersistInPhase
 import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
+import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
@@ -55,7 +57,8 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val resolved = recorder.loadResolvedBranch(request.workflowId)
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
-    val outcome = observePublishedHead(run, observation, repairSteps, iteration, branch)
+    val (repairAssociation, expectedHead) = publishedHeadExpectation(repairSteps, iteration)
+    val outcome = observePublishedHead(run, observation, branch, expectedHead)
     return when (outcome) {
       PullRequestCiOutcome.Merged ->
         complete(run, iteration, mergedMonitorOutput(run.phaseId, branch))
@@ -86,15 +89,14 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       PullRequestCiOutcome.NoPullRequest -> settleWithoutPullRequest(run, iteration, branch)
       is PullRequestCiOutcome.Failed -> {
         observation.recordFailingChecks(request.issueKey, outcome.failingChecks)
-        failedCiOutcome(run, iteration, branch, outcome, repairSteps)
+        failedCiOutcome(run, iteration, branch, outcome, repairAssociation)
       }
       PullRequestCiOutcome.Conflicted -> {
         observation.recordMergeConflict(request.issueKey, baseBranch)
         routeToRepair(
           run,
           iteration,
-          conflictProse(branch, baseBranch),
-          FeatureTaskRuntimeVerdict.PROGRESS,
+          RepairRoute(conflictProse(branch, baseBranch), FeatureTaskRuntimeVerdict.PROGRESS),
         )
       }
       is PullRequestCiOutcome.Blocked -> block(run, iteration, outcome.reason)
@@ -108,31 +110,51 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     }
   }
 
+  private fun PhaseRuntimeFinalizationContext.repairAccounting(repairSteps: MonitorRepairStepRoles) =
+    MonitorRepairAccounting(
+      repairSteps,
+      gitOperations,
+      recorder::producerOutput,
+      phaseSettlementService::findEnvelope,
+      diagnostics,
+    )
+
+  private fun PhaseRuntimeFinalizationContext.publishedHeadExpectation(
+    repairSteps: MonitorRepairStepRoles,
+    iteration: Int,
+  ): Pair<RepairPublicationAssociation, ExpectedCiHead> {
+    val accounting = repairAccounting(repairSteps)
+    val ledger = recorder.loadPhaseLedger(request.workflowId).orEmpty()
+    val outputs = progress.outputs()
+    val repairAssociation =
+      accounting.publishedRepairCommitSha(
+        request,
+        iteration,
+        recorder.loadPhaseRecords(request.workflowId).orEmpty(),
+        ledger,
+        outputs,
+      )
+    val expectedHead =
+      ExpectedCiHead(
+        accounting.publishedHeadBeforeMonitor(request, iteration, ledger, outputs),
+        (repairAssociation as? RepairPublicationAssociation.Published)?.pullRequestEdit?.repairStartedAt,
+      )
+    return repairAssociation to expectedHead
+  }
+
   private fun PhaseRuntimeFinalizationContext.observePublishedHead(
     run: PhaseRun,
     observation: PhaseCiObservation,
-    repairSteps: MonitorRepairStepRoles,
-    iteration: Int,
     branch: String,
-  ): PullRequestCiOutcome {
-    val ledger = recorder.loadPhaseLedger(request.workflowId).orEmpty()
-    val accounting =
-      MonitorRepairAccounting(
-        repairSteps,
-        gitOperations,
-        recorder::producerOutput,
-        phaseSettlementService::findEnvelope,
-        diagnostics,
-      )
-    val priorOutputs = progress.outputs()
-    val expectedHeadSha = accounting.publishedHeadBeforeMonitor(request, iteration, ledger, priorOutputs)
-    return observation.watch(
+    expectedHead: ExpectedCiHead,
+  ): PullRequestCiOutcome =
+    observation.watch(
       request.repoRoot,
       branch,
       onCiRunning = { pullRequestUrl, pending ->
         observability.ciStillRunning(run.phaseId, pullRequestUrl, pending)
       },
-      expectedHeadSha = expectedHeadSha,
+      expectedHead = expectedHead,
       onInconclusive = { reason ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,
@@ -140,36 +162,26 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
         )
       },
     )
-  }
 
   private fun PhaseRuntimeFinalizationContext.failedCiOutcome(
     run: PhaseRun,
     iteration: Int,
     branch: String,
     outcome: PullRequestCiOutcome.Failed,
-    repairSteps: MonitorRepairStepRoles,
+    repairAssociation: RepairPublicationAssociation,
   ): PhaseOutcome {
-    val repairAssociation =
-      MonitorRepairAccounting(
-        repairSteps,
-        gitOperations,
-        recorder::producerOutput,
-        phaseSettlementService::findEnvelope,
-        diagnostics,
-      ).publishedRepairCommitSha(
-        request,
-        iteration,
-        recorder.loadPhaseRecords(request.workflowId).orEmpty(),
-        recorder.loadPhaseLedger(request.workflowId).orEmpty(),
-        progress.outputs(),
-      )
     if (repairAssociation == RepairPublicationAssociation.Unchanged) {
-      return block(run, iteration, "The completed repair did not publish a source or merge change.")
+      return block(
+        run,
+        iteration,
+        "The completed repair published no source, merge, or pull request change, and CI still fails on branch " +
+          "'$branch'. ${failingChecksList(outcome.failingChecks)}",
+      )
     }
     val published = repairAssociation as? RepairPublicationAssociation.Published
     val qualified =
       published != null && outcome.headSha != null && outcome.headSha == published.commitSha &&
-        published.commitSha !in progress.monitorFailedRepairCommitShas
+        published.repairKey !in progress.monitorFailedRepairCommitShas
     if (!qualified && repairAssociation !is RepairPublicationAssociation.NotStarted) {
       val reason = repairExclusionReason(repairAssociation, outcome.headSha)
       RuntimeDiagnosticsBestEffortWarning.record(
@@ -177,22 +189,17 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
         "Monitor excluded a failing CI observation from attempt accounting: $reason.",
       )
     }
-    return if (qualified) {
-      routeToRepair(
-        run,
-        iteration,
-        failingChecksProse(branch, outcome.failingChecks, outcome.headSha, publishedRepair = true),
-        FeatureTaskRuntimeVerdict.CI_FAILED,
-        requireNotNull(published).commitSha,
-      )
-    } else {
-      routeToRepair(
-        run,
-        iteration,
-        failingChecksProse(branch, outcome.failingChecks, outcome.headSha),
-        FeatureTaskRuntimeVerdict.PROGRESS,
-      )
-    }
+    val confirmed = published?.takeIf { qualified }
+    return routeToRepair(
+      run,
+      iteration,
+      RepairRoute(
+        failingChecksProse(branch, outcome, confirmed),
+        if (confirmed != null) FeatureTaskRuntimeVerdict.CI_FAILED else FeatureTaskRuntimeVerdict.PROGRESS,
+        outcome.editableFieldsDigest,
+      ),
+      confirmed?.repairKey,
+    )
   }
 
   private fun repairExclusionReason(
@@ -201,7 +208,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
   ): String =
     when (association) {
       RepairPublicationAssociation.Unavailable -> "repair publication association is unavailable"
-      RepairPublicationAssociation.Unchanged -> "repair publication has no source or merge change"
+      RepairPublicationAssociation.Unchanged -> "repair publication has no source, merge, or pull request change"
       RepairPublicationAssociation.NotStarted -> "repair failure is not associated with a published commit"
       is RepairPublicationAssociation.Published ->
         when (observedHeadSha) {
@@ -211,11 +218,16 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
         }
     }
 
+  private data class RepairRoute(
+    val value: String,
+    val verdict: FeatureTaskRuntimeVerdict,
+    val pullRequestFieldsDigest: String? = null,
+  )
+
   private fun PhaseRuntimeFinalizationContext.routeToRepair(
     run: PhaseRun,
     iteration: Int,
-    value: String,
-    verdict: FeatureTaskRuntimeVerdict,
+    route: RepairRoute,
     qualifiedFailedRepairSha: String? = null,
   ): PhaseOutcome =
     complete(
@@ -223,13 +235,14 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       iteration,
       monitorOutput(
         run.phaseId,
-        if (verdict == FeatureTaskRuntimeVerdict.CI_FAILED) {
+        if (route.verdict == FeatureTaskRuntimeVerdict.CI_FAILED) {
           "CI confirmed that a published repair failed."
         } else {
           "CI or merge repair work is starting."
         },
-        value,
-        verdict = verdict,
+        route.value,
+        verdict = route.verdict,
+        pullRequestFieldsDigest = route.pullRequestFieldsDigest,
       ),
       qualifiedFailedRepairSha,
     )
@@ -297,32 +310,36 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
 
   private fun failingChecksProse(
     branch: String,
-    checks: List<PullRequestCheck>,
-    headSha: String?,
-    publishedRepair: Boolean = false,
+    outcome: PullRequestCiOutcome.Failed,
+    confirmedRepair: RepairPublicationAssociation.Published?,
   ): String =
-    (
-      if (publishedRepair) {
-        "CI confirmed a failed published repair commit '$headSha' on branch '$branch'. "
-      } else {
-        "CI is failing on branch '$branch' at observed commit '${headSha ?: "unknown"}'. "
-      }
-    ) + "Failing checks: " +
-      checks.joinToString("; ") { check -> "${check.name} (${check.link})" } + "."
+    when {
+      confirmedRepair?.pullRequestEdit != null ->
+        "CI confirmed a failed published pull request edit '${confirmedRepair.repairKey}' on branch '$branch'. "
+      confirmedRepair != null ->
+        "CI confirmed a failed published repair commit '${outcome.headSha}' on branch '$branch'. "
+      else -> "CI is failing on branch '$branch' at observed commit '${outcome.headSha ?: "unknown"}'. "
+    } + failingChecksList(outcome.failingChecks)
+
+  private fun failingChecksList(checks: List<PullRequestCheck>): String =
+    "Failing checks: " + checks.joinToString("; ") { check -> "${check.name} (${check.link})" } + "."
 
   internal fun monitorOutput(
     phaseId: String,
     summary: String,
     value: String,
     verdict: FeatureTaskRuntimeVerdict?,
+    pullRequestFieldsDigest: String? = null,
   ): String {
+    val producedOutputs = linkedMapOf<String, Any?>(SharedPayloadKeys.VALUE to value)
+    pullRequestFieldsDigest?.let { producedOutputs[MonitorRepairPayloadKeys.PULL_REQUEST_FIELDS_DIGEST] = it }
     val envelope =
       linkedMapOf<String, Any?>(
         SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
         SharedPayloadKeys.PHASE_ID to phaseId,
         SharedPayloadKeys.STATUS to STATUS_COMPLETED,
         SharedPayloadKeys.SUMMARY to summary,
-        SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to value),
+        SharedPayloadKeys.PRODUCED_OUTPUTS to producedOutputs,
       )
     if (verdict != null) envelope[SharedPayloadKeys.VERDICT] = verdict.wireValue
     return JsonCodec.mapToJsonString(envelope)

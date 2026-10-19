@@ -15,6 +15,12 @@ Reason: Each subtask must close its own full project gate. Deferring validate to
 Supersedes: Goal continuation stamps build for every non-skipped child before the last non-skipped entry (SKILL-204).
 Revisit when: An operator needs a compile-only intermediate child again.
 
+## [2026-10-19] Monitor repair fixes the pull request, not only the repository
+Context: A goal PR failed Danger's title rule. The repair could not fix that through source, so the unchanged publication blocked the goal ("did not publish a source or merge change") even though the agent could edit the pull request.
+Decision: Monitor repair may fix a check that rejects the pull request itself with `gh pr edit`. The runtime digests the PR title, body and labels from the identity lookup, records the digest in the monitor output that starts a repair and in the repair publication, and qualifies a tree-unchanged repair as published when the digests differ. Its budget key is `<head>+pull-request-edit:<repair attempt>`, so every edit counts once against the same cap, including an edit that restores an earlier failed title. After such a repair the watcher counts failures only once checks settle and one started after the repair began, or after a ten-minute grace, because commit statuses refresh in place on the same head and `gh pr checks` gives them no timestamp. A repair that changes neither tree, merge ancestry nor PR fields still blocks.
+Reason: Monitoring exists to get every PR check passing, and PR-metadata rules are checks. Runtime-observed digests keep qualification evidence-based instead of trusting narration, and distinct keys prevent uncharged repair loops on an unchanged head.
+Supersedes: The source-or-merge-only qualification in "Count failed repair commits independently of repair launches" (2026-10-16).
+
 ## [2026-10-16] Recover failed repairs from recorded execution semantics
 Context: Resume must retain failed repairs after current phase records are replaced. Legacy monitor verdicts conflated CI failure and merge conflict, and report prose cannot establish which occurred.
 Decision: Admit historical CI_FAILED meaning only through the immutable stored monitor selection, dispatch owners and corrected traversal. Join matched START/COMPLETE and generation-zero producer identities, accepted repair completion, pushed baseline/publication outputs and Git ancestry/content evidence. Derive failed SHAs from publication records and restore the distinct failed-commit set.

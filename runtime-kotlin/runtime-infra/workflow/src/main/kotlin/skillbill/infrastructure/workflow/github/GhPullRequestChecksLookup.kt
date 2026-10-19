@@ -16,7 +16,7 @@ class GhPullRequestChecksLookup internal constructor(
     prNumber: Int,
   ): PullRequestChecks {
     val root = repoRoot.toAbsolutePath().normalize()
-    val result = gh.run(root, listOf("pr", "checks", prNumber.toString(), "--json", "name,state,bucket,link"))
+    val result = gh.run(root, listOf("pr", "checks", prNumber.toString(), "--json", "name,state,bucket,link,startedAt"))
     return parsePullRequestChecks(result)
   }
 }

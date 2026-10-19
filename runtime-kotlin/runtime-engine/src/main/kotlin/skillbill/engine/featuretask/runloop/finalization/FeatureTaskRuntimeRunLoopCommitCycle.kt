@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushRe
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalisationBlocked
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalised
+import skillbill.engine.featuretask.phase.core.MonitorRepairPayloadKeys
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.core.CommitPushBlocked
 import skillbill.engine.featuretask.runloop.core.CommitPushNotApplicable
@@ -42,7 +43,8 @@ import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -74,6 +76,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
   internal fun PhaseRuntimeFinalizationContext.publishMonitorRepair(
     run: PhaseRun,
     publicationPhaseId: String,
+    pullRequests: PullRequestIdentityLookup,
   ): String? {
     val ledger =
       recorder.loadPhaseLedger(request.workflowId)
@@ -93,11 +96,15 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     val base = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, base)
     val result = InMemoryCommitPush(gitOperations, request.repoRoot).run(branch, request.issueKey)
-    if (result !is WorkflowGitOperationResult.Ok) return result.error
+    if (result is InMemoryCommitPushResult.Failed) return result.error
+    val pushed = result as InMemoryCommitPushResult.Pushed
+    val pullRequestFieldsDigest =
+      (pullRequests.lookup(request.repoRoot, branch) as? PullRequestIdentity.Found)?.editableFieldsDigest
     val output =
       runtimeOwnedCommitPushOutput(
         publicationPhaseId,
-        FeatureTaskRuntimeCommitPushReceipt(result.value, branch, base, pushed = true),
+        FeatureTaskRuntimeCommitPushReceipt(pushed.headSha, branch, base, pushed = true, committed = pushed.committed),
+        pullRequestFieldsDigest,
       ).encodeToByteArray()
     recorder.retainProducerOutput(
       ProducerOutputEvidence(
@@ -122,6 +129,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
   internal fun runtimeOwnedCommitPushOutput(
     phaseId: String,
     receipt: FeatureTaskRuntimeCommitPushReceipt,
+    pullRequestFieldsDigest: String? = null,
   ): String {
     val result = linkedMapOf<String, Any?>()
     receipt.commitSha?.trim()?.takeIf(String::isNotBlank)?.let { sha ->
@@ -134,25 +142,43 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
       result[DecompositionPlanningPayloadKeys.BASE_BRANCH] = baseBranch
     }
     result[FeatureTaskRuntimeCommitPushPayloadKeys.PUSHED] = receipt.pushed
-    val value =
-      "Runtime committed " +
-        (result[DecompositionManifestPayloadKeys.COMMIT_SHA]?.let { "commit $it" } ?: "no recorded commit") +
-        (result[DecompositionPlanningPayloadKeys.BRANCH]?.let { " on branch $it" } ?: "") +
-        (result[DecompositionPlanningPayloadKeys.BASE_BRANCH]?.let { " against base $it" } ?: "") +
-        if (receipt.pushed) " and pushed it." else " without pushing."
+    val producedOutputs =
+      linkedMapOf<String, Any?>(
+        SharedPayloadKeys.VALUE to commitPushProse(receipt, result),
+        FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT to result,
+      )
+    pullRequestFieldsDigest?.let { producedOutputs[MonitorRepairPayloadKeys.PULL_REQUEST_FIELDS_DIGEST] = it }
     return JsonCodec.mapToJsonString(
       mapOf(
         SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
         SharedPayloadKeys.PHASE_ID to phaseId,
         SharedPayloadKeys.STATUS to STATUS_COMPLETED,
-        SharedPayloadKeys.SUMMARY to "Runtime staged every dirty path, committed, and recorded commit_sha.",
-        SharedPayloadKeys.PRODUCED_OUTPUTS to
-          mapOf(
-            SharedPayloadKeys.VALUE to value,
-            FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT to result,
-          ),
+        SharedPayloadKeys.SUMMARY to
+          if (receipt.committed) {
+            "Runtime staged every dirty path, committed, and recorded commit_sha."
+          } else {
+            "Runtime found no pending changes and recorded the existing head as commit_sha."
+          },
+        SharedPayloadKeys.PRODUCED_OUTPUTS to producedOutputs,
       ),
     )
+  }
+
+  private fun commitPushProse(
+    receipt: FeatureTaskRuntimeCommitPushReceipt,
+    result: Map<String, Any?>,
+  ): String {
+    val commit = result[DecompositionManifestPayloadKeys.COMMIT_SHA]?.let { "commit $it" }
+    val location =
+      (result[DecompositionPlanningPayloadKeys.BRANCH]?.let { " on branch $it" } ?: "") +
+        (result[DecompositionPlanningPayloadKeys.BASE_BRANCH]?.let { " against base $it" } ?: "")
+    return if (receipt.committed) {
+      "Runtime committed ${commit ?: "no recorded commit"}$location" +
+        if (receipt.pushed) " and pushed it." else " without pushing."
+    } else {
+      "Runtime found no new changes to commit; existing ${commit ?: "head"}$location was " +
+        if (receipt.pushed) "pushed." else "not pushed."
+    }
   }
 
   private fun PhaseRuntimeFinalizationContext.settle(
@@ -182,13 +208,20 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
     val result = InMemoryCommitPush(gitOperations, request.repoRoot).run(branch, request.issueKey)
-    if (result !is WorkflowGitOperationResult.Ok) return block(run, iteration, result.error)
+    if (result is InMemoryCommitPushResult.Failed) return block(run, iteration, result.error)
+    val pushed = result as InMemoryCommitPushResult.Pushed
     return complete(
       run,
       iteration,
       runtimeOwnedCommitPushOutput(
         run.phaseId,
-        FeatureTaskRuntimeCommitPushReceipt(result.value, branch, baseBranch, pushed = true),
+        FeatureTaskRuntimeCommitPushReceipt(
+          pushed.headSha,
+          branch,
+          baseBranch,
+          pushed = true,
+          committed = pushed.committed,
+        ),
       ),
     )
   }

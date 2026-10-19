@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
+import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PhaseMonitorStepBinding
@@ -29,7 +30,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Path
 
 class MonitorStrategy(
-  identityLookup: PullRequestIdentityLookup,
+  private val identityLookup: PullRequestIdentityLookup,
   checksLookup: PullRequestChecksLookup,
 ) : PhaseStrategy() {
   private val watcher = PullRequestCiWatcher(identityLookup, checksLookup)
@@ -40,9 +41,9 @@ class MonitorStrategy(
         repoRoot: Path,
         branch: String,
         onCiRunning: (String, List<PullRequestCheck>) -> Unit,
-        expectedHeadSha: String?,
+        expectedHead: ExpectedCiHead,
         onInconclusive: (String) -> Unit,
-      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning, expectedHeadSha, onInconclusive)
+      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning, expectedHead, onInconclusive)
 
       override fun recordFailingChecks(
         issueKey: String,
@@ -104,7 +105,7 @@ class MonitorStrategy(
         state: PhaseAcceptedStepExecution,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck =
-        (state as PhaseMonitorStepBinding).publishRepair(run)?.let { PhaseStepOutputCheck.Block(it) }
+        (state as PhaseMonitorStepBinding).publishRepair(run, identityLookup)?.let { PhaseStepOutputCheck.Block(it) }
           ?: PhaseStepOutputCheck.Accept
     }
 
@@ -163,7 +164,9 @@ class MonitorStrategy(
         "the workflow created. A merged pull request completes monitoring regardless of its checks. " +
         "A failed check on an open pull request starts repair even while other checks are pending. " +
         "The initial failure starts repair but does not count as a failed repair. Only a completed, " +
-        "published repair whose associated commit has a failing CI result counts toward the three-failure cap. " +
+        "published repair whose associated commit or pull request edit has a failing CI result counts toward the " +
+        "three-failure cap. After a repair that only edited the pull request, failures count once checks settle " +
+        "and a check has run since the repair started, or after a ten-minute grace. " +
         "A merge conflict starts merge repair without counting as a CI failure. Cancelled checks do not start " +
         "repair. All checks passing, skipped, or cancelled completes the phase only when none is pending. " +
         "While checks are pending, report the current pull request and available commit or check links. Describe " +
@@ -176,25 +179,29 @@ class MonitorStrategy(
         "GitHub CLI cannot report checks, monitoring blocks."
 
     private const val MONITOR_FIX_DIRECTIVE: String =
-      "Monitor repair completion requires both a repository fix for the recorded failure and passing local " +
-        "project checks. Passing local checks alone does not satisfy this phase, even when discovery finds " +
-        "no applicable checks. When the brief names a merge conflict, merge the named base branch into the " +
-        "current branch and resolve every conflict. When it names failing checks, open each recorded check " +
-        "URL and read that failing job's logs first, for example with " +
-        "`gh run view <run-id> --job <job-id> --log-failed`. Identify the failed command, assertion or error, " +
-        "and relevant CI environment. Trace that evidence through the repository code, tests, and CI " +
+      "Monitor repair completion requires both a fix for the recorded failure and passing local project checks. " +
+        "Passing local checks alone does not satisfy this phase, even when discovery finds no applicable checks. " +
+        "When the brief names a merge conflict, merge the named base branch into the current branch and resolve " +
+        "every conflict. When it names failing checks, open each recorded check URL and read that failing job's " +
+        "logs or the check's report first, for example with `gh run view <run-id> --job <job-id> --log-failed` " +
+        "or the pull request comment the check links to. Identify the failed command, assertion, rule or error, " +
+        "and relevant CI environment. When the evidence shows the check rejects the pull request itself, such as " +
+        "its title, description or labels, fix the pull request with `gh pr edit` so it satisfies the rule the " +
+        "check enforces, following the repository's conventions, and change repository files only when the " +
+        "failure also needs them. Otherwise trace that evidence through the repository code, tests, and CI " +
         "configuration before editing, then fix the cause in the working tree. A passing local rerun does " +
         "not resolve the recorded CI failure. If it does not reproduce locally, investigate timing, " +
         "concurrency, isolation, and environment differences as the evidence warrants. Fix any identified " +
         "race or nondeterministic test setup without weakening assertions or skipping coverage, and run " +
-        "targeted proof as well as the required project checks. Do not settle completed with an unchanged " +
-        "tree merely because local checks passed, or use a CI rerun as a substitute for investigating the " +
-        "cause. If investigation cannot establish a repository fix, settle blocked with the failed check " +
-        "URL, the evidence inspected, and the unresolved cause or missing evidence, even if all local checks " +
-        "pass. Unavailable CI logs, missing secrets, or an infrastructure outage also require a block with " +
-        "the concrete obstacle. Do not commit or push. The runtime commits and pushes a completed repair " +
-        "and owns subsequent CI confirmation. In natural prose, explain the CI failure, its cause, the repository " +
-        "change, and local check results. Local validation is not a claim that CI passed. Never weaken assertions, " +
-        "suppress findings, disable rules, or skip tests to silence the failure."
+        "targeted proof as well as the required project checks. Do not settle completed when neither the " +
+        "working tree nor the pull request changed merely because local checks passed, or use a CI rerun as a " +
+        "substitute for investigating the cause. If investigation cannot establish a repository or pull request " +
+        "fix, settle blocked with the failed check URL, the evidence inspected, and the unresolved cause or " +
+        "missing evidence, even if all local checks pass. Unavailable CI logs, missing secrets, or an " +
+        "infrastructure outage also require a block with the concrete obstacle. Do not commit or push. The " +
+        "runtime commits and pushes a completed repair and owns subsequent CI confirmation. In natural prose, " +
+        "explain the CI failure, its cause, the repository or pull request change, and local check results. " +
+        "Local validation is not a claim that CI passed. Never weaken assertions, suppress findings, disable " +
+        "rules, or skip tests to silence the failure."
   }
 }

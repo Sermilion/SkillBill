@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phase.core
 
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
@@ -13,21 +14,35 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.nio.file.Path
+import java.time.Instant
 
 internal sealed interface RepairPublicationAssociation {
   data object NotStarted : RepairPublicationAssociation
 
-  data class Published(val commitSha: String) : RepairPublicationAssociation
+  data class Published(
+    val commitSha: String,
+    val pullRequestEdit: PullRequestEdit? = null,
+  ) : RepairPublicationAssociation {
+    val repairKey: String
+      get() = pullRequestEdit?.let { "$commitSha+pull-request-edit:${it.repairAttempt}" } ?: commitSha
+  }
 
   data object Unchanged : RepairPublicationAssociation
 
   data object Unavailable : RepairPublicationAssociation
+}
+
+internal data class PullRequestEdit(val repairAttempt: Int, val repairStartedAt: Instant)
+
+internal object MonitorRepairPayloadKeys {
+  const val PULL_REQUEST_FIELDS_DIGEST: String = "pull_request_fields_digest"
 }
 
 internal class MonitorRepairAccounting(
@@ -78,7 +93,7 @@ internal class MonitorRepairAccounting(
           val association =
             historicalFailureCommitSha(request, output.iteration, records, ledger, retained)
         ) {
-          is RepairPublicationAssociation.Published -> failedRepairs[output.iteration] = association.commitSha
+          is RepairPublicationAssociation.Published -> failedRepairs[output.iteration] = association.repairKey
           RepairPublicationAssociation.NotStarted -> {
             unqualifiedMonitorFailure(output.iteration)
             evidenceUnavailable = true
@@ -136,13 +151,14 @@ internal class MonitorRepairAccounting(
     val record: FeatureTaskRuntimePhaseRecord?,
   )
 
-  private data class Publication(val sha: String)
+  private data class Publication(val sha: String, val pullRequestFieldsDigest: String?)
 
   private data class PublishedChange(val sameTree: Boolean, val addedMergeParent: Boolean)
 
   private data class RepairPublicationEvidence(
     val repair: RepairAttempt,
     val publications: Pair<Publication, Publication>,
+    val pullRequestEdit: PullRequestEdit?,
   )
 
   fun publishedRepairCommitSha(
@@ -170,7 +186,7 @@ internal class MonitorRepairAccounting(
     val evidence =
       repairPublicationEvidence(request.workflowId, RepairWindow(repairStart, monitorStart), records, ledger, outputs)
         ?: return RepairPublicationAssociation.Unavailable
-    return qualifyChange(request.repoRoot, evidence.repair, evidence.publications)
+    return qualifyChange(request.repoRoot, evidence)
   }
 
   private fun historicalFailureCommitSha(
@@ -198,14 +214,22 @@ internal class MonitorRepairAccounting(
     val evidence =
       repairPublicationEvidence(request.workflowId, RepairWindow(repairStart, monitorStart), records, ledger, outputs)
         ?: return RepairPublicationAssociation.Unavailable
-    return publishedChange(request.repoRoot, evidence.publications.first.sha, evidence.publications.second.sha)?.let {
-        change ->
-      if (change.addedMergeParent || !change.sameTree) {
-        RepairPublicationAssociation.Published(evidence.publications.second.sha)
-      } else {
-        RepairPublicationAssociation.Unchanged
-      }
-    } ?: RepairPublicationAssociation.Unavailable
+    return historicalChange(request.repoRoot, evidence)
+  }
+
+  private fun historicalChange(
+    repoRoot: Path,
+    evidence: RepairPublicationEvidence,
+  ): RepairPublicationAssociation {
+    val published = evidence.publications.second.sha
+    val change =
+      publishedChange(repoRoot, evidence.publications.first.sha, published)
+        ?: return RepairPublicationAssociation.Unavailable
+    return when {
+      change.addedMergeParent || !change.sameTree -> RepairPublicationAssociation.Published(published)
+      evidence.pullRequestEdit != null -> RepairPublicationAssociation.Published(published, evidence.pullRequestEdit)
+      else -> RepairPublicationAssociation.Unchanged
+    }
   }
 
   private data class RepairWindow(
@@ -222,8 +246,36 @@ internal class MonitorRepairAccounting(
   ): RepairPublicationEvidence? {
     val repair = completedRepair(workflowId, window.repairStart, window.monitorStart, records, ledger) ?: return null
     val publications = publications(workflowId, repair, window.monitorStart, ledger, outputs) ?: return null
-    return RepairPublicationEvidence(repair, publications)
+    val before = triggeringMonitorFieldsDigest(workflowId, window.repairStart, ledger, outputs)
+    val after = publications.second.pullRequestFieldsDigest
+    val pullRequestEdit =
+      PullRequestEdit(window.repairStart.attemptCount, window.repairStart.timestamp)
+        .takeIf { before != null && after != null && before != after }
+    return RepairPublicationEvidence(repair, publications, pullRequestEdit)
   }
+
+  private fun triggeringMonitorFieldsDigest(
+    workflowId: String,
+    repairStart: FeatureTaskRuntimePhaseLedgerEntry,
+    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    outputs: List<FeatureTaskRuntimePhaseOutput>,
+  ): String? {
+    val completion =
+      ledger.lastOrNull {
+        it.phaseId == steps.monitor && it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
+          it.sequenceNumber < repairStart.sequenceNumber
+      } ?: return null
+    val output =
+      outputs.singleOrNull { it.phaseId == steps.monitor && it.iteration == completion.attemptCount }
+        ?: evidenceReader.completedOutput(workflowId, completion, ledger, null)
+    return output?.let(::pullRequestFieldsDigest)
+  }
+
+  private fun pullRequestFieldsDigest(output: FeatureTaskRuntimePhaseOutput): String? =
+    (output.normalizedOutput?.envelopeWireMap()?.get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? Map<*, *>)
+      ?.get(MonitorRepairPayloadKeys.PULL_REQUEST_FIELDS_DIGEST)
+      ?.toString()
+      ?.takeIf(String::isNotBlank)
 
   private fun completedRepair(
     workflowId: String,
@@ -304,21 +356,26 @@ internal class MonitorRepairAccounting(
       return null
     }
     if (!evidenceReader.producerOutputMatches(workflowId, start, completion, output)) return null
-    return Publication(sha)
+    return Publication(sha, output?.let(::pullRequestFieldsDigest))
   }
 
   private fun qualifyChange(
     repoRoot: Path,
-    repair: RepairAttempt,
-    publications: Pair<Publication, Publication>,
+    evidence: RepairPublicationEvidence,
   ): RepairPublicationAssociation {
-    val baseline = publications.first.sha
+    val publications = evidence.publications
     val published = publications.second.sha
-    val change = publishedChange(repoRoot, baseline, published) ?: return RepairPublicationAssociation.Unavailable
+    val change =
+      publishedChange(repoRoot, publications.first.sha, published) ?: return RepairPublicationAssociation.Unavailable
     if (change.addedMergeParent) return RepairPublicationAssociation.Published(published)
-    if (change.sameTree) return RepairPublicationAssociation.Unchanged
-    return repair.record?.let { record -> qualifySourceChange(repoRoot, record, publications) }
-      ?: unavailableRepairAssociation("repair source attribution is no longer retained")
+    if (!change.sameTree) {
+      val source =
+        evidence.repair.record?.let { record -> qualifySourceChange(repoRoot, record, publications) }
+          ?: unavailableRepairAssociation("repair source attribution is no longer retained")
+      if (source != RepairPublicationAssociation.Unchanged) return source
+    }
+    return evidence.pullRequestEdit?.let { RepairPublicationAssociation.Published(published, it) }
+      ?: RepairPublicationAssociation.Unchanged
   }
 
   private fun qualifySourceChange(

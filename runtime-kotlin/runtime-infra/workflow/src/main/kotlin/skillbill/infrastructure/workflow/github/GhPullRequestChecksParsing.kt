@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
+import java.time.Instant
 
 private val checksMapper: ObjectMapper by lazy { ObjectMapper() }
 
@@ -33,8 +34,13 @@ private fun checkFrom(entry: JsonNode): PullRequestCheck? {
   val name = entry.path("name").takeIf(JsonNode::isTextual)?.asText()?.takeIf(String::isNotBlank) ?: return null
   val bucket = entry.path("bucket").takeIf(JsonNode::isTextual)?.asText()?.let(::bucketFrom) ?: return null
   val link = entry.path("link").takeIf(JsonNode::isTextual)?.asText().orEmpty()
-  return PullRequestCheck(name = name, bucket = bucket, link = link)
+  return PullRequestCheck(name = name, bucket = bucket, link = link, startedAt = startedAtFrom(entry))
 }
+
+private fun startedAtFrom(entry: JsonNode): Instant? =
+  entry.path("startedAt").takeIf(JsonNode::isTextual)?.asText()
+    ?.let { text -> runCatching { Instant.parse(text) }.getOrNull() }
+    ?.takeIf { it.isAfter(Instant.EPOCH) }
 
 private fun bucketFrom(wireValue: String): CheckBucket? = CheckBucket.entries.firstOrNull { it.wireValue == wireValue }
 

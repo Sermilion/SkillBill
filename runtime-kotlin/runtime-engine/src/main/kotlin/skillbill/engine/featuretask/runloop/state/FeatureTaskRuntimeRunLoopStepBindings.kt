@@ -75,6 +75,7 @@ import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -350,10 +351,13 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
 ) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhaseMonitorStepBinding {
-  override fun publishRepair(run: PhaseRun): String? {
+  override fun publishRepair(
+    run: PhaseRun,
+    pullRequests: PullRequestIdentityLookup,
+  ): String? {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopCommitCycle) {
-      environment.publishMonitorRepair(run, requireNotNull(acceptedOwner.monitorRepairSteps).publication)
+      environment.publishMonitorRepair(run, requireNotNull(acceptedOwner.monitorRepairSteps).publication, pullRequests)
     }
   }
 

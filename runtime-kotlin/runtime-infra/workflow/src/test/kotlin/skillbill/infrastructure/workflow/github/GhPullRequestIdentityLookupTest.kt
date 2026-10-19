@@ -5,6 +5,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 
 class GhPullRequestIdentityLookupTest {
   private val repoRoot = Path.of("/tmp/skillbill-pr-identity")
@@ -27,6 +28,26 @@ class GhPullRequestIdentityLookupTest {
   }
 
   @Test
+  fun `editing the title changes the editable fields digest but reordering labels does not`() {
+    fun digest(
+      title: String,
+      labels: String,
+    ): String? {
+      val stdout =
+        "[{\"number\":42,\"url\":\"https://github.com/acme/repo/pull/42\",\"title\":\"$title\"," +
+          "\"body\":\"Summary\",\"labels\":$labels,\"state\":\"OPEN\",\"headRefOid\":\"abc123\"}]"
+      val identity =
+        GhPullRequestIdentityLookup { _, _ -> GhCommandResult(exitCode = 0, stdout = stdout) }
+          .lookup(repoRoot, "feat/SKILL-380")
+      return assertIs<PullRequestIdentity.Found>(identity).editableFieldsDigest
+    }
+    val original = digest("[SKILL-380] Rules", "[{\"name\":\"stack\"},{\"name\":\"android\"}]")
+
+    assertEquals(original, digest("[SKILL-380] Rules", "[{\"name\":\"android\"},{\"name\":\"stack\"}]"))
+    assertNotEquals(original, digest("fix: [SKILL-380] Rules", "[{\"name\":\"stack\"},{\"name\":\"android\"}]"))
+  }
+
+  @Test
   fun `the first listed pull request for the branch is found with its url, number, and title`() {
     val calls = mutableListOf<List<String>>()
     val lookup =
@@ -45,7 +66,7 @@ class GhPullRequestIdentityLookupTest {
 
     assertEquals(
       PullRequestIdentity.Found("https://github.com/acme/repo/pull/42", 42, "[SKILL-380] Rules", headSha = "abc123"),
-      identity,
+      assertIs<PullRequestIdentity.Found>(identity).copy(editableFieldsDigest = null),
     )
     assertEquals(
       listOf(
@@ -56,7 +77,7 @@ class GhPullRequestIdentityLookupTest {
         "--state",
         "all",
         "--json",
-        "url,number,title,state,headRefOid",
+        "url,number,title,body,labels,state,headRefOid",
         "--limit",
         "1",
       ),
@@ -76,7 +97,10 @@ class GhPullRequestIdentityLookupTest {
     lookup.lookup(repoRoot, "feat/SKILL-380")
 
     val args = calls.single()
-    assertEquals("url,number,title,state,headRefOid,mergeable,mergeStateStatus", args[args.indexOf("--json") + 1])
+    assertEquals(
+      "url,number,title,body,labels,state,headRefOid,mergeable,mergeStateStatus",
+      args[args.indexOf("--json") + 1],
+    )
   }
 
   @Test

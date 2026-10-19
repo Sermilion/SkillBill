@@ -7,6 +7,7 @@ sealed interface PullRequestIdentity {
     val title: String = "",
     val conflicting: Boolean = false,
     val headSha: String? = null,
+    val editableFieldsDigest: String? = null,
   ) : PullRequestIdentity
 
   data class Merged(

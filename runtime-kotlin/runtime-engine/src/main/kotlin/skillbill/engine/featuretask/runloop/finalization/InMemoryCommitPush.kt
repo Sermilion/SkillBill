@@ -7,6 +7,12 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
+internal sealed interface InMemoryCommitPushResult {
+  data class Pushed(val headSha: String, val committed: Boolean) : InMemoryCommitPushResult
+
+  data class Failed(val error: String) : InMemoryCommitPushResult
+}
+
 internal class InMemoryCommitPush(
   private val git: WorkflowGitOperations,
   private val repoRoot: Path,
@@ -14,24 +20,34 @@ internal class InMemoryCommitPush(
   fun run(
     branch: String,
     issueKey: String,
-  ): WorkflowGitOperationResult {
-    commitPendingChanges(issueKey)?.let { return WorkflowGitOperationResult.Failed(it) }
-    remainingChangesFailure()?.let { return WorkflowGitOperationResult.Failed(it) }
+  ): InMemoryCommitPushResult {
+    val committed =
+      when (val commit = commitPendingChanges(issueKey)) {
+        is PendingCommit.Failed -> return InMemoryCommitPushResult.Failed(commit.error)
+        is PendingCommit.Done -> commit.committed
+      }
+    remainingChangesFailure()?.let { return InMemoryCommitPushResult.Failed(it) }
     val head = git.headCommitSha(repoRoot)
     if (head !is WorkflowGitOperationResult.Ok || head.value.isBlank()) {
-      return WorkflowGitOperationResult.Failed("Could not resolve committed HEAD: ${head.error}")
+      return InMemoryCommitPushResult.Failed("Could not resolve committed HEAD: ${head.error}")
     }
     val push = git.pushBranch(repoRoot, branch)
     return if (push is WorkflowGitOperationResult.Ok) {
-      WorkflowGitOperationResult.Ok(head.value.trim())
+      InMemoryCommitPushResult.Pushed(head.value.trim(), committed)
     } else {
-      WorkflowGitOperationResult.Failed("Could not push branch '$branch': ${push.error}")
+      InMemoryCommitPushResult.Failed("Could not push branch '$branch': ${push.error}")
     }
   }
 
-  private fun commitPendingChanges(issueKey: String): String? {
+  private sealed interface PendingCommit {
+    data class Done(val committed: Boolean) : PendingCommit
+
+    data class Failed(val error: String) : PendingCommit
+  }
+
+  private fun commitPendingChanges(issueKey: String): PendingCommit {
     val stageable = stageableCommitPaths()
-    if (stageable !is WorkflowGitOperationResult.Ok) return stageable.error
+    if (stageable !is WorkflowGitOperationResult.Ok) return PendingCommit.Failed(stageable.error)
     val paths = stageable.value.lineSequence().map(String::trim).filter(String::isNotBlank).toList()
     return commitPaths(paths, issueKey)
   }
@@ -64,14 +80,17 @@ internal class InMemoryCommitPush(
   private fun commitPaths(
     paths: List<String>,
     issueKey: String,
-  ): String? {
+  ): PendingCommit {
     if (paths.isNotEmpty()) {
       val stage = git.stagePaths(repoRoot, paths)
-      if (stage !is WorkflowGitOperationResult.Ok) return "Could not stage pending changes: ${stage.error}"
+      if (stage !is WorkflowGitOperationResult.Ok) {
+        return PendingCommit.Failed("Could not stage pending changes: ${stage.error}")
+      }
     }
     return when (val commit = git.createCommit(repoRoot, "$issueKey: Prepare changes for pull request")) {
-      is WorkflowGitCommitResult.Failed -> "Could not commit pending changes: ${commit.error}"
-      is WorkflowGitCommitResult.Committed, WorkflowGitCommitResult.NothingToCommit -> null
+      is WorkflowGitCommitResult.Failed -> PendingCommit.Failed("Could not commit pending changes: ${commit.error}")
+      is WorkflowGitCommitResult.Committed -> PendingCommit.Done(committed = true)
+      WorkflowGitCommitResult.NothingToCommit -> PendingCommit.Done(committed = false)
     }
   }
 

@@ -10,6 +10,7 @@ data class FeatureTaskRuntimeCommitPushReceipt(
   val branch: String? = null,
   val baseBranch: String? = null,
   val pushed: Boolean = false,
+  val committed: Boolean = true,
 )
 
 sealed interface FeatureTaskRuntimeCommitPushHandoffResult

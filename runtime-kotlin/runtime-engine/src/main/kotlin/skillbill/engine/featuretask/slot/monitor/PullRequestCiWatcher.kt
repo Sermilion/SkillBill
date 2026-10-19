@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.monitor
 
+import skillbill.engine.featuretask.slot.state.ExpectedCiHead
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -20,16 +21,18 @@ internal class PullRequestCiWatcher(
   private val pollInterval: Duration = DEFAULT_POLL_INTERVAL,
   private val startTimeout: Duration = DEFAULT_START_TIMEOUT,
   private val progressInterval: Duration = DEFAULT_PROGRESS_INTERVAL,
+  private val refreshGrace: Duration = DEFAULT_REFRESH_GRACE,
 ) {
   fun watch(
     repoRoot: Path,
     branch: String,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
-    expectedHeadSha: String? = null,
+    expectedHead: ExpectedCiHead = ExpectedCiHead(),
     onInconclusive: (String) -> Unit = {},
   ): PullRequestCiOutcome {
-    val request = WatchRequest(repoRoot, branch, expectedHeadSha)
     val startedAt = now()
+    val refresh = expectedHead.refreshAfter?.let { CheckRefresh(it, startedAt + refreshGrace) }
+    val request = WatchRequest(repoRoot, branch, expectedHead.sha, refresh)
     var ciStarted = false
     var inconclusiveReported = false
     var progress = CiProgress()
@@ -55,7 +58,14 @@ internal class PullRequestCiWatcher(
     }
   }
 
-  private data class WatchRequest(val repoRoot: Path, val branch: String, val expectedHeadSha: String?)
+  private data class WatchRequest(
+    val repoRoot: Path,
+    val branch: String,
+    val expectedHeadSha: String?,
+    val refresh: CheckRefresh?,
+  )
+
+  private data class CheckRefresh(val after: Instant, val graceEndsAt: Instant)
 
   private data class CiPoll(val outcome: PullRequestCiOutcome? = null, val started: Boolean = false)
 
@@ -83,6 +93,7 @@ internal class PullRequestCiWatcher(
         onChecks(found.url, checks.checks)
         val failingChecks = checks.checks.filter { it.bucket == CheckBucket.FAIL }
         when {
+          failingChecks.isNotEmpty() && !refreshed(request.refresh, checks.checks) -> CiPoll(started = true)
           failingChecks.isNotEmpty() || checksSettled(checks.checks) ->
             CiPoll(
               refreshedOutcome(
@@ -103,6 +114,17 @@ internal class PullRequestCiWatcher(
       }
     }
   }
+
+  private fun refreshed(
+    refresh: CheckRefresh?,
+    checks: List<PullRequestCheck>,
+  ): Boolean =
+    refresh == null ||
+      checksSettled(checks) &&
+      (
+        checks.any { check -> check.startedAt?.let { !it.isBefore(refresh.after) } == true } ||
+          !now().isBefore(refresh.graceEndsAt)
+      )
 
   private fun refreshedOutcome(
     request: WatchRequest,
@@ -166,7 +188,7 @@ internal class PullRequestCiWatcher(
           onInconclusive("Pull request identity changed during check observation.")
           null
         } else if (failingChecks != null) {
-          PullRequestCiOutcome.Failed(failingChecks, observedIdentity.headSha)
+          PullRequestCiOutcome.Failed(failingChecks, observedIdentity.headSha, latest.editableFieldsDigest)
         } else if (isExpectedHead(latest, request.expectedHeadSha)) {
           PullRequestCiOutcome.Passed(requireNotNull(latest.headSha))
         } else {
@@ -244,6 +266,7 @@ internal class PullRequestCiWatcher(
     val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(30)
     val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
     val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofSeconds(30)
+    val DEFAULT_REFRESH_GRACE: Duration = Duration.ofMinutes(10)
     const val MAX_PROGRESS_CHECKS: Int = 8
     const val MAX_PROGRESS_TEXT_LENGTH: Int = 160
     const val MAX_PROGRESS_LINK_LENGTH: Int = 300

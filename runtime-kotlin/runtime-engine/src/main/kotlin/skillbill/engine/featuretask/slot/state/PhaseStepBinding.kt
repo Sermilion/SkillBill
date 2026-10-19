@@ -11,12 +11,14 @@ import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import java.nio.file.Path
+import java.time.Instant
 
 /** Step binding for one accepted step; strategies read launch facts through [launchState] only. */
 internal interface PhaseStepBinding {
@@ -108,7 +110,10 @@ internal interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
 }
 
 internal interface PhaseMonitorStepBinding : PhaseAcceptedStepExecution {
-  fun publishRepair(run: PhaseRun): String?
+  fun publishRepair(
+    run: PhaseRun,
+    pullRequests: PullRequestIdentityLookup,
+  ): String?
 
   fun runMonitor(
     run: PhaseRun,
@@ -126,7 +131,7 @@ internal interface PhaseCiObservation {
     repoRoot: Path,
     branch: String,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
-    expectedHeadSha: String? = null,
+    expectedHead: ExpectedCiHead = ExpectedCiHead(),
     onInconclusive: (String) -> Unit = {},
   ): PullRequestCiOutcome
 
@@ -232,6 +237,11 @@ internal sealed interface StandalonePublication {
   data class Blocked(val reason: String) : StandalonePublication
 }
 
+internal data class ExpectedCiHead(
+  val sha: String? = null,
+  val refreshAfter: Instant? = null,
+)
+
 internal sealed interface PullRequestCiOutcome {
   data class Passed(val headSha: String) : PullRequestCiOutcome
 
@@ -241,7 +251,11 @@ internal sealed interface PullRequestCiOutcome {
 
   data object NoPullRequest : PullRequestCiOutcome
 
-  data class Failed(val failingChecks: List<PullRequestCheck>, val headSha: String? = null) : PullRequestCiOutcome
+  data class Failed(
+    val failingChecks: List<PullRequestCheck>,
+    val headSha: String? = null,
+    val editableFieldsDigest: String? = null,
+  ) : PullRequestCiOutcome
 
   data object Conflicted : PullRequestCiOutcome
 

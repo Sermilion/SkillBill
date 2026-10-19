@@ -1,5 +1,7 @@
 package skillbill.ports.goalrunner.runner.model
 
+import java.time.Instant
+
 sealed interface PullRequestChecks {
   data class Reported(val checks: List<PullRequestCheck>) : PullRequestChecks
 
@@ -12,6 +14,7 @@ data class PullRequestCheck(
   val name: String,
   val bucket: CheckBucket,
   val link: String,
+  val startedAt: Instant? = null,
 )
 
 enum class CheckBucket(val wireValue: String) {

@@ -39,7 +39,7 @@ class GhPullRequestChecksLookupTest {
       ),
       checks,
     )
-    assertEquals(listOf("pr", "checks", "42", "--json", "name,state,bucket,link"), calls.single())
+    assertEquals(listOf("pr", "checks", "42", "--json", "name,state,bucket,link,startedAt"), calls.single())
   }
 
   @Test

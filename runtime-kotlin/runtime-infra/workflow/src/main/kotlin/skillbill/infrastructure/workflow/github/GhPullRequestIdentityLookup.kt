@@ -6,6 +6,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.nio.file.Path
+import java.security.MessageDigest
 
 class GhPullRequestIdentityLookup internal constructor(
   private val includeMergeState: Boolean = false,
@@ -73,11 +74,25 @@ class GhPullRequestIdentityLookup internal constructor(
           title,
           conflicting = conflicting(first),
           headSha = first.path("headRefOid").asText().takeIf(String::isNotBlank),
+          editableFieldsDigest = editableFieldsDigest(title, first),
         )
       "MERGED" -> PullRequestIdentity.Merged(url, number)
       "CLOSED" -> PullRequestIdentity.Absent
       else -> null
     }
+  }
+
+  private fun editableFieldsDigest(
+    title: String,
+    entry: JsonNode,
+  ): String {
+    val body = entry.path("body").takeIf(JsonNode::isTextual)?.asText().orEmpty()
+    val labels =
+      entry.path("labels").mapNotNull { label -> label.path("name").takeIf(JsonNode::isTextual)?.asText() }.sorted()
+    val fields = mapper.writeValueAsString(listOf(title, body, labels))
+    return MessageDigest.getInstance("SHA-256")
+      .digest(fields.encodeToByteArray())
+      .joinToString("") { "%02x".format(it) }
   }
 
   private fun conflicting(entry: JsonNode): Boolean {
@@ -87,7 +102,7 @@ class GhPullRequestIdentityLookup internal constructor(
   }
 
   private companion object {
-    const val IDENTITY_FIELDS = "url,number,title,state,headRefOid"
+    const val IDENTITY_FIELDS = "url,number,title,body,labels,state,headRefOid"
     const val MERGE_STATE_FIELDS = "mergeable,mergeStateStatus"
   }
 }
