@@ -1,5 +1,10 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-19] SKILL-431: derive the live goal finalization allowlist from GOAL_FINISH_PIPELINE
+Context: Status projection kept its own allowlist of live goal finalization step ids (monitor, pr, monitor_fix), which would have hidden the new goal QA gate's qa, qa_fix and validate events and left the goal looking stuck.
+Decision: The allowlist is GOAL_FINISH_PIPELINE as a set, and GOAL_FINISH_PIPELINE became internal so the mapping file can reuse it.
+Reason: One list means a new finish step shows up in both the chip pipeline and the live projection, with no second list to forget.
+
 ## [2026-10-19] SKILL-419: verify QA runs in a detached worktree at the target head
 Context: Verify audits a resolved target while the operator's checkout may be dirty or on another revision, and QA must test exactly the target head without touching the operator's tree.
 Decision: qa:on creates a detached worktree under the git common dir (skill-bill/verify-qa/<workflowId>) at target.headRevision, removing any stale one first for resume. The receipt must carry that clean checkout's tree identity. A finally block always removes the worktree; a removal failure adds a retained resource and manual guidance to the receipt and a diagnostics warning, without changing the QA outcome.

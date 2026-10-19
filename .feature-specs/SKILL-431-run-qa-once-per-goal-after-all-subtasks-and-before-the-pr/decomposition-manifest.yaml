@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-431"
 feature_name: "run-qa-once-per-goal-after-all-subtasks-and-before-the-pr"
 parent_spec_path: ".feature-specs/SKILL-431-run-qa-once-per-goal-after-all-subtasks-and-before-the-pr/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-431-run-qa-once-per-goal-after-all-subtasks-and-before-the-pr"
@@ -44,12 +44,12 @@ subtasks:
 - id: 3
   name: "Finish-pipeline status, desktop chips, and docs"
   spec_path: ".feature-specs/SKILL-431-run-qa-once-per-goal-after-all-subtasks-and-before-the-pr/spec_subtask_3_finish-pipeline-status-and-docs.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261019-193229-0bel"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

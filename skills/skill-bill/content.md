@@ -121,11 +121,11 @@ tokens, each forwarded as `--agent-addon <slug>` in the given order. Omitted
 values remain omitted.
 
 The full run accepts one `qa:auto|off` token and forwards it as `--qa <value>`.
-Omission selects `auto`. In the full run, QA runs after audit and before review:
-audit, then QA (skipped when `qa:off`), then review. QA findings enter `qa_fix`,
-which gets three repair attempts, each followed by a re-audit and QA, before the
-runtime blocks the subtask. A `qa:` token on a form that does not accept it is a
-usage error.
+Omission selects `auto`. In the full run, QA runs once per goal, after all
+subtasks and before the PR (skipped when `qa:off`). QA findings enter `qa_fix`,
+then full validation, then QA again, for up to three attempts. Findings left
+after the third attempt block the goal before `commit_push`. A `qa:` token on a
+form that does not accept it is a usage error.
 
 `phase:review` forwards `mode:inline|delegated` and
 `target:pr|staged|unstaged|HEAD|last|uncommitted|<sha>` verbatim as `key:value`
