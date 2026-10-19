@@ -130,7 +130,7 @@ class GoalRunnerPurgeCoordinator(
         childrenByParent.firstNotNullOfOrNull { (parentId, childIds) ->
           refusal(issueKey, parentId, childIds + orphanIds)
         } ?: planRefusal(issueKey, ownership.planWorkflowIds),
-      unclassifiedLeftovers = ownership.unclassifiedWorkflows,
+      unclassifiedLeftovers = ownership.unclassifiedWorkflows + ownership.siblingWorktreeWorkflows,
     )
   }
 

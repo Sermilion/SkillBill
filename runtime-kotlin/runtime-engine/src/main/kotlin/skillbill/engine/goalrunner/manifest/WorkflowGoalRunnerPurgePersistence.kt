@@ -6,9 +6,12 @@ import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.nio.file.Path
 
 internal class WorkflowGoalRunnerPurgePersistence(
@@ -52,9 +55,39 @@ internal class WorkflowGoalRunnerPurgePersistence(
             "workflow ${row.workflowId} matches $issueKey but its state cannot be decoded (${row.reason}); " +
               "it was not purged"
           },
+        siblingWorktreeWorkflows = unitOfWork.siblingWorktreeWorkflows(issueKey, repoRoot, identity),
       )
     }
   }
+
+  // Repository identity is the worktree path, so another worktree of the same repository keeps its own goal state
+  // for the issue. Purge leaves it alone and names the worktree that owns it.
+  private fun UnitOfWork.siblingWorktreeWorkflows(
+    issueKey: String,
+    repoRoot: Path,
+    identity: String,
+  ): List<String> {
+    val primaryRoot = repositoryEnclosingRootPort.primaryRepositoryRoot(repoRoot)
+    return workflowStates
+      .findFeatureTaskWorkflowsForIssue(FeatureTaskWorkflowMode.RUNTIME, normalizeRequiredIssueKey(issueKey), null)
+      .groupBy({ row -> recordedRepositoryIdentity(row.workflowId) }, { row -> row.workflowId })
+      .mapNotNull { (owner, workflowIds) ->
+        val prefix = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX
+        val worktree =
+          owner?.takeIf { it != identity && it.startsWith(prefix) }
+            ?.removePrefix(prefix)
+            ?.let(Path::of)
+            ?.takeIf { repositoryEnclosingRootPort.optionalRealPath(it) != null }
+            ?.takeIf { repositoryEnclosingRootPort.primaryRepositoryRoot(it) == primaryRoot }
+            ?: return@mapNotNull null
+        "workflows ${workflowIds.sorted().joinToString()} match $issueKey but belong to worktree $worktree; " +
+          "they were not purged (run `skill-bill goal purge $issueKey --repo-root $worktree`)"
+      }
+  }
+
+  private fun UnitOfWork.recordedRepositoryIdentity(workflowId: String): String? =
+    goalRunnerControls.controlState(workflowId).repositoryIdentity
+      ?: workflowStates.getFeatureTaskExecutionIdentity(workflowId)?.repositoryIdentity
 
   override fun verifyOwnedWorkflowIds(
     candidateIds: Set<String>,

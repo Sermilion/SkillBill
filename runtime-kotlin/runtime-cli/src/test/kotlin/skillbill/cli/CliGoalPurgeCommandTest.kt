@@ -148,6 +148,32 @@ class CliGoalPurgeCommandTest {
   }
 
   @Test
+  fun `goal purge names same-key state owned by a sibling worktree and leaves it untouched`() {
+    val fixture = goalFixture(subtaskCount = 1)
+    val target = we5006Seed(fixture)
+    val worktree = linkedWorktree(fixture.tempDir, "sibling")
+    val sibling =
+      GoalSeed(
+        issueKey = PURGE_ISSUE_KEY,
+        repositoryIdentity = CanonicalRepositoryRoot.repositoryIdentity(worktree),
+        parentId = "wftr-sibling-parent",
+        childId = "wftr-sibling-child",
+        sessionId = "session-sibling",
+      )
+    listOf(target, sibling).forEach { seed -> seedGoalOwnedState(fixture, seed) }
+    val siblingCounts = ownedRowCounts(fixture, sibling)
+
+    val result = runPurge(fixture, PurgeGitOperations(trackedPrefix = null))
+
+    assertEquals(1, result.exitCode, result.stdout + result.stderr)
+    assertEquals(0, ownedRowCounts(fixture, target).values.sum())
+    assertEquals(siblingCounts, ownedRowCounts(fixture, sibling))
+    val leftovers = requireNotNull(result.payload)["leftovers"] as List<*>
+    val siblingLeftover = leftovers.filterIsInstance<String>().single { it.contains("wftr-sibling-child") }
+    assertContains(siblingLeftover, "goal purge $PURGE_ISSUE_KEY --repo-root ${worktree.toRealPath()}")
+  }
+
+  @Test
   fun `goal purge exits non-zero when anything is left behind or refused`() {
     assertEquals(0, goalPurgeExitCode(GoalRunnerPurgeResult(issueKey = PURGE_ISSUE_KEY)))
     assertEquals(
@@ -171,6 +197,18 @@ class CliGoalPurgeCommandTest {
       sessionId = "session-we5006",
       parentExists = true,
     )
+
+  private fun linkedWorktree(
+    primaryRoot: Path,
+    name: String,
+  ): Path {
+    val gitDir = primaryRoot.resolve(".git/worktrees/$name")
+    Files.createDirectories(gitDir)
+    Files.writeString(gitDir.resolve("commondir"), "../..")
+    val worktree = Files.createTempDirectory("skillbill-$name")
+    Files.writeString(worktree.resolve(".git"), "gitdir: $gitDir\n")
+    return worktree
+  }
 
   private fun seedOtherGoalSpecBundle(repoRoot: Path): List<Path> {
     val bundle = repoRoot.resolve(".feature-specs/SKILL-902-other")
