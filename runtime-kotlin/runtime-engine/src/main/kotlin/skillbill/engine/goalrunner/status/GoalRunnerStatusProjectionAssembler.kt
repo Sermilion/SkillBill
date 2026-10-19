@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.status
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.telemetry.lifecycle.asWorkerOwnership
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
@@ -12,7 +13,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.review.core.isAuditGapRound
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
-import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks

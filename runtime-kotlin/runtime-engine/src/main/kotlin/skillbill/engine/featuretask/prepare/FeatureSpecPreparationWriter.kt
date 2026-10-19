@@ -28,7 +28,9 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import java.io.IOException
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
+import java.security.MessageDigest
 
 @Inject
 class FeatureSpecPreparationWriter(
@@ -46,8 +48,8 @@ class FeatureSpecPreparationWriter(
     if (featureName.isBlank()) {
       invalidRequest(DecompositionManifestPayloadKeys.FEATURE_NAME, "feature name is required.")
     }
-    val specDirectory = repoRoot.resolve(".feature-specs/$issueKey-$featureName")
-    val parentSpecPath = existingParentSpecPath ?: specDirectory.resolve("spec.md")
+    val parentSpecPath =
+      existingParentSpecPath ?: repoRoot.resolve(".feature-specs/${parentDirectoryName(issueKey, featureName)}/spec.md")
     val parentSpecRelativePath = repoRelativePath(repoRoot, parentSpecPath)
     return writePreparedFeature(
       repoRoot = repoRoot,
@@ -62,7 +64,10 @@ class FeatureSpecPreparationWriter(
     repoRoot: Path,
     issueKey: String,
     featureName: String,
-  ): Path = repoRoot.resolve(".feature-specs/${issueKey.trim()}-${normalizeFeatureName(featureName)}/spec.md")
+  ): Path =
+    repoRoot.resolve(
+      ".feature-specs/${parentDirectoryName(issueKey, featureName)}/spec.md",
+    )
 
   fun writeParentSpecOnly(
     repoRoot: Path,
@@ -72,14 +77,13 @@ class FeatureSpecPreparationWriter(
     existingParentSpecPath: Path? = null,
   ): Path {
     val issueKey = decision.issueKey.trim()
-    val normalizedFeatureName = normalizeFeatureName(featureName)
     val parentSpecPath = existingParentSpecPath ?: plannedParentSpecPath(repoRoot, issueKey, featureName)
     fileStore.writeTextAtomically(
       parentSpecPath,
       renderParentSpec(
         ParentSpecRenderInput(
           issueKey = issueKey,
-          featureName = normalizedFeatureName,
+          featureName = featureName,
           mode = decision.mode,
           intendedOutcome = decision.intendedOutcome,
           acceptanceCriteria = decision.acceptanceCriteria,
@@ -186,7 +190,7 @@ class FeatureSpecPreparationWriter(
       renderParentSpec(
         ParentSpecRenderInput(
           issueKey = request.decision.issueKey,
-          featureName = normalizeFeatureName(request.featureName),
+          featureName = request.featureName,
           mode = request.decision.mode,
           intendedOutcome = request.decision.intendedOutcome,
           acceptanceCriteria = request.decision.acceptanceCriteria,
@@ -474,7 +478,52 @@ private fun normalizeFeatureName(raw: String): String =
     .ifBlank { "feature" }
 
 private fun subtaskFileName(subtask: FeatureSpecSubtaskPreparation): String =
-  "spec_subtask_${subtask.id}_${normalizeFeatureName(subtask.name)}.md"
+  boundedComponent(
+    prefix = "spec_subtask_${subtask.id}_",
+    slug = normalizeFeatureName(subtask.name),
+    suffix = ".md",
+    fieldPath = "subtasks[${subtask.id}].name",
+  )
+
+private fun parentDirectoryName(
+  issueKey: String,
+  featureName: String,
+): String =
+  boundedComponent(
+    prefix = "${issueKey.trim()}-",
+    slug = normalizeFeatureName(featureName),
+    suffix = "",
+    fieldPath = DecompositionManifestPayloadKeys.FEATURE_NAME,
+  )
+
+private fun boundedComponent(
+  prefix: String,
+  slug: String,
+  suffix: String,
+  fieldPath: String,
+): String {
+  val fixedBytes = prefix.toByteArray(StandardCharsets.UTF_8).size + suffix.toByteArray(StandardCharsets.UTF_8).size
+  val full = "$prefix$slug$suffix"
+  if (full.toByteArray(StandardCharsets.UTF_8).size <= MAX_COMPONENT_BYTES) return full
+  val slugBudget = MAX_COMPONENT_BYTES - fixedBytes - HASH_SUFFIX_BYTES
+  if (slugBudget < 1) {
+    invalidRequest(fieldPath, "issue identity leaves no room for a bounded generated component.")
+  }
+  val hash =
+    MessageDigest.getInstance("SHA-256")
+      .digest(slug.toByteArray(StandardCharsets.UTF_8))
+      .take(HASH_HEX_CHARACTERS / 2)
+      .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+  val prefixSlug = slug.take(slugBudget).trimEnd('-')
+  if (prefixSlug.isEmpty()) {
+    invalidRequest(fieldPath, "generated component has no room for a nonempty slug.")
+  }
+  return "$prefix$prefixSlug-$hash$suffix"
+}
+
+private const val MAX_COMPONENT_BYTES = 240
+private const val HASH_HEX_CHARACTERS = 16
+private const val HASH_SUFFIX_BYTES = HASH_HEX_CHARACTERS + 1
 
 private fun invalidRequest(
   fieldPath: String,

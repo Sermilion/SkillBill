@@ -1,11 +1,11 @@
 package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.telemetry.lifecycle.asWorkerOwnership
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
-import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
@@ -55,22 +55,6 @@ private sealed interface LeaseAcquisition {
 
   data class AlreadyRunning(val reason: String) : LeaseAcquisition
 }
-
-fun GoalRunnerExecutionLease.asWorkerOwnership(parentWorkflowId: String) =
-  FeatureTaskRuntimeWorkerOwnership(
-    workflowId = parentWorkflowId,
-    generation = generation,
-    ownerToken = ownerToken,
-    hostIdentity = hostIdentity,
-    bootIdentity = bootIdentity,
-    pid = pid,
-    processBirthToken = processBirthToken,
-    leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
-    heartbeatAt = heartbeatAt.toString(),
-    expiresAt = expiresAt.toString(),
-    phaseId = "goal_runner",
-    phaseAttempt = 1,
-  )
 
 @Inject
 class DefaultGoalRunnerExecutionCoordinator(

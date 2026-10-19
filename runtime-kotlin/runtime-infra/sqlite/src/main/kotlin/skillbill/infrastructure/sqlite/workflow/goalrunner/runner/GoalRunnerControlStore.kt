@@ -21,14 +21,14 @@ internal class GoalRunnerControlStore(
   private val connection: Connection,
 ) : GoalRunnerControlRepository {
   override fun controlState(parentWorkflowId: String): GoalRunnerControlState =
-    selectJson(parentWorkflowId, "control_state_json")?.let(::decodeControlState) ?: GoalRunnerControlState()
+    selectJson(parentWorkflowId, "control_state_json", preserveBlank = true)?.let(::decodeControlState) ?: GoalRunnerControlState()
 
   override fun persistControlState(
     parentWorkflowId: String,
     state: GoalRunnerControlState,
   ): GoalRunnerControlState {
     val source =
-      selectJson(parentWorkflowId, "control_state_json")?.let { raw ->
+      selectJson(parentWorkflowId, "control_state_json", preserveBlank = true)?.let { raw ->
         decodeControlState(raw)
         JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(raw))
           ?: goalRunnerControlSchemaError("control state must be an object")
@@ -179,13 +179,14 @@ internal class GoalRunnerControlStore(
   private fun selectJson(
     parentWorkflowId: String,
     column: String,
+    preserveBlank: Boolean = false,
   ): String? =
     connection.prepareStatement(
       "SELECT $column FROM goal_runner_controls WHERE parent_workflow_id = ?",
     ).use { statement ->
       statement.bindAll(parentWorkflowId)
       statement.executeQuery().use { rows ->
-        if (rows.next()) rows.getString(1)?.takeIf(String::isNotBlank) else null
+        if (rows.next()) rows.getString(1)?.let { value -> if (preserveBlank || value.isNotBlank()) value else null } else null
       }
     }
 }

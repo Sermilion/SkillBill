@@ -180,6 +180,83 @@ class FeatureSpecPreparationWriterTest {
   }
 
   @Test
+  fun `generated components stay bounded and manifest paths match written long-name files`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-long-names")
+    val sharedPrefix = "a".repeat(320)
+    val longNames = listOf("$sharedPrefix-first", "$sharedPrefix-second")
+    val request =
+      authoredBundleRequest().copy(
+        featureName = "Parent ${"feature-".repeat(50)} end",
+        subtasks =
+          longNames.mapIndexed { index, name ->
+            singleSubtask().copy(id = index + 1, name = name, dependsOn = if (index == 0) emptyList() else listOf(1))
+          },
+      )
+
+    val planned = writer.plannedParentSpecPath(repoRoot, request.decision.issueKey, request.featureName)
+    val written = writer.write(repoRoot, request)
+    val verified = writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
+    val parentName = repoRoot.resolve(written.parentSpecPath).parent.fileName.toString()
+    val subtaskPaths = written.subtaskSpecPaths.map(repoRoot::resolve)
+    val manifest = loadTestManifest(repoRoot.resolve(written.decompositionManifestPath))
+    val repeatedRoot = Files.createTempDirectory("skillbill-feature-spec-long-names-repeat")
+    val repeated = writer.write(repeatedRoot, request)
+
+    assertEquals(planned, repoRoot.resolve(written.parentSpecPath))
+    assertTrue(parentName.toByteArray(Charsets.UTF_8).size <= 240)
+    assertTrue(subtaskPaths.all { it.fileName.toString().toByteArray(Charsets.UTF_8).size <= 240 })
+    assertEquals(2, subtaskPaths.distinct().size)
+    assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
+    assertEquals(written.subtaskSpecPaths, manifest.subtasks.map { it.specPath })
+    assertEquals(
+      subtaskPaths.map { it.fileName.toString() },
+      repeated.subtaskSpecPaths.map { repeatedRoot.resolve(it).fileName.toString() },
+    )
+    longNames.forEachIndexed { index, name ->
+      assertTrue(Files.isRegularFile(subtaskPaths[index]))
+      assertContains(Files.readString(subtaskPaths[index]), name)
+      assertContains(Files.readString(subtaskPaths[index]), written.subtaskSpecPaths[index])
+    }
+    assertEquals(
+      request.featureName,
+      Regex("(?m)^# SKILL-59 - (.+)$")
+        .find(writer.readText(repoRoot.resolve(written.parentSpecPath)))
+        ?.groupValues?.get(1),
+    )
+  }
+
+  @Test
+  fun `generated parent rejects an issue identity with no bounded slug budget`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-long-issue")
+    val request =
+      authoredBundleRequest().copy(
+        decision = decomposedDecision().copy(issueKey = "K".repeat(239)),
+        featureName = "oversized-feature-name",
+      )
+
+    val error = assertFailsWith<InvalidFeatureSpecPreparationRequestError> { writer.write(repoRoot, request) }
+
+    assertEquals("feature_name", error.fieldPath)
+    assertTrue(!Files.exists(repoRoot.resolve(".feature-specs")))
+  }
+
+  @Test
+  fun `explicit existing parent path remains authoritative`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-explicit-parent")
+    val explicitParent = repoRoot.resolve("operator-authored/deep/spec.md")
+    Files.createDirectories(explicitParent.parent)
+    Files.writeString(explicitParent, "# Operator-authored\n\n## Acceptance Criteria\n\n- Keep this parent.\n")
+
+    val written = writer.write(repoRoot, authoredBundleRequest(), existingParentSpecPath = explicitParent)
+    val verified = writer.verifyAuthored(repoRoot, explicitParent)
+
+    assertEquals("operator-authored/deep/spec.md", written.parentSpecPath)
+    assertEquals(written.parentSpecPath, verified.parentSpecPath)
+    assertContains(Files.readString(explicitParent), "# Operator-authored")
+    assertTrue(!explicitParent.parent.fileName.toString().contains("SKILL-59"))
+  }
+
+  @Test
   fun `decomposed metadata accepts exactly one ordered subtask`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-decomposed-invalid")
     val result =
