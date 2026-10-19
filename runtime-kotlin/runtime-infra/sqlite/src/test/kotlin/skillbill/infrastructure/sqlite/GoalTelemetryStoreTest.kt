@@ -7,7 +7,7 @@ import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
-import skillbill.ports.telemetry.lifecycle.GoalStartedSupersession
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
@@ -428,25 +428,7 @@ class GoalTelemetryStoreTest {
   fun `fresh same-parent start abandons older open segment once and keeps the new issue run active`() {
     withConnection { connection ->
       val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
-      val oldStart =
-        startedRecord("wf-parent:old", subtaskTotal = 2, resumed = false, startedAt = "2026-06-04T10:00:00+01:00")
-          .copy(parentWorkflowId = "wf-parent")
-      val newStart =
-        startedRecord("wf-parent:new", subtaskTotal = 2, resumed = true, startedAt = "2026-06-04T10:00:00Z")
-          .copy(parentWorkflowId = "wf-parent")
-      val otherParentStart =
-        startedRecord("wf-other:old", subtaskTotal = 1, resumed = false, startedAt = "2026-06-04T09:00:00Z")
-          .copy(parentWorkflowId = "wf-other")
-
-      store.goalStarted(oldStart, "full")
-      store.goalStarted(otherParentStart, "full")
-      store.goalStarted(newStart, "full")
-      store.goalStarted(newStart, "full")
-      store.goalFinished(
-        finishedRecord("wf-parent:old", status = "blocked", startedAt = oldStart.startedAt)
-          .copy(parentWorkflowId = "wf-parent"),
-        "full",
-      )
+      val newStart = startSupersedingSegmentAndReplayLateFinish(store)
 
       val oldRow =
         connection.prepareStatement(
@@ -506,6 +488,29 @@ class GoalTelemetryStoreTest {
       assertEquals(2, stats.inProgressRuns)
       assertEquals(1, stats.completionStatusCounts["abandoned"])
     }
+  }
+
+  private fun startSupersedingSegmentAndReplayLateFinish(store: LifecycleTelemetryStore): GoalStartedRecord {
+    val oldStart =
+      startedRecord("wf-parent:old", subtaskTotal = 2, resumed = false, startedAt = "2026-06-04T10:00:00+01:00")
+        .copy(parentWorkflowId = "wf-parent")
+    val newStart =
+      startedRecord("wf-parent:new", subtaskTotal = 2, resumed = true, startedAt = "2026-06-04T10:00:00Z")
+        .copy(parentWorkflowId = "wf-parent")
+    val otherParentStart =
+      startedRecord("wf-other:old", subtaskTotal = 1, resumed = false, startedAt = "2026-06-04T09:00:00Z")
+        .copy(parentWorkflowId = "wf-other")
+
+    store.goalStarted(oldStart, "full")
+    store.goalStarted(otherParentStart, "full")
+    store.goalStarted(newStart, "full")
+    store.goalStarted(newStart, "full")
+    store.goalFinished(
+      finishedRecord("wf-parent:old", status = "blocked", startedAt = oldStart.startedAt)
+        .copy(parentWorkflowId = "wf-parent"),
+      "full",
+    )
+    return newStart
   }
 
   @Test

@@ -205,9 +205,14 @@ class FeatureSpecPreparationWriterTest {
     assertEquals(planned, repoRoot.resolve(written.parentSpecPath))
     assertTrue(parentName.toByteArray(Charsets.UTF_8).size <= 240)
     assertTrue(subtaskPaths.all { it.fileName.toString().toByteArray(Charsets.UTF_8).size <= 240 })
+    assertTrue(
+      subtaskPaths.all {
+        "${it.fileName}.18446744073709551615.tmp".toByteArray(Charsets.UTF_8).size <= 255
+      },
+    )
     assertEquals(2, subtaskPaths.distinct().size)
     assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
-    assertEquals(written.subtaskSpecPaths, manifest.subtasks.map { it.specPath })
+    assertEquals(subtaskPaths.map { it.toString() }, manifest.subtasks.map { it.specPath })
     assertEquals(
       subtaskPaths.map { it.fileName.toString() },
       repeated.subtaskSpecPaths.map { repeatedRoot.resolve(it).fileName.toString() },

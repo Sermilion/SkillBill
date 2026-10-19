@@ -187,12 +187,12 @@ class GoalRunner(
     val ledger = GoalRunnerLedgerRecorder(outcomeStore, effectiveRequest, clock, diagnostics)
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
     val telemetryEmitter = GoalRunnerTelemetryEmitter(telemetry, clock, state)
-    try {
+    return runCatching {
       telemetryEmitter.goalStarted()
       pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
         val pausedReport = requireNotNull(paused.report)
         closeGoalTelemetrySegment(telemetryEmitter, state, pausedReport, emptyList())
-        return pausedReport
+        return@runCatching pausedReport
       }
       val sweepOutcome =
         if (GoalRunnerPlanner.selectNext(state.manifest) is GoalRunnerSelection.Done) {
@@ -201,7 +201,7 @@ class GoalRunner(
           goalPlanningSource.prepare(state, effectiveRequest)
         }
       if (sweepOutcome is GoalPlanningSweepOutcome.Stopped) {
-        return planningStoppedReport(effectiveRequest, state, telemetryEmitter, emptyList(), sweepOutcome)
+        return@runCatching planningStoppedReport(effectiveRequest, state, telemetryEmitter, emptyList(), sweepOutcome)
       }
       val prepared = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll
       state = prepared.state ?: state
@@ -226,8 +226,8 @@ class GoalRunner(
       closeGoalTelemetrySegment(telemetryEmitter, state, finalReport, loopResult.attempted)
       recordGoalCompletion(state.parentWorkflowId, finalReport)
       emitCompletedGoalEvent(effectiveRequest, finalReport)
-      return finalReport.withParentWorkflowId(state.parentWorkflowId)
-    } catch (failure: Throwable) {
+      finalReport.withParentWorkflowId(state.parentWorkflowId)
+    }.getOrElse { failure ->
       if (failure is InterruptedException) Thread.currentThread().interrupt()
       runCatching { telemetryEmitter.goalFailed() }
         .onFailure { cleanupFailure ->

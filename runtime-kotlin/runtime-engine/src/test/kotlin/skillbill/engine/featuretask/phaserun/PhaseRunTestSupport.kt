@@ -42,6 +42,7 @@ import skillbill.ports.monitor.model.MonitorWorktree
 import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.review.ReviewContextEnvelopeValidator
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files
@@ -103,7 +104,13 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         clock,
       ),
     lifecycleTelemetry =
-      LifecycleTelemetryService(database, EnabledRuntimeTelemetrySettingsProvider, clock, NoopRuntimeDiagnostics),
+      LifecycleTelemetryService(
+        database,
+        EnabledRuntimeTelemetrySettingsProvider,
+        clock,
+        NoopRuntimeDiagnostics,
+        workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+      ),
     diagnostics = NoopRuntimeDiagnostics,
     clock = clock,
     intakeResolver =

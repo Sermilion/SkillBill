@@ -1562,7 +1562,7 @@ internal class RecordingReviewDatabase : DatabaseSessionFactory {
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 }
 
-private object NoopReviewLifecycleTelemetry : LifecycleTelemetryRepository {
+private object NoopReviewLifecycleTelemetry : LifecycleTelemetryRepository by RecordingLifecycleTelemetryRepository() {
   override fun featureTaskRuntimeProjectionMeasurement(record: FeatureTaskRuntimeProjectionMeasurement) = Unit
 
   override fun featureTaskRuntimeSharedEvidence(record: FeatureTaskRuntimeSharedEvidenceMeasurement) = Unit

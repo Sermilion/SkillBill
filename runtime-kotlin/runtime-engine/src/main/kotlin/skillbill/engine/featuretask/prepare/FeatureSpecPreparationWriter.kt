@@ -513,7 +513,7 @@ private fun boundedComponent(
     MessageDigest.getInstance("SHA-256")
       .digest(slug.toByteArray(StandardCharsets.UTF_8))
       .take(HASH_HEX_CHARACTERS / 2)
-      .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+      .joinToString("") { byte -> "%02x".format(byte.toInt() and UNSIGNED_BYTE_MASK) }
   val prefixSlug = slug.take(slugBudget).trimEnd('-')
   if (prefixSlug.isEmpty()) {
     invalidRequest(fieldPath, "generated component has no room for a nonempty slug.")
@@ -521,8 +521,9 @@ private fun boundedComponent(
   return "$prefix$prefixSlug-$hash$suffix"
 }
 
-private const val MAX_COMPONENT_BYTES = 240
+private const val MAX_COMPONENT_BYTES = 230
 private const val HASH_HEX_CHARACTERS = 16
+private const val UNSIGNED_BYTE_MASK = 0xff
 private const val HASH_SUFFIX_BYTES = HASH_HEX_CHARACTERS + 1
 
 private fun invalidRequest(

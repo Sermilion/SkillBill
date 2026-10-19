@@ -1,28 +1,32 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle.session
 
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalFinishedSaveOutcome
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueIdentity
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueSegmentStart
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalStartedSaveOutcome
+import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalIssueFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalStarted
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalSubtaskFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.recordGoalIssueSegmentEnd
 import skillbill.infrastructure.sqlite.telemetry.goal.recordGoalIssueSegmentStarted
+import skillbill.infrastructure.sqlite.telemetry.goal.resolveOpenGoalIssueKey
 import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalIssueFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalStarted
 import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalSubtaskFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.supersedeEligibleSegments
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.telemetry.lifecycle.GoalChildSubtaskIdentity
 import skillbill.ports.telemetry.lifecycle.GoalLifecycleTelemetryRepository
-import skillbill.ports.telemetry.lifecycle.GoalStartedCandidate
-import skillbill.ports.telemetry.lifecycle.GoalStartedOwnershipEvidence
-import skillbill.ports.telemetry.lifecycle.GoalStartedPreparation
-import skillbill.ports.telemetry.lifecycle.GoalStartedSupersession
+import skillbill.ports.telemetry.lifecycle.model.GoalChildSubtaskIdentity
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedCandidate
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedOwnershipEvidence
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedPreparation
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
 import skillbill.telemetry.model.GoalStartedRecord
@@ -78,55 +82,68 @@ internal class LifecycleTelemetryGoalSessionAdapter(
     val inserted = saveGoalStarted(connection, record) == GoalStartedSaveOutcome.INSERTED
     val snapshot = if (inserted) sameKeyUnfinishedGoalSegments(record) else emptyList()
     val startedAt = Instant.parse(record.startedAt)
-    val candidates = snapshot.mapNotNull { (evidence, started, mode) ->
-      if (evidence.status != null || evidence.finishedAt != null || !Instant.parse(started).isBefore(startedAt)) null
-      else GoalStartedCandidate(
-        workflowId = evidence.workflowId,
-        parentWorkflowId = evidence.parentWorkflowId,
-        startedAt = started,
-        latestSegmentParentWorkflowId = evidence.latestSegmentParentWorkflowId,
-        mode = mode,
-      )
-    }.distinctBy { it.workflowId to it.parentWorkflowId to it.latestSegmentParentWorkflowId }
+    val candidates =
+      snapshot.mapNotNull { (evidence, started, mode) ->
+        if (evidence.status != null || evidence.finishedAt != null || !Instant.parse(started).isBefore(startedAt)) {
+          null
+        } else {
+          GoalStartedCandidate(
+            workflowId = evidence.workflowId,
+            parentWorkflowId = evidence.parentWorkflowId,
+            startedAt = started,
+            latestSegmentParentWorkflowId = evidence.latestSegmentParentWorkflowId,
+            mode = mode,
+          )
+        }
+      }.distinctBy { it.workflowId to it.parentWorkflowId to it.latestSegmentParentWorkflowId }
     return GoalStartedPreparation(inserted, candidates, snapshot.map { it.first }.distinct())
   }
 
-  override fun goalStarted(record: GoalStartedRecord, level: String) {
+  override fun goalStarted(
+    record: GoalStartedRecord,
+    level: String,
+  ) {
     val prepared = prepareGoalStarted(record)
     val evidenceByWorkflow = prepared.ownershipEvidence.groupBy { it.workflowId }
-    val sameParent = prepared.candidates.groupBy { it.workflowId }.mapNotNull { (workflowId, joinedCandidates) ->
-      val owners = evidenceByWorkflow[workflowId].orEmpty().flatMap {
-        listOfNotNull(it.parentWorkflowId, it.latestSegmentParentWorkflowId)
-      }.distinct()
-      if (record.parentWorkflowId.isNullOrBlank() || owners != listOf(record.parentWorkflowId)) return@mapNotNull null
-      val candidate = joinedCandidates.first().copy(
-        parentWorkflowId = evidenceByWorkflow[workflowId].orEmpty().firstNotNullOfOrNull { it.parentWorkflowId }
-          ?: record.parentWorkflowId,
-        latestSegmentParentWorkflowId = evidenceByWorkflow[workflowId].orEmpty()
-          .none { it.parentWorkflowId == record.parentWorkflowId }.takeIf { it }?.let { record.parentWorkflowId },
-      )
-      GoalStartedSupersession(candidate, true, 0, 0, 0)
-    }
+    val sameParent =
+      prepared.candidates.groupBy { it.workflowId }.mapNotNull { (workflowId, joinedCandidates) ->
+        val owners =
+          evidenceByWorkflow[workflowId].orEmpty().flatMap {
+            listOfNotNull(it.parentWorkflowId, it.latestSegmentParentWorkflowId)
+          }.distinct()
+        if (record.parentWorkflowId.isNullOrBlank() || owners != listOf(record.parentWorkflowId)) return@mapNotNull null
+        val candidate =
+          joinedCandidates.first().copy(
+            parentWorkflowId =
+              evidenceByWorkflow[workflowId].orEmpty().firstNotNullOfOrNull { it.parentWorkflowId }
+                ?: record.parentWorkflowId,
+            latestSegmentParentWorkflowId =
+              evidenceByWorkflow[workflowId].orEmpty()
+                .none { it.parentWorkflowId == record.parentWorkflowId }.takeIf { it }?.let { record.parentWorkflowId },
+          )
+        GoalStartedSupersession(candidate, true, 0, 0, 0)
+      }
     reconcileGoalStarted(record, prepared.inserted, sameParent, level)
   }
 
   override fun persistedChildSubtaskStatuses(
     issueKey: String,
     children: List<GoalChildSubtaskIdentity>,
-  ): Map<Int, String> = children.mapNotNull { child ->
-    connection.prepareStatement(
-      """
-      SELECT status FROM goal_subtask_events
-      WHERE UPPER(TRIM(issue_key)) = UPPER(TRIM(?)) AND subtask_id = ? AND workflow_id = ?
-      ORDER BY finished_at DESC LIMIT 1
-      """.trimIndent(),
-    ).use { statement ->
-      statement.bindAll(issueKey, child.subtaskId, child.childWorkflowId)
-      statement.executeQuery().use { rows ->
-        if (rows.next()) child.subtaskId to rows.getString("status") else null
+  ): Map<Int, String> =
+    children.mapNotNull { child ->
+      connection.prepareStatement(
+        """
+        SELECT status FROM goal_subtask_events
+        WHERE UPPER(TRIM(issue_key)) = UPPER(TRIM(?)) AND subtask_id = ? AND workflow_id = ?
+        ORDER BY finished_at DESC LIMIT 1
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(issueKey, child.subtaskId, child.childWorkflowId)
+        statement.executeQuery().use { rows ->
+          if (rows.next()) child.subtaskId to rows.getString(SharedPayloadKeys.STATUS) else null
+        }
       }
-    }
-  }.toMap()
+    }.toMap()
 
   override fun reconcileGoalStarted(
     record: GoalStartedRecord,
@@ -136,22 +153,25 @@ internal class LifecycleTelemetryGoalSessionAdapter(
   ) {
     if (inserted) {
       record.parentWorkflowId?.takeIf(String::isNotBlank)?.let { parentWorkflowId ->
-        val recorded = recordGoalIssueSegmentStarted(
-          connection = connection,
-          segment =
-            GoalIssueSegmentStart(
-              parentWorkflowId = parentWorkflowId,
-              issueKey = record.issueKey,
-              workflowId = record.workflowId,
-              startedAt = record.startedAt,
-              resumed = record.resumed,
-              mode = record.mode,
-            ),
-        )
-        if (!recorded) diagnostics.warning(
-          "seam=goal-issue-identity outcome=deferred workflow=$parentWorkflowId reason=case-variant-ambiguous",
-          null,
-        )
+        val recorded =
+          recordGoalIssueSegmentStarted(
+            connection = connection,
+            segment =
+              GoalIssueSegmentStart(
+                parentWorkflowId = parentWorkflowId,
+                issueKey = record.issueKey,
+                workflowId = record.workflowId,
+                startedAt = record.startedAt,
+                resumed = record.resumed,
+                mode = record.mode,
+              ),
+          )
+        if (!recorded) {
+          diagnostics.warning(
+            "seam=goal-issue-identity outcome=deferred workflow=$parentWorkflowId reason=case-variant-ambiguous",
+            null,
+          )
+        }
       }
       val result = supersedeEligibleSegments(connection, record, candidates)
       result.invocationWorkflowIds.forEach { emitGoalFinished(connection, runtimeVersion, it, level) }
@@ -189,19 +209,23 @@ internal class LifecycleTelemetryGoalSessionAdapter(
       statement.executeQuery().use { rows ->
         buildList {
           while (rows.next()) {
-            val oldStartedAt = rows.getString("started_at")
+            val oldStartedAt = rows.getString(GoalTelemetryPayloadKeys.STARTED_AT)
             add(
               Triple(
                 GoalStartedOwnershipEvidence(
-                  workflowId = rows.getString("workflow_id"),
-                  parentWorkflowId = rows.getString("parent_workflow_id")?.takeIf(String::isNotBlank),
-                  latestSegmentParentWorkflowId = rows.getString("latest_parent_workflow_id")?.takeIf(String::isNotBlank),
-                  status = rows.getString("status"),
-                  finishedAt = rows.getString("finished_at"),
+                  workflowId = rows.getString(SharedPayloadKeys.WORKFLOW_ID),
+                  parentWorkflowId =
+                    rows.getString(GoalTelemetryPayloadKeys.PARENT_WORKFLOW_ID)?.takeIf(String::isNotBlank),
+                  latestSegmentParentWorkflowId =
+                    rows.getString(
+                      "latest_parent_workflow_id",
+                    )?.takeIf(String::isNotBlank),
+                  status = rows.getString(SharedPayloadKeys.STATUS),
+                  finishedAt = rows.getString(GoalTelemetryPayloadKeys.FINISHED_AT),
                 ),
                 oldStartedAt,
-                rows.getString("mode") ?: "runtime",
-              )
+                rows.getString(LifecycleTelemetryPayloadKeys.MODE) ?: "runtime",
+              ),
             )
           }
         }
@@ -240,17 +264,18 @@ internal class LifecycleTelemetryGoalSessionAdapter(
     record: GoalIssueFinishedRecord,
     level: String,
   ) {
-    val persistedIssueKey = skillbill.infrastructure.sqlite.telemetry.goal.resolveOpenGoalIssueKey(
-      connection,
-      record.parentWorkflowId,
-      record.issueKey,
-    ) ?: run {
-      diagnostics.warning(
-        "seam=goal-issue-identity outcome=deferred workflow=${record.parentWorkflowId} reason=case-variant-ambiguous",
-        null,
-      )
-      return
-    }
+    val persistedIssueKey =
+      resolveOpenGoalIssueKey(
+        connection,
+        record.parentWorkflowId,
+        record.issueKey,
+      ) ?: run {
+        diagnostics.warning(
+          "seam=goal-issue-identity outcome=deferred workflow=${record.parentWorkflowId} reason=case-variant-ambiguous",
+          null,
+        )
+        return
+      }
     val persistedRecord = record.copy(issueKey = persistedIssueKey)
     saveGoalIssueFinished(connection, persistedRecord, diagnostics)
     val goal = GoalIssueIdentity(persistedRecord.parentWorkflowId, persistedRecord.issueKey)

@@ -21,7 +21,11 @@ internal class GoalRunnerControlStore(
   private val connection: Connection,
 ) : GoalRunnerControlRepository {
   override fun controlState(parentWorkflowId: String): GoalRunnerControlState =
-    selectJson(parentWorkflowId, "control_state_json", preserveBlank = true)?.let(::decodeControlState) ?: GoalRunnerControlState()
+    selectJson(
+      parentWorkflowId,
+      "control_state_json",
+      preserveBlank = true,
+    )?.let(::decodeControlState) ?: GoalRunnerControlState()
 
   override fun persistControlState(
     parentWorkflowId: String,
@@ -186,7 +190,14 @@ internal class GoalRunnerControlStore(
     ).use { statement ->
       statement.bindAll(parentWorkflowId)
       statement.executeQuery().use { rows ->
-        if (rows.next()) rows.getString(1)?.let { value -> if (preserveBlank || value.isNotBlank()) value else null } else null
+        if (rows.next()) {
+          rows.getString(1)?.let {
+              value ->
+            if (preserveBlank || value.isNotBlank()) value else null
+          }
+        } else {
+          null
+        }
       }
     }
 }

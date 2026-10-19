@@ -1,5 +1,8 @@
 package skillbill.ports.telemetry.lifecycle
 
+import skillbill.ports.telemetry.lifecycle.model.GoalChildSubtaskIdentity
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedPreparation
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
 import skillbill.telemetry.model.GoalStartedRecord
@@ -24,22 +27,19 @@ interface GoalLifecycleTelemetryRepository {
     level: String,
   )
 
-  fun prepareGoalStarted(record: GoalStartedRecord): GoalStartedPreparation =
-    GoalStartedPreparation(inserted = false, candidates = emptyList(), ownershipEvidence = emptyList())
+  fun prepareGoalStarted(record: GoalStartedRecord): GoalStartedPreparation
 
   fun persistedChildSubtaskStatuses(
     issueKey: String,
     children: List<GoalChildSubtaskIdentity>,
-  ): Map<Int, String> = emptyMap()
+  ): Map<Int, String>
 
   fun reconcileGoalStarted(
     record: GoalStartedRecord,
     inserted: Boolean,
     candidates: List<GoalStartedSupersession>,
     level: String,
-  ) {
-    if (inserted) goalStarted(record, level)
-  }
+  )
 
   fun goalSubtaskFinished(
     record: GoalSubtaskFinishedRecord,
@@ -56,37 +56,3 @@ interface GoalLifecycleTelemetryRepository {
     level: String,
   )
 }
-
-data class GoalStartedPreparation(
-  val inserted: Boolean,
-  val candidates: List<GoalStartedCandidate>,
-  val ownershipEvidence: List<GoalStartedOwnershipEvidence>,
-)
-
-data class GoalStartedCandidate(
-  val workflowId: String,
-  val parentWorkflowId: String?,
-  val startedAt: String,
-  val latestSegmentParentWorkflowId: String?,
-  val mode: String,
-)
-
-data class GoalStartedOwnershipEvidence(
-  val workflowId: String,
-  val parentWorkflowId: String?,
-  val latestSegmentParentWorkflowId: String?,
-  val status: String?,
-  val finishedAt: String?,
-)
-
-data class GoalStartedSupersession(
-  val candidate: GoalStartedCandidate,
-  val eligible: Boolean,
-  val complete: Int,
-  val blocked: Int,
-  val skipped: Int,
-  val diagnosticReason: String? = null,
-  val confirmedNonLiveOwner: Boolean = false,
-)
-
-data class GoalChildSubtaskIdentity(val subtaskId: Int, val childWorkflowId: String)

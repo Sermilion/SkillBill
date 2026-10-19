@@ -1,5 +1,17 @@
 # goalrunner boundary decisions
 
+## [2026-10-19] Reconcile stale segments only on an inserted start with ownership evidence
+Context: A crashed invocation can retain an open telemetry segment, but another parent may still own a live execution of the same issue.
+Decision: Only a genuinely inserted start authorizes transactional supersession. Same-parent admission permits older-segment cleanup; an expired other-parent lease requires supervisor-confirmed death. Missing-lease and parentless rows require no protected conflict.
+Reason: Lease expiry alone cannot prove process death. Reusing the execution-ownership supervisor avoids a second liveness authority in SQLite, while the existing lifecycle transaction keeps segment terminals, logical progress and outbox effects atomic and replay-safe.
+Alternatives considered: Expiry-only cleanup could abandon a live invocation. Uncertain or contradictory ownership instead preserves rows and emits diagnostics; aggregate abandonment additionally requires the transitioned latest segment and no protected open segment.
+
+## [2026-10-19] Close failed invocation telemetry without replacing the execution failure
+Context: Planning, launch or telemetry can throw after the invocation start persists, leaving it reported as running.
+Decision: Attempt direct blocked segment closure with goal_run_failed while rethrowing the original failure. Preserve interruption and cancellation, attach closure errors as suppressed evidence, and skip closure before persisted start or after terminal settlement.
+Reason: Closure must work independently of manifest-control updates and subtask telemetry. Recording invocation failure must not invent subtask success or logical-goal completion, and cleanup failure must not hide the cause that stopped execution.
+Revisit when: Immediate hard-kill repair becomes a requirement; catchable failure closure cannot run after an uncatchable process exit.
+
 ## [2026-10-17] Keep checkpoint prune off the status read path
 Context: Goal status and watch defaulted pruneCheckpointRefs to true, and reconcileStatusManifest deleted eligible checkpoint refs during ordinary projection.
 Decision: Status projection requires pruneCheckpointRefs false and no longer calls prune. Default the request flag to false; CLI status and ide-status pass false. Authorized prune stays on finalization, reset, and purge.

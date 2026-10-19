@@ -1,0 +1,125 @@
+# Subtask 1 - repair goal invocation lifecycle and generated spec paths
+
+## Scope
+
+Deliver the complete SKILL-432 correctness fix in one subtask. Primary owners from preplan are `GoalRunner.kt`, `GoalRunnerTelemetryEmitter.kt`, `GoalTelemetrySave.kt`, `LifecycleTelemetryGoalSessionAdapter.kt`, `GoalTelemetryEmit.kt`, and `FeatureSpecPreparationWriter.kt`. Reuse the established control-state decoder, existing execution-ownership evidence and lifecycle application transaction. Production and regression sources may require adjacent owner changes to satisfy the stated outcomes.
+
+## Acceptance Criteria
+
+1. Fresh goal-start persistence supersedes older unfinished non-live invocation segments of the same issue key atomically, while preserving live or uncertain other-parent ownership, unrelated keys, first-terminal evidence, and correct logical-goal accounting.
+2. Catchable failures after a persisted goal start close that invocation as a supported terminal failure without replacing the original throwable, claiming logical-goal completion, or changing ordinary completion and stop semantics.
+3. Newly generated parent directory and subtask filename components use one deterministic bounded naming policy, with consistent planned paths, written paths, manifest references and links, while preserving short names, full display titles and explicit existing parent paths.
+
+## Decisions and assumptions
+
+The persisted invocation status for supersession is `abandoned`, with owner-declared stop reason `superseded_by_new_run`. Catchable post-start failures use `blocked` with owner-declared reason `goal_run_failed`. Failure reasons are bounded to 512 UTF-8 bytes and exclude raw exception messages from exported payloads. Preserve the original throwable and attach cleanup failures as suppressed evidence. Cancellation and interruption retain their original propagation and interruption semantics. Hard-crash remnants are repaired on the next genuinely inserted start.
+
+Only an inserted start authorizes reconciliation. A duplicate start neither supersedes rows nor increments aggregates. Compare old and new start times as instants, using strictly older segments; timestamp equality alone does not prove ordering. Exclusive same-parent admission authorizes superseding that parent's older unfinished segments even though the newly acquired lease is live. Other-parent segments with a valid unexpired lease remain untouched. Expired leases require positive non-live evidence from the existing execution-ownership recovery boundary; expiry alone is insufficient. Missing lease evidence and legacy parentless rows are eligible only when there is no conflicting or uncertain ownership evidence. Corrupt ownership data must loud-fail through the established typed decoder, preserving the transaction rather than pretending the owner is absent. Unavailable or indeterminate process evidence preserves the affected other-parent rows and records the deliberate degradation through existing observability policy.
+
+The digest does not identify the exact carrier for supervisor-confirmed liveness. Implement must confirm how the existing ownership boundary can expose that evidence and use the smallest change to that boundary if needed. The assumption is that positive dead-owner evidence can be reused; if it cannot, retain uncertain rows and record the evidence gap rather than weakening the death rule. No SQLite process probing is authorized.
+
+A superseded row receives abandoned status, a finish timestamp from the inserted start, a nonnegative elapsed duration, and complete nonnegative count fields using the established persisted progress sources. Unknown counts use zero rather than invented progress. Keep terminal rows stats-readable, preserve first-terminal writes and emit exactly one existing redacted GOAL_FINISHED event per transitioned row through GoalTelemetryEmit.
+
+For same-parent supersession, retain the aggregate for the new running invocation. Historical cleanup must neither overwrite its latest-segment state nor increase total_blocks. For a different parent, abandon a logical aggregate only when its latest segment is among the superseded rows, it has no remaining protected unfinished segment, ownership is confirmed non-live, and the aggregate is unfinished. Preserve completed, failed, abandoned and unrelated aggregates. A blocked aggregate without an eligible superseded latest segment is unchanged. Emit a logical terminal event once through its existing owner without treating abandonment as a measured execution block. Late historical finishes cannot change the newer logical invocation or emit duplicate terminals. Implement must confirm the existing logical-terminal event and persistence owner; extend that owner only as required, preserving the external event shape.
+
+The component limit is 240 UTF-8 bytes including prefixes and suffixes. Normalize slugs by the existing ASCII normalization and `feature` fallback. Preserve a component exactly when it fits. Otherwise reserve 17 characters for `-` plus the first 16 lowercase hexadecimal characters of SHA-256 of the complete normalized slug, and truncate the slug portion to the remaining budget. Trim trailing hyphens from the retained prefix. Parent components reserve the exact trimmed issue key plus `-`; subtask components reserve `spec_subtask_<id>_` and `.md`. Count a non-ASCII issue-key prefix in UTF-8 bytes. If fixed identity material leaves insufficient room for a nonempty slug and the hash suffix, reject through the existing typed preparation-request failure rather than truncating issue identity. Use one path naming owner across planning and writing; display titles retain their full text. Explicit existing parent paths remain authoritative even when their components exceed the new generated limit.
+
+The digest does not supply the repository default branch. This bundle uses `main` as an explicit planning assumption. The next runtime planning boundary must confirm it from its authorized context before branch-dependent execution. The manifest feature branch follows the supplied format and retains this workflow's existing long slug; this task bounds filesystem components, not branch names. No branch is created by this phase.
+
+## Ownership and behavior boundaries
+
+Keep segment identity and clocks inside GoalRunnerTelemetryEmitter. Add narrow failure closure around the post-start interval instead of relying on manifest-control updates or subtask emission to succeed before closure. Track terminal settlement so a failure after a committed finish cannot produce a second logical terminal. Expected planning stops and ordinary reports retain their existing behavior. Do not widen generic lifecycle interfaces solely for an engine helper.
+
+Supersession persistence, insertion, affected logical progress and outbox writes share the existing application-owned transaction. Keep late-terminal handling first-terminal-wins and guard aggregate updates with latest-segment identity. Reuse the finished-event payload and consent/redaction path. The execution coordinator remains the owner of fenced lease acquisition, heartbeats and teardown; telemetry cleanup must not steal or clear leases.
+
+Consolidate only generated component naming in the preparation writer. Preserve atomic bundle writes, read-back validation and rollback, runtime status, and explicit path authority. Derive all generated subtask references and rendered links from the final bounded name. Keep issue-prefix resolution compatible and leave preparation policy classification unchanged.
+
+## Constraints
+
+Use the supplied preplan digest as the repository evidence for this bundle. No tracker lookup is required. The tracker could not resolve SKILL-432; the supplied requirements and local issue identity remain authoritative.
+
+Keep state ownership in the existing engine, lifecycle application and SQLite boundaries. SQLite changes share the existing lifecycle transaction and connection. Engine code must not access the database. Reuse supported abandoned and blocked statuses rather than introducing a finished status that stats cannot decode. Keep wire tokens and payload keys in their owning vocabulary objects.
+
+Apply architecture rules A1-A12 and the section 5 checklist, retain G1-G7 guards, baselines and exemptions, and follow the Design Principles and Code Principles described in the digest. In particular, preserve ownership boundaries, typed malformed-state failures, injected clocks, narrow visibility and tests beside owners. Authored Kotlin must obey the repository comment restrictions. Planned owner paths guide the change; required production wiring, test setup, formatting and lint repairs remain allowed.
+
+## Non-Goals
+
+Do not change platform packs, dispatcher behavior, CLI grammar, feature-task settlement, preparation classification, or unrelated lifecycle families. Do not rename existing bundles, change completed workflow or commit state, delete telemetry history, add a feature flag, or promise immediate repair after an uncatchable hard kill. Periodic goal-session reconciliation and a new process-inspection mechanism in SQLite are outside this change.
+
+## Dependency Notes
+
+There is one executable subtask and no external dependency. Its engine, SQLite and writer changes form one reviewable correctness fix. There are no preparatory commits that leave replacement behavior incomplete. Review, history, commits and publication remain with the runtime-owned phases.
+
+## Validation Strategy
+
+Implement produces production changes and test sources; audit checks the repository end states against each criterion. Neither phase runs tests, builds or generators. Only validate discovers and executes the required focused tests and complete repository checks, including the pack full gate, and repairs failures. Only a runtime build phase may execute the pack build command. This planning phase executes none of those commands and records no test execution.
+
+Validate should exercise GoalRunnerTelemetryTest, GoalTelemetryStoreTest or its owning-package equivalent, and FeatureSpecPreparationWriterTest, then the required repository validation strategy. Keep the existing architecture and contract parity checks. Validation owns command selection and execution evidence; a passing command is not an acceptance criterion.
+
+## Test Obligations
+
+- AC 1, stale rows and replay. Extend the real SQLite boundary coverage with a compact scenario containing several old same-key segments, same-parent restart under its newly live lease, protected live other-parent ownership, expired-but-uncertain ownership, confirmed-dead ownership, missing leases, legacy parentless rows, unrelated keys and prefinished rows. The realistic bug is either leaving stale invocations running or terminalizing another live invocation. Assert durable fields, readable stats, correct latest logical state, no fabricated block increments, and exactly-once redacted finish events. Replay the start and a late terminal to prove idempotence. Include equivalent offset timestamps and the exact expiry boundary so string comparison or expiry-as-death errors fail observably. Retain existing regression assertions.
+- AC 1, atomic failure. Through the transaction-owning lifecycle boundary, inject a failure during supersession/start or outbox persistence. The realistic bug is committing only some terminal rows or counters after the new start fails. Assert rollback of the inserted start, affected old rows, logical progress and outbox together. Add a malformed-lease rejection case at this boundary, so decoder failure cannot silently authorize supersession.
+- AC 1, aggregate closure. Cover a dead different-parent latest segment and a blocked aggregate with no superseded latest segment. The realistic bug is either leaving a superseded logical run running or abandoning an unrelated blocked goal. Assert logical terminal emission once and preservation of protected or completed aggregates. Combine this with the SQLite scenario when it retains clear outcome assertions.
+- AC 2, post-start failures. Extend GoalRunnerTelemetryTest with planning and launch failures after persisted start. Assert one terminal for the started segment, original throwable identity, no issue completion or fabricated subtask success, and cleanup failure suppression. Cover cancellation and interruption propagation, including the interrupt flag where applicable. The realistic bugs are stranded running telemetry and masked cancellation or original errors. Preserve existing normal completion and stopped-report coverage instead of duplicating it. Update the subtask-finish telemetry failure expectation only to permit best-effort segment closure while retaining its loud original failure assertion.
+- AC 3, generated filesystem writes. Extend FeatureSpecPreparationWriterTest with oversized parent and subtask names, names sharing a long prefix, and short names. Assert actual writes, the 240-byte component limit, deterministic distinct truncated names, planned/written equality and reloadable manifest paths and links. Verify full titles, explicit existing parent preservation and typed rejection of an issue prefix that leaves no safe slug budget. The realistic bugs are filename-too-long failures, overwritten bundles and dangling manifest references. Retain atomic rollback, byte-for-byte restoration and preserved runtime-status coverage; reuse existing tests where their assertions already prove those behaviors.
+
+Do not add tests for trivial forwarding or duplicate branches already covered. Each new case must retain its named observable failure and avoid SQL-text, call-order or implementation-structure assertions.
+
+## Next Path
+
+The runtime's plan_subtasks phase authors the execution details for this sole subtask. Subsequent implementation and validation follow the runtime loop; there is no second subtask or separate workflow to launch.
+
+## Implementation Details
+
+Execute the following tasks in order within this single subtask. AC numbers refer to this file's three production acceptance criteria. The preplan digest is the evidence for these steps. Facts it does not supply remain explicit implementation confirmations below, with conservative behavior already decided. Test obligations describe sources to add or retain during implement; validate owns their execution and all required check evidence.
+
+### 1. Establish supersession eligibility and failure vocabulary
+
+Serves AC 1 and AC 2. Use `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/execution/core/GoalRunnerExecutionCoordinator.kt`, the existing execution-ownership recovery boundary, `GoalRunnerControlModels.kt`, and SQLite `workflow/goalrunner/runner/GoalRunnerControlStore.kt` and `GoalRunnerControlStoreDecodeState.kt` as the ownership boundaries. Confirm the smallest existing carrier for positive non-live evidence before wiring supersession. Keep acquisition, heartbeat and teardown with the coordinator. Reuse supported decoding and typed failures; do not add SQLite process inspection or a second liveness authority.
+
+Implement eligibility as a decision for strictly older unfinished same-key rows, comparing parsed instants. Exclusive same-parent admission permits historical same-parent cleanup. For another parent, preserve valid live leases and all uncertain evidence, including an expired lease without confirmed non-live evidence. Missing leases and parentless rows require the absence of conflicting evidence. If the existing recovery boundary cannot supply positive death evidence, retain those uncertain rows and record the deliberate degradation through the existing observability owner. This is the decided fallback, not permission to infer death from expiry. Confirm the carrier and observability hook during implementation without widening this policy.
+
+Declare `superseded_by_new_run` and `goal_run_failed` once in their owning vocabulary. Reuse `abandoned` and `blocked` status tokens from their owners. Keep reasons within 512 UTF-8 bytes and omit raw throwable messages from exported reasons. Add no generic lifecycle interface merely for an engine helper.
+
+Test obligations: retain the AC 1 ownership and malformed-lease cases below. No standalone forwarding or vocabulary-constant test is needed.
+
+### 2. Make inserted-start reconciliation atomic and replay-safe
+
+Serves AC 1. Update `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/telemetry/goal/GoalTelemetrySave.kt` and `telemetry/lifecycle/session/LifecycleTelemetryGoalSessionAdapter.kt`. Keep the existing transaction in `runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/telemetry/lifecycle/LifecycleTelemetryGoalEmission.kt` as the sole transaction owner. Pass any required ownership evidence through the existing layering, with no database access in engine code.
+
+Gate all reconciliation on `saveGoalStarted` returning INSERTED. Duplicate start replay must not authorize cleanup, counters or duplicate finish events. Within that transaction and connection, transition each eligible old open segment only while both terminal fields remain unset. Set abandoned status, the inserted start instant as finish time, nonnegative elapsed duration and every required count. Reuse persisted progress where available; use zero for unknown counts. Return or retain the actual transitioned identities for aggregate handling and emission. Preserve already-terminal rows and first-terminal-wins behavior for late real finishes.
+
+Test obligations: extend `runtime-kotlin/runtime-infra/sqlite/src/test/kotlin/skillbill/infrastructure/sqlite/GoalTelemetryStoreTest.kt` or its owning-package equivalent with the compact stale-row and replay scenario defined above. It must catch live-owner termination, stale same-parent rows surviving a newly live lease, incorrect instant comparison, and duplicate effects. At the application transaction boundary, add the rollback case that proves insertion, old-row terminals, progress and outbox all roll back together. Include malformed ownership rejection, not silent absence. Assert durable results and readable stats rather than SQL statements.
+
+### 3. Preserve logical-goal accounting and existing terminal emission
+
+Serves AC 1. In `GoalTelemetrySave.kt`, guard `recordGoalIssueSegmentEnd` against historical segments overwriting the latest segment's logical state. Keep normal paused and blocked accounting intact. Supersession must bypass measured-block increments. For same-parent cleanup, leave the aggregate running for the inserted latest segment. For another parent, abandon only an unfinished aggregate whose latest segment transitioned, whose ownership is confirmed non-live, and which has no protected unfinished segment. Preserve completed, failed, abandoned and unrelated aggregates, and blocked aggregates without a superseded latest segment.
+
+Use `telemetry/goal/GoalTelemetryEmit.kt` for each actually transitioned invocation's existing GOAL_FINISHED event. Preserve `GoalTelemetryPayloads.kt` payload shape, consent, redaction and emitted markers. Confirm the existing logical-terminal persistence and event owner during implement and extend that owner only where needed to record different-parent abandonment once. The digest does not name that symbol; the assumption is that its existing terminal path can express abandonment without manufacturing completion. Keep logical and invocation terminal identities separate and preserve the current external event shape.
+
+Test obligations: combine the AC 1 aggregate-closure case with the preceding SQLite fixture where readable. Assert latest logical state, unchanged block counts for supersession, exactly one invocation finish per transitioned row, exactly one eligible logical abandonment, and no duplicates after start or late-finish replay. Preserve existing issue-completion and consent/redaction regression coverage. Stats readers remain read-only.
+
+### 4. Close catchable post-start failures without masking them
+
+Serves AC 2. Update `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/GoalRunner.kt` and `goalrunner/telemetry/GoalRunnerTelemetryEmitter.kt`. Add a narrow emitter operation owning the current segment identity and injected clock, emitting blocked status with `goal_run_failed`. Cover the interval after a persisted start through planning, assembly, driving and terminal settlement. Track terminal settlement so a failure after a committed finish cannot create a second logical terminal.
+
+Attempt direct segment closure when that interval throws. Do not make closure depend on manifest-control updates or subtask telemetry, and do not call issue completion or fabricate subtask success. Rethrow the original throwable, preserve cancellation and interruption semantics, and attach any closure failure as secondary suppressed evidence. Keep existing expected planning stops and ordinary report handling. The coordinator continues to handle lease teardown and its own suppressed teardown failures. A hard kill remains recoverable only at a later admitted start.
+
+Test obligations: extend `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/goalrunner/telemetry/GoalRunnerTelemetryTest.kt` with planning and launch exceptions after start, cleanup failure, cancellation and interruption. Assert original throwable identity, matching segment identity, one supported terminal when persistence permits, no issue completion or invented subtask success, and interruption state where applicable. Retain existing ordinary finish and stop tests. Adjust the subtask-finish telemetry failure expectation to allow direct closure while preserving the original failure assertion. These cases catch stranded segments and replaced failures, not helper call order.
+
+### 5. Apply one bounded generated-component policy
+
+Serves AC 3. Update `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/prepare/FeatureSpecPreparationWriter.kt`, specifically `plannedParentSpecPath`, `write`, `writeParentSpecOnly`, `normalizeFeatureName`, `subtaskFileName` and the final names used by `prepareSubtasks`. Keep the helper narrow and owned by preparation. Preserve existing normalization and display text.
+
+Apply the already-decided 240-byte total component cap. Preserve fitting components exactly. For an oversized normalized slug, reserve fixed prefix and suffix bytes plus 17 ASCII characters for `-` and the first 16 lowercase SHA-256 hex characters of the complete normalized slug. Truncate only the slug prefix, trim its trailing hyphens, and append the hash. Account for the trimmed issue key in UTF-8 bytes and retain it in full. Reject insufficient fixed-identity budgets through the existing typed preparation-request failure. Confirm that failure symbol during implement; do not invent a new error family without need.
+
+Derive planned and written generated parents from the same naming owner. Derive manifest references, rendered links and returned subtask paths from each final bounded filename. Explicit parent paths bypass generated-parent naming. Preserve bundle atomicity, read-back validation, rollback and runtime status. No resolver or preparation-policy change is indicated by the digest.
+
+Test obligations: extend `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask/prepare/FeatureSpecPreparationWriterTest.kt` with real writes for oversized parent and subtask names and distinct names sharing a long prefix. Assert the exact byte cap, stable distinct names, planned/written equality, full titles and reloadable references. Reuse short-name and explicit-parent coverage or add boundary assertions where absent, including insufficient issue-prefix budget rejection. Retain existing rollback and runtime-status tests. These cases catch filesystem rejection, collisions and broken references.
+
+### 6. Prepare the completed change for runtime-owned verification
+
+Serves AC 1, AC 2 and AC 3. Implement must leave production wiring and the named regression sources complete in this checkout. Preserve A1-A12, G1-G7, single-owner wire vocabulary, narrow visibility, injected clocks and Kotlin comment restrictions. Required adjacent wiring, test setup, formatting and lint repairs remain within scope. Do not weaken architecture guards, contract parity checks or past-bug assertions.
+
+Audit inspects each production criterion and the ownership decisions above. Validate selects and runs the focused engine, SQLite and writer tests and the required full repository strategy, including architecture and parity checks. Only a runtime build phase performs build proof. History, commits, PR publication and monitoring remain with their owning runtime phases. This plan records no executed tests, builds or checks. The existing `main` assumption remains for the next authorized branch-dependent boundary to confirm; this task neither creates a branch nor changes the workflow's branch identity.

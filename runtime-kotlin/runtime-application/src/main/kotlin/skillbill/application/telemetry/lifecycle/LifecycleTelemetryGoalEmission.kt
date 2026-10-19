@@ -11,24 +11,32 @@ import skillbill.application.telemetry.settings.telemetrySettingsOrNull
 import skillbill.contracts.JsonPayloadContract
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.telemetry.lifecycle.GoalChildSubtaskIdentity
-import skillbill.ports.telemetry.lifecycle.GoalStartedSupersession
+import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.ports.telemetry.lifecycle.GoalLifecycleTelemetryRepository
+import skillbill.ports.telemetry.lifecycle.model.GoalChildSubtaskIdentity
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedCandidate
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedOwnershipEvidence
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedPreparation
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
+import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.attribution.normalizeStackLabel
+import skillbill.telemetry.model.GoalStartedRecord
 import skillbill.telemetry.model.TelemetrySettings
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
 import skillbill.workflow.model.DecompositionStatus
-import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.time.Clock
+import java.time.Instant
 
 private const val QUALITY_CHECK_ROUTED_SKILL = "bill-code-check"
 
@@ -51,128 +59,203 @@ class LifecycleTelemetryGoalEmission(
         val prepared = repository.prepareGoalStarted(record)
         val candidates =
           if (prepared.inserted) {
-            val observedAt = clock.instant()
-            val evidenceByWorkflow = prepared.ownershipEvidence.groupBy { it.workflowId }
-            val contradictoryParents = evidenceByWorkflow.values
-              .filter { evidence -> evidence.flatMap { listOfNotNull(it.parentWorkflowId, it.latestSegmentParentWorkflowId) }.distinct().size > 1 }
-              .flatMap { evidence -> evidence.flatMap { listOfNotNull(it.parentWorkflowId, it.latestSegmentParentWorkflowId) } }
-              .toSet()
-            val ownershipByParent = prepared.ownershipEvidence
-              .flatMap { evidence ->
-                listOfNotNull(evidence.parentWorkflowId, evidence.latestSegmentParentWorkflowId)
-                  .filter { it != record.parentWorkflowId }
-                  .distinct().map { it to (evidence.parentWorkflowId to evidence.latestSegmentParentWorkflowId) }
-              }
-              .groupBy({ it.first }, { it.second })
-              .mapValues { (parent, associations) ->
-                val conflictingAssociation = associations.any { (explicit, latest) ->
-                  explicit != null && latest != null && explicit != latest
-                }
-                val state = unitOfWork.goalRunnerControls.controlState(parent)
-                val lease = state.executionLease
-                val inspection = if (lease != null && !lease.expiresAt.isAfter(observedAt)) {
-                  supervisor?.inspect(lease.asWorkerOwnership(parent))
-                } else null
-                when {
-                  parent in contradictoryParents || conflictingAssociation ->
-                    ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "parent-ownership-ambiguous")
-                  lease == null -> ParentOwnershipDecision(ParentOwnershipState.MISSING_LEASE, "lease-missing")
-                  lease.expiresAt.isAfter(observedAt) ->
-                    ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "other-parent-lease-live")
-                  inspection == FeatureTaskRuntimeProcessInspection.NotRunning ->
-                    ParentOwnershipDecision(ParentOwnershipState.CONFIRMED_NON_LIVE, null)
-                  supervisor == null ->
-                    ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "process-inspection-unavailable")
-                  else -> ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "other-parent-process-not-confirmed-dead")
-                }
-              }
-            val anyProtectedOwner = ownershipByParent.any { it.value.state == ParentOwnershipState.PROTECTED }
-            prepared.candidates.groupBy { it.workflowId }.map { (workflowId, joinedCandidates) ->
-              val evidence = evidenceByWorkflow[workflowId].orEmpty()
-              val associations = evidence.flatMap { listOfNotNull(it.parentWorkflowId, it.latestSegmentParentWorkflowId) }.distinct()
-              val contradictory = associations.size > 1
-              val candidate = joinedCandidates.first()
-              val oldParent = associations.singleOrNull()
-              val normalizedCandidate = candidate.copy(
-                parentWorkflowId = evidence.firstNotNullOfOrNull { it.parentWorkflowId } ?: oldParent,
-                latestSegmentParentWorkflowId = oldParent?.takeIf { evidence.none { row -> row.parentWorkflowId == oldParent } },
-              )
-              val sameParent = !record.parentWorkflowId.isNullOrBlank() && oldParent == record.parentWorkflowId
-              val protectedAssociation = contradictory || associations.any { parent ->
-                parent != record.parentWorkflowId && ownershipByParent[parent]?.state == ParentOwnershipState.PROTECTED
-              }
-              val missingLeaseConflict = associations.isEmpty() || oldParent?.let { ownershipByParent[it]?.state == ParentOwnershipState.MISSING_LEASE } == true
-              val eligible = when {
-                sameParent -> !protectedAssociation
-                else -> !protectedAssociation && !(missingLeaseConflict && anyProtectedOwner)
-              }
-              val snapshot = oldParent?.let { unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it) }
-              val manifest = snapshot?.artifacts?.decompositionRuntime()
-              val progressStatuses =
-                if (manifest != null) {
-                  manifest.subtasks.distinctBy { it.id }.map { it.status }
-                } else if (oldParent != null) {
-                  val children =
-                    unitOfWork.workflowStates.listGoalChildWorkflowIdsByParent(oldParent)
-                      .mapNotNull { childId ->
-                        val childSnapshot =
-                          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, childId) ?: return@mapNotNull null
-                        val continuation = childSnapshot.artifacts.goalContinuationArtifact() ?: return@mapNotNull null
-                        if (
-                          continuation.parentWorkflowId != oldParent ||
-                          !continuation.issueKey.equals(record.issueKey, ignoreCase = true)
-                        ) {
-                          return@mapNotNull null
-                        }
-                        val observedAt = childSnapshot.updatedAt ?: childSnapshot.startedAt ?: return@mapNotNull null
-                        Triple(continuation.subtaskId, observedAt, childId)
-                      }
-                      .groupBy { it.first }
-                      .mapNotNull { (_, attempts) -> attempts.maxByOrNull { it.second } }
-                      .map { GoalChildSubtaskIdentity(it.first, it.third) }
-                  repository.persistedChildSubtaskStatuses(record.issueKey, children).values.toList()
-                } else {
-                  emptyList()
-                }
-              if (manifest == null && progressStatuses.isEmpty()) {
-                diagnostics.warning(
-                  "seam=goal-run-supersession outcome=degraded issue=${record.issueKey} " +
-                    "workflow=${normalizedCandidate.workflowId} reason=parent-progress-unavailable",
-                  null,
-                )
-              }
-              val counts = progressStatuses.mapNotNull(String::decompositionStatus)
-              val supersession =
-                GoalStartedSupersession(
-                  candidate = normalizedCandidate,
-                  eligible = eligible,
-                  confirmedNonLiveOwner = eligible && !sameParent &&
-                    oldParent?.let { ownershipByParent[it]?.state == ParentOwnershipState.CONFIRMED_NON_LIVE } == true,
-                  complete = counts.count { it == DecompositionStatus.COMPLETE },
-                  blocked = counts.count { it == DecompositionStatus.BLOCKED },
-                  skipped = counts.count { it == DecompositionStatus.SKIPPED },
-                  diagnosticReason = when {
-                    !eligible && (associations.isEmpty() || contradictory) -> "parent-ownership-ambiguous"
-                    !eligible && missingLeaseConflict && anyProtectedOwner -> "other-parent-ownership-conflict"
-                    !eligible -> associations.firstNotNullOfOrNull { ownershipByParent[it]?.reason }
-                    else -> null
-                  },
-                )
-              if (supersession.diagnosticReason != null) {
-                diagnostics.warning(
-                  "seam=goal-run-supersession outcome=deferred issue=${record.issueKey} " +
-                    "workflow=$workflowId reason=${supersession.diagnosticReason}",
-                  null,
-                )
-              }
-              supersession
-            }
+            supersessions(record, prepared, unitOfWork.goalRunnerControls, unitOfWork.workflowStates, repository)
           } else {
             emptyList()
           }
         repository.reconcileGoalStarted(record, prepared.inserted, candidates, settings.level)
       }
     }
+  }
+
+  private fun supersessions(
+    record: GoalStartedRecord,
+    prepared: GoalStartedPreparation,
+    controls: GoalRunnerControlRepository,
+    workflows: WorkflowStateRepository,
+    repository: GoalLifecycleTelemetryRepository,
+  ): List<GoalStartedSupersession> {
+    val evidenceByWorkflow = prepared.ownershipEvidence.groupBy { it.workflowId }
+    val ownershipByParent = parentOwnership(record, evidenceByWorkflow, controls)
+    return prepared.candidates.groupBy { it.workflowId }.map { (workflowId, candidates) ->
+      val evidence = evidenceByWorkflow[workflowId].orEmpty()
+      val associations = evidence.parentAssociations()
+      val oldParent = associations.singleOrNull()
+      val candidate =
+        candidates.first().copy(
+          parentWorkflowId = evidence.firstNotNullOfOrNull { it.parentWorkflowId } ?: oldParent,
+          latestSegmentParentWorkflowId =
+            oldParent?.takeIf { evidence.none { row -> row.parentWorkflowId == oldParent } },
+        )
+      val statuses = progressStatuses(record.issueKey, candidate, oldParent, workflows, repository)
+      supersession(record, candidate, associations, ownershipByParent, statuses)
+    }
+  }
+
+  private fun parentOwnership(
+    record: GoalStartedRecord,
+    evidenceByWorkflow: Map<String, List<GoalStartedOwnershipEvidence>>,
+    controls: GoalRunnerControlRepository,
+  ): Map<String, ParentOwnershipDecision> {
+    val contradictoryParents =
+      evidenceByWorkflow.values
+        .filter { it.parentAssociations().size > 1 }
+        .flatMap { it.parentAssociations() }
+        .toSet()
+    val observedAt = clock.instant()
+    return evidenceByWorkflow.values.flatten()
+      .flatMap { listOfNotNull(it.parentWorkflowId, it.latestSegmentParentWorkflowId) }
+      .filter { it != record.parentWorkflowId }
+      .distinct()
+      .associateWith { parent ->
+        val observed = inspectParent(parent, controls, observedAt)
+        if (parent in contradictoryParents) {
+          ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "parent-ownership-ambiguous")
+        } else {
+          observed
+        }
+      }
+  }
+
+  private fun inspectParent(
+    parent: String,
+    controls: GoalRunnerControlRepository,
+    observedAt: Instant,
+  ): ParentOwnershipDecision {
+    val lease = controls.controlState(parent).executionLease
+    val inspection =
+      if (lease != null && !lease.expiresAt.isAfter(observedAt)) {
+        supervisor?.inspect(lease.asWorkerOwnership(parent))
+      } else {
+        null
+      }
+    return when {
+      lease == null -> ParentOwnershipDecision(ParentOwnershipState.MISSING_LEASE, "lease-missing")
+      lease.expiresAt.isAfter(observedAt) ->
+        ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "other-parent-lease-live")
+      inspection == FeatureTaskRuntimeProcessInspection.NotRunning ->
+        ParentOwnershipDecision(ParentOwnershipState.CONFIRMED_NON_LIVE, null)
+      supervisor == null ->
+        ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "process-inspection-unavailable")
+      else -> ParentOwnershipDecision(ParentOwnershipState.PROTECTED, "other-parent-process-not-confirmed-dead")
+    }
+  }
+
+  private fun supersession(
+    record: GoalStartedRecord,
+    candidate: GoalStartedCandidate,
+    associations: List<String>,
+    ownership: Map<String, ParentOwnershipDecision>,
+    statuses: List<String>,
+  ): GoalStartedSupersession {
+    val oldParent = associations.singleOrNull()
+    val sameParent = !record.parentWorkflowId.isNullOrBlank() && oldParent == record.parentWorkflowId
+    val eligible = supersessionEligible(record.parentWorkflowId, associations, ownership)
+    val counts = statuses.mapNotNull(String::decompositionStatus)
+    val reason = supersessionReason(eligible, associations, ownership)
+    val result =
+      GoalStartedSupersession(
+        candidate = candidate,
+        eligible = eligible,
+        confirmedNonLiveOwner =
+          eligible && !sameParent &&
+            ownership[oldParent]?.state == ParentOwnershipState.CONFIRMED_NON_LIVE,
+        complete = counts.count { it == DecompositionStatus.COMPLETE },
+        blocked = counts.count { it == DecompositionStatus.BLOCKED },
+        skipped = counts.count { it == DecompositionStatus.SKIPPED },
+        diagnosticReason = reason,
+      )
+    if (reason != null) {
+      diagnostics.warning(
+        "seam=goal-run-supersession outcome=deferred issue=${record.issueKey} " +
+          "workflow=${candidate.workflowId} reason=$reason",
+        null,
+      )
+    }
+    return result
+  }
+
+  private fun supersessionEligible(
+    currentParent: String?,
+    associations: List<String>,
+    ownership: Map<String, ParentOwnershipDecision>,
+  ): Boolean {
+    val oldParent = associations.singleOrNull()
+    val sameParent = !currentParent.isNullOrBlank() && oldParent == currentParent
+    val protectedAssociation =
+      associations.size > 1 ||
+        associations.any { parent ->
+          parent != currentParent && ownership[parent]?.state == ParentOwnershipState.PROTECTED
+        }
+    val missingLeaseConflict =
+      associations.isEmpty() || ownership[oldParent]?.state == ParentOwnershipState.MISSING_LEASE
+    val anyProtectedOwner = ownership.values.any { it.state == ParentOwnershipState.PROTECTED }
+    return !protectedAssociation && (sameParent || !(missingLeaseConflict && anyProtectedOwner))
+  }
+
+  private fun supersessionReason(
+    eligible: Boolean,
+    associations: List<String>,
+    ownership: Map<String, ParentOwnershipDecision>,
+  ): String? {
+    val oldParent = associations.singleOrNull()
+    val missingLeaseConflict =
+      associations.isEmpty() || ownership[oldParent]?.state == ParentOwnershipState.MISSING_LEASE
+    val anyProtectedOwner = ownership.values.any { it.state == ParentOwnershipState.PROTECTED }
+    return when {
+      eligible -> null
+      associations.isEmpty() || associations.size > 1 -> "parent-ownership-ambiguous"
+      missingLeaseConflict && anyProtectedOwner -> "other-parent-ownership-conflict"
+      else -> associations.firstNotNullOfOrNull { ownership[it]?.reason }
+    }
+  }
+
+  private fun progressStatuses(
+    issueKey: String,
+    candidate: GoalStartedCandidate,
+    oldParent: String?,
+    workflows: WorkflowStateRepository,
+    repository: GoalLifecycleTelemetryRepository,
+  ): List<String> {
+    val snapshot = oldParent?.let { workflows.get(WorkflowFamily.TASK_RUNTIME, it) }
+    val manifest = snapshot?.artifacts?.decompositionRuntime()
+    val statuses =
+      when {
+        manifest != null -> manifest.subtasks.distinctBy { it.id }.map { it.status }
+        oldParent != null -> {
+          val children =
+            workflows.listGoalChildWorkflowIdsByParent(oldParent)
+              .mapNotNull { childProgressIdentity(workflows, oldParent, issueKey, it) }
+              .groupBy { it.first }
+              .mapNotNull { (_, attempts) -> attempts.maxByOrNull { it.second } }
+              .map { GoalChildSubtaskIdentity(it.first, it.third) }
+          repository.persistedChildSubtaskStatuses(issueKey, children).values.toList()
+        }
+        else -> emptyList()
+      }
+    if (manifest == null && statuses.isEmpty()) {
+      diagnostics.warning(
+        "seam=goal-run-supersession outcome=degraded issue=$issueKey " +
+          "workflow=${candidate.workflowId} reason=parent-progress-unavailable",
+        null,
+      )
+    }
+    return statuses
+  }
+
+  private fun childProgressIdentity(
+    workflows: WorkflowStateRepository,
+    parent: String,
+    issueKey: String,
+    childId: String,
+  ): Triple<Int, Instant, String>? {
+    val snapshot = workflows.get(WorkflowFamily.TASK_RUNTIME, childId) ?: return null
+    val continuation = snapshot.artifacts.goalContinuationArtifact() ?: return null
+    if (continuation.parentWorkflowId != parent || !continuation.issueKey.equals(issueKey, ignoreCase = true)) {
+      return null
+    }
+    val observedAt = snapshot.updatedAt ?: snapshot.startedAt
+    return observedAt?.let { Triple(continuation.subtaskId, it, childId) }
   }
 
   override fun goalSubtaskFinished(request: GoalSubtaskFinishedRequest) {
@@ -273,3 +356,6 @@ internal fun GoalSubtaskFinishedRequest.reconcileBlockedReason(): GoalSubtaskFin
       ),
   )
 }
+
+private fun List<GoalStartedOwnershipEvidence>.parentAssociations(): List<String> =
+  flatMap { listOfNotNull(it.parentWorkflowId, it.latestSegmentParentWorkflowId) }.distinct()

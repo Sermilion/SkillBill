@@ -14,8 +14,8 @@ import skillbill.application.telemetry.validation.validateQualityCheckStarted
 import skillbill.contracts.JsonPayloadContract
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import java.time.Clock
 
 @Inject
@@ -24,8 +24,9 @@ class LifecycleTelemetryService(
   private val settingsProvider: TelemetrySettingsProvider,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
-  private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor? = null,
-) : GoalLifecycleTelemetryEmitter by LifecycleTelemetryGoalEmission(database, settingsProvider, diagnostics, clock, workerSupervisor) {
+  private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
+) : GoalLifecycleTelemetryEmitter by
+  LifecycleTelemetryGoalEmission(database, settingsProvider, diagnostics, clock, workerSupervisor) {
   fun featureTaskRuntimeStarted(request: FeatureTaskRuntimeStartedRequest): JsonPayloadContract {
     val sessionId = request.sessionId.ifBlank { generateLifecycleSessionId("ftr", clock) }
     return enabledStandaloneResult(settingsProvider, diagnostics, sessionId) { settings ->

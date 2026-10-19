@@ -8,6 +8,9 @@ import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.lifecycle.PrDescriptionLifecycleTelemetryRepository
 import skillbill.ports.telemetry.lifecycle.QualityCheckLifecycleTelemetryRepository
 import skillbill.ports.telemetry.lifecycle.ReviewStageTelemetryMeasurementRepository
+import skillbill.ports.telemetry.lifecycle.model.GoalChildSubtaskIdentity
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedPreparation
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.review.model.ReviewStageDegradationMeasurement
 import skillbill.telemetry.model.FeatureTaskRuntimeFinishedRecord
 import skillbill.telemetry.model.FeatureTaskRuntimeStartedRecord
@@ -58,6 +61,21 @@ private object PrDescriptionLifecycleTelemetryNoop : PrDescriptionLifecycleTelem
 }
 
 private object GoalLifecycleTelemetryNoop : GoalLifecycleTelemetryRepository {
+  override fun prepareGoalStarted(record: GoalStartedRecord): GoalStartedPreparation =
+    GoalStartedPreparation(inserted = false, candidates = emptyList(), ownershipEvidence = emptyList())
+
+  override fun persistedChildSubtaskStatuses(
+    issueKey: String,
+    children: List<GoalChildSubtaskIdentity>,
+  ): Map<Int, String> = emptyMap()
+
+  override fun reconcileGoalStarted(
+    record: GoalStartedRecord,
+    inserted: Boolean,
+    candidates: List<GoalStartedSupersession>,
+    level: String,
+  ) = Unit
+
   override fun goalStarted(
     record: GoalStartedRecord,
     level: String,
