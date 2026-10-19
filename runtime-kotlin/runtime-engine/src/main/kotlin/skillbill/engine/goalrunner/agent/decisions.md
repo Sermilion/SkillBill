@@ -94,3 +94,8 @@ On 2026-10-11, the operator removed the rule that blocked plan settlement when
 other files changed during planning. Shared worktrees can receive concurrent edits.
 The plan still verifies its authored bundle and rejects bundle paths that escape
 its directory. Unrelated worktree changes do not determine bundle readiness.
+
+## [2026-10-19] Purge names sibling-worktree goal state instead of deleting it
+Context: Repository identity is the worktree path, so another worktree of the same repository keeps its own goal state for the issue.
+Decision: Purge leaves that state alone and names the worktree that owns it.
+Reason: The sibling worktree may hold an active goal run. Reporting it lets the operator purge from that worktree without this purge reaching across repository identities.

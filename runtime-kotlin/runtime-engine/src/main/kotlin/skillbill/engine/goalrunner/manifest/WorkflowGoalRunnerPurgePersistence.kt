@@ -60,8 +60,6 @@ internal class WorkflowGoalRunnerPurgePersistence(
     }
   }
 
-  // Repository identity is the worktree path, so another worktree of the same repository keeps its own goal state
-  // for the issue. Purge leaves it alone and names the worktree that owns it.
   private fun UnitOfWork.siblingWorktreeWorkflows(
     issueKey: String,
     repoRoot: Path,
