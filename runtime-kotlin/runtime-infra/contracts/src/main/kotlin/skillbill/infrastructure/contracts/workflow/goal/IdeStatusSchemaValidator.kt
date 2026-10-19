@@ -162,6 +162,7 @@ private fun MutableMap<String, Any?>.putExecutionFields(execution: IdeStatusExec
   put(IdeStatusPayloadKeys.STATUS_REVISION, execution.statusRevision)
   execution.invocationId?.let { put(IdeStatusPayloadKeys.INVOCATION_ID, it) }
   execution.phaseId?.let { put(SharedPayloadKeys.PHASE_ID, it) }
+  execution.qaOutcome?.let { put(IdeStatusPayloadKeys.QA_OUTCOME, it.wireValue) }
 }
 
 private fun currentStepWireMap(snapshot: IdeStatusSnapshot): Map<String, Any?> =

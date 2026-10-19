@@ -11,6 +11,7 @@ data class IdeStatusExecutionIdentity(
   val invocationId: String? = null,
   val phaseId: String? = null,
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  val qaOutcome: StandaloneQaOutcome? = null,
 ) {
   init {
     require(executionId.isNotBlank()) { "executionId must not be blank." }
@@ -22,6 +23,7 @@ data class IdeStatusExecutionIdentity(
         require(invocationId == null) { "Workflow status cannot carry invocationId." }
         require(phaseId == null) { "Workflow status cannot carry phaseId." }
         require(launchScope == IdeStatusLaunchScope.STANDALONE) { "Workflow status cannot carry a goal launch." }
+        require(qaOutcome == null) { "Workflow status cannot carry a QA outcome." }
       }
       IdeStatusExecutionScope.STANDALONE_PHASE -> {
         require(!invocationId.isNullOrBlank()) { "Standalone phase status requires invocationId." }

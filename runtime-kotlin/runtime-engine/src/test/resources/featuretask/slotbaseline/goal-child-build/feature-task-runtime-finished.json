@@ -13,6 +13,7 @@
         "implement",
         "simplify",
         "audit",
+        "qa",
         "review",
         "verify_findings",
         "build",
@@ -39,6 +40,7 @@
         "plan": "completed",
         "plan_subtasks": "completed",
         "preplan": "completed",
+        "qa": "completed",
         "review": "completed",
         "simplify": "completed",
         "verify_findings": "completed",
@@ -73,6 +75,10 @@
             "semantic_revision": 1,
             "strategy_id": "agent-preplan"
         },
+        "qa": {
+            "semantic_revision": 1,
+            "strategy_id": "agent-qa"
+        },
         "review": {
             "semantic_revision": 1,
             "strategy_id": "inline"
@@ -106,7 +112,8 @@
         "agent-simplify",
         "agent-verify_findings",
         "agent-write_history",
-        "goal-planning-import"
+        "goal-planning-import",
+        "runtime"
     ],
     "resolved_branch": "feat/SKILL-380-phase-slot-strategies",
     "review_fix_cap_exhausted": false,

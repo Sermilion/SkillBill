@@ -2,6 +2,9 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
 import skillbill.scaffold.model.PointerSpec
+import skillbill.scaffold.model.QaCapabilityDeclaration
+import skillbill.scaffold.model.QaPlatform
+import java.nio.file.Files
 import java.nio.file.Path
 
 internal fun parsePointers(
@@ -68,4 +71,56 @@ internal fun parseOptionalPath(
     invalidManifestSchema("Platform pack '$slug': '$key' must be a non-empty path string when provided.")
   }
   return packRoot.resolve(value).normalize()
+}
+
+internal fun parseQaCapability(
+  manifest: Map<*, *>,
+  slug: String,
+  packRoot: Path,
+): QaCapabilityDeclaration? {
+  val raw = manifest["qa_capability"] ?: return null
+  val capability =
+    raw as? Map<*, *> ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability' must be a mapping when present.")
+  val platforms =
+    (capability["platforms"] as? List<*>)?.takeIf(List<*>::isNotEmpty)?.map { value ->
+      (value as? String)?.let(QaPlatform::fromWire)
+        ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' has unknown platform '$value'.")
+    } ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' must be a non-empty list.")
+  if (platforms.toSet().size != platforms.size) {
+    invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' must not repeat a platform.")
+  }
+  val guidanceFile = requireQaGuidanceFile(capability, slug, packRoot)
+  val hints =
+    (capability["discovery_hints"] ?: emptyList<String>()) as? List<*>
+      ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.discovery_hints' must be a list.")
+  return QaCapabilityDeclaration(
+    platforms = platforms.toSet(),
+    guidanceFile = guidanceFile,
+    discoveryHints =
+      hints.map { hint ->
+        (hint as? String)?.takeIf(String::isNotBlank)
+          ?: invalidManifestSchema(
+            "Platform pack '$slug': 'qa_capability.discovery_hints' must hold non-blank strings.",
+          )
+      },
+  )
+}
+
+private fun requireQaGuidanceFile(
+  capability: Map<*, *>,
+  slug: String,
+  packRoot: Path,
+): String {
+  val guidanceFile =
+    (capability["guidance_file"] as? String)?.takeIf { it.isNotBlank() && it.endsWith(".md") }
+      ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.guidance_file' must be a pack-relative .md path.")
+  val root = packRoot.toAbsolutePath().normalize()
+  val resolved = root.resolve(guidanceFile).normalize()
+  if (Path.of(guidanceFile).isAbsolute || !resolved.startsWith(root)) {
+    invalidManifestSchema("Platform pack '$slug': 'qa_capability.guidance_file' must stay inside the pack.")
+  }
+  if (!Files.isRegularFile(resolved)) {
+    invalidManifestSchema("Platform pack '$slug': 'qa_capability.guidance_file' '$guidanceFile' does not exist.")
+  }
+  return guidanceFile
 }

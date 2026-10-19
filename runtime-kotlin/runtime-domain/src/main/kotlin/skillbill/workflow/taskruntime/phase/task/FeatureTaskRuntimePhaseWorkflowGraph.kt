@@ -63,6 +63,8 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to "Phase 4b: Plan Fix",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4c: Implement Fix",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to "Phase 4d: Mobile QA",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX to "Phase 4e: QA Fix",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to "Phase 5: Code Review",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to "Phase 5a: Verify Findings",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to "Phase 5b: Implement Fix",
@@ -107,6 +109,17 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY,
+            ),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to
+            listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+            ),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX to
+            listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
             ),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT),
@@ -176,6 +189,10 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
             "Inspect every planned criterion against current code and tests without editing files. " +
             "Report remaining criteria for the implementation repair step.",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to
+            "Re-check target and revision, then run QA.",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX to
+            "Reconcile existing edits and continue to re-audit and QA without replaying a completed repair.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to
             "Resume code review over its repository scope after audit completes.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to

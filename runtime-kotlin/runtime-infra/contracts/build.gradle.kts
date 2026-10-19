@@ -113,6 +113,26 @@ governedResources {
     "SKILL-427: canonical standalone monitor ownership schema",
   )
   copy(
+    "copyQaReceiptSchema",
+    "qa-receipt-schema.yaml",
+    "SKILL-419: canonical QA receipt schema",
+  )
+  copy(
+    "copyQaRepairStateSchema",
+    "qa-repair-state-schema.yaml",
+    "SKILL-419: canonical QA repair-state schema",
+  )
+  copy(
+    "copyPreviousQaRepairStateSchema",
+    "qa-repair-state-schema-0.1.yaml",
+    "QA repair state migration from a single receipt reference",
+  )
+  copy(
+    "copyQaDeviceLeaseSchema",
+    "qa-device-lease-schema.yaml",
+    "SKILL-419: canonical QA device lease schema",
+  )
+  copy(
     "copyFeatureTaskExecutionIdentitySchema",
     "feature-task-execution-identity-schema.yaml",
     "SKILL-120: canonical feature-task execution-identity schema",
@@ -211,6 +231,11 @@ governedResources {
     "copyFeatureTaskRuntimeExecutionPlanSchemaV01",
     "feature-task-runtime-execution-plan-0.1.yaml",
     "SKILL-403: historical execution-plan schema for admitted 0.1 plans",
+  )
+  copy(
+    "copyFeatureTaskRuntimeExecutionPlanSchemaV02",
+    "feature-task-runtime-execution-plan-0.2.yaml",
+    "SKILL-419: historical execution-plan schema for admitted 0.2 plans",
   )
   copy(
     "copyFeatureTaskRuntimePhaseOutputSchema",

@@ -8,17 +8,24 @@ import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.artifact.asQaRepairStateWireMap
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,6 +43,45 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     }
 
   @Test
+  fun `spec drift before repair start retains the refusal without reserving or consuming an attempt`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val scope =
+          AcceptanceCriterionRepairRunState(
+            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+            f.binding,
+          )
+        val recorder =
+          requireNotNull(
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
+              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+          )
+        audit(f, recorder, 1, false, "The first requirement needs a caller.")
+        val repair = phase(f, "audit_implement_fix", 1)
+        val before = f.snapshot().toRecord()
+        val accounting = scope.snapshot
+        f.sourceDigest = "e".repeat(64)
+
+        val rejected = assertIs<RequiredPhaseWrite.Rejected>(recorder.start(repair))
+
+        assertEquals(RequiredPhaseWriteKind.START, rejected.writeKind)
+        assertEquals(repair.phaseId, rejected.phaseId)
+        assertEquals(repair.attemptCount, rejected.attempt)
+        assertTrue(rejected.message.contains(worker.governedSpecPath))
+        assertTrue(rejected.message.contains("changed or is unreadable"))
+        assertEquals(before, f.snapshot().toRecord())
+        assertEquals(accounting, scope.snapshot)
+        assertNull(scope.snapshot?.reservation)
+        assertTrue(assertNotNull(scope.snapshot).outcomes.isEmpty())
+
+        f.sourceDigest = f.binding.specDigest
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
+        assertEquals(AcceptanceCriterionRepairStage.REPAIR_RESERVED, scope.snapshot?.stage)
+      }
+    }
+  }
+
+  @Test
   fun `spec drift after a satisfied audit reports the bound source and preserves the running record`() {
     SerialRepairSqliteFixture().use { f ->
       f.owned { worker ->
@@ -46,12 +92,12 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
           )
         val recorder =
           requireNotNull(
-            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git)
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
               .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
           )
         audit(f, recorder, 1, true, "The first requirement is implemented.")
         val next = phase(f, "audit", 2)
-        assertTrue(recorder.start(next) == true)
+        assertTrue(recorder.start(next) == RequiredPhaseWrite.Acknowledged)
         val before = f.snapshot().toRecord()
         val accounting = scope.snapshot
         f.sourceDigest = "e".repeat(64)
@@ -75,6 +121,68 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   }
 
   @Test
+  fun `an accepted catalog re-audits only the criteria that open QA findings name`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val scope =
+          AcceptanceCriterionRepairRunState(
+            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+            f.binding,
+          )
+        val recorder =
+          requireNotNull(
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
+              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+          )
+        audit(f, recorder, 1, true, "The first requirement is implemented.")
+        val second = phase(f, "audit", 2)
+        assertTrue(recorder.start(second) == RequiredPhaseWrite.Acknowledged)
+        recorder.complete(output(second, "satisfied", "The second requirement is implemented."))
+        assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+
+        assertTrue(recorder.start(phase(f, "audit", 3)) == RequiredPhaseWrite.Acknowledged)
+        assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+
+        saveQaFindings(f, QaOpenFinding("F-1", listOf("AC-002"), listOf("/repo/.git/skill-bill/qa/q1/receipt.json")))
+        val reaudit = phase(f, "audit", 4)
+        assertTrue(recorder.start(reaudit) == RequiredPhaseWrite.Acknowledged)
+        val admitted = assertNotNull(scope.snapshot)
+        assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, admitted.stage)
+        assertEquals(listOf("AC-002"), admitted.pendingAuditRefs)
+        assertEquals("AC-002", admitted.currentCriterionRef)
+        assertEquals(
+          AcceptanceCriterionSourceDisposition.SOURCE_CLOSED,
+          admitted.criteria.single { it.canonicalRef == "AC-001" }.sourceDisposition,
+        )
+
+        assertEquals(
+          RequiredPhaseWrite.Acknowledged,
+          recorder.complete(output(reaudit, "satisfied", "The second requirement still holds after the QA repair.")),
+        )
+        assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+      }
+    }
+  }
+
+  private fun saveQaFindings(
+    f: SerialRepairSqliteFixture,
+    vararg findings: QaOpenFinding,
+  ) {
+    val state = QaRepairState(subtaskId = 1, openFindings = findings.toList(), lastReceiptTreeIdentity = "1".repeat(64))
+    f.database.transaction { unit ->
+      val record = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, f.workflowId))
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QA_REPAIR_STATE
+      unit.workflowStates.save(
+        WorkflowFamily.TASK_RUNTIME,
+        record.copy(
+          artifacts =
+            DurableWorkflowArtifacts.fromMap(record.artifacts + mapOf(family.entry(state.asQaRepairStateWireMap()))),
+        ),
+      )
+    }
+  }
+
+  @Test
   fun `each criterion keeps its own failure count and its third unsuccessful cycle blocks`() {
     SerialRepairSqliteFixture().use { f ->
       f.owned { worker ->
@@ -88,6 +196,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
             AcceptanceCriterionRepairPhaseRecorder(
               f.persistence,
               git,
+              f.workflows,
             ).session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
           )
         audit(f, recorder, 1, true, "The first requirement is implemented. Tests remain for validation.")
@@ -110,7 +219,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         assertEquals(null, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
         assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
         val last = phase(f, "audit_implement_fix", 3)
-        assertTrue(recorder.start(last) == true)
+        assertTrue(recorder.start(last) == RequiredPhaseWrite.Acknowledged)
         assertTrue(
           recorder.settleUnsuccessfulRepair(
             output(last, "advance", "The caller repair is incomplete."),
@@ -120,7 +229,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
         assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
         assertEquals(WorkflowStatus.BLOCKED, f.snapshot().workflowStatus)
-        assertFalse(recorder.start(phase(f, "audit_implement_fix", 4)) == true)
+        assertFalse(recorder.start(phase(f, "audit_implement_fix", 4)) == RequiredPhaseWrite.Acknowledged)
         assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
       }
     }
@@ -137,13 +246,13 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
           )
         val recorder =
           requireNotNull(
-            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git)
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
               .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
           )
         audit(f, recorder, 1, true, "The first requirement holds.")
         audit(f, recorder, 2, false, "The second requirement needs a caller.")
         val first = phase(f, "audit_implement_fix", 1)
-        assertTrue(recorder.start(first) == true)
+        assertTrue(recorder.start(first) == RequiredPhaseWrite.Acknowledged)
         assertTrue(
           recorder.complete(
             output(first, "advance", "Only part of the caller is connected."),
@@ -163,7 +272,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
           ).last().status,
         )
         assertEquals("audit_plan_fix", f.snapshot().currentStepId)
-        assertTrue(recorder.start(phase(f, "audit_implement_fix", 2)) == true)
+        assertTrue(recorder.start(phase(f, "audit_implement_fix", 2)) == RequiredPhaseWrite.Acknowledged)
         assertEquals(AcceptanceCriterionRepairStage.REPAIR_RESERVED, scope.snapshot?.stage)
         assertNull(scope.snapshot?.pendingClarificationQuestion)
         assertEquals("audit_implement_fix", f.snapshot().currentStepId)
@@ -182,21 +291,21 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
           )
         val recorder =
           requireNotNull(
-            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git)
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
               .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
           )
         audit(f, recorder, 1, true, "The first requirement holds.")
         val closed = scope.snapshot
         val closedLedger = decodePhaseLedger(f.snapshot().artifacts)
-        assertFalse(recorder.start(phase(f, "audit", 1)) == true)
+        assertFalse(recorder.start(phase(f, "audit", 1)) == RequiredPhaseWrite.Acknowledged)
         assertEquals(closed, scope.snapshot)
         assertEquals(closedLedger, decodePhaseLedger(f.snapshot().artifacts))
         audit(f, recorder, 2, false, "The second requirement needs a caller.")
         val first = phase(f, "audit_implement_fix", 1)
-        assertTrue(recorder.start(first) == true)
+        assertTrue(recorder.start(first) == RequiredPhaseWrite.Acknowledged)
         val reserved = scope.snapshot
         val liveLedger = decodePhaseLedger(f.snapshot().artifacts)
-        assertTrue(recorder.start(first) == true)
+        assertTrue(recorder.start(first) == RequiredPhaseWrite.Acknowledged)
         assertEquals(reserved, scope.snapshot)
         assertEquals(liveLedger, decodePhaseLedger(f.snapshot().artifacts))
       }
@@ -218,10 +327,11 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
             AcceptanceCriterionRepairPhaseRecorder(
               f.persistence,
               git,
+              f.workflows,
             ).session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
           )
         audit(f, recorder, 1, false, "The first requirement needs a caller.")
-        assertTrue(recorder.start(phase(f, "audit_implement_fix", 1)) == true)
+        assertTrue(recorder.start(phase(f, "audit_implement_fix", 1)) == RequiredPhaseWrite.Acknowledged)
         stale = recorder
       }
       val before = stale.accounting.snapshot
@@ -245,9 +355,10 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
             AcceptanceCriterionRepairPhaseRecorder(
               f.persistence,
               git,
+              f.workflows,
             ).session(recovered, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
           )
-            .start(phase(f, "audit_implement_fix", 2)) == true,
+            .start(phase(f, "audit_implement_fix", 2)) == RequiredPhaseWrite.Acknowledged,
         )
         assertEquals(before?.reservation?.reservationId, recovered.snapshot?.reservation?.reservationId)
         assertTrue(assertNotNull(recovered.snapshot).outcomes.isEmpty())
@@ -260,7 +371,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     recorder: AcceptanceCriterionRepairSession,
   ) {
     val first = phase(f, "audit_implement_fix", 1)
-    assertTrue(recorder.start(first) == true)
+    assertTrue(recorder.start(first) == RequiredPhaseWrite.Acknowledged)
     val reserved = assertNotNull(recorder.accounting.snapshot?.reservation)
     assertEquals("AC-002", reserved.criterionRef)
     assertTrue(
@@ -319,7 +430,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   ) {
     if (recorder.accounting.snapshot == null) {
       val discovery = phase(f, "audit", -1)
-      assertTrue(recorder.start(discovery) == true)
+      assertTrue(recorder.start(discovery) == RequiredPhaseWrite.Acknowledged)
       assertTrue(
         recorder.complete(
           output(
@@ -331,7 +442,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         ) == RequiredPhaseWrite.Acknowledged,
       )
       val initialAudit = phase(f, "audit", 0)
-      assertTrue(recorder.start(initialAudit) == true)
+      assertTrue(recorder.start(initialAudit) == RequiredPhaseWrite.Acknowledged)
       assertTrue(
         recorder.complete(
           output(initialAudit, "advance", "The full source audit found a missing caller."),
@@ -339,7 +450,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
       )
     }
     val phase = phase(f, "audit", attempt)
-    assertTrue(recorder.start(phase) == true)
+    assertTrue(recorder.start(phase) == RequiredPhaseWrite.Acknowledged)
     assertTrue(
       recorder.complete(
         output(phase, if (satisfied) "satisfied" else "advance", prose),
@@ -353,7 +464,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     attempt: Int,
   ) {
     val phase = phase(f, "audit_implement_fix", attempt)
-    assertTrue(recorder.start(phase) == true)
+    assertTrue(recorder.start(phase) == RequiredPhaseWrite.Acknowledged)
     assertTrue(
       recorder.complete(
         output(phase, "satisfied", "Connected the missing production caller."),

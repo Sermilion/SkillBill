@@ -14,10 +14,11 @@
       {"step_id": "code_review", "status": "running", "attempt_count": 1},
       {"step_id": "unit_test_value_check", "status": "pending", "attempt_count": 0},
       {"step_id": "completeness_audit", "status": "pending", "attempt_count": 0},
+      {"step_id": "qa", "status": "pending", "attempt_count": 0},
       {"step_id": "verdict", "status": "pending", "attempt_count": 0},
       {"step_id": "finish", "status": "pending", "attempt_count": 0}
     ],
-    "artifacts": {},
+    "artifacts": {"input_context": {"qa_selection": "off"}},
     "started_at": "<STARTED_AT>",
     "updated_at": "<STARTED_AT>",
     "finished_at": "",
@@ -101,10 +102,12 @@
       {"step_id": "code_review", "status": "running", "attempt_count": 1},
       {"step_id": "unit_test_value_check", "status": "pending", "attempt_count": 0},
       {"step_id": "completeness_audit", "status": "pending", "attempt_count": 0},
+      {"step_id": "qa", "status": "pending", "attempt_count": 0},
       {"step_id": "verdict", "status": "blocked", "attempt_count": 1},
       {"step_id": "finish", "status": "pending", "attempt_count": 0}
     ],
     "artifacts": {
+      "input_context": {"qa_selection": "off"},
       "diff_projection": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []},
       "feature_flag_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
       "code_review_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
@@ -132,10 +135,12 @@
       {"step_id": "code_review", "status": "running", "attempt_count": 1},
       {"step_id": "unit_test_value_check", "status": "pending", "attempt_count": 0},
       {"step_id": "completeness_audit", "status": "pending", "attempt_count": 0},
+      {"step_id": "qa", "status": "pending", "attempt_count": 0},
       {"step_id": "verdict", "status": "blocked", "attempt_count": 1},
       {"step_id": "finish", "status": "pending", "attempt_count": 0}
     ],
     "artifacts": {
+      "input_context": {"qa_selection": "off"},
       "diff_projection": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []},
       "feature_flag_audit_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
       "code_review_receipt": {"contract_version": "0.1", "verdict": "approved", "findings": []},
@@ -153,6 +158,7 @@
       "completeness_audit_receipt",
       "diff_projection",
       "feature_flag_audit_receipt",
+      "input_context",
       "unit_test_value_receipt"
     ],
     "required_artifacts": [
@@ -176,12 +182,12 @@
     "updated_at": "<CONTINUED_AT>",
     "continue_status": "reopened",
     "resume_step_id": "verdict",
-    "resume_step_label": "Step 8: Consolidated Verdict",
+    "resume_step_label": "Step 9: Consolidated Verdict",
     "continue_step_id": "verdict",
-    "continue_step_label": "Step 8: Consolidated Verdict",
+    "continue_step_label": "Step 9: Consolidated Verdict",
     "continue_step_directive": "Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
     "reference_sections": [
-      "runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Step 8: Consolidated Verdict",
+      "runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Step 9: Consolidated Verdict",
       "runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Consolidated Verdict"
     ],
     "required_artifact_keys": [
@@ -196,6 +202,7 @@
       "completeness_audit_receipt",
       "diff_projection",
       "feature_flag_audit_receipt",
+      "input_context",
       "unit_test_value_receipt"
     ],
     "missing_artifact_keys": [],
@@ -211,6 +218,7 @@
       "completeness_audit_receipt",
       "diff_projection",
       "feature_flag_audit_receipt",
+      "input_context",
       "unit_test_value_receipt"
     ],
     "missing_artifacts": [],
@@ -221,9 +229,9 @@
       {"key": "completeness_audit_receipt", "present": true, "inline": true, "size_bytes": 61, "value": {"contract_version": "0.1", "verdict": "approved", "findings": []}, "preview": null, "truncated": false, "omitted": false, "omission_reason": null},
       {"key": "diff_projection", "present": true, "inline": true, "size_bytes": 132, "value": {"checkpoint": "<CHECKPOINT>", "comparison_scope": "base..head", "changed_files": []}, "preview": null, "truncated": false, "omitted": false, "omission_reason": null}
     ],
-    "omitted_artifact_keys": [],
-    "continuation_brief": "Resume `bill-feature-verify` workflow `<WORKFLOW_ID>` from `Step 8: Consolidated Verdict` (`verdict`). Follow the normal step instructions that `skill-bill operation verify confirm:<WORKFLOW_ID>` supplies. Use `current_step_artifacts` in this compact payload (feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection) as authoritative current-step context instead of reconstructing prior context from chat history. Omitted artifact keys (none) remain private phase context. Explicit operator diagnostics may inspect them with `workflow show`; phase agents must not. Workflow activation status: `reopened`. Next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
-    "continuation_entry_prompt": "Use `skill-bill operation verify confirm:<WORKFLOW_ID>` in continuation mode.\nWorkflow id: <WORKFLOW_ID>\nSession id: (none)\nContinue status: reopened\nResume step: verdict (Step 8: Consolidated Verdict)\nCurrent-step artifacts: feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection\nOmitted artifact keys: none\nAcceptance criteria count: 0\nRollout relevant: false\nSpec summary: (none saved)\nReference sections: runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Step 8: Consolidated Verdict; runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Consolidated Verdict\nRules: do not rerun completed steps unless the workflow sends work backwards; treat `current_step_artifacts` as the complete authoritative phase input. Omitted keys remain private; `workflow show` is an explicit operator diagnostic and must not widen phase context.\nWorkflow update rule: every step_updates item must include step_id, status, and integer attempt_count; use attempt_count 3 for `verdict` unless a later retry increments it.\nKeep the same workflow_id and session_id, then continue `skill-bill operation verify confirm:<WORKFLOW_ID>`.\nStep directive: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.\nImmediate next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
+    "omitted_artifact_keys": ["input_context"],
+    "continuation_brief": "Resume `bill-feature-verify` workflow `<WORKFLOW_ID>` from `Step 9: Consolidated Verdict` (`verdict`). Follow the normal step instructions that `skill-bill operation verify confirm:<WORKFLOW_ID>` supplies. Use `current_step_artifacts` in this compact payload (feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection) as authoritative current-step context instead of reconstructing prior context from chat history. Omitted artifact keys (input_context) remain private phase context. Explicit operator diagnostics may inspect them with `workflow show`; phase agents must not. Workflow activation status: `reopened`. Next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
+    "continuation_entry_prompt": "Use `skill-bill operation verify confirm:<WORKFLOW_ID>` in continuation mode.\nWorkflow id: <WORKFLOW_ID>\nSession id: (none)\nContinue status: reopened\nResume step: verdict (Step 9: Consolidated Verdict)\nCurrent-step artifacts: feature_flag_audit_receipt, code_review_receipt, unit_test_value_receipt, completeness_audit_receipt, diff_projection\nOmitted artifact keys: input_context\nAcceptance criteria count: 0\nRollout relevant: false\nSpec summary: (none saved)\nReference sections: runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Step 9: Consolidated Verdict; runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md :: Consolidated Verdict\nRules: do not rerun completed steps unless the workflow sends work backwards; treat `current_step_artifacts` as the complete authoritative phase input. Omitted keys remain private; `workflow show` is an explicit operator diagnostic and must not widen phase context.\nWorkflow update rule: every step_updates item must include step_id, status, and integer attempt_count; use attempt_count 3 for `verdict` unless a later retry increments it.\nKeep the same workflow_id and session_id, then continue `skill-bill operation verify confirm:<WORKFLOW_ID>`.\nStep directive: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.\nImmediate next action: Reuse only compact typed evaluator receipts to produce the final verdict without rerunning earlier phases.",
     "read_only_full_state_guidance": "Use workflow show for read-only full-state inspection, including the complete durable artifacts map.",
     "session_summary": {"acceptance_criteria_count": 0, "rollout_relevant": false, "spec_summary": ""},
     "read_only_full_state_command": "skill-bill --db '<DB_PATH>' verify-workflow show '<WORKFLOW_ID>' --format json",

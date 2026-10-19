@@ -50,7 +50,10 @@ private fun deriveTransitions(
     forwardPhaseIds = steps,
     entryGates = canonical.entryGates.filter { it.phaseId in present && it.requiredPhaseId in present },
     backwardEdges =
-      canonical.backwardEdges.filter { it.fromPhaseId in present && it.destinationPhaseId in present },
+      canonical.backwardEdges.filter { edge ->
+        edge.fromPhaseId in present && edge.destinationPhaseId in present &&
+          FeatureTaskRuntimePhaseWorkflowTransitions.composedOnlyWithSteps[edge.loopId].orEmpty().all { it in present }
+      },
     loopOnlyPhaseIds = loopOnly,
     loopOnlySuccessors =
       canonical.loopOnlySuccessors.filter { (source, successor) -> source in loopOnly && successor in loopOnly },

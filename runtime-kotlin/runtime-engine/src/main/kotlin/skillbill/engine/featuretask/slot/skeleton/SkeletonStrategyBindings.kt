@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.qa.QaStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
@@ -37,33 +38,41 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 object SkeletonStrategyBindings {
+  private val standaloneRevision2Bindings: Map<PhaseSlot, PhaseStrategyBinding> =
+    sharedBindings() +
+      mapOf(
+        PhaseSlot.QUALITY_GATE to
+          PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
+        PhaseSlot.PULL_REQUEST to
+          PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
+        PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
+      )
+
+  private val goalChildRevision2Bindings: Map<PhaseSlot, PhaseStrategyBinding> =
+    sharedBindings() +
+      mapOf(
+        PhaseSlot.QUALITY_GATE to
+          PhaseStrategyBinding.ByFact(
+            mapOf(
+              FeatureTaskRuntimeQualityGateSelection.BUILD to PackBuildStrategy.ID,
+              FeatureTaskRuntimeQualityGateSelection.VALIDATE to AgentValidateStrategy.ID,
+            ),
+          ).withOpus(
+            mapOf(
+              PackBuildStrategy.ID to PackBuildOpus55Strategy.ID,
+              AgentValidateStrategy.ID to AgentValidateOpus55Strategy.ID,
+            ),
+          ),
+      )
+
   val bindings: Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> =
     mapOf(
+      SkeletonDefinition.STANDALONE_REVISION_2 to standaloneRevision2Bindings,
+      SkeletonDefinition.GOAL_CHILD_REVISION_2 to goalChildRevision2Bindings,
       SkeletonDefinition.STANDALONE to
-        sharedBindings() +
-        mapOf(
-          PhaseSlot.QUALITY_GATE to
-            PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
-          PhaseSlot.PULL_REQUEST to
-            PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
-          PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
-        ),
+        standaloneRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
       SkeletonDefinition.GOAL_CHILD to
-        sharedBindings() +
-        mapOf(
-          PhaseSlot.QUALITY_GATE to
-            PhaseStrategyBinding.ByFact(
-              mapOf(
-                FeatureTaskRuntimeQualityGateSelection.BUILD to PackBuildStrategy.ID,
-                FeatureTaskRuntimeQualityGateSelection.VALIDATE to AgentValidateStrategy.ID,
-              ),
-            ).withOpus(
-              mapOf(
-                PackBuildStrategy.ID to PackBuildOpus55Strategy.ID,
-                AgentValidateStrategy.ID to AgentValidateOpus55Strategy.ID,
-              ),
-            ),
-        ),
+        goalChildRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
       SkeletonDefinition.REVIEW to
         mapOf(
           PhaseSlot.STANDALONE_REVIEW to
@@ -86,6 +95,7 @@ object SkeletonStrategyBindings {
           PhaseSlot.QUALITY_GATE to
             PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
         ),
+      SkeletonDefinition.QA to mapOf(PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),

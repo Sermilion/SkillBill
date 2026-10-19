@@ -284,6 +284,41 @@ class AcceptanceCriterionRepairStateTest {
   }
 
   @Test
+  fun `a QA re-audit reopens only the named accepted criteria and refuses foreign or empty scopes`() {
+    val accepted =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second", "third"),
+            listOf(
+              criterion("AC-001", 1, "first"),
+              criterion("AC-002", 2, "second"),
+              criterion("AC-003", 3, "third"),
+            ).map { it.copy(sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED) },
+            emptyList(),
+          ),
+        ),
+      )
+    assertEquals(emptyList(), accepted.qaReauditRefs(emptySet()))
+    assertNull(accepted.qaReauditRefs(setOf("AC-009")))
+    assertNull(accepted.admitQaReaudit(emptyList()))
+    assertNull(accepted.admitQaReaudit(listOf("AC-003", "AC-001")))
+
+    val refs = assertNotNull(accepted.qaReauditRefs(setOf("AC-003", "AC-001")))
+    val reaudit = assertNotNull(accepted.admitQaReaudit(refs))
+
+    assertEquals(listOf("AC-001", "AC-003"), reaudit.pendingAuditRefs)
+    assertEquals("AC-001", reaudit.currentCriterionRef)
+    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, reaudit.stage)
+    assertEquals(accepted.criteria, reaudit.criteria)
+    assertEquals(reaudit, AcceptanceCriterionRepairState.restore(reaudit))
+    assertNull(reaudit.qaReauditRefs(setOf("AC-002")))
+  }
+
+  @Test
   fun `initial discovery stays restorable across clarification and progress until the first audit lands`() {
     val discovered =
       assertNotNull(

@@ -2,6 +2,7 @@ package skillbill.engine.operation.verify
 
 import skillbill.application.telemetry.model.FeatureVerifyFinishedRequest
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
@@ -16,6 +17,7 @@ import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.verify.model.VerifyQaSelection
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -37,13 +39,17 @@ internal data class VerifyRun(
   val mode: VerifyReviewMode,
   val criteria: VerifyCriteria,
   val startedAt: Instant,
-)
+  val qa: VerifyQaSelection?,
+) {
+  val steps: List<String> get() = VerifyWorkflow.CONFIRMED_STEPS.filter { qa != null || it != VerifyWorkflow.QA }
+}
 
 internal class VerifyStepSequence(
   private val store: VerifyWorkflowStore,
   private val gitOperations: WorkflowGitOperations,
   private val telemetry: VerifyTelemetry,
   private val codeReview: VerifyCodeReviewStep,
+  private val qaStep: VerifyQaStep,
   private val clock: Clock,
 ) {
   fun run(
@@ -60,6 +66,7 @@ internal class VerifyStepSequence(
         start,
         settledBefore + stepEntry(start, WorkflowStepStatus.RUNNING, attempt),
         run.sessionId,
+        VerifyQaReport.at(run, start, store.artifacts(run.workflowId)).patch,
       )
     var prior =
       when (begun) {
@@ -74,7 +81,7 @@ internal class VerifyStepSequence(
           is VerifyStepDone.Settled -> result
         }
       done.report?.let { report = it }
-      val next = VerifyWorkflow.CONFIRMED_STEPS[VerifyWorkflow.CONFIRMED_STEPS.indexOf(stepId) + 1]
+      val next = run.steps[run.steps.indexOf(stepId) + 1]
       val nextAttempt = (attempts[next] ?: 0) + 1
       val written =
         store.write(
@@ -140,6 +147,7 @@ internal class VerifyStepSequence(
       VerifyWorkflow.CODE_REVIEW -> codeReview(run, prior)
       VerifyWorkflow.UNIT_TEST_VALUE_CHECK -> unitTestValueCheck(run, prior)
       VerifyWorkflow.COMPLETENESS_AUDIT -> completenessAudit(run, prior)
+      VerifyWorkflow.QA -> qaStep.run(run, prior)
       VerifyWorkflow.VERDICT -> verdict(run, prior)
       else -> VerifyStepDone.Failed("Verify has no step '$stepId'.")
     }
@@ -239,12 +247,22 @@ internal class VerifyStepSequence(
     run: VerifyRun,
     prior: Map<String, String>,
   ): VerifyStepDone {
-    val report =
-      readOnly(run, VerifyPromptSections.VERDICT_STEP, VerifyPromptSections.verdictDirective(), prior) {
-        return it
+    val qaReceipt =
+      run.qa?.let {
+        JsonCodec.anyToStringAnyMap(store.artifacts(run.workflowId)[VerifyWorkflow.QA_RECEIPT])
+          ?: return VerifyStepDone.Failed("The verify verdict needs a qa_receipt; rerun the qa step.")
       }
+    val directive = VerifyPromptSections.verdictDirective(qaReceipt.takeIf { run.qa == VerifyQaSelection.ON })
+    val report = readOnly(run, VerifyPromptSections.VERDICT_STEP, directive, prior) { return it }
     val section = report.substringAfter(VERDICT_HEADING, missingDelimiterValue = report)
     val verdict = VERDICTS.firstOrNull { candidate -> section.contains(candidate) } ?: UNKNOWN_VERDICT
+    val qaVerdict = VerifyWorkflow.string(qaReceipt, VerifyWorkflow.VERDICT_FIELD)
+    if (verdict == APPROVE && qaVerdict == QaVerdict.FINDINGS_OPEN.wireValue) {
+      return VerifyStepDone.Failed(
+        "The verdict was an unqualified APPROVE while the QA receipt has open findings; QA findings must join the " +
+          "consolidated findings as APPROVE WITH FIXES or REQUEST CHANGES.",
+      )
+    }
     val findings = reportLines(section.lines())
     return VerifyStepDone.Settled(
       WorkflowStepStatus.COMPLETED,
@@ -258,18 +276,20 @@ internal class VerifyStepSequence(
     attempt: Int,
     report: String?,
   ): OperationOutcome {
+    val qa = VerifyQaReport.at(run, VerifyWorkflow.FINISH, store.artifacts(run.workflowId))
     val closed =
       store.write(
         run.workflowId,
         WorkflowStatus.COMPLETED,
         VerifyWorkflow.FINISH,
         listOf(stepEntry(VerifyWorkflow.FINISH, WorkflowStepStatus.COMPLETED, attempt)),
+        qa.patch,
       )
     if (closed is VerifyWrite.Rejected) return fail(run, VerifyWorkflow.FINISH, attempt, closed.error)
     val artifacts = store.artifacts(run.workflowId)
-    finished(run, COMPLETED_STATUS, artifacts)
+    finished(run, COMPLETED_STATUS, artifacts, qa)
     val text = report ?: storedVerdict(artifacts)
-    return OperationOutcome.Completed("${text.trimEnd()}\n\nVerify workflow: ${run.workflowId}\n")
+    return OperationOutcome.Completed("${text.trimEnd()}\n\n${qa.line}\nVerify workflow: ${run.workflowId}\n")
   }
 
   private fun fail(
@@ -278,8 +298,9 @@ internal class VerifyStepSequence(
     attempt: Int,
     reason: String,
   ): OperationOutcome {
+    val qa = VerifyQaReport.at(run, stepId, store.artifacts(run.workflowId))
     val steps = listOf(stepEntry(stepId, WorkflowStepStatus.FAILED, attempt))
-    val failed = store.write(run.workflowId, WorkflowStatus.FAILED, stepId, steps)
+    val failed = store.write(run.workflowId, WorkflowStatus.FAILED, stepId, steps, qa.patch)
     if (failed is VerifyWrite.Rejected) {
       (diffProjection(run.context, run.target) as? VerifyDiffProjection.Ready)?.let { refreshed ->
         store.write(
@@ -287,7 +308,7 @@ internal class VerifyStepSequence(
           WorkflowStatus.FAILED,
           stepId,
           steps,
-          mapOf(VerifyWorkflow.DIFF_PROJECTION to refreshed.artifact),
+          mapOf(VerifyWorkflow.DIFF_PROJECTION to refreshed.artifact) + qa.patch,
         )
       }
     }
@@ -297,14 +318,18 @@ internal class VerifyStepSequence(
         VerifyWorkflow.COMPLETENESS_AUDIT -> ABANDONED_AT_AUDIT
         else -> ERROR_STATUS
       }
-    finished(run, status, store.artifacts(run.workflowId))
-    return OperationOutcome.Failed("Verify step '$stepId' failed: $reason\nVerify workflow: ${run.workflowId}")
+    val artifacts = store.artifacts(run.workflowId)
+    finished(run, status, artifacts, qa)
+    return OperationOutcome.Failed(
+      "Verify step '$stepId' failed: $reason\n${qa.line}\nVerify workflow: ${run.workflowId}",
+    )
   }
 
   private fun finished(
     run: VerifyRun,
     completionStatus: String,
     artifacts: Map<String, Any?>,
+    qa: VerifyQaReport,
   ) {
     if (run.sessionId.isBlank()) return
     val flagAudit =
@@ -327,6 +352,8 @@ internal class VerifyStepSequence(
         rolloutRelevant = run.criteria.rolloutRelevant,
         specSummary = run.intake,
         durationSeconds = Duration.between(run.startedAt, clock.instant()).seconds.toInt(),
+        qaOutcome = qa.outcome.wireValue,
+        qaReason = qa.reason,
       ),
     )
   }
@@ -393,6 +420,7 @@ internal class VerifyStepSequence(
     const val ALL_PASS = "all_pass"
     const val HAD_GAPS = "had_gaps"
     const val UNKNOWN_VERDICT = "unknown"
+    const val APPROVE = "APPROVE"
     const val VERDICT_HEADING = "--- VERDICT ---"
     const val NO_HISTORY = "none"
     const val COMPLETED_STATUS = "completed"
@@ -400,7 +428,7 @@ internal class VerifyStepSequence(
     const val ABANDONED_AT_AUDIT = "abandoned_at_audit"
     const val ERROR_STATUS = "error"
 
-    val VERDICTS = listOf("REQUEST CHANGES", "APPROVE WITH FIXES", "APPROVE")
+    val VERDICTS = listOf("REQUEST CHANGES", "APPROVE WITH FIXES", APPROVE)
     val REVIEW_STAGE =
       setOf(
         VerifyWorkflow.GATHER_DIFF,

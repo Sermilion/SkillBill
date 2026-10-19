@@ -42,6 +42,7 @@ import skillbill.cli.goal.run.toGoalRunCliMap
 import skillbill.cli.goal.status.GoalStatusCommand
 import skillbill.cli.goal.status.GoalWatchCommand
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
+import skillbill.cli.kernel.agent.resolveRequestedQaSelection
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.drainTelemetryOnCompletion
@@ -143,6 +144,10 @@ class GoalRunCommand(
       "Review execution mode for every child: inline (default, one review subagent per " +
         "pass) or auto (also resolves inline).",
   )
+  private val qaSelections by option(
+    FeatureTaskRuntimeGoalContinuationLaunchTokens.QA_SELECTION_FLAG,
+    help = "QA policy for every new child: auto (default) or off. Resumed children keep their recorded policy.",
+  ).multiple()
   private val agentAddonSelectionJson by option(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.AGENT_ADDON_SELECTION_JSON_FLAG,
     help = "Already-resolved ordered agent add-on selection JSON. Use --agent-addon for raw slugs.",
@@ -197,6 +202,7 @@ class GoalRunCommand(
       return
     }
     val effectiveRepoRoot = resolveCliRepositoryRoot(repoRoot, inputs)
+    val qaSelection = resolveRequestedQaSelection(qaSelections, inputs.environment)
     val intake = intakeTokens.joinToString(" ").trim()
     val runIssueKey =
       when (val admission = goalRunner.admitIntake(intake, effectiveRepoRoot)) {
@@ -253,7 +259,7 @@ class GoalRunCommand(
     presenter.emitStartupProvenance()
     val request =
       runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
-        .copy(intake = intake)
+        .copy(intake = intake, qaSelection = qaSelection)
     val report = goalRunner.run(request)
     val payload = report.toGoalRunCliMap()
     state.completeText(goalRunText(report), payload, exitCode = report.goalRunExitCode())

@@ -17,6 +17,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranc
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import java.nio.file.Path
 import java.time.Instant
 
@@ -80,6 +81,10 @@ internal interface PhaseAcceptedStepExecution :
 internal interface PhaseAgentStepBinding :
   PhaseAcceptedStepExecution,
   PhaseAgentExecution
+
+internal interface PhaseQaStepBinding : PhaseAgentStepBinding {
+  fun qaRepairState(): QaRepairState?
+}
 
 /** Agent launch is available only to steps that execute an agent through the attempt owner. */
 internal interface PhaseAgentExecution {

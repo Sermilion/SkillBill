@@ -2,12 +2,14 @@ package skillbill.cli.featuretask
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.review.service.RuntimeOwnedReviewMode
+import skillbill.cli.kernel.agent.resolveRequestedQaSelection
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.error.featuretask.UnknownQualityGateSelectionError
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.parseGoalContinuationContext(
@@ -39,6 +41,7 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.parseGoalContinuationContext(
         ?.let(ValidationDepth::fromWire)
         ?: ValidationDepth.FULL,
     qualityGateSelection = requestedQualityGateSelection(environment),
+    qaSelection = requestedQaSelection(environment),
     reviewBaseline =
       requireNotNull(goalReviewBaseSha?.takeIf(String::isNotBlank)) {
         "${FeatureTaskRuntimeGoalContinuationLaunchTokens.GOAL_REVIEW_BASE_SHA_FLAG} is required with " +
@@ -48,6 +51,10 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.parseGoalContinuationContext(
       },
   )
 }
+
+internal fun FeatureTaskRuntimePhaseAgentCommand.requestedQaSelection(
+  environment: Map<String, String>,
+): FeatureTaskRuntimeQaSelection? = resolveRequestedQaSelection(qaSelections, environment)
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.requestedQualityGateSelection(
   environment: Map<String, String>,

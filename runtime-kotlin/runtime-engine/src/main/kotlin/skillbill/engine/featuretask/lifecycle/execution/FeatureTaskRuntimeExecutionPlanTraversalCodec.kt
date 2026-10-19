@@ -5,16 +5,20 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdgeCapScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCrossSlotAllowance
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseEntryGate
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
-internal fun encodeExecutionPlanTraversal(traversal: FeatureTaskRuntimeTransitionDeclaration): Map<String, Any?> =
+internal fun encodeExecutionPlanTraversal(
+  traversal: FeatureTaskRuntimeTransitionDeclaration,
+  includeCrossSlotAllowance: Boolean,
+): Map<String, Any?> =
   mapOf(
     Keys.FORWARD_STEPS to traversal.forwardPhaseIds,
     Keys.BACKWARD_EDGES to
       traversal.backwardEdges.map { edge ->
-        mapOf(
+        linkedMapOf<String, Any?>(
           Keys.FROM_STEP to edge.fromPhaseId,
           Keys.VERDICT to edge.triggeringVerdict.wireValue,
           Keys.DESTINATION_STEP to edge.destinationPhaseId,
@@ -23,7 +27,9 @@ internal fun encodeExecutionPlanTraversal(traversal: FeatureTaskRuntimeTransitio
           Keys.CAP_EXHAUSTION_BEHAVIOR to edge.capExhaustionBehavior.name,
           Keys.CAP_SCOPE to edge.capScope.name,
           Keys.WARN_AFTER_ITERATIONS to edge.warnAfterIterations,
-        )
+        ).apply {
+          if (includeCrossSlotAllowance) put(Keys.CROSS_SLOT_ALLOWANCE, edge.crossSlotAllowance?.name)
+        }
       },
     Keys.LOOP_ONLY_STEPS to traversal.loopOnlyPhaseIds.toList(),
     Keys.ENTRY_GATES to
@@ -59,6 +65,11 @@ internal fun decodeExecutionPlanTraversal(payload: Map<String, Any?>): FeatureTa
             FeatureTaskRuntimeBackwardEdgeCapScope.entries.singleOrNull { it.name == planString(edge, Keys.CAP_SCOPE) }
               ?: invalidExecutionPlanTraversal(),
           warnAfterIterations = (edge[Keys.WARN_AFTER_ITERATIONS] as? Number)?.toInt(),
+          crossSlotAllowance =
+            edge[Keys.CROSS_SLOT_ALLOWANCE]?.let { raw ->
+              FeatureTaskRuntimeCrossSlotAllowance.entries.singleOrNull { it.name == raw }
+                ?: invalidExecutionPlanTraversal()
+            },
         )
       },
     loopOnlyPhaseIds = planStrings(payload, Keys.LOOP_ONLY_STEPS).toSet(),

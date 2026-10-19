@@ -11,6 +11,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CancellationException
@@ -27,9 +28,14 @@ class StandalonePhaseStatusEventSink(
   private var currentActivity: String? = null
   private var lastCiObservedPendingSampleNames: Set<String>? = null
   private var monitorCleanup: StandaloneMonitorCleanup? = null
+  private var qaOutcome: StandaloneQaOutcome? = null
 
   fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
     monitorCleanup = cleanup
+  }
+
+  fun recordQaOutcome(outcome: StandaloneQaOutcome) {
+    qaOutcome = outcome
   }
 
   override fun emit(event: FeatureTaskRuntimeRunEvent) {
@@ -68,13 +74,15 @@ class StandalonePhaseStatusEventSink(
     runCatching {
       ensureRegistered(null)
       when (result) {
-        is PhaseRunResult.Completed ->
+        is PhaseRunResult.Completed -> {
+          result.qaOutcome?.let(::recordQaOutcome)
           persist(
             state = "terminal",
             finishedAt = clock.instant(),
             terminalResult = result.value,
             acceptedResult = result.acceptedOutput ?: result.value,
           )
+        }
         is PhaseRunResult.Blocked ->
           persist(
             state = "blocked",
@@ -158,6 +166,7 @@ class StandalonePhaseStatusEventSink(
             terminalResult = terminalResult?.takeIf(String::isNotBlank),
             acceptedResult = acceptedResult?.takeIf(String::isNotBlank),
             monitorCleanup = monitorCleanup,
+            qaOutcome = qaOutcome,
           ),
         )
       }

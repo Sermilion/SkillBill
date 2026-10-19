@@ -327,6 +327,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
           codeReviewMode = setup.reviewPolicy.codeReviewMode,
           validationDepth = ValidationDepth.FULL,
           qualityGateSelection = GoalRunnerQualityGateSelectionResolver.resolve(),
+          qaSelection = setup.qaSelection,
           subtaskName =
             state.manifest.subtasks.firstOrNull { it.id == setup.subtaskId }?.name?.takeIf(
               String::isNotBlank,

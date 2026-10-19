@@ -89,6 +89,8 @@
               "audit",
               "audit_plan_fix",
               "audit_implement_fix",
+              "qa",
+              "qa_fix",
               "validate",
               "write_history",
               "pr",
@@ -152,6 +154,8 @@
               "audit",
               "audit_plan_fix",
               "audit_implement_fix",
+              "qa",
+              "qa_fix",
               "validate",
               "write_history",
               "pr",
@@ -274,6 +278,23 @@
               "integer",
               "null"
             ]
+          },
+          "qa_outcome": {
+            "type": "string",
+            "enum": [
+              "not_selected",
+              "attempted",
+              "passed",
+              "findings",
+              "skipped",
+              "incomplete"
+            ]
+          },
+          "qa_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }
@@ -367,6 +388,10 @@
         "properties": {
           "workflow_id": {
             "type": "string"
+          },
+          "qa": {
+            "type": "string",
+            "description": "Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.\n"
           }
         }
       }
@@ -395,6 +420,10 @@
           },
           "governed_spec_path": {
             "type": "string"
+          },
+          "qa": {
+            "type": "string",
+            "description": "Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.\n"
           }
         }
       }
@@ -411,6 +440,10 @@
         "properties": {
           "workflow_id": {
             "type": "string"
+          },
+          "qa": {
+            "type": "string",
+            "description": "Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.\n"
           }
         }
       }
@@ -450,6 +483,7 @@
               "code_review",
               "unit_test_value_check",
               "completeness_audit",
+              "qa",
               "verdict",
               "finish"
             ]
@@ -475,6 +509,7 @@
                     "code_review",
                     "unit_test_value_check",
                     "completeness_audit",
+                    "qa",
                     "verdict",
                     "finish"
                   ]
@@ -502,6 +537,10 @@
           },
           "session_id": {
             "type": "string"
+          },
+          "qa": {
+            "type": "string",
+            "description": "Mobile QA selection for operation verify, on or off. At open an omitted value means off; on update, continue and resume a value must match the stored selection.\n"
           }
         }
       }

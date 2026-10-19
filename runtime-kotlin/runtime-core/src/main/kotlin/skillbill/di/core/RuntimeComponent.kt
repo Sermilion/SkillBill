@@ -25,6 +25,7 @@ import skillbill.di.featurespec.RuntimeFeatureSpecProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
+import skillbill.di.featuretask.RuntimeQaProvides
 import skillbill.di.featuretask.RuntimeStandaloneMonitorProvides
 import skillbill.di.goal.RuntimeGoalPlanningProvides
 import skillbill.di.goal.RuntimeGoalRunnerLaunchProvides
@@ -81,6 +82,7 @@ import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
+import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
@@ -110,6 +112,7 @@ abstract class RuntimeComponent(
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
     RuntimeStandaloneMonitorProvides,
+    RuntimeQaProvides,
     RuntimeOperationProvides,
     RuntimeFeatureSpecProvides,
     RuntimeWorkflowProvides,
@@ -189,6 +192,7 @@ abstract class RuntimeComponent(
   abstract val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService
 
   abstract val phaseRunEntry: PhaseRunEntry
+  abstract val qaDeviceLeasePort: QaDeviceLeasePort
   abstract val phaseStrategyLookup: PhaseStrategyLookup
   abstract val operationExecutor: OperationExecutor
   abstract val operationRegistry: OperationRegistry

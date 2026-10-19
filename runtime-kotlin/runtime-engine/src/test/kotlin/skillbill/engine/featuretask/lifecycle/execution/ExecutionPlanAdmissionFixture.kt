@@ -39,7 +39,9 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
@@ -49,13 +51,13 @@ class ExecutionPlanAdmissionFixture(
   private val specPath: String = ".feature-specs/SKILL-384/spec.md",
   private val database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository()),
   qualityGate: FeatureTaskRuntimeQualityGateSelection? =
-    FeatureTaskRuntimeQualityGateSelection.VALIDATE.takeIf { definition == SkeletonDefinition.GOAL_CHILD },
+    FeatureTaskRuntimeQualityGateSelection.VALIDATE.takeIf { definition.id == SkeletonDefinition.GOAL_CHILD.id },
   selectedStrategies: PhaseStrategyLookup? = null,
   supervisor: FeatureTaskRuntimeWorkerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
   diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
 ) {
   private val routeScope =
-    if (definition == SkeletonDefinition.GOAL_CHILD) {
+    if (definition.id == SkeletonDefinition.GOAL_CHILD.id) {
       FeatureTaskRouteScope.GOAL_CHILD
     } else {
       FeatureTaskRouteScope.STANDALONE
@@ -100,6 +102,7 @@ class ExecutionPlanAdmissionFixture(
         setOfNotNull(
           CodeReviewExecutionMode.INLINE,
           qualityGate,
+          FeatureTaskRuntimeQaSelection.AUTO.takeIf { PhaseSlot.QA in definition.slots },
         ),
       ),
     )

@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.model.execution
 
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
@@ -17,4 +18,5 @@ data class FeatureTaskRuntimeExecutionPlanCreationRequest(
   val timeout: Duration?,
   val workflowId: String? = null,
   val stepLaunchAssignments: Map<String, StepLaunchAssignment> = emptyMap(),
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
 )

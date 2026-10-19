@@ -77,6 +77,7 @@ internal const val FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_ARTI
   "feature_task_runtime_acceptance_criterion_repair_handoff"
 internal const val FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_ARTIFACT_KEY: String =
   "feature_task_runtime_acceptance_criterion_repair_adoption"
+internal const val FEATURE_TASK_RUNTIME_QA_REPAIR_STATE_ARTIFACT_KEY: String = "feature_task_runtime_qa_repair_state"
 
 internal const val FEATURE_TASK_RUNTIME_PLAN_SEED_ARTIFACT_KEY: String = "plan_seed"
 internal const val FEATURE_TASK_RUNTIME_PLAN_WORKFLOW_ARTIFACT_KEY: String = "plan_workflow"

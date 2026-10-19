@@ -93,18 +93,22 @@ internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpe
         args.effectiveSessionId,
         stepId,
       )
-    val withExecutionPlan =
+    val planArtifacts =
       args.executionPlan?.let { descriptor ->
-        record.copy(
-          artifacts =
-            DurableWorkflowArtifacts.fromMap(
-              record.artifacts +
-                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
-                  JsonCodec.parseValue(descriptor.encoded().toString(Charsets.UTF_8)),
-                ) + args.initialArtifacts,
-            ),
+        mapOf(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+            JsonCodec.parseValue(descriptor.encoded().toString(Charsets.UTF_8)),
+          ),
         )
-      } ?: record
+      }.orEmpty()
+    val withExecutionPlan =
+      if (planArtifacts.isEmpty() && args.initialArtifacts.isEmpty()) {
+        record
+      } else {
+        record.copy(
+          artifacts = DurableWorkflowArtifacts.fromMap(record.artifacts + planArtifacts + args.initialArtifacts),
+        )
+      }
     args.workflowSnapshotValidator.validate(withExecutionPlan, family.definition.workflowName)
     unitOfWork.workflowStates.saveRecord(
       family,

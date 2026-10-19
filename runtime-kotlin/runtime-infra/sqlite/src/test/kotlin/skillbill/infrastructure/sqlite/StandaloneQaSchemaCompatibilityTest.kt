@@ -27,7 +27,7 @@ class StandaloneQaSchemaCompatibilityTest {
         }
         statement.executeQuery("PRAGMA user_version").use { rows ->
           assertTrue(rows.next())
-          assertEquals(60, rows.getInt(1))
+          assertEquals(61, rows.getInt(1))
         }
       }
     }

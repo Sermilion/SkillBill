@@ -76,6 +76,19 @@ sealed interface StandaloneMonitorCleanup {
   }
 }
 
+enum class StandaloneQaOutcome(val wireValue: String) {
+  ATTEMPTED("attempted"),
+  PASSED("passed"),
+  FINDINGS("findings"),
+  SKIPPED("skipped"),
+  INCOMPLETE("incomplete"),
+  ;
+
+  companion object {
+    fun fromWire(value: String?): StandaloneQaOutcome? = entries.firstOrNull { it.wireValue == value }
+  }
+}
+
 data class StandalonePhaseStatusRegistration(
   val repositoryIdentity: String,
   val branchCorrelation: String,
@@ -113,6 +126,7 @@ data class StandalonePhaseStatusUpdate(
   val terminalResult: String? = null,
   val acceptedResult: String? = null,
   val monitorCleanup: StandaloneMonitorCleanup? = null,
+  val qaOutcome: StandaloneQaOutcome? = null,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -155,6 +169,7 @@ data class StandalonePhaseStatusRecord(
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
   val monitorTarget: StandaloneMonitorTarget? = null,
   val monitorCleanup: StandaloneMonitorCleanup? = null,
+  val qaOutcome: StandaloneQaOutcome? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500

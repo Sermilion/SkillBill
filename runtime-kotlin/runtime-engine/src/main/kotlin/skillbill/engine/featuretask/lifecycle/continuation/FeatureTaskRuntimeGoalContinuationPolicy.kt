@@ -48,6 +48,9 @@ private fun suppliedGoalContinuationConflict(
     durable.qualityGateSelection?.takeIf { it != supplied.qualityGateSelection }?.let {
       "The supplied goal-continuation quality gate selection conflicts with its durable child policy."
     },
+    supplied.qaSelection?.takeIf { it != durable.qaSelection }?.let {
+      "The supplied goal-continuation QA selection conflicts with its durable child policy."
+    },
     requireNotNull(supplied.reviewBaseline).takeIf { it != baseline }?.let {
       "The supplied goal-continuation review baseline conflicts with its durable child policy."
     },

@@ -2,12 +2,16 @@ package skillbill.engine.featuretask.persist
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.engine.featuretask.qa.receipt.QaPhaseOutputKeys
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.qa.invalidQaRepairStateSchema
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.workflowIssueKeyConflictError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -33,6 +37,7 @@ import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.toQaRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -42,6 +47,7 @@ import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHA
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_STATUS_PENDING
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
@@ -152,6 +158,28 @@ class FeatureTaskRuntimeWorkflowPersistence
         record.artifacts
       }
 
+    fun readQaRepairState(workflowId: String): QaRepairState? {
+      val artifacts =
+        readArtifacts(workflowId)
+          ?: throw invalidWorkflowStateSchemaError("Workflow '$workflowId' is missing its QA state.")
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QA_REPAIR_STATE
+      if (!family.contains(artifacts)) {
+        val hasQaReceipt =
+          decodePhaseRecords(artifacts).values.any { phase ->
+            val envelope =
+              phase.outputArtifact?.let(JsonCodec::parseObjectOrNull)?.let(JsonCodec::jsonElementToValue)
+                ?.let(JsonCodec::anyToStringAnyMap)
+            val produced = JsonCodec.anyToStringAnyMap(envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS))
+            produced?.containsKey(QaPhaseOutputKeys.RECEIPT) == true
+          }
+        if (hasQaReceipt) {
+          throw invalidQaRepairStateSchema("Workflow '$workflowId' has QA output but no authoritative findings state.")
+        }
+        return null
+      }
+      return FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts)).toQaRepairState()
+    }
+
     fun readAcceptanceCriterionRepairState(
       workflowId: String,
       expectedCatalogId: String,
@@ -215,13 +243,13 @@ class FeatureTaskRuntimeWorkflowPersistence
           FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_HANDOFF,
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_ADOPTION to
           FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION,
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QA_REPAIR_STATE to
+          FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE,
       ).forEach { (family, kind) ->
         if (family.contains(artifacts)) {
-          wireArtifactValidator.validate(
-            kind,
-            FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts)),
-            "workflow-artifact:${family.label()}",
-          )
+          val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+          wireArtifactValidator.validate(kind, payload, "workflow-artifact:${family.label()}")
+          if (kind == FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE) payload.toQaRepairState()
         }
       }
     }

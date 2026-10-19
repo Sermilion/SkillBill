@@ -203,6 +203,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeCrit
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeReason
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Files
 import java.nio.file.Path
@@ -1089,6 +1090,49 @@ class GoalRunnerQualityGateSelectionTest {
       List(2) { FeatureTaskRuntimeQualityGateSelection.VALIDATE },
       launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qualityGateSelection },
     )
+  }
+
+  @Test
+  fun `an explicit goal QA selection reaches every child plan artifact and launch`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 2))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher { request ->
+        val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+        store.mutate { current -> current.withWorkflowId(subtaskId, "wfl-$subtaskId") }
+        outcomes["wfl-$subtaskId"] = completeOutcome(subtaskId)
+        launchFacts()
+      }
+    val runner = testGoalRunner(goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()))
+
+    assertIs<GoalRunnerRunReport.Completed>(
+      runner.run(runRequest().copy(qaSelection = FeatureTaskRuntimeQaSelection.OFF)),
+    )
+
+    assertEquals(List(2) { FeatureTaskRuntimeQaSelection.OFF }, store.newChildWorkflowSetups.map { it.qaSelection })
+    assertEquals(
+      List(2) { FeatureTaskRuntimeQaSelection.OFF },
+      launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qaSelection },
+    )
+  }
+
+  @Test
+  fun `an omitted goal QA selection composes auto and forwards no QA token`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher { request ->
+        val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+        store.mutate { current -> current.withWorkflowId(subtaskId, "wfl-$subtaskId") }
+        outcomes["wfl-$subtaskId"] = completeOutcome(subtaskId)
+        launchFacts()
+      }
+    val runner = testGoalRunner(goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()))
+
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(runRequest()))
+
+    assertEquals(FeatureTaskRuntimeQaSelection.AUTO, store.newChildWorkflowSetups.single().qaSelection)
+    assertNull(requireNotNull(launcher.requests.single().skillRunRequest.goalContinuation).qaSelection)
   }
 
   @Test

@@ -383,6 +383,42 @@ properties:
       Each entry references generated pointer filenames declared under `pointers` for the same
       consumer key; Kotlin coherence checks require those pointers to target
       `platform-packs/<slug>/addons/*.md`.
+  qa_capability:
+    type: object
+    additionalProperties: false
+    x-runtime-anchored: true
+    description: >
+      Optional QA capability declaration. Names the device platforms this
+      pack can exercise and the pack-owned guidance file the QA agent follows.
+      Absence means the pack offers no QA support; malformed shapes loud-fail.
+    required:
+      - platforms
+      - guidance_file
+    properties:
+      platforms:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum:
+            - android
+            - ios
+      guidance_file:
+        type: string
+        minLength: 1
+        maxLength: 256
+        pattern: "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\\.md$"
+        allOf:
+          - not:
+              pattern: "\\.\\."
+      discovery_hints:
+        type: array
+        maxItems: 16
+        items:
+          type: string
+          minLength: 1
+          maxLength: 200
   validation_gate:
     type: object
     additionalProperties: false
@@ -565,6 +601,10 @@ x-coherence-checks:
       Within a single skill-relative directory in `pointers`, every pointer
       `name` must be unique. Enforced in
       `ShellContentLoader.parsePointers`.
+  qa-capability-guidance-in-pack:
+    description: >
+      `qa_capability.guidance_file` must resolve to an existing markdown file
+      inside the pack root. Enforced in `ShellContentLoader.parseQaCapability`.
   addon-usage-references-declared-pointers:
     description: >
       Every `addon_usage.<skill-dir>[]` entrypoint and companion pointer must

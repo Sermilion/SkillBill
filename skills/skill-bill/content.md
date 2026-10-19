@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports mobile QA findings from a device or simulator; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
@@ -66,6 +66,7 @@ operator's current request selects a standalone phase or operation.
 | `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill <standalone quality check: run checks, lint, format, or quality validation>` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill [<instructions>] phase:qa` | `skill-bill phase qa [<instructions>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<issue-key\|pr-url>] phase:monitor` | `skill-bill phase monitor [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:update-check [--include-prereleases] [--format json]` | `skill-bill operation update-check [--include-prereleases] [--format json]` | none |
@@ -74,7 +75,7 @@ operator's current request selects a standalone phase or operation.
 | `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] --agent <currently-executing-agent>` | required |
+| `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated] [qa:on\|off]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] [qa:on\|off] --agent <currently-executing-agent>` | required |
 
 `phase:plan` is a durable, resumable plan: it seeds the parent spec, opens a
 plan workflow, stops after the verified spec bundle, and prints the bundle
@@ -99,15 +100,18 @@ branch's PR. For `operation:update-check`, forward `--include-prereleases` and
 
 `operation:<name>` translates to `skill-bill operation <name>`, forwarding
 `bump:`, `confirm:`, `select:`, `mode:`, `scope:`, `push:`, `replies:`, `spec:`,
-and `target:` tokens verbatim and any other text as operator instructions. The
-runtime rejects an unknown operation name, a missing bump, a missing guard
-intake, a `push:` or `replies:` token outside `operation:pr-review-fix`, or a
-`spec:`, `target:`, or `mode:` token outside `operation:verify`; relay its usage
-error. For `operation:verify`, forward the intake verbatim: a Linear issue key or
-URL, the requirements as raw text, or a `spec:<path>` token. If it has no intake,
-stop and ask for it. Forward `target:` and `mode:` verbatim; without `target:`,
-the runtime verifies HEAD against `origin/HEAD`, and without `mode:`, it reviews
-inline.
+`target:`, and `qa:` tokens verbatim and any other text as operator
+instructions. The runtime rejects an unknown operation name, a missing bump, a
+missing guard intake, a `push:` or `replies:` token outside
+`operation:pr-review-fix`, or a `spec:`, `target:`, `mode:`, or `qa:` token
+outside `operation:verify`, and a duplicate, conflicting, or unknown `qa:`
+value; relay its usage error. For `operation:verify`, forward the intake
+verbatim: a Linear issue key or URL, the requirements as raw text, or a
+`spec:<path>` token. If it has no intake, stop and ask for it. Forward
+`target:`, `mode:`, and `qa:` verbatim; without `target:`, the runtime verifies
+HEAD against `origin/HEAD`, without `mode:`, it reviews inline, and without
+`qa:`, QA is `off`. `qa:on` adds report-only mobile QA in a temporary worktree
+at the target head after the completeness audit.
 
 ## Token Forwarding
 
@@ -115,6 +119,13 @@ The full run accepts at most one `code-review:inline|auto`, forwarded verbatim a
 `--code-review-mode <value>`, and zero or more ordered `agent-addon:<slug>`
 tokens, each forwarded as `--agent-addon <slug>` in the given order. Omitted
 values remain omitted.
+
+The full run accepts one `qa:auto|off` token and forwards it as `--qa <value>`.
+Omission selects `auto`. In the full run, QA runs after audit and before review:
+audit, then QA (skipped when `qa:off`), then review. QA findings enter `qa_fix`,
+which gets three repair attempts, each followed by a re-audit and QA, before the
+runtime blocks the subtask. A `qa:` token on a form that does not accept it is a
+usage error.
 
 `phase:review` forwards `mode:inline|delegated` and
 `target:pr|staged|unstaged|HEAD|last|uncommitted|<sha>` verbatim as `key:value`
@@ -128,7 +139,7 @@ Stop without running any CLI command when:
 - the caller passes `parallel-review:<agent>`: name the removed dual-agent
   parallel review capability.
 - the caller passes `phase:` together with `operation:`: report a usage error.
-- a token reaches a form that does not accept it (`code-review:` or
+- a token reaches a form that does not accept it (`code-review:`, `qa:`, or
   `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`
   and `operation:verify`):
   report a usage error naming the token and the form that accepts it. Never drop
@@ -332,6 +343,20 @@ launches repair. Full feature runs retain their separate review, verification,
 and repair steps. A `# Review phase blocked` line means the phase stopped before
 it finished; report it and exit non-zero.
 
+## Phase QA
+
+`phase:qa` runs the report-only `qa` slot. The runtime resolves the platform from
+the installed packs, not the dispatcher: the routed pack's `qa_capability` names
+its guidance, and a repository with no declaring pack completes as a skipped
+`unsupported_target` run without launching an agent. The QA agent drives one
+device or simulator and writes its receipt and evidence under
+`.git/skill-bill/qa/<invocation>/`, never in the working tree. It never edits
+tracked files, commits, pushes, or opens a PR, and a run that changes the
+repository fails. A valid receipt exits 0 for every verdict, findings included.
+A missing or malformed receipt, a receipt for another revision, or a changed
+worktree exits 1. Relay the printed verdict, flows, findings, and cleanup as a
+phase form.
+
 ## Phase PR
 
 `phase:pr` composes `commit_push`, `pr`, and `monitor`. The runtime refuses a
@@ -463,10 +488,12 @@ not infer a scope. Never pass `confirm:` or `select:` without an operator answer
 The runtime owns the thread options and refuses a selection it does not
 recognise; relay that usage error and ask again.
 
-For `operation:verify` the proposal is the extracted acceptance criteria. Show
-them and ask the operator once to confirm or adjust them. On confirm, run the same
-operation with `confirm:<token>`. On an adjustment, run the same operation again
-with the same intake and the same `spec:`, `target:`, and `mode:` tokens, adding
+For `operation:verify` the proposal is the extracted acceptance criteria and the
+QA selection (`QA: on` or `QA: off`). Show both and ask the operator once to
+confirm or adjust the criteria. On confirm, run the same operation with
+`confirm:<token>`; confirm keeps the proposed QA selection and refuses a `qa:`
+value that differs from it. On an adjustment, run the same operation again
+with the same intake and the same `spec:`, `target:`, `mode:`, and `qa:` tokens, adding
 the adjustment after the intake, then relay the new criteria and their new token; the new run
 supersedes the earlier one. The verify report is final: never offer a fix or a
 PR comment. When the command is blocked with a reason starting

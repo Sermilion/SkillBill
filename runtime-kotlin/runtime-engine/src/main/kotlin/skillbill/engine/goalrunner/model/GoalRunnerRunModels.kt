@@ -4,8 +4,10 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -21,11 +23,14 @@ data class GoalRunnerRunRequest(
   val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
   val eventSink: GoalRunnerEventSink = GoalRunnerEventSink.NONE,
   val codeReviewMode: CodeReviewExecutionMode? = null,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val stopAfterSubtaskId: Int? = null,
   val intake: String? = null,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
 ) {
+  val childQaSelection: FeatureTaskRuntimeQaSelection get() = qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
+
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
     require(invokedAgentId.isNotBlank()) { "invokedAgentId is required." }
@@ -102,4 +107,12 @@ fun interface GoalRunnerEventSink {
   companion object {
     val NONE: GoalRunnerEventSink = GoalRunnerEventSink {}
   }
+}
+
+sealed interface GoalSubtaskQaSummary {
+  data object NotComposed : GoalSubtaskQaSummary
+
+  data object NotRecorded : GoalSubtaskQaSummary
+
+  data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalSubtaskQaSummary
 }

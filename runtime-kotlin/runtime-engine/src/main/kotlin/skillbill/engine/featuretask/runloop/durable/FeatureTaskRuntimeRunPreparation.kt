@@ -23,6 +23,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
@@ -249,6 +250,7 @@ class FeatureTaskRuntimeRunPreparation(
               codeReviewMode = selectedMode,
               validationDepth = context.validationDepth,
               qualityGateSelection = context.qualityGateSelection,
+              qaSelection = context.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
               subtaskName = context.subtaskName,
               agentAddonSelection =
                 context.agentAddonSelection.takeUnless { it.entries.isEmpty() }

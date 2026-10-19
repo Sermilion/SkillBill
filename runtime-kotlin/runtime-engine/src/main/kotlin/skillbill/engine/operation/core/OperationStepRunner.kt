@@ -30,8 +30,28 @@ class OperationStepRunner(
     priorValues: Map<String, String> = emptyMap(),
     session: PhaseStepSession? = null,
   ): OperationStepResult {
+    val input = stepInput(context, stepName, directive, priorValues, READ_ONLY_STEP_POLICY)
+    return runUnchanged(context, stepName, input, session)
+  }
+
+  fun runReportOnly(
+    context: OperationContext,
+    stepName: String,
+    directive: String,
+    priorValues: Map<String, String>,
+  ): OperationStepResult {
+    val input = stepInput(context, stepName, directive, priorValues, REPORT_ONLY_STEP_POLICY)
+    return runUnchanged(context, stepName, input, session = null)
+  }
+
+  private fun runUnchanged(
+    context: OperationContext,
+    stepName: String,
+    input: PhaseStepInput?,
+    session: PhaseStepSession?,
+  ): OperationStepResult {
     val before = fingerprint(context) { return OperationStepResult.Refused(it) }
-    val result = launch(stepName, stepInput(context, stepName, directive, priorValues, READ_ONLY_STEP_POLICY), session)
+    val result = launch(stepName, input, session)
     if (fingerprint(context) { return OperationStepResult.Refused(it) } != before) {
       return OperationStepResult.Failed(readOnlyViolation(stepName))
     }
@@ -193,6 +213,15 @@ private val READ_ONLY_STEP_POLICY =
     mutating = false,
     singleAgentSession = true,
     readOnlyIdle = true,
+    fileMutating = false,
+    generationScoped = false,
+  )
+
+private val REPORT_ONLY_STEP_POLICY =
+  PhaseStepPolicy(
+    mutating = false,
+    singleAgentSession = true,
+    readOnlyIdle = false,
     fileMutating = false,
     generationScoped = false,
   )

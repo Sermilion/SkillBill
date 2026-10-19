@@ -73,5 +73,6 @@ internal fun harnessAcceptanceRecorder(
       ),
     ),
     gitOperations,
+    persistence,
   )
 }

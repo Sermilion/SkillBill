@@ -6,6 +6,7 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdgeCapScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCrossSlotAllowance
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseEntryGate
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -15,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SkeletonDefinitionTest {
   private val goalChildForward =
@@ -27,6 +29,8 @@ class SkeletonDefinitionTest {
       "audit_plan_fix",
       "audit_implement_fix",
       "audit",
+      "qa",
+      "qa_fix",
       "review",
       "verify_findings",
       "implement_fix",
@@ -42,6 +46,7 @@ class SkeletonDefinitionTest {
       entryGates =
         listOf(
           FeatureTaskRuntimePhaseEntryGate("review", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
+          FeatureTaskRuntimePhaseEntryGate("qa", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
           FeatureTaskRuntimePhaseEntryGate(
             "implement_fix",
             "verify_findings",
@@ -68,6 +73,7 @@ class SkeletonDefinitionTest {
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
         ) +
+          qaEdges +
           listOf("build" to "regenerate_build_receipt", "validate" to "regenerate_validation_receipt").map {
               (step, loop) ->
             FeatureTaskRuntimeBackwardEdge(
@@ -80,8 +86,39 @@ class SkeletonDefinitionTest {
               capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
             )
           },
-      loopOnlyPhaseIds = setOf("audit_plan_fix", "audit_implement_fix", "implement_fix", "build"),
+      loopOnlyPhaseIds = setOf("audit_plan_fix", "audit_implement_fix", "implement_fix", "build", "qa_fix"),
       loopOnlySuccessors = mapOf("audit_plan_fix" to "audit_implement_fix"),
+    )
+
+  private val qaEdges =
+    listOf(
+      FeatureTaskRuntimeBackwardEdge(
+        "qa",
+        FeatureTaskRuntimeVerdict.QA_FINDINGS,
+        "qa_fix",
+        "qa_fix",
+        3,
+        FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+      ),
+      FeatureTaskRuntimeBackwardEdge(
+        "qa_fix",
+        FeatureTaskRuntimeVerdict.ADVANCE,
+        "audit",
+        "qa_fix_return",
+        null,
+        crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
+      ),
+      FeatureTaskRuntimeBackwardEdge(
+        "write_history",
+        FeatureTaskRuntimeVerdict.QA_INVALIDATED,
+        "audit",
+        "qa_invalidation",
+        3,
+        FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+        crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
+      ),
     )
 
   @Test
@@ -128,6 +165,17 @@ class SkeletonDefinitionTest {
   @Test
   fun `goal-child derives today's declaration without the pull request step`() {
     assertEquals(todaysDeclaration(goalChildForward), SkeletonDefinition.GOAL_CHILD.declaration())
+  }
+
+  @Test
+  fun `revision two keeps the pre-QA composition while new lookup selects revision three`() {
+    assertEquals(3, SkeletonDefinition.byId("goal-child").semanticRevision)
+    assertEquals(3, SkeletonDefinition.GOAL_CHILD.semanticRevision)
+    assertFalse(PhaseSlot.QA in SkeletonDefinition.GOAL_CHILD_REVISION_2.slots)
+    assertEquals(2, SkeletonDefinition.GOAL_CHILD_REVISION_2.semanticRevision)
+    for (preQa in listOf(SkeletonDefinition.GOAL_CHILD_REVISION_2, SkeletonDefinition.STANDALONE_REVISION_2)) {
+      assertTrue(preQa.declaration().backwardEdges.none { it.loopId == "qa_invalidation" })
+    }
   }
 
   @Test
@@ -188,7 +236,7 @@ class SkeletonDefinitionTest {
     assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.PLAN.runStateKind)
     assertEquals(listOf("intake", "preplan", "plan", "plan_subtasks"), SkeletonDefinition.PLAN.stepIds)
     assertEquals(
-      listOf("review", "validation", "plan", "pr", "monitor"),
+      listOf("review", "validation", "qa", "plan", "pr", "monitor"),
       SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),
     )
     assertEquals(setOf(SkeletonDefinition.PLAN), SkeletonDefinition.admittedForRun(goalContinuation = false))
@@ -235,6 +283,7 @@ class SkeletonDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
       ),
       traversal.loopOnlyPhaseIds,
     )

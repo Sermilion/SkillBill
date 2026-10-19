@@ -43,7 +43,8 @@ class OperationCommand(
         "URL, or a lone PR number (default: the current branch's PR) and alone accepts push:on|off and " +
         "replies:post|draft. verify reads its intake from the free text (a Linear issue key or URL, or the " +
         "requirements) or spec:<path>, and alone accepts spec:, target:<pr-number|branch|base..head> (default: " +
-        "HEAD against origin/HEAD), and mode:inline|delegated; its confirm:<token> is the verify workflow id.",
+        "HEAD against origin/HEAD), mode:inline|delegated, and qa:on|off (default off; a confirm may repeat " +
+        "but not change it); its confirm:<token> is the verify workflow id.",
   ).multiple()
   private val agent by option(
     "--agent",
@@ -96,7 +97,8 @@ object OperationInvocationParser {
   const val REPLIES: String = "replies"
   const val SPEC: String = "spec"
   const val TARGET: String = "target"
-  val KEYS: List<String> = listOf(BUMP, CONFIRM, SELECT, MODE, SCOPE, PUSH, REPLIES, SPEC, TARGET)
+  const val QA: String = "qa"
+  val KEYS: List<String> = listOf(BUMP, CONFIRM, SELECT, MODE, SCOPE, PUSH, REPLIES, SPEC, TARGET, QA)
   const val INCLUDE_PRERELEASES_OPTION: String = "--include-prereleases"
   const val FORMAT_OPTION: String = "--format"
   private const val UPDATE_CHECK = "update-check"
@@ -109,6 +111,7 @@ object OperationInvocationParser {
       MODE to "verify",
       SPEC to "verify",
       TARGET to "verify",
+      QA to "verify",
     )
 
   fun parse(
@@ -124,6 +127,7 @@ object OperationInvocationParser {
     OPERATION_ONLY_KEYS.forEach { (key, owner) ->
       if (key in values && name != owner) throw UsageError("$key: is accepted only by operation $owner.")
     }
+    requireSingleQa(pairs)
     requireUpdateCheckFlagsOwner(name, flags)
     return OperationInvocation(
       operationId = name,
@@ -138,10 +142,25 @@ object OperationInvocationParser {
           replies = values[REPLIES],
           spec = values[SPEC],
           target = values[TARGET],
+          qa = values[QA],
           includePrereleases = flags.includePrereleases,
           format = flags.format ?: OperationOutputFormat.TEXT,
         ),
       instructions = rest.filterNot(::isKeyValue).joinToString(" ").takeIf(String::isNotBlank),
+    )
+  }
+
+  private fun requireSingleQa(pairs: List<String>) {
+    val given =
+      pairs.filter { pair -> pair.substringBefore(KEY_SEPARATOR) == QA }.map { it.substringAfter(KEY_SEPARATOR) }
+    if (given.size < 2) return
+    throw UsageError(
+      if (given.distinct().size == 1) {
+        "Duplicate $QA:${given.first()} is not allowed; supply $QA:on or $QA:off at most once."
+      } else {
+        "Conflicting $QA: values '${given.joinToString(", ")}' are not allowed; " +
+          "supply exactly one of $QA:on or $QA:off."
+      },
     )
   }
 

@@ -14,6 +14,7 @@ object FeatureTaskRuntimeGoalContinuationLaunchTokens {
   const val CODE_REVIEW_MODE_ENV: String = "SKILL_BILL_CODE_REVIEW_MODE"
   const val VALIDATION_DEPTH_ENV: String = "SKILL_BILL_VALIDATION_DEPTH"
   const val QUALITY_GATE_SELECTION_ENV: String = "SKILL_BILL_QUALITY_GATE_SELECTION"
+  const val QA_SELECTION_ENV: String = "SKILL_BILL_QA_SELECTION"
 
   const val GOAL_PARENT_ISSUE_KEY_FLAG: String = "--goal-parent-issue-key"
   const val GOAL_SUBTASK_ID_FLAG: String = "--goal-subtask-id"
@@ -25,6 +26,7 @@ object FeatureTaskRuntimeGoalContinuationLaunchTokens {
   const val CODE_REVIEW_MODE_FLAG: String = "--code-review-mode"
   const val SUPPRESS_PR_FLAG: String = "--suppress-pr"
   const val QUALITY_GATE_SELECTION_FLAG: String = "--quality-gate-selection"
+  const val QA_SELECTION_FLAG: String = "--qa"
   const val WORKFLOW_ID_FLAG: String = "--workflow-id"
   const val AGENT_ADDON_SELECTION_JSON_FLAG: String = "--agent-addon-selection-json"
 }

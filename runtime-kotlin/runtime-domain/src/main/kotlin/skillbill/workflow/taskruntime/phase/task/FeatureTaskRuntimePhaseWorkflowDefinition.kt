@@ -23,6 +23,8 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_AUDIT_PLAN_FIX: String = FeatureTaskRuntimePhaseIds.AUDIT_PLAN_FIX
   const val PHASE_AUDIT_IMPLEMENT_FIX: String = FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX
   const val PHASE_AUDIT: String = FeatureTaskRuntimePhaseIds.AUDIT
+  const val PHASE_QA: String = FeatureTaskRuntimePhaseIds.QA
+  const val PHASE_QA_FIX: String = FeatureTaskRuntimePhaseIds.QA_FIX
   const val PHASE_VALIDATE: String = FeatureTaskRuntimePhaseIds.VALIDATE
   const val PHASE_WRITE_HISTORY: String = FeatureTaskRuntimePhaseIds.WRITE_HISTORY
   const val PHASE_COMMIT_PUSH: String = FeatureTaskRuntimePhaseIds.COMMIT_PUSH
@@ -50,6 +52,11 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val MONITOR_FIX_TRIGGER_LOOP_ID: String = "monitor_fix_trigger"
 
   const val MAX_MONITOR_FIX_ATTEMPTS: Int = 3
+  const val QA_FIX_LOOP_ID: String = "qa_fix"
+  const val QA_FIX_RETURN_LOOP_ID: String = "qa_fix_return"
+  const val MAX_QA_FIX_ATTEMPTS: Int = 3
+  const val QA_INVALIDATION_LOOP_ID: String = "qa_invalidation"
+  const val MAX_QA_INVALIDATIONS: Int = 3
   const val MONITOR_FIX_COMMIT_LOOP_ID: String = "monitor_fix_commit"
 
   const val SEMANTIC_LOOP_WARNING_THRESHOLD: Int = 3
@@ -75,7 +82,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   val runtimeSettledPhaseIds: Set<String> = setOf(PHASE_INTAKE, PHASE_COMMIT_PUSH, PHASE_MONITOR)
 
-  val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - runtimeSettledPhaseIds
+  val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - runtimeSettledPhaseIds + PHASE_QA
 
   val noChangeClaimPhaseIds: Set<String> = setOf(PHASE_IMPLEMENT, PHASE_AUDIT_IMPLEMENT_FIX)
 
@@ -96,6 +103,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
     const val VALIDATION_REQUEST: String = "feature_task_runtime.validation_request"
     const val VALIDATION_RECEIPT: String = "feature_task_runtime.validation_receipt"
     const val BUILD_RECEIPT: String = "feature_task_runtime.build_receipt"
+    const val QA_RECEIPT: String = "feature_task_runtime.qa_receipt"
     const val BOUNDARY_CANDIDATES: String = "feature_task_runtime.boundary_candidates"
     const val HISTORY_RECEIPT: String = "feature_task_runtime.history_receipt"
     const val HISTORY_RECEIPT_VERSION: String = "0.2"

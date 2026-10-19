@@ -111,7 +111,12 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
       listOf("standalone", "goal-child-build", "goal-child-validate").forEach { mode ->
         val execution =
           ExecutionPlanAdmissionFixture(
-            definition = if (mode == "standalone") SkeletonDefinition.STANDALONE else SkeletonDefinition.GOAL_CHILD,
+            definition =
+              if (mode == "standalone") {
+                SkeletonDefinition.STANDALONE_REVISION_2
+              } else {
+                SkeletonDefinition.GOAL_CHILD_REVISION_2
+              },
             qualityGate =
               when (mode) {
                 "goal-child-build" -> FeatureTaskRuntimeQualityGateSelection.BUILD

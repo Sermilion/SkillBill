@@ -91,6 +91,9 @@ lane_conditions:
   ui: { content: ["SwiftUI", "UIView", "NavigationStack", "View"] }
   ux-accessibility: { content: ["accessibility", "VoiceOver", "Dynamic Type", "focus"] }
   code-quality: { required: true }
+qa_capability:
+  platforms: [ios]
+  guidance_file: qa/ios-qa.md
 validation_gate:
   full_gate_command:
     - swift

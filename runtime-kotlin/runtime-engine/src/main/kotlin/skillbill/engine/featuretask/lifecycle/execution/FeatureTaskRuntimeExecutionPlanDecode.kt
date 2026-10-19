@@ -5,6 +5,7 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaE
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
 import skillbill.workflow.taskruntime.model.skeleton.LaunchModelUnknownReason
@@ -24,72 +25,77 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPla
 internal fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecutionPlan {
   val definition = planObject(payload[Keys.DEFINITION])
   val contractVersion = payload[Keys.CONTRACT_VERSION] as? String ?: invalidPlanValue()
-  return ResolvedPhaseExecutionPlan(
-    definitionId = planString(definition, Keys.ID),
-    definitionSemanticRevision = planRevision(definition),
-    selectedStrategies =
-      planObjects(payload, Keys.SELECTED_STRATEGIES).map { strategy ->
-        val slot = planSlot(strategy)
-        val strategyId = planString(strategy, Keys.STRATEGY_ID)
-        val revision = planRevision(strategy)
-        val steps = planStrings(strategy, Keys.SELECTED_STEPS)
-        val entryStep = planString(strategy, Keys.ENTRY_STEP)
-        if (ResolvedPhaseStrategyIdentity.violation(strategyId, revision, steps, entryStep) != null) invalidPlanValue()
-        ResolvedPhaseStrategyIdentity(
-          slot = slot,
-          strategyId = strategyId,
-          semanticRevision = revision,
-          steps = steps,
-          entryStep = entryStep,
-        )
-      }.sortedBy { it.slot.ordinal },
-    reviewSelection =
-      payload[Keys.REVIEW_SELECTION]?.let { value ->
-        RuntimeReviewSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
-      },
-    qualityGateSelection =
-      payload[Keys.QUALITY_GATE_SELECTION]?.let { value ->
-        FeatureTaskRuntimeQualityGateSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
-      },
-    traversal = decodeExecutionPlanTraversal(planObject(payload[Keys.TRAVERSAL])),
-    dispatchStrategyByStep =
-      planObjects(payload, Keys.DISPATCH_OWNERSHIP).associate { dispatch ->
-        val strategyId = planString(dispatch, Keys.STRATEGY_ID)
-        val revision = planRevision(dispatch)
-        if (ResolvedPhaseStrategyDispatch.violation(strategyId, revision) != null) invalidPlanValue()
-        planString(dispatch, Keys.STEP) to ResolvedPhaseStrategyDispatch(planSlot(dispatch), strategyId, revision)
-      },
-    stepRecords =
-      ResolvedPhaseStepRecords(
-        decodePolicies(payload, Keys.STEP_POLICIES),
-        decodePolicies(payload, Keys.RESUME_INTERPRETATIONS),
-        decodeAssignments(payload),
-      ),
-    effectivePolicies =
-      planObjects(payload, Keys.EFFECTIVE_POLICIES).map { policy ->
-        val id = planString(policy, Keys.ID)
-        val revision = planRevision(policy)
-        val digest = planString(policy, Keys.SEMANTIC_DIGEST)
-        if (ResolvedExecutionPolicy.violation(id, revision, digest) != null) {
-          throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan cannot be reconstructed")
-        }
-        ResolvedExecutionPolicy(id, revision, digest)
-      },
-    effectivePolicySettings =
-      payload[Keys.EFFECTIVE_POLICY_SETTINGS]?.let { raw ->
-        val settings = planObject(raw)
-        val rawDepth = planString(settings, Keys.VALIDATION_DEPTH)
-        val validationDepth =
-          ValidationDepth.fromWireOrNull(rawDepth)
-            ?: invalidSettings(ValidationDepth.unknownWireValueMessage(rawDepth))
-        val phaseTimeoutMillis = (settings[Keys.PHASE_TIMEOUT_MILLIS] as? Number)?.toLong()
-        val violation = ResolvedFeatureTaskRuntimeExecutionSettings.violation(phaseTimeoutMillis)
-        if (violation != null) invalidSettings(violation)
-        ResolvedFeatureTaskRuntimeExecutionSettings(validationDepth, phaseTimeoutMillis)
-      },
-    contractVersion = contractVersion,
-  )
+  val plan =
+    ResolvedPhaseExecutionPlan(
+      definitionId = planString(definition, Keys.ID),
+      definitionSemanticRevision = planRevision(definition),
+      selectedStrategies =
+        planObjects(payload, Keys.SELECTED_STRATEGIES).map(::decodeStrategy).sortedBy { it.slot.ordinal },
+      reviewSelection =
+        payload[Keys.REVIEW_SELECTION]?.let { value ->
+          RuntimeReviewSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
+        },
+      qualityGateSelection =
+        payload[Keys.QUALITY_GATE_SELECTION]?.let { value ->
+          FeatureTaskRuntimeQualityGateSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
+        },
+      qaSelection =
+        payload[Keys.QA_SELECTION]?.let { value ->
+          FeatureTaskRuntimeQaSelection.entries.singleOrNull { it.wireValue == value } ?: invalidPlanValue()
+        },
+      traversal = decodeExecutionPlanTraversal(planObject(payload[Keys.TRAVERSAL])),
+      stepRecords =
+        ResolvedPhaseStepRecords(
+          decodePolicies(payload, Keys.STEP_POLICIES),
+          decodePolicies(payload, Keys.RESUME_INTERPRETATIONS),
+          decodeAssignments(payload),
+        ),
+      effectivePolicies =
+        planObjects(payload, Keys.EFFECTIVE_POLICIES).map { policy ->
+          val id = planString(policy, Keys.ID)
+          val revision = planRevision(policy)
+          val digest = planString(policy, Keys.SEMANTIC_DIGEST)
+          if (ResolvedExecutionPolicy.violation(id, revision, digest) != null) {
+            throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan cannot be reconstructed")
+          }
+          ResolvedExecutionPolicy(id, revision, digest)
+        },
+      effectivePolicySettings =
+        payload[Keys.EFFECTIVE_POLICY_SETTINGS]?.let { raw ->
+          val settings = planObject(raw)
+          val rawDepth = planString(settings, Keys.VALIDATION_DEPTH)
+          val validationDepth =
+            ValidationDepth.fromWireOrNull(rawDepth)
+              ?: invalidSettings(ValidationDepth.unknownWireValueMessage(rawDepth))
+          val phaseTimeoutMillis = (settings[Keys.PHASE_TIMEOUT_MILLIS] as? Number)?.toLong()
+          val violation = ResolvedFeatureTaskRuntimeExecutionSettings.violation(phaseTimeoutMillis)
+          if (violation != null) invalidSettings(violation)
+          ResolvedFeatureTaskRuntimeExecutionSettings(validationDepth, phaseTimeoutMillis)
+        },
+      contractVersion = contractVersion,
+    )
+  if (plan.dispatchStrategyByStep != decodeDispatch(payload)) invalidPlanValue()
+  return plan
 }
+
+private fun decodeStrategy(strategy: Map<String, Any?>): ResolvedPhaseStrategyIdentity {
+  val slot = planSlot(strategy)
+  val strategyId = planString(strategy, Keys.STRATEGY_ID)
+  val revision = planRevision(strategy)
+  val steps = planStrings(strategy, Keys.SELECTED_STEPS)
+  val entryStep = planString(strategy, Keys.ENTRY_STEP)
+  val violation = ResolvedPhaseStrategyIdentity.violation(strategyId, revision, steps, entryStep)
+  if (violation != null) invalidPlanValue()
+  return ResolvedPhaseStrategyIdentity(slot, strategyId, revision, steps, entryStep)
+}
+
+private fun decodeDispatch(payload: Map<String, Any?>): Map<String, ResolvedPhaseStrategyDispatch> =
+  planObjects(payload, Keys.DISPATCH_OWNERSHIP).associate { dispatch ->
+    val strategyId = planString(dispatch, Keys.STRATEGY_ID)
+    val revision = planRevision(dispatch)
+    if (ResolvedPhaseStrategyDispatch.violation(strategyId, revision) != null) invalidPlanValue()
+    planString(dispatch, Keys.STEP) to ResolvedPhaseStrategyDispatch(planSlot(dispatch), strategyId, revision)
+  }
 
 private fun decodePolicies(
   payload: Map<String, Any?>,

@@ -184,6 +184,8 @@ internal object DatabaseColumnMigrationsEnsure {
     ensureColumn(connection, "feature_verify_sessions", "audit_result", "TEXT")
     ensureColumn(connection, "feature_verify_sessions", "completion_status", "TEXT")
     ensureColumn(connection, "feature_verify_sessions", "gaps_found", "TEXT NOT NULL DEFAULT ''")
+    ensureColumn(connection, "feature_verify_sessions", "qa_outcome", "TEXT")
+    ensureColumn(connection, "feature_verify_sessions", "qa_reason", "TEXT")
     ensureColumn(
       connection = connection,
       tableName = "feature_verify_sessions",

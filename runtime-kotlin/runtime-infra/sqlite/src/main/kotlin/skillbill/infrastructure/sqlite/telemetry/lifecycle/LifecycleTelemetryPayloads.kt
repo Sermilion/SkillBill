@@ -310,6 +310,10 @@ internal fun featureVerifyFinishedPayload(
     val durationAvailability = verifyDurationAvailability(row)
     put(LifeKeys.DURATION_SECONDS, durationSeconds(row, diagnostics).takeIf { durationAvailability.measured })
     put(LifeKeys.DURATION_SECONDS_AVAILABILITY, durationAvailability.wireValue)
+    row.stringOrEmpty(LifeKeys.QA_OUTCOME).takeIf(String::isNotBlank)?.let { outcome ->
+      put(LifeKeys.QA_OUTCOME, outcome)
+      put(LifeKeys.QA_REASON, row.stringOrEmpty(LifeKeys.QA_REASON).ifBlank { null })
+    }
     if (level == "full") {
       put(
         LifeKeys.GAPS_FOUND,

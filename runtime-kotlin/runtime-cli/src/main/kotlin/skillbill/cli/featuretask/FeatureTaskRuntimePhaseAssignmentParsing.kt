@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -76,6 +77,7 @@ internal data class PreparedRuntimeRun(
   val compactionSettings: CompactionSettings,
   val agentAddonSelection: HydratedAgentAddonSelection,
   val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
+  val qaSelection: FeatureTaskRuntimeQaSelection?,
   val operatorDecision: GoalSubtaskOperatorDecision?,
 )
 

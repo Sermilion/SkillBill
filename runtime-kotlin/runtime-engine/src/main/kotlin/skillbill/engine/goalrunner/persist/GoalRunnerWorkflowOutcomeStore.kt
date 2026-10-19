@@ -5,6 +5,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
@@ -16,6 +17,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 
@@ -45,6 +47,14 @@ interface GoalRunnerReviewOutcomeStore {
   fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState?
 
   fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection?
+
+  fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded
+
+  /** The admitted plan's QA selection once the child has a stored plan, else [requested]; null keeps a pre-QA plan. */
+  fun childQaSelection(
+    workflowId: String,
+    requested: FeatureTaskRuntimeQaSelection?,
+  ): FeatureTaskRuntimeQaSelection? = requested
 
   fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult>
 

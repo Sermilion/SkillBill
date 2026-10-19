@@ -7,11 +7,11 @@ import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
-import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -104,6 +104,7 @@ class PhaseStrategyLookup(
             add(CodeReviewExecutionMode.entries.single { it.wireValue == review.wireValue })
           }
           plan.qualityGateSelection?.let(::add)
+          plan.qaSelection?.let(::add)
         },
         plan.stepLaunchAssignments,
       )
@@ -124,6 +125,7 @@ class PhaseStrategyLookup(
         buildSet {
           recorded.reviewSelection?.let { add(CodeReviewExecutionMode.valueOf(it.name)) }
           recorded.qualityGateSelection?.let(::add)
+          recorded.qaSelection?.let(::add)
         },
         recorded.stepLaunchAssignments,
       )
@@ -215,11 +217,8 @@ class PhaseStrategyLookup(
         selectedStrategies = identities,
         reviewSelection = reviewSelection(facts),
         qualityGateSelection = singleQualityGateSelection(facts),
+        qaSelection = singleQaSelection(facts),
         traversal = declaration,
-        dispatchStrategyByStep =
-          selectedSteps.mapValues { (_, strategy) ->
-            ResolvedPhaseStrategyDispatch(strategy.slot, strategy.strategyId, strategy.semanticRevision)
-          },
         stepRecords =
           ResolvedPhaseStepRecords(
             policies,
@@ -327,6 +326,12 @@ class PhaseStrategyLookup(
     if (selections.size > 1) {
       invalidComposition("multiple quality gate selections were supplied")
     }
+    return selections.singleOrNull()
+  }
+
+  private fun singleQaSelection(facts: PhaseStrategySelectionFacts): FeatureTaskRuntimeQaSelection? {
+    val selections = facts.values.filterIsInstance<FeatureTaskRuntimeQaSelection>()
+    if (selections.size > 1) invalidComposition("multiple QA selections were supplied")
     return selections.singleOrNull()
   }
 

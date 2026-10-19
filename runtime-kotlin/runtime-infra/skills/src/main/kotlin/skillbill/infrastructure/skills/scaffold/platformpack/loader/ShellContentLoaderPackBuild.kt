@@ -80,6 +80,7 @@ internal fun assemblePlatformManifest(
     notes = parseOptionalString(manifest, slug, "notes"),
     declaredQualityCheckFile = declaredQualityCheckFile?.toFileLocation(),
     validationGate = parseValidationGate(manifest, slug),
+    qaCapability = parseQaCapability(manifest, slug, packRoot),
     codeReviewComposition = parseCodeReviewComposition(manifest, slug),
     fallbackCapabilities = parseFallbackCapabilities(manifest, slug),
     pointers = pointers,

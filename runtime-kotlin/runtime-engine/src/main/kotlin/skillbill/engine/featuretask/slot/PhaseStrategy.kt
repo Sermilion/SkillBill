@@ -77,6 +77,11 @@ abstract class PhaseStrategy {
     state: PhaseAcceptedStepExecution,
   ): PhaseOutcome
 
+  internal open fun withPreparedRun(
+    run: PhaseRun,
+    execute: (PhaseRun) -> PhaseOutcome,
+  ): PhaseOutcome = execute(run)
+
   internal open fun stepHooks(stepId: String): PhaseStepHooks = PhaseStepHooks.None
 
   internal open fun verdictRule(
@@ -115,6 +120,7 @@ internal enum class PhaseExecutionBindingKind {
   REVIEW,
   FINDING_VERIFICATION,
   REPAIR_RECEIPT,
+  QA_FINDINGS,
   CI_MONITOR,
   STANDALONE_MONITOR,
   STANDALONE_PUBLICATION,

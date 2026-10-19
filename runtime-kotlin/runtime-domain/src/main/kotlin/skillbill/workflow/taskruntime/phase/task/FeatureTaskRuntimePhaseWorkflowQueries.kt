@@ -8,6 +8,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePreplanCeremony
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeReviewScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
 object FeatureTaskRuntimePhaseWorkflowQueries {
   fun backwardEdgeForLoop(loopId: String): FeatureTaskRuntimeBackwardEdge? =
@@ -15,6 +16,14 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
       FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
       loopId,
     )
+
+  fun loopOnlyPhaseIds(qualityGate: FeatureTaskRuntimeQualityGateSelection): Set<String> =
+    FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds -
+      setOfNotNull(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD.takeIf {
+          qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD
+        },
+      )
 
   fun ceremonyScaling(featureSize: FeatureTaskRuntimeFeatureSize): FeatureTaskRuntimeCeremonyScaling =
     when (featureSize) {
@@ -38,7 +47,9 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
     phaseId: String,
     featureSize: FeatureTaskRuntimeFeatureSize,
   ): FeatureTaskRuntimePhaseDeclaration {
-    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS) {
+    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS ||
+      phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA
+    ) {
       return FeatureTaskRuntimePhaseDeclaration(
         phaseId = phaseId,
         projectionDeclarations = emptyList(),

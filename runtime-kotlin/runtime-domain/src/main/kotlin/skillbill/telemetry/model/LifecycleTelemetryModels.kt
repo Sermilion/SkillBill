@@ -77,6 +77,8 @@ data class FeatureVerifyFinishedRecord(
   val historyRelevance: String,
   val historyHelpfulness: String,
   val gapsFound: List<String>,
+  val qaOutcome: String? = null,
+  val qaReason: String? = null,
 )
 
 data class PrDescriptionGeneratedRecord(

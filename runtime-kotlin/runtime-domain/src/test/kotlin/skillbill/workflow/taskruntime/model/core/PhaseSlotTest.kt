@@ -25,6 +25,7 @@ class PhaseSlotTest {
         "plan",
         "implementation",
         "audit",
+        "qa",
         "code_review",
         "quality_gate",
         "write_history",

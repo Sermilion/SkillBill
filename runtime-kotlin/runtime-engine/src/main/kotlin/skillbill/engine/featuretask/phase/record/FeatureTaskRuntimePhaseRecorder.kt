@@ -29,7 +29,6 @@ import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
-import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeDiagnosticSignal
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
@@ -41,6 +40,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalCo
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.time.Clock
 
@@ -97,7 +97,7 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
     parts.gateProgress,
   )
 
-  fun existingWorkflowMode(workflowId: String): FeatureTaskWorkflowMode? = phaseQuery.existingWorkflowMode(workflowId)
+  fun loadQaRepairState(workflowId: String): QaRepairState? = workflowPersistence.readQaRepairState(workflowId)
 
   fun ensureWorkflowOpen(
     workflowId: String,

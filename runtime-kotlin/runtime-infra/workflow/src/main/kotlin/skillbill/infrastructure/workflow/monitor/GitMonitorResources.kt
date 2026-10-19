@@ -26,7 +26,6 @@ import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
 import skillbill.ports.monitor.model.MonitorWorktree
 import skillbill.ports.monitor.model.redactedMonitorDetail
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.taskruntime.model.isConfirmedDead
 import java.io.IOException
 import java.nio.file.Files
@@ -377,9 +376,7 @@ class GitMonitorResources(
     request: MonitorStaleRecoveryRequest,
     directory: Path,
   ): MonitorStaleRecovery.Refused? {
-    val local = runCatching { inspector.currentProcess() }.getOrNull()
-    val sameHost = local != null && local.hostIdentity == record.process.hostIdentity
-    val inspection = if (sameHost) inspector.inspect(record.process) else null
+    val liveness = inspector.livenessOf(record.process)
     return when {
       record.state == MonitorOwnershipState.RELEASED ->
         MonitorStaleRecovery.Refused(
@@ -399,15 +396,15 @@ class GitMonitorResources(
           retainedPath(record, directory),
           retainedDetail(record),
         )
-      inspection == null ->
+      liveness == RecordedProcessLiveness.UNREADABLE ->
         MonitorStaleRecovery.Refused(
           MonitorRecoveryRefusal.UNKNOWN_OWNER,
           directory,
           "The owner process belongs to another host or is unreadable.",
         )
-      inspection == FeatureTaskRuntimeProcessInspection.ExactLive ->
+      liveness == RecordedProcessLiveness.LIVE ->
         MonitorStaleRecovery.Refused(MonitorRecoveryRefusal.LIVE_OWNER, directory, "The owner process is still alive.")
-      !inspection.isConfirmedDead() ->
+      liveness == RecordedProcessLiveness.UNCONFIRMED ->
         MonitorStaleRecovery.Refused(
           MonitorRecoveryRefusal.UNKNOWN_OWNER,
           directory,

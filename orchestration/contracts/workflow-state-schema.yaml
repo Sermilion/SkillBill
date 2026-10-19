@@ -141,6 +141,8 @@ $defs:
           - audit_plan_fix
           - audit_implement_fix
           - audit
+          - qa
+          - qa_fix
           - validate
           - write_history
           - commit_push
@@ -169,6 +171,8 @@ $defs:
                     - audit_plan_fix
                     - audit_implement_fix
                     - audit
+                    - qa
+                    - qa_fix
                     - validate
                     - write_history
                     - commit_push
@@ -206,6 +210,7 @@ $defs:
           - code_review
           - unit_test_value_check
           - completeness_audit
+          - qa
           - verdict
           - finish
       steps:
@@ -224,6 +229,7 @@ $defs:
                     - code_review
                     - unit_test_value_check
                     - completeness_audit
+                    - qa
                     - verdict
                     - finish
     required:

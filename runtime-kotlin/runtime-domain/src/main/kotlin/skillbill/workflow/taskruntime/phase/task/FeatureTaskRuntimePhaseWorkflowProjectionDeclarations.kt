@@ -104,6 +104,24 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to emptyList(),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to emptyList(),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to
+        listOf(
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
+          ),
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+          ),
+        ),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX to
+        listOf(
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+          ),
+        ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
         listOf(
           phaseProseDeclaration(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN),

@@ -12,6 +12,7 @@ import skillbill.cli.install.core.InstallTopLevelCommands
 import skillbill.cli.learning.LearningsCommand
 import skillbill.cli.operation.OperationCommand
 import skillbill.cli.phase.PhaseCommand
+import skillbill.cli.qa.QaCommand
 import skillbill.cli.repovalidation.RepoValidationCliCommands
 import skillbill.cli.review.ReviewTopLevelCommands
 import skillbill.cli.scaffold.commands.ScaffoldTopLevelCommands
@@ -93,6 +94,7 @@ class CliMiscCommands(
   configCommand: ConfigCommand,
   workCommands: WorkTopLevelCommands,
   agentAddonCommand: AgentAddonCommand,
+  qaCommand: QaCommand,
 ) {
   val commands: List<CliktCommand> =
     listOf(
@@ -102,6 +104,7 @@ class CliMiscCommands(
       configCommand,
       workCommands.command,
       agentAddonCommand,
+      qaCommand,
     )
 }
 

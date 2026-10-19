@@ -6,7 +6,7 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
-const val IDE_STATUS_CONTRACT_VERSION: String = "0.4"
+const val IDE_STATUS_CONTRACT_VERSION: String = "0.5"
 const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
 const val WORK_DETAIL_CONTRACT_VERSION: String = "1.1"
 
@@ -20,6 +20,7 @@ object IdeStatusPayloadKeys {
   const val STATUS_REVISION = "status_revision"
   const val INVOCATION_ID = "invocation_id"
   const val CURRENT_ACTIVITY = "current_activity"
+  const val QA_OUTCOME = "qa_outcome"
 }
 
 object WorkBoardPayloadKeys {

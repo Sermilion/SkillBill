@@ -86,7 +86,9 @@ internal object AcceptanceAuditPromptSections {
       "criterion in the claim against the current tree. Read each cited path:line and the boundary trace without " +
       "editing anything. Set verdict to no_change_confirmed when the evidence supports every criterion's verdict. " +
       "Otherwise set verdict to no_change_rejected and give the specific per-criterion reasons in the value. " +
-      "Do not return the remaining-criteria list for this round. Claim:\n" + claim
+      "End the initial full audit with the Open criteria line required above, including every criterion with " +
+      "a production source gap. Later focused audits assess only the runtime-selected criterion, even when " +
+      "this claim covers other criteria. Claim:\n" + claim
   }
 
   private fun auditScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {

@@ -490,7 +490,7 @@ segment, and `skillbill_goal_issue_finished` is the goal, carrying `parent_workf
 The feature-verify workflow emits two events per standalone session:
 
 - `skillbill_feature_verify_started` — emitted after Step 2 (acceptance criteria confirmed)
-- `skillbill_feature_verify_finished` — emitted after Step 8 (verdict delivered) or when the workflow ends early
+- `skillbill_feature_verify_finished` — emitted after Step 9 (verdict delivered) or when the workflow ends early
 
 Session id format: `fvr-YYYYMMDD-HHMMSS-XXXX`.
 
@@ -515,6 +515,8 @@ Both levels:
 | `history_relevance` | string | How relevant history-entry reading was: `none`, `irrelevant`, `low`, `medium`, or `high` |
 | `history_helpfulness` | string | How helpful history-entry reading was: `none`, `irrelevant`, `low`, `medium`, or `high` |
 | `duration_seconds` | integer | Wall-clock seconds from started to finished |
+| `qa_outcome` | string | Optional. Verify QA result: `not_selected`, `attempted`, `passed`, `findings`, `skipped`, or `incomplete` |
+| `qa_reason` | string or null | Optional. The QA skip or incomplete reason code, such as `disabled_policy`; never a log body |
 
 `full` adds:
 

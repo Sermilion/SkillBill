@@ -1,3 +1,40 @@
+## [2026-10-19] SKILL-419 subtask 3: verify qa:on|off integration
+Areas: runtime-kotlin domain (verify definition, VerifyQaSelection model), engine operation/verify and core, CLI operation, MCP workflow tools, application and sqlite telemetry, ports and infra git worktree; orchestration/contracts; skills/skill-bill; docs
+- MEDIUM feature. `operation:verify` accepts `qa:on|off` (default off) from the CLI and the four MCP verify workflow tools. The selection is stored in input_context.qa_selection, named in the proposal, and a confirm with a different value is refused.
+- Verify gains a `qa` step between completeness_audit and verdict (verdict is now Step 9). Workflows created before QA have no stored selection and skip the step entirely.
+- qa:off writes a disabled_policy skip receipt with no capability probe, lease, worktree or agent. qa:on runs the shared QaExecutionLifecycle in a detached temp worktree at the target head and removes it in a finally block.
+- New report-only OperationStepRunner policy (single session, non-mutating, fingerprint guarded). reusable for other read-only operation steps.
+- Git port gains addDetachedWorktree/removeWorktree. reusable
+- Verdict reads the stored qa_receipt. With qa:on, QA findings join the consolidated findings and skipped or incomplete QA is listed as untested coverage. An unqualified APPROVE against open findings fails the verdict step.
+- Outcome (not_selected, attempted, passed, findings, skipped, incomplete) appears in report text and as optional qa_outcome/qa_reason on feature_verify_finished. The telemetry contract stays 1.12.0.
+- Limits: capability resolves on the worktree's tracked paths, not the target's changed paths. The verdict's static projection is unchanged; the runtime enforces qa_receipt itself.
+Feature flag: N/A (operator selection `qa:on|off`, default off)
+Acceptance criteria: 7/7 implemented
+
+## [2026-10-19] SKILL-419 subtask 2: feature-task qa and qa_fix slot
+Areas: runtime-kotlin domain, contracts, ports, engine, infra (contracts, sqlite, workflow, launcher, skills), core and CLI; orchestration/contracts; skills/skill-bill; docs
+- MEDIUM feature. `PhaseSlot.QA` (qa, qa_fix) sits between audit and code review in FEATURE_RUN_SLOTS. qa needs a SATISFIED audit; findings route to qa_fix (3 attempts per subtask, then BLOCK), and qa_fix returns to audit, then qa.
+- Backward edges cross slots only with a typed `FeatureTaskRuntimeCrossSlotAllowance`; phaseTraversal drops every other cross-slot edge. The write_history `qa_invalidated` edge is composed only with qa, so pre-QA traversals stay unchanged. reusable
+- The post-qa_fix audit re-checks only criteria the open findings name, through the acceptance recorder's QaReaudit mutation, and the audit prompt states that scope.
+- qa-repair state contract 0.2 (0.1 history schema kept for decode) owns open findings, attempts and the last tested tree. `decodeQaOpenFindings` in QaRepairStateWire is the one decoder for open findings, shared by the wire codec and QaVerdictRule. reusable
+- `--qa auto|off`, its env var and the goal continuation artifact feed execution-plan contract 0.3 (`qa_selection`). 0.2 plans decode with QA not composed, and revision-2 definitions still resolve. `FeatureTaskRuntimeQaSelection.fromWire` throws the typed unknown-selection error; the CLI maps it to a usage error.
+- Schema 61 adds `feature_task_qa_outcomes`; the goal PR gets a "## Mobile QA" section. Progress, IDE and CLI status do not show the outcome yet.
+- Limits: verify integration belongs to subtask 3. Run-state reconstruction, not workflow persistence, rejects a completed qa_fix with no repair state, because the step-identity architecture test bars qa_fix ids in shared persistence.
+Feature flag: N/A (operator selection `qa:auto|off`, default auto)
+Acceptance criteria: 10/10 implemented
+
+## [2026-10-18] SKILL-419 subtask 1: QA contracts and standalone phase
+Areas: runtime-kotlin contracts, domain, ports, engine, infra, core and CLI; orchestration/contracts; platform-packs/kmp and platform-packs/ios; skills/skill-bill; docs; README.md
+- MEDIUM feature. Added report-only `phase qa`, the in-memory QA skeleton and agent strategy. Valid receipts complete with exit 0, including findings; missing or invalid output and changed HEAD or tracked-file status block.
+- Receipt and device-lease schemas start at 0.1. The shared `featuretask/qa` validator binds receipts to the expected revision and invocation evidence, rejects unsupported success claims, and distinguishes simulator coverage. reusable
+- Manifest-owned `qa_capability` uses dominant-pack routing. Absent capability produces an `unsupported_target` skip; incompatible declarations fail. Android and iOS guidance owns device discovery and interaction.
+- Invocation-owned scripts and evidence stay under `.git/skill-bill/qa/`. The lease CLI hashes serials; the adapter preserves live foreign leases, reclaims confirmed-dead owners, and reports retained cleanup resources.
+- Extracted `WorktreeBaseline` for QA and verify, and `RecordedProcessLiveness` for QA leases and monitor ownership. reusable
+- Standalone status carries attempted, passed, findings, skipped and incomplete outcomes through SQLite migration v60 and IDE status contract 0.5. Fallback and cleanup paths emit records.
+- Limits: feature-task composition, `qa_fix`, QA policy flags and verify integration belong to subtasks 2 and 3. Live iOS device smoke remains unavailable on this Linux host.
+Feature flag: N/A
+Acceptance criteria: 9/9 implemented
+
 ## [2026-10-17] Resume a different selected agent with that agent's models
 Areas: runtime-engine featuretask lifecycle and runloop planning
 - Same-agent resume still launches the recorded step assignment. A remaining step whose recorded agent is not the resolved resume agent drops that assignment and resolves the model from the selected agent's execution matrix.

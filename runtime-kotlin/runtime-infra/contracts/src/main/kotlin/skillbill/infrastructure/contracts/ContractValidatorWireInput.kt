@@ -5,6 +5,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENV
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.error.featuretask.qa.invalidQaRepairStateSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairAdoptionSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairHandoffSchema
@@ -113,5 +114,7 @@ private fun serialWireArtifactNonObjectError(
       invalidAcceptanceCriterionRepairHandoffSchema(sourceLabel, reason)
     FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION ->
       invalidAcceptanceCriterionRepairAdoptionSchema(sourceLabel, reason)
+    FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE ->
+      invalidQaRepairStateSchema("$sourceLabel: $reason")
     else -> error("Unexpected non-serial wire artifact $kind")
   }

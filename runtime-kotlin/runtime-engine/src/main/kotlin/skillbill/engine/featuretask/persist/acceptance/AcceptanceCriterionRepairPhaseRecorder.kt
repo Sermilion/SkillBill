@@ -13,11 +13,13 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRol
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
 import skillbill.engine.featuretask.model.audit.ExpectedAcceptanceCriterionRepairState
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
@@ -32,6 +34,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDispo
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
+import skillbill.workflow.taskruntime.model.audit.qaReauditRefs
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import java.nio.file.Path
@@ -41,6 +44,7 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 class AcceptanceCriterionRepairPhaseRecorder(
   private val persistence: AcceptanceCriterionRepairPersistence,
   private val gitOperations: WorkflowGitOperations,
+  private val workflows: FeatureTaskRuntimeWorkflowPersistence,
 ) {
   internal fun session(
     scope: AcceptanceCriterionRepairRunState?,
@@ -57,20 +61,51 @@ class AcceptanceCriterionRepairPhaseRecorder(
   internal fun start(
     session: AcceptanceCriterionRepairSession,
     phase: FeatureTaskRuntimePhaseStateRequest,
-  ): Boolean? {
-    val scope = session.accounting
+  ): RequiredPhaseWrite? {
     if (!session.worker.ownsAuditStep(phase.phaseId)) return null
-    val state = scope.snapshot?.takeUnless { it.stage == AcceptanceCriterionRepairStage.ACCEPTED } ?: return true
-    val mutation = startMutation(state, session.steps, phase) ?: return false
+    val snapshot = session.accounting.snapshot
+    return when {
+      snapshot == null -> RequiredPhaseWrite.Acknowledged
+      snapshot.stage == AcceptanceCriterionRepairStage.ACCEPTED -> startQaReaudit(session, phase, snapshot)
+      else -> startRepair(session, phase, snapshot)
+    }
+  }
+
+  private fun startRepair(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    state: AcceptanceCriterionRepairState,
+  ): RequiredPhaseWrite {
+    val scope = session.accounting
+    val mutation =
+      startMutation(state, session.steps, phase)
+        ?: return rejected(phase, "Acceptance repair cannot start from stage '${state.stage.wireValue}'.")
     val committed =
       if (mutation == AcceptanceCriterionRepairMutation.KeepProgress &&
         state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
       ) {
-        true
+        RequiredPhaseWrite.Acknowledged
       } else {
-        commit(session, phase, mutation) == RequiredPhaseWrite.Acknowledged
+        commit(session, phase, mutation)
       }
-    if (committed) scope.acknowledgeStarted(phase)
+    if (committed == RequiredPhaseWrite.Acknowledged) scope.acknowledgeStarted(phase)
+    return committed
+  }
+
+  private fun startQaReaudit(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    state: AcceptanceCriterionRepairState,
+  ): RequiredPhaseWrite {
+    if (phase.phaseId != session.steps.audit) return RequiredPhaseWrite.Acknowledged
+    val scope = workflows.readQaRepairState(phase.workflowId)?.openFindingCriteria.orEmpty()
+    val refs =
+      state.qaReauditRefs(scope)
+        ?: return rejected(phase, "The QA findings do not match the admitted acceptance criteria.")
+    if (refs.isEmpty()) return RequiredPhaseWrite.Acknowledged
+    val committed =
+      commit(session, phase, AcceptanceCriterionRepairMutation.QaReaudit(refs))
+    if (committed == RequiredPhaseWrite.Acknowledged) session.accounting.acknowledgeStarted(phase)
     return committed
   }
 
@@ -445,7 +480,11 @@ class AcceptanceCriterionRepairPhaseRecorder(
     detail: String,
   ): RequiredPhaseWrite.Rejected =
     RequiredPhaseWrite.Rejected(
-      RequiredPhaseWriteKind.COMPLETION,
+      if (phase.status == WorkflowStepStatus.RUNNING.wireValue) {
+        RequiredPhaseWriteKind.START
+      } else {
+        RequiredPhaseWriteKind.COMPLETION
+      },
       phase.workflowId,
       phase.phaseId,
       phase.attemptCount,

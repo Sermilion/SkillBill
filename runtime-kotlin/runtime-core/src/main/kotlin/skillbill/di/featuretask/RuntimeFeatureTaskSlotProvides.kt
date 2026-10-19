@@ -18,9 +18,7 @@ import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
-import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
-import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
@@ -106,10 +104,9 @@ internal interface RuntimeFeatureTaskSlotProvides {
     runner: () -> PhaseRunner,
     reviewRunner: ParallelCodeReviewRunner,
     planFanOut: PlanFanOutStrategy,
-    pullRequest: PullRequestPhaseStrategies,
+    injected: InjectedPhaseStrategies,
     planIntake: () -> FeatureTaskRuntimePlanIntake,
   ): PhaseStrategyRegistry {
-    val prDescription = pullRequest.prDescription
     val inlineReviewRunner = runner()
     val delegatedReviewRunner = runner()
     val standaloneInlineRunner = runner()
@@ -167,14 +164,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
         PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
         PhaseStrategyRegistration(BoundaryHistoryOpus55Strategy(), runner()),
         PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
-        PhaseStrategyRegistration(prDescription, runner()),
-        PhaseStrategyRegistration(PrDescriptionOpus55Strategy(prDescription), runner()),
-        PhaseStrategyRegistration(pullRequest.monitor, runner()),
-        PhaseStrategyRegistration(MonitorOpus55Strategy(pullRequest.monitor), runner()),
-        PhaseStrategyRegistration(pullRequest.standaloneMonitor, runner()),
-        PhaseStrategyRegistration(StandaloneMonitorOpus55Strategy(pullRequest.standaloneMonitor), runner()),
-        PhaseStrategyRegistration(pullRequest.standalonePublication, runner()),
-      ),
+      ) + injected.registrations(runner),
     )
   }
 

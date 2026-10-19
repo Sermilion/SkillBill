@@ -31,6 +31,8 @@ fun FeatureTaskRuntimeProcessInspection.isConfirmedDead(): Boolean =
 sealed interface FeatureTaskRuntimeHeartbeatTick {
   data object Renewed : FeatureTaskRuntimeHeartbeatTick
 
+  data object WorkflowFinished : FeatureTaskRuntimeHeartbeatTick
+
   data class FencingLost(val reason: String) : FeatureTaskRuntimeHeartbeatTick
 }
 

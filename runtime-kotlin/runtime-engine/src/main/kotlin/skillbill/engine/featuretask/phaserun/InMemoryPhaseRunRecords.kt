@@ -37,6 +37,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredPro
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -66,6 +67,9 @@ internal class InMemoryPhaseRunRecords private constructor(
   private var verificationCheckpoint: List<FeatureTaskRuntimeFindingVerificationDisposition>? = null
   private var verificationBoundary: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? = null
   private var reviewGeneration: Int = 0
+  private var qaState: QaRepairState? = null
+
+  override fun loadQaRepairState(workflowId: String): QaRepairState? = qaState
 
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -114,6 +118,7 @@ internal class InMemoryPhaseRunRecords private constructor(
   }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
+    request.normalizedOutput?.qaRepairState?.let { qaState = it }
     request.normalizedOutput?.output?.value?.let { acceptedOutputs[request.phaseId] = it }
     recordPhaseState(request)
     phaseLedger += phaseLedgerEntry(FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)

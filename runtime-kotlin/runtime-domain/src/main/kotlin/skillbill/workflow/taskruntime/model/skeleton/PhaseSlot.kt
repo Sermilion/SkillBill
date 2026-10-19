@@ -16,6 +16,7 @@ enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
       FeatureTaskRuntimePhaseIds.AUDIT,
     ),
   ),
+  QA("qa", listOf(FeatureTaskRuntimePhaseIds.QA, FeatureTaskRuntimePhaseIds.QA_FIX)),
   CODE_REVIEW(
     "code_review",
     listOf(

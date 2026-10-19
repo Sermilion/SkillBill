@@ -93,6 +93,7 @@ private fun stageReviewCatalogPack(
   val runtimeFiles =
     buildList {
       add(source.resolve("platform.yaml"))
+      manifest.qaCapability?.guidanceFile?.let { guidance -> add(source.resolve(guidance)) }
       manifest.declaredFiles.baseline?.let { baseline -> add(baseline.toPath()) }
       addAll(manifest.declaredFiles.areas.values.map { area -> area.toPath() })
       val declaredAddons =

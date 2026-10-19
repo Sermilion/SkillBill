@@ -87,8 +87,11 @@ class DispatcherSkillInstallRepoTest : InstallApplyTestSupport() {
     assertTrue("`confirm:<token>` and that `select:`" in prose, "pr-review-fix must re-run with the operator's select:")
     assertTrue("Never pass `confirm:` or `select:` without an operator answer." in prose)
     assertTrue("For `operation:verify`, forward the intake verbatim" in prose, "verify must forward its intake")
-    assertTrue("Forward `target:` and `mode:` verbatim" in prose, "verify must forward target: and mode: verbatim")
-    assertTrue("ask the operator once to confirm or adjust them." in prose)
+    assertTrue(
+      "Forward `target:`, `mode:`, and `qa:` verbatim" in prose,
+      "verify must forward target:, mode:, and qa: verbatim",
+    )
+    assertTrue("ask the operator once to confirm or adjust the criteria." in prose)
     assertTrue("`rehydrate-needed:`, run Rehydrate for that spec path, then run the same operation once more." in prose)
     assertTrue(
       "`mode:` or `target:` outside `phase:review` and `operation:verify`" in prose,

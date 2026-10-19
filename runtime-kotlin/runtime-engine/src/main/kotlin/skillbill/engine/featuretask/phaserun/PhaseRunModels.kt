@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.config.model.CompactionSettings
@@ -10,7 +11,13 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
+import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.review.ReviewInvocation
+import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
+import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
+import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -35,6 +42,7 @@ data class PhaseRunRequest(
   val activityOutput: ((String, String) -> Unit)? = null,
   val launchArguments: List<String>? = null,
   val recoverStaleOwner: String? = null,
+  val qaExecution: QaExecutionContext? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -60,6 +68,7 @@ sealed interface PhaseRunResult {
     val completedOutputs: List<String> = emptyList(),
     val acceptedOutput: String? = null,
     override val targetReport: List<String> = emptyList(),
+    val qaOutcome: StandaloneQaOutcome? = null,
   ) : PhaseRunResult
 
   data class Blocked(
@@ -71,6 +80,20 @@ sealed interface PhaseRunResult {
     val completedOutputs: List<String> = emptyList(),
     override val targetReport: List<String> = emptyList(),
   ) : PhaseRunResult
+}
+
+@Inject
+class StandalonePhaseRunners(
+  private val monitor: StandaloneMonitorExecutionPreparer,
+  private val qa: QaStandalonePhaseRun,
+) {
+  internal fun prepareMonitor(request: MonitorPreparationRequest): MonitorPreparation = monitor.prepare(request)
+
+  fun runQa(
+    request: PhaseRunRequest,
+    invocationId: String,
+    launch: (PhaseRunRequest) -> PhaseRunResult,
+  ): PhaseRunResult = qa.run(request, invocationId, launch)
 }
 
 data class PhaseRunSpecBundle(
@@ -103,4 +126,5 @@ internal data class InMemoryPhaseRunFacts(
   override val skeletonDefinition: SkeletonDefinition = definition
   override val reviewInvocation: ReviewInvocation = request.reviewInvocation
   override val phaseInstructions: PhaseInstructions? = request.instructions
+  override val qaExecution: QaExecutionContext? = request.qaExecution
 }

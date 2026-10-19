@@ -19,7 +19,7 @@ required:
 properties:
   contract_version:
     type: string
-    const: "0.4"
+    const: "0.5"
     description: >
       Pinned to IDE_STATUS_CONTRACT_VERSION. Bump the schema const and Kotlin
       constant together.
@@ -73,6 +73,17 @@ properties:
     type: string
     minLength: 1
     maxLength: 64
+  qa_outcome:
+    type: string
+    enum:
+      - attempted
+      - passed
+      - findings
+      - skipped
+      - incomplete
+    description: >
+      Present only on a standalone QA phase. `attempted` until the run settles a
+      valid receipt, then the receipt verdict.
   current_activity:
     type: string
     minLength: 1

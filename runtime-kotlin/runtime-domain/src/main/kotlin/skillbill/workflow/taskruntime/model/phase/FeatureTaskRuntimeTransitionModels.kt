@@ -56,6 +56,10 @@ enum class FeatureTaskRuntimeBackwardEdgeCapScope {
   PER_SUBTASK,
 }
 
+enum class FeatureTaskRuntimeCrossSlotAllowance {
+  DECLARED,
+}
+
 data class FeatureTaskRuntimeBackwardEdge(
   val fromPhaseId: String,
   val triggeringVerdict: FeatureTaskRuntimeVerdict,
@@ -66,6 +70,7 @@ data class FeatureTaskRuntimeBackwardEdge(
     FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
   val capScope: FeatureTaskRuntimeBackwardEdgeCapScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
   val warnAfterIterations: Int? = null,
+  val crossSlotAllowance: FeatureTaskRuntimeCrossSlotAllowance? = null,
 ) {
   init {
     require(warnAfterIterations == null || warnAfterIterations >= 1) {

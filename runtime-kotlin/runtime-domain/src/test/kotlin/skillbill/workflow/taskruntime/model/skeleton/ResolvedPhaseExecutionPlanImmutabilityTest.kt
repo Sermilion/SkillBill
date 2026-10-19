@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.model.skeleton
 
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCrossSlotAllowance
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseEntryGate
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import kotlin.test.Test
@@ -10,12 +11,46 @@ import kotlin.test.assertFailsWith
 
 class ResolvedPhaseExecutionPlanImmutabilityTest {
   @Test
+  fun `phase traversal keeps declared cross-slot edges and drops undeclared ones`() {
+    val allowed =
+      FeatureTaskRuntimeBackwardEdge(
+        "qa_fix",
+        FeatureTaskRuntimeVerdict.ADVANCE,
+        "audit",
+        "qa_fix_return",
+        null,
+        crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
+      )
+    val undeclared =
+      FeatureTaskRuntimeBackwardEdge("audit", FeatureTaskRuntimeVerdict.ADVANCE, "qa_fix", "undeclared", null)
+    val plan =
+      ResolvedPhaseExecutionPlan(
+        definitionId = "cross-slot-test",
+        definitionSemanticRevision = 1,
+        selectedStrategies =
+          listOf(
+            ResolvedPhaseStrategyIdentity(PhaseSlot.QA, "qa", 1, listOf("qa_fix"), "qa_fix"),
+            ResolvedPhaseStrategyIdentity(PhaseSlot.AUDIT, "audit", 1, listOf("audit"), "audit"),
+          ),
+        reviewSelection = null,
+        qualityGateSelection = null,
+        traversal = FeatureTaskRuntimeTransitionDeclaration(listOf("qa_fix", "audit"), listOf(allowed, undeclared)),
+        stepRecords =
+          ResolvedPhaseStepRecords(
+            mapOf("qa_fix" to "qa-fix-policy", "audit" to "audit-policy"),
+            mapOf("qa_fix" to "qa-fix-resume", "audit" to "audit-resume"),
+          ),
+      )
+
+    assertEquals(listOf(allowed), plan.phaseTraversal().backwardEdges)
+  }
+
+  @Test
   fun `registration and traversal input mutations cannot change a resolved plan`() {
     val steps = mutableListOf("implement", "simplify")
     val identity = ResolvedPhaseStrategyIdentity(PhaseSlot.IMPLEMENTATION, "implement-simplify", 1, steps, "implement")
     val strategies = mutableListOf(identity)
     val owner = ResolvedPhaseStrategyDispatch(identity.slot, identity.strategyId, identity.semanticRevision)
-    val dispatch = steps.associateWith { owner }.toMutableMap()
     val policies = steps.associateWith { "step-policy-v1:$it" }.toMutableMap()
     val resumes = steps.associateWith { "resume-v1:$it" }.toMutableMap()
     val forward = steps.toMutableList()
@@ -34,13 +69,11 @@ class ResolvedPhaseExecutionPlanImmutabilityTest {
         reviewSelection = null,
         qualityGateSelection = null,
         traversal = FeatureTaskRuntimeTransitionDeclaration(forward, edges, loopOnly, gates, successors),
-        dispatchStrategyByStep = dispatch,
         stepRecords = ResolvedPhaseStepRecords(policies, resumes),
       )
 
     steps.clear()
     strategies.clear()
-    dispatch.clear()
     policies.clear()
     resumes.clear()
     forward.reverse()

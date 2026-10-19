@@ -33,6 +33,7 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
+import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
@@ -83,6 +84,7 @@ internal class SQLiteUnitOfWork(
 ) : UnitOfWork {
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
     SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
+  override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)

@@ -45,6 +45,8 @@ internal const val NO_CHANGE_PAUSE_REASON =
   "Audit confirmed the no-change claim; awaiting an operator decision on the no-change pause."
 
 internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
+  val auditsNoChangeClaim: Boolean
+
   val operatorReopened: Boolean
 
   /** Recorded audit rounds whose remaining list did not shrink after repair. */

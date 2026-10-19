@@ -9,6 +9,7 @@ object FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys {
   const val CODE_REVIEW_MODE: String = "code_review_mode"
   const val VALIDATION_DEPTH: String = "validation_depth"
   const val QUALITY_GATE_SELECTION: String = "quality_gate_selection"
+  const val QA_SELECTION: String = "qa_selection"
   const val PARALLEL_REVIEW_AGENT: String = "parallel_review_agent"
   const val SUBTASK_NAME: String = "subtask_name"
   const val AGENT_ADDON_SELECTION: String = "agent_addon_selection"

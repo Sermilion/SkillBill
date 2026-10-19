@@ -6,6 +6,7 @@ import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.assertGoldenPayload
 import skillbill.mcp.shared.assertSqliteTimestampShape
 import skillbill.mcp.shared.assertWorkflowIdShape
+import skillbill.mcp.shared.callToolError
 import skillbill.mcp.shared.callToolPayload
 import skillbill.mcp.shared.disabledTelemetryEnvironment
 import java.nio.file.Files
@@ -82,6 +83,34 @@ class McpVerifyWorkflowToolsTest {
       continued["read_only_full_state_command"],
     )
     assertCompactContinuationPayload(continued)
+  }
+
+  @Test
+  fun `verify open without qa stores off and an input_context patch keeps it`() {
+    val tempDir = Files.createTempDirectory("skillbill-mcp-verify-qa")
+    val context = McpRuntimeContext(environment = disabledTelemetryEnvironment(tempDir), userHome = tempDir)
+    val workflowId =
+      context.callToolPayload(
+        "feature_verify_workflow_open",
+        mapOf("session_id" to "", "current_step_id" to "code_review"),
+      )["workflow_id"] as String
+    val update =
+      mapOf(
+        "workflow_id" to workflowId,
+        "session_id" to "",
+        "workflow_status" to "running",
+        "current_step_id" to "code_review",
+        "step_updates" to listOf(mapOf("step_id" to "code_review", "status" to "running", "attempt_count" to 1)),
+        "artifacts_patch" to mapOf("input_context" to mapOf("spec_summary" to "replaced")),
+      )
+
+    context.callToolPayload("feature_verify_workflow_update", update)
+
+    val got = context.callToolPayload("feature_verify_workflow_get", mapOf("workflow_id" to workflowId))
+    val inputContext = (got["artifacts"] as Map<*, *>)["input_context"] as Map<*, *>
+    assertEquals(mapOf("spec_summary" to "replaced", "qa_selection" to "off"), inputContext)
+    val refused = context.callToolError("feature_verify_workflow_update", update + ("qa" to "on"))
+    assertTrue("cannot change to qa:on" in refused.toString(), refused.toString())
   }
 
   @Test

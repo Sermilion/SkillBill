@@ -118,6 +118,10 @@ internal fun MutableList<String>.addGoalContinuationArguments(context: SkillRunG
   add(context.codeReviewMode.wireValue)
   add(tokens.QUALITY_GATE_SELECTION_FLAG)
   add(context.qualityGateSelection.wireValue)
+  context.qaSelection?.let { selection ->
+    add(tokens.QA_SELECTION_FLAG)
+    add(selection.wireValue)
+  }
   context.reviewBaseline?.let { baseline ->
     add(tokens.GOAL_REVIEW_BASE_SHA_FLAG)
     add(baseline.reviewBaseSha)

@@ -18,6 +18,8 @@ internal fun featureVerifyFinishedValues(
     add(record.historyRelevance)
     add(record.historyHelpfulness)
     add(gapsFoundJson)
+    add(record.qaOutcome)
+    add(record.qaReason)
     if (!includeSessionFirst) {
       add(record.sessionId)
     }

@@ -21,6 +21,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
@@ -54,7 +55,11 @@ class AdmittedBuildGateCommandsTest {
         execution.strategies.executionPlan(
           PhaseStrategySelectionFacts(
             SkeletonDefinition.GOAL_CHILD,
-            setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
+            setOf(
+              CodeReviewExecutionMode.INLINE,
+              FeatureTaskRuntimeQualityGateSelection.BUILD,
+              FeatureTaskRuntimeQaSelection.AUTO,
+            ),
           ),
         )
       val descriptor = execution.validator.read(execution.codec.encodeExecution(plan, inputs), "build creation")

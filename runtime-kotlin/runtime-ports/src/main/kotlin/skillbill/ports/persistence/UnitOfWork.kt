@@ -3,6 +3,7 @@ package skillbill.ports.persistence
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
+import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
@@ -42,6 +43,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository
   val rejectedOutputDiagnosticPermissions: RejectedOutputDiagnosticPermissions
   val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository
+  val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository
   val operationProposals: OperationProposalRepository
 
   fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts

@@ -12,11 +12,17 @@ data class FeatureTaskRuntimeVerdict(
   companion object {
     val ADVANCE: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("advance")
 
+    val BLOCK: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("block")
+
     val APPROVED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("approved")
 
     val CHANGES_REQUESTED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("changes_requested")
 
     val FINDINGS_VERIFIED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("findings_verified")
+
+    val QA_FINDINGS: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("qa_findings")
+
+    val QA_INVALIDATED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("qa_invalidated")
 
     val NO_FINDINGS_VERIFIED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("no_findings_verified")
 

@@ -5,6 +5,7 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdgeCapScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCrossSlotAllowance
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseEntryGate
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
@@ -16,6 +17,11 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
         listOf(
           FeatureTaskRuntimePhaseEntryGate(
             phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
+            requiredPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+            requiredVerdict = FeatureTaskRuntimeVerdict.SATISFIED,
+          ),
+          FeatureTaskRuntimePhaseEntryGate(
+            phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
             requiredPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
             requiredVerdict = FeatureTaskRuntimeVerdict.SATISFIED,
           ),
@@ -45,6 +51,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
         ) + monitorFixEdges() +
+          qaFixEdges() +
           FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER.map { (producer, loopId) ->
             FeatureTaskRuntimeBackwardEdge(
               fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
@@ -63,12 +70,50 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
         ),
       loopOnlySuccessors =
         mapOf(
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         ),
+    )
+
+  private fun qaFixEdges(): List<FeatureTaskRuntimeBackwardEdge> =
+    listOf(
+      FeatureTaskRuntimeBackwardEdge(
+        fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+        triggeringVerdict = FeatureTaskRuntimeVerdict.QA_FINDINGS,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
+        loopId = FeatureTaskRuntimePhaseWorkflowDefinition.QA_FIX_LOOP_ID,
+        perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_FIX_ATTEMPTS,
+        capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+      ),
+      FeatureTaskRuntimeBackwardEdge(
+        fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
+        triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+        loopId = FeatureTaskRuntimePhaseWorkflowDefinition.QA_FIX_RETURN_LOOP_ID,
+        perEdgeCap = null,
+        crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
+      ),
+      FeatureTaskRuntimeBackwardEdge(
+        fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
+        triggeringVerdict = FeatureTaskRuntimeVerdict.QA_INVALIDATED,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+        loopId = FeatureTaskRuntimePhaseWorkflowDefinition.QA_INVALIDATION_LOOP_ID,
+        perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_INVALIDATIONS,
+        capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+        crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
+      ),
+    )
+
+  val composedOnlyWithSteps: Map<String, Set<String>> =
+    mapOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.QA_INVALIDATION_LOOP_ID to
+        setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA),
     )
 
   private fun monitorFixEdges(): List<FeatureTaskRuntimeBackwardEdge> =

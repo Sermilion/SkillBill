@@ -28,6 +28,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
@@ -41,6 +42,8 @@ internal interface PhaseRunRecords :
   PhaseLaunchRecords,
   PhasePlanRecords,
   FeatureTaskRuntimeNoChangePausePort {
+  fun loadQaRepairState(workflowId: String): QaRepairState?
+
   /** Appends a ledger entry. */
   fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean
 

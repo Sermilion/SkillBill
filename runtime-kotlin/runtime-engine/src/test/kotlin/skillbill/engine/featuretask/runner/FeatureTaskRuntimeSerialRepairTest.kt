@@ -57,6 +57,71 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class FeatureTaskRuntimeSerialRepairTest {
   @Test
+  fun `a rejected full no-change claim cannot charge another criterion's gap to the focused audit`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    var repaired = false
+    val focused = mutableListOf<String>()
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val prompt = assertNotNull(request.skillRunRequest.promptOverride)
+        val phase = phaseIdFromPrompt(prompt)
+        val state = accounting.get()?.snapshot
+        facts(
+          when (phase) {
+            "audit" ->
+              when {
+                state == null -> serialDiscoveryOutput().replace("advance", "no_change_rejected")
+                state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY ->
+                  auditRemainingAcOutput("AC-002 has no production caller. AC-001 is satisfied.")
+                    .replace(
+                      "\"status\": \"completed\",",
+                      "\"status\": \"completed\", \"verdict\": \"no_change_rejected\",",
+                    )
+                else -> {
+                  val criterion = assertNotNull(state.currentCriterionRef)
+                  focused += criterion
+                  assertFalse(prompt.contains("Judge every criterion in the claim"))
+                  assertContains(prompt, "($criterion)")
+                  if (criterion == "AC-001" || repaired) {
+                    settledAuditSatisfiedRecord()
+                  } else {
+                    auditRemainingAcOutput("AC-002 has no production caller.")
+                      .replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"advance\",")
+                  }
+                }
+              }
+            "audit_plan_fix", "audit_implement_fix" -> {
+              assertEquals("AC-002", state?.currentCriterionRef)
+              if (phase == "audit_implement_fix") repaired = true
+              defaultPhaseOutput(request)
+            }
+            else -> defaultPhaseOutput(request)
+          },
+        )
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    harness.seedPhase("preplan", "completed", 1, "claude", PREPLAN_OUTPUT)
+    harness.seedPhase("plan", "completed", 1, "claude", PLAN_OUTPUT)
+    harness.seedPhase("implement", "completed", 1, "claude", noChangeImplementationOutput())
+
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+      assertEquals(listOf("AC-001", "AC-002", "AC-002", "AC-002"), focused)
+      assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
+      assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+    }
+  }
+
+  @Test
   fun `confirmed no-change source acceptance commits before review and continues to validation`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val launcher =
@@ -269,7 +334,7 @@ class FeatureTaskRuntimeSerialRepairTest {
   }
 
   @Test
-  fun `operator resume restores the audit receipt for focused planning after clearing the current output`() =
+  fun `operator resume restores audit evidence and executes each new plan instead of reusing a completed repair`() =
     assertOperatorResumeAuditReceipt(settlementAvailable = true)
 
   @Test
@@ -328,6 +393,12 @@ class FeatureTaskRuntimeSerialRepairTest {
         assertEquals("audit_plan_fix", harness.launchedPromptPhaseOrder().drop(beforeResume).firstOrNull(), "$report")
         assertContains(report.blockedReason, "three unsuccessful repair attempts")
         assertEquals(mapOf("AC-002" to 6), repairs)
+        assertEquals(
+          List(3) { listOf("audit_plan_fix", "audit_implement_fix") }.flatten(),
+          harness.launchedPromptPhaseOrder().drop(beforeResume).filter {
+            it in setOf("audit_plan_fix", "audit_implement_fix")
+          },
+        )
         assertEquals(3, resumed.unsuccessfulTotals["AC-002"])
       } else {
         assertContains(report.blockedReason, "requires upstream output(s) audit")

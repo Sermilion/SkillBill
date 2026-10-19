@@ -5,6 +5,7 @@ import skillbill.config.model.PhaseCompactionDirective
 import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.model.review.ReviewTarget
@@ -68,6 +69,8 @@ internal data class PendingReentry(
   val edgeIteration: Int,
   val drivingVerdict: FeatureTaskRuntimeVerdict,
   val expectedRepositoryCheckpoint: String? = null,
+  val completionDerived: Boolean = false,
+  val resumeCoveredPhaseIds: Set<String> = emptySet(),
 )
 
 internal data class PhaseAttemptLoopCarryForward(
@@ -298,6 +301,7 @@ internal data class PhaseRun(
   val validationGateTriage: Boolean = false,
   val agentRunValidateFallback: Boolean = false,
   val validationGateRepairTurn: Int = 0,
+  val qaExecution: QaExecutionContext? = request.qaExecution,
 )
 
 internal data class PreLaunchBlock(

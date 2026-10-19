@@ -111,6 +111,7 @@ object FeatureVerifyWorkflowDefinition {
           "code_review",
           "unit_test_value_check",
           "completeness_audit",
+          "qa",
           "verdict",
           "finish",
         ),
@@ -123,7 +124,8 @@ object FeatureVerifyWorkflowDefinition {
           "code_review" to "Step 5: Code Review",
           "unit_test_value_check" to "Step 6: Unit Test Value Check",
           "completeness_audit" to "Step 7: Completeness Audit",
-          SharedPayloadKeys.VERDICT to "Step 8: Consolidated Verdict",
+          "qa" to "Step 8: Mobile QA",
+          SharedPayloadKeys.VERDICT to "Step 9: Consolidated Verdict",
           "finish" to "Finish",
         ),
       requiredArtifactsByStep =
@@ -135,6 +137,7 @@ object FeatureVerifyWorkflowDefinition {
           "code_review" to listOf("criteria_summary", "review_rubric", "diff_projection"),
           "unit_test_value_check" to listOf("criteria_summary", "unit_test_value_rubric", "diff_projection"),
           "completeness_audit" to listOf("criteria_summary", "completeness_rubric", "diff_projection"),
+          "qa" to listOf("criteria_summary", "diff_projection"),
           SharedPayloadKeys.VERDICT to
             listOf(
               "feature_flag_audit_receipt",
@@ -162,6 +165,8 @@ object FeatureVerifyWorkflowDefinition {
             "Run operation:unit-test-value-check independently against criteria, its rubric, and diff_projection.",
           "completeness_audit" to
             "Run completeness independently against criteria, its rubric, and diff_projection.",
+          "qa" to
+            "Re-create the temporary target worktree and rerun QA; never reuse a receipt from another tree.",
           SharedPayloadKeys.VERDICT to
             "Reuse only compact typed evaluator receipts to produce the final verdict " +
             "without rerunning earlier phases.",
@@ -184,12 +189,13 @@ object FeatureVerifyWorkflowDefinition {
               directiveSection("Step 7: Completeness Audit"),
               directiveSection("Completeness Audit"),
             ),
+          "qa" to listOf(directiveSection("Step 8: Mobile QA")),
           SharedPayloadKeys.VERDICT to
             listOf(
-              directiveSection("Step 8: Consolidated Verdict"),
+              directiveSection("Step 9: Consolidated Verdict"),
               directiveSection("Consolidated Verdict"),
             ),
-          "finish" to listOf(directiveSection("Step 8: Consolidated Verdict")),
+          "finish" to listOf(directiveSection("Step 9: Consolidated Verdict")),
         ),
       continuationDirectives =
         mapOf(
@@ -215,6 +221,10 @@ object FeatureVerifyWorkflowDefinition {
           "completeness_audit" to
             "Run independently from sibling evaluators using criteria_summary, completeness_rubric, and the " +
             "checkpoint-scoped diff_projection. Refresh the projection if the target changed materially.",
+          "qa" to
+            "Honor the stored qa_selection. With off, persist a disabled_policy qa_receipt. With on, check the " +
+            "target head out into a fresh temporary detached worktree, run report-only QA there, persist qa_receipt, " +
+            "and remove the worktree.",
           SharedPayloadKeys.VERDICT to
             "Reuse only compact typed evaluator receipts to produce the final verdict " +
             "without rerunning earlier phases.",
@@ -231,6 +241,8 @@ object FeatureVerifyWorkflowDefinition {
           "code_review_receipt",
           "unit_test_value_receipt",
           "completeness_audit_receipt",
+          "qa_receipt",
+          "qa_outcome",
           "verdict_result",
           "session_notes",
           "review_diff_pointer",
@@ -284,6 +296,16 @@ object FeatureVerifyWorkflowDefinition {
                 mapOf(
                   "criteria_summary" to criteriaFields,
                   "completeness_rubric" to evaluatorPolicyFields,
+                  "diff_projection" to diffFields,
+                ),
+            ),
+          "qa" to
+            projection(
+              "criteria_summary",
+              "diff_projection",
+              typedFields =
+                mapOf(
+                  "criteria_summary" to criteriaFields,
                   "diff_projection" to diffFields,
                 ),
             ),

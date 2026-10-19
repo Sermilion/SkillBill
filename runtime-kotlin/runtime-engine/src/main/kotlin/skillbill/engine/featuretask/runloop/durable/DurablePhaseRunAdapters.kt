@@ -59,6 +59,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.nio.file.Path
@@ -121,19 +122,23 @@ internal class DurablePhaseRunRecords(
     admitted.ownedWrite({ recorder.recordOwnedPhaseState(request, it) }) { recorder.recordPhaseState(request) }
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
-    when (acceptance?.start(request)?.let { it && recorder.bindOwnedPhaseCoordinates(request, admitted) }) {
-      true -> RequiredPhaseWrite.Acknowledged
-      false ->
-        RequiredPhaseWrite.Rejected(
-          RequiredPhaseWriteKind.START,
-          request.workflowId,
-          request.phaseId,
-          request.attemptCount,
-        )
+    when (val started = acceptance?.start(request)) {
       null ->
         admitted.ownedWrite({ recorder.recordOwnedRequiredPhaseStart(request, it) }) {
           recorder.recordRequiredPhaseStart(request)
         }
+      RequiredPhaseWrite.Acknowledged ->
+        if (recorder.bindOwnedPhaseCoordinates(request, admitted)) {
+          started
+        } else {
+          RequiredPhaseWrite.Rejected(
+            RequiredPhaseWriteKind.START,
+            request.workflowId,
+            request.phaseId,
+            request.attemptCount,
+          )
+        }
+      else -> started
     }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
@@ -164,6 +169,8 @@ internal class DurablePhaseRunRecords(
 
   override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>? =
     recorder.loadPhaseRecords(workflowId)
+
+  override fun loadQaRepairState(workflowId: String): QaRepairState? = recorder.loadQaRepairState(workflowId)
 
   override fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
     admitted.ownedWrite({ recorder.completeOwnedGoalReviewPhase(completion, it) }) {

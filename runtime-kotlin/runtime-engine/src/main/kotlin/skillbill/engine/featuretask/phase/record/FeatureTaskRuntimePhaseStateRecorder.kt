@@ -17,10 +17,12 @@ import skillbill.engine.featuretask.persist.workflowStatusFor
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.operatorBlockRetryFromWorkflowArtifacts
+import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecords
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -29,6 +31,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asQaRepairStateWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -102,7 +105,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
         attemptStatusOverride ?: attemptStatusFor(
           request,
         ),
-      ) + findingVerificationCheckpointPatch(request)
+      ) + findingVerificationCheckpointPatch(request) + qaRepairStatePatch(request)
   }
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
@@ -173,7 +176,8 @@ class FeatureTaskRuntimePhaseStateRecorder(
             updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
           ),
         ) + implementationAttemptPatch(artifacts, request, attemptStatusFor(request)) +
-          findingVerificationCheckpointPatch(request)
+          findingVerificationCheckpointPatch(request) + qaRepairStatePatch(request)
+      recordQaOutcome(unitOfWork, request)
       workflowPersistence.persistArtifactsPatch(
         unitOfWork.workflowStates,
         record,
@@ -399,6 +403,24 @@ class FeatureTaskRuntimePhaseStateRecorder(
     )
   }
 
+  private fun qaRepairStatePatch(request: FeatureTaskRuntimePhaseStateRequest): Map<String, Any?> {
+    if (!request.finished || request.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) return emptyMap()
+    val payload = request.normalizedOutput?.qaRepairState?.asQaRepairStateWireMap() ?: return emptyMap()
+    implementationAttemptValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE,
+      payload,
+      "completed-qa-findings-state",
+    )
+    return mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QA_REPAIR_STATE.entry(payload))
+  }
+
+  private fun recordQaOutcome(
+    unitOfWork: UnitOfWork,
+    request: FeatureTaskRuntimePhaseStateRequest,
+  ) {
+    FeatureTaskQaOutcomeRecords.settled(request, clock.instant())?.let(unitOfWork.featureTaskQaOutcomes::upsert)
+  }
+
   private fun recordCompletedPhaseWrite(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution?,
@@ -442,6 +464,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
           workflowArtifactEntryMap(completion.asWorkflowArtifactEntry()),
           FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
         )
+      recordQaOutcome(unitOfWork, request)
       workflowPersistence.persistArtifactsPatch(
         unitOfWork.workflowStates,
         record,
@@ -451,7 +474,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
           ),
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(updatedLedger),
         ) + implementationAttemptPatch(artifacts, request, FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED) +
-          findingVerificationCheckpointPatch(request),
+          findingVerificationCheckpointPatch(request) + qaRepairStatePatch(request),
         WorkflowRowAdvance(
           request.phaseId,
           workflowStatusFor(request),

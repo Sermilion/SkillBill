@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
-import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
@@ -20,12 +19,14 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.skeleton.PhaseRunHarness
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import java.time.Clock
@@ -43,13 +44,17 @@ class PhaseRunEntry(
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val agentRunLauncher: AgentRunLauncher,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
-  private val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer,
+  private val standaloneRunners: StandalonePhaseRunners,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
     if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
     val invocationId = newInvocationId()
     return withStatus(request, invocationId, request.definitionId) { statusRequest ->
-      runInternal(statusRequest, invocationId)
+      if (SkeletonDefinition.runHarnessOf(request.definitionId) == PhaseRunHarness.DEVICE_QA) {
+        standaloneRunners.runQa(statusRequest, invocationId) { runInternal(it, invocationId) }
+      } else {
+        runInternal(statusRequest, invocationId)
+      }
     }
   }
 
@@ -70,7 +75,7 @@ class PhaseRunEntry(
       )
     }
     val preparation =
-      standaloneMonitorPreparer.prepare(
+      standaloneRunners.prepareMonitor(
         MonitorPreparationRequest(
           request.repoRoot,
           request.intake,
@@ -181,6 +186,9 @@ class PhaseRunEntry(
           request.activityOutput?.invoke(stepName, activity)
         },
       )
+    if (SkeletonDefinition.runHarnessOf(publicPhaseId) == PhaseRunHarness.DEVICE_QA) {
+      publisher.recordQaOutcome(StandaloneQaOutcome.ATTEMPTED)
+    }
     monitor?.cleanup?.onSettled { settlement ->
       runCatching { publisher.recordMonitorCleanup(settlement.toStatusCleanup()) }
     }

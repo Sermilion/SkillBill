@@ -120,7 +120,13 @@ class RuntimeFeatureTaskSlotProvidesTest {
     val holders = SkeletonDefinition.entries.filter { PhaseSlot.PLAN in it.slots }
 
     assertEquals(
-      setOf(SkeletonDefinition.STANDALONE, SkeletonDefinition.GOAL_CHILD, SkeletonDefinition.PLAN),
+      setOf(
+        SkeletonDefinition.STANDALONE_REVISION_2,
+        SkeletonDefinition.GOAL_CHILD_REVISION_2,
+        SkeletonDefinition.STANDALONE,
+        SkeletonDefinition.GOAL_CHILD,
+        SkeletonDefinition.PLAN,
+      ),
       holders.toSet(),
     )
     holders.forEach { definition ->

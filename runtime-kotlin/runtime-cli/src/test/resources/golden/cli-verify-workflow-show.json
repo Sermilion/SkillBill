@@ -46,6 +46,11 @@
     {
       "attempt_count": 0,
       "status": "pending",
+      "step_id": "qa"
+    },
+    {
+      "attempt_count": 0,
+      "status": "pending",
       "step_id": "verdict"
     },
     {

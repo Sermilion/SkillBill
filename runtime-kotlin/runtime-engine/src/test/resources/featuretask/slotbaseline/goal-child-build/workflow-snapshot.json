@@ -620,10 +620,10 @@
             }
         },
         "feature_task_runtime_execution_plan": {
-            "contract_version": "0.2",
+            "contract_version": "0.3",
             "definition": {
                 "id": "goal-child",
-                "semantic_revision": 2
+                "semantic_revision": 3
             },
             "dispatch_ownership": [
                 {
@@ -685,6 +685,18 @@
                     "slot": "preplan",
                     "step": "preplan",
                     "strategy_id": "agent-preplan"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "qa",
+                    "step": "qa",
+                    "strategy_id": "agent-qa"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "qa",
+                    "step": "qa_fix",
+                    "strategy_id": "agent-qa"
                 },
                 {
                     "semantic_revision": 1,
@@ -757,6 +769,7 @@
                 "phase_timeout_millis": null,
                 "validation_depth": "full"
             },
+            "qa_selection": "auto",
             "quality_gate_selection": "build",
             "resume_interpretations": [
                 {
@@ -808,6 +821,16 @@
                     "identity": "agent-preplan/1:preplan",
                     "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "preplan"
+                },
+                {
+                    "identity": "agent-qa/1:qa",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "qa"
+                },
+                {
+                    "identity": "agent-qa/1:qa_fix",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "qa_fix"
                 },
                 {
                     "identity": "inline/1:review",
@@ -893,6 +916,16 @@
                     "strategy_id": "agent-preplan"
                 },
                 {
+                    "entry_step": "qa",
+                    "selected_steps": [
+                        "qa",
+                        "qa_fix"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "qa",
+                    "strategy_id": "agent-qa"
+                },
+                {
                     "entry_step": "build",
                     "selected_steps": [
                         "build"
@@ -966,6 +999,16 @@
                 {
                     "identity": "step-policy-v2:__NORMALIZED_SHA64__",
                     "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "qa"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "qa_fix"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "review"
                 },
                 {
@@ -989,6 +1032,7 @@
                     {
                         "cap_exhaustion_behavior": "BLOCK",
                         "cap_scope": "PER_SUBTASK",
+                        "cross_slot_allowance": null,
                         "destination_step": "audit_plan_fix",
                         "from_step": "audit",
                         "loop_id": "audit_repair",
@@ -999,6 +1043,7 @@
                     {
                         "cap_exhaustion_behavior": "ADVANCE",
                         "cap_scope": "PER_SUBTASK",
+                        "cross_slot_allowance": null,
                         "destination_step": "implement_fix",
                         "from_step": "verify_findings",
                         "loop_id": "review_fix",
@@ -1009,6 +1054,40 @@
                     {
                         "cap_exhaustion_behavior": "BLOCK",
                         "cap_scope": "PER_SUBTASK",
+                        "cross_slot_allowance": null,
+                        "destination_step": "qa_fix",
+                        "from_step": "qa",
+                        "loop_id": "qa_fix",
+                        "per_edge_cap": 3,
+                        "verdict": "qa_findings",
+                        "warn_after_iterations": null
+                    },
+                    {
+                        "cap_exhaustion_behavior": "BLOCK",
+                        "cap_scope": "PER_SUBTASK",
+                        "cross_slot_allowance": "DECLARED",
+                        "destination_step": "audit",
+                        "from_step": "qa_fix",
+                        "loop_id": "qa_fix_return",
+                        "per_edge_cap": null,
+                        "verdict": "advance",
+                        "warn_after_iterations": null
+                    },
+                    {
+                        "cap_exhaustion_behavior": "BLOCK",
+                        "cap_scope": "PER_SUBTASK",
+                        "cross_slot_allowance": "DECLARED",
+                        "destination_step": "audit",
+                        "from_step": "write_history",
+                        "loop_id": "qa_invalidation",
+                        "per_edge_cap": 3,
+                        "verdict": "qa_invalidated",
+                        "warn_after_iterations": null
+                    },
+                    {
+                        "cap_exhaustion_behavior": "BLOCK",
+                        "cap_scope": "PER_SUBTASK",
+                        "cross_slot_allowance": null,
                         "destination_step": "build",
                         "from_step": "write_history",
                         "loop_id": "regenerate_build_receipt",
@@ -1022,6 +1101,11 @@
                         "required_step": "audit",
                         "required_verdict": "satisfied",
                         "step": "review"
+                    },
+                    {
+                        "required_step": "audit",
+                        "required_verdict": "satisfied",
+                        "step": "qa"
                     },
                     {
                         "required_step": "verify_findings",
@@ -1038,6 +1122,8 @@
                     "audit_plan_fix",
                     "audit_implement_fix",
                     "audit",
+                    "qa",
+                    "qa_fix",
                     "review",
                     "verify_findings",
                     "implement_fix",
@@ -1048,7 +1134,8 @@
                 "loop_only_steps": [
                     "audit_implement_fix",
                     "audit_plan_fix",
-                    "implement_fix"
+                    "implement_fix",
+                    "qa_fix"
                 ],
                 "loop_only_successors": [
                     {
@@ -1704,16 +1791,16 @@
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "start",
+                "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "review",
-                "resolved_agent_id": "agent-review",
+                "phase_id": "qa",
+                "resolved_agent_id": "runtime",
                 "sequence_number": 6,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "complete",
+                "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
                 "phase_id": "review",
@@ -1731,16 +1818,16 @@
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "start",
+                "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "verify_findings",
-                "resolved_agent_id": "agent-verify_findings",
+                "phase_id": "review",
+                "resolved_agent_id": "agent-review",
                 "sequence_number": 9,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "complete",
+                "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
                 "phase_id": "verify_findings",
@@ -1749,16 +1836,16 @@
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "start",
+                "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "build",
-                "resolved_agent_id": "agent-build",
+                "phase_id": "verify_findings",
+                "resolved_agent_id": "agent-verify_findings",
                 "sequence_number": 11,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "complete",
+                "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
                 "phase_id": "build",
@@ -1776,16 +1863,16 @@
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "start",
+                "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "write_history",
-                "resolved_agent_id": "agent-write_history",
+                "phase_id": "build",
+                "resolved_agent_id": "agent-build",
                 "sequence_number": 14,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "complete",
+                "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
                 "phase_id": "write_history",
@@ -1794,16 +1881,16 @@
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "start",
+                "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "commit_push",
-                "resolved_agent_id": "agent-commit_push",
+                "phase_id": "write_history",
+                "resolved_agent_id": "agent-write_history",
                 "sequence_number": 16,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "complete",
+                "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
                 "phase_id": "commit_push",
@@ -1818,6 +1905,15 @@
                 "phase_id": "commit_push",
                 "resolved_agent_id": "agent-commit_push",
                 "sequence_number": 18,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "commit_push",
+                "resolved_agent_id": "agent-commit_push",
+                "sequence_number": 19,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             }
         ],
@@ -1932,6 +2028,20 @@
                 "started_at": "__NORMALIZED_TIMESTAMP__",
                 "status": "completed"
             },
+            "qa": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"qa\",\"status\":\"completed\",\"summary\":\"no installed pack declares qa_capability for this repository\",\"produced_outputs\":{\"qa_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"skipped\",\"identity\":{\"head_revision\":\"\",\"tree_identity\":\"__NORMALIZED_SHA64__\"},\"artifact\":null,\"policy\":\"auto\",\"target\":null,\"flows\":[],\"assertions\":[],\"findings\":[],\"skip_reason\":\"unsupported_target\",\"reason_detail\":\"no installed pack declares qa_capability for this repository\",\"cleanup\":{\"outcome\":\"released\",\"retained_resources\":[]}},\"qa_head_revision\":\"\",\"qa_tree_identity\":\"__NORMALIZED_SHA64__\",\"qa_evidence_prefix\":\".git/skill-bill/qa/qa-test-invocation/\",\"qa_receipt_ref\":\"__NORMALIZED_REPO_ROOT__/.git/skill-bill/qa/qa-test-invocation/receipt.json\",\"qa_criterion_ids\":[\"AC-001\",\"AC-002\"],\"qa_open_findings\":[]}}",
+                "phase_id": "qa",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "runtime",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
             "review": {
                 "attempt_count": 1,
                 "contract_version": "0.2",
@@ -2015,6 +2125,16 @@
                 "status": "completed"
             }
         },
+        "feature_task_runtime_qa_repair_state": {
+            "attempts": [],
+            "consumed_attempts": 0,
+            "contract_version": "0.2",
+            "last_receipt_tree_identity": "__NORMALIZED_SHA64__",
+            "max_attempts": 3,
+            "open_findings": [],
+            "qa_fix_step_id": "qa_fix",
+            "subtask_id": 1
+        },
         "feature_task_runtime_resolved_branch": {
             "baseline_owned_paths": [],
             "boundary_history_paths": [],
@@ -2045,6 +2165,7 @@
             "goal_branch": "feat/SKILL-380-phase-slot-strategies",
             "issue_key": "SKILL-380",
             "parent_workflow_id": "wfl-skill-380-parent",
+            "qa_selection": "auto",
             "quality_gate_selection": "build",
             "subtask_id": 1,
             "subtask_name": "slot baseline build child",
@@ -2060,6 +2181,7 @@
                 "agent-implement",
                 "agent-simplify",
                 "agent-audit",
+                "runtime",
                 "agent-review",
                 "agent-verify_findings",
                 "agent-build",
@@ -2156,6 +2278,16 @@
             "attempt_count": 1,
             "status": "completed",
             "step_id": "audit"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "qa"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "qa_fix"
         },
         {
             "attempt_count": 1,

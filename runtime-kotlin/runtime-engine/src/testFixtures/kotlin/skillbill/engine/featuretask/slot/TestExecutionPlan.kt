@@ -8,7 +8,9 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 fun testExecutionPlan(
@@ -21,6 +23,7 @@ fun testExecutionPlan(
         definition,
         setOfNotNull(
           CodeReviewExecutionMode.INLINE,
+          FeatureTaskRuntimeQaSelection.AUTO.takeIf { PhaseSlot.QA in definition.slots },
           FeatureTaskRuntimeQualityGateSelection.VALIDATE.takeIf { definition == SkeletonDefinition.GOAL_CHILD },
         ),
       ),

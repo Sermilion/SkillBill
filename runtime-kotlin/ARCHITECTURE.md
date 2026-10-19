@@ -1303,10 +1303,12 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `REVIEW` (`standalone_review`, with only `present_findings`), `VALIDATION` (the `quality_gate` slot),
   `IMPLEMENT` (the `implementation` slot) and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
-  `IN_MEMORY`) that a phase run drives on its own. `PLAN` (`intake`, `preplan`,
+  `IN_MEMORY`) that a phase run drives on its own. `QA` (the `qa` slot, with only `qa`) is
+  in-memory too; `PhaseRunEntry` hands it to `QaStandalonePhaseRun`, which prepares the QA
+  workspace, resolves the routed pack's `qa_capability`, and validates the receipt. `PLAN` (`intake`, `preplan`,
   `plan`, and `plan_subtasks`) is durable: `skill-bill phase plan` runs it as a standalone workflow
   (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
-  `phase` command lists: review, validation, plan, pr and monitor.
+  `phase` command lists: review, validation, qa, plan, pr and monitor.
   `admittedForRun(goalContinuation)` is the set of definitions a recorded run may
   carry: `{GOAL_CHILD}` for a goal child, `{PLAN}` otherwise, so
   admission and crash reconciliation still raise

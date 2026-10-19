@@ -99,6 +99,8 @@ fun FeatureVerifyFinishedRequest.toRecord(): FeatureVerifyFinishedRecord =
     historyRelevance = historyRelevance,
     historyHelpfulness = historyHelpfulness,
     gapsFound = gapsFound,
+    qaOutcome = qaOutcome,
+    qaReason = qaReason,
   )
 
 fun PrDescriptionGeneratedRequest.toRecord(sessionId: String): PrDescriptionGeneratedRecord =

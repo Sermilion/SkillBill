@@ -99,6 +99,10 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.QUALITY_GATE_SELECTION_FLAG,
     help = "Goal-child quality gate: build (compile proof) or validate (full collect-all). Defaults to validate.",
   ).multiple()
+  internal val qaSelections by option(
+    FeatureTaskRuntimeGoalContinuationLaunchTokens.QA_SELECTION_FLAG,
+    help = "Full-run QA policy: auto or off. Defaults to auto.",
+  ).multiple()
   internal val agentAddonSelectionJson by option(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.AGENT_ADDON_SELECTION_JSON_FLAG,
     help = "Already-resolved ordered agent add-on selection JSON. Raw agent-addon tokens are not accepted here.",

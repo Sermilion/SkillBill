@@ -16,6 +16,7 @@ required:
   - selected_strategies
   - review_selection
   - quality_gate_selection
+  - qa_selection
   - traversal
   - dispatch_ownership
   - step_policies
@@ -23,7 +24,7 @@ required:
   - effective_policies
 properties:
   contract_version:
-    const: "0.2"
+    const: "0.3"
   definition:
     $ref: "#/$defs/definition"
   selected_strategies:
@@ -36,6 +37,8 @@ properties:
     enum: [auto, inline, delegated, null]
   quality_gate_selection:
     enum: [build, validate, null]
+  qa_selection:
+    enum: [auto, "off", null]
   traversal:
     $ref: "#/$defs/traversal"
   dispatch_ownership:
@@ -159,6 +162,7 @@ $defs:
             - cap_exhaustion_behavior
             - cap_scope
             - warn_after_iterations
+            - cross_slot_allowance
           properties:
             from_step:
               $ref: "#/$defs/identifier"
@@ -180,6 +184,8 @@ $defs:
               type: [integer, "null"]
               minimum: 1
               maximum: 2147483647
+            cross_slot_allowance:
+              enum: [DECLARED, null]
       loop_only_steps:
         type: array
         maxItems: 128

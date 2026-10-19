@@ -63,6 +63,8 @@ private fun FeatureVerifyFinishedRequest.featureVerifyPayloadContract(level: Str
     level = level,
     specSummary = specSummary,
     gapsFound = gapsFound,
+    qaOutcome = qaOutcome,
+    qaReason = qaReason,
   )
 
 private fun PrDescriptionGeneratedRequest.prDescriptionPayloadContract(level: String): JsonPayloadContract =
@@ -126,6 +128,8 @@ private data class FeatureVerifyFinishedTelemetryPayload(
   val level: String,
   val specSummary: String,
   val gapsFound: List<String>,
+  val qaOutcome: String?,
+  val qaReason: String?,
 ) : JsonPayloadContract {
   override fun toPayload(): Map<String, Any?> =
     linkedMapOf<String, Any?>(
@@ -140,6 +144,10 @@ private data class FeatureVerifyFinishedTelemetryPayload(
       LifecycleTelemetryPayloadKeys.DURATION_SECONDS to durationSeconds,
       LifecycleTelemetryPayloadKeys.SKILL to "bill-feature-verify",
     ).apply {
+      qaOutcome?.let { outcome ->
+        put(LifecycleTelemetryPayloadKeys.QA_OUTCOME, outcome)
+        put(LifecycleTelemetryPayloadKeys.QA_REASON, qaReason)
+      }
       if (level == "full") {
         put(LifecycleTelemetryPayloadKeys.SPEC_SUMMARY, specSummary)
         put(LifecycleTelemetryPayloadKeys.GAPS_FOUND, gapsFound)

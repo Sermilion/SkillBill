@@ -9,6 +9,10 @@ object FeatureTaskRuntimeExecutionPlanSchemaPaths {
     "orchestration/contracts/feature-task-runtime-execution-plan-0.1.yaml"
   const val HISTORICAL_0_1: String =
     "skillbill/infrastructure/contracts/feature-task-runtime-execution-plan-0.1.yaml"
+  const val HISTORICAL_0_2_REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/feature-task-runtime-execution-plan-0.2.yaml"
+  const val HISTORICAL_0_2: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-execution-plan-0.2.yaml"
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
 }
@@ -187,4 +191,29 @@ object FeatureTaskExecutionIdentitySchemaPaths {
     "skillbill/infrastructure/contracts/feature-task-execution-identity-schema.yaml"
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-execution-identity-schema.yaml"
+}
+
+object QaReceiptSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/qa-receipt-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/qa-receipt-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/qa-receipt-schema.yaml"
+}
+
+object QaRepairStateSchemaPaths {
+  const val REPO_RELATIVE_PATH: String = "orchestration/contracts/qa-repair-state-schema.yaml"
+  const val CLASSPATH_RESOURCE: String = "skillbill/infrastructure/contracts/qa-repair-state-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/qa-repair-state-schema.yaml"
+  const val PREVIOUS_CLASSPATH_RESOURCE: String = "skillbill/infrastructure/contracts/qa-repair-state-schema-0.1.yaml"
+}
+
+object QaDeviceLeaseSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/qa-device-lease-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/qa-device-lease-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/qa-device-lease-schema.yaml"
 }

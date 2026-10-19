@@ -127,6 +127,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
@@ -151,6 +153,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to "Phase 4b: Plan Fix",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4c: Implement Fix",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to "Phase 4d: Mobile QA",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX to "Phase 4e: QA Fix",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to "Phase 5: Code Review",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to "Phase 5a: Verify Findings",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to "Phase 5b: Implement Fix",
@@ -200,6 +204,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         def.PHASE_IMPLEMENT_FIX,
         def.PHASE_BUILD,
         def.PHASE_MONITOR_FIX,
+        def.PHASE_QA_FIX,
       ),
       transitions.loopOnlyPhaseIds,
     )
@@ -233,6 +238,9 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         def.MONITOR_FIX_LOOP_ID,
         def.MONITOR_FIX_TRIGGER_LOOP_ID,
         def.MONITOR_FIX_COMMIT_LOOP_ID,
+        def.QA_FIX_LOOP_ID,
+        def.QA_FIX_RETURN_LOOP_ID,
+        def.QA_INVALIDATION_LOOP_ID,
       ),
       transitions.backwardEdges.filterNot { def.isRegenerationLoopId(it.loopId) }.map { it.loopId }.toSet(),
     )
@@ -258,10 +266,19 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         }
       val projectedDependencies =
         phaseWorkflowDependenciesOf(phaseId).filterNot {
-          (it == def.PHASE_AUDIT && phaseId !in setOf(def.PHASE_AUDIT_PLAN_FIX, def.PHASE_AUDIT_IMPLEMENT_FIX)) ||
+          (
+            it == def.PHASE_AUDIT &&
+              phaseId !in setOf(def.PHASE_AUDIT_PLAN_FIX, def.PHASE_AUDIT_IMPLEMENT_FIX, def.PHASE_QA)
+          ) ||
             (it == def.PHASE_PLAN && phaseId == def.PHASE_IMPLEMENT)
         }
-      assertEquals(projectedDependencies, declaration.consumedUpstreamPhaseIds, phaseId)
+      val expected =
+        when (phaseId) {
+          def.PHASE_QA -> listOf(def.PHASE_IMPLEMENT, def.PHASE_AUDIT)
+          def.PHASE_QA_FIX -> listOf(def.PHASE_QA)
+          else -> projectedDependencies
+        }
+      assertEquals(expected, declaration.consumedUpstreamPhaseIds, phaseId)
     }
     assertEquals(
       listOf("diff"),

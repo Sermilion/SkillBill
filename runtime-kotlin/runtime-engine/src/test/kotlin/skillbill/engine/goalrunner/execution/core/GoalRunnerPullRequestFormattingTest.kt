@@ -4,6 +4,9 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -27,6 +30,28 @@ class GoalRunnerPullRequestFormattingTest {
     assertTrue(request.body.contains("- Parse citation metadata"))
     assertFalse(request.body.contains("# Checklist"))
     assertFalse(request.body.contains("- [ ]"))
+  }
+
+  @Test
+  fun `pull request states each subtask QA outcome and omits the section without QA facts`() {
+    val outcome =
+      FeatureTaskQaOutcome(
+        "wfl-1",
+        StandaloneQaOutcome.SKIPPED,
+        "offline_target",
+        2,
+        "a".repeat(64),
+        "2026-10-18T00:00Z",
+      )
+    val body =
+      manifest().toPullRequestRequest(Path.of("/repo")) { GoalSubtaskQaSummary.Recorded(outcome) }.body
+    assertTrue(
+      body.contains("## Mobile QA\n\n- Parse citation metadata: skipped (offline_target), after 2 qa_fix attempts"),
+    )
+
+    val preQa = manifest().toPullRequestRequest(Path.of("/repo")) { GoalSubtaskQaSummary.NotComposed }.body
+    assertTrue(preQa.contains("- Parse citation metadata: QA not composed (pre-QA workflow)"))
+    assertFalse(manifest().toPullRequestRequest(Path.of("/repo")).body.contains("Mobile QA"))
   }
 
   private fun manifest() =

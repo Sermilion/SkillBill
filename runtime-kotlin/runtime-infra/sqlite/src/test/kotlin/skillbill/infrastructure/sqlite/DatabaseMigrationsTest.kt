@@ -2100,4 +2100,5 @@ private val expectedMigrationDefinitions =
     58 to "record-standalone-phase-launch-scope",
     59 to "record-standalone-monitor-target",
     60 to "record-standalone-qa-outcome",
+    61 to "record-feature-task-qa-outcomes",
   )

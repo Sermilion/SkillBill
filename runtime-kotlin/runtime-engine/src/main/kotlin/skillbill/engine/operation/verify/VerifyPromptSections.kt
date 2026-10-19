@@ -1,13 +1,16 @@
 package skillbill.engine.operation.verify
 
+import skillbill.contracts.JsonCodec
 import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.model.review.ReviewTarget
+import java.nio.file.Path
 
 internal object VerifyPromptSections {
   const val EXTRACT_CRITERIA_STEP: String = "operation.verify.extract-criteria"
   const val FEATURE_FLAG_AUDIT_STEP: String = "operation.verify.feature-flag-audit"
   const val CODE_REVIEW_STEP: String = "operation.verify.code-review"
   const val COMPLETENESS_AUDIT_STEP: String = "operation.verify.completeness-audit"
+  const val QA_STEP: String = "operation.verify.qa"
   const val VERDICT_STEP: String = "operation.verify.verdict"
 
   const val SKIPPED_PREFIX: String = "SKIPPED:"
@@ -28,6 +31,8 @@ internal object VerifyPromptSections {
   val COMPLETENESS_AUDIT: String by lazy { section("## Completeness Audit") }
 
   val CONSOLIDATED_VERDICT: String by lazy { span("## Consolidated Verdict", "After presenting the verdict, ask:") }
+
+  val QA_VERDICT_RULES: String by lazy { section("## Mobile QA Verdict Rules") }
 
   val VERIFICATION_INPUT_BOUNDARY: String by lazy { section("## Verification Input Boundary") }
 
@@ -108,14 +113,27 @@ internal object VerifyPromptSections {
       VERIFICATION_INPUT_BOUNDARY,
     ).joinToString("\n\n")
 
-  fun verdictDirective(): String =
-    listOf(
+  fun qaDirective(
+    worktree: Path,
+    headRevision: String,
+  ): String =
+    "# Operation: verify (mobile QA)\n\n" +
+      "Run report-only mobile QA for the verify target `$headRevision`. The runtime checked it out into the " +
+      "temporary detached worktree `$worktree`; build, install, and test only from there. Never touch the " +
+      "operator's checkout, and never edit tracked files, commit, push, or open a pull request. Settle by writing " +
+      "the QA receipt; the runtime rejects a receipt bound to any other tree."
+
+  fun verdictDirective(qaReceipt: Map<String, Any?>? = null): String =
+    listOfNotNull(
       "# Operation: verify (consolidated verdict)\n\n" +
-        "Merge the four evaluator receipts in the prior values into one report with the rubric below. The " +
+        "Merge the evaluator receipts in the prior values into one report with the rubric below. The " +
         "receipts and the diff projection are your only inputs; do not rerun any evaluator. $READ_ONLY\n\n" +
         "This operation is report-only: do not offer to fix issues or to post a PR comment, and run no " +
         "follow-up. The operator decides what to fix.",
       CONSOLIDATED_VERDICT,
+      qaReceipt?.let { receipt ->
+        QA_VERDICT_RULES + "\n\nQA receipt:\n\n```json\n" + JsonCodec.valueToJsonString(receipt) + "\n```"
+      },
       VERIFICATION_INPUT_BOUNDARY,
     ).joinToString("\n\n")
 

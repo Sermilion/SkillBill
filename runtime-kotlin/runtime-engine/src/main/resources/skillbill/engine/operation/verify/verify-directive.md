@@ -121,9 +121,24 @@ Primary artifact: `completeness_audit_receipt`
 
 Use the Completeness Audit rubric below for the audit format and rules.
 
-Run completeness independently against acceptance criteria, its declared rubric, and the authoritative checkpoint-scoped diff projection; do not provide sibling evaluator output. Persist only `completeness_audit_receipt`. When the verify target changes materially during the same session, invalidate stale projections and receipts, refresh the checkpoint-scoped diff, and increment the next step's `attempt_count`. Otherwise, update workflow state so `completeness_audit` is completed and `verdict` is running.
+Run completeness independently against acceptance criteria, its declared rubric, and the authoritative checkpoint-scoped diff projection; do not provide sibling evaluator output. Persist only `completeness_audit_receipt`. When the verify target changes materially during the same session, invalidate stale projections and receipts, refresh the checkpoint-scoped diff, and increment the next step's `attempt_count`. Otherwise, update workflow state so `completeness_audit` is completed and `qa` is running.
 
-## Step 8: Consolidated Verdict
+## Step 8: Mobile QA
+
+Step id: `qa`
+
+Primary artifact: `qa_receipt`
+
+The proposal names the QA selection, `qa:on` or `qa:off` (default `off`), and confirm keeps it. With `off`, the
+runtime writes a `disabled_policy` skip receipt without probing devices or launching an agent. With `on`, the runtime
+checks out the confirmed head into a temporary detached worktree and runs report-only QA there with the pack QA
+guidance; the operator's checkout, HEAD, and target never change. The runtime rejects a receipt bound to another tree
+and removes the worktree on every exit, recording any retained worktree with manual cleanup guidance. Workflows
+proposed before QA existed skip this step and report `not_selected`.
+
+Persist `qa_receipt` after QA settles. Update workflow state so `qa` is completed or skipped and `verdict` is running.
+
+## Step 9: Consolidated Verdict
 
 Step id: `verdict`
 
@@ -231,6 +246,17 @@ After presenting the verdict, ask:
 If the user wants a PR comment:
 - Format the verdict as a GitHub PR review comment using `gh pr review <number>`
 - Use `--comment` for APPROVE WITH FIXES, `--approve` for APPROVE, `--request-changes` for REQUEST CHANGES
+
+## Mobile QA Verdict Rules
+
+Apply these rules only when the run selected `qa:on`:
+
+- Add a `--- MOBILE QA ---` section after `--- UNIT TEST VALUE ---` with the QA verdict and every QA finding id,
+  its affected criteria, and its evidence paths.
+- QA findings join the consolidated findings. An open QA finding rules out an unqualified `APPROVE`; use
+  `APPROVE WITH FIXES` or `REQUEST CHANGES`.
+- A skipped or incomplete QA receipt is untested coverage, never a product defect. List it under
+  `Untested coverage:` with its reason, and do not treat it as a pass.
 
 ## Verification Input Boundary
 

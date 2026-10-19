@@ -51,6 +51,8 @@ sealed interface AcceptanceCriterionRepairMutation {
 
   data object KeepProgress : AcceptanceCriterionRepairMutation
 
+  data class QaReaudit(val criterionRefs: List<String>) : AcceptanceCriterionRepairMutation
+
   data class Clarification(val question: String) : AcceptanceCriterionRepairMutation
 
   data class Reserve(val reservationId: String) : AcceptanceCriterionRepairMutation
@@ -113,6 +115,9 @@ class AcceptanceCriterionRepairRunState internal constructor(
 
   internal val snapshot: AcceptanceCriterionRepairState?
     get() = (accounting as? AcceptanceCriterionRepairHydration.Present)?.state
+
+  internal val auditsNoChangeClaim: Boolean
+    get() = snapshot?.mode == null || snapshot?.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
 
   fun historicalAttributionUnavailable(): Boolean =
     accounting == AcceptanceCriterionRepairHydration.HistoricalAttributionUnavailable ||

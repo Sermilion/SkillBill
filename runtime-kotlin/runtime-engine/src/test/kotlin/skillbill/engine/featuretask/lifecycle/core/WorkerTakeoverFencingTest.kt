@@ -394,6 +394,43 @@ class WorkerTakeoverFencingTest {
       }
     }
   }
+
+  @Test
+  fun `a heartbeat after the phase finished its own workflow does not report lost fencing`() {
+    WorkflowStatus.terminalStatuses.forEach { status ->
+      val home = Files.createTempDirectory("worker-finished-heartbeat")
+      try {
+        val database = phaseRunDatabase(home, testHarnessClock)
+        val workflowId = "wftr-finished-heartbeat"
+        database.transaction { execution.seed(it.workflowStates, workflowId) }
+        val supervisor = TakeoverSupervisor()
+        val coordinator =
+          FeatureTaskRuntimeWorkerCoordinator(
+            database,
+            supervisor,
+            testHarnessClock,
+            execution.admission,
+            NoopRuntimeDiagnostics,
+          )
+
+        val tick =
+          coordinator.runOwned(workflowId, execution.inputs, execution.identity(workflowId)) { _, _ ->
+            database.transaction { unit ->
+              val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(workflowId))
+              unit.workflowStates.saveFeatureTaskWorkflow(
+                row.copy(workflowStatus = status.wireValue, finishedAt = testHarnessClock.instant().toString()),
+                FeatureTaskWorkflowMode.RUNTIME,
+              )
+            }
+            assertNotNull(supervisor.heartbeatTick).invoke()
+          }
+
+        assertEquals(FeatureTaskRuntimeHeartbeatTick.WorkflowFinished, tick, status.wireValue)
+      } finally {
+        home.toFile().deleteRecursively()
+      }
+    }
+  }
 }
 
 private fun withOwnedWorkflow(block: (DatabaseSessionFactory, FeatureTaskRuntimeWorkerOwnership) -> Unit) {
@@ -448,6 +485,8 @@ private class TakeoverSupervisor(
     private set
   var heartbeats = 0
     private set
+  var heartbeatTick: (() -> FeatureTaskRuntimeHeartbeatTick)? = null
+    private set
 
   override fun currentProcess() = FeatureTaskRuntimeProcessIdentity("host", "boot", 200, "birth-200")
 
@@ -490,6 +529,7 @@ private class TakeoverSupervisor(
     heartbeat: () -> FeatureTaskRuntimeHeartbeatTick,
   ): FeatureTaskRuntimeHeartbeat {
     heartbeats++
+    heartbeatTick = heartbeat
     return object : FeatureTaskRuntimeHeartbeat {
       override fun stop() = Unit
 

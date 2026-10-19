@@ -173,6 +173,8 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
       initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
       stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
       resumeRulesFn = strategies.resumeRules(executionPlan),
+      workflowId = runRequest.workflowId,
+      initialQaRepairState = recorder.loadQaRepairState(runRequest.workflowId),
     )
   }
 

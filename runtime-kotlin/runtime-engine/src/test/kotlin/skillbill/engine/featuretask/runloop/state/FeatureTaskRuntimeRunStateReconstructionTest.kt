@@ -37,7 +37,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.phase.task.declaration
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -100,7 +102,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val state =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       )
     val output =
@@ -123,7 +125,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val state =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -155,13 +157,13 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val live =
       FeatureTaskRuntimeRunState(
         initialRecords = durableRecords,
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       )
     val resumed =
       FeatureTaskRuntimeRunState(
         initialRecords = durableRecords,
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -176,7 +178,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
 
   @Test
   fun `resume reconstruction preserves completed phase and backward edge state`() {
-    val transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
+    val transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration()
     val live =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
@@ -272,7 +274,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val live =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       ).also {
         it.recordEdgeIteration(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, 2)
@@ -281,7 +283,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val resumed =
       FeatureTaskRuntimeRunState(
         initialRecords = recorder.loadPhaseRecords(workflowId).orEmpty(),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         durableInitialLedger = recorder.loadPhaseLedger(workflowId).orEmpty(),
         resumeRulesFn = RESUME_RULES,
       )
@@ -334,7 +336,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       ValidationSettlementState(
         completed = completed,
         initialRecords = emptyMap(),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         gateInvalidatedPhases = invalidated,
       )
 
@@ -420,7 +422,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val state =
       FeatureTaskRuntimeRunState(
         initialRecords = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty(),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       )
     assertNull(state.phase("audit").blockedReason)
@@ -568,7 +570,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val bases =
       FeatureTaskRuntimeRunStateReconstruction.reconstructFixLoopBudgetBases(
         ReconstructFixLoopBudgetBasesArgs(
-          transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+          transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
           edgeIterationByLoop = emptyMap(),
           initialRecords = rawRecords,
           initialLedger = rawLedger,
