@@ -50,23 +50,7 @@ class ValidationGateRoutingTest {
 
   @Test
   fun `a composed pack keeps its own gate instead of borrowing its baseline gate`() {
-    val kmp =
-      kotlin.copy(
-        slug = "kmp",
-        routingSignals = RoutingSignals(listOf("commonMain"), emptyList(), path = listOf("commonMain")),
-        codeReviewComposition =
-          CodeReviewComposition(
-            listOf(
-              CodeReviewBaselineLayer(
-                platform = "kotlin",
-                skill = "bill-kotlin-code-review",
-                scope = CodeReviewCompositionScope.SameReviewScope,
-                required = true,
-                mode = CodeReviewCompositionMode.KmpBaseline,
-              ),
-            ),
-          ),
-      )
+    val kmp = kmpPack(path = listOf("commonMain"))
     val resolver = ValidationGateResolver { listOf(ios, kmp, kotlin) }
 
     val result = assertIs<ValidationGateResolution.Declared>(resolver.resolve(listOf("shared/commonMain/Foo.kt")))
@@ -77,4 +61,89 @@ class ValidationGateRoutingTest {
         .resolve(listOf("shared/commonMain/Foo.kt"))
     assertEquals(ValidationGateResolution.Absent("kmp"), absent)
   }
+
+  @Test
+  fun `a whole KMP repository routes to the composed pack despite Kotlin-only Gradle and module files`() {
+    val resolver = ValidationGateResolver { listOf(reviewFallbackPackWithoutGate(), ios, kmpRepoPack, kotlinRepoPack) }
+
+    val result = assertIs<ValidationGateResolution.Declared>(resolver.resolve(kmpRepositoryPaths))
+
+    assertEquals("kmp", result.packSlug)
+  }
+
+  @Test
+  fun `a whole JVM repository without KMP markers still routes to the Kotlin pack`() {
+    val resolver = ValidationGateResolver { listOf(reviewFallbackPackWithoutGate(), ios, kmpRepoPack, kotlinRepoPack) }
+    val paths =
+      listOf(
+        "build.gradle.kts",
+        "settings.gradle.kts",
+        "server/build.gradle.kts",
+        "server/src/main/kotlin/Application.kt",
+        "server/src/test/kotlin/ApplicationTest.kt",
+      )
+
+    val result = assertIs<ValidationGateResolution.Declared>(resolver.resolve(paths))
+
+    assertEquals("kotlin", result.packSlug)
+  }
+
+  @Test
+  fun `a composed pack absorbs its baseline before competing with an unrelated larger pack`() {
+    val resolver = ValidationGateResolver { listOf(ios, kmpRepoPack, kotlinRepoPack) }
+    val paths = kmpRepositoryPaths + (1..20).map { "iosApp/Feature$it.swift" }
+
+    val result = assertIs<ValidationGateResolution.Declared>(resolver.resolve(paths))
+
+    assertEquals("ios", result.packSlug)
+  }
+
+  private val kotlinRepoPack =
+    kotlin.copy(
+      routingSignals =
+        RoutingSignals(
+          strong = emptyList(),
+          tieBreakers = emptyList(),
+          path = listOf(".kt", "*.kt", ".kts", "*.kts", "build.gradle", "build.gradle.kts", "settings.gradle.kts"),
+        ),
+    )
+
+  private val kmpRepoPack =
+    kmpPack(
+      path = listOf(".kt", "*.kt", ".kts", "*.kts", "AndroidManifest.xml", "androidMain", "iosMain", "commonMain"),
+    )
+
+  private val kmpRepositoryPaths =
+    listOf(
+      "build.gradle.kts",
+      "settings.gradle.kts",
+      "gradle/libs.versions.toml",
+      "app/build.gradle.kts",
+      "app/src/main/AndroidManifest.xml",
+      "app/src/main/kotlin/MainActivity.kt",
+      "feature/account/build.gradle.kts",
+      "feature/account/src/main/kotlin/AccountScreen.kt",
+      "feature/account/src/main/kotlin/LogoutViewModel.kt",
+      "feature/account/src/test/kotlin/LogoutViewModelTest.kt",
+      "shared/build.gradle.kts",
+      "shared/src/commonMain/kotlin/Session.kt",
+    )
+
+  private fun kmpPack(path: List<String>) =
+    kotlin.copy(
+      slug = "kmp",
+      routingSignals = RoutingSignals(path, emptyList(), path = path),
+      codeReviewComposition =
+        CodeReviewComposition(
+          listOf(
+            CodeReviewBaselineLayer(
+              platform = "kotlin",
+              skill = "bill-kotlin-code-review",
+              scope = CodeReviewCompositionScope.SameReviewScope,
+              required = true,
+              mode = CodeReviewCompositionMode.KmpBaseline,
+            ),
+          ),
+        ),
+    )
 }

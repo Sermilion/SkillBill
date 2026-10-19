@@ -361,6 +361,7 @@ fun testPhaseStrategyBindings(
         ),
       SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
       SkeletonDefinition.QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.QA),
+      SkeletonDefinition.GOAL_QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_QA),
       SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
       SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
       SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),

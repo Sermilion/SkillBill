@@ -168,6 +168,21 @@ class SkeletonDefinitionTest {
   }
 
   @Test
+  fun `goal QA composes its own repair and revalidation loops only`() {
+    val loops = setOf("qa_fix_revalidate", "qa_requalify")
+    val goalQa = SkeletonDefinition.GOAL_QA
+
+    assertEquals(listOf("qa", "qa_fix", "validate"), goalQa.stepIds)
+    assertEquals(setOf("qa_fix", "validate"), goalQa.declaration().loopOnlyPhaseIds)
+    assertTrue(loops.all { loop -> goalQa.declaration().backwardEdges.any { it.loopId == loop } })
+    assertFalse(
+      SkeletonDefinition.entries.filter { it != goalQa }.any { definition ->
+        definition.declaration().backwardEdges.any { it.loopId in loops }
+      },
+    )
+  }
+
+  @Test
   fun `revision two keeps the pre-QA composition while new lookup selects revision three`() {
     assertEquals(3, SkeletonDefinition.byId("goal-child").semanticRevision)
     assertEquals(3, SkeletonDefinition.GOAL_CHILD.semanticRevision)

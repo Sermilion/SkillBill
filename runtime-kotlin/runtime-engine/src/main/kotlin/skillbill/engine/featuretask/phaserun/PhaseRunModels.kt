@@ -22,6 +22,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -43,6 +44,8 @@ data class PhaseRunRequest(
   val launchArguments: List<String>? = null,
   val recoverStaleOwner: String? = null,
   val qaExecution: QaExecutionContext? = null,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  val acceptanceCriteria: List<String>? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -110,7 +113,9 @@ internal data class InMemoryPhaseRunFacts(
   override val monitorExecution: MonitorExecutionContext? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val issueKey: String = intake.issueKey
-  override val runInvariants: FeatureTaskRuntimeRunInvariants = intake.runInvariants
+  override val qaSelection: FeatureTaskRuntimeQaSelection? = request.qaSelection
+  override val runInvariants: FeatureTaskRuntimeRunInvariants =
+    request.acceptanceCriteria?.let { intake.runInvariants.copy(acceptanceCriteria = it) } ?: intake.runInvariants
   override val invokedAgentId: String = request.invokedAgentId
   override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()
   override val modelAssignment: FeatureTaskRuntimeModelAssignment = request.modelAssignment

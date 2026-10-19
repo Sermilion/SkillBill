@@ -30,6 +30,7 @@ data class SkeletonDefinition(
   val standaloneInvocable: Boolean = false,
   val preparedExecutionOf: String? = null,
   val runHarness: PhaseRunHarness = PhaseRunHarness.NONE,
+  val loopOnlyStepIds: Set<String> = emptySet(),
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -41,6 +42,7 @@ data class SkeletonDefinition(
     if (stepIds.isEmpty() || stepIds != available.filter { it in stepIds }) {
       throw InvalidPhaseStrategyCompositionError("definition $id has duplicate, reordered, or unowned steps")
     }
+    require(loopOnlyStepIds.all(stepIds::contains))
   }
 
   companion object {
@@ -101,6 +103,19 @@ data class SkeletonDefinition(
         stepIds = listOf(FeatureTaskRuntimePhaseIds.QA),
         runHarness = PhaseRunHarness.DEVICE_QA,
       )
+    val GOAL_QA: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-qa",
+        listOf(PhaseSlot.QA, PhaseSlot.QUALITY_GATE),
+        runStateKind = SkeletonRunStateKind.IN_MEMORY,
+        stepIds =
+          listOf(
+            FeatureTaskRuntimePhaseIds.QA,
+            FeatureTaskRuntimePhaseIds.QA_FIX,
+            FeatureTaskRuntimePhaseIds.VALIDATE,
+          ),
+        loopOnlyStepIds = setOf(FeatureTaskRuntimePhaseIds.VALIDATE),
+      )
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
@@ -142,6 +157,7 @@ data class SkeletonDefinition(
           REVIEW,
           VALIDATION,
           QA,
+          GOAL_QA,
           PLAN,
           PR,
           MONITOR,

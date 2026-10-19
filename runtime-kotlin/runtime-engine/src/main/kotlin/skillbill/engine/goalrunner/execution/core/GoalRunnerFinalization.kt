@@ -16,16 +16,17 @@ import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
-import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
-import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
-import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.qa.GoalQaGateResult
+import skillbill.engine.goalrunner.qa.GoalQaSkipReason
+import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
@@ -56,16 +57,16 @@ import java.nio.file.Path
 
 @Inject
 class GoalRunnerFinalization(
-  private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val pullRequestPort: GoalPullRequestPort,
   private val specScratchStore: SpecScratchStore,
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
-  private val progressReader: GoalRunnerProgressReader,
+  private val reconciliation: GoalRunnerFinalReconciliation,
   private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
   private val ciMonitor: GoalRunnerCiMonitor,
+  private val qaGate: GoalRunnerQaGate,
   private val pullRequestIdentityLookup: PullRequestIdentityLookup,
 ) {
   fun finalizeGoal(
@@ -74,8 +75,7 @@ class GoalRunnerFinalization(
     attempted: List<Int>,
     ledger: GoalRunnerLedgerRecorder,
   ): GoalRunnerRunReport {
-    reconcileBeforeFinalization(state, request, ledger)
-    val finalState = manifestStore.save(state)
+    val finalState = reconciliation.reconcile(state, request, ledger)
     return finalizePublication(finalState, request, attempted)
   }
 
@@ -84,8 +84,24 @@ class GoalRunnerFinalization(
     request: GoalRunnerRunRequest,
     attempted: List<Int>,
   ): GoalRunnerRunReport {
-    noChangeFinalization(finalState.manifest, request, attempted)?.let { return it }
-    publishedGoalResult(finalState, request, attempted)?.let { return it }
+    val settled =
+      noChangeFinalization(finalState.manifest, request, attempted)
+        ?: publishedGoalResult(finalState, request, attempted)
+    settled?.let { return it }
+    val qaResult = qaGate.run(finalState, request)
+    if (qaResult is GoalQaGateResult.Blocked) {
+      return stopped(
+        StoppedReportArgs(
+          issueKey = finalState.manifest.issueKey,
+          attempted = attempted,
+          subtaskId = finalState.manifest.subtasks.lastOrNull()?.id ?: 0,
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason = qaResult.reason,
+          workflowId = finalState.parentWorkflowId,
+          lastResumableStep = qaResult.stepId,
+        ),
+      )
+    }
     commitAllRemainingWorktree(finalState.manifest, request)?.let { reason ->
       return stopped(
         StoppedReportArgs(
@@ -99,13 +115,7 @@ class GoalRunnerFinalization(
         ),
       )
     }
-    val manifest = finalState.manifest
-    val result =
-      pullRequestPort.open(
-        manifest.toPullRequestRequest(request.repoRoot) { subtask ->
-          manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome) ?: GoalSubtaskQaSummary.NotRecorded
-        },
-      )
+    val result = openPullRequest(finalState, request, qaResult)
     return when (result) {
       is GoalPullRequestResult.Opened ->
         completeMonitoredGoal(finalState, request, attempted, result.url, GoalPullRequestStatus.OPENED)
@@ -133,6 +143,33 @@ class GoalRunnerFinalization(
         )
     }
   }
+
+  private fun openPullRequest(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    qaResult: GoalQaGateResult,
+  ): GoalPullRequestResult =
+    pullRequestPort.open(
+      state.manifest.toPullRequestRequest(
+        request.repoRoot,
+        goalQaSummary = goalQaSummary(state, qaResult),
+        qaSummary = { subtask ->
+          state.manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome)
+            ?: GoalSubtaskQaSummary.NotRecorded
+        },
+      ),
+    )
+
+  private fun goalQaSummary(
+    state: GoalRunnerManifestState,
+    result: GoalQaGateResult,
+  ): GoalQaSummary =
+    if (result is GoalQaGateResult.Skipped && result.reason == GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA) {
+      GoalQaSummary.RanPerSubtask
+    } else {
+      outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)?.let { GoalQaSummary.Recorded(it) }
+        ?: GoalQaSummary.NotRecorded
+    }
 
   private fun publishedGoalResult(
     finalState: GoalRunnerManifestState,
@@ -298,41 +335,6 @@ class GoalRunnerFinalization(
         )
       },
     )
-  }
-
-  private fun reconcileBeforeFinalization(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-    ledger: GoalRunnerLedgerRecorder,
-  ) {
-    outcomeStore.reconcileAuthoritativeOutcomes(
-      issueKey = state.manifest.issueKey,
-      activeWorkflowIds = emptySet(),
-      gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
-      repoRoot = request.repoRoot,
-    )
-    state.manifest.subtasks
-      .lastOrNull { subtask -> !subtask.workflowId.isNullOrBlank() }
-      ?.let { subtask ->
-        ledger.recordLedgerEntry(
-          GoalRunnerLedgerContext.FinalReconciledOutcome(
-            workflowId = subtask.workflowId,
-            issueKey = state.manifest.issueKey,
-            subtaskId = subtask.id,
-            progress = subtask.workflowId?.let { progressReader.safeProgress(it) },
-            blockedReason = null,
-            finalReconciledResult = "goal_finalize status=${state.manifest.status}",
-            stopReason = null,
-            diagnosticClass = null,
-            recoverableJsonPresent = null,
-            nextSafeAction = null,
-            attemptDurationMillis = null,
-            causingLoopEntry = null,
-            reAttemptCause = null,
-            findingsInScope = null,
-          ),
-        )
-      }
   }
 
   private fun commitAllRemainingWorktree(

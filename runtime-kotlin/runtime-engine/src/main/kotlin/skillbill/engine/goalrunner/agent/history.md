@@ -1,5 +1,18 @@
 # goalrunner boundary history
 
+## [2026-10-19] SKILL-431 subtask 1: goal-level QA run in finalization
+Areas: runtime-domain skeleton and phase/task transitions, runtime-engine goalrunner (qa, execution/core, execution/support, model, persist), featuretask (phaserun, slot/qa, qa/receipt, runloop), runtime-core goal DI, goalrunner and phaserun tests
+- New in-memory goal-qa skeleton (qa, qa_fix, validate; not standalone-invocable, no run harness). validate is loop-only there through the skeleton-scoped loopOnlyStepIds set, so a passing or skipped first QA ends the run and validate runs only after a qa_fix repair.
+- New loops qa_fix_revalidate (qa_fix to validate) and qa_requalify (validate to qa). composedOnlyWithoutSteps drops both whenever audit is composed, so STANDALONE and every GOAL_CHILD revision never get them.
+- GoalRunnerFinalization.finalizePublication calls GoalRunnerQaGate after the no-change and already-published checks and before commitAllRemainingWorktree. Blocked returns a BLOCKED stop with the run's reason and lastResumableStep before any commit-all, push or PR call.
+- Reusable: DefaultGoalRunnerQaGate runs goal-qa through PhaseRunEntry.runForGoal on the final PR head branch with the parent spec ACs and reports progress under the goal-finalization operation kind, like DefaultGoalRunnerCiMonitor. Test fixtures provide a no-op gate that returns Skipped.
+- Skip rule (a): every subtask workflow ran a QA-composed plan with a recorded outcome. Rule (a) writes no parent outcome and the PR says QA ran per subtask. Skip rule (b): the parent outcome is passed or skipped on the current tree identity.
+- PhaseRunRequest carries qaSelection and acceptanceCriteria. QaStrategy falls back to the request selection when admittedExecution is null and records settled outcomes under the parent workflow id through FeatureTaskQaOutcomeRecorder.recordSettled. Standalone phase:qa passes no selection and still records nothing.
+- Reusable: GoalRunnerWorkflowOutcomeStore.recordedGoalQaOutcome reads the parent outcome by workflow id without consulting a plan, so it never answers NotComposed. The PR body gets one goal-level Mobile QA line from GoalQaSummary ahead of the per-child lines.
+- Limits: children still compose QA until subtask 2, so rule (a) keeps the gate dormant for current goals. Selection comes from the goal request, then the first child's recorded selection, then AUTO. In-memory repair progress is lost on a crash; worktree edits survive for commit-all.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate passed clean check)
+
 ## [2026-10-17] SKILL-425 subtask 1: validate every goal child
 Areas: runtime-domain goalrunner (GoalRunnerPolicy), runtime-engine goalrunner (launch, execution/core, persist, reset), docs/runtime-command-guidance.md, goalrunner and lifecycle tests
 - GoalRunnerQualityGateSelectionResolver.resolve() takes no parameters and always returns VALIDATE. The last-non-skipped BUILD promotion is gone, so every non-skipped child runs review, validate, write_history.

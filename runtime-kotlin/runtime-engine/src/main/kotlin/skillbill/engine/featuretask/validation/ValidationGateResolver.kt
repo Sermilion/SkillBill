@@ -75,8 +75,13 @@ internal fun dominantPacks(
   val routed = routing.routedSlugs.mapNotNull(bySlug::get)
   val fallback = ReviewFallbackResolver.resolveOptional(manifests)
   val concrete = routed.filterNot { it.slug == fallback?.slug }.ifEmpty { routed }
-  val largestScope = concrete.maxOfOrNull { routing.ownedPathsBySlug[it.slug]?.size ?: 0 } ?: return emptyList()
-  val leaders = concrete.filter { routing.ownedPathsBySlug[it.slug]?.size == largestScope }
-  val composedBaselines = leaders.flatMap { it.codeReviewComposition?.baselineLayers.orEmpty() }.map { it.platform }
-  return leaders.filterNot { it.slug in composedBaselines }
+  val baselinesOf =
+    concrete.associateWith { pack -> pack.codeReviewComposition?.baselineLayers.orEmpty().map { it.platform } }
+  val absorbed = baselinesOf.values.flatten().toSet()
+  val scopeBySlug =
+    concrete.filterNot { it.slug in absorbed }.associateWith { pack ->
+      (listOf(pack.slug) + baselinesOf.getValue(pack)).flatMap { routing.ownedPathsBySlug[it].orEmpty() }.toSet().size
+    }
+  val largestScope = scopeBySlug.values.maxOrNull() ?: return emptyList()
+  return scopeBySlug.filterValues { it == largestScope }.keys.toList()
 }

@@ -116,3 +116,11 @@ sealed interface GoalSubtaskQaSummary {
 
   data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalSubtaskQaSummary
 }
+
+sealed interface GoalQaSummary {
+  data object RanPerSubtask : GoalQaSummary
+
+  data object NotRecorded : GoalQaSummary
+
+  data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalQaSummary
+}

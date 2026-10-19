@@ -5,12 +5,13 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonTraversalResult
 
 fun SkeletonDefinition.declaration(): FeatureTaskRuntimeTransitionDeclaration =
-  deriveTransitions(stepIds, entryStepIds = emptySet())
+  deriveTransitions(stepIds, entryStepIds = emptySet(), loopOnlyStepIds)
 
 fun SkeletonDefinition.traversal(
   selectedStepIds: Set<String>,
   entryStepIds: Set<String>,
-): FeatureTaskRuntimeTransitionDeclaration = deriveTransitions(stepIds.filter { it in selectedStepIds }, entryStepIds)
+): FeatureTaskRuntimeTransitionDeclaration =
+  deriveTransitions(stepIds.filter { it in selectedStepIds }, entryStepIds, loopOnlyStepIds)
 
 fun SkeletonDefinition.traversalOrViolation(
   selectedStepIds: Set<String>,
@@ -28,7 +29,7 @@ fun SkeletonDefinition.traversalOrViolation(
           steps.indexOf(it.requiredPhaseId) >= steps.indexOf(it.phaseId)
       }
     if (reversedGate == null) {
-      SkeletonTraversalResult.Ready(deriveTransitions(steps, entryStepIds))
+      SkeletonTraversalResult.Ready(deriveTransitions(steps, entryStepIds, loopOnlyStepIds))
     } else {
       SkeletonTraversalResult.Rejected(
         "FeatureTaskRuntimePhaseEntryGate requires '${reversedGate.requiredPhaseId}' to precede " +
@@ -42,18 +43,23 @@ fun SkeletonDefinition.traversalOrViolation(
 private fun deriveTransitions(
   steps: List<String>,
   entryStepIds: Set<String>,
+  loopOnlyStepIds: Set<String>,
 ): FeatureTaskRuntimeTransitionDeclaration {
   val canonical = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
   val present = steps.toSet()
-  val loopOnly = canonical.loopOnlyPhaseIds.filter { it in present && it !in entryStepIds }.toSet()
+  val loopOnly =
+    (canonical.loopOnlyPhaseIds - entryStepIds + loopOnlyStepIds).filter(present::contains).toSet()
+  val backwardEdges =
+    canonical.backwardEdges.filter { edge ->
+      val requiredSteps = FeatureTaskRuntimePhaseWorkflowTransitions.composedOnlyWithSteps[edge.loopId].orEmpty()
+      val forbiddenSteps = FeatureTaskRuntimePhaseWorkflowTransitions.composedOnlyWithoutSteps[edge.loopId].orEmpty()
+      edge.fromPhaseId in present && edge.destinationPhaseId in present &&
+        requiredSteps.all(present::contains) && forbiddenSteps.none(present::contains)
+    }
   return FeatureTaskRuntimeTransitionDeclaration(
     forwardPhaseIds = steps,
     entryGates = canonical.entryGates.filter { it.phaseId in present && it.requiredPhaseId in present },
-    backwardEdges =
-      canonical.backwardEdges.filter { edge ->
-        edge.fromPhaseId in present && edge.destinationPhaseId in present &&
-          FeatureTaskRuntimePhaseWorkflowTransitions.composedOnlyWithSteps[edge.loopId].orEmpty().all { it in present }
-      },
+    backwardEdges = backwardEdges,
     loopOnlyPhaseIds = loopOnly,
     loopOnlySuccessors =
       canonical.loopOnlySuccessors.filter { (source, successor) -> source in loopOnly && successor in loopOnly },

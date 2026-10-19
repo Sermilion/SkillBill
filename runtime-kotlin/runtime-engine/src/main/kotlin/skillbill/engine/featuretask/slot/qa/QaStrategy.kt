@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.qa.receipt.QaPhaseOutputKeys
 import skillbill.engine.featuretask.qa.receipt.QaReceipt
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -34,6 +35,7 @@ import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.audit.canonicalAcceptanceCriterionRef
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -119,14 +121,32 @@ class QaStrategy(
     execute: (PhaseRun) -> PhaseOutcome,
   ): PhaseOutcome {
     if (run.phaseId != entryStep || run.qaExecution != null) return execute(run)
+    val recordsGoalOutcome = run.request.admittedExecution == null && run.request.qaSelection != null
     val policy =
-      when (checkNotNull(run.request.admittedExecution?.plan?.qaSelection)) {
+      when (
+        requireNotNull(run.request.admittedExecution?.plan?.qaSelection ?: run.request.qaSelection) {
+          "QA selection is required for an in-memory QA run."
+        }
+      ) {
         FeatureTaskRuntimeQaSelection.AUTO -> QaPolicy.AUTO
         FeatureTaskRuntimeQaSelection.OFF -> QaPolicy.OFF
       }
-    return execution.withExecution(run.request.repoRoot, policy) { qa ->
-      execute(run.copy(qaExecution = qa))
-    }.value
+    if (recordsGoalOutcome) outcomes.recordAttempted(run.request.workflowId)
+    val result =
+      execution.withExecution(run.request.repoRoot, policy) { qa ->
+        execute(run.copy(qaExecution = qa))
+      }
+    if (recordsGoalOutcome) {
+      val completed = result.value as? PhaseOutcome.Completed
+      if (completed != null) {
+        val output = completed.output.normalizedOutput ?: invalid("completed QA step has no normalized output.")
+        if (output.phaseId != entryStep || output.status != "completed") {
+          invalid("completed QA step has no accepted completed QA output.")
+        }
+        recordGoalOutcome(run.request.workflowId, output, result.expected.treeIdentity)
+      }
+    }
+    return result.value
   }
 
   override fun runStep(
@@ -309,6 +329,36 @@ class QaStrategy(
     }
 
   private fun invalid(reason: String): Nothing = throw invalidQaReceipt(reason)
+
+  private fun recordGoalOutcome(
+    workflowId: String,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+    testedTreeIdentity: String,
+  ) {
+    val wire = output.envelopeWireMap()
+    val verdict = QaVerdictRule(receiptValidator).verdictFor(null, wire)
+    val produced =
+      JsonCodec.anyToStringAnyMap(wire[SharedPayloadKeys.PRODUCED_OUTPUTS])
+        ?: invalid("accepted QA output has no produced_outputs object.")
+    val receipt =
+      JsonCodec.anyToStringAnyMap(produced[QaPhaseOutputKeys.RECEIPT])
+        ?: invalid("accepted QA output has no runtime-validated receipt.")
+    val receiptVerdict =
+      QaVerdict.fromWire(receipt[QaReceiptPayloadKeys.VERDICT] as? String)
+        ?: invalid("accepted QA receipt has no known verdict.")
+    val effectiveVerdict =
+      if (verdict == FeatureTaskRuntimeVerdict.QA_FINDINGS) QaVerdict.FINDINGS_OPEN else receiptVerdict
+    val reason =
+      when (effectiveVerdict) {
+        QaVerdict.SKIPPED -> receipt[QaReceiptPayloadKeys.SKIP_REASON] as? String
+        QaVerdict.INCOMPLETE -> receipt[QaReceiptPayloadKeys.INCOMPLETE_REASON] as? String
+        else -> null
+      }
+    val attempts =
+      output.qaRepairState?.consumedAttempts
+        ?: invalid("accepted QA output has no repair-attempt state.")
+    outcomes.recordSettled(workflowId, effectiveVerdict, reason, attempts, testedTreeIdentity)
+  }
 
   companion object {
     const val ID = "agent-qa"

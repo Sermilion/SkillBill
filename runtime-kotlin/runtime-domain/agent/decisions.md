@@ -1,3 +1,8 @@
+## [2026-10-19] Scope goal-qa loops by step absence
+Context: The goal-qa skeleton needs qa_fix to validate and validate to qa edges, but feature runs also compose qa, qa_fix and validate. composedOnlyWithSteps cannot express that audit must be absent.
+Decision: Add composedOnlyWithoutSteps and key the qa_fix_revalidate and qa_requalify loops on audit. Make validate loop-only in goal-qa through a skeleton-scoped loopOnlyStepIds set that must be a subset of the skeleton's steps.
+Reason: If the validate to qa edge leaks into STANDALONE or GOAL_CHILD, every validate pass loops back to qa forever. A skeleton-scoped loop-only set keeps the global loop-only phases and feature runs unchanged.
+
 ## [2026-10-17] Recover through named resume on the existing workflow row
 Context: Explicit recovery and rerun have no separate recovery-history artifact table.
 Decision: Keep recovery as WorkflowEngine resume or continue on the same workflow id and embedded artifacts. Do not add a recovery ledger in this subtask.

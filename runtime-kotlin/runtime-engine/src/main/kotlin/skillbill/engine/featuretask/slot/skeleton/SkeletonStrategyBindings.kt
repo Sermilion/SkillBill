@@ -96,6 +96,12 @@ object SkeletonStrategyBindings {
             PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
         ),
       SkeletonDefinition.QA to mapOf(PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
+      SkeletonDefinition.GOAL_QA to
+        mapOf(
+          PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
+          PhaseSlot.QUALITY_GATE to
+            PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
+        ),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),

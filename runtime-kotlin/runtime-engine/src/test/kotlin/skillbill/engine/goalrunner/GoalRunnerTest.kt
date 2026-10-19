@@ -72,6 +72,8 @@ import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
+import skillbill.engine.goalrunner.qa.GoalQaGateResult
+import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.goalrunner.status.supervisionEvent
@@ -119,6 +121,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.ACTIVE
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -330,6 +333,37 @@ class GoalRunnerTest {
     assertEquals(listOf("sha-1", "sha-2"), store.manifest.subtasks.map { it.commitSha })
     assertEquals(listOf(1, 2), store.newChildWorkflowSetups.map { it.subtaskId })
     assertTrue(store.newChildWorkflowSetups.all { it.reviewBaseline.reviewBaseSha == "0".repeat(40) })
+  }
+
+  @Test
+  fun `blocked goal QA stops before commit-all push and PR open`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { current -> current.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val git = CommitAllRecordingGitOperations(" M change.kt", "feat/SKILL-56-goal")
+    val pr = RecordingPullRequestPort()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, pr).copy(
+          gitOperations = git,
+          qaGate = GoalRunnerQaGate { _, _ -> GoalQaGateResult.Blocked("findings remain", "qa") },
+        ),
+      )
+
+    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(runRequest()))
+
+    assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
+    assertEquals("findings remain", stopped.stop.blockedReason)
+    assertEquals("qa", stopped.stop.lastResumableStep)
+    assertEquals(0, git.stageAllCalls)
+    assertTrue(git.commitMessages.isEmpty())
+    assertTrue(git.pushedBranches.isEmpty())
+    assertTrue(pr.requests.isEmpty())
   }
 
   @Test
@@ -5023,6 +5057,10 @@ class GoalRunnerLaunchReconcilerWiringTest {
 }
 
 internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun hasQaComposedPlan(workflowId: String): Boolean = false
+
+  override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
+
   private val outcomes: MutableMap<String, GoalRunnerStoredOutcome> = mutableMapOf()
   private val reviewStates: MutableMap<String, GoalSubtaskReviewState> = mutableMapOf()
   val qualityGateSelections: MutableMap<String, FeatureTaskRuntimeQualityGateSelection> = mutableMapOf()
