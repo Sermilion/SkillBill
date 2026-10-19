@@ -68,7 +68,10 @@ internal interface PhaseLoopRules {
     state: PhaseAcceptedStepExecution,
   ): FeatureTaskRuntimeVerdict = verdict
 
-  /** The checkpoint the run loop commits before advancing forward from [stepId] to [destinationStepId], or null. */
+  /**
+   * The checkpoint the run loop tries to commit before advancing forward from [stepId] to [destinationStepId], or
+   * null. A failed forward checkpoint is a warning; the run still advances.
+   */
   fun forwardCheckpoint(
     stepId: String,
     destinationStepId: String,
@@ -88,5 +91,5 @@ internal sealed interface PhaseEntrySettlement {
 
 internal class PhaseForwardCheckpoint(
   val intent: String,
-  val blockedReason: (branch: String, error: String) -> String,
+  val failureWarning: (branch: String, error: String) -> String,
 )

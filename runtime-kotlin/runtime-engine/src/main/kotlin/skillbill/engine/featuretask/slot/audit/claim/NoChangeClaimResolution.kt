@@ -54,13 +54,6 @@ internal object NoChangeClaimResolution {
 
   private const val MAX_RENDERED_CLAIM_CHARS = 4000
 
-  fun changedFiles(progress: FeatureTaskRuntimeProgressSnapshotAccess): List<String> {
-    val record = progress.phase(producingPhaseId(progress)).record ?: return emptyList()
-    val before = record.fileManifestBefore.toSet()
-    val after = record.fileManifestAfter.toSet()
-    return (record.fileManifestIntroduced + (before - after) + (after - before)).distinct().sorted()
-  }
-
   fun pendingOperatorRetry(
     pause: FeatureTaskRuntimeNoChangePause?,
     auditRecord: FeatureTaskRuntimePhaseRecord?,
@@ -86,7 +79,6 @@ internal object NoChangeClaimResolution {
     return FeatureTaskRuntimeNoChangeClaimValidator.validate(
       claim = activeClaimMap(progress)?.let { claim -> withCatalogCriterionIds(claim, known) }.orEmpty(),
       catalogCriterionIds = known.aliases.values.distinct(),
-      changedFiles = changedFiles(progress),
     )
   }
 

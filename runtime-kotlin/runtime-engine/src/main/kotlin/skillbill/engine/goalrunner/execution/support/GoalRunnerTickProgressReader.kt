@@ -13,7 +13,6 @@ val RUNTIME_WORKFLOW_ID_PREFIX: String = WorkflowFamily.TASK_RUNTIME.definition.
 
 const val FEATURE_SPEC_ROOT = ".feature-specs"
 const val MAX_VALIDATION_QUALITY_RETRIES = 3
-const val MAX_REPORTED_FINALIZE_DIRTY_PATHS = 10
 
 val CHILD_WORKFLOW_BLOCK_REASONS: Set<GoalRunnerStopReason> =
   setOf(

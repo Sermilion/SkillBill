@@ -25,12 +25,11 @@ class FeatureTaskRuntimeNoChangeClaimValidatorTest {
           it["citations"] = listOf("web/report.ts")
         },
         Row("blank boundary trace", "boundary_trace is blank") { it["boundary_trace"] = "  " },
-        Row("changed files", "this step changed files: web/report.ts", changedFiles = listOf("web/report.ts")) {},
         Row("unknown field", "unsupported fields: extra") { it["extra"] = "x" },
       )
     rows.forEach { row ->
       val raw = validClaim().also(row.mutate)
-      val validation = FeatureTaskRuntimeNoChangeClaimValidator.validate(raw, CATALOG, row.changedFiles)
+      val validation = FeatureTaskRuntimeNoChangeClaimValidator.validate(raw, CATALOG)
       val rejected = assertIs<FeatureTaskRuntimeNoChangeClaimValidation.Rejected>(validation, row.name)
       assertTrue(
         rejected.reasons.any { it.contains(row.expectedFragment) },
@@ -46,7 +45,7 @@ class FeatureTaskRuntimeNoChangeClaimValidatorTest {
         it["reason"] = "Out-Of-Repo"
         it["owning_system"] = "ticket-service"
       }
-    val validation = FeatureTaskRuntimeNoChangeClaimValidator.validate(raw, CATALOG, emptyList())
+    val validation = FeatureTaskRuntimeNoChangeClaimValidator.validate(raw, CATALOG)
     val claim = assertIs<FeatureTaskRuntimeNoChangeClaimValidation.Valid>(validation).claim
     assertEquals(FeatureTaskRuntimeNoChangeReason.OUT_OF_REPO, claim.reason)
     assertEquals("ticket-service", claim.owningSystem)
@@ -61,7 +60,7 @@ class FeatureTaskRuntimeNoChangeClaimValidatorTest {
     val handoffs =
       listOf(outOfRepo, alreadySatisfied, notReproducible).map { raw ->
         assertIs<FeatureTaskRuntimeNoChangeClaimValidation.Valid>(
-          FeatureTaskRuntimeNoChangeClaimValidator.validate(raw, CATALOG, emptyList()),
+          FeatureTaskRuntimeNoChangeClaimValidator.validate(raw, CATALOG),
         ).claim.suggestedHandoff
       }
     assertEquals(
@@ -77,7 +76,6 @@ class FeatureTaskRuntimeNoChangeClaimValidatorTest {
   private data class Row(
     val name: String,
     val expectedFragment: String,
-    val changedFiles: List<String> = emptyList(),
     val mutate: (MutableMap<String, Any?>) -> Unit,
   )
 

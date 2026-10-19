@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.lifecycle.subtask.parseGitPorcelainPaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
-import skillbill.engine.goalrunner.execution.support.MAX_REPORTED_FINALIZE_DIRTY_PATHS
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -379,8 +378,7 @@ class GoalRunnerFinalization(
       return "Goal finalization commit-all requires a feature branch."
     }
     val branchError = requireFeatureBranchForFinalize(featureBranch, request.repoRoot)
-    val commitError = branchError ?: stageCommitAndPushAll(manifest, request, featureBranch, implementationPaths)
-    return commitError ?: verifyWorktreeCleanAfterCommitAll(request)
+    return branchError ?: stageCommitAndPushAll(manifest, request, featureBranch, implementationPaths)
   }
 
   private fun stageCommitAndPushAll(
@@ -418,25 +416,6 @@ class GoalRunnerFinalization(
     } else {
       "Goal finalization commit-all committed remaining changes but could not push " +
         "branch '$featureBranch': ${pushed.error}"
-    }
-  }
-
-  private fun verifyWorktreeCleanAfterCommitAll(request: GoalRunnerRunRequest): String? {
-    val after = gitOperations.worktreeStatus(request.repoRoot)
-    if (after !is WorkflowGitOperationResult.Ok) {
-      return "Goal finalization could not re-verify worktree cleanliness after commit-all: ${after.error}"
-    }
-    val remaining = parseGitPorcelainPaths(after.value.orEmpty()).filterNot(::isFeatureSpecPath)
-    return if (remaining.isEmpty()) {
-      null
-    } else {
-      "Goal finalization commit-all left dirty paths after commit/push: " +
-        remaining.take(MAX_REPORTED_FINALIZE_DIRTY_PATHS).joinToString(", ") +
-        if (remaining.size > MAX_REPORTED_FINALIZE_DIRTY_PATHS) {
-          " (+${remaining.size - MAX_REPORTED_FINALIZE_DIRTY_PATHS} more)"
-        } else {
-          ""
-        }
     }
   }
 

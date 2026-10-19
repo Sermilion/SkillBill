@@ -199,17 +199,8 @@ internal class CodeReviewStep(
     val manifest = reviewed.manifest
     val initialText = InlineReviewEnvelope.assemble(reviewed.result, pass.reviewRunId, pass.cycle)
     val accepted = measuredReviewOutput(initialText)
-    if (manifest.before == manifest.after) {
+    if (manifest.before == manifest.after || !reviewPass.policy.fileMutating) {
       return complete(run, state, reviewed, initialText, accepted)
-    }
-    if (!reviewPass.policy.fileMutating) {
-      return blockStep(
-        state,
-        pass.iteration,
-        "Feature-task-runtime phase 'review' is read-only but the worktree changed during the review: " +
-          ((manifest.after union manifest.before) - (manifest.after intersect manifest.before)).joinToString(", "),
-        fileManifest = manifest,
-      )
     }
     return settleAmended(run, context, state, reviewed)
   }

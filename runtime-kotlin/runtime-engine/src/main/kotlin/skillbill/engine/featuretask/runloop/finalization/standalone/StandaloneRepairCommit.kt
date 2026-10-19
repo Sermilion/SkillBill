@@ -43,23 +43,9 @@ internal class StandaloneRepairCommit(
   ): String? {
     val stage = git.stagePaths(worktree, paths)
     if (stage !is WorkflowGitOperationResult.Ok) return "Could not stage the repair: ${stage.error}"
-    val committed =
-      when (val commit = git.createCommit(worktree, subject)) {
-        is WorkflowGitCommitResult.Failed -> "Could not commit the repair: ${commit.error}"
-        is WorkflowGitCommitResult.Committed, WorkflowGitCommitResult.NothingToCommit -> null
-      }
-    return committed ?: leftoverFailure()
-  }
-
-  private fun leftoverFailure(): String? =
-    when (val remaining = git.repositoryOwnedPaths(worktree)) {
-      is WorkflowGitNameListResult.Failed -> "Could not verify the worktree after the commit: ${remaining.error}"
-      is WorkflowGitNameListResult.Listed ->
-        remaining.names.filterNot(::isRuntimePrivatePath).takeIf { it.isNotEmpty() }
-          ?.let { "Uncommitted changes remain after the repair commit: ${it.take(MAX_LISTED_PATHS).joinToString()}." }
+    return when (val commit = git.createCommit(worktree, subject)) {
+      is WorkflowGitCommitResult.Failed -> "Could not commit the repair: ${commit.error}"
+      is WorkflowGitCommitResult.Committed, WorkflowGitCommitResult.NothingToCommit -> null
     }
-
-  private companion object {
-    const val MAX_LISTED_PATHS = 5
   }
 }
