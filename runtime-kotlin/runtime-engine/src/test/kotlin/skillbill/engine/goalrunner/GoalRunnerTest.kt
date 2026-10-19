@@ -72,6 +72,8 @@ import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
+import skillbill.engine.goalrunner.qa.GoalQaGateResult
+import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.goalrunner.status.supervisionEvent
@@ -119,6 +121,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.ACTIVE
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -330,6 +333,37 @@ class GoalRunnerTest {
     assertEquals(listOf("sha-1", "sha-2"), store.manifest.subtasks.map { it.commitSha })
     assertEquals(listOf(1, 2), store.newChildWorkflowSetups.map { it.subtaskId })
     assertTrue(store.newChildWorkflowSetups.all { it.reviewBaseline.reviewBaseSha == "0".repeat(40) })
+  }
+
+  @Test
+  fun `blocked goal QA stops before commit-all push and PR open`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { current -> current.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val git = CommitAllRecordingGitOperations(" M change.kt", "feat/SKILL-56-goal")
+    val pr = RecordingPullRequestPort()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, pr).copy(
+          gitOperations = git,
+          qaGate = GoalRunnerQaGate { _, _ -> GoalQaGateResult.Blocked("findings remain", "qa") },
+        ),
+      )
+
+    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(runRequest()))
+
+    assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
+    assertEquals("findings remain", stopped.stop.blockedReason)
+    assertEquals("qa", stopped.stop.lastResumableStep)
+    assertEquals(0, git.stageAllCalls)
+    assertTrue(git.commitMessages.isEmpty())
+    assertTrue(git.pushedBranches.isEmpty())
+    assertTrue(pr.requests.isEmpty())
   }
 
   @Test
@@ -1093,7 +1127,7 @@ class GoalRunnerQualityGateSelectionTest {
   }
 
   @Test
-  fun `an explicit goal QA selection reaches every child plan artifact and launch`() {
+  fun `an explicit goal QA selection pins the parent and never reaches a new child`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 2))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -1109,15 +1143,16 @@ class GoalRunnerQualityGateSelectionTest {
       runner.run(runRequest().copy(qaSelection = FeatureTaskRuntimeQaSelection.OFF)),
     )
 
-    assertEquals(List(2) { FeatureTaskRuntimeQaSelection.OFF }, store.newChildWorkflowSetups.map { it.qaSelection })
+    assertEquals(FeatureTaskRuntimeQaSelection.OFF, store.controlState.qaSelection)
+    assertEquals(List(2) { null }, store.newChildWorkflowSetups.map { it.qaSelection })
     assertEquals(
-      List(2) { FeatureTaskRuntimeQaSelection.OFF },
+      List(2) { null },
       launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qaSelection },
     )
   }
 
   @Test
-  fun `an omitted goal QA selection composes auto and forwards no QA token`() {
+  fun `an omitted goal QA selection pins auto on the parent and forwards no QA token`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -1131,7 +1166,64 @@ class GoalRunnerQualityGateSelectionTest {
 
     assertIs<GoalRunnerRunReport.Completed>(runner.run(runRequest()))
 
-    assertEquals(FeatureTaskRuntimeQaSelection.AUTO, store.newChildWorkflowSetups.single().qaSelection)
+    assertEquals(FeatureTaskRuntimeQaSelection.AUTO, store.controlState.qaSelection)
+    assertNull(store.newChildWorkflowSetups.single().qaSelection)
+    assertNull(requireNotNull(launcher.requests.single().skillRunRequest.goalContinuation).qaSelection)
+  }
+
+  @Test
+  fun `a goal resume requesting a different QA selection than the parent's is refused`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1),
+        initialControlState = GoalRunnerControlState(qaSelection = FeatureTaskRuntimeQaSelection.AUTO),
+      )
+    val launcher = RecordingSubtaskLauncher { launchFacts() }
+    val runner = testGoalRunner(goalRunnerDeps(store, launcher, RecordingOutcomeStore(), RecordingPullRequestPort()))
+
+    val report = runner.run(runRequest().copy(qaSelection = FeatureTaskRuntimeQaSelection.OFF))
+
+    val stopped = assertIs<GoalRunnerRunReport.Stopped>(report)
+    assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
+    assertEquals(
+      "Cannot change QA selection on goal resume: parent workflow 'wfl-parent' is pinned to qa:auto.",
+      stopped.stop.blockedReason,
+    )
+    assertTrue(launcher.requests.isEmpty())
+  }
+
+  @Test
+  fun `an in-flight goal without a parent selection inherits its recorded child selection for goal QA`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 2).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val outcomes = RecordingOutcomeStore()
+    outcomes["wfl-1"] = completeOutcome(1)
+    outcomes.qaSelections["wfl-1"] = FeatureTaskRuntimeQaSelection.OFF
+    val launcher =
+      RecordingSubtaskLauncher { request ->
+        val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+        store.mutate { current -> current.withWorkflowId(subtaskId, "wfl-$subtaskId") }
+        outcomes["wfl-$subtaskId"] = completeOutcome(subtaskId)
+        launchFacts()
+      }
+    var goalQaSelection: FeatureTaskRuntimeQaSelection? = null
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(
+          qaGate =
+            GoalRunnerQaGate { _, request ->
+              goalQaSelection = request.qaSelection
+              GoalQaGateResult.Passed
+            },
+        ),
+      )
+
+    runner.run(runRequest())
+
+    assertEquals(FeatureTaskRuntimeQaSelection.OFF, goalQaSelection)
+    assertEquals(FeatureTaskRuntimeQaSelection.OFF, store.controlState.qaSelection)
     assertNull(requireNotNull(launcher.requests.single().skillRunRequest.goalContinuation).qaSelection)
   }
 
@@ -5023,6 +5115,17 @@ class GoalRunnerLaunchReconcilerWiringTest {
 }
 
 internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  val qaSelections: MutableMap<String, FeatureTaskRuntimeQaSelection> = mutableMapOf()
+
+  override fun hasQaComposedPlan(workflowId: String): Boolean = false
+
+  override fun childQaSelection(
+    workflowId: String,
+    requested: FeatureTaskRuntimeQaSelection?,
+  ): FeatureTaskRuntimeQaSelection? = qaSelections[workflowId] ?: requested
+
+  override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
+
   private val outcomes: MutableMap<String, GoalRunnerStoredOutcome> = mutableMapOf()
   private val reviewStates: MutableMap<String, GoalSubtaskReviewState> = mutableMapOf()
   val qualityGateSelections: MutableMap<String, FeatureTaskRuntimeQualityGateSelection> = mutableMapOf()

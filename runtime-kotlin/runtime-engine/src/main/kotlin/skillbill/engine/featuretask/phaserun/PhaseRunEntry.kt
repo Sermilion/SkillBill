@@ -245,15 +245,6 @@ class PhaseRunEntry(
         ?.context
         ?.let { FeatureTaskRuntimeResolvedBranch(branch = it.worktree.branch, baseBranch = it.target.base.ref) }
         ?: currentBranch(request)
-    if (expectedBranch != null && branch?.branch != expectedBranch) {
-      return PhaseRunResult.Blocked(
-        invocationId,
-        emptyList(),
-        null,
-        definition.id,
-        "Goal monitoring requires branch '$expectedBranch'; current branch is '${branch?.branch.orEmpty()}'.",
-      )
-    }
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
     val facts = InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context)
     val selection = strategySelectionFacts(facts)
@@ -274,6 +265,15 @@ class PhaseRunEntry(
             ),
         ),
       )
+    if (expectedBranch != null && branch?.branch != expectedBranch) {
+      return PhaseRunResult.Blocked(
+        invocationId,
+        emptyList(),
+        null,
+        executionPlan.selectedEntryStepIds.first(),
+        "Goal finalization requires branch '$expectedBranch'; current branch is '${branch?.branch.orEmpty()}'.",
+      )
+    }
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),

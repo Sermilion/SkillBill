@@ -63,7 +63,6 @@ class QaExecutionLifecycle(
     return QaExecutionResult(value, retained, expected)
   }
 
-  /** QA accepts any repository change made while it ran; the change is reported, never refused. */
   internal fun warnIfChanged(
     repoRoot: Path,
     expected: QaExpectedIdentity,

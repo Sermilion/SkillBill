@@ -43,6 +43,7 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -798,6 +799,10 @@ internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
 }
 
 internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun hasQaComposedPlan(workflowId: String): Boolean = false
+
+  override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
+
   override fun terminalOutcome(
     workflowId: String,
     issueKey: String,

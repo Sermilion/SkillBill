@@ -29,8 +29,6 @@ data class GoalRunnerRunRequest(
   val intake: String? = null,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
 ) {
-  val childQaSelection: FeatureTaskRuntimeQaSelection get() = qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
-
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
     require(invokedAgentId.isNotBlank()) { "invokedAgentId is required." }
@@ -115,4 +113,12 @@ sealed interface GoalSubtaskQaSummary {
   data object NotRecorded : GoalSubtaskQaSummary
 
   data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalSubtaskQaSummary
+}
+
+sealed interface GoalQaSummary {
+  data object RanPerSubtask : GoalQaSummary
+
+  data object NotRecorded : GoalQaSummary
+
+  data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalQaSummary
 }

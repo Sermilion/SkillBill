@@ -735,7 +735,7 @@ class IdeStatusServiceGoalProjectionTest {
         outcomeStore =
           object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
             override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
-              parkedParentProgressOnMonitor().takeIf { workflowId == "goal-1" }
+              parkedParentFinalizationProgress().takeIf { workflowId == "goal-1" }
           },
       ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
@@ -745,6 +745,42 @@ class IdeStatusServiceGoalProjectionTest {
     assertEquals(GoalPlanningStatusState.PARTIALLY_PLANNED, status.snapshot.planning?.state)
     assertEquals(2, status.snapshot.progress?.completed)
     assertEquals(2, status.snapshot.progress?.total)
+  }
+
+  @Test
+  fun `goal qa started after every child completes projects qa as the current finish step`() {
+    val fixture = gitRepoFixture("ide-status-goal-qa", branch = "feat/SKILL-148-status-fix")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val original = zeroAc46Database(identity, includeFeatureGoalWorkItem = true)
+    val database =
+      TrackingDatabase(
+        work = original.work.filter { it.workflowId == "goal-1" },
+        workflows = original.workflows,
+        controls =
+          object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+            override fun controlState(parentWorkflowId: String) = GoalRunnerControlState(repositoryIdentity = identity)
+          },
+      )
+    val status =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            zeroAc46ManifestState(fixture, identity),
+            planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+            lease = liveLease(),
+          ),
+        outcomeStore =
+          object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+            override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
+              parkedParentFinalizationProgress("qa", GoalProgressEventKind.PHASE_STARTED)
+                .takeIf { workflowId == "goal-1" }
+          },
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+    assertEquals(IdeStatusLifecycleState.ACTIVE, status.snapshot.lifecycleState)
+    assertEquals("qa", status.snapshot.currentStep.id)
+    assertEquals("Goal SKILL-148 is active on qa.", status.snapshot.summary)
   }
 
   @Test
@@ -783,7 +819,7 @@ class IdeStatusServiceGoalProjectionTest {
         outcomeStore =
           object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
             override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
-              parkedParentProgressOnMonitor().copy(workflowStatus = WorkflowStatus.COMPLETED)
+              parkedParentFinalizationProgress().copy(workflowStatus = WorkflowStatus.COMPLETED)
                 .takeIf { workflowId == "goal-1" }
           },
       )
@@ -815,7 +851,7 @@ class IdeStatusServiceGoalProjectionTest {
       object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
         override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
           when (workflowId) {
-            "goal-1" -> parkedParentProgressOnMonitor()
+            "goal-1" -> parkedParentFinalizationProgress()
             "w-child" ->
               GoalRunnerWorkflowProgress(
                 workflowId = "w-child",
@@ -906,22 +942,25 @@ class IdeStatusServiceGoalProjectionTest {
     return TrackingDatabase(work = work, workflows = workflows)
   }
 
-  private fun parkedParentProgressOnMonitor(): GoalRunnerWorkflowProgress =
+  private fun parkedParentFinalizationProgress(
+    step: String = "monitor",
+    eventKind: GoalProgressEventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+  ): GoalRunnerWorkflowProgress =
     GoalRunnerWorkflowProgress(
       workflowId = "goal-1",
       workflowStatus = WorkflowStatus.PAUSED,
       currentStepId = "plan",
-      progressToken = "monitor-heartbeat",
+      progressToken = "$step-heartbeat",
       latestDeclaredProgressEvent =
         GoalProgressEvent(
-          eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+          eventKind = eventKind,
           workflowId = "goal-1",
-          workflowPhase = "monitor",
+          workflowPhase = step,
           processAlive = true,
           sequenceNumber = 1,
           timestamp = ideStatusObservedAt.toString(),
-          stepId = "monitor",
-          operationName = "monitor",
+          stepId = step,
+          operationName = step,
           operationKind = GOAL_FINALIZATION_OPERATION_KIND,
         ),
       latestLivenessSignal = "workflow_status=PAUSED; step=plan",

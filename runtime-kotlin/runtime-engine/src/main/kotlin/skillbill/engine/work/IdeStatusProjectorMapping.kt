@@ -136,7 +136,7 @@ internal fun goalProjectsLiveFinalizationStep(projection: GoalRunnerStatusProjec
   if (projection == null || projection.executionLiveness != ExecutionLiveness.LIVE) return false
   if (!goalStaysOnOpenCiMonitor(projection)) return false
   val step = projection.currentStep?.takeIf(String::isNotBlank) ?: return false
-  return step in LIVE_GOAL_FINALIZATION_STEP_IDS
+  return step in GOAL_FINISH_PIPELINE
 }
 
 internal data class GoalCurrentStepSignals(
@@ -175,8 +175,6 @@ internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
 
 internal val LIVE_PLANNING_STEP_IDS: Set<String> =
   setOf("plan", "preplan", "planning", "pending_launch", "initializing")
-
-private val LIVE_GOAL_FINALIZATION_STEP_IDS: Set<String> = setOf(OPEN_CI_MONITOR_STEP, "pr", "monitor_fix")
 
 internal fun goalSummary(
   issueKey: String,

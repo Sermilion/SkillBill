@@ -32,6 +32,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
+import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.model.RepositoryRoot
@@ -111,6 +112,7 @@ internal data class GoalRunnerTestWiring(
     GoalRunnerCiMonitor { _, _ ->
       PhaseRunResult.Completed("test-monitor", listOf("monitor"), null, "CI passed")
     },
+  val qaGate: GoalRunnerQaGate = NoopGoalRunnerQaGate,
   val pullRequestIdentityLookup: PullRequestIdentityLookup =
     PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
@@ -161,6 +163,7 @@ internal data class GoalRunnerTestInputs(
     GoalRunnerCiMonitor { _, _ ->
       PhaseRunResult.Completed("test-monitor", listOf("monitor"), null, "CI passed")
     },
+  val qaGate: GoalRunnerQaGate = NoopGoalRunnerQaGate,
   val pullRequestIdentityLookup: PullRequestIdentityLookup =
     PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
@@ -183,6 +186,7 @@ internal data class GoalRunnerTestInputs(
       phaseRecorder = phaseRecorder,
       childWorkflowDatabase = childWorkflowDatabase,
       ciMonitor = ciMonitor,
+      qaGate = qaGate,
       pullRequestIdentityLookup = pullRequestIdentityLookup,
     )
 }
@@ -207,16 +211,16 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   val progressReader = GoalRunnerProgressReader(wiring.outcomeStore)
   val finalization =
     GoalRunnerFinalization(
-      wiring.manifestStore,
       wiring.outcomeStore,
       wiring.pullRequestPort,
       wiring.specScratchStore,
       wiring.gitOperations,
       wiring.diagnostics,
       wiring.unaddressedFindingsLedgerService,
-      progressReader,
+      GoalRunnerFinalReconciliation(wiring.manifestStore, wiring.outcomeStore, progressReader),
       wiring.phaseRecorder,
       wiring.ciMonitor,
+      wiring.qaGate,
       wiring.pullRequestIdentityLookup,
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)

@@ -54,16 +54,16 @@
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "complete",
+        "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "qa",
-        "resolved_agent_id": "runtime",
+        "phase_id": "review",
+        "resolved_agent_id": "agent-review",
         "sequence_number": 6,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "start",
+        "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
         "phase_id": "review",
@@ -81,16 +81,16 @@
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "complete",
+        "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "review",
-        "resolved_agent_id": "agent-review",
+        "phase_id": "verify_findings",
+        "resolved_agent_id": "agent-verify_findings",
         "sequence_number": 9,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "start",
+        "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
         "phase_id": "verify_findings",
@@ -99,16 +99,16 @@
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "complete",
+        "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "verify_findings",
-        "resolved_agent_id": "agent-verify_findings",
+        "phase_id": "build",
+        "resolved_agent_id": "agent-build",
         "sequence_number": 11,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "start",
+        "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
         "phase_id": "build",
@@ -126,16 +126,16 @@
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "complete",
+        "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "build",
-        "resolved_agent_id": "agent-build",
+        "phase_id": "write_history",
+        "resolved_agent_id": "agent-write_history",
         "sequence_number": 14,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "start",
+        "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
         "phase_id": "write_history",
@@ -144,16 +144,16 @@
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "complete",
+        "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "write_history",
-        "resolved_agent_id": "agent-write_history",
+        "phase_id": "commit_push",
+        "resolved_agent_id": "agent-commit_push",
         "sequence_number": 16,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "start",
+        "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
         "phase_id": "commit_push",
@@ -168,15 +168,6 @@
         "phase_id": "commit_push",
         "resolved_agent_id": "agent-commit_push",
         "sequence_number": 18,
-        "timestamp": "__NORMALIZED_TIMESTAMP__"
-    },
-    {
-        "action": "complete",
-        "attempt_count": 1,
-        "execution_origin": "agent-executed",
-        "phase_id": "commit_push",
-        "resolved_agent_id": "agent-commit_push",
-        "sequence_number": 19,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     }
 ]

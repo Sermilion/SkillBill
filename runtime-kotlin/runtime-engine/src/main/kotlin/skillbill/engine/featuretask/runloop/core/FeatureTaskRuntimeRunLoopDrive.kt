@@ -1,9 +1,12 @@
 package skillbill.engine.featuretask.runloop.core
 
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.phaseLoopContext
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
+import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.loopCapExhausted
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopAcceptanceRepair
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -11,6 +14,10 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.error.shellcontent.featureTaskRuntimePhaseOrderViolationMessage
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -18,7 +25,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeTransitionFunction
+import kotlin.coroutines.cancellation.CancellationException
 
 object FeatureTaskRuntimeRunLoopDrive {
   internal fun resumedReentry(context: FeatureTaskRuntimeRunLoopContext): PendingReentry? {
@@ -240,18 +249,53 @@ object FeatureTaskRuntimeRunLoopDrive {
         }?.key ?: requested
       }
     while (phaseId != null) {
-      val settled = advance(phaseId)
-      val completedPhaseId = settled.completedPhaseId
-      phaseId =
-        if (completedPhaseId != null) {
-          nextPhaseAfter(
-            this,
-            completedPhaseId,
-            requireNotNull(settled.completedVerdict),
-          )
-        } else {
-          null
-        }
+      val currentPhaseId = phaseId
+      try {
+        val settled = advance(currentPhaseId)
+        val completedPhaseId = settled.completedPhaseId
+        phaseId =
+          if (completedPhaseId != null) {
+            nextPhaseAfter(
+              this,
+              completedPhaseId,
+              requireNotNull(settled.completedVerdict),
+            )
+          } else {
+            null
+          }
+      } catch (error: CancellationException) {
+        throw error
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(request.skeletonDefinition?.id == SkeletonDefinition.GOAL_QA.id && error.isQaFailure)
+        val reason = error.message.orEmpty()
+        FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
+          request,
+          state,
+          runState.coupledSession(),
+          currentPhaseId,
+          reason,
+        )
+        val phaseProgress = state.phase(currentPhaseId)
+        val resolvedAgentId =
+          FeatureTaskRuntimeAgentResolver.resolve(
+            phaseId = currentPhaseId,
+            assignment = request.agentAssignment,
+            invokedAgentId = request.invokedAgentId,
+          ).resolvedAgentId
+        observability.blocked(
+          currentPhaseId,
+          resolvedAgentId,
+          (phaseProgress.nextIteration - 1).coerceAtLeast(1),
+          reason,
+        )
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Goal QA failure converted to blocked [seam=goal_qa_drive, " +
+            "code=${error.failureCodeLabel()}, phase=$currentPhaseId].",
+          error,
+        )
+        phaseId = null
+      }
     }
   }
 

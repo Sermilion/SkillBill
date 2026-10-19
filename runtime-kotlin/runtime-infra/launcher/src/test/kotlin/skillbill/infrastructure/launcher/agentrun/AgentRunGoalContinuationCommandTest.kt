@@ -381,7 +381,7 @@ class AgentRunGoalContinuationCommandTest {
   }
 
   @Test
-  fun `goal-continuation launch forwards an explicit QA selection and omits an absent one`() {
+  fun `goal-continuation launch forwards an explicit QA selection and blanks an absent one`() {
     val tokens = FeatureTaskRuntimeGoalContinuationLaunchTokens
     val selected = RecordingAgentRunProcessRunner()
     requireNotNull(adapters(selected)[SupportedAgent.CLAUDE]).launch(
@@ -406,7 +406,7 @@ class AgentRunGoalContinuationCommandTest {
       ),
     )
     assertFalse(tokens.QA_SELECTION_FLAG in omitted.requests.single().launch.command)
-    assertNull(omitted.requests.single().environmentFields.environment[tokens.QA_SELECTION_ENV])
+    assertEquals("", omitted.requests.single().environmentFields.environment[tokens.QA_SELECTION_ENV])
   }
 
   private fun fullyPopulated(context: SkillRunGoalContinuationContext): SkillRunGoalContinuationContext =

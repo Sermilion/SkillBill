@@ -24,7 +24,6 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
 ) {
   private var checkpointBlockOverride: ((String) -> Unit)? = null
 
-  /** Runs [action] with checkpoint blocks routed to [onBlock] instead of ending the run. */
   fun <T> checkpointBlocksAsWarnings(
     onBlock: (String) -> Unit,
     action: () -> T,

@@ -24,7 +24,7 @@ fun testExecutionPlan(
         setOfNotNull(
           CodeReviewExecutionMode.INLINE,
           FeatureTaskRuntimeQaSelection.AUTO.takeIf { PhaseSlot.QA in definition.slots },
-          FeatureTaskRuntimeQualityGateSelection.VALIDATE.takeIf { definition == SkeletonDefinition.GOAL_CHILD },
+          FeatureTaskRuntimeQualityGateSelection.VALIDATE.takeIf { definition.id == SkeletonDefinition.GOAL_CHILD.id },
         ),
       ),
     )

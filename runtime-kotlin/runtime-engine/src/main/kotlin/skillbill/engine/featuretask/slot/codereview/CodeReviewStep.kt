@@ -199,7 +199,6 @@ internal class CodeReviewStep(
     val manifest = reviewed.manifest
     val initialText = InlineReviewEnvelope.assemble(reviewed.result, pass.reviewRunId, pass.cycle)
     val accepted = measuredReviewOutput(initialText)
-    // A read-only pass accepts whatever else changed the worktree meanwhile; the manifest keeps the record.
     if (manifest.before == manifest.after || !reviewPass.policy.fileMutating) {
       return complete(run, state, reviewed, initialText, accepted)
     }

@@ -127,7 +127,6 @@ object FeatureTaskRuntimeRunLoopTransitions {
     val checkpoint =
       context.strategyFor(precedingPhaseId).loopRules?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
         ?: return true
-    // A forward checkpoint never stops the run: whatever is on the branch moves on to the next phase.
     val failures = mutableListOf<String>()
     runCatching {
       context.coupledRunTransitions.checkpointBlocksAsWarnings(failures::add) {

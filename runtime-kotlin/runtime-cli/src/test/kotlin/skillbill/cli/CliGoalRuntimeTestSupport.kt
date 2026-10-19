@@ -631,6 +631,9 @@ internal fun goalFixture(
   seedWorkflow: Boolean = true,
 ): GoalCliFixture {
   val tempDir = Files.createTempDirectory("skillbill-cli-goal")
+  val gitInit = ProcessBuilder("git", "init", "--quiet", tempDir.toString()).redirectErrorStream(true).start()
+  val gitOutput = gitInit.inputStream.bufferedReader().use { it.readText() }
+  check(gitInit.waitFor() == 0) { gitOutput }
   installGoalBuildPack(tempDir)
   val parentSpec = tempDir.resolve(".feature-specs/SKILL-901-goal/spec.md")
   Files.createDirectories(parentSpec.parent)
@@ -772,7 +775,7 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
     WorkflowGitOperationResult.Ok(value = "test-repository-fingerprint")
 
   override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
-    WorkflowGitOperationResult.Ok(value = "test-repository-tree-identity")
+    WorkflowGitOperationResult.Ok(value = "2".repeat(64))
 
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
@@ -851,6 +854,9 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
 
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "test-commit")
+
+  override fun runtimePhaseHeadCommit(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = "1".repeat(40))
 
   override fun isCommitAncestor(
     repoRoot: Path,

@@ -1,3 +1,14 @@
+## [2026-10-19] SKILL-431 subtask 3: goal finish pipeline status and docs
+Areas: runtime-kotlin engine work (IdeStatusService, IdeStatusProjectorMapping, IdeStatusServiceGoalProjectionTest); runtime-kotlin/ARCHITECTURE.md; docs/runtime-command-guidance.md; skills/skill-bill
+- MEDIUM feature. GOAL_FINISH_PIPELINE is now qa, qa_fix, validate, pr, monitor, monitor_fix, built from the FeatureTaskRuntimePhaseWorkflowDefinition PHASE_* constants and made internal. commit_push stays out.
+- The live goal finalization allowlist in IdeStatusProjectorMapping is GOAL_FINISH_PIPELINE.toSet(), so goal QA gate events (operationKind goal_finalization, stepId = phase id) project as the current finish step and the list cannot drift from the pipeline.
+- The desktop needed no change. PhaseChip renders the step id and goalFinishSteps works on whatever list the runtime sends.
+- Docs: goal children run audit, review, validate, write_history with no qa. Goal finalization runs qa once on the goal branch HEAD before commit_push. qa_fix, full validate, qa loops 3 times, then blocks. The docs also cover the qa:off and unsupported_target skips and the in-flight revision-3 child rule.
+- ARCHITECTURE.md documents GOAL_CHILD revision 4, GOAL_CHILD_REVISION_3 kept in entries, and the GOAL_QA skeleton driven by DefaultGoalRunnerQaGate.
+- Limit: FeatureTaskRuntimePhaseWorkflowGraph qa_fix guidance still says "re-audit and QA", which is wrong for the goal-qa loop (qa_fix goes to validate).
+Feature flag: N/A (operator selection qa:auto|off)
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-19] SKILL-419 subtask 3: verify qa:on|off integration
 Areas: runtime-kotlin domain (verify definition, VerifyQaSelection model), engine operation/verify and core, CLI operation, MCP workflow tools, application and sqlite telemetry, ports and infra git worktree; orchestration/contracts; skills/skill-bill; docs
 - MEDIUM feature. `operation:verify` accepts `qa:on|off` (default off) from the CLI and the four MCP verify workflow tools. The selection is stored in input_context.qa_selection, named in the proposal, and a confirm with a different value is refused.

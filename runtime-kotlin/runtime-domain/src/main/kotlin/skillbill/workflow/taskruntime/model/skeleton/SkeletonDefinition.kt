@@ -30,6 +30,7 @@ data class SkeletonDefinition(
   val standaloneInvocable: Boolean = false,
   val preparedExecutionOf: String? = null,
   val runHarness: PhaseRunHarness = PhaseRunHarness.NONE,
+  val loopOnlyStepIds: Set<String> = emptySet(),
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -41,6 +42,7 @@ data class SkeletonDefinition(
     if (stepIds.isEmpty() || stepIds != available.filter { it in stepIds }) {
       throw InvalidPhaseStrategyCompositionError("definition $id has duplicate, reordered, or unowned steps")
     }
+    require(loopOnlyStepIds.all(stepIds::contains))
   }
 
   companion object {
@@ -72,11 +74,17 @@ data class SkeletonDefinition(
         semanticRevision = 2,
       )
     val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", FEATURE_RUN_SLOTS, semanticRevision = 3)
-    val GOAL_CHILD: SkeletonDefinition =
+    val GOAL_CHILD_REVISION_3: SkeletonDefinition =
       SkeletonDefinition(
         "goal-child",
         FEATURE_RUN_SLOTS.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
         semanticRevision = 3,
+      )
+    val GOAL_CHILD: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-child",
+        LEGACY_FEATURE_RUN_SLOTS_REVISION_2.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
+        semanticRevision = 4,
       )
     val REVIEW: SkeletonDefinition =
       SkeletonDefinition(
@@ -100,6 +108,19 @@ data class SkeletonDefinition(
         standaloneInvocable = true,
         stepIds = listOf(FeatureTaskRuntimePhaseIds.QA),
         runHarness = PhaseRunHarness.DEVICE_QA,
+      )
+    val GOAL_QA: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-qa",
+        listOf(PhaseSlot.QA, PhaseSlot.QUALITY_GATE),
+        runStateKind = SkeletonRunStateKind.IN_MEMORY,
+        stepIds =
+          listOf(
+            FeatureTaskRuntimePhaseIds.QA,
+            FeatureTaskRuntimePhaseIds.QA_FIX,
+            FeatureTaskRuntimePhaseIds.VALIDATE,
+          ),
+        loopOnlyStepIds = setOf(FeatureTaskRuntimePhaseIds.VALIDATE),
       )
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
@@ -138,10 +159,12 @@ data class SkeletonDefinition(
           STANDALONE_REVISION_2,
           GOAL_CHILD_REVISION_2,
           STANDALONE,
+          GOAL_CHILD_REVISION_3,
           GOAL_CHILD,
           REVIEW,
           VALIDATION,
           QA,
+          GOAL_QA,
           PLAN,
           PR,
           MONITOR,

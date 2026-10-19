@@ -1293,8 +1293,12 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `Scoped` (the base and head `skill-bill code-review` resolves). It composes
   the opening lines of the review prompt.
 - `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
-  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots; `GOAL_CHILD` omits
-  `pull_request` and `monitor`. `standalone_review` is outside that list. The
+  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots. `GOAL_CHILD`
+  (semantic revision 4) omits `qa`, `pull_request` and `monitor`, so a new goal
+  child runs `audit -> review -> validate -> write_history`. `GOAL_CHILD_REVISION_3`
+  keeps the `qa` slot and stays in `entries`, so an in-flight child recorded on
+  revision 3 resolves its recorded step list and still runs child-level `qa` and
+  `qa_fix`. `standalone_review` is outside that list. The
   retired `STANDALONE` definition still uses all nine slots. It stays declared,
   listed in `entries` and bound to strategies so a stored `standalone` plan keeps
   decoding, but no run is admitted on it and it is not `standaloneInvocable`.
@@ -1305,7 +1309,18 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
   `IN_MEMORY`) that a phase run drives on its own. `QA` (the `qa` slot, with only `qa`) is
   in-memory too; `PhaseRunEntry` hands it to `QaStandalonePhaseRun`, which prepares the QA
-  workspace, resolves the routed pack's `qa_capability`, and validates the receipt. `PLAN` (`intake`, `preplan`,
+  workspace, resolves the routed pack's `qa_capability`, and validates the receipt. `GOAL_QA`
+  (`goal-qa`, slots `qa` and `quality_gate`, steps `qa`, `qa_fix` and `validate`) is the
+  in-memory definition goal finalization runs once per goal, after every child completes and
+  before `commit_push`. `DefaultGoalRunnerQaGate` drives it through `PhaseRunEntry.runForGoal`
+  on the goal branch, and its `qa` step runs through `QaStrategy`, not `QaStandalonePhaseRun`.
+  `validate` is loop-only there (`loopOnlyStepIds`): QA findings take `qa -> qa_fix`, then the
+  `qa_fix_revalidate` edge to `validate` (the full project gate) and the `qa_requalify` edge
+  back to `qa`, capped at three and blocking on exhaustion. A blocked gate stops the goal
+  before any commit, push or PR write. Both loops are composed only when `audit` is absent
+  (`composedOnlyWithoutSteps`), so they never reach goal-child runs. The gate skips when
+  every child ran and recorded child-level QA, or when a goal QA outcome already passed or
+  skipped on the current tree. `PLAN` (`intake`, `preplan`,
   `plan`, and `plan_subtasks`) is durable: `skill-bill phase plan` runs it as a standalone workflow
   (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
   `phase` command lists: review, validation, qa, plan, pr and monitor.

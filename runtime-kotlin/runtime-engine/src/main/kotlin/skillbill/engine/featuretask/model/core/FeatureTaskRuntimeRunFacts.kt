@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -21,6 +22,9 @@ import kotlin.time.Duration
  */
 interface FeatureTaskRuntimeRunFacts {
   val admittedExecution: AdmittedFeatureTaskRuntimeExecution? get() = null
+
+  /** The caller's explicit in-memory QA selection; null when the caller supplies none. */
+  val qaSelection: FeatureTaskRuntimeQaSelection? get() = null
 
   /** The issue the run works on. */
   val issueKey: String

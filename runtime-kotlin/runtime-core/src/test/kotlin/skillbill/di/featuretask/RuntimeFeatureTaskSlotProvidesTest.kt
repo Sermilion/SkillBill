@@ -124,6 +124,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
         SkeletonDefinition.STANDALONE_REVISION_2,
         SkeletonDefinition.GOAL_CHILD_REVISION_2,
         SkeletonDefinition.STANDALONE,
+        SkeletonDefinition.GOAL_CHILD_REVISION_3,
         SkeletonDefinition.GOAL_CHILD,
         SkeletonDefinition.PLAN,
       ),

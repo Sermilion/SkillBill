@@ -67,7 +67,6 @@ abandon stay CLI-only and deferred.
 ```bash
 cd vscode-extension
 npm run compile
-npm test
 npm run package
 ```
 
