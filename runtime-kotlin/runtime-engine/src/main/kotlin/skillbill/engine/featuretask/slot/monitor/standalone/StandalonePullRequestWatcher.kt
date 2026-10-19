@@ -16,6 +16,7 @@ import java.time.Instant
 internal data class StandaloneWatchHeads(
   val expected: String,
   val superseded: Set<String>,
+  val refreshAfter: Instant? = null,
 )
 
 internal class StandalonePullRequestWatcher(
@@ -27,6 +28,7 @@ internal class StandalonePullRequestWatcher(
   private val pollInterval: Duration = DEFAULT_POLL_INTERVAL,
   private val startTimeout: Duration = DEFAULT_START_TIMEOUT,
   private val progressInterval: Duration = DEFAULT_PROGRESS_INTERVAL,
+  private val refreshGrace: Duration = DEFAULT_REFRESH_GRACE,
 ) {
   private sealed interface Observation {
     data class Settled(val outcome: PullRequestCiOutcome) : Observation
@@ -43,6 +45,7 @@ internal class StandalonePullRequestWatcher(
   private class WatchState(
     var heads: StandaloneWatchHeads,
     val adoptHead: (String) -> String?,
+    val refreshGraceEndsAt: Instant,
     var ciStarted: Boolean = false,
     var progress: Progress = Progress(),
   )
@@ -54,7 +57,7 @@ internal class StandalonePullRequestWatcher(
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
   ): PullRequestCiOutcome {
     val startedAt = now()
-    val state = WatchState(heads, adoptHead)
+    val state = WatchState(heads, adoptHead, startedAt + refreshGrace)
     while (true) {
       val outcome =
         if (cancelled()) {
@@ -76,7 +79,7 @@ internal class StandalonePullRequestWatcher(
       is Observation.Settled -> observation.outcome
       Observation.NotYetVisible -> null
       is Observation.Moved -> adopt(observation.headSha, state)
-      is Observation.Open -> pollChecks(pullRequest, observation.headSha, onCiRunning, state)
+      is Observation.Open -> pollChecks(pullRequest, observation, onCiRunning, state)
     }
 
   private fun adopt(
@@ -95,7 +98,7 @@ internal class StandalonePullRequestWatcher(
 
   private fun pollChecks(
     pullRequest: MonitorPullRequestIdentity,
-    headSha: String,
+    open: Observation.Open,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     state: WatchState,
   ): PullRequestCiOutcome? {
@@ -105,7 +108,9 @@ internal class StandalonePullRequestWatcher(
     }
     val reportedChecks = (reported as? PullRequestChecks.Reported)?.checks.orEmpty()
     if (reportedChecks.isNotEmpty()) state.ciStarted = true
-    val verdict = verdictFor(reportedChecks, headSha)
+    val verdict =
+      verdictFor(reportedChecks, open.headSha, open.pullRequest.editableFieldsDigest)
+        ?.takeUnless { it is PullRequestCiOutcome.Failed && !refreshed(reportedChecks, state) }
     if (verdict == null) {
       state.progress = reportRunning(pullRequest, reportedChecks, onCiRunning, state.progress)
       return null
@@ -160,13 +165,26 @@ internal class StandalonePullRequestWatcher(
       is Observation.Open -> observed
     }
 
+  private fun refreshed(
+    reportedChecks: List<PullRequestCheck>,
+    state: WatchState,
+  ): Boolean {
+    val after = state.heads.refreshAfter ?: return true
+    return reportedChecks.none { it.bucket == CheckBucket.PENDING } &&
+      (
+        reportedChecks.any { check -> check.startedAt?.let { !it.isBefore(after) } == true } ||
+          !now().isBefore(state.refreshGraceEndsAt)
+      )
+  }
+
   private fun verdictFor(
     reportedChecks: List<PullRequestCheck>,
     headSha: String,
+    editableFieldsDigest: String?,
   ): PullRequestCiOutcome? {
     val failing = reportedChecks.filter { it.bucket == CheckBucket.FAIL }
     return when {
-      failing.isNotEmpty() -> PullRequestCiOutcome.Failed(failing, headSha)
+      failing.isNotEmpty() -> PullRequestCiOutcome.Failed(failing, headSha, editableFieldsDigest)
       reportedChecks.isEmpty() || reportedChecks.any { it.bucket == CheckBucket.PENDING } -> null
       else -> PullRequestCiOutcome.Passed(headSha)
     }
@@ -195,6 +213,7 @@ internal class StandalonePullRequestWatcher(
     private val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(30)
     private val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
     private val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofSeconds(30)
+    private val DEFAULT_REFRESH_GRACE: Duration = Duration.ofMinutes(10)
     private const val MAX_PROGRESS_CHECKS: Int = 8
     private const val MAX_PROGRESS_TEXT_LENGTH: Int = 160
   }

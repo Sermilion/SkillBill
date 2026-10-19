@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.monitor
 
 import com.fasterxml.jackson.databind.JsonNode
+import skillbill.infrastructure.workflow.github.pullRequestEditableFieldsDigest
 import skillbill.ports.monitor.model.MonitorBranchTip
 import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestHead
@@ -27,7 +28,11 @@ internal fun parseMonitorPullRequest(
   val state = stateOf(node)
   val base = tipOf(node.path("base"), repository.host)
   val conflicting = node.path("mergeable_state").asText() == "dirty" || node.path("mergeable").asText() == "false"
-  return if (state == null || base == null) null else MonitorPullRequest(identity, state, head, base, conflicting)
+  return if (state == null || base == null) {
+    null
+  } else {
+    MonitorPullRequest(identity, state, head, base, conflicting, pullRequestEditableFieldsDigest(node))
+  }
 }
 
 internal fun parseMonitorPullRequestSummary(

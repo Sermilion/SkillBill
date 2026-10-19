@@ -68,6 +68,7 @@ data class MonitorPullRequest(
   val head: MonitorPullRequestHead?,
   val base: MonitorBranchTip?,
   val conflicting: Boolean = false,
+  val editableFieldsDigest: String? = null,
 )
 
 data class MonitorPullRequestSummary(

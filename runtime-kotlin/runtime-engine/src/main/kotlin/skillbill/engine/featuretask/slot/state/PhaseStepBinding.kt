@@ -234,6 +234,8 @@ internal sealed interface StandalonePublication {
 
   data class Published(val commitSha: String) : StandalonePublication
 
+  data class PullRequestEdited(val headSha: String) : StandalonePublication
+
   data class Blocked(val reason: String) : StandalonePublication
 }
 

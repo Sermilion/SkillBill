@@ -37,7 +37,7 @@ class GhMonitorCheckSource internal constructor(
           "--repo",
           repositoryArgument(pullRequest),
           "--json",
-          "name,state,bucket,link",
+          "name,state,bucket,link,startedAt",
         ),
       ),
     )

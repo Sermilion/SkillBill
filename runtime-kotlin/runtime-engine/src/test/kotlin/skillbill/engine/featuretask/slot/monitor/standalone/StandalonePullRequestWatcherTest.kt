@@ -66,6 +66,7 @@ class StandalonePullRequestWatcherTest {
   private fun watch(
     expected: String = PUBLISHED,
     superseded: Set<String> = emptySet(),
+    refreshAfter: Instant? = null,
   ): PullRequestCiOutcome =
     StandalonePullRequestWatcher(
       source = source,
@@ -78,7 +79,7 @@ class StandalonePullRequestWatcherTest {
       cancelled = { cancelled },
     ).watch(
       identity(PR_NUMBER),
-      StandaloneWatchHeads(expected, superseded),
+      StandaloneWatchHeads(expected, superseded, refreshAfter),
       { sha -> adoptionRefusal.also { if (it == null) adopted += sha } },
     ) { _, pending ->
       running += pending.map(PullRequestCheck::name)
@@ -99,6 +100,35 @@ class StandalonePullRequestWatcherTest {
 
     assertEquals(PullRequestCiOutcome.Blocked("CI did not start within 60 minutes."), outcome)
     assertTrue(Duration.between(Instant.parse("2026-10-16T10:00:00Z"), clock) >= Duration.ofHours(1))
+  }
+
+  @Test
+  fun `after a pull request edit a stale failure waits for the check that re-ran on the edit`() {
+    heads += PUBLISHED
+    val editedAt = clock.minusSeconds(60)
+    reportedSequence +=
+      listOf(
+        reports(check("danger/danger", CheckBucket.FAIL)),
+        reports(check("danger/danger", CheckBucket.FAIL), check("danger", CheckBucket.PENDING)),
+        reports(
+          check("danger/danger", CheckBucket.PASS),
+          check("danger", CheckBucket.PASS).copy(startedAt = editedAt.plusSeconds(5)),
+        ),
+      )
+
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), watch(refreshAfter = editedAt))
+    assertEquals(2, sleeps.size)
+  }
+
+  @Test
+  fun `after a pull request edit a failure no check refreshes counts once the grace passes`() {
+    heads += PUBLISHED
+    val failing = check("danger/danger", CheckBucket.FAIL)
+    reported = reports(failing)
+    val startedAt = clock
+
+    assertEquals(PullRequestCiOutcome.Failed(listOf(failing), PUBLISHED), watch(refreshAfter = startedAt))
+    assertTrue(Duration.between(startedAt, clock) >= Duration.ofMinutes(10))
   }
 
   @Test

@@ -36,6 +36,7 @@ import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -47,6 +48,7 @@ private const val TEAMMATE = "2222222222222222222222222222222222222222"
 private const val ADVANCED_BASE = "3333333333333333333333333333333333333333"
 private const val FETCHED_BASE = "4444444444444444444444444444444444444444"
 private const val PR_NUMBER = 427
+private val EDIT_START = Instant.parse("2026-10-19T12:00:00Z")
 private val WORKTREE = MonitorWorktree(Path.of("/owned/worktree"), "skill-bill/monitor/service-test")
 
 class StandaloneMonitorServiceTest {
@@ -57,11 +59,13 @@ class StandaloneMonitorServiceTest {
   private var remoteHead = PUBLISHED
   private var remoteState = MonitorPullRequestState.OPEN
   private var remoteBase = MonitorBranchTip(ACME, "main", SHA)
+  private var remoteFieldsDigest: String? = "title-before"
   private val source =
     FakeMonitorPullRequestSource(
       lookup = {
         MonitorPullRequestLookup.Found(
-          pullRequest(it, state = remoteState, head = head(sha = remoteHead), base = remoteBase),
+          pullRequest(it, state = remoteState, head = head(sha = remoteHead), base = remoteBase)
+            .copy(editableFieldsDigest = remoteFieldsDigest),
         )
       },
     )
@@ -117,7 +121,9 @@ class StandaloneMonitorServiceTest {
     )
 
   private fun completedRepair(dirtyPath: String? = null) {
-    ledger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
+    ledger.beginRepair(
+      StandalonePendingRepair("CI failed", PUBLISHED, pullRequestFieldsDigest = "title-before", startedAt = EDIT_START),
+    )
     ledger.completePendingRepair()
     dirtyPath?.let { path ->
       git.ownedPathsValue = listOf(path)
@@ -227,6 +233,20 @@ class StandaloneMonitorServiceTest {
 
     assertTrue("made no change" in blocked.reason, blocked.reason)
     assertEquals(emptyList(), publisherRequests)
+  }
+
+  @Test
+  fun `a repair that only edited the pull request is recorded on the unchanged head without a push`() {
+    completedRepair()
+    remoteFieldsDigest = "title-after"
+
+    val edited = assertIs<StandalonePublication.PullRequestEdited>(service.operations.publish(ledger, repairWorktree))
+
+    assertEquals(PUBLISHED, edited.headSha)
+    assertEquals(emptyList(), publisherRequests)
+    assertNull(ledger.pendingRepair)
+    assertEquals(listOf("$PUBLISHED+pull-request-edit:1"), ledger.publishedRepairs.map { it.repairKey })
+    assertEquals(EDIT_START, ledger.pullRequestEditRefreshAfter)
   }
 
   @Test

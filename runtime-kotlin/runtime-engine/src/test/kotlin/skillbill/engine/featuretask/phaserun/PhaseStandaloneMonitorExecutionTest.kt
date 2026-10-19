@@ -53,6 +53,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,6 +80,8 @@ class PhaseStandaloneMonitorExecutionTest {
   private var reportedBase: String? = null
   private var repairCount = 0
   private var repairOutcome = FIXED
+  private var pullRequestTitle = "title 0"
+  private var repairEdits: ((Int) -> String)? = null
   private val launcher =
     RuntimeRecordingLauncher { request ->
       val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
@@ -87,7 +90,12 @@ class PhaseStandaloneMonitorExecutionTest {
         repairCwds.add(cwd)
         repairPrompts.add(requireNotNull(request.skillRunRequest.promptOverride))
         repairCount += 1
-        Files.writeString(cwd.resolve("Fix.kt"), "class Fix$repairCount\n")
+        val editTitle = repairEdits
+        if (editTitle != null) {
+          pullRequestTitle = editTitle(repairCount)
+        } else {
+          Files.writeString(cwd.resolve("Fix.kt"), "class Fix$repairCount\n")
+        }
         duringRepair(cwd)
         return@RuntimeRecordingLauncher facts(repairOutput(repairOutcome))
       }
@@ -320,6 +328,33 @@ class PhaseStandaloneMonitorExecutionTest {
   }
 
   @Test
+  fun `a repair that only fixes the pull request title pushes nothing and monitoring follows the refreshed checks`() {
+    repairEdits = { "fix: title" }
+
+    val result = run(checks = { if (pullRequestTitle.startsWith("fix:")) passing() else failing() })
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(1, repairCwds.size)
+    assertEquals(headSha, forkHead(), "a pull-request-only repair publishes no commit")
+  }
+
+  @Test
+  fun `pull request edits that keep failing CI count toward the cap even when a title repeats`() {
+    repairEdits = { attempt -> "title ${attempt % 2}" }
+    val freshFailure = {
+      PullRequestChecks.Reported(listOf(PullRequestCheck("build", CheckBucket.FAIL, CHECK_URL, Instant.now())))
+    }
+
+    val result = run(checks = { freshFailure() })
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertEquals(MAX_REPAIRS, repairCwds.size, "no fourth repair may launch")
+    assertTrue("after 3 CI-confirmed" in blocked.reason, blocked.reason)
+    assertTrue("failed published pull request edit" in blocked.reason, blocked.reason)
+    assertEquals(headSha, forkHead())
+  }
+
+  @Test
   fun `a teammate push on a published repair is adopted and its failure does not spend the repair budget`() {
     var teammateHead: String? = null
     val checks = { sha: String ->
@@ -471,6 +506,7 @@ class PhaseStandaloneMonitorExecutionTest {
             ),
             MonitorBranchTip(ACME, "main", reportedBase ?: git(origin, "rev-parse", "main")),
             conflicting = !isAncestor(git(origin, "rev-parse", "main"), forkHead()),
+            editableFieldsDigest = pullRequestTitle,
           ),
         )
       }

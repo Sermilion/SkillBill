@@ -37,7 +37,11 @@ class StandaloneMonitorService(
       StandalonePullRequestWatcher(source, checks, clock::instant, sleep, { Thread.currentThread().isInterrupted })
         .watch(
           ledger.execution.target.pullRequest,
-          StandaloneWatchHeads(ledger.acknowledgedHeadSha, ledger.supersededHeadShas),
+          StandaloneWatchHeads(
+            ledger.acknowledgedHeadSha,
+            ledger.supersededHeadShas,
+            ledger.pullRequestEditRefreshAfter,
+          ),
           ledger::adopt,
           onCiRunning,
         )
@@ -120,13 +124,35 @@ class StandaloneMonitorService(
     val refusal =
       verifyTarget(ledger)
         ?: worktree.commitPending("Repair ${ledger.execution.target.pullRequest.targetKey}")
-        ?: repairCommitRefusal(worktree, pending)
+    if (refusal != null) return blocked(ledger, refusal)
+    if (worktree.headSha() == pending.baselineSha) return publishPullRequestEdit(ledger, pending)
     val repairSha = worktree.headSha()
-    return when {
-      refusal != null -> blocked(ledger, refusal)
-      repairSha == null -> blocked(ledger, "The repair commit could not be read.")
-      else -> pushRepair(ledger, repairSha)
+    return when (val commitRefusal = repairCommitRefusal(worktree, pending)) {
+      null -> pushRepair(ledger, requireNotNull(repairSha))
+      else -> blocked(ledger, commitRefusal)
     }
+  }
+
+  private fun publishPullRequestEdit(
+    ledger: StandaloneMonitorLedger,
+    pending: StandalonePendingRepair,
+  ): StandalonePublication {
+    val pullRequest = ledger.execution.target.pullRequest
+    val current =
+      (source.pullRequest(pullRequest.repository, pullRequest.number) as? MonitorPullRequestLookup.Found)
+        ?.pullRequest
+        ?.editableFieldsDigest
+    val before = pending.pullRequestFieldsDigest
+    val edited = current != null && before != null && current != before
+    if (!edited) {
+      return blocked(
+        ledger,
+        "The repair made no change to the pull request head ${pending.baselineSha} or to the pull request's " +
+          "title, description, or labels.",
+      )
+    }
+    ledger.acknowledgePullRequestEdit()
+    return StandalonePublication.PullRequestEdited(ledger.acknowledgedHeadSha)
   }
 
   private fun repairCommitRefusal(
@@ -136,7 +162,6 @@ class StandaloneMonitorService(
     val head = worktree.headSha()
     return when {
       head == null -> "The repair commit could not be read."
-      head == pending.baselineSha -> "The repair made no change to the pull request head ${pending.baselineSha}."
       !worktree.descendsFrom(pending.baselineSha, head) ->
         "The repair commit $head does not descend from the published head ${pending.baselineSha}."
       else -> null

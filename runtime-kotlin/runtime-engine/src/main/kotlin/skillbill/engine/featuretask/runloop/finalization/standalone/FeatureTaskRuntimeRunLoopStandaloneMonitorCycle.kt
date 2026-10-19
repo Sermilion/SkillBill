@@ -115,6 +115,10 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
         is StandalonePublication.Published ->
           "The repair was published." to
             "The remote acknowledged repair commit ${publication.commitSha} on ${ledger.execution.target.head.tip.ref}."
+        is StandalonePublication.PullRequestEdited ->
+          "The pull request edit was recorded." to
+            "The repair edited ${ledger.execution.target.pullRequest.targetKey} without changing its head " +
+            "${publication.headSha}."
         is StandalonePublication.Blocked -> return block(run, iteration, publication.reason)
       }
     return complete(run, iteration, monitorOutput(run, summary, value))
@@ -156,20 +160,24 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
       )
     }
     val checks = failingChecksProse(outcome.failingChecks)
-    val confirmsPublishedRepair =
-      ledger.publishedRepairs.any { it.commitSha == head } && head !in progress.monitorFailedRepairCommitShas
+    val confirmed =
+      ledger.publishedRepairs.lastOrNull { it.commitSha == head }
+        ?.takeIf { it.repairKey !in progress.monitorFailedRepairCommitShas }
     return routeToRepair(
       run,
       iteration,
       ledger,
       RepairRoute(
         operations.failureEvidence(ledger, outcome.failingChecks),
-        if (confirmsPublishedRepair) {
-          "CI confirmed a failed published repair commit '$head' on ${target.targetKey}. $checks"
-        } else {
-          "CI is failing on ${target.targetKey} at observed commit '$head'. $checks"
+        when {
+          confirmed?.pullRequestEdit != null ->
+            "CI confirmed a failed published pull request edit '${confirmed.repairKey}' on ${target.targetKey}. $checks"
+          confirmed != null -> "CI confirmed a failed published repair commit '$head' on ${target.targetKey}. $checks"
+          else -> "CI is failing on ${target.targetKey} at observed commit '$head'. $checks"
         },
-        if (confirmsPublishedRepair) FeatureTaskRuntimeVerdict.CI_FAILED else FeatureTaskRuntimeVerdict.PROGRESS,
+        if (confirmed != null) FeatureTaskRuntimeVerdict.CI_FAILED else FeatureTaskRuntimeVerdict.PROGRESS,
+        confirmed?.repairKey,
+        outcome.editableFieldsDigest,
       ),
     )
   }
@@ -182,14 +190,21 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
   ): PhaseOutcome {
     val head = ledger.acknowledgedHeadSha
     val verdict = route.verdict
-    ledger.beginRepair(StandalonePendingRepair(route.evidence, head))
+    ledger.beginRepair(
+      StandalonePendingRepair(
+        route.evidence,
+        head,
+        pullRequestFieldsDigest = route.pullRequestFieldsDigest,
+        startedAt = clock.instant(),
+      ),
+    )
     val summary =
       if (verdict == FeatureTaskRuntimeVerdict.CI_FAILED) {
         "CI confirmed that a published repair failed."
       } else {
         "CI or merge repair work is starting."
       }
-    val qualifiedFailedRepairSha = head.takeIf { verdict == FeatureTaskRuntimeVerdict.CI_FAILED }
+    val qualifiedFailedRepairSha = route.failedRepairKey.takeIf { verdict == FeatureTaskRuntimeVerdict.CI_FAILED }
     return complete(run, iteration, monitorOutput(run, summary, route.prose, verdict), qualifiedFailedRepairSha)
   }
 
@@ -197,6 +212,8 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
     val evidence: String,
     val prose: String,
     val verdict: FeatureTaskRuntimeVerdict,
+    val failedRepairKey: String? = null,
+    val pullRequestFieldsDigest: String? = null,
   )
 
   private fun failingChecksProse(checks: List<PullRequestCheck>): String =
