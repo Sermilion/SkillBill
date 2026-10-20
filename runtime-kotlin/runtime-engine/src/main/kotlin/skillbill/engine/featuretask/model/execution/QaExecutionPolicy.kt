@@ -22,6 +22,7 @@ enum class QaSkipReason(val wireValue: String) {
   OFFLINE_TARGET("offline_target"),
   DEVICE_CONTENDED("device_contended"),
   EMPTY_SCOPE("empty_scope"),
+  PRODUCTION_ONLY("production_only"),
   ;
 
   companion object {

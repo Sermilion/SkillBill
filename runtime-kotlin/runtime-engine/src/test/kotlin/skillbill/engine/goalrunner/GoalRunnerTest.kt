@@ -337,7 +337,7 @@ class GoalRunnerTest {
   }
 
   @Test
-  fun `blocked goal QA stops before commit-all push and PR open`() {
+  fun `goal QA that cannot settle warns and still commits, pushes, and opens the PR`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -352,19 +352,19 @@ class GoalRunnerTest {
       testGoalRunner(
         goalRunnerDeps(store, launcher, outcomes, pr).copy(
           gitOperations = git,
-          qaGate = GoalRunnerQaGate { _, _ -> GoalQaGateResult.Blocked("findings remain", "qa") },
+          qaGate = GoalRunnerQaGate { _, _ -> GoalQaGateResult.Warned("QA stopped at 'qa': findings remain") },
         ),
       )
 
-    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(runRequest()))
+    val report = runner.run(runRequest())
 
-    assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
-    assertEquals("findings remain", stopped.stop.blockedReason)
-    assertEquals("qa", stopped.stop.lastResumableStep)
-    assertEquals(0, git.stageAllCalls)
-    assertTrue(git.commitMessages.isEmpty())
-    assertTrue(git.pushedBranches.isEmpty())
-    assertTrue(pr.requests.isEmpty())
+    assertIs<GoalRunnerRunReport.Completed>(report, "$report")
+    assertEquals(
+      listOf("chore(SKILL-56): goal finalization commit-all on 'feat/SKILL-56-goal'"),
+      git.commitMessages,
+    )
+    assertEquals(listOf("feat/SKILL-56-goal"), git.pushedBranches.distinct())
+    assertContains(pr.requests.single().body, "- Goal: warning: QA stopped at 'qa': findings remain")
   }
 
   @Test

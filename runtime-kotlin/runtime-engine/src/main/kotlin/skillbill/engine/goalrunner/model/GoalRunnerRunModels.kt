@@ -121,4 +121,9 @@ sealed interface GoalQaSummary {
   data object NotRecorded : GoalQaSummary
 
   data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalQaSummary
+
+  data class Warned(
+    val reason: String,
+    val outcome: FeatureTaskQaOutcome?,
+  ) : GoalQaSummary
 }

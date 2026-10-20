@@ -257,6 +257,8 @@ Apply these rules only when the run selected `qa:on`:
   `APPROVE WITH FIXES` or `REQUEST CHANGES`.
 - A skipped or incomplete QA receipt is untested coverage, never a product defect. List it under
   `Untested coverage:` with its reason, and do not treat it as a pass.
+- List every entry in the QA receipt's `warnings` under `Untested coverage:` as well. A QA warning never fails
+  the verdict on its own.
 
 ## Verification Input Boundary
 

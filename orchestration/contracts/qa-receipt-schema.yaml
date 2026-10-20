@@ -9,6 +9,8 @@
 #   runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/qa/QaReceiptContract.kt.
 # - Evidence is referenced by path and digest only. No object carries a body, content, or data field, so an inline
 #   body fails additionalProperties.
+# - Only passed and findings_open must name the built artifact and the target. An incomplete receipt may stop before
+#   either exists, and the runtime writes one itself when the agent's receipt is missing or unusable.
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://skill-bill.dev/contracts/qa-receipt-schema.yaml"
 title: "QA receipt"
@@ -244,6 +246,7 @@ properties:
       - offline_target
       - device_contended
       - empty_scope
+      - production_only
   incomplete_reason:
     type: string
     enum:
@@ -345,10 +348,11 @@ allOf:
         required:
           - incomplete_reason
   - if:
-      not:
-        properties:
-          verdict:
-            const: skipped
+      properties:
+        verdict:
+          enum:
+            - passed
+            - findings_open
     then:
       properties:
         artifact:

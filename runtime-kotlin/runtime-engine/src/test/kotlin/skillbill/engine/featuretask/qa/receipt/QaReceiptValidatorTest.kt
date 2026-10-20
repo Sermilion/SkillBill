@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.qa.receipt
 
+import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
@@ -36,10 +37,36 @@ class QaReceiptValidatorTest {
   }
 
   @Test
-  fun `a passed receipt needs a passing assertion on an exercised flow`() {
-    val receipt = qaTestReceipt(QaVerdict.PASSED) + ("assertions" to emptyList<Any?>())
+  fun `a self-contradicting receipt is downgraded to its honest verdict with a warning and keeps its evidence`() {
+    val passed = qaTestReceipt(QaVerdict.PASSED)
+    val findings = qaTestReceipt(QaVerdict.FINDINGS_OPEN)
+    val untestedFlow = qaTestFlow() + mapOf("id" to "logout", "status" to "untested", "untested_reason" to "No time.")
+    val cases =
+      listOf(
+        passed + ("flows" to listOf(qaTestFlow(), untestedFlow)) to QaVerdict.INCOMPLETE,
+        passed + ("findings" to findings.getValue("findings")) to QaVerdict.FINDINGS_OPEN,
+        findings + ("findings" to emptyList<Any?>()) to QaVerdict.INCOMPLETE,
+        passed + ("assertions" to emptyList<Any?>()) to QaVerdict.INCOMPLETE,
+      )
 
-    assertRejected(FeatureTaskRuntimeFailureCode.QA_RECEIPT_UNSUPPORTED_CLAIM, receipt)
+    cases.forEach { (wire, honest) ->
+      val receipt = validator.validate(qaTestJson(wire), expected)
+
+      assertEquals(honest, receipt.verdict)
+      assertEquals(honest.wireValue, receipt.wire["verdict"])
+      assertEquals(1, receipt.warnings.size, receipt.warnings.toString())
+      assertEquals((wire.getValue("flows") as List<*>).size, receipt.flows.size)
+      assertEquals((wire.getValue("findings") as List<*>).size, receipt.findings.size)
+      assertEquals(receipt, validator.validate(qaTestJson(receipt.wire), expected).copy(warnings = receipt.warnings))
+    }
+  }
+
+  @Test
+  fun `production_only is an accepted skip reason`() {
+    val receipt =
+      validator.validate(qaTestJson(qaTestReceipt(QaVerdict.SKIPPED) + ("skip_reason" to "production_only")), expected)
+
+    assertEquals(QaSkipReason.PRODUCTION_ONLY, receipt.skipReason)
   }
 
   @Test
@@ -54,16 +81,20 @@ class QaReceiptValidatorTest {
   }
 
   @Test
-  fun `a simulator cannot exercise a hardware-only flow`() {
+  fun `a simulator run that claims a hardware-only flow records it untested and cannot pass`() {
     val passed = qaTestReceipt(QaVerdict.PASSED)
-    val receipt =
+    val wire =
       passed +
         mapOf(
           "target" to passed.getValue("target").asReceiptObject() + mapOf("kind" to "simulator"),
           "flows" to listOf(qaTestFlow(hardwareOnly = true)),
         )
 
-    assertRejected(FeatureTaskRuntimeFailureCode.QA_RECEIPT_UNSUPPORTED_CLAIM, receipt)
+    val receipt = validator.validate(qaTestJson(wire), expected)
+
+    assertEquals(QaVerdict.INCOMPLETE, receipt.verdict)
+    assertEquals(QaFlowStatus.UNTESTED, receipt.flows.single().status)
+    assertEquals(2, receipt.warnings.size, receipt.warnings.toString())
   }
 
   private fun assertRejected(

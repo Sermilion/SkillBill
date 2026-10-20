@@ -121,7 +121,7 @@ internal object VerifyPromptSections {
       "Run report-only mobile QA for the verify target `$headRevision`. The runtime checked it out into the " +
       "temporary detached worktree `$worktree`; build, install, and test only from there. Never touch the " +
       "operator's checkout, and never edit tracked files, commit, push, or open a pull request. Settle by writing " +
-      "the QA receipt; the runtime rejects a receipt bound to any other tree."
+      "the QA receipt; the runtime records a receipt bound to any other tree as incomplete with a warning."
 
   fun verdictDirective(qaReceipt: Map<String, Any?>? = null): String =
     listOfNotNull(

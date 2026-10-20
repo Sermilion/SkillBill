@@ -5,7 +5,6 @@ import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
-import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.qa.QaWorkspacePort
@@ -19,7 +18,6 @@ import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class QaFindingSettlementTest {
@@ -195,10 +193,13 @@ class QaFindingSettlementTest {
   }
 
   @Test
-  fun `a malformed historical receipt fails instead of silently closing its finding`() {
+  fun `a malformed historical receipt keeps its finding open and records the deferred closure`() {
     workspaces.receipts[original.receiptPath] = "{}"
     val receipt = validator.validate(qaTestJson(qaTestReceipt(QaVerdict.PASSED, qa.expected)), qa.expected)
 
-    assertFailsWith<SkillBillRuntimeException> { settlement.observe(previous, receipt, qa) }
+    val result = settlement.observe(previous, receipt, qa)
+
+    assertEquals(previous.openFindings, result.openFindings)
+    assertTrue(warnings.single().contains("qa closure deferred"), warnings.toString())
   }
 }

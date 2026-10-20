@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.qa.receipt.qaTestReceipt
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -43,6 +44,8 @@ import kotlin.test.assertTrue
 class FeatureTaskRuntimeQaExecutionTest {
   @TempDir
   lateinit var repo: Path
+
+  private var qaOutputOverride: String? = null
 
   @Test
   fun `full QA records each fallback and policy skip without exposing receipt reasons`() {
@@ -217,6 +220,80 @@ class FeatureTaskRuntimeQaExecutionTest {
   }
 
   @Test
+  fun `findings left after the third qa_fix attempt continue to history and are reported`() {
+    var qaVisits = 0
+    var fixes = 0
+    lateinit var fixture: Fixture
+    fixture =
+      fixture(
+        QaVerdict.FINDINGS_OPEN,
+        receiptForVisit = { _, expected ->
+          qaVisits++
+          qaTestReceipt(QaVerdict.FINDINGS_OPEN, expected)
+        },
+        onPhase = { phase ->
+          if (phase == "qa_fix") {
+            fixes++
+            fixture.git.repositoryFingerprintValue = (fixes + 3).toString().repeat(64)
+          }
+        },
+        identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" },
+      )
+
+    val report = fixture.harness.runner.run(fixture.harness.request)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    assertEquals(3, fixes)
+    assertEquals(4, qaVisits)
+    val launched = fixture.launcher.requests.map { phaseIdFromPrompt(it.skillRunRequest.promptOverride.orEmpty()) }
+    assertEquals(1, launched.count { it == "write_history" })
+    val stored = assertNotNull(fixture.storedQaOutcome())
+    assertEquals(StandaloneQaOutcome.FINDINGS, stored.outcome)
+    assertEquals("findings left open: F-1", stored.reason)
+    assertEquals(3, stored.qaFixAttempts)
+    val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
+    assertContains(assertNotNull(qa.outputArtifact), "remain after 3 qa_fix attempts")
+  }
+
+  @Test
+  fun `a malformed receipt is recorded incomplete with a warning and the run continues`() {
+    val fixture = fixture(QaVerdict.PASSED, receiptForVisit = { _, _ -> mapOf("verdict" to "passed") })
+
+    val report = fixture.harness.runner.run(fixture.harness.request)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
+    assertContains(assertNotNull(qa.outputArtifact), "\"verdict\":\"incomplete\"")
+    assertContains(assertNotNull(qa.outputArtifact), "QA recorded incomplete because its receipt was unusable")
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, assertNotNull(fixture.storedQaOutcome()).outcome)
+  }
+
+  @Test
+  fun `a QA agent step that stops is recorded incomplete and the run continues`() {
+    val stopped =
+      """
+      {
+        "contract_version": "0.7",
+        "phase_id": "qa",
+        "status": "blocked",
+        "summary": "The emulator never booted.",
+        "produced_outputs": {"blocking_reasons": ["The emulator never booted."]}
+      }
+      """.trimIndent()
+    qaOutputOverride = stopped
+    val fixture = fixture(QaVerdict.PASSED)
+
+    val report = fixture.harness.runner.run(fixture.harness.request)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
+    assertContains(assertNotNull(qa.outputArtifact), "\"incomplete_reason\":\"interrupted\"")
+    val stored = assertNotNull(fixture.storedQaOutcome())
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, stored.outcome)
+    assertEquals("interrupted", stored.reason)
+  }
+
+  @Test
   fun `a tree-changing validation repair after passing QA re-enters audit and QA before history`() {
     var qaVisits = 0
     var edited = false
@@ -304,7 +381,7 @@ class FeatureTaskRuntimeQaExecutionTest {
           val receipt = receiptForVisit?.invoke(visit, identity) ?: qaTestReceipt(verdict, identity)
           workspaces.receipt = qaTestJson(receipt).replace("AC-1", "AC-001").replace("\"standalone\"", "\"auto\"")
         }
-        facts(if (phase == "audit") auditSatisfiedOutput() else defaultPhaseOutput(request))
+        facts(launchOutput(phase, request))
       }
     val harness =
       telemetryRunnerHarness(
@@ -321,6 +398,16 @@ class FeatureTaskRuntimeQaExecutionTest {
       )
     return Fixture(harness, launcher, workspaces, leases, git, diagnostics) { capabilityReads }
   }
+
+  private fun launchOutput(
+    phase: String,
+    request: GoalRunnerSubtaskLaunchRequest,
+  ): String =
+    when {
+      phase == "audit" -> auditSatisfiedOutput()
+      phase == "qa" && qaOutputOverride != null -> checkNotNull(qaOutputOverride)
+      else -> defaultPhaseOutput(request)
+    }
 
   private data class Fixture(
     val harness: TelemetryRunnerHarness,

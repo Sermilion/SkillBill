@@ -36,6 +36,7 @@ import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.goalrunner.model.UnaddressedFindingsLedger
+import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -88,19 +89,7 @@ class GoalRunnerFinalization(
         ?: publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
     val qaResult = qaGate.run(finalState, request)
-    if (qaResult is GoalQaGateResult.Blocked) {
-      return stopped(
-        StoppedReportArgs(
-          issueKey = finalState.manifest.issueKey,
-          attempted = attempted,
-          subtaskId = finalState.manifest.subtasks.lastOrNull()?.id ?: 0,
-          reason = GoalRunnerStopReason.BLOCKED,
-          blockedReason = qaResult.reason,
-          workflowId = finalState.parentWorkflowId,
-          lastResumableStep = qaResult.stepId,
-        ),
-      )
-    }
+    if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
     commitAllRemainingWorktree(finalState.manifest, request)?.let { reason ->
       return stopped(
         StoppedReportArgs(
@@ -162,13 +151,26 @@ class GoalRunnerFinalization(
   private fun goalQaSummary(
     state: GoalRunnerManifestState,
     result: GoalQaGateResult,
-  ): GoalQaSummary =
+  ): GoalQaSummary {
     if (result is GoalQaGateResult.Skipped && result.reason == GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA) {
-      GoalQaSummary.RanPerSubtask
-    } else {
-      outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)?.let { GoalQaSummary.Recorded(it) }
-        ?: GoalQaSummary.NotRecorded
+      return GoalQaSummary.RanPerSubtask
     }
+    val recorded = outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)
+    return when {
+      result is GoalQaGateResult.Warned -> GoalQaSummary.Warned(result.reason, recorded)
+      recorded != null -> GoalQaSummary.Recorded(recorded)
+      else -> GoalQaSummary.NotRecorded
+    }
+  }
+
+  private fun warnQa(
+    request: GoalRunnerRunRequest,
+    reason: String,
+  ) {
+    val warning = "Warning: goal QA did not settle; continuing to commit_push. $reason"
+    RuntimeDiagnosticsBestEffortWarning.record(diagnostics, warning)
+    request.outputSink.write(AgentRunOutputStream.STDERR, "$warning\n")
+  }
 
   private fun publishedGoalResult(
     finalState: GoalRunnerManifestState,
@@ -357,8 +359,6 @@ class GoalRunnerFinalization(
     return commitAndPushDirtyWorktree(manifest, request, featureBranch, implementationPaths)
   }
 
-  // An interrupted monitor repair can leave a merge behind. Commit-all concludes it with the remaining
-  // worktree changes; the CI monitor checks the pushed result like any other commit.
   private fun warnUnfinishedGitOperation(repoRoot: Path) {
     val inProgress = gitOperations.inProgressOperation(repoRoot)
     val operation = (inProgress as? WorkflowGitOperationResult.Ok)?.value?.trim().orEmpty()

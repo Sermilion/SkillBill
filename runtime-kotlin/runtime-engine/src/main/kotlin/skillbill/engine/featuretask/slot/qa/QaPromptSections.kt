@@ -41,6 +41,14 @@ internal object QaPromptSections {
     |Rules:
     |
     |- QA is report-only. Never edit tracked files, commit, push, or open a pull request.
+    |- QA runs on a test account with test data. Every in-app action is allowed: create, edit, and delete
+    |  records, add profiles, remove cards, log out. Never leave a flow untested to protect device or account state.
+    |- When the app or build offers an environment, flavor, or server choice, use Local when a local backend or
+    |  simulator backend is available, else staging. Never use production. When only production is available,
+    |  exercise no flow: settle `skipped` with `production_only` and name the missing environment in
+    |  `reason_detail`.
+    |- QA never blocks the run. A missing or contradictory receipt is recorded with a warning and the run continues,
+    |  so report honestly: an untested flow means `incomplete`, never `passed`.
     |- An app launch alone is never a pass. `passed` needs at least one exercised flow with a passing assertion.
     |- A simulator run never marks a `hardware_only` flow exercised.
     |- Never put raw device serials, credentials, or log bodies in the receipt. Reference evidence by path and sha256.

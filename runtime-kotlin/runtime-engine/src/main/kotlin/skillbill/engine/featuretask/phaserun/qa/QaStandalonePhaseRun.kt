@@ -1,18 +1,21 @@
 package skillbill.engine.featuretask.phaserun.qa
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
+import skillbill.engine.featuretask.qa.receipt.QaIncompleteReason
 import skillbill.engine.featuretask.qa.receipt.QaReceipt
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaFailure
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 
 @Inject
 class QaStandalonePhaseRun(
@@ -29,7 +32,7 @@ class QaStandalonePhaseRun(
       execute(request, invocationId, launch)
     } catch (failure: SkillBillRuntimeException) {
       failure.rethrowUnless(failure.isQaFailure)
-      blocked(request, invocationId, failure.message.orEmpty())
+      notStarted(invocationId, "QA could not start and was skipped: ${failure.message.orEmpty()}")
     }
 
   private fun execute(
@@ -41,57 +44,59 @@ class QaStandalonePhaseRun(
       execution.withExecution(request.repoRoot, QaPolicy.STANDALONE, invocationId) { qa ->
         when (val target = qa.target) {
           is QaExecutionTarget.Skipped ->
-            QaAttempt.Settled(
-              validator.skipped(target.reason, target.detail, qa.expected, qa.policy),
-              emptyList(),
-            )
+            QaAttempt(validator.skipped(target.reason, target.detail, qa.expected, qa.policy), emptyList())
           is QaExecutionTarget.Supported ->
             when (val result = launch(request.copy(qaExecution = qa))) {
-              is PhaseRunResult.Blocked -> QaAttempt.Stopped(result)
-              is PhaseRunResult.Completed -> QaAttempt.Settled(settlement.settle(qa), result.completedStepIds)
+              is PhaseRunResult.Blocked -> QaAttempt(stopped(qa, result.reason), result.completedStepIds)
+              is PhaseRunResult.Completed -> QaAttempt(settlement.settle(qa), result.completedStepIds)
             }
         }
       }
-    return when (val outcome = settled.value) {
-      is QaAttempt.Stopped -> outcome.result
-      is QaAttempt.Settled -> {
-        val receipt =
-          validator.withRetainedResources(
-            outcome.receipt,
-            settled.retainedResources,
-            RETAINED_GUIDANCE,
-            settled.expected,
-          )
-        settlement.recordDiagnostics(outcome.receipt)
-        PhaseRunResult.Completed(
-          invocationId = invocationId,
-          completedStepIds = outcome.completedStepIds,
-          reviewResult = null,
-          value = receipt.reasonDetail ?: "QA verdict: ${receipt.verdict.wireValue}.",
-          targetReport = receipt.targetReport(),
-          qaOutcome = receipt.qaOutcome(),
-        )
-      }
-    }
+    val outcome = settled.value
+    val receipt =
+      validator.withRetainedResources(outcome.receipt, settled.retainedResources, RETAINED_GUIDANCE, settled.expected)
+    settlement.recordDiagnostics(outcome.receipt)
+    val warnings = receipt.warnings + settled.warnings
+    return PhaseRunResult.Completed(
+      invocationId = invocationId,
+      completedStepIds = outcome.completedStepIds,
+      reviewResult = null,
+      value = receipt.reasonDetail ?: "QA verdict: ${receipt.verdict.wireValue}.",
+      targetReport = warnings.map(::warningLine) + receipt.targetReport(),
+      qaOutcome = receipt.qaOutcome(),
+    )
   }
 
-  private fun blocked(
-    request: PhaseRunRequest,
-    invocationId: String,
+  private fun stopped(
+    qa: QaExecutionContext,
     reason: String,
-  ): PhaseRunResult.Blocked {
-    val stepId = SkeletonDefinition.byId(request.definitionId).stepIds.first()
-    return PhaseRunResult.Blocked(invocationId, emptyList(), null, stepId, reason)
-  }
+  ): QaReceipt =
+    validator.incomplete(
+      "QA recorded incomplete because the QA agent step stopped: $reason",
+      qa.expected,
+      qa.policy,
+      QaIncompleteReason.INTERRUPTED,
+    )
 
-  private sealed interface QaAttempt {
-    data class Settled(
-      val receipt: QaReceipt,
-      val completedStepIds: List<String>,
-    ) : QaAttempt
+  private fun notStarted(
+    invocationId: String,
+    warning: String,
+  ): PhaseRunResult.Completed =
+    PhaseRunResult.Completed(
+      invocationId = invocationId,
+      completedStepIds = emptyList(),
+      reviewResult = null,
+      value = warning,
+      targetReport = listOf(warningLine(warning), "Verdict: ${QaVerdict.SKIPPED.wireValue}"),
+      qaOutcome = StandaloneQaOutcome.SKIPPED,
+    )
 
-    data class Stopped(val result: PhaseRunResult.Blocked) : QaAttempt
-  }
+  private fun warningLine(warning: String): String = "Warning: $warning"
+
+  private data class QaAttempt(
+    val receipt: QaReceipt,
+    val completedStepIds: List<String>,
+  )
 
   private companion object {
     const val RETAINED_GUIDANCE =

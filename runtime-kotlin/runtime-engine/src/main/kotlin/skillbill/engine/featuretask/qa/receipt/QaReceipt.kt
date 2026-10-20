@@ -150,4 +150,5 @@ data class QaReceipt(
   val fallbacks: List<QaFallback>,
   val cleanup: QaCleanup,
   val wire: Map<String, Any?>,
+  val warnings: List<String> = emptyList(),
 )

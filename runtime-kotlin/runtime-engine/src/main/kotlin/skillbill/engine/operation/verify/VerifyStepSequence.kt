@@ -248,26 +248,20 @@ internal class VerifyStepSequence(
     prior: Map<String, String>,
   ): VerifyStepDone {
     val qaReceipt =
-      run.qa?.let {
-        JsonCodec.anyToStringAnyMap(store.artifacts(run.workflowId)[VerifyWorkflow.QA_RECEIPT])
-          ?: return VerifyStepDone.Failed("The verify verdict needs a qa_receipt; rerun the qa step.")
-      }
+      run.qa?.let { JsonCodec.anyToStringAnyMap(store.artifacts(run.workflowId)[VerifyWorkflow.QA_RECEIPT]) }
     val directive = VerifyPromptSections.verdictDirective(qaReceipt.takeIf { run.qa == VerifyQaSelection.ON })
     val report = readOnly(run, VerifyPromptSections.VERDICT_STEP, directive, prior) { return it }
     val section = report.substringAfter(VERDICT_HEADING, missingDelimiterValue = report)
-    val verdict = VERDICTS.firstOrNull { candidate -> section.contains(candidate) } ?: UNKNOWN_VERDICT
+    val stated = VERDICTS.firstOrNull { candidate -> section.contains(candidate) } ?: UNKNOWN_VERDICT
     val qaVerdict = VerifyWorkflow.string(qaReceipt, VerifyWorkflow.VERDICT_FIELD)
-    if (verdict == APPROVE && qaVerdict == QaVerdict.FINDINGS_OPEN.wireValue) {
-      return VerifyStepDone.Failed(
-        "The verdict was an unqualified APPROVE while the QA receipt has open findings; QA findings must join the " +
-          "consolidated findings as APPROVE WITH FIXES or REQUEST CHANGES.",
-      )
-    }
-    val findings = reportLines(section.lines())
+    val qaOverride = stated == APPROVE && qaVerdict == QaVerdict.FINDINGS_OPEN.wireValue
+    val verdict = if (qaOverride) APPROVE_WITH_FIXES else stated
+    val warning = QA_APPROVE_WARNING.takeIf { qaOverride }
+    val findings = reportLines(section.lines()) + listOfNotNull(warning)
     return VerifyStepDone.Settled(
       WorkflowStepStatus.COMPLETED,
       mapOf(VerifyWorkflow.VERDICT_RESULT to VerifyWorkflow.receipt(verdict, findings)),
-      report,
+      warning?.let { "${report.trimEnd()}\n\n$it" } ?: report,
     )
   }
 
@@ -421,6 +415,10 @@ internal class VerifyStepSequence(
     const val HAD_GAPS = "had_gaps"
     const val UNKNOWN_VERDICT = "unknown"
     const val APPROVE = "APPROVE"
+    const val APPROVE_WITH_FIXES = "APPROVE WITH FIXES"
+    const val QA_APPROVE_WARNING =
+      "Warning: the verdict said APPROVE while the QA receipt has open findings; recorded APPROVE WITH FIXES so " +
+        "the QA findings stay in the consolidated findings."
     const val VERDICT_HEADING = "--- VERDICT ---"
     const val NO_HISTORY = "none"
     const val COMPLETED_STATUS = "completed"
@@ -428,7 +426,7 @@ internal class VerifyStepSequence(
     const val ABANDONED_AT_AUDIT = "abandoned_at_audit"
     const val ERROR_STATUS = "error"
 
-    val VERDICTS = listOf("REQUEST CHANGES", "APPROVE WITH FIXES", APPROVE)
+    val VERDICTS = listOf("REQUEST CHANGES", APPROVE_WITH_FIXES, APPROVE)
     val REVIEW_STAGE =
       setOf(
         VerifyWorkflow.GATHER_DIFF,

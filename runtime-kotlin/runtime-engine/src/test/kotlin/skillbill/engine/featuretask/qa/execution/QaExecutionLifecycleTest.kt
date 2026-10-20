@@ -8,7 +8,7 @@ import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
 import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
-import skillbill.error.core.SkillBillRuntimeException
+import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Path
@@ -45,17 +45,15 @@ class QaExecutionLifecycleTest {
   }
 
   @Test
-  fun `malformed receipts fail and still release the invocation`() {
+  fun `a malformed receipt settles incomplete with a warning and still releases the invocation`() {
     workspaces.receipt = "{}"
     val settlement =
       QaReceiptSettlement(QaReceiptValidator(QaReceiptSchemaValidator()), workspaces, NoopRuntimeDiagnostics)
 
-    val thrown =
-      assertFailsWith<SkillBillRuntimeException> {
-        execution.withExecution(repo, QaPolicy.AUTO) { settlement.settle(it) }
-      }
+    val receipt = execution.withExecution(repo, QaPolicy.AUTO) { settlement.settle(it) }.value
 
-    assertContains(thrown.message.orEmpty(), "schema validation")
+    assertEquals(QaVerdict.INCOMPLETE, receipt.verdict)
+    assertContains(receipt.warnings.single(), "schema validation")
     assertEquals(listOf("qa-test-invocation"), leases.releasedInvocations)
     assertEquals(listOf("qa-test-invocation"), workspaces.closedInvocations)
   }

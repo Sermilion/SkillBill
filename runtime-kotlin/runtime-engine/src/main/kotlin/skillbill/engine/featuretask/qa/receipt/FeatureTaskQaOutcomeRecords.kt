@@ -39,12 +39,11 @@ internal object FeatureTaskQaOutcomeRecords {
     val verdict =
       QaVerdict.fromWire(receipt[QaReceiptPayloadKeys.VERDICT] as? String)
         ?: throw invalidQaReceipt("the settled QA receipt has no known verdict.")
-    val reason =
-      (receipt[QaReceiptPayloadKeys.SKIP_REASON] ?: receipt[QaReceiptPayloadKeys.INCOMPLETE_REASON]) as? String
+    val reason = qaOutcomeReason(verdict, receipt, produced)
     return FeatureTaskQaOutcome(
       request.workflowId,
       outcome(verdict),
-      reason?.takeIf(String::isNotBlank),
+      reason,
       attempts,
       produced[QaPhaseOutputKeys.TREE_IDENTITY] as? String,
       "$recordedAt",

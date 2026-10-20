@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
 import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
+import skillbill.engine.featuretask.qa.receipt.QaIncompleteReason
 import skillbill.engine.featuretask.qa.receipt.QaReceipt
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
@@ -110,19 +111,50 @@ class VerifyQaStep(
       }
     } catch (failure: SkillBillRuntimeException) {
       failure.rethrowUnless(failure.isQaFailure)
-      VerifyStepDone.Failed(failure.message.orEmpty())
+      unavailable(run, "QA could not finish and was recorded incomplete: ${failure.message.orEmpty()}")
     }
 
   private fun disabled(run: VerifyRun): QaReceipt {
+    val receipt = validator.skipped(QaSkipReason.DISABLED_POLICY, DISABLED_DETAIL, revisionExpected(run), QaPolicy.OFF)
+    settlement.recordDiagnostics(receipt)
+    return receipt
+  }
+
+  private fun revisionExpected(run: VerifyRun): QaExpectedIdentity {
     val tree =
       when (val identity = gitOperations.revisionTreeIdentity(run.context.repoRoot, run.target.headRevision)) {
         is WorkflowGitOperationResult.Ok -> identity.value.trim()
         else -> throw qaRepositoryUnreadable("could not read tree identity: ${identity.error}")
       }
-    val expected = QaExpectedIdentity(run.target.headRevision, tree, "")
-    val receipt = validator.skipped(QaSkipReason.DISABLED_POLICY, DISABLED_DETAIL, expected, QaPolicy.OFF)
-    settlement.recordDiagnostics(receipt)
-    return receipt
+    return QaExpectedIdentity(run.target.headRevision, tree, "")
+  }
+
+  private fun unavailable(
+    run: VerifyRun,
+    warning: String,
+  ): VerifyStepDone {
+    RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "verify qa warning: ${warning.take(MAX_RECORD_REASON)}")
+    val receipt =
+      try {
+        validator.incomplete(warning, revisionExpected(run), QaPolicy.ON)
+      } catch (failure: SkillBillRuntimeException) {
+        failure.rethrowUnless(failure.isQaFailure)
+        return VerifyStepDone.Settled(
+          WorkflowStepStatus.COMPLETED,
+          mapOf(VerifyWorkflow.QA_RECEIPT to unreadableArtifact(run, warning)) +
+            VerifyQaReport(VerifyQaOutcome.INCOMPLETE, QaIncompleteReason.OTHER.wireValue).patch,
+        )
+      }
+    return settled(receipt)
+  }
+
+  private fun notStarted(
+    run: VerifyRun,
+    detail: String,
+  ): VerifyStepDone {
+    RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "verify qa warning: ${detail.take(MAX_RECORD_REASON)}")
+    val receipt = validator.skipped(QaSkipReason.ISOLATION_UNAVAILABLE, detail, revisionExpected(run), QaPolicy.ON)
+    return settled(receipt.copy(warnings = listOf(detail)))
   }
 
   private fun opted(
@@ -135,13 +167,13 @@ class VerifyQaStep(
     val worktree =
       when (val resolved = gitOperations.linkedWorktreePath(repoRoot, relativePath)) {
         is WorkflowGitOperationResult.Ok -> Path.of(resolved.value.trim())
-        else -> return VerifyStepDone.Failed("Could not resolve the QA worktree path: ${resolved.error}")
+        else -> return notStarted(run, "QA was skipped: could not resolve the QA worktree path: ${resolved.error}")
       }
     val added = gitOperations.addDetachedWorktree(repoRoot, relativePath, head)
     if (added !is WorkflowGitOperationResult.Ok) {
-      val failure = "Could not create the QA worktree at $head: ${added.error}"
+      val failure = "QA was skipped: could not create the QA worktree at $head: ${added.error}"
       val stale = removeWorktree(repoRoot, worktree)
-      return VerifyStepDone.Failed(if (stale.isEmpty()) failure else "$failure ${guidance(worktree)}")
+      return notStarted(run, if (stale.isEmpty()) failure else "$failure ${guidance(worktree)}")
     }
     var retained = emptyList<QaRetainedResource>()
     val attempt =
@@ -150,22 +182,9 @@ class VerifyQaStep(
       } finally {
         retained = removeWorktree(repoRoot, worktree)
       }
-    return when (attempt) {
-      is VerifyQaAttempt.Stopped -> {
-        val done = attempt.done
-        if (done is VerifyStepDone.Failed && retained.isNotEmpty()) {
-          VerifyStepDone.Failed("${done.reason} ${guidance(worktree)}")
-        } else {
-          done
-        }
-      }
-      is VerifyQaAttempt.Settled -> {
-        val receipt =
-          validator.withRetainedResources(attempt.receipt, retained, guidance(worktree), attempt.expected)
-        settlement.recordDiagnostics(receipt)
-        settled(receipt)
-      }
-    }
+    val receipt = validator.withRetainedResources(attempt.receipt, retained, guidance(worktree), attempt.expected)
+    settlement.recordDiagnostics(receipt)
+    return settled(receipt)
   }
 
   private fun attempt(
@@ -178,24 +197,15 @@ class VerifyQaStep(
         when (val target = qa.target) {
           is QaExecutionTarget.Skipped -> {
             val skipped = validator.skipped(target.reason, target.detail, qa.expected, qa.policy)
-            VerifyQaAttempt.Settled(skipped, qa.expected)
+            VerifyQaAttempt(skipped, qa.expected)
           }
           is QaExecutionTarget.Supported -> launch(run, worktree, qa, prior)
         }
       }
-    return when (val attempt = settled.value) {
-      is VerifyQaAttempt.Stopped -> attempt
-      is VerifyQaAttempt.Settled ->
-        attempt.copy(
-          receipt =
-            validator.withRetainedResources(
-              attempt.receipt,
-              settled.retainedResources,
-              LEASE_GUIDANCE,
-              settled.expected,
-            ),
-        )
-    }
+    val attempt = settled.value
+    val receipt =
+      validator.withRetainedResources(attempt.receipt, settled.retainedResources, LEASE_GUIDANCE, settled.expected)
+    return attempt.copy(receipt = receipt.copy(warnings = receipt.warnings + settled.warnings))
   }
 
   private fun launch(
@@ -207,12 +217,25 @@ class VerifyQaStep(
     val directive =
       VerifyPromptSections.qaDirective(worktree, run.target.headRevision) + QaPromptSections.supplement(qa)
     val context = run.context.copy(repoRoot = worktree)
-    return when (val step = run.context.steps.runReportOnly(context, VerifyPromptSections.QA_STEP, directive, prior)) {
-      is OperationStepResult.Failed -> VerifyQaAttempt.Stopped(VerifyStepDone.Failed(step.reason))
-      is OperationStepResult.Refused -> VerifyQaAttempt.Stopped(VerifyStepDone.Refused(step.refusal))
-      is OperationStepResult.Settled -> VerifyQaAttempt.Settled(settlement.settle(qa), qa.expected)
-    }
+    val receipt =
+      when (val step = run.context.steps.runReportOnly(context, VerifyPromptSections.QA_STEP, directive, prior)) {
+        is OperationStepResult.Failed -> stopped(qa, step.reason)
+        is OperationStepResult.Refused -> stopped(qa, step.refusal.reason)
+        is OperationStepResult.Settled -> settlement.settle(qa)
+      }
+    return VerifyQaAttempt(receipt, qa.expected)
   }
+
+  private fun stopped(
+    qa: QaExecutionContext,
+    reason: String,
+  ): QaReceipt =
+    validator.incomplete(
+      "QA recorded incomplete because the QA agent step stopped: $reason",
+      qa.expected,
+      qa.policy,
+      QaIncompleteReason.INTERRUPTED,
+    )
 
   private fun removeWorktree(
     repoRoot: Path,
@@ -250,6 +273,22 @@ class VerifyQaStep(
       QaReceiptPayloadKeys.CLEANUP to receipt.cleanup.outcome.wireValue,
       QaReceiptPayloadKeys.RETAINED_RESOURCES to receipt.cleanup.retainedResources.map { "${it.kind} ${it.identity}" },
       VerifyWorkflow.FINDINGS to findingLines(receipt),
+      VerifyWorkflow.WARNINGS to receipt.warnings,
+    )
+
+  private fun unreadableArtifact(
+    run: VerifyRun,
+    warning: String,
+  ): Map<String, Any?> =
+    mapOf(
+      VerifyWorkflow.CONTRACT_VERSION to VerifyWorkflow.ARTIFACT_CONTRACT_VERSION,
+      VerifyWorkflow.VERDICT_FIELD to QaVerdict.INCOMPLETE.wireValue,
+      QaReceiptPayloadKeys.OUTCOME to VerifyQaOutcome.INCOMPLETE.wireValue,
+      QaReceiptPayloadKeys.REASON to QaIncompleteReason.OTHER.wireValue,
+      QaReceiptPayloadKeys.REASON_DETAIL to warning,
+      QaReceiptPayloadKeys.HEAD_REVISION to run.target.headRevision,
+      VerifyWorkflow.FINDINGS to emptyList<String>(),
+      VerifyWorkflow.WARNINGS to listOf(warning),
     )
 
   private fun reason(receipt: QaReceipt): String? = receipt.skipReason?.wireValue ?: receipt.incompleteReason?.wireValue
@@ -265,14 +304,10 @@ class VerifyQaStep(
     }
   }
 
-  private sealed interface VerifyQaAttempt {
-    data class Settled(
-      val receipt: QaReceipt,
-      val expected: QaExpectedIdentity,
-    ) : VerifyQaAttempt
-
-    data class Stopped(val done: VerifyStepDone.Stopped) : VerifyQaAttempt
-  }
+  private data class VerifyQaAttempt(
+    val receipt: QaReceipt,
+    val expected: QaExpectedIdentity,
+  )
 
   private companion object {
     const val WORKTREE_ROOT = "skill-bill/verify-qa"

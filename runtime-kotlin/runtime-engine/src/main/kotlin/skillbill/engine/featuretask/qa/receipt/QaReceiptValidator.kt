@@ -30,8 +30,11 @@ class QaReceiptValidator(
     }
     val receipt = decodeQaReceipt(wire)
     checkIdentity(receipt, expected)
-    checkClaims(receipt, expected)
-    return receipt
+    checkStructure(receipt, expected)
+    val normalized = normalizeQaReceiptClaims(receipt) ?: return receipt
+    val normalizedJson = JsonCodec.mapToJsonString(normalized.wire)
+    schema.violation(normalizedJson)?.let { invalid("the normalized receipt fails the schema: $it") }
+    return decodeQaReceipt(normalized.wire).copy(warnings = normalized.warnings)
   }
 
   fun skipped(
@@ -40,11 +43,34 @@ class QaReceiptValidator(
     expected: QaExpectedIdentity,
     policy: QaPolicy = QaPolicy.STANDALONE,
   ): QaReceipt =
+    runtimeReceipt(QaVerdict.SKIPPED, QaReceiptPayloadKeys.SKIP_REASON to reason.wireValue, detail, expected, policy)
+
+  fun incomplete(
+    warning: String,
+    expected: QaExpectedIdentity,
+    policy: QaPolicy,
+    reason: QaIncompleteReason = QaIncompleteReason.OTHER,
+  ): QaReceipt =
+    runtimeReceipt(
+      QaVerdict.INCOMPLETE,
+      QaReceiptPayloadKeys.INCOMPLETE_REASON to reason.wireValue,
+      warning,
+      expected,
+      policy,
+    ).copy(warnings = listOf(warning))
+
+  private fun runtimeReceipt(
+    verdict: QaVerdict,
+    reason: Pair<String, String>,
+    detail: String,
+    expected: QaExpectedIdentity,
+    policy: QaPolicy,
+  ): QaReceipt =
     validate(
       JsonCodec.mapToJsonString(
         mapOf(
           QaReceiptPayloadKeys.CONTRACT_VERSION to QA_RECEIPT_CONTRACT_VERSION,
-          QaReceiptPayloadKeys.VERDICT to QaVerdict.SKIPPED.wireValue,
+          QaReceiptPayloadKeys.VERDICT to verdict.wireValue,
           QaReceiptPayloadKeys.IDENTITY to
             mapOf(
               QaReceiptPayloadKeys.HEAD_REVISION to expected.headRevision,
@@ -56,8 +82,8 @@ class QaReceiptValidator(
           QaReceiptPayloadKeys.FLOWS to emptyList<Any?>(),
           QaReceiptPayloadKeys.ASSERTIONS to emptyList<Any?>(),
           QaReceiptPayloadKeys.FINDINGS to emptyList<Any?>(),
-          QaReceiptPayloadKeys.SKIP_REASON to reason.wireValue,
-          QaReceiptPayloadKeys.REASON_DETAIL to detail.take(MAX_REASON_DETAIL),
+          reason,
+          QaReceiptPayloadKeys.REASON_DETAIL to detail.ifBlank { verdict.wireValue }.take(MAX_REASON_DETAIL),
           QaReceiptPayloadKeys.CLEANUP to cleanupWire(QaCleanupOutcome.RELEASED, emptyList(), null),
         ),
       ),
@@ -77,7 +103,7 @@ class QaReceiptValidator(
         QaReceiptPayloadKeys.CLEANUP to
           cleanupWire(QaCleanupOutcome.RETAINED, merged, receipt.cleanup.guidance ?: guidance.take(MAX_GUIDANCE))
       )
-    return validate(JsonCodec.mapToJsonString(wire), expected)
+    return validate(JsonCodec.mapToJsonString(wire), expected).copy(warnings = receipt.warnings)
   }
 
   private fun checkIdentity(
@@ -101,11 +127,10 @@ class QaReceiptValidator(
     }
   }
 
-  private fun checkClaims(
+  private fun checkStructure(
     receipt: QaReceipt,
     expected: QaExpectedIdentity,
   ) {
-    unsupportedClaim(receipt)?.let { unsupported(it) }
     val flowIds = receipt.flows.map(QaFlow::id)
     if (flowIds.size != flowIds.toSet().size) {
       unsupported("flow identifiers must be unique.")
@@ -126,32 +151,6 @@ class QaReceiptValidator(
       unsupported(
         "evidence '$foreign' is outside this run's directory '${expected.evidencePrefix}'.",
       )
-    }
-  }
-
-  private fun unsupportedClaim(receipt: QaReceipt): String? {
-    val exercised = receipt.flows.filter { it.status == QaFlowStatus.EXERCISED }
-    val failedFlows =
-      receipt.assertions.filter { it.outcome == QaAssertionOutcome.FAIL }.map(
-        QaAssertion::flowId,
-      ).toSet()
-    val passedFlows =
-      receipt.assertions.filter { it.outcome == QaAssertionOutcome.PASS && it.flowId !in failedFlows }
-        .map(QaAssertion::flowId).toSet()
-    return when {
-      receipt.target?.kind == QaTargetKind.SIMULATOR && exercised.any(QaFlow::hardwareOnly) ->
-        "a simulator run cannot exercise a hardware-only flow."
-      receipt.verdict == QaVerdict.FINDINGS_OPEN && receipt.findings.isEmpty() ->
-        "findings_open needs at least one finding."
-      receipt.assertions.any { it.outcome == QaAssertionOutcome.FAIL } && receipt.findings.isEmpty() ->
-        "failed assertions need a finding with an affected criterion before qa_fix can repair them."
-      receipt.verdict != QaVerdict.PASSED -> null
-      exercised.none { it.id in passedFlows } ->
-        "passed needs at least one exercised flow with a passing assertion."
-      receipt.flows.any { it.status == QaFlowStatus.UNTESTED } -> "passed cannot leave a selected flow untested."
-      receipt.findings.isNotEmpty() || receipt.assertions.any { it.outcome == QaAssertionOutcome.FAIL } ->
-        "passed cannot carry findings or failed assertions."
-      else -> null
     }
   }
 

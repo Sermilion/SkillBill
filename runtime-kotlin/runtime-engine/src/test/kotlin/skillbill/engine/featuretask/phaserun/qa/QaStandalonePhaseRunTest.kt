@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
 import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
 import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.engine.featuretask.qa.receipt.qaTestExpected
+import skillbill.engine.featuretask.qa.receipt.qaTestFlow
 import skillbill.engine.featuretask.qa.receipt.qaTestJson
 import skillbill.engine.featuretask.qa.receipt.qaTestReceipt
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
@@ -23,6 +24,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class QaStandalonePhaseRunTest {
   private val git =
@@ -51,11 +53,81 @@ class QaStandalonePhaseRunTest {
   }
 
   @Test
-  fun `a malformed receipt blocks the run`() {
-    val result = assertIs<PhaseRunResult.Blocked>(runQa { "{\"verdict\": \"passed\"}" })
+  fun `a malformed receipt completes as incomplete with a warning and releases the invocation`() {
+    val result = assertIs<PhaseRunResult.Completed>(runQa { "{\"verdict\": \"passed\"}" })
 
-    assertContains(result.reason, "schema validation")
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
+    assertTrue(
+      result.targetReport.first().startsWith("Warning: QA recorded incomplete"),
+      result.targetReport.toString(),
+    )
+    assertContains(result.targetReport.first(), "schema validation")
     assertEquals(listOf(INVOCATION), leases.releasedInvocations)
+  }
+
+  @Test
+  fun `a passed receipt with an untested flow completes as incomplete and says why`() {
+    val result =
+      assertIs<PhaseRunResult.Completed>(
+        runQa {
+          val untested =
+            mapOf(
+              "id" to "logout",
+              "name" to "Log out",
+              "status" to "untested",
+              "hardware_only" to false,
+              "untested_reason" to "The build has no logout entry.",
+            )
+          qaTestJson(qaTestReceipt(QaVerdict.PASSED, it.expected) + ("flows" to listOf(qaTestFlow(), untested)))
+        },
+      )
+
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
+    assertContains(
+      result.targetReport,
+      "Warning: The QA receipt claimed passed but left 'Log out' untested; recorded incomplete.",
+    )
+    assertContains(result.targetReport, "Verdict: incomplete")
+    assertContains(result.targetReport, "Untested flows: Log out (The build has no logout entry.)")
+  }
+
+  @Test
+  fun `a production-only skip completes with a warning`() {
+    val result =
+      assertIs<PhaseRunResult.Completed>(
+        runQa {
+          qaTestJson(
+            qaTestReceipt(QaVerdict.SKIPPED, it.expected) +
+              mapOf("skip_reason" to "production_only", "reason_detail" to "Only the prod flavor is installed."),
+          )
+        },
+      )
+
+    assertEquals(StandaloneQaOutcome.SKIPPED, result.qaOutcome)
+    assertContains(
+      result.targetReport,
+      "Warning: QA refused to run because the app offers only a production environment: " +
+        "Only the prod flavor is installed.",
+    )
+    assertContains(result.targetReport, "Skip reason: production_only - Only the prod flavor is installed.")
+  }
+
+  @Test
+  fun `a stopped QA agent step completes as incomplete with a warning`() {
+    val result =
+      assertIs<PhaseRunResult.Completed>(
+        qaStandalonePhaseRun(git, listOf(androidPack), workspaces, leases).run(
+          PhaseRunRequest(SkeletonDefinition.QA.id, Path.of("/tmp/qa-repo"), "claude"),
+          INVOCATION,
+        ) { PhaseRunResult.Blocked(INVOCATION, emptyList(), null, "qa", "agent timed out") },
+      )
+
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
+    assertContains(result.targetReport.first(), "agent timed out")
+    assertTrue(
+      result.targetReport.any { it.startsWith("Incomplete reason: interrupted") },
+      result.targetReport.toString(),
+    )
   }
 
   @Test

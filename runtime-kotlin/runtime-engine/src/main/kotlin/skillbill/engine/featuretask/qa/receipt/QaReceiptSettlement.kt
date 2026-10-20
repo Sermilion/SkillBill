@@ -6,9 +6,12 @@ import skillbill.contracts.qa.QaReceiptPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
+import skillbill.engine.featuretask.model.execution.QaSkipReason
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.invalidQaReceipt
+import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.error.featuretask.qa.qaReceiptMissing
-import skillbill.error.featuretask.qa.qaReceiptUnsupportedClaim
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.workflow.taskruntime.model.qa.QaFindingVerification
@@ -22,6 +25,13 @@ class QaReceiptSettlement(
   private val diagnostics: RuntimeDiagnostics,
 ) {
   internal fun recordDiagnostics(receipt: QaReceipt) {
+    receipt.warnings.forEach { warning ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "qa warning: seam=qa_receipt value_expected=consistent_receipt value_used=warned " +
+          "reason=${warning.take(MAX_RECORD_WARNING)}",
+      )
+    }
     receipt.skipReason?.let { reason ->
       diagnostics.info(
         "qa skipped: seam=qa_receipt value_expected=executed value_used=${reason.wireValue} reason=${reason.wireValue}",
@@ -71,15 +81,31 @@ class QaReceiptSettlement(
     return previous.observe(current, previous.verifiedClosure(verification), qa.expected.treeIdentity)
   }
 
-  fun settle(qa: QaExecutionContext): QaReceipt {
+  fun settle(qa: QaExecutionContext): QaReceipt =
+    try {
+      settleAgentReceipt(qa)
+    } catch (failure: SkillBillRuntimeException) {
+      failure.rethrowUnless(failure.isQaFailure)
+      validator.incomplete(
+        "QA recorded incomplete because its receipt was unusable: ${failure.message.orEmpty()}",
+        qa.expected,
+        qa.policy,
+      )
+    }
+
+  private fun settleAgentReceipt(qa: QaExecutionContext): QaReceipt {
     val raw =
       workspaces.readReceipt(qa.workspace.receiptPath)
         ?: throw qaReceiptMissing(qa.workspace.receiptPath.toString())
     val receipt = validator.validate(raw.content, qa.expected)
-    if (receipt.policy != qa.policy) {
-      throw qaReceiptUnsupportedClaim("receipt policy does not match the admitted QA policy '${qa.policy.wireValue}'.")
-    }
-    return receipt
+    val warnings =
+      listOfNotNull(
+        "The QA receipt names policy '${receipt.policy.wireValue}' but the run admitted '${qa.policy.wireValue}'."
+          .takeIf { receipt.policy != qa.policy },
+        "QA refused to run because the app offers only a production environment: ${receipt.reasonDetail.orEmpty()}"
+          .takeIf { receipt.skipReason == QaSkipReason.PRODUCTION_ONLY },
+      )
+    return if (warnings.isEmpty()) receipt else receipt.copy(warnings = receipt.warnings + warnings)
   }
 
   private fun verification(
@@ -87,9 +113,10 @@ class QaReceiptSettlement(
     reference: String,
     original: QaReceipt,
     receipt: QaReceipt,
-  ): QaFindingVerification {
+  ): QaFindingVerification? {
     if (original.findings.none { it.id == finding.id }) {
-      throw invalidQaReceipt("retained receipt does not contain finding '${finding.id}'.")
+      deferClosure("retained receipt does not contain finding '${finding.id}'")
+      return null
     }
     val matchingTarget = original.target == null || original.target.platform == receipt.target?.platform
     val originalFlows = original.flows.filter { it.status == QaFlowStatus.EXERCISED }
@@ -124,26 +151,39 @@ class QaReceiptSettlement(
       )
       return null
     }
-    val wire =
-      JsonCodec.parseObjectOrNull(raw.content)?.let(JsonCodec::jsonElementToValue)?.let(JsonCodec::anyToStringAnyMap)
-    val identity = JsonCodec.anyToStringAnyMap(wire?.get(QaReceiptPayloadKeys.IDENTITY))
-    val head = identity?.get(QaReceiptPayloadKeys.HEAD_REVISION) as? String
-    val tree = identity?.get(QaReceiptPayloadKeys.TREE_IDENTITY) as? String
-    if (head.isNullOrBlank() || tree.isNullOrBlank()) {
-      invalid("retained QA receipt has no tested identity.")
+    return try {
+      val wire =
+        JsonCodec.parseObjectOrNull(raw.content)?.let(JsonCodec::jsonElementToValue)
+          ?.let(JsonCodec::anyToStringAnyMap)
+      val identity = JsonCodec.anyToStringAnyMap(wire?.get(QaReceiptPayloadKeys.IDENTITY))
+      val head = identity?.get(QaReceiptPayloadKeys.HEAD_REVISION) as? String
+      val tree = identity?.get(QaReceiptPayloadKeys.TREE_IDENTITY) as? String
+      if (head.isNullOrBlank() || tree.isNullOrBlank()) {
+        throw invalidQaReceipt("retained QA receipt has no tested identity.")
+      }
+      val receipt = validator.validate(raw.content, QaExpectedIdentity(head, tree, raw.evidencePrefix))
+      if (raw.receiptReference != reference) {
+        throw invalidQaReceipt("retained QA receipt identity does not match its reference.")
+      }
+      receipt
+    } catch (failure: SkillBillRuntimeException) {
+      failure.rethrowUnless(failure.isQaFailure)
+      deferClosure(failure.message.orEmpty())
+      null
     }
-    val receipt = validator.validate(raw.content, QaExpectedIdentity(head, tree, raw.evidencePrefix))
-    if (raw.receiptReference != reference) invalid("retained QA receipt identity does not match its reference.")
-    return receipt
   }
 
-  private fun invalid(
-    reason: String,
-    cause: Throwable? = null,
-  ): Nothing = throw invalidQaReceipt(reason, cause)
+  private fun deferClosure(reason: String) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "qa closure deferred: seam=qa_findings value_expected=retained_receipt value_used=unusable " +
+        "reason=${reason.take(MAX_RECORD_WARNING)}",
+    )
+  }
 
   private companion object {
     const val MAX_RECORD_KIND = 64
     const val MAX_RECORD_IDENTITY = 200
+    const val MAX_RECORD_WARNING = 300
   }
 }

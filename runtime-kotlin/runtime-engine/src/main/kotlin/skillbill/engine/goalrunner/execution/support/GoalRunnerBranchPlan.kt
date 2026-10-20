@@ -111,4 +111,6 @@ private fun GoalQaSummary.pullRequestText(): String =
     GoalQaSummary.RanPerSubtask -> "QA ran per subtask (pre-SKILL-431 children)"
     GoalQaSummary.NotRecorded -> "no goal-level QA outcome recorded"
     is GoalQaSummary.Recorded -> GoalSubtaskQaSummary.Recorded(outcome).pullRequestText()
+    is GoalQaSummary.Warned ->
+      outcome?.let { GoalSubtaskQaSummary.Recorded(it).pullRequestText() + "; " }.orEmpty() + "warning: $reason"
   }

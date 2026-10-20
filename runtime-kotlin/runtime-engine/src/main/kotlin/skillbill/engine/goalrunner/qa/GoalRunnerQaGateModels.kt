@@ -15,7 +15,7 @@ sealed interface GoalQaGateResult {
 
   data class Skipped(val reason: GoalQaSkipReason) : GoalQaGateResult
 
-  data class Blocked(val reason: String, val stepId: String) : GoalQaGateResult
+  data class Warned(val reason: String) : GoalQaGateResult
 }
 
 enum class GoalQaSkipReason {

@@ -123,9 +123,11 @@ values remain omitted.
 The full run accepts one `qa:auto|off` token and forwards it as `--qa <value>`.
 Omission selects `auto`. In the full run, QA runs once per goal, after all
 subtasks and before the PR (skipped when `qa:off`). QA findings enter `qa_fix`,
-then full validation, then QA again, for up to three attempts. Findings left
-after the third attempt block the goal before `commit_push`. A `qa:` token on a
-form that does not accept it is a usage error.
+then full validation, then QA again, for up to three attempts. QA never blocks
+the goal: findings left after the third attempt, and any QA run that cannot
+settle, are reported as warnings in the run output and the PR body, and the goal
+continues to `commit_push`. A `qa:` token on a form that does not accept it is a
+usage error.
 
 `phase:review` forwards `mode:inline|delegated` and
 `target:pr|staged|unstaged|HEAD|last|uncommitted|<sha>` verbatim as `key:value`
@@ -350,12 +352,17 @@ the installed packs, not the dispatcher: the routed pack's `qa_capability` names
 its guidance, and a repository with no declaring pack completes as a skipped
 `unsupported_target` run without launching an agent. The QA agent drives one
 device or simulator and writes its receipt and evidence under
-`.git/skill-bill/qa/<invocation>/`, never in the working tree. It never edits
-tracked files, commits, pushes, or opens a PR, and a run that changes the
-repository fails. A valid receipt exits 0 for every verdict, findings included.
-A missing or malformed receipt, a receipt for another revision, or a changed
-worktree exits 1. Relay the printed verdict, flows, findings, and cleanup as a
-phase form.
+`.git/skill-bill/qa/<invocation>/`, never in the working tree. It runs on a
+test account, so every in-app action is allowed, and it picks a Local or staging
+environment, never production; a production-only app settles `skipped` with
+`production_only`. It never edits tracked files, commits, pushes, or opens a PR.
+QA never blocks and always exits 0. A self-contradicting receipt is downgraded
+to its honest verdict (for example `passed` with an untested flow becomes
+`incomplete`). A missing or malformed receipt, a receipt for another revision,
+or a stopped QA agent settles `incomplete`; a run that could not start settles
+`skipped`. A repository change made during QA is kept and named in a warning.
+Each case prints a `Warning:` line with the verdict. Relay the printed warnings,
+verdict, flows, findings, and cleanup as a phase form.
 
 ## Phase PR
 

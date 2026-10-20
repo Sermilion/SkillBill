@@ -100,7 +100,7 @@ class VerifyQaOperationTest {
   }
 
   @Test
-  fun `open QA findings rule out an unqualified APPROVE`() {
+  fun `open QA findings turn an unqualified APPROVE into APPROVE WITH FIXES with a warning`() {
     VerifyOperationHarness().use { harness ->
       harness.qaManifests = listOf(ANDROID_PACK)
       val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on")).token
@@ -108,17 +108,17 @@ class VerifyQaOperationTest {
         harness.qaWorkspaces.receipt = receipt(harness, token, QaVerdict.FINDINGS_OPEN)
       }
 
-      val failed = assertIs<OperationOutcome.Failed>(harness.confirm(token))
+      val report = assertIs<OperationOutcome.Completed>(harness.confirm(token))
 
-      assertContains(failed.reason, "unqualified APPROVE")
-      assertContains(failed.reason, "QA outcome: findings")
+      assertContains(report.text, "recorded APPROVE WITH FIXES")
+      assertContains(report.text, "QA outcome: findings")
       assertContains(harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive, "[F-1] criteria=AC-1")
       assertEquals("findings", harness.telemetry.finished.single().qaOutcome)
     }
   }
 
   @Test
-  fun `a receipt bound to another tree is rejected and the worktree is still removed`() {
+  fun `a receipt bound to another tree is recorded incomplete with a warning and verify still completes`() {
     VerifyOperationHarness().use { harness ->
       harness.qaManifests = listOf(ANDROID_PACK)
       val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on")).token
@@ -126,11 +126,11 @@ class VerifyQaOperationTest {
         harness.qaWorkspaces.receipt = receipt(harness, token, QaVerdict.PASSED, tree = "f".repeat(64))
       }
 
-      val failed = assertIs<OperationOutcome.Failed>(harness.confirm(token))
+      val report = assertIs<OperationOutcome.Completed>(harness.confirm(token))
 
-      assertContains(failed.reason, "tree_identity")
-      assertContains(failed.reason, "QA outcome: attempted")
-      assertEquals("qa", harness.currentStep(token))
+      assertContains(report.text, "QA outcome: incomplete (other)")
+      val receipt = qaReceipt(harness, token)
+      assertContains((receipt["warnings"] as List<*>).single().toString(), "tree_identity")
       assertFalse(Files.exists(harness.qaWorktree(token)))
     }
   }

@@ -59,7 +59,9 @@ class DefaultGoalRunnerQaGate(
       ) {
         is FeatureTaskRuntimeRunInvariantsRead.Read -> read.invariants
         is FeatureTaskRuntimeRunInvariantsRead.Rejected ->
-          return GoalQaGateResult.Blocked("Could not read parent spec acceptance criteria: ${read.reason}", "qa")
+          return GoalQaGateResult.Warned(
+            "QA did not run: could not read parent spec acceptance criteria: ${read.reason}",
+          )
       }
     val branch = state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
     val result =
@@ -82,7 +84,7 @@ class DefaultGoalRunnerQaGate(
       )
     return when (result) {
       is PhaseRunResult.Completed -> GoalQaGateResult.Passed
-      is PhaseRunResult.Blocked -> GoalQaGateResult.Blocked(result.reason, result.stepId)
+      is PhaseRunResult.Blocked -> GoalQaGateResult.Warned("QA stopped at '${result.stepId}': ${result.reason}")
     }
   }
 

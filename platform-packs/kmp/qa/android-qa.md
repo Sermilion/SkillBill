@@ -9,6 +9,12 @@ Drive the app on one Android device or emulator, check the changed behavior, and
 - Never paste log bodies, raw device serials, credentials, or tokens into the receipt. Evidence is a path under the invocation directory plus its sha256.
 - Write the receipt to the exact path the briefing names. An app launch alone is never a pass.
 
+## Test account and environment
+
+- QA runs on a test account with test data. Every in-app action is allowed: create, edit, and delete records, add profiles, remove cards, log out. Never leave a flow untested to protect device or account state.
+- When the app or build offers an environment, flavor, or server choice, use Local when a local backend is available, else staging. Never use production.
+- When only production is available, exercise no flow. Write a `skipped` receipt with `production_only` and name the missing environment in `reason_detail`.
+
 ## Device discovery
 
 Run `adb devices -l` and classify each line:
@@ -78,3 +84,5 @@ Each assertion names the flow it checks, what it verified, and its outcome. A fi
 - `findings_open`: at least one finding.
 - `incomplete`: the run started but could not finish, with `incomplete_reason`.
 - `skipped`: the run could not start, with `skip_reason` and `reason_detail` holding the fix-it line.
+
+QA never blocks the run. The runtime records a missing, malformed, or contradictory receipt as a warning and continues, so claim only what you exercised.

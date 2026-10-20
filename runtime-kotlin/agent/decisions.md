@@ -1,5 +1,15 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-20] QA never blocks a run
+Context: QA is optional and runs on a test account, but receipt validation, the incomplete verdict, the qa_fix cap, the goal QA gate, and verify all stopped runs on QA problems.
+Decision: The validator downgrades a self-contradicting receipt to its honest verdict with a warning instead of rejecting it. Settlement turns a missing or unusable receipt into a runtime-written incomplete receipt, and the receipt schema lets incomplete omit artifact and target for that. A stopped QA agent step settles incomplete through a runtime-authored completion. Repair exhaustion is a produced-output flag that makes QaVerdictRule advance, not a traversal change. The goal gate returns Warned and finalization continues to commit_push.
+Reason: Changing the qa_fix edge's cap behavior would change the recorded traversal and make every in-flight plan incompatible, so exhaustion is decided by the verdict rule. A runtime-written incomplete receipt keeps the QA outcome, telemetry, and repair state paths unchanged.
+
+## [2026-10-20] Goal finalization commits an unfinished merge
+Context: An interrupted monitor repair can leave a merge in progress when goal finalization reaches commit-all.
+Decision: warnUnfinishedGitOperation records a warning and commit-all concludes the merge with the remaining worktree changes.
+Reason: The CI monitor checks the pushed result like any other commit, so stopping the goal adds no safety. This rationale moved out of a source comment that the comment architecture test rejects.
+
 ## [2026-10-19] SKILL-431: derive the live goal finalization allowlist from GOAL_FINISH_PIPELINE
 Context: Status projection kept its own allowlist of live goal finalization step ids (monitor, pr, monitor_fix), which would have hidden the new goal QA gate's qa, qa_fix and validate events and left the goal looking stuck.
 Decision: The allowlist is GOAL_FINISH_PIPELINE as a set, and GOAL_FINISH_PIPELINE became internal so the mapping file can reuse it.
@@ -12,7 +22,7 @@ Reason: The monitor's owned-worktree helper is fenced and branch-based, so two s
 
 ## [2026-10-19] SKILL-419: the runtime hands qa_receipt to the verdict, not the static projection
 Context: The workflow definition supports only static required artifacts, but the verdict needs qa_receipt only when a QA selection is stored.
-Decision: The verdict's static requirements and projection stay unchanged. When a selection is stored, the runtime fails the verdict if qa_receipt is missing, and passes the receipt and Mobile QA rules into the directive only for qa:on. An unqualified APPROVE against open findings fails the verdict step, because no malformed-verdict retry path exists.
+Decision: The verdict's static requirements and projection stay unchanged. The runtime passes the receipt and Mobile QA rules into the directive only for qa:on. An unqualified APPROVE against open findings is recorded as APPROVE WITH FIXES with a warning, because no malformed-verdict retry path exists and QA must not fail verify.
 Reason: Pre-QA workflows keep resolving, and qa:off reaches its verdict with unchanged rules.
 
 ## [2026-10-19] SKILL-419: the verify QA selection enum lives in runtime-domain

@@ -1316,8 +1316,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   on the goal branch, and its `qa` step runs through `QaStrategy`, not `QaStandalonePhaseRun`.
   `validate` is loop-only there (`loopOnlyStepIds`): QA findings take `qa -> qa_fix`, then the
   `qa_fix_revalidate` edge to `validate` (the full project gate) and the `qa_requalify` edge
-  back to `qa`, capped at three and blocking on exhaustion. A blocked gate stops the goal
-  before any commit, push or PR write. Both loops are composed only when `audit` is absent
+  back to `qa`, capped at three. QA never blocks: once three `qa_fix` attempts are consumed,
+  the `qa` output carries `qa_repairs_exhausted` and `QaVerdictRule` advances with the open
+  findings reported, and a gate that cannot settle returns `GoalQaGateResult.Warned`, which
+  goal finalization prints and writes into the PR body before `commit_push`. Both loops are composed only when `audit` is absent
   (`composedOnlyWithoutSteps`), so they never reach goal-child runs. The gate skips when
   every child ran and recorded child-level QA, or when a goal QA outcome already passed or
   skipped on the current tree. `PLAN` (`intake`, `preplan`,
