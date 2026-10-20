@@ -1,7 +1,10 @@
 package skillbill.engine.featuretask.slot.qa
 
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.qa.QaReceiptPayloadKeys
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
+import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 
 internal object QaPromptSections {
   const val DIRECTIVE: String =
@@ -13,11 +16,53 @@ internal object QaPromptSections {
       "Name evidence by path only."
 
   const val FIX_DIRECTIVE: String =
-    "Repair only findings recorded by the preceding mobile QA receipt. Keep the finding ids and affected acceptance " +
-      "criteria in view. Do not claim that QA findings are closed; a later QA receipt decides that."
+    "Repair the findings recorded by the preceding mobile QA receipt by editing source in the repository root. " +
+      "Keep the finding ids and affected acceptance criteria in view. Do not claim that QA findings are closed; a " +
+      "later QA receipt decides that."
 
   const val FIX_VALUE_CONTENT: String =
-    "Return a concise repair report naming the findings addressed and the files changed."
+    "A repair report with one line per open QA finding: `<finding-id>: fixed: <files changed and how>` or " +
+      "`<finding-id>: not changed: <reason with evidence>`. A finding you leave unchanged needs its reason, for " +
+      "example that the tested build predates the code at HEAD, with the file and line that already meet the " +
+      "expected behavior."
+
+  fun repairSupplement(
+    findings: List<QaOpenFinding>,
+    receiptFindings: List<Map<String, Any?>>,
+    repoRoot: String,
+  ): String {
+    val details = receiptFindings.associateBy { it[QaReceiptPayloadKeys.ID] as? String }
+    val entries =
+      findings.joinToString("\n") { finding ->
+        val detail = details[finding.id].orEmpty()
+        val steps = (detail[QaReceiptPayloadKeys.STEPS] as? List<*>).orEmpty().mapNotNull { it as? String }
+        val evidence =
+          JsonCodec.anyToStringAnyMapList(detail[QaReceiptPayloadKeys.EVIDENCE_REFS]).orEmpty()
+            .mapNotNull { it[QaReceiptPayloadKeys.PATH_REF] as? String }
+        listOfNotNull(
+          "### ${finding.id}",
+          "- Affected criteria: ${finding.affectedCriteria.joinToString().ifBlank { "none named" }}",
+          steps.takeIf(List<String>::isNotEmpty)?.joinToString("; ", prefix = "- Steps: "),
+          (detail[QaReceiptPayloadKeys.EXPECTED] as? String)?.let { "- Expected: $it" },
+          (detail[QaReceiptPayloadKeys.OBSERVED] as? String)?.let { "- Observed: $it" },
+          evidence.takeIf(List<String>::isNotEmpty)?.joinToString(", ", prefix = "- Evidence: "),
+          "- Receipts: ${finding.receiptRefs.joinToString()}",
+        ).joinToString("\n")
+      }
+    return "\n\n" +
+      """
+    |## Open QA findings to repair
+    |
+    |$entries
+    |
+    |Rules:
+    |
+    |- Edit source in `$repoRoot`, on the current branch. Leave the changes uncommitted; the goal commits them.
+    |- QA tested the build named in the receipt. When that build predates the code at HEAD, say so in the
+    |  finding's `not changed:` line and name the code that already meets the expected behavior.
+    |- QA runs again on your changes next and decides whether each finding is closed.
+      """.trimMargin()
+  }
 
   fun supplement(qa: QaExecutionContext): String {
     val target = qa.target as QaExecutionTarget.Supported

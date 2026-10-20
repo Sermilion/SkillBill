@@ -167,7 +167,7 @@ class GoalRunnerFinalization(
     request: GoalRunnerRunRequest,
     reason: String,
   ) {
-    val warning = "Warning: goal QA did not settle; continuing to commit_push. $reason"
+    val warning = "Warning: goal QA finished with a warning; continuing to commit_push. $reason"
     RuntimeDiagnosticsBestEffortWarning.record(diagnostics, warning)
     request.outputSink.write(AgentRunOutputStream.STDERR, "$warning\n")
   }

@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
@@ -48,6 +49,7 @@ data class PhaseRunRequest(
   val qaExecution: QaExecutionContext? = null,
   val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val acceptanceCriteria: List<String>? = null,
+  val recordedGoalQaOutcome: FeatureTaskQaOutcome? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }

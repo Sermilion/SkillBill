@@ -26,6 +26,7 @@ import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseRunHarness
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
@@ -281,12 +282,7 @@ class PhaseRunEntry(
         stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
         resumeRulesFn = strategies.resumeRules(executionPlan),
       )
-    val records =
-      InMemoryPhaseRunRecords(
-        clock,
-        branch,
-        standalone?.let { StandaloneMonitorLedger(it.context, it.cleanup) },
-      )
+    val records = inMemoryRecords(request, workflowId, branch, standalone)
     val state =
       InMemoryPhaseRunState(
         facts = facts,
@@ -304,6 +300,21 @@ class PhaseRunEntry(
     val report = runLoopEntry.run(runLoopEntry.context(facts, state))
     return resultOf(report, state, records)
   }
+
+  private fun inMemoryRecords(
+    request: PhaseRunRequest,
+    workflowId: String,
+    branch: FeatureTaskRuntimeResolvedBranch?,
+    standalone: MonitorPreparation.Prepared?,
+  ): InMemoryPhaseRunRecords =
+    InMemoryPhaseRunRecords(
+      clock,
+      branch,
+      standalone?.let { StandaloneMonitorLedger(it.context, it.cleanup) },
+      request.recordedGoalQaOutcome?.let { recorded ->
+        QaRepairState.resumedAfter(workflowId, recorded.qaFixAttempts, recorded.testedTreeIdentity)
+      },
+    )
 
   private fun resultOf(
     report: FeatureTaskRuntimeRunReport,

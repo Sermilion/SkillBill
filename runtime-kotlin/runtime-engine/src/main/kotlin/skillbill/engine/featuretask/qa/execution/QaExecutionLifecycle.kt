@@ -90,6 +90,12 @@ class QaExecutionLifecycle(
       warnChanged("the runtime could not reread the repository: ${failure.message.orEmpty()}")
     }
 
+  internal fun currentTreeIdentity(repoRoot: Path): String? =
+    (gitOperations.repositoryTreeIdentity(repoRoot) as? WorkflowGitOperationResult.Ok)
+      ?.value
+      ?.trim()
+      ?.takeIf(String::isNotBlank)
+
   private fun statusChange(
     repoRoot: Path,
     before: String,

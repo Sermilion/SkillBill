@@ -5,13 +5,12 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonTraversalResult
 
 fun SkeletonDefinition.declaration(): FeatureTaskRuntimeTransitionDeclaration =
-  deriveTransitions(stepIds, entryStepIds = emptySet(), loopOnlyStepIds)
+  deriveTransitions(stepIds, entryStepIds = emptySet())
 
 fun SkeletonDefinition.traversal(
   selectedStepIds: Set<String>,
   entryStepIds: Set<String>,
-): FeatureTaskRuntimeTransitionDeclaration =
-  deriveTransitions(stepIds.filter { it in selectedStepIds }, entryStepIds, loopOnlyStepIds)
+): FeatureTaskRuntimeTransitionDeclaration = deriveTransitions(stepIds.filter { it in selectedStepIds }, entryStepIds)
 
 fun SkeletonDefinition.traversalOrViolation(
   selectedStepIds: Set<String>,
@@ -29,7 +28,7 @@ fun SkeletonDefinition.traversalOrViolation(
           steps.indexOf(it.requiredPhaseId) >= steps.indexOf(it.phaseId)
       }
     if (reversedGate == null) {
-      SkeletonTraversalResult.Ready(deriveTransitions(steps, entryStepIds, loopOnlyStepIds))
+      SkeletonTraversalResult.Ready(deriveTransitions(steps, entryStepIds))
     } else {
       SkeletonTraversalResult.Rejected(
         "FeatureTaskRuntimePhaseEntryGate requires '${reversedGate.requiredPhaseId}' to precede " +
@@ -43,12 +42,11 @@ fun SkeletonDefinition.traversalOrViolation(
 private fun deriveTransitions(
   steps: List<String>,
   entryStepIds: Set<String>,
-  loopOnlyStepIds: Set<String>,
 ): FeatureTaskRuntimeTransitionDeclaration {
   val canonical = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
   val present = steps.toSet()
   val loopOnly =
-    (canonical.loopOnlyPhaseIds - entryStepIds + loopOnlyStepIds).filter(present::contains).toSet()
+    (canonical.loopOnlyPhaseIds - entryStepIds).filter(present::contains).toSet()
   val backwardEdges =
     canonical.backwardEdges.filter { edge ->
       val requiredSteps = FeatureTaskRuntimePhaseWorkflowTransitions.composedOnlyWithSteps[edge.loopId].orEmpty()

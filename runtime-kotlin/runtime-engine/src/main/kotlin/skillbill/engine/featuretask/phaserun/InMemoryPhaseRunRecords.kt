@@ -56,7 +56,10 @@ internal class InMemoryPhaseRunRecords private constructor(
     clock: Clock,
     resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
     standaloneMonitorLedger: StandaloneMonitorLedger? = null,
-  ) : this(clock, resolvedBranch, LinkedHashMap(), standaloneMonitorLedger)
+    initialQaRepairState: QaRepairState? = null,
+  ) : this(clock, resolvedBranch, LinkedHashMap(), standaloneMonitorLedger) {
+    qaState = initialQaRepairState
+  }
 
   val acceptedOutputs = mutableMapOf<String, String>()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()

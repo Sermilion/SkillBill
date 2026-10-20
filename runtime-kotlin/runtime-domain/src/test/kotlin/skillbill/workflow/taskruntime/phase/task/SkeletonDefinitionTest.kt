@@ -168,16 +168,21 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `goal QA composes its own repair and revalidation loops only`() {
-    val loops = setOf("qa_fix_revalidate", "qa_requalify")
-    val goalQa = SkeletonDefinition.GOAL_QA
+  fun `goal QA loops qa_fix straight back to qa with no phase after it that re-enters QA`() {
+    val goalQa = SkeletonDefinition.GOAL_QA.declaration()
 
-    assertEquals(listOf("qa", "qa_fix", "validate"), goalQa.stepIds)
-    assertEquals(setOf("qa_fix", "validate"), goalQa.declaration().loopOnlyPhaseIds)
-    assertTrue(loops.all { loop -> goalQa.declaration().backwardEdges.any { it.loopId == loop } })
+    assertEquals(listOf("qa", "qa_fix"), goalQa.forwardPhaseIds)
+    assertEquals(setOf("qa_fix"), goalQa.loopOnlyPhaseIds)
+    assertEquals(
+      setOf(
+        Triple("qa", FeatureTaskRuntimeVerdict.QA_FINDINGS, "qa_fix"),
+        Triple("qa_fix", FeatureTaskRuntimeVerdict.ADVANCE, "qa"),
+      ),
+      goalQa.backwardEdges.map { Triple(it.fromPhaseId, it.triggeringVerdict, it.destinationPhaseId) }.toSet(),
+    )
     assertFalse(
-      SkeletonDefinition.entries.filter { it != goalQa }.any { definition ->
-        definition.declaration().backwardEdges.any { it.loopId in loops }
+      SkeletonDefinition.entries.filter { it != SkeletonDefinition.GOAL_QA }.any { definition ->
+        definition.declaration().backwardEdges.any { it.loopId == "qa_requalify" }
       },
     )
   }

@@ -38,6 +38,18 @@ class FeatureTaskQaOutcomeRecorder(
     }
   }
 
+  fun recordRepairAttempts(
+    workflowId: String,
+    qaFixAttempts: Int,
+  ) {
+    database.transaction { unitOfWork ->
+      val outcomes = unitOfWork.featureTaskQaOutcomes
+      val recorded = outcomes.find(workflowId) ?: return@transaction
+      if (recorded.qaFixAttempts >= qaFixAttempts) return@transaction
+      outcomes.upsert(recorded.copy(qaFixAttempts = qaFixAttempts, recordedAt = "${clock.instant()}"))
+    }
+  }
+
   fun recordWarning(
     workflowId: String,
     warning: String,

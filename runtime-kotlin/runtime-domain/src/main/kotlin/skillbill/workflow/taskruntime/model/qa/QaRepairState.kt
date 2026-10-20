@@ -1,5 +1,7 @@
 package skillbill.workflow.taskruntime.model.qa
 
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
+
 data class QaRepairAttempt(
   val attemptNumber: Int,
   val receiptTreeIdentity: String,
@@ -90,5 +92,30 @@ data class QaRepairState(
 
   companion object {
     const val MAX_ATTEMPTS = 3
+    private const val UNRECORDED_TREE = "unrecorded"
+
+    fun repairOutputRef(
+      workflowId: String,
+      attemptNumber: Int,
+    ): String = "$workflowId:${FeatureTaskRuntimePhaseIds.QA_FIX}:attempt-$attemptNumber"
+
+    fun resumedAfter(
+      workflowId: String,
+      consumedAttempts: Int,
+      testedTreeIdentity: String?,
+    ): QaRepairState? {
+      if (consumedAttempts <= 0) return null
+      val attempts =
+        (1..consumedAttempts.coerceAtMost(MAX_ATTEMPTS)).map { number ->
+          QaRepairAttempt(
+            attemptNumber = number,
+            receiptTreeIdentity = testedTreeIdentity ?: UNRECORDED_TREE,
+            consumedFindingIds = emptyList(),
+            repairOutputRef = repairOutputRef(workflowId, number),
+            outcome = QaRepairAttemptOutcome.COMPLETED,
+          )
+        }
+      return QaRepairState(subtaskId = 1, attempts = attempts, lastReceiptTreeIdentity = testedTreeIdentity)
+    }
   }
 }

@@ -44,9 +44,6 @@ import skillbill.workflow.taskruntime.model.audit.canonicalAcceptanceCriterionRe
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
-import skillbill.workflow.taskruntime.model.qa.QaRepairAttempt
-import skillbill.workflow.taskruntime.model.qa.QaRepairAttemptOutcome
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -229,37 +226,7 @@ class QaStrategy(
       }
   }
 
-  private val repairHooks =
-    object : PhaseStepHooks {
-      override fun launchPromptSupplement(
-        run: PhaseRun,
-        context: PhaseAttemptLaunchHookContext,
-        state: PhaseStepBinding,
-      ): String = findingSupplement(state)
-
-      override fun interpretedOutput(
-        run: PhaseRun,
-        context: PhaseStepOutputContext,
-        state: PhaseAcceptedStepExecution,
-        output: NormalizedFeatureTaskRuntimePhaseOutput,
-      ): NormalizedFeatureTaskRuntimePhaseOutput {
-        if (output.status != "completed") return output
-        val previous =
-          (state as PhaseQaStepBinding).qaRepairState()
-            ?: invalid("qa_fix completed without the QA findings state it repairs.")
-        val number = previous.consumedAttempts + 1
-        val attempt =
-          QaRepairAttempt(
-            attemptNumber = number,
-            receiptTreeIdentity =
-              previous.lastReceiptTreeIdentity ?: invalid("qa_fix repaired findings without a tested tree identity."),
-            consumedFindingIds = previous.openFindings.map(QaOpenFinding::id),
-            repairOutputRef = "${run.request.workflowId}:${run.phaseId}:attempt-$number",
-            outcome = QaRepairAttemptOutcome.COMPLETED,
-          )
-        return output.copy(qaRepairState = previous.recordRepair(attempt))
-      }
-    }
+  private val repairHooks = QaRepairHooks(execution, outcomes)
 
   private val hooks =
     object : PhaseStepHooks {
@@ -321,23 +288,17 @@ class QaStrategy(
         val subtaskId = run.request.goalContinuation?.subtaskId ?: 1
         val previous = (state as PhaseQaStepBinding).qaRepairState() ?: QaRepairState(subtaskId)
         if (previous.subtaskId != subtaskId) invalid("QA repair state belongs to another subtask.")
+        val repairWarning = QaRepairHooks.noChangeWarning(state, previous, qa.expected.treeIdentity)
         val settled = receipts.observe(previous, restricted, qa)
         val exhausted =
           settled.openFindings.isNotEmpty() &&
             settled.consumedAttempts >= FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_FIX_ATTEMPTS
-        val receipt =
-          if (exhausted) {
-            restricted.copy(
-              warnings =
-                restricted.warnings +
-                  (
-                    "QA findings ${settled.openFindings.joinToString { it.id }} remain after " +
-                      "${settled.consumedAttempts} qa_fix attempts; the run continues and reports them."
-                  ),
-            )
-          } else {
-            restricted
-          }
+        val exhaustedWarning =
+          (
+            "QA findings ${settled.openFindings.joinToString { it.id }} remain after " +
+              "${settled.consumedAttempts} qa_fix attempts; the run continues and reports them."
+          ).takeIf { exhausted }
+        val receipt = restricted.copy(warnings = restricted.warnings + listOfNotNull(repairWarning, exhaustedWarning))
         receipts.recordDiagnostics(receipt)
         val enriched =
           record +

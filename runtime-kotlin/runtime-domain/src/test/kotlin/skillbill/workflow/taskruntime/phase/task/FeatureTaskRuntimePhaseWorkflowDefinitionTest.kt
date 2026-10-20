@@ -240,7 +240,6 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         def.MONITOR_FIX_COMMIT_LOOP_ID,
         def.QA_FIX_LOOP_ID,
         def.QA_FIX_RETURN_LOOP_ID,
-        def.QA_FIX_REVALIDATE_LOOP_ID,
         def.QA_REQUALIFY_LOOP_ID,
         def.QA_INVALIDATION_LOOP_ID,
       ),

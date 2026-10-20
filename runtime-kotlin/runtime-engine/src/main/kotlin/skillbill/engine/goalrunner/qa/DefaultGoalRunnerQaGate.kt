@@ -66,29 +66,63 @@ class DefaultGoalRunnerQaGate(
           )
       }
     val branch = state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
-    val result =
-      phaseRunEntry.runForGoal(
-        PhaseRunRequest(
-          definitionId = SkeletonDefinition.GOAL_QA.id,
-          repoRoot = request.repoRoot,
-          invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
-          intake = request.issueKey,
-          timeout = request.timeout,
-          agentAddonSelection = request.agentAddonSelection,
-          modelAssignment = request.modelAssignment,
-          qaSelection = request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
-          acceptanceCriteria = invariants.acceptanceCriteria,
-          eventSink = FeatureTaskRuntimeRunEventSink { event -> record(state, request, event) },
-          activityOutput = { stepName, activity -> recordActivity(state, request, stepName, activity) },
-          activityStampSink = activityStampWriter.sink(state.parentWorkflowId, parentWorkflowId = null),
-        ),
-        state.parentWorkflowId,
-        branch,
+    val goalQaRequest =
+      PhaseRunRequest(
+        definitionId = SkeletonDefinition.GOAL_QA.id,
+        repoRoot = request.repoRoot,
+        invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+        intake = request.issueKey,
+        timeout = request.timeout,
+        agentAddonSelection = request.agentAddonSelection,
+        modelAssignment = request.modelAssignment,
+        qaSelection = request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
+        acceptanceCriteria = invariants.acceptanceCriteria,
+        eventSink = FeatureTaskRuntimeRunEventSink { event -> record(state, request, event) },
+        activityOutput = { stepName, activity -> recordActivity(state, request, stepName, activity) },
+        activityStampSink = activityStampWriter.sink(state.parentWorkflowId, parentWorkflowId = null),
+        recordedGoalQaOutcome = parentOutcome,
       )
-    return when (result) {
-      is PhaseRunResult.Completed -> GoalQaGateResult.Passed
-      is PhaseRunResult.Blocked -> GoalQaGateResult.Warned("QA stopped at '${result.stepId}': ${result.reason}")
-    }
+    val qaResult = phaseRunEntry.runForGoal(goalQaRequest, state.parentWorkflowId, branch)
+    val qaWarning = (qaResult as? PhaseRunResult.Blocked)?.let { "QA stopped at '${it.stepId}': ${it.reason}" }
+    val treeAfterQa = gitOperations.repositoryTreeIdentity(request.repoRoot)
+    val validationWarnings =
+      if (sameTree(currentTree, treeAfterQa)) {
+        emptyList()
+      } else {
+        val validation =
+          phaseRunEntry.runForGoal(
+            goalQaRequest.copy(definitionId = SkeletonDefinition.VALIDATION.id, recordedGoalQaOutcome = null),
+            state.parentWorkflowId,
+            branch,
+          )
+        listOfNotNull(
+          (validation as? PhaseRunResult.Blocked)?.let { blocked ->
+            "Validation after QA stopped at '${blocked.stepId}': ${blocked.reason}"
+          },
+          codeChangedAfterQa(state, request),
+        )
+      }
+    val warnings = listOfNotNull(qaWarning) + validationWarnings
+    return if (warnings.isEmpty()) GoalQaGateResult.Passed else GoalQaGateResult.Warned(warnings.joinToString(" "))
+  }
+
+  private fun sameTree(
+    before: WorkflowGitOperationResult,
+    after: WorkflowGitOperationResult,
+  ): Boolean =
+    before is WorkflowGitOperationResult.Ok && after is WorkflowGitOperationResult.Ok &&
+      before.value.trim() == after.value.trim()
+
+  private fun codeChangedAfterQa(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): String? {
+    val settled = outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId) ?: return null
+    val tested = settled.testedTreeIdentity?.takeIf { settled.outcome != StandaloneQaOutcome.SKIPPED } ?: return null
+    val current = gitOperations.repositoryTreeIdentity(request.repoRoot)
+    if (current is WorkflowGitOperationResult.Ok && current.value.trim() == tested) return null
+    return "validate changed code after QA settled; QA does not re-run, so the published change differs from the " +
+      "tree QA tested ($tested)."
   }
 
   private fun childrenAlreadyRanQa(state: GoalRunnerManifestState): Boolean {

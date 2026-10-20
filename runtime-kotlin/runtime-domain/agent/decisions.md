@@ -4,7 +4,7 @@ Decision: GOAL_CHILD becomes revision 4 without the QA slot, and the old definit
 Reason: Recorded plans resolve their definition by id and semantic revision, so keeping rev 3 lets an in-flight child resume with its exact step list while every new child picks rev 4. Editing rev 3 in place would change a recorded child's steps under it.
 Revisit when: No goal with a rev-3 child remains resumable.
 
-## [2026-10-19] Scope goal-qa loops by step absence
+## [2026-10-19] Scope goal-qa loops by step absence (superseded 2026-10-20: goal-qa is qa and qa_fix only, see runtime-kotlin/agent/decisions.md)
 Context: The goal-qa skeleton needs qa_fix to validate and validate to qa edges, but feature runs also compose qa, qa_fix and validate. composedOnlyWithSteps cannot express that audit must be absent.
 Decision: Add composedOnlyWithoutSteps and key the qa_fix_revalidate and qa_requalify loops on audit. Make validate loop-only in goal-qa through a skeleton-scoped loopOnlyStepIds set that must be a subset of the skeleton's steps.
 Reason: If the validate to qa edge leaks into STANDALONE or GOAL_CHILD, every validate pass loops back to qa forever. A skeleton-scoped loop-only set keeps the global loop-only phases and feature runs unchanged.
