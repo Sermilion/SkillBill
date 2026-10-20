@@ -1171,8 +1171,11 @@ private sealed interface WorkDetailMatch {
 
 private const val BOARD_CANDIDATE_BATCH_BUDGET = 4
 
-private val GOAL_FINISH_PIPELINE =
+internal val GOAL_FINISH_PIPELINE =
   listOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,

@@ -32,6 +32,7 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
@@ -164,17 +165,30 @@ class GoalRunnerRunPreparation(
         goalRepositoryIdentity(request.repoRoot, repositoryEnclosingRootPort),
       )
     stopAfterPolicyMismatch(state, request, persistedControl)?.let { return it }
+    val recordedQaSelection = persistedControl.qaSelection ?: inheritedQaSelection(state)
+    qaSelectionMismatch(state, request, recordedQaSelection)?.let { return it }
     val persistedReviewPolicy = manifestStore.reviewPolicy(state.parentWorkflowId)
     persistedReviewPolicy?.let { policy ->
       reviewPolicyMismatch(state, request, policy)?.let { return it }
     }
     val effectiveReviewPolicy = persistEffectiveReviewPolicy(state, request, persistedReviewPolicy)
-    val effectiveControl = persistEffectiveStopAfterPolicy(state, request, persistedControl)
+    val effectiveQaSelection = recordedQaSelection ?: request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
+    val effectiveControl =
+      persistEffectiveStopAfterPolicy(state, request, persistedControl).let { control ->
+        if (control.qaSelection == null) {
+          manifestStore.updateControlState(state.parentWorkflowId) { current ->
+            current.takeIf { it.qaSelection != null } ?: current.copy(qaSelection = effectiveQaSelection)
+          }
+        } else {
+          control
+        }
+      }
     val preparedState = resumeForRun(state, effectiveControl)
     return GoalRunPreparation.Prepared(
       preparedState,
       request.copy(
         codeReviewMode = effectiveReviewPolicy.codeReviewMode,
+        qaSelection = effectiveQaSelection,
         stopAfterSubtaskId = request.stopAfterSubtaskId ?: persistedControl.stopAfterSubtaskId,
       ),
     )
@@ -225,6 +239,37 @@ class GoalRunnerRunPreparation(
           blockedReason =
             "Cannot change stop-after subtask policy on goal resume: parent workflow " +
               "'${state.parentWorkflowId}' is pinned to subtask $persisted.",
+          workflowId = state.parentWorkflowId,
+          lastResumableStep = "preplan",
+        ),
+      ),
+    )
+  }
+
+  private fun inheritedQaSelection(state: GoalRunnerManifestState): FeatureTaskRuntimeQaSelection? =
+    state.manifest.subtasks.asSequence()
+      .mapNotNull { subtask ->
+        subtask.workflowId?.takeIf(String::isNotBlank)?.let { outcomeStore.childQaSelection(it, null) }
+      }
+      .firstOrNull()
+
+  private fun qaSelectionMismatch(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    recorded: FeatureTaskRuntimeQaSelection?,
+  ): GoalRunPreparation.PreparationBlocked? {
+    val requested = request.qaSelection ?: return null
+    if (recorded == null || recorded == requested) return null
+    return GoalRunPreparation.PreparationBlocked(
+      stopped(
+        StoppedReportArgs(
+          issueKey = request.issueKey,
+          attempted = emptyList(),
+          subtaskId = state.manifest.currentSubtaskIntent.subtaskId,
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason =
+            "Cannot change QA selection on goal resume: parent workflow " +
+              "'${state.parentWorkflowId}' is pinned to qa:${recorded.wireValue}.",
           workflowId = state.parentWorkflowId,
           lastResumableStep = "preplan",
         ),

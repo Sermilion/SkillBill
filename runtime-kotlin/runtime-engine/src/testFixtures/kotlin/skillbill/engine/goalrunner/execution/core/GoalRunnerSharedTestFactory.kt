@@ -16,6 +16,8 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.NoopGoalRunnerAttemptLedgerStore
@@ -24,6 +26,9 @@ import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerChildRepairSt
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPortAdapter
+import skillbill.engine.goalrunner.qa.GoalQaGateResult
+import skillbill.engine.goalrunner.qa.GoalQaSkipReason
+import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
@@ -52,6 +57,13 @@ import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.goalstate.UnavailableGoalRuntimeStateFileStore
 import skillbill.scaffold.model.PlatformManifest
 import java.time.Clock
+
+internal object NoopGoalRunnerQaGate : GoalRunnerQaGate {
+  override fun run(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalQaGateResult = GoalQaGateResult.Skipped(GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA)
+}
 
 fun goalRunnerDefaultPhaseRecorder(): FeatureTaskRuntimePhaseRecorder =
   testPhaseRecorder(

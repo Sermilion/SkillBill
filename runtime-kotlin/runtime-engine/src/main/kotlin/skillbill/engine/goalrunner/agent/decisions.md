@@ -11,6 +11,23 @@ Context: Planning, launch or telemetry can throw after the invocation start pers
 Decision: Attempt direct blocked segment closure with goal_run_failed while rethrowing the original failure. Preserve interruption and cancellation, attach closure errors as suppressed evidence, and skip closure before persisted start or after terminal settlement.
 Reason: Closure must work independently of manifest-control updates and subtask telemetry. Recording invocation failure must not invent subtask success or logical-goal completion, and cleanup failure must not hide the cause that stopped execution.
 Revisit when: Immediate hard-kill repair becomes a requirement; catchable failure closure cannot run after an uncatchable process exit.
+## [2026-10-19] Pin the goal QA selection on the parent control state
+Context: Children no longer carry a QA selection, so the goal QA gate needs one owner for the selection across resumes, including goals that started before the change.
+Decision: The parent's control state records the effective selection on first run (request, else AUTO). An in-flight goal with none inherits the first child's recorded plan selection. A resume asking for a different value is refused with a QA-specific blocked stop.
+Reason: Without the pin a resume could silently flip an in-flight goal from off to AUTO, or QA under a different selection than the children were planned with. Refusing before any persistence keeps a rejected resume free of side effects.
+Alternatives considered: A dedicated persistQaSelection manifest write, dropped because the transactional updateControlState already gives first-write-wins and the extra method tripped detekt TooManyFunctions.
+
+## [2026-10-19] Skip goal QA for legacy per-child QA and for a settled tree
+Context: Children still compose QA until SKILL-431 subtask 2, and a blocked or resumed goal re-enters finalization and would run goal QA again.
+Decision: The gate skips when every subtask workflow ran a QA-composed plan with a recorded outcome, or when the parent outcome is passed or skipped on the current tree identity. The legacy skip writes no parent outcome.
+Reason: Without both rules a goal runs QA twice, once per child and once at the goal, or repeats QA on a tree it already settled. Writing a parent outcome for the legacy skip would claim a goal-level run that never happened.
+Revisit when: Subtask 2 removes QA from goal children and no pre-SKILL-431 goals remain.
+
+## [2026-10-19] Run goal QA before commit-all at finalization
+Context: SKILL-431 moves QA from each goal child to one run per goal before the PR.
+Decision: finalizePublication calls the goal QA gate after the no-change and already-published checks and before commitAllRemainingWorktree. A blocked gate stops the goal BLOCKED before any commit, push or PR write. The gate also runs when an unmerged PR already exists.
+Reason: QA after commit_push would publish an unqualified tree, and qa_fix edits must land in the same commit-all. Running on resume after a PR failure keeps the PR tree qualified; the settled-tree skip stops the repeat.
+Alternatives considered: Special-casing single-subtask goals, rejected because one QA path per goal is simpler to reason about.
 
 ## [2026-10-17] Keep checkpoint prune off the status read path
 Context: Goal status and watch defaulted pruneCheckpointRefs to true, and reconcileStatusManifest deleted eligible checkpoint refs during ordinary projection.

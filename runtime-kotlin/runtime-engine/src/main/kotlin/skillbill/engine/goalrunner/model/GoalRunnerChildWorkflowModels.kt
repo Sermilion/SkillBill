@@ -26,7 +26,7 @@ data class GoalRunnerChildWorkflowSetup(
   val reviewPolicy: GoalRunnerReviewPolicy,
   val planningHydration: GoalChildPlanningHydrationRequest? = null,
   val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
-  val qaSelection: FeatureTaskRuntimeQaSelection = FeatureTaskRuntimeQaSelection.AUTO,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val operatorResumePhaseId: String? = null,
   val operatorResumeReason: String? = null,
 ) {

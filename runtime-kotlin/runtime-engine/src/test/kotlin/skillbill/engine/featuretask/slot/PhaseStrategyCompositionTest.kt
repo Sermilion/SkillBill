@@ -507,7 +507,6 @@ class PhaseStrategyCompositionTest {
           setOf(
             CodeReviewExecutionMode.INLINE,
             FeatureTaskRuntimeQualityGateSelection.BUILD,
-            FeatureTaskRuntimeQaSelection.AUTO,
           ),
         ),
       )
@@ -576,7 +575,6 @@ class PhaseStrategyCompositionTest {
         setOf(
           CodeReviewExecutionMode.INLINE,
           FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-          FeatureTaskRuntimeQaSelection.AUTO,
         ),
       )
     val resolved = lookup.executionPlan(facts)

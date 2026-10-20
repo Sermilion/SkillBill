@@ -23,6 +23,7 @@ import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.validatedGoalReviewPasses
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -128,6 +129,14 @@ class WorkflowGoalRunnerOutcomeStore
       review.recordedQualityGateSelection(workflowId)
 
     override fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = review.recordedQaOutcome(workflowId)
+
+    override fun hasQaComposedPlan(workflowId: String): Boolean =
+      database.read { unitOfWork ->
+        storedExecutionPlanComposesQa(taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts)
+      }
+
+    override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? =
+      database.read { unitOfWork -> unitOfWork.featureTaskQaOutcomes.find(parentWorkflowId) }
 
     override fun childQaSelection(
       workflowId: String,

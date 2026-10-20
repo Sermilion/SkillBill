@@ -25,6 +25,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
@@ -74,7 +75,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
           setOfNotNull(
             reviewMode,
             plannedQualityGate(qualityGate, inputs),
-            request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
+            request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO.takeIf { PhaseSlot.QA in definition.slots },
           ),
           request.stepLaunchAssignments,
         ),

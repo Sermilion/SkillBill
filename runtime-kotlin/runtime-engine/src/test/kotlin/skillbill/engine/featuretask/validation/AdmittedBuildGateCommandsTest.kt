@@ -21,7 +21,6 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
-import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
@@ -58,7 +57,6 @@ class AdmittedBuildGateCommandsTest {
             setOf(
               CodeReviewExecutionMode.INLINE,
               FeatureTaskRuntimeQualityGateSelection.BUILD,
-              FeatureTaskRuntimeQaSelection.AUTO,
             ),
           ),
         )

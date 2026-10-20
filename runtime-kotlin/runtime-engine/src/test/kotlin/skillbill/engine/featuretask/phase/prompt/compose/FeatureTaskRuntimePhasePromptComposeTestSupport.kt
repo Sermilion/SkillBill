@@ -17,6 +17,7 @@ private fun definitionOwning(stepId: String): SkeletonDefinition =
     "intake" -> SkeletonDefinition.PLAN
     "validate" -> SkeletonDefinition.VALIDATION
     "pr", "monitor", "monitor_fix" -> SkeletonDefinition.PR
+    "qa", "qa_fix" -> SkeletonDefinition.STANDALONE
     else -> SkeletonDefinition.GOAL_CHILD
   }
 

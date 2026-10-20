@@ -114,7 +114,7 @@ internal fun goalContinuationEnvironment(request: SkillRunRequest): Map<String, 
         put(tokens.CODE_REVIEW_MODE_ENV, context.codeReviewMode.wireValue)
         put(tokens.VALIDATION_DEPTH_ENV, context.validationDepth.wireValue)
         put(tokens.QUALITY_GATE_SELECTION_ENV, context.qualityGateSelection.wireValue)
-        context.qaSelection?.let { put(tokens.QA_SELECTION_ENV, it.wireValue) }
+        put(tokens.QA_SELECTION_ENV, context.qaSelection?.wireValue.orEmpty())
       }
   }.orEmpty()
 

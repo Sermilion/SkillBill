@@ -98,7 +98,7 @@ class FeatureTaskRuntimeRunEntry(
         (goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
     ) { admittedExecution, acquiredWorker ->
-      val requestedQaSelection = input.qaSelection ?: goalContinuation?.qaSelection
+      val requestedQaSelection = if (goalContinuation != null) goalContinuation.qaSelection else input.qaSelection
       if (requestedQaSelection != null && requestedQaSelection != admittedExecution.plan.qaSelection) {
         return@runOwned changedQaSelectionRefusal(input, acquiredWorker, specPath, admittedExecution)
       }
@@ -269,7 +269,12 @@ class FeatureTaskRuntimeRunEntry(
           runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
         }
     val qualityGate = goalContinuation?.qualityGateSelection
-    val qaSelection = input.qaSelection ?: goalContinuation?.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
+    val qaSelection =
+      if (goalContinuation != null) {
+        goalContinuation.qaSelection
+      } else {
+        input.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
+      }
     val facts =
       PhaseStrategySelectionFacts(
         definition,

@@ -212,6 +212,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode.CACHE_ELIGIBLE
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.FAILED
@@ -683,6 +684,7 @@ internal fun harnessGoalContinuation(branchSetup: BranchSetupTestConfig): Featur
 
 internal data class RuntimeHarnessConfig(
   val seedDurableWorkflow: Boolean = true,
+  val definition: SkeletonDefinition = SkeletonDefinition.GOAL_CHILD,
   val hydratedPlanning: Boolean = true,
   val allowOwningWrites: Boolean = false,
   val branchSetup: BranchSetupTestConfig = BranchSetupTestConfig(),
@@ -1429,15 +1431,7 @@ private fun runnerExecutionEntry(
       repositories,
     )
   }
-  val facts =
-    PhaseStrategySelectionFacts(
-      SkeletonDefinition.GOAL_CHILD,
-      setOf(
-        config.codeReviewMode,
-        config.goalContinuation.qualityGateSelection,
-        config.goalContinuation.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
-      ),
-    )
+  val facts = runnerSelectionFacts(config)
   val inputs =
     resolver.resolveInputs(
       config.repoRoot,
@@ -1463,6 +1457,17 @@ private fun runnerExecutionEntry(
   }
   return FeatureTaskRuntimeExecutionEntry(database, fixture.admission, resolver, repositories)
 }
+
+private fun runnerSelectionFacts(config: RuntimeHarnessConfig): PhaseStrategySelectionFacts =
+  PhaseStrategySelectionFacts(
+    config.definition,
+    setOfNotNull(
+      config.codeReviewMode,
+      config.goalContinuation.qualityGateSelection,
+      config.goalContinuation.qaSelection
+        ?: FeatureTaskRuntimeQaSelection.AUTO.takeIf { PhaseSlot.QA in config.definition.slots },
+    ),
+  )
 
 private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
   val resolver = ValidationGateResolver { listOf(kotlinPackWithValidationGate()) }

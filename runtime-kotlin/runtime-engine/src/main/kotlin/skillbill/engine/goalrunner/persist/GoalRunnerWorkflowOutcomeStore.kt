@@ -12,6 +12,7 @@ import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -69,7 +70,11 @@ interface GoalRunnerWorkflowOutcomeStore :
   GoalRunnerReviewOutcomeStore,
   GoalRunnerWorkflowProgressStore,
   GoalRunnerWorkflowLedgerWriteStore,
-  GoalRunnerWorkflowOutcomeMutationStore
+  GoalRunnerWorkflowOutcomeMutationStore {
+  fun hasQaComposedPlan(workflowId: String): Boolean
+
+  fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
+}
 
 interface GoalRunnerAttemptLedgerStore {
   fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary

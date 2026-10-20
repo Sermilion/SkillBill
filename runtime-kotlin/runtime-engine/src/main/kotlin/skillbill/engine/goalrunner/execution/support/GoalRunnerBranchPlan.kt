@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.support
 
+import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
@@ -18,6 +19,7 @@ internal data class GoalRunnerBranchPlan(
 
 fun DecompositionManifest.toPullRequestRequest(
   repoRoot: Path,
+  goalQaSummary: GoalQaSummary = GoalQaSummary.NotRecorded,
   qaSummary: (DecompositionSubtask) -> GoalSubtaskQaSummary? = { null },
 ): GoalPullRequestRequest {
   val title = "[$issueKey] ${featureName.toPullRequestTitle()}"
@@ -46,12 +48,11 @@ fun DecompositionManifest.toPullRequestRequest(
           "this pull request was opened.",
       )
       val qa = subtasks.mapNotNull { subtask -> qaSummary(subtask)?.let { subtask.name to it } }
-      if (qa.isNotEmpty()) {
-        appendLine()
-        appendLine("## Mobile QA")
-        appendLine()
-        qa.forEach { (name, summary) -> appendLine("- $name: ${summary.pullRequestText()}") }
-      }
+      appendLine()
+      appendLine("## Mobile QA")
+      appendLine()
+      appendLine("- Goal: ${goalQaSummary.pullRequestText()}")
+      qa.forEach { (name, summary) -> appendLine("- $name: ${summary.pullRequestText()}") }
     }
   return GoalPullRequestRequest(
     repoRoot = repoRoot,
@@ -103,4 +104,11 @@ private fun GoalSubtaskQaSummary.pullRequestText(): String =
         outcome.qaFixAttempts.takeIf { it > 0 }?.let { ", after $it qa_fix attempt" + if (it == 1) "" else "s" }
       "${outcome.outcome.wireValue}$reason${repairs.orEmpty()}"
     }
+  }
+
+private fun GoalQaSummary.pullRequestText(): String =
+  when (this) {
+    GoalQaSummary.RanPerSubtask -> "QA ran per subtask (pre-SKILL-431 children)"
+    GoalQaSummary.NotRecorded -> "no goal-level QA outcome recorded"
+    is GoalQaSummary.Recorded -> GoalSubtaskQaSummary.Recorded(outcome).pullRequestText()
   }

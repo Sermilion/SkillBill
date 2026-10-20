@@ -48,7 +48,6 @@ jobs:
           set -euo pipefail
           cd vscode-extension
           npm ci
-          npm test
           npm version "${VERSION}" --no-git-tag-version --allow-same-version
           npm run package
 

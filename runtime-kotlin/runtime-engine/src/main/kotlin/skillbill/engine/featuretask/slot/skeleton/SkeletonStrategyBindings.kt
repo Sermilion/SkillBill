@@ -71,8 +71,9 @@ object SkeletonStrategyBindings {
       SkeletonDefinition.GOAL_CHILD_REVISION_2 to goalChildRevision2Bindings,
       SkeletonDefinition.STANDALONE to
         standaloneRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
-      SkeletonDefinition.GOAL_CHILD to
+      SkeletonDefinition.GOAL_CHILD_REVISION_3 to
         goalChildRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
+      SkeletonDefinition.GOAL_CHILD to goalChildRevision2Bindings,
       SkeletonDefinition.REVIEW to
         mapOf(
           PhaseSlot.STANDALONE_REVIEW to
@@ -96,6 +97,12 @@ object SkeletonStrategyBindings {
             PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
         ),
       SkeletonDefinition.QA to mapOf(PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
+      SkeletonDefinition.GOAL_QA to
+        mapOf(
+          PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
+          PhaseSlot.QUALITY_GATE to
+            PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
+        ),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),

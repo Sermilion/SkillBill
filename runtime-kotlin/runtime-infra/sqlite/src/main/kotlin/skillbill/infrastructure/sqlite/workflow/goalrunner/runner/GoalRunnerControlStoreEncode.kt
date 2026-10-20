@@ -75,6 +75,7 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
     "goal_completed_at" to goalCompletedAt,
     "goal_pull_request_url" to goalPullRequestUrl,
     GoalRunnerControlPayloadKeys.BLOCKED_REASON to goalBlockedReason,
+    GoalRunnerControlPayloadKeys.QA_SELECTION to qaSelection?.wireValue,
   )
 
 private fun leaseTimestamp(

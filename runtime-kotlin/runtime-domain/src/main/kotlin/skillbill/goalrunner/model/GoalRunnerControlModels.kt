@@ -4,6 +4,7 @@ import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
@@ -99,6 +100,7 @@ data class GoalRunnerControlState(
   val goalCompletedAt: String? = null,
   val goalPullRequestUrl: String? = null,
   val goalBlockedReason: String? = null,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
 ) {
   init {
     goalCompletedAt?.let { require(it.isNotBlank()) { "goalCompletedAt must not be blank when provided." } }

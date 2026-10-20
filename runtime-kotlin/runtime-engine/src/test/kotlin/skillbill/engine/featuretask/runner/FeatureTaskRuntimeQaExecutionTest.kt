@@ -28,6 +28,7 @@ import skillbill.scaffold.model.QaPlatform
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
 import kotlin.test.Test
@@ -308,6 +309,7 @@ class FeatureTaskRuntimeQaExecutionTest {
     val harness =
       telemetryRunnerHarness(
         RuntimeHarnessConfig(
+          definition = SkeletonDefinition.GOAL_CHILD_REVISION_3,
           repoRoot = repo.resolve(verdict.wireValue),
           branchSetup = branch,
           launcher = launcher,
