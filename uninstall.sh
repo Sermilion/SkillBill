@@ -779,20 +779,27 @@ remove_install_state() {
   if [[ ! -d "$SKILL_BILL_STATE_DIR" ]]; then
     return 0
   fi
+  # Reinstall clears only what the installer regenerates. Everything else under
+  # the state dir (QA workspaces and receipts, device leases, desktop settings,
+  # copied-in source) is runtime or user state the app still needs afterwards.
+  if [[ "${SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" == "1" ]]; then
+    info "Clearing regenerated install output for reinstall (preserving runtime and user state)."
+    local generated
+    for generated in \
+      "runtime" \
+      "installed-skills" \
+      ".candidate-source" \
+      "native-agent-link-inventory.json" \
+      "native-agent-link-inventory.json.lock"; do
+      rm -rf "${SKILL_BILL_STATE_DIR:?}/$generated"
+    done
+    ok "  cleared regenerated install output under $SKILL_BILL_STATE_DIR"
+    return 0
+  fi
+
   info "Clearing skill-bill runtime/install state (preserving databases and backups)."
 
   local preserved=("backups")
-  if [[ "${SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" == "1" ]]; then
-    preserved+=(
-      "skills"
-      "platform-packs"
-      "orchestration"
-      "agent-addons"
-      "baseline-manifest.json"
-    )
-    info "Preserving copied-in source for reinstall."
-  fi
-
   local is_preserved entry name keep
   for entry in "$SKILL_BILL_STATE_DIR"/* "$SKILL_BILL_STATE_DIR"/.[!.]* "$SKILL_BILL_STATE_DIR"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue

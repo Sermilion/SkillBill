@@ -724,11 +724,12 @@ migrate_legacy_config_to_durable_path() {
 }
 
 # Every install starts from a clean slate: removes agent symlinks, native
-# subagent symlinks, MCP registrations, runtime launchers, and wipes
-# ~/.skill-bill/ (including the installed-skills staging cache, runtime
-# binaries, while preserving the desktop app and persistent state DBs). This guarantees that
-# generator changes — which the staging-cache content hash does not see —
-# actually land on the next install without deleting durable workflow state.
+# subagent symlinks, MCP registrations, runtime launchers, and clears the
+# regenerated install output under ~/.skill-bill/ (the installed-skills staging
+# cache and runtime binaries). This guarantees that generator changes — which
+# the staging-cache content hash does not see — actually land on the next
+# install. Runtime and user state (databases, QA workspaces, desktop settings,
+# copied-in source) stays so the app can still show it after reinstall.
 #
 # Tests and dev iteration can opt out with SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1.
 run_pre_install_uninstall() {
@@ -749,12 +750,9 @@ run_pre_install_uninstall() {
   printf "${CYAN}━━━ Pre-install cleanup ━━━${NC}\n"
   echo ""
   info "Running uninstall.sh first so every install starts from a clean slate."
-  # PRESERVE the copied-in self-contained source (skills/, platform-packs/,
-  # orchestration/ + the reserved baseline-manifest path) and durable *.db state
-  # across the pre-install wipe, while still clearing runtime/ and
-  # installed-skills/.
-  # Explicit uninstall also preserves databases and backups; this flag keeps
-  # copied-in source available for reinstall.
+  # This flag limits the wipe to regenerated install output (runtime/,
+  # installed-skills/, the native link inventory). Explicit uninstall still
+  # clears everything except databases and backups.
   SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 SKILL_BILL_PRESERVE_DESKTOP_APP=1 bash "$uninstall_script"
 }
 
