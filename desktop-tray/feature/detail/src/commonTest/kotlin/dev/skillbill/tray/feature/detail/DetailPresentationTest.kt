@@ -1,8 +1,10 @@
 package dev.skillbill.tray.feature.detail
 
+import dev.skillbill.tray.core.domain.model.ExecutionInstance
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.QaVerdict
 import dev.skillbill.tray.core.domain.model.ReasonRestoration
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.WorkItem
@@ -19,6 +21,25 @@ import kotlin.time.Instant
 
 class DetailPresentationTest {
   private fun untitled(issueKey: String? = "SKILL-phase") = detail(workItem("a", issueKey = issueKey)).copy(featureTitle = null)
+
+  @Test
+  fun `each run in a qa phase history reads its own stored verdict`() {
+    val latest = workItem("qa-run", Lifecycle.TERMINAL, family = null, issueKey = null)
+      .copy(scope = ExecutionScope.STANDALONE_PHASE, phaseId = "qa", executionId = "execution-latest", qaVerdict = QaVerdict.ATTEMPTED)
+    fun run(id: String, state: String, verdict: QaVerdict?) =
+      ExecutionInstance("invocation-$id", id, state, fixtureInstant, fixtureInstant, fixtureInstant, null, qaVerdict = verdict)
+
+    assertEquals(
+      listOf("Incomplete", "Findings", "Skipped", "Complete", "Failed"),
+      listOf(
+        executionOutcomeLabel(latest, run("execution-latest", "terminal", QaVerdict.ATTEMPTED)),
+        executionOutcomeLabel(latest, run("execution-older-1", "terminal", QaVerdict.FINDINGS)),
+        executionOutcomeLabel(latest, run("execution-older-2", "terminal", QaVerdict.SKIPPED)),
+        executionOutcomeLabel(latest, run("execution-older-3", "terminal", null)),
+        executionOutcomeLabel(latest, run("execution-older-4", "failed", QaVerdict.ATTEMPTED)),
+      ),
+    )
+  }
 
   @Test
   fun `a standalone phase is titled by its phase and a goal by its kind`() {

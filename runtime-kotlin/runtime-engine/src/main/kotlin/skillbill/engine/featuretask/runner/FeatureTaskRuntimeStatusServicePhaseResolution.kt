@@ -45,7 +45,10 @@ fun phaseStatuses(
 fun goalChildHiddenPhaseIds(
   goalChild: Boolean,
   recordedPhaseIds: Set<String>,
-): Set<String> = if (goalChild) PhaseSlot.QA.steps.toSet() - recordedPhaseIds else emptySet()
+): Set<String> = if (goalChild) GOAL_FINISH_OWNED_PHASE_IDS - recordedPhaseIds else emptySet()
+
+private val GOAL_FINISH_OWNED_PHASE_IDS: Set<String> =
+  listOf(PhaseSlot.QA, PhaseSlot.PULL_REQUEST, PhaseSlot.MONITOR).flatMap(PhaseSlot::steps).toSet()
 
 fun resolveCurrentPhaseId(
   terminalDecomposeRecorded: Boolean,

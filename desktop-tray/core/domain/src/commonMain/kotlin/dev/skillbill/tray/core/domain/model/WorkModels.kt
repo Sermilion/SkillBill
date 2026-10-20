@@ -333,6 +333,7 @@ data class ExecutionInstance(
   val finishedAt: Instant?,
   val result: String?,
   val restoration: ReasonRestoration? = null,
+  val qaVerdict: QaVerdict? = null,
 )
 
 data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)

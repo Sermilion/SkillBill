@@ -18,7 +18,7 @@ enum class FinishedOutcome(val label: String) {
                     "passed" -> PASSED
                     "findings" -> FINDINGS
                     "skipped" -> SKIPPED
-                    "incomplete" -> INCOMPLETE
+                    "incomplete", "attempted" -> INCOMPLETE
                     else -> COMPLETE
                 }
             }

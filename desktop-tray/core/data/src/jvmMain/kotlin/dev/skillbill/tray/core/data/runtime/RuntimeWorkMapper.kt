@@ -157,7 +157,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     ),
     executionHistory = executionHistory.map { ExecutionInstance(it.invocationId, it.executionId, it.lifecycleState,
       it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(), it.finishedAt?.toKotlinInstant(), it.result,
-      it.restoration?.toDomain()) },
+      it.restoration?.toDomain(), it.qaOutcome?.toDomain()) },
     observedAt = observedAt,
     nextCursor = cursor,
     pageOffset = pageOffset,

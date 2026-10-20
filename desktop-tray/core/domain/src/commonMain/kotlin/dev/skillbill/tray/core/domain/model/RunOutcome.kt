@@ -8,7 +8,7 @@ enum class RunOutcome { ACTIVE, PAUSED, BLOCKED, IDLE, COMPLETE, PASSED, FINDING
 
 /**
  * The run's outcome from its lifecycle and, for a finished QA phase, its recorded verdict. A finished QA run that never
- * settled a verdict reads as complete, the most that its record states.
+ * settled a receipt verdict reads as incomplete.
  */
 fun WorkItem.outcome(): RunOutcome = when (lifecycle) {
   Lifecycle.ACTIVE -> RunOutcome.ACTIVE
@@ -17,24 +17,29 @@ fun WorkItem.outcome(): RunOutcome = when (lifecycle) {
   Lifecycle.IDLE -> RunOutcome.IDLE
   Lifecycle.FAILED -> RunOutcome.FAILED
   Lifecycle.CANCELED -> RunOutcome.CANCELLED
-  Lifecycle.TERMINAL -> when (qaVerdict) {
-    QaVerdict.PASSED -> RunOutcome.PASSED
-    QaVerdict.FINDINGS -> RunOutcome.FINDINGS
-    QaVerdict.SKIPPED -> RunOutcome.SKIPPED
-    QaVerdict.INCOMPLETE -> RunOutcome.INCOMPLETE
-    QaVerdict.ATTEMPTED, null -> RunOutcome.COMPLETE
-  }
+  Lifecycle.TERMINAL -> terminalOutcome(qaVerdict)
+}
+
+private fun terminalOutcome(qaVerdict: QaVerdict?): RunOutcome = when (qaVerdict) {
+  QaVerdict.PASSED -> RunOutcome.PASSED
+  QaVerdict.FINDINGS -> RunOutcome.FINDINGS
+  QaVerdict.SKIPPED -> RunOutcome.SKIPPED
+  QaVerdict.INCOMPLETE, QaVerdict.ATTEMPTED -> RunOutcome.INCOMPLETE
+  null -> RunOutcome.COMPLETE
 }
 
 /** Whether the run has ended, so its outcome replaces the step it last reported. */
 fun WorkItem.finished(): Boolean = lifecycle == Lifecycle.TERMINAL || lifecycle == Lifecycle.CANCELED || lifecycle == Lifecycle.FAILED
 
-/** The outcome of one recorded standalone execution, read from the lifecycle state the runtime stored for it. */
-fun standaloneExecutionOutcome(lifecycleState: String): RunOutcome = when (lifecycleState) {
+/**
+ * The outcome of one recorded standalone execution, read from the lifecycle state and, for a QA run, the verdict the
+ * runtime stored for that execution.
+ */
+fun standaloneExecutionOutcome(lifecycleState: String, qaVerdict: QaVerdict? = null): RunOutcome = when (lifecycleState) {
   "active", "running" -> RunOutcome.ACTIVE
   "paused", "runner_interrupted" -> RunOutcome.PAUSED
   "blocked" -> RunOutcome.BLOCKED
   "canceled" -> RunOutcome.CANCELLED
-  "terminal", "completed", "success" -> RunOutcome.COMPLETE
+  "terminal", "completed", "success" -> terminalOutcome(qaVerdict)
   else -> RunOutcome.FAILED
 }

@@ -209,8 +209,9 @@ internal fun standalonePhaseStateSummary(
 ): String =
   when {
     lifecycle != IdeStatusLifecycleState.TERMINAL -> "Standalone phase $phaseId is $recordedState."
-    qaOutcome != null && qaOutcome != StandaloneQaOutcome.ATTEMPTED ->
-      "Standalone phase $phaseId finished with verdict ${qaOutcome.wireValue}."
+    qaOutcome == StandaloneQaOutcome.ATTEMPTED ->
+      "Standalone phase $phaseId finished with verdict ${StandaloneQaOutcome.INCOMPLETE.wireValue}."
+    qaOutcome != null -> "Standalone phase $phaseId finished with verdict ${qaOutcome.wireValue}."
     else -> "Standalone phase $phaseId is complete."
   }
 

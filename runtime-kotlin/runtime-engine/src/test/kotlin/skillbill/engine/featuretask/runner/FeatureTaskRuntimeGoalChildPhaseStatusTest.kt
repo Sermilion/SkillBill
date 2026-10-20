@@ -7,25 +7,25 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import kotlin.test.Test
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeGoalChildPhaseStatusTest {
   @Test
-  fun `goal child subtask presents no qa steps while a standalone feature run keeps them`() {
+  fun `goal child subtask lists no goal finish steps while a standalone feature run keeps them`() {
     val standalone = statusHarness()
     standalone.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     standalone.recordCompleted("audit", 1)
     val standalonePhases = phaseIds(standalone)
-    assertTrue("qa" in standalonePhases && "qa_fix" in standalonePhases)
+    assertTrue(standalonePhases.containsAll(GOAL_FINISH_STEPS + "commit_push"), "Standalone phases: $standalonePhases")
 
     val child = statusHarness()
     child.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recordGoalContinuation(child)
     child.recordCompleted("audit", 1)
     val childPhases = phaseIds(child)
-    assertFalse("qa" in childPhases || "qa_fix" in childPhases, "Goal child phases: $childPhases")
+    assertTrue(childPhases.none { it in GOAL_FINISH_STEPS }, "Goal child phases: $childPhases")
+    assertTrue("commit_push" in childPhases, "Goal child phases: $childPhases")
   }
 
   private fun phaseIds(harness: StatusHarness): List<String> =
@@ -54,5 +54,6 @@ class FeatureTaskRuntimeGoalChildPhaseStatusTest {
   private companion object {
     const val WORKFLOW_ID = "wftr-20260603-status-0001"
     const val SESSION_ID = "ftr-status-001"
+    val GOAL_FINISH_STEPS = listOf("qa", "qa_fix", "pr", "monitor", "monitor_fix")
   }
 }

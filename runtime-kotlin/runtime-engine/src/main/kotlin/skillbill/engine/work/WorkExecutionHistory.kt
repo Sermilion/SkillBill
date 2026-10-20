@@ -106,6 +106,7 @@ internal fun workExecutionHistory(
           reason.text,
           reason.restoration,
           it.runSequence,
+          it.qaOutcome,
         )
       }
   } else {

@@ -27,11 +27,15 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
- * The outcome of one run in a standalone phase's history. The run the item describes carries its recorded verdict; an older
- * run only has its stored lifecycle state.
+ * The outcome of one run in a standalone phase's history. The run the item describes uses the item's outcome; an older run
+ * reads its own stored lifecycle state and QA verdict.
  */
 internal fun executionOutcomeLabel(item: WorkItem, instance: ExecutionInstance): String =
-  if (instance.executionId == item.executionId) item.outcomeLabel() else standaloneExecutionOutcome(instance.lifecycleState).label()
+  if (instance.executionId == item.executionId) {
+    item.outcomeLabel()
+  } else {
+    standaloneExecutionOutcome(instance.lifecycleState, instance.qaVerdict).label()
+  }
 
 internal data class DetailDuration(val label: String, val value: String, val note: String)
 

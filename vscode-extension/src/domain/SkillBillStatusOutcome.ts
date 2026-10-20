@@ -12,6 +12,8 @@ export function finishedOutcome(lifecycle: string, qaOutcome: string | undefined
     case "skipped":
     case "incomplete":
       return qaOutcome;
+    case "attempted":
+      return "incomplete";
     default:
       return "complete";
   }

@@ -14,7 +14,7 @@ class OutcomeLabelsTest {
   @Test
   fun `finished runs read as their real outcome, never as a lifecycle name`() {
     assertEquals(
-      listOf("Skipped", "Passed", "Findings", "Incomplete", "Complete", "Complete", "Cancelled", "Failed"),
+      listOf("Skipped", "Passed", "Findings", "Incomplete", "Incomplete", "Complete", "Cancelled", "Failed"),
       listOf(
         qa(QaVerdict.SKIPPED).outcomeLabel(),
         qa(QaVerdict.PASSED).outcomeLabel(),
