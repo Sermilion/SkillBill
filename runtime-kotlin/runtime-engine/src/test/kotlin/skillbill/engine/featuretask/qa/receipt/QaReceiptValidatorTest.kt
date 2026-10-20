@@ -87,6 +87,41 @@ class QaReceiptValidatorTest {
   }
 
   @Test
+  fun `an incomplete untested_flows claim records passed when every admitted criterion passed on an exercised flow`() {
+    val untestedFlow = qaTestFlow() + mapOf("id" to "extra", "status" to "untested", "untested_reason" to "No fixture.")
+    val wire =
+      qaTestReceipt(QaVerdict.INCOMPLETE) +
+        mapOf("incomplete_reason" to "untested_flows", "flows" to listOf(qaTestFlow(), untestedFlow))
+
+    val receipt = validator.validate(qaTestJson(wire), expected.copy(acceptanceCriteria = setOf("AC-1")))
+
+    assertEquals(QaVerdict.PASSED, receipt.verdict)
+    assertEquals(null, receipt.incompleteReason)
+    assertEquals(null, receipt.wire["incomplete_reason"])
+    assertTrue(receipt.warnings.single().endsWith("recorded passed."))
+  }
+
+  @Test
+  fun `an incomplete claim stays incomplete unless only untested flows kept every admitted criterion from passing`() {
+    val untestedFlow = qaTestFlow() + mapOf("id" to "extra", "status" to "untested", "untested_reason" to "No fixture.")
+    val untested = qaTestReceipt(QaVerdict.INCOMPLETE) + ("flows" to listOf(qaTestFlow(), untestedFlow))
+    val cases =
+      listOf(
+        untested + ("incomplete_reason" to "untested_flows") to emptySet(),
+        untested + ("incomplete_reason" to "untested_flows") to setOf("AC-1", "AC-2"),
+        untested + ("incomplete_reason" to "device_lost") to setOf("AC-1"),
+        untested + mapOf("incomplete_reason" to "untested_flows", "target" to null) to setOf("AC-1"),
+      )
+
+    cases.forEach { (wire, criteria) ->
+      val receipt = validator.validate(qaTestJson(wire), expected.copy(acceptanceCriteria = criteria))
+
+      assertEquals(QaVerdict.INCOMPLETE, receipt.verdict)
+      assertEquals(wire["incomplete_reason"], receipt.incompleteReason?.wireValue)
+    }
+  }
+
+  @Test
   fun `production_only is an accepted skip reason`() {
     val receipt =
       validator.validate(qaTestJson(qaTestReceipt(QaVerdict.SKIPPED) + ("skip_reason" to "production_only")), expected)

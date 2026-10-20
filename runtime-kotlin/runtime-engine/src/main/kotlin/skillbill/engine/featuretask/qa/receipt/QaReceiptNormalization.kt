@@ -30,6 +30,7 @@ internal fun normalizeQaReceiptClaims(
     receipt.wire.toMutableMap().apply {
       if (demoted.isNotEmpty()) put(QaReceiptPayloadKeys.FLOWS, demotedFlowsWire(receipt.wire, demoted))
       if (verdict != receipt.verdict) put(QaReceiptPayloadKeys.VERDICT, verdict.wireValue)
+      if (verdict != QaVerdict.INCOMPLETE) remove(QaReceiptPayloadKeys.INCOMPLETE_REASON)
       if (verdict == QaVerdict.INCOMPLETE && receipt.verdict != QaVerdict.INCOMPLETE) {
         put(QaReceiptPayloadKeys.INCOMPLETE_REASON, honest.incompleteReason.wireValue)
         put(
@@ -97,8 +98,43 @@ private fun honestVerdict(
       } else {
         HonestVerdict(QaVerdict.FINDINGS_OPEN)
       }
-    QaVerdict.SKIPPED, QaVerdict.INCOMPLETE -> HonestVerdict(receipt.verdict)
+    QaVerdict.INCOMPLETE -> incompleteVerdict(receipt, flows, acceptanceCriteria, warnings)
+    QaVerdict.SKIPPED -> HonestVerdict(receipt.verdict)
   }
+
+private fun incompleteVerdict(
+  receipt: QaReceipt,
+  flows: List<QaFlow>,
+  acceptanceCriteria: Set<String>,
+  warnings: MutableList<String>,
+): HonestVerdict {
+  val coversEveryCriterion =
+    receipt.incompleteReason == QaIncompleteReason.UNTESTED_FLOWS &&
+      acceptanceCriteria.isNotEmpty() &&
+      receipt.hasArtifact &&
+      receipt.target != null &&
+      receipt.findings.isEmpty() &&
+      receipt.assertions.none { it.outcome == QaAssertionOutcome.FAIL } &&
+      (acceptanceCriteria - passingAssertions(receipt, flows).flatMap(QaAssertion::criteria).toSet()).isEmpty()
+  if (!coversEveryCriterion) return HonestVerdict(QaVerdict.INCOMPLETE)
+  val untestedNames = flows.filter { it.status == QaFlowStatus.UNTESTED }.joinToString { "'${it.name}'" }
+  warnings +=
+    "The QA receipt claimed incomplete for untested flow(s) $untestedNames, but every acceptance criterion passed " +
+    "on an exercised flow; recorded passed."
+  return HonestVerdict(QaVerdict.PASSED)
+}
+
+private fun passingAssertions(
+  receipt: QaReceipt,
+  flows: List<QaFlow>,
+): List<QaAssertion> {
+  val failedFlows =
+    receipt.assertions.filter { it.outcome == QaAssertionOutcome.FAIL }.map(QaAssertion::flowId).toSet()
+  val exercised = flows.filter { it.status == QaFlowStatus.EXERCISED }.map(QaFlow::id).toSet()
+  return receipt.assertions.filter { assertion ->
+    assertion.outcome == QaAssertionOutcome.PASS && assertion.flowId in exercised && assertion.flowId !in failedFlows
+  }
+}
 
 private fun passedVerdict(
   receipt: QaReceipt,
@@ -108,11 +144,7 @@ private fun passedVerdict(
 ): HonestVerdict {
   val failedFlows =
     receipt.assertions.filter { it.outcome == QaAssertionOutcome.FAIL }.map(QaAssertion::flowId).toSet()
-  val exercised = flows.filter { it.status == QaFlowStatus.EXERCISED }.map(QaFlow::id).toSet()
-  val passingAssertions =
-    receipt.assertions.filter { assertion ->
-      assertion.outcome == QaAssertionOutcome.PASS && assertion.flowId in exercised && assertion.flowId !in failedFlows
-    }
+  val passingAssertions = passingAssertions(receipt, flows)
   val uncovered = acceptanceCriteria - passingAssertions.flatMap(QaAssertion::criteria).toSet()
   val untested = flows.filter { it.status == QaFlowStatus.UNTESTED }
   val untestedNames = untested.joinToString { "'${it.name}'" }
