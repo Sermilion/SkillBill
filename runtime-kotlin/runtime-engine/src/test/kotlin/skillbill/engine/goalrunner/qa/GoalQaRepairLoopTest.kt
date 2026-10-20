@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
 import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.receipt.QaSettledRun
 import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.engine.featuretask.qa.receipt.qaTestEvidencePrefix
 import skillbill.engine.featuretask.qa.receipt.qaTestJson
@@ -28,6 +29,8 @@ import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
+import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
+import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -36,6 +39,7 @@ import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.process.IdentifierGeneratorPort
@@ -159,8 +163,59 @@ class GoalQaRepairLoopTest {
     assertContains(assertNotNull(outcome.reason), "remain after 3 qa_fix attempts")
   }
 
+  @Test
+  fun `findings QA cannot fix in three attempts are recorded as not fixed beside the ones it fixed`() {
+    var repairs = 0
+    val fixture =
+      Fixture(
+        verdicts = List(4) { QaVerdict.FINDINGS_OPEN },
+        findingIds = listOf(listOf("F-1", "F-2"), listOf("F-2"), listOf("F-2"), listOf("F-2")),
+        onQaFix = { git -> git.repositoryFingerprintValue = (++repairs + 4).toString().repeat(64) },
+        qaFixOutput = { "F-1: fixed: bound the user name.\nF-2: fixed: retried the settings crash." },
+      )
+
+    fixture.gate.run(fixture.state, fixture.request)
+
+    assertEquals("validate", fixture.startedPhases().last())
+    val outcome = assertNotNull(fixture.storedOutcome())
+    assertEquals(StandaloneQaOutcome.FINDINGS, outcome.outcome)
+    assertEquals(3, outcome.qaFixAttempts)
+    assertEquals(
+      listOf("F-1" to FeatureTaskQaFindingStatus.FIXED, "F-2" to FeatureTaskQaFindingStatus.NOT_FIXED),
+      outcome.findings.map { it.id to it.status },
+    )
+    val open = outcome.notFixedFindings.single()
+    assertEquals("The F-2 screen stays blank.", open.title)
+    assertContains(assertNotNull(open.evidencePath), "home.png")
+    val body = fixture.state.manifest.toPullRequestRequest(home, GoalQaSummary.Recorded(outcome)).body
+    assertContains(body, "fixed: F-1")
+    assertContains(body, "not fixed, review them yourself: F-2 \"The F-2 screen stays blank.\"")
+  }
+
+  @Test
+  fun `a goal QA that passes after qa_fix records every finding it caught as fixed`() {
+    val fixture =
+      Fixture(
+        verdicts = listOf(QaVerdict.FINDINGS_OPEN, QaVerdict.PASSED),
+        findingIds = listOf(listOf("F-1", "F-2"), emptyList()),
+        onQaFix = { git -> git.repositoryFingerprintValue = REPAIRED_TREE },
+        qaFixOutput = { "F-1: fixed: bound the user name.\nF-2: fixed: retried the settings crash." },
+      )
+
+    fixture.gate.run(fixture.state, fixture.request)
+
+    val outcome = assertNotNull(fixture.storedOutcome())
+    assertEquals(StandaloneQaOutcome.PASSED, outcome.outcome)
+    assertEquals(1, outcome.qaFixAttempts)
+    assertEquals(
+      listOf("F-1" to FeatureTaskQaFindingStatus.FIXED, "F-2" to FeatureTaskQaFindingStatus.FIXED),
+      outcome.findings.map { it.id to it.status },
+    )
+  }
+
   private inner class Fixture(
     verdicts: List<QaVerdict>,
+    findingIds: List<List<String>>? = null,
     qaFixOutput: () -> String,
     onQaFix: (RecordingWorkflowGitOperations) -> Unit = {},
     onValidate: (RecordingWorkflowGitOperations) -> Unit = {},
@@ -192,8 +247,9 @@ class GoalQaRepairLoopTest {
                   checkNotNull(git.repositoryFingerprintValue),
                   qaTestEvidencePrefix("qa-$qaVisits"),
                 )
+              val receipt = qaTestReceipt(verdicts[qaVisits - 1], identity)
               workspaces.receipt =
-                qaTestJson(qaTestReceipt(verdicts[qaVisits - 1], identity))
+                qaTestJson(findingIds?.let { receipt.withFindings(it[qaVisits - 1]) } ?: receipt)
                   .replace("AC-1", "AC-001")
                   .replace("\"standalone\"", "\"auto\"")
               "QA settled."
@@ -227,7 +283,7 @@ class GoalQaRepairLoopTest {
 
     init {
       if (recordedAttempts > 0) {
-        outcomes.recordSettled(PARENT, QaVerdict.FINDINGS_OPEN, null, recordedAttempts, PREVIOUS_TREE)
+        outcomes.recordSettled(PARENT, QaVerdict.FINDINGS_OPEN, null, recordedAttempts, QaSettledRun(PREVIOUS_TREE))
       }
       val pack =
         kotlinPackWithValidationGate().copy(
@@ -292,6 +348,19 @@ class GoalQaRepairLoopTest {
       launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }.filter { phaseIdFromPrompt(it) == phase }
 
     fun storedOutcome(): FeatureTaskQaOutcome? = database.read { it.featureTaskQaOutcomes.find(PARENT) }
+  }
+
+  private fun Map<String, Any?>.withFindings(ids: List<String>): Map<String, Any?> {
+    if (ids.isEmpty()) return this
+    val template = (this["findings"] as List<*>).single() as Map<*, *>
+    return this +
+      (
+        "findings" to
+          ids.map { id ->
+            template.entries.associate { (key, value) -> key.toString() to value } +
+              mapOf("id" to id, "observed" to "The $id screen stays blank.")
+          }
+      )
   }
 
   private class DatabaseGoalQaOutcomes(

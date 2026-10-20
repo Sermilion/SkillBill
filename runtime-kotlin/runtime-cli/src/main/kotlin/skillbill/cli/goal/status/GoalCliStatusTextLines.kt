@@ -27,6 +27,14 @@ internal fun StringBuilder.appendOperatorSurfaceLines(projection: GoalRunnerStat
   }
 }
 
+internal fun StringBuilder.appendQaFindingsLines(projection: GoalRunnerStatusProjection) {
+  val findings = projection.goalQaResult?.findings.orEmpty()
+  if (findings.isEmpty()) return
+  val (fixed, notFixed) = findings.partition { it.fixed }
+  val notFixedIds = notFixed.takeIf { it.isNotEmpty() }?.joinToString(",", prefix = " not_fixed_ids=") { it.id }
+  appendLine("qa_findings: fixed=${fixed.size} not_fixed=${notFixed.size}${notFixedIds.orEmpty()}")
+}
+
 internal fun StringBuilder.appendDiffStatusLines(
   projection: GoalRunnerStatusProjection,
   watchIndex: String? = null,

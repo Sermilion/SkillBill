@@ -22,17 +22,25 @@ class FeatureTaskQaOutcomeRecorder(
     verdict: QaVerdict,
     reason: String?,
     qaFixAttempts: Int,
-    testedTreeIdentity: String?,
+    tested: QaSettledRun,
   ) {
     database.transaction { unitOfWork ->
-      unitOfWork.featureTaskQaOutcomes.upsert(
+      val outcomes = unitOfWork.featureTaskQaOutcomes
+      val previous = outcomes.find(workflowId)?.findings.orEmpty()
+      outcomes.upsert(
         FeatureTaskQaOutcome(
           workflowId,
           FeatureTaskQaOutcomeRecords.outcome(verdict),
           reason?.takeIf(String::isNotBlank),
           qaFixAttempts,
-          testedTreeIdentity,
+          tested.treeIdentity,
           "${clock.instant()}",
+          FeatureTaskQaOutcomeRecords.mergedFindings(
+            previous,
+            tested.receiptVerdict,
+            tested.receipt,
+            tested.receiptPath,
+          ),
         ),
       )
     }
@@ -62,3 +70,10 @@ class FeatureTaskQaOutcomeRecorder(
     }
   }
 }
+
+data class QaSettledRun(
+  val treeIdentity: String?,
+  val receiptVerdict: QaVerdict = QaVerdict.INCOMPLETE,
+  val receipt: Map<String, Any?> = emptyMap(),
+  val receiptPath: String? = null,
+)

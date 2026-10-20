@@ -418,7 +418,9 @@ class FeatureTaskRuntimePhaseStateRecorder(
     unitOfWork: UnitOfWork,
     request: FeatureTaskRuntimePhaseStateRequest,
   ) {
-    FeatureTaskQaOutcomeRecords.settled(request, clock.instant())?.let(unitOfWork.featureTaskQaOutcomes::upsert)
+    val outcomes = unitOfWork.featureTaskQaOutcomes
+    FeatureTaskQaOutcomeRecords.settled(request, clock.instant(), outcomes.find(request.workflowId))
+      ?.let(outcomes::upsert)
   }
 
   private fun recordCompletedPhaseWrite(

@@ -150,7 +150,10 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
         result.audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) })
     },
     goalQa = goal?.goalQaResult?.let { qa ->
-      GoalQaResult(qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant())
+      GoalQaResult(
+        qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
+        qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePath, it.fixed) },
+      )
     },
     latestActivity = LatestActivity(
       event = goal?.latestObservabilityEvent?.let { ActivityEvent(it.workflowPhase, it.workerRole, it.activitySummary, it.timestamp?.toKotlinInstant()) },

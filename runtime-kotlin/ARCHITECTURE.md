@@ -1340,7 +1340,13 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   three `qa_fix` attempts are consumed, the `qa` output carries `qa_repairs_exhausted` and
   `QaVerdictRule` advances with the open findings reported. A `qa_fix` attempt also updates the
   parent's `feature_task_qa_outcomes.qa_fix_attempts`, and a relaunched goal seeds its repair state
-  from that count, so the three-attempt cap spans goal processes. When the QA loop leaves the tree
+  from that count, so the three-attempt cap spans goal processes. Each settled goal `qa` round
+  also merges its receipt into `feature_task_qa_outcomes.findings_summary`
+  (`FeatureTaskQaOutcomeRecords.mergedFindings`): receipt findings are `not_fixed`, and a stored
+  finding missing from a `passed` or `findings_open` receipt becomes `fixed`. The goal status
+  projection exposes that list as `GoalRunnerQaResult.findings` for the desktop QA findings
+  section and the `goal status` `qa_findings:` line, and the PR body names the not-fixed ones.
+  When the QA loop leaves the tree
   different from the one it started on, the gate then runs `VALIDATION` once through
   `runForGoal`. Validation repairs never re-run QA; a validation run that changes the tree QA
   tested adds a warning instead. The `qa` output's `qa_warnings` also lists capability-unavailable

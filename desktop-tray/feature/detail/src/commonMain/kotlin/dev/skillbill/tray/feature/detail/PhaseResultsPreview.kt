@@ -16,6 +16,7 @@ import dev.skillbill.tray.core.designsystem.DesignSystemTheme
 import dev.skillbill.tray.core.designsystem.border
 import dev.skillbill.tray.core.designsystem.canvas
 import dev.skillbill.tray.core.designsystem.panel
+import dev.skillbill.tray.core.domain.model.GoalQaFinding
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
 import dev.skillbill.tray.core.domain.model.ReviewFinding
@@ -53,7 +54,13 @@ private fun PhaseResultsWithFindingsPreview() = PhaseResultsPreviewFrame(
       audit = PhaseConclusion(verdict = "gaps_found", summary = "AC-003 has no test.", detail = null, attemptCount = 1),
     ),
   ),
-  qa = GoalQaResult("findings", "Login flow fails after a cold start on the emulator.", 2, Instant.parse("2026-10-20T10:15:30Z")),
+  qa = GoalQaResult(
+    "findings", "findings left open: F-2", 3, Instant.parse("2026-10-20T10:15:30Z"),
+    findings = listOf(
+      GoalQaFinding("F-1", "The login button does nothing after a cold start.", "/home/me/.skill-bill/qa/repo/run-1/login.png", fixed = true),
+      GoalQaFinding("F-2", "The home screen stays blank after sign-in.", "/home/me/.skill-bill/qa/repo/run-4/home.png", fixed = false),
+    ),
+  ),
   subtaskName = mapOf(1 to "Persist pause state", 2 to "Retry flaky store reads")::get,
 )
 
@@ -67,7 +74,13 @@ private fun PhaseResultsAllClearPreview() = PhaseResultsPreviewFrame(
       audit = PhaseConclusion(verdict = "satisfied", summary = "All criteria met.", detail = null, attemptCount = 1),
     ),
   ),
-  qa = GoalQaResult("passed", null, 0, Instant.parse("2026-10-20T10:15:30Z")),
+  qa = GoalQaResult(
+    "passed", null, 1, Instant.parse("2026-10-20T10:15:30Z"),
+    findings = listOf(
+      GoalQaFinding("F-1", "The login button does nothing after a cold start.", null, fixed = true),
+      GoalQaFinding("F-2", "The home screen stays blank after sign-in.", null, fixed = true),
+    ),
+  ),
   subtaskName = { "Add phase results to goal activity" },
 )
 
@@ -91,6 +104,7 @@ private fun PhaseResultsPreviewFrame(results: List<SubtaskPhaseResults>, qa: Goa
       ) {
         DesignLabel("Goal activity")
         PhaseResultsSection(results, qa, subtaskName)
+        QaFindingsSection(qa)
       }
     }
   }

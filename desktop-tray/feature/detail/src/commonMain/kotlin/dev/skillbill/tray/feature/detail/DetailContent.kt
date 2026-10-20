@@ -333,6 +333,7 @@ private fun LoadedDetail(
           if (goalBlocked && goalBlockReason == null) Text("The full block reason was not saved for this attempt.", color = muted, fontSize = 12.sp)
           activity.forEach { (label, value) -> DesignKv(label, value) }
           PhaseResultsSection(detail.phaseResults, detail.goalQa) { id -> detail.subtasks.firstOrNull { it.id == id }?.name }
+          QaFindingsSection(detail.goalQa)
           LazyColumn(state = executionScroll, modifier = Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(detail.executionHistory, key = { detail.key("execution", "${it.invocationId}:${it.executionId}") }) { instance ->
               val index = detail.executionHistory.indexOf(instance)

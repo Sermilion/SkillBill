@@ -9,6 +9,7 @@ data class FeatureTaskQaOutcome(
   val qaFixAttempts: Int,
   val testedTreeIdentity: String?,
   val recordedAt: String,
+  val findings: List<FeatureTaskQaFinding> = emptyList(),
 ) {
   init {
     require(workflowId.isNotBlank()) { "FeatureTaskQaOutcome.workflowId must not be blank." }
@@ -16,7 +17,38 @@ data class FeatureTaskQaOutcome(
     require(reason == null || reason.isNotBlank()) { "FeatureTaskQaOutcome.reason must not be blank." }
   }
 
+  val fixedFindings: List<FeatureTaskQaFinding>
+    get() = findings.filter { it.status == FeatureTaskQaFindingStatus.FIXED }
+
+  val notFixedFindings: List<FeatureTaskQaFinding>
+    get() = findings.filter { it.status == FeatureTaskQaFindingStatus.NOT_FIXED }
+
   companion object {
     const val MAX_QA_FIX_ATTEMPTS: Int = 3
+  }
+}
+
+data class FeatureTaskQaFinding(
+  val id: String,
+  val title: String,
+  val affectedCriteria: List<String>,
+  val evidencePaths: List<String>,
+  val receiptPath: String?,
+  val status: FeatureTaskQaFindingStatus,
+) {
+  init {
+    require(id.isNotBlank()) { "FeatureTaskQaFinding.id must not be blank." }
+  }
+
+  val evidencePath: String? get() = evidencePaths.firstOrNull() ?: receiptPath
+}
+
+enum class FeatureTaskQaFindingStatus(val wireValue: String) {
+  FIXED("fixed"),
+  NOT_FIXED("not_fixed"),
+  ;
+
+  companion object {
+    fun fromWire(value: String?): FeatureTaskQaFindingStatus? = entries.firstOrNull { it.wireValue == value }
   }
 }

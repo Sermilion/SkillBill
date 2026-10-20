@@ -32,6 +32,7 @@ import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
+import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.goalrunner.model.GoalRunnerReviewFinding
 import skillbill.goalrunner.model.GoalRunnerReviewPassResult
@@ -44,6 +45,7 @@ import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.idestatus.model.summary
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -604,7 +606,20 @@ class GoalRunnerStatusProjectionAssembler(
   ): GoalRunnerQaResult? =
     runCatching {
       outcomeStore.recordedGoalQaOutcome(parentWorkflowId)?.let {
-        GoalRunnerQaResult(it.outcome.wireValue, it.reason, it.qaFixAttempts, Instant.parse(it.recordedAt))
+        GoalRunnerQaResult(
+          it.outcome.wireValue,
+          it.reason,
+          it.qaFixAttempts,
+          Instant.parse(it.recordedAt),
+          it.findings.map { finding ->
+            GoalRunnerQaFinding(
+              finding.id,
+              finding.title,
+              finding.evidencePath,
+              finding.status == FeatureTaskQaFindingStatus.FIXED,
+            )
+          },
+        )
       }
     }.getOrElse { error ->
       durableRead.recordDegradedRead(

@@ -149,7 +149,15 @@ data class SubtaskPhaseResults(val subtaskId: Int, val reviewPasses: List<Review
 data class ReviewPass(val passNumber: Int, val verdict: String, val unresolvedFindingCount: Int, val findings: List<ReviewFinding>)
 data class ReviewFinding(val severity: String, val label: String, val text: String)
 data class PhaseConclusion(val verdict: String?, val summary: String?, val detail: String?, val attemptCount: Int)
-data class GoalQaResult(val outcome: String, val reason: String?, val fixAttempts: Int, val recordedAt: Instant)
+data class GoalQaResult(
+  val outcome: String,
+  val reason: String?,
+  val fixAttempts: Int,
+  val recordedAt: Instant,
+  val findings: List<GoalQaFinding> = emptyList(),
+)
+/** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
+data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
 data class ValidationCommand(val command: String, val exitCode: Int)
 data class ValidationResult(val status: String, val checks: List<String>, val gateRunCount: Int?, val gates: List<ValidationGateRun>)
 data class ValidationGateRun(

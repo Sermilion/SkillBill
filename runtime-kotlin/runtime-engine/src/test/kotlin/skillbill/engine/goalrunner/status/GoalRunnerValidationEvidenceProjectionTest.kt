@@ -13,7 +13,11 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
+import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
+import skillbill.ports.featuretask.model.FeatureTaskQaFinding
+import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.FIXED
+import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.NOT_FIXED
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -149,6 +153,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
             qaFixAttempts = 1,
             testedTreeIdentity = null,
             recordedAt = "2026-10-20T10:15:30Z",
+            findings = storedQaFindings,
           )
       }
     val result =
@@ -167,11 +172,29 @@ class GoalRunnerValidationEvidenceProjectionTest {
       phaseResults.audit,
     )
     assertEquals(
-      GoalRunnerQaResult("findings", "Login flow failed.", 1, Instant.parse("2026-10-20T10:15:30Z")),
+      GoalRunnerQaResult(
+        "findings",
+        "Login flow failed.",
+        1,
+        Instant.parse("2026-10-20T10:15:30Z"),
+        projectedQaFindings,
+      ),
       result.goalQaResult,
     )
     assertFalse(result.degradedDurableRead)
   }
+
+  private val storedQaFindings =
+    listOf(
+      FeatureTaskQaFinding("F-1", "Login fails.", listOf("AC-001"), listOf("/qa/1.png"), null, FIXED),
+      FeatureTaskQaFinding("F-2", "Home is blank.", listOf("AC-002"), emptyList(), "/qa/r.json", NOT_FIXED),
+    )
+
+  private val projectedQaFindings =
+    listOf(
+      GoalRunnerQaFinding("F-1", "Login fails.", "/qa/1.png", fixed = true),
+      GoalRunnerQaFinding("F-2", "Home is blank.", "/qa/r.json", fixed = false),
+    )
 
   private fun completedManifest(workflowId: String): DecompositionManifest =
     manifest(1).copy(

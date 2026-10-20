@@ -2101,4 +2101,5 @@ private val expectedMigrationDefinitions =
     59 to "record-standalone-monitor-target",
     60 to "record-standalone-qa-outcome",
     61 to "record-feature-task-qa-outcomes",
+    62 to "record-feature-task-qa-findings-summary",
   )

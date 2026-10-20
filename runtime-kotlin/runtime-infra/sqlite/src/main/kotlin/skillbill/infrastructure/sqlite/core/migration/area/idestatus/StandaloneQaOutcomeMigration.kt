@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.core.migration.area.idestatus
 
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
+import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import java.sql.Connection
 import java.sql.ResultSet
@@ -47,4 +48,15 @@ internal fun recordFeatureTaskQaOutcomes(connection: Connection) {
       """.trimIndent(),
     )
   }
+}
+
+internal const val QA_FINDINGS_SUMMARY_COLUMN: String = "findings_summary"
+
+internal fun recordFeatureTaskQaFindingsSummary(connection: Connection) {
+  DatabaseColumnMigrations.ensureColumn(
+    connection,
+    "feature_task_qa_outcomes",
+    QA_FINDINGS_SUMMARY_COLUMN,
+    "TEXT CHECK ($QA_FINDINGS_SUMMARY_COLUMN IS NULL OR json_valid($QA_FINDINGS_SUMMARY_COLUMN))",
+  )
 }

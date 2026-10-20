@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.qa.receipt.QaPhaseOutputKeys
 import skillbill.engine.featuretask.qa.receipt.QaReceipt
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.receipt.QaSettledRun
 import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.engine.featuretask.qa.receipt.qaOutcomeReason
 import skillbill.engine.featuretask.qa.receipt.restrictedToCriteria
@@ -357,7 +358,13 @@ class QaStrategy(
     val attempts =
       output.qaRepairState?.consumedAttempts
         ?: invalid("accepted QA output has no repair-attempt state.")
-    outcomes.recordSettled(workflowId, effectiveVerdict, reason, attempts, testedTreeIdentity)
+    outcomes.recordSettled(
+      workflowId,
+      effectiveVerdict,
+      reason,
+      attempts,
+      QaSettledRun(testedTreeIdentity, receiptVerdict, receipt, produced[QaPhaseOutputKeys.RECEIPT_REF] as? String),
+    )
   }
 
   companion object {

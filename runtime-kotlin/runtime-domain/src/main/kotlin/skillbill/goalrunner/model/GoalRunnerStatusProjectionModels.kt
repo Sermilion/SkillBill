@@ -193,6 +193,14 @@ data class GoalRunnerQaResult(
   val reason: String?,
   val qaFixAttempts: Int,
   val recordedAt: Instant,
+  val findings: List<GoalRunnerQaFinding> = emptyList(),
+)
+
+data class GoalRunnerQaFinding(
+  val id: String,
+  val title: String,
+  val evidencePath: String?,
+  val fixed: Boolean,
 )
 
 data class GoalRunnerAcceptedSubtask(

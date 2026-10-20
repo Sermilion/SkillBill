@@ -4,6 +4,7 @@ import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.workflow.decomposition.branchForFinalPullRequest
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
@@ -102,9 +103,18 @@ private fun GoalSubtaskQaSummary.pullRequestText(): String =
       val reason = outcome.reason?.let { " ($it)" }.orEmpty()
       val repairs =
         outcome.qaFixAttempts.takeIf { it > 0 }?.let { ", after $it qa_fix attempt" + if (it == 1) "" else "s" }
-      "${outcome.outcome.wireValue}$reason${repairs.orEmpty()}"
+      "${outcome.outcome.wireValue}$reason${repairs.orEmpty()}${outcome.findingsPullRequestText()}"
     }
   }
+
+private fun FeatureTaskQaOutcome.findingsPullRequestText(): String {
+  val fixed = fixedFindings.takeIf { it.isNotEmpty() }?.joinToString(prefix = "; fixed: ") { it.id }
+  val notFixed =
+    notFixedFindings.takeIf { it.isNotEmpty() }?.joinToString(prefix = "; not fixed, review them yourself: ") {
+      listOfNotNull(it.id, it.title.takeIf(String::isNotBlank)?.let { title -> "\"$title\"" }).joinToString(" ")
+    }
+  return fixed.orEmpty() + notFixed.orEmpty()
+}
 
 private fun GoalQaSummary.pullRequestText(): String =
   when (this) {
