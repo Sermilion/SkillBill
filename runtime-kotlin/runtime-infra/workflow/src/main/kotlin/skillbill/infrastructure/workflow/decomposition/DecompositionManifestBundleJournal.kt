@@ -35,8 +35,6 @@ internal class DecompositionManifestBundleJournal(
 
   fun failIfPending(parent: Path?) = DecompositionManifestBundleJournalRecovery.failIfPending(parent)
 
-  fun failIfPendingUnder(root: Path) = DecompositionManifestBundleJournalRecovery.failIfPendingUnder(root)
-
   fun cleanup(transaction: DecompositionManifestBundleTransaction) =
     DecompositionManifestBundleJournalIo.cleanup(transaction)
 

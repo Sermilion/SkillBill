@@ -10,32 +10,34 @@ import kotlin.test.assertIs
 
 class FileSystemFeatureSpecPathResolverTest {
   @Test
-  fun `archived spec resolves when active bundle contains only a stale manifest`() {
+  fun `archived spec cannot supply a parent when active bundle contains only a stale manifest`() {
     val root = Files.createTempDirectory("archived-spec")
     val active = root.resolve(".feature-specs/SKILL-417-status")
     Files.createDirectories(active)
     Files.writeString(active.resolve("decomposition-manifest.yaml"), "stale projection")
-    val archived = spec(root, "done/SKILL-417-status")
+    spec(root, "done/SKILL-417-status")
 
     val result = FileSystemFeatureSpecPathResolver().resolve(FeatureSpecPathResolveInput("SKILL-417", null, root))
 
-    assertEquals(archived.toString(), assertIs<FeatureSpecPathResolveResult.SingleMatch>(result).specPath)
+    assertIs<FeatureSpecPathResolveResult.NoMatch>(result)
   }
 
   @Test
-  fun `active spec takes precedence and ambiguous archives remain ambiguous`() {
+  fun `archived duplicates do not match or make an active spec ambiguous`() {
     val root = Files.createTempDirectory("spec-precedence")
     spec(root, "done/SKILL-417-first")
     spec(root, "done/SKILL-417-second")
     val input = FeatureSpecPathResolveInput("SKILL-417", null, root)
     val resolver = FileSystemFeatureSpecPathResolver()
 
-    assertEquals(2, assertIs<FeatureSpecPathResolveResult.Ambiguous>(resolver.resolve(input)).matches.size)
+    assertIs<FeatureSpecPathResolveResult.NoMatch>(resolver.resolve(input))
     val active = spec(root, "SKILL-417-active")
     assertEquals(
       active.toString(),
       assertIs<FeatureSpecPathResolveResult.SingleMatch>(resolver.resolve(input)).specPath,
     )
+    spec(root, "SKILL-417-second-active")
+    assertEquals(2, assertIs<FeatureSpecPathResolveResult.Ambiguous>(resolver.resolve(input)).matches.size)
   }
 
   private fun spec(

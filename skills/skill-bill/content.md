@@ -155,9 +155,11 @@ Stop without running any CLI command when:
 ## Issue resolution
 
 For a tracker link or issue key, check local specs and persisted workflow state
-before contacting the tracker. Search `.feature-specs/` in the current repository,
-including ignored and untracked files. Use
-`rg --files --hidden --no-ignore .feature-specs` or inspect the directory directly.
+before contacting the tracker. Search active bundles directly under `.feature-specs/`
+in the current repository, including ignored and untracked files. Exclude
+`.feature-specs/done/`; archived bundles never supply intake or resume work,
+even when their issue key matches. Use
+`rg --files --hidden --no-ignore -g '!.feature-specs/done/**' .feature-specs` or inspect the directory directly.
 Match the issue key and read the matching `spec.md`. A filename search that
 honors ignore rules does not prove that a spec is absent. If several bundles match, ask for the intended spec path.
 

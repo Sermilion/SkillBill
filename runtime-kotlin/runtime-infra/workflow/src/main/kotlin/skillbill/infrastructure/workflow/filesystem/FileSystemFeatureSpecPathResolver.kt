@@ -17,10 +17,7 @@ class FileSystemFeatureSpecPathResolver : FeatureSpecPathResolverPort {
     if (!Files.isDirectory(specsRoot)) {
       return FeatureSpecPathResolveResult.NoMatch(input.issueKey, specsRoot)
     }
-    val matches =
-      matchingSpecs(specsRoot, input.issueKey).ifEmpty {
-        matchingSpecs(specsRoot.resolve("done"), input.issueKey)
-      }
+    val matches = matchingSpecs(specsRoot, input.issueKey)
     return when (matches.size) {
       0 -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, specsRoot)
       1 -> FeatureSpecPathResolveResult.SingleMatch(matches.single().toString())

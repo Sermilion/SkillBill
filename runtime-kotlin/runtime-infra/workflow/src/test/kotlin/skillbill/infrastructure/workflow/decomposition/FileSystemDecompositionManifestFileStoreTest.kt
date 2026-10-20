@@ -14,6 +14,25 @@ import kotlin.test.assertTrue
 
 class FileSystemDecompositionManifestFileStoreTest {
   @Test
+  fun `manifest discovery ignores archived bundles and their pending journals`() {
+    val repoRoot = Files.createTempDirectory("decomposition-manifest-archived")
+    val active = repoRoot.resolve(".feature-specs/SKILL-901-goal/decomposition-manifest.yaml")
+    val archived = repoRoot.resolve(".feature-specs/done/SKILL-901-goal/decomposition-manifest.yaml")
+    Files.createDirectories(active.parent)
+    Files.createDirectories(archived.parent)
+    Files.writeString(active, "active")
+    Files.writeString(archived, "invalid archived manifest")
+    val marker = archived.resolveSibling(".decomposition-manifest-bundle-pending.commit")
+    Files.writeString(marker, "invalid archived journal")
+    val store = FileSystemDecompositionManifestFileStore()
+
+    assertEquals(listOf(active), store.findDecompositionManifestFiles(repoRoot))
+    assertEquals(listOf(active), store.findDecompositionManifestFilesWithoutRecovery(repoRoot))
+    assertEquals("invalid archived manifest", Files.readString(archived))
+    assertEquals("invalid archived journal", Files.readString(marker))
+  }
+
+  @Test
   fun `manifest discovery keeps interprocess lock artifacts outside the repository`() {
     val repoRoot = Files.createTempDirectory("decomposition-manifest-discovery")
     val featureSpecsRoot = repoRoot.resolve(".feature-specs")

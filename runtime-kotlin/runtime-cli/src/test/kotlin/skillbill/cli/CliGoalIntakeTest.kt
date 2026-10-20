@@ -90,6 +90,41 @@ class CliGoalIntakeTest {
   }
 
   @Test
+  fun `goal and standalone plan seed fresh specs when the same key is archived`() {
+    for (route in listOf(emptyList(), listOf("phase", "plan"))) {
+      val fixture = goalFixture(subtaskCount = 1, seedWorkflow = false)
+      val root = fixture.tempDir
+      val archived = root.resolve(".feature-specs/done/SKILL-901-goal")
+      Files.createDirectories(archived.parent)
+      Files.move(fixture.parentSpec.parent, archived)
+      val archivedSpec = Files.readString(archived.resolve("spec.md"))
+      val archivedManifest = archived.resolve("decomposition-manifest.yaml")
+      Files.writeString(archivedManifest, "invalid archived manifest")
+      val launcher = StoppedPlanningLauncher(fixture.dbPath)
+      val intake = "SKILL-901 Goal\nFresh requirements for the same key."
+      try {
+        val result =
+          CliRuntime.run(
+            listOf("--db", fixture.dbPath.toString()) + route +
+              listOf(intake, "--agent", "codex"),
+            fixture.context(launcher = launcher).copy(repositoryRoot = root),
+          )
+
+        assertEquals(1, result.exitCode, result.stderr + result.stdout)
+        assertContains(result.stdout + result.stderr, "Plan workflow ID")
+        assertContains(Files.readString(fixture.parentSpec), intake)
+        assertEquals(archivedSpec, Files.readString(archived.resolve("spec.md")))
+        assertEquals("invalid archived manifest", Files.readString(archivedManifest))
+        assertTrue(launcher.prompts.isNotEmpty())
+        assertTrue(launcher.prompts.all { it.contains(fixture.parentSpec.toString()) })
+        assertTrue(launcher.prompts.none { it.contains(archived.toString()) })
+      } finally {
+        root.toFile().deleteRecursively()
+      }
+    }
+  }
+
+  @Test
   fun `bare spec intake prepares beside its unchanged parent and design assets`() {
     for (referenceKind in listOf(
       "absolute",

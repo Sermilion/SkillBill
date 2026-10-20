@@ -52,14 +52,6 @@ internal object DecompositionManifestBundleJournalRecovery {
         }
       }
   }
-
-  fun failIfPendingUnder(root: Path) {
-    Files.walk(root).use { paths ->
-      paths
-        .filter(Files::isDirectory)
-        .forEach(::failIfPending)
-    }
-  }
 }
 
 internal object DecompositionManifestBundleJournalCreate {
