@@ -57,7 +57,7 @@ class GoalRunner(
     repoRoot: Path,
   ): GoalIntakeAdmission {
     val trimmed = intake.trim()
-    intakePreparation.issueKeyForExistingSpec(trimmed, repoRoot)?.let { return GoalIntakeAdmission.Admitted(it) }
+    existingSpecAdmission(trimmed, repoRoot)?.let { return it }
     if (trimmed.isNotBlank() && trimmed.none(Char::isWhitespace) && !trimmed.contains('/')) {
       manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let {
         return GoalIntakeAdmission.Admitted(it.manifest.issueKey)
@@ -75,6 +75,13 @@ class GoalRunner(
     return missing?.let { GoalIntakeAdmission.NeedsInput(it, parsed.issueKey) }
       ?: GoalIntakeAdmission.Admitted(parsed.issueKey)
   }
+
+  private fun existingSpecAdmission(
+    intake: String,
+    repoRoot: Path,
+  ): GoalIntakeAdmission? =
+    intakePreparation.archivedSpec(intake, repoRoot)
+      ?: intakePreparation.issueKeyForExistingSpec(intake, repoRoot)?.let(GoalIntakeAdmission::Admitted)
 
   fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
     manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&

@@ -17,15 +17,15 @@ internal fun gitCheckoutBranch(
   }
   val existing = runGitCommand(repoRoot, "rev-parse", "--verify", "--quiet", normalizedBranch)
   return if (existing is WorkflowGitOperationResult.Ok) {
-    gitCheckoutPreservingLocalChanges(repoRoot, listOf("checkout", "--merge", normalizedBranch))
+    gitCheckoutPreservingLocalChanges(repoRoot, normalizedBranch, listOf("checkout", "--merge", normalizedBranch))
       .withValue(normalizedBranch)
   } else {
     val base = baseBranch?.trim().orEmpty()
     if (base.isBlank()) {
-      gitCheckoutPreservingLocalChanges(repoRoot, listOf("checkout", "--merge", "-b", normalizedBranch))
+      gitCheckoutPreservingLocalChanges(repoRoot, null, listOf("checkout", "--merge", "-b", normalizedBranch))
         .withValue(normalizedBranch)
     } else {
-      gitCheckoutPreservingLocalChanges(repoRoot, listOf("checkout", "--merge", "-b", normalizedBranch, base))
+      gitCheckoutPreservingLocalChanges(repoRoot, base, listOf("checkout", "--merge", "-b", normalizedBranch, base))
         .withValue(normalizedBranch)
     }
   }
@@ -33,6 +33,7 @@ internal fun gitCheckoutBranch(
 
 internal fun gitCheckoutPreservingLocalChanges(
   repoRoot: Path,
+  targetRef: String?,
   args: List<String>,
 ): WorkflowGitOperationResult {
   val existingConflictMarkers = gitConflictMarkerPaths(repoRoot)
@@ -41,7 +42,8 @@ internal fun gitCheckoutPreservingLocalChanges(
     val cleared = runGitCommand(repoRoot, "reset", "--quiet")
     if (cleared !is WorkflowGitOperationResult.Ok) return cleared
   }
-  val outcome = gitMergeCheckout(repoRoot, args, existingConflictMarkers)
+  val outcome =
+    gitCheckoutCarryingUntracked(repoRoot, targetRef) { gitMergeCheckout(repoRoot, args, existingConflictMarkers) }
   if (previouslyStaged.isEmpty()) return outcome
   val restaged = runGitCommand(repoRoot, listOf("add", "--all", "--") + previouslyStaged)
   return if (restaged is WorkflowGitOperationResult.Ok) outcome else restaged

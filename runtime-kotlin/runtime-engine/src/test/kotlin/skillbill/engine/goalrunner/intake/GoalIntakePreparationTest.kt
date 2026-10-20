@@ -30,6 +30,23 @@ class GoalIntakePreparationTest {
   }
 
   @Test
+  fun `archived spec reports the stale active copy when its bundle also sits under done`() {
+    val repoRoot = Files.createTempDirectory("skillbill-goal-intake-archived")
+    writeParentSpec(repoRoot, TABLE_SPEC)
+    val archived = repoRoot.resolve(".feature-specs/done/SKILL-77-table-criteria/spec.md")
+    Files.createDirectories(archived.parent)
+    Files.writeString(archived, TABLE_SPEC)
+
+    val result = preparation.archivedSpec(".feature-specs/SKILL-77-table-criteria", repoRoot)
+
+    assertEquals("SKILL-77", result?.issueKey)
+    assertEquals(PARENT_SPEC_PATH, result?.activeSpecPath)
+    assertEquals(".feature-specs/done/SKILL-77-table-criteria/spec.md", result?.archivedSpecPath)
+    Files.delete(archived)
+    assertNull(preparation.archivedSpec(".feature-specs/SKILL-77-table-criteria", repoRoot))
+  }
+
+  @Test
   fun `plan intake keeps a listed operator spec byte for byte and writes nothing else`() {
     val repoRoot = Files.createTempDirectory("skillbill-plan-intake-listed")
     val listedSpec = "# SKILL-77 Listed\n\n## Acceptance Criteria\n\n1. The desktop app compiles.\n"

@@ -34,6 +34,7 @@ import skillbill.cli.goal.run.GoalRunPresenter
 import skillbill.cli.goal.run.RUNTIME_CLASSPATH_ENV
 import skillbill.cli.goal.run.RUNTIME_EXECUTABLE_ENV
 import skillbill.cli.goal.run.RUNTIME_PATH_SEPARATOR_ENV
+import skillbill.cli.goal.run.goalArchivedSpecText
 import skillbill.cli.goal.run.goalIntakeRequestText
 import skillbill.cli.goal.run.goalRunText
 import skillbill.cli.goal.run.parseCodeReviewMode
@@ -197,6 +198,23 @@ class GoalRunCommand(
     subcommands(goalRunSubcommands.commands)
   }
 
+  private fun admittedIssueKey(
+    intake: String,
+    repoRoot: Path,
+  ): String? =
+    when (val admission = goalRunner.admitIntake(intake, repoRoot)) {
+      is GoalIntakeAdmission.Admitted -> admission.issueKey
+      is GoalIntakeAdmission.NeedsInput -> {
+        state.appendStderr(goalIntakeRequestText(admission))
+        state.completeEmpty(exitCode = 1)
+        null
+      }
+      is GoalIntakeAdmission.ArchivedSpec -> {
+        state.completeText(goalArchivedSpecText(admission))
+        null
+      }
+    }
+
   override fun run() {
     if (currentContext.invokedSubcommand != null) {
       return
@@ -204,15 +222,7 @@ class GoalRunCommand(
     val effectiveRepoRoot = resolveCliRepositoryRoot(repoRoot, inputs)
     val qaSelection = resolveRequestedQaSelection(qaSelections, inputs.environment)
     val intake = intakeTokens.joinToString(" ").trim()
-    val runIssueKey =
-      when (val admission = goalRunner.admitIntake(intake, effectiveRepoRoot)) {
-        is GoalIntakeAdmission.Admitted -> admission.issueKey
-        is GoalIntakeAdmission.NeedsInput -> {
-          state.appendStderr(goalIntakeRequestText(admission))
-          state.completeEmpty(exitCode = 1)
-          return
-        }
-      }
+    val runIssueKey = admittedIssueKey(intake, effectiveRepoRoot) ?: return
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
     inputPreparation.validate(
       GoalRunInputValidationArgs(

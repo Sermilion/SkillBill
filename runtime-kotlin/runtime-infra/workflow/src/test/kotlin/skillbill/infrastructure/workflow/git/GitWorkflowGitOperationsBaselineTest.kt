@@ -238,6 +238,34 @@ class GitWorkflowGitOperationsBaselineTest {
   }
 
   @Test
+  fun `checkout keeps an untracked file that the target branch tracks`() {
+    val repoRoot = Files.createTempDirectory("skillbill-git-checkout-untracked-collision")
+    git(repoRoot, "init", "-b", "main")
+    git(repoRoot, "config", "user.email", "skill-bill@example.test")
+    git(repoRoot, "config", "user.name", "Skill Bill")
+    Files.writeString(repoRoot.resolve("base.txt"), "base\n")
+    git(repoRoot, "add", ".")
+    git(repoRoot, "commit", "-m", "initial")
+    git(repoRoot, "checkout", "-b", "feat/takeover")
+    Files.createDirectories(repoRoot.resolve("specs"))
+    Files.writeString(repoRoot.resolve("specs/manifest.yaml"), "branch version\n")
+    git(repoRoot, "add", ".")
+    git(repoRoot, "commit", "-m", "branch manifest")
+    git(repoRoot, "checkout", "main")
+    Files.createDirectories(repoRoot.resolve("specs"))
+    Files.writeString(repoRoot.resolve("specs/manifest.yaml"), "local version\n")
+
+    val result = GitWorkflowGitOperations().checkoutBranch(repoRoot, "feat/takeover")
+
+    assertTrue(result is WorkflowGitOperationResult.Ok, result.error)
+    assertEquals("feat/takeover", git(repoRoot, "branch", "--show-current"))
+    assertEquals("local version\n", Files.readString(repoRoot.resolve("specs/manifest.yaml")))
+    val status = git(repoRoot, "status", "--porcelain")
+    assertContains(status, "M specs/manifest.yaml")
+    assertFalse(status.contains("??"), status)
+  }
+
+  @Test
   fun `worktree activity summarizes changed files and diff stat`() {
     val repoRoot = Files.createTempDirectory("skillbill-git-worktree-activity")
     git(repoRoot, "init")

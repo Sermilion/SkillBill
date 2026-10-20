@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -30,6 +31,39 @@ class GoalIntakePreparation(
     intake: String,
     repoRoot: Path,
   ): String? = referencedSpecPath(intake, repoRoot)?.let { GoalIntake.parse(it.toString()).issueKey }
+
+  fun archivedSpec(
+    intake: String,
+    repoRoot: Path,
+  ): GoalIntakeAdmission.ArchivedSpec? {
+    val active = activeSpecPath(intake, repoRoot) ?: return null
+    val root = repoRoot.toAbsolutePath().normalize()
+    val activeRoot = root.resolve(FEATURE_SPECS)
+    val doneRoot = activeRoot.resolve(ARCHIVE)
+    if (!active.startsWith(activeRoot) || active.startsWith(doneRoot)) return null
+    val archived = doneRoot.resolve(activeRoot.relativize(active))
+    if (!fileStore.isRegularFile(archived)) return null
+    return GoalIntakeAdmission.ArchivedSpec(
+      issueKey = GoalIntake.parse(active.toString()).issueKey,
+      activeSpecPath = root.relativize(active).joinToString("/"),
+      archivedSpecPath = root.relativize(archived).joinToString("/"),
+    )
+  }
+
+  private fun activeSpecPath(
+    intake: String,
+    repoRoot: Path,
+  ): Path? {
+    referencedSpecPath(intake, repoRoot)?.let { return it.toAbsolutePath().normalize() }
+    val issueKey = GoalIntake.parseOrNull(intake)?.issueKey ?: return null
+    return when (
+      val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(issueKey, null, repoRoot))
+    ) {
+      is FeatureSpecPathResolveResult.Explicit -> repoRoot.resolve(resolved.specPath).toAbsolutePath().normalize()
+      is FeatureSpecPathResolveResult.SingleMatch -> repoRoot.resolve(resolved.specPath).toAbsolutePath().normalize()
+      is FeatureSpecPathResolveResult.NoMatch, is FeatureSpecPathResolveResult.Ambiguous -> null
+    }
+  }
 
   fun issueKeyOf(intake: String): String = GoalIntake.parse(intake).issueKey
 
@@ -172,6 +206,8 @@ class GoalIntakePreparation(
   }
 
   private companion object {
+    const val FEATURE_SPECS = ".feature-specs"
+    const val ARCHIVE = "done"
     val ACCEPTANCE_HEADING = Regex("(?i)#{1,6}\\s+acceptance criteria\\s*")
     val ITEM = Regex("\\s*(?:[-*]|[0-9]+[.)])\\s+(?:\\[[ xX]\\]\\s+)?(.+)")
     const val VALIDATION = "Run the repository's required checks and verify every supplied acceptance criterion."
