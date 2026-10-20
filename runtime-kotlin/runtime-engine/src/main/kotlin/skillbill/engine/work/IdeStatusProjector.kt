@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeOperatorDecisionPause
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.runner.OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS
 import skillbill.engine.featuretask.runner.operatorDecisionPause
@@ -38,6 +40,7 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Instant
@@ -79,8 +82,19 @@ class IdeStatusProjector(
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
   private val manifestStore: GoalRunnerManifestStore,
   private val diagnostics: RuntimeDiagnostics,
+  private val qaCapabilities: QaCapabilityResolver,
 ) {
   private val workflowEngine = WorkflowEngine()
+
+  internal fun goalFinishPipeline(repoRoot: Path): List<String> =
+    when (val capability = qaCapabilities.resolve(repoRoot)) {
+      is QaCapabilityResolution.Absent -> GOAL_FINISH_PIPELINE.filterNot { it in PhaseSlot.QA.steps }
+      is QaCapabilityResolution.Declared -> GOAL_FINISH_PIPELINE
+      is QaCapabilityResolution.Incompatible -> {
+        RuntimeDiagnosticsBestEffortWarning.record(diagnostics, capability.reason)
+        GOAL_FINISH_PIPELINE
+      }
+    }
 
   internal fun project(
     candidate: IdeStatusCandidate,

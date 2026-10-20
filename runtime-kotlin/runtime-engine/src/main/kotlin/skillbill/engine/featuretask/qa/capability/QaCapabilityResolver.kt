@@ -7,8 +7,11 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.model.FileLocation
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.QaCapabilityDeclaration
+import java.nio.file.Path
 
 sealed interface QaCapabilityResolution {
   data class Declared(
@@ -26,8 +29,16 @@ sealed interface QaCapabilityResolution {
 
 @Inject
 class QaCapabilityResolver(
+  private val gitOperations: WorkflowGitOperations,
   private val installedCatalog: InstalledPlatformPackCatalogPort,
 ) {
+  internal fun resolve(repoRoot: Path): QaCapabilityResolution =
+    when (val paths = gitOperations.trackedPaths(repoRoot)) {
+      is WorkflowGitNameListResult.Listed -> resolve(paths.names)
+      is WorkflowGitNameListResult.Failed ->
+        QaCapabilityResolution.Incompatible("QA could not read tracked paths: ${paths.error}")
+    }
+
   fun resolve(changedPaths: List<String>): QaCapabilityResolution {
     val manifests =
       try {

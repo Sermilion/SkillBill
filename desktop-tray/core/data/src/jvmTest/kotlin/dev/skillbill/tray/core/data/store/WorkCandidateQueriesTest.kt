@@ -21,6 +21,33 @@ class WorkCandidateQueriesTest {
   private val now = Instant.now()
 
   @Test
+  fun `verification candidates page separately from standalone phases`() {
+    establishTemporarySchemaReadiness("desktop-operation-candidates").use { fixture ->
+      fixture.connection.prepareStatement(
+        "INSERT INTO feature_verify_workflows (workflow_id, workflow_status, started_at, updated_at, state_entered_at) VALUES ('verify', 'running', ?, ?, ?)",
+      ).use { statement ->
+        for (column in 1..3) statement.setString(column, now.toString())
+        statement.executeUpdate()
+      }
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { unit ->
+        unit.standalonePhaseStatuses.register(StandalonePhaseStatusRegistration(
+          "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}", "main", null, null, "review", "review", "review-execution",
+          "active", "review", now, "owner", 1, now.plusSeconds(300),
+        ))
+      }
+
+      assertEquals(setOf("verify"), fixture.connection.candidates(WorkSection.OPERATIONS, now))
+      assertEquals(setOf("review"), fixture.connection.candidates(WorkSection.PHASES, now))
+      fixture.connection.createStatement().use {
+        it.executeUpdate("UPDATE feature_verify_workflows SET workflow_status = 'completed', finished_at = '$now' WHERE workflow_id = 'verify'")
+      }
+      assertEquals(setOf("verify"), fixture.connection.candidates(WorkSection.HISTORY, now, HistoryFilter.OPERATIONS))
+      assertEquals(emptySet(), fixture.connection.candidates(WorkSection.HISTORY, now, HistoryFilter.PHASES))
+    }
+  }
+
+  @Test
   fun `goal phases stay out of live sections after cancellation while unrelated and later standalone phases remain selectable`() {
     establishTemporarySchemaReadiness("desktop-goal-phase-ownership").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())

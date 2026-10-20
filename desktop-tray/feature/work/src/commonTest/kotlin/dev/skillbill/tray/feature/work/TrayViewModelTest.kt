@@ -60,7 +60,7 @@ class TrayViewModelTest {
   fun `every section starts reading and each one lands on its own`() = runTest(dispatcher) {
     val vm = viewModel()
     assertEquals(
-      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.RECENT),
+      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS, WorkSection.RECENT),
       boards.observeCalls.map { it.section }.toSet(),
     )
     assertEquals(PagedListState.InitialLoading, vm.state.value.sections.goals)
@@ -80,6 +80,7 @@ class TrayViewModelTest {
     emit(WorkSection.NEEDS_YOU)
     emit(WorkSection.PHASES)
     emit(WorkSection.RECENT, workItem("r1"))
+    emit(WorkSection.OPERATIONS)
     runCurrent()
 
     assertTrue(vm.state.value.sections.settled)

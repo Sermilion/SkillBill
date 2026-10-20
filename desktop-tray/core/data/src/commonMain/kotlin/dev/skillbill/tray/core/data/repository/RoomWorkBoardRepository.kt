@@ -408,7 +408,7 @@ class RoomWorkBoardRepository(
                   noteDeadline(expires)
                 }
               }
-              row.deadline?.takeIf { section in setOf(WorkSection.GOALS, WorkSection.PHASES, WorkSection.NEEDS_YOU) }?.let { raw ->
+              row.deadline?.takeIf { section in setOf(WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS, WorkSection.NEEDS_YOU) }?.let { raw ->
                 val time = Instant.parse(raw)
                 if (time > clock.now()) noteDeadline(time)
               }
@@ -434,7 +434,7 @@ class RoomWorkBoardRepository(
                 endObservation.storeId, endObservation.revision,
               )
               activeRetentions[subscription] = retainedObservation
-              if (section in setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES)) {
+              if (section in setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS)) {
                 watchOwners(section, requestedPageKey, result, owner, retainedObservation)
               }
               val pageDeadlines = deadlines.getOrPut(section) { mutableMapOf() }
@@ -568,6 +568,6 @@ class RoomWorkBoardRepository(
 
   private fun belongs(item: WorkItem, section: WorkSection, cutoff: Instant, through: Instant): Boolean = when (section) {
     WorkSection.HISTORY, WorkSection.RECENT -> item.finishedAt?.let { it >= cutoff && it <= through } == true
-    WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES -> item.liveSection == section
+    WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS -> item.liveSection == section
   }
 }

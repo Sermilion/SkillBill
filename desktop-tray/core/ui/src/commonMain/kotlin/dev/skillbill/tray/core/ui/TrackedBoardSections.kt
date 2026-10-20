@@ -24,11 +24,12 @@ data class TrackedSections(
   val goals: PagedListState<WorkItem> = PagedListState.InitialLoading,
   val phases: PagedListState<WorkItem> = PagedListState.InitialLoading,
   val recent: PagedListState<WorkItem> = PagedListState.InitialLoading,
+  val operations: PagedListState<WorkItem> = PagedListState.InitialLoading,
   val store: StoreObservation? = null,
   /** The observation every section was last read from; null while they were read from different stores or sessions. */
   val observation: StoreObservation? = null,
 ) {
-  private val liveLists = listOf(needsYou, goals, phases)
+  private val liveLists = listOf(needsYou, goals, phases, operations)
 
   /** Live work in section order, each item once. */
   val liveItems: List<WorkItem> = liveLists.flatMap { it.items }.distinctBy { it.identity }
@@ -64,7 +65,7 @@ private fun PagedListState<WorkItem>.problem(): Problem? = when (this) {
 private fun isLive(item: WorkItem): Boolean = item.liveSection != null
 
 /**
- * The live board sections (needs you, goals, standalone phases) and, unless [includeRecent] is false, the recent section the
+ * The live board sections (needs you, goals, standalone phases, operations) and, unless [includeRecent] is false, the recent section the
  * board is completed with. The filter narrows the recent section only when [filterRecent] is true, for an owner that lists
  * it on screen. One owner builds one instance: it keeps its own pagers and its own board observations, so
  * owners never supersede each other's reads. It is fed the preferences through [apply]; everything runs on [scope]'s
@@ -79,8 +80,9 @@ class TrackedBoardSections(
   private val needsYou = SectionPager(scope, boards, WorkSection.NEEDS_YOU, ::isLive)
   private val goals = SectionPager(scope, boards, WorkSection.GOALS, ::isLive)
   private val phases = SectionPager(scope, boards, WorkSection.PHASES, ::isLive)
+  private val operations = SectionPager(scope, boards, WorkSection.OPERATIONS, ::isLive)
   private val recent = SectionPager(scope, boards, WorkSection.RECENT) { true }
-  private val live = listOf(needsYou, goals, phases)
+  private val live = listOf(needsYou, goals, phases, operations)
   private val pagers = if (includeRecent) live + recent else live
   private val recentIncluded = includeRecent
 
@@ -90,10 +92,13 @@ class TrackedBoardSections(
   private var applied: AppSettings? = null
 
   private val stores = combine(pagers.map(SectionPager::store)) { it.toList() }
+  private val liveStates = combine(needsYou.state, goals.state, phases.state, operations.state) { n, g, p, o ->
+    TrackedSections(needsYou = n, goals = g, phases = p, operations = o)
+  }
 
   val state: StateFlow<TrackedSections> =
-    combine(needsYou.state, goals.state, phases.state, recent.state, stores) { n, g, p, r, s ->
-      TrackedSections(n, g, p, r, store = s.firstNotNullOfOrNull { it }, observation = s.distinct().singleOrNull())
+    combine(liveStates, recent.state, stores) { live, r, s ->
+      live.copy(recent = r, store = s.firstNotNullOfOrNull { it }, observation = s.distinct().singleOrNull())
     }.stateIn(scope, SharingStarted.Eagerly, TrackedSections())
 
   init {

@@ -19,6 +19,7 @@ sealed interface GoalQaGateResult {
 }
 
 enum class GoalQaSkipReason {
+  UNSUPPORTED_TARGET,
   SUBTASKS_ALREADY_RAN_QA,
   ALREADY_SETTLED_ON_TREE,
 }

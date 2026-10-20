@@ -17,6 +17,8 @@ fun TrayUiState.trayHover(): String {
     appendHoverCategory("GOALS", popoverGoals)
     append("<hr/>")
     appendHoverCategory("PHASES", popoverLivePhases)
+    append("<hr/>")
+    appendHoverCategory("OPERATIONS", popoverLiveOperations)
   }
 }
 

@@ -6,10 +6,12 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
+import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
@@ -72,6 +74,7 @@ import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
+import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.work.model.WorkListListRead
@@ -268,6 +271,7 @@ internal fun ideStatusService(
   manifestStore: GoalRunnerManifestStore = EmptyManifestStore,
   outcomeStore: GoalRunnerWorkflowOutcomeStore = EmptyOutcomeStore,
   snapshotValidator: WorkflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,
+  qaCapabilities: QaCapabilityResolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
 ): IdeStatusService {
   val phaseRecorder =
     featureTaskRuntimePhaseRecorder(
@@ -315,6 +319,7 @@ internal fun ideStatusService(
       featureTaskRuntimeStatusService = runtimeStatusService,
       manifestStore = manifestStore,
       diagnostics = NoopRuntimeDiagnostics,
+      qaCapabilities = qaCapabilities,
     )
   return IdeStatusService(
     database = database,
@@ -516,6 +521,7 @@ internal class TrackingDatabase(
   internal val exists: Boolean = true,
   internal val controls: GoalRunnerControlRepository = EmptyGoalRunnerControlRepository,
   internal val statusRepository: StandalonePhaseStatusRepository? = null,
+  internal val goalPage: WorkGoalSubtaskPage? = null,
 ) : DatabaseSessionFactory {
   var readCalls: Int = 0
     internal set
@@ -597,6 +603,14 @@ internal class TrackingDatabase(
 
           override fun findByWorkflowId(workflowId: String): List<WorkItem> =
             work.filter { it.workflowId == workflowId }
+
+          override fun goalSubtaskPage(
+            workflowId: String,
+            offset: Int,
+            limit: Int,
+            completedOnly: Boolean,
+            afterSubtaskId: Int?,
+          ): WorkGoalSubtaskPage? = goalPage
         }
       override val standalonePhaseStatuses = statusRepository ?: super.standalonePhaseStatuses
       override val goalRunnerControls = controls

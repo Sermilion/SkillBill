@@ -110,7 +110,7 @@ class DatabaseSession(
   private val sessionScope = CoroutineScope(SupervisorJob() + dispatchers.io)
   private val closerScope = CoroutineScope(SupervisorJob() + dispatchers.io)
   internal val sectionSignals = MutableStateFlow(WorkSection.entries.associateWith { 0L })
-  internal val detailSignals = MutableStateFlow(mapOf(WorkSection.GOALS to 0L, WorkSection.PHASES to 0L))
+  internal val detailSignals = MutableStateFlow(mapOf(WorkSection.GOALS to 0L, WorkSection.PHASES to 0L, WorkSection.OPERATIONS to 0L))
   private val detailOwnerSignals = MutableStateFlow(emptyMap<Long, Long>())
   private val mutableRefreshEvents = MutableSharedFlow<Set<WorkSection>>(extraBufferCapacity = 1)
   internal val refreshEvents: Flow<Set<WorkSection>> = mutableRefreshEvents.asSharedFlow()
@@ -290,7 +290,10 @@ class DatabaseSession(
           add(WorkSection.RECENT)
           val affected = if (change.resynchronize) topics.all else changedTopics
           if (topics.goals in affected) add(WorkSection.GOALS)
-          if (topics.phases in affected) add(WorkSection.PHASES)
+          if (topics.phases in affected) {
+            add(WorkSection.PHASES)
+            add(WorkSection.OPERATIONS)
+          }
         }
         if (owner.observationSession == observationSession) observationProblem = null
         invalidate(sections)
@@ -321,7 +324,7 @@ class DatabaseSession(
   }
 
   internal fun invalidate(sections: Set<WorkSection> = WorkSection.entries.toSet()) {
-    val detailSections = if (sections == setOf(WorkSection.NEEDS_YOU)) setOf(WorkSection.GOALS, WorkSection.PHASES) else sections
+    val detailSections = if (sections == setOf(WorkSection.NEEDS_YOU)) setOf(WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS) else sections
     detailSignals.update { current ->
       current.mapValues { (section, revision) -> if (section in detailSections) revision + 1 else revision }
     }

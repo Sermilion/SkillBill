@@ -12,6 +12,7 @@ import dev.skillbill.tray.core.ui.TrackedSections
 enum class PopoverTab(val label: String) {
   GOALS("Goals"),
   PHASES("Phases"),
+  OPERATIONS("Operations"),
   ;
 
   companion object {
@@ -43,6 +44,8 @@ data class TrayUiState(
   private val byIdentity = sections.trackedItems.associateBy { it.identity }
   val popoverGoals: List<WorkItem> = arrangement?.goals.orEmpty().mapNotNull(byIdentity::get)
   val popoverLivePhases: List<WorkItem> = arrangement?.livePhases.orEmpty().mapNotNull(byIdentity::get)
+  val popoverLiveOperations: List<WorkItem> = arrangement?.liveOperations.orEmpty().mapNotNull(byIdentity::get)
+  val popoverFinishedOperations: List<WorkItem> = arrangement?.finishedOperations.orEmpty().mapNotNull(byIdentity::get)
   val popoverFinishedPhases: List<WorkItem> = arrangement?.finishedPhases.orEmpty().mapNotNull(byIdentity::get)
 }
 

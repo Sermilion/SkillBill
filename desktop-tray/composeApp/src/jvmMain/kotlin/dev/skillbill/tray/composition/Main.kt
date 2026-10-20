@@ -104,7 +104,7 @@ fun main() {
       else -> "Skill Bill is idle"
     }
 
-    if (isMac) NativeTrayHost.MacStatusItem(board.trayStatus, board.running, board.popoverGoals, board.popoverLivePhases + board.popoverFinishedPhases,
+    if (isMac) NativeTrayHost.MacStatusItem(board.trayStatus, board.running, board.popoverGoals, board.popoverLivePhases + board.popoverFinishedPhases + board.popoverLiveOperations + board.popoverFinishedOperations,
       onPrimary = {
         tray.available()
         dev.skillbill.tray.infrastructure.macos.MacStatusItemBridge.statusItemAnchor?.let { anchor ->
@@ -116,7 +116,7 @@ fun main() {
       },
       onMenuAction = { action ->
         tray.available()
-        val phases = board.popoverLivePhases + board.popoverFinishedPhases
+        val phases = board.popoverLivePhases + board.popoverFinishedPhases + board.popoverLiveOperations + board.popoverFinishedOperations
         // The menu callback may arrive on a native thread; the router moves every intent onto the UI dispatcher.
         when {
           action in 0..7 -> board.popoverGoals.getOrNull(action)?.let { owner.router.dispatch(HostIntent.OpenWork(it.identity)) }

@@ -24,7 +24,6 @@ import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
@@ -135,13 +134,7 @@ class QaExecutionLifecycle(
         "QA is disabled by policy.",
       )
     }
-    val paths =
-      when (val result = gitOperations.trackedPaths(repoRoot)) {
-        is WorkflowGitNameListResult.Listed -> result.names
-        is WorkflowGitNameListResult.Failed ->
-          return capabilityUnavailable("QA could not read tracked paths: ${result.error}", warnings)
-      }
-    return when (val resolution = capabilities.resolve(paths)) {
+    return when (val resolution = capabilities.resolve(repoRoot)) {
       is QaCapabilityResolution.Declared ->
         QaExecutionTarget.Supported(resolution.guidancePath, resolution.declaration.platforms)
       is QaCapabilityResolution.Absent -> QaExecutionTarget.Skipped(QaSkipReason.UNSUPPORTED_TARGET, resolution.detail)

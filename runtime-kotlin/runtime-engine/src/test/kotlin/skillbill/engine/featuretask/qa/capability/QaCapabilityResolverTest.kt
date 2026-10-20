@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.qa.capability
 
+import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.CodeReviewComposition
@@ -49,7 +50,7 @@ class QaCapabilityResolverTest {
 
   @Test
   fun `an Android app repository resolves the KMP pack QA guidance`() {
-    val resolver = QaCapabilityResolver { listOf(kotlin, kmp) }
+    val resolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { listOf(kotlin, kmp) }
     val paths =
       listOf(
         "build.gradle.kts",
@@ -69,7 +70,7 @@ class QaCapabilityResolverTest {
 
   @Test
   fun `a JVM repository stays an unsupported Kotlin target`() {
-    val resolver = QaCapabilityResolver { listOf(kotlin, kmp) }
+    val resolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { listOf(kotlin, kmp) }
 
     val resolution = resolver.resolve(listOf("build.gradle.kts", "server/src/main/kotlin/Application.kt"))
 

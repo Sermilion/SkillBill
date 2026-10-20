@@ -66,7 +66,7 @@ class WorkViewModelTest {
   fun `every live section starts reading and each one lands on its own`() = runTest(dispatcher) {
     val vm = viewModel()
     assertEquals(
-      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.RECENT),
+      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS, WorkSection.RECENT),
       boards.observeCalls.map { it.section }.toSet(),
     )
     assertEquals(PagedListState.InitialLoading, vm.state.value.goals)
@@ -174,7 +174,7 @@ class WorkViewModelTest {
 
     val restarted = boards.observeCalls.drop(before)
     assertEquals(
-      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.RECENT),
+      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS, WorkSection.RECENT),
       restarted.map { it.section }.toSet(),
     )
     assertTrue(restarted.all { it.filter == "skill" })
@@ -202,7 +202,7 @@ class WorkViewModelTest {
     val vm = viewModel()
 
     val state = vm.state.value
-    listOf(state.needsYou, state.goals, state.phases).forEach { assertIs<PagedListState.InitialError>(it) }
+    listOf(state.needsYou, state.goals, state.phases, state.operations).forEach { assertIs<PagedListState.InitialError>(it) }
     assertEquals(ProblemCode.SETTINGS_CORRUPT, state.liveProblem?.code)
     assertTrue(boards.observeCalls.isEmpty())
 
@@ -210,7 +210,7 @@ class WorkViewModelTest {
     runCurrent()
 
     assertEquals(PagedListState.InitialLoading, vm.state.value.goals)
-    assertEquals(4, boards.observeCalls.size)
+    assertEquals(5, boards.observeCalls.size)
   }
 
   @Test

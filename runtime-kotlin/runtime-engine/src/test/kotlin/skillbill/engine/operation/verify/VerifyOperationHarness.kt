@@ -219,7 +219,7 @@ internal class VerifyOperationHarness : AutoCloseable {
   private fun qaStep(): VerifyQaStep {
     val validator = QaReceiptValidator(QaReceiptSchemaValidator())
     return VerifyQaStep(
-      testQaExecutionLifecycle(git, qaWorkspaces, qaLeases, QaCapabilityResolver { qaManifests }),
+      testQaExecutionLifecycle(git, qaWorkspaces, qaLeases, QaCapabilityResolver(git) { qaManifests }),
       QaReceiptSettlement(validator, qaWorkspaces, NoopRuntimeDiagnostics),
       validator,
       qaGit,

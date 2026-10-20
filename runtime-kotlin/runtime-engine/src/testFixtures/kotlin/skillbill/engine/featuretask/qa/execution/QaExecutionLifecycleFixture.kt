@@ -22,7 +22,7 @@ fun testQaExecutionLifecycle(
     },
   workspaces: QaWorkspacePort = TestQaWorkspaces(),
   leases: QaDeviceLeasePort = TestQaLeases(),
-  capabilities: QaCapabilityResolver = QaCapabilityResolver { emptyList() },
+  capabilities: QaCapabilityResolver = QaCapabilityResolver(gitOperations) { emptyList() },
   identifiers: IdentifierGeneratorPort = IdentifierGeneratorPort { "test-invocation" },
 ): QaExecutionLifecycle =
   QaExecutionLifecycle(

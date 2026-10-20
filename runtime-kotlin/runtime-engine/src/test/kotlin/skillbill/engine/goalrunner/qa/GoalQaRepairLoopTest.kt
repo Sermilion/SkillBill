@@ -301,7 +301,7 @@ class GoalQaRepairLoopTest {
               git,
               workspaces,
               RecordingQaLeases(),
-              QaCapabilityResolver { listOf(pack) },
+              QaCapabilityResolver(git) { listOf(pack) },
               IdentifierGeneratorPort { "${++invocations}" },
             ),
           qaReceipts =
@@ -336,6 +336,7 @@ class GoalQaRepairLoopTest {
           clock,
           testActivityStampWriter(),
           outcomes,
+          QaCapabilityResolver(git) { listOf(pack) },
         )
     }
 

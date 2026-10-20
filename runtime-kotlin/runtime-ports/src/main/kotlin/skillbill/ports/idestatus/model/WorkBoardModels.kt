@@ -40,7 +40,7 @@ data class WorkBoardRequest(
   val cursor: String? = null,
 )
 
-enum class WorkLiveSection { NEEDS_YOU, GOALS, PHASES }
+enum class WorkLiveSection { NEEDS_YOU, GOALS, PHASES, OPERATIONS }
 
 data class WorkBoardItem(
   val snapshot: IdeStatusSnapshot,

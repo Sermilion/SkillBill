@@ -70,7 +70,7 @@ class RoomWorkDetailRepository(
     val scheduler = DeadlineScheduler(clock)
     session.acquireSubscriber()
     try {
-      var relevant = setOf(WorkSection.GOALS, WorkSection.PHASES)
+      var relevant = setOf(WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS)
       var previous: DetailSignal? = null
       combine(session.detailSignals, session.detailReprojections(owner), ::DetailSignal).collect { signal ->
         val last = previous
@@ -81,7 +81,9 @@ class RoomWorkDetailRepository(
           val result = detail(identity)
           if (result is Outcome.Value) {
             relevant = if (result.value.item.family == WorkFamily.FEATURE_GOAL) {
-              setOf(WorkSection.GOALS, WorkSection.PHASES)
+              setOf(WorkSection.GOALS, WorkSection.PHASES, WorkSection.OPERATIONS)
+            } else if (result.value.item.family == WorkFamily.FEATURE_VERIFY) {
+              setOf(WorkSection.OPERATIONS)
             } else {
               setOf(WorkSection.PHASES)
             }

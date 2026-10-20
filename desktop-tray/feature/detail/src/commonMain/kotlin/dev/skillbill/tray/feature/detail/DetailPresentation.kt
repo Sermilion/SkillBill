@@ -45,11 +45,12 @@ internal fun detailDuration(item: WorkItem, now: Instant, stale: Boolean, frozen
     val value = item.activeDurationMs?.let { age(it.milliseconds) } ?: "not available"
     return DetailDuration("Total run time", value, "finished ${formatInstant(finished, "d MMM HH:mm")}")
   }
+  val operation = item.family == WorkFamily.FEATURE_VERIFY
   val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
-  val value = if (standalone) phaseElapsedText(item, now, stale) else
+  val value = if (standalone || operation) phaseElapsedText(item, now, stale) else
     durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, stale, frozen)
   return DetailDuration(
-    if (item.goalLaunched) "Planning elapsed" else if (standalone) "Phase elapsed" else "Goal active",
+    if (operation) "Operation elapsed" else if (item.goalLaunched) "Planning elapsed" else if (standalone) "Phase elapsed" else "Goal active",
     value,
     item.startedAt?.let { "since ${formatInstant(it, "d MMM HH:mm")}" } ?: "",
   )
@@ -58,13 +59,13 @@ internal fun detailDuration(item: WorkItem, now: Instant, stale: Boolean, frozen
 private val KEBAB_TITLE = Regex("[a-z0-9]+(?:-[a-z0-9]+)+")
 
 internal fun detailTitle(detail: Detail): String {
+  if (detail.item.family == WorkFamily.FEATURE_VERIFY) return "Operation: Verify"
   detail.featureTitle?.takeIf { it.isNotBlank() }?.let { return displayFeatureTitle(it) }
   val item = detail.item
   val title = if (item.goalLaunched) "Goal" else if (item.scope == ExecutionScope.STANDALONE_PHASE) {
     item.phaseId?.takeIf { it.isNotBlank() }?.replace('_', ' ')?.replace('-', ' ')?.replaceFirstChar(Char::uppercase) ?: "Standalone phase"
   } else when (item.family) {
     WorkFamily.FEATURE_GOAL -> "Goal"
-    WorkFamily.FEATURE_VERIFY -> "Verification"
     else -> "Feature work"
   }
   return item.issueKey?.let { "$title · $it" } ?: title

@@ -1319,8 +1319,9 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   workspace, resolves the routed pack's `qa_capability`, and validates the receipt. `GOAL_QA`
   (`goal-qa`, slots `qa` and `quality_gate`, steps `qa`, `qa_fix` and `build`) is the
   in-memory definition goal finalization runs once per goal, after every child completes and
-  before `commit_push`. `DefaultGoalRunnerQaGate` drives it through `PhaseRunEntry.runForGoal`
-  on the goal branch, and its `qa` step runs through `QaStrategy`, not `QaStandalonePhaseRun`.
+  before `commit_push`. `DefaultGoalRunnerQaGate` checks the routed pack's QA capability
+  before selecting it, then drives it through `PhaseRunEntry.runForGoal` on the goal branch.
+  Its `qa` step runs through `QaStrategy`, not `QaStandalonePhaseRun`.
   QA findings take `qa -> qa_fix`, the `qa_fix_build` edge sends `qa_fix` to `build`
   (`PackBuildStrategy`, the pack's compile-only gate with its `PackBuildGateCycle` repair turns),
   and the `qa_requalify` edge returns a `satisfied` build to `qa`; nothing after the loop routes
@@ -1358,7 +1359,9 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `qa_requalify` loops are composed only when `audit` is absent (`composedOnlyWithoutSteps`), so
   they never reach goal-child or standalone runs. The gate skips when
   every child ran and recorded child-level QA, or when a goal QA outcome already passed or
-  skipped on the current tree. `PLAN` (`intake`, `preplan`,
+  skipped on the current tree. A routed pack without `qa_capability` omits the skeleton
+  before phase composition or QA workspace creation. Work detail uses the same capability
+  resolution and excludes the QA slot steps from its desktop progress pipeline. `PLAN` (`intake`, `preplan`,
   `plan`, and `plan_subtasks`) is durable: `skill-bill phase plan` runs it as a standalone workflow
   (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
   `phase` command lists: review, validation, qa, plan, pr and monitor.

@@ -35,6 +35,8 @@ class RuntimeWorkPolicyRepository : WorkPolicyRepository {
       goals = arranged.goals.resolve(),
       livePhases = arranged.livePhases.resolve(),
       finishedPhases = arranged.finishedPhases.resolve(),
+      liveOperations = arranged.liveOperations.resolve(),
+      finishedOperations = arranged.finishedOperations.resolve(),
     )
   }
 }

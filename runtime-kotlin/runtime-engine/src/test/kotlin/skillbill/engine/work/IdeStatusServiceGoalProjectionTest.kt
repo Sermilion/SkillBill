@@ -1,5 +1,8 @@
 package skillbill.engine.work
 
+import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
+import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.engine.goalrunner.execution.core.lease
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -19,7 +22,10 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.scaffold.model.QaCapabilityDeclaration
+import skillbill.scaffold.model.QaPlatform
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -37,6 +43,48 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class IdeStatusServiceGoalProjectionTest {
+  @Test
+  fun `goal detail includes QA pills only when the routed pack declares the QA slot capability`() {
+    for (declaresQa in listOf(false, true)) {
+      val fixture = gitRepoFixture("goal-detail-qa-$declaresQa")
+      val identity = testGoalRepositoryIdentity(fixture)
+      val pack =
+        kotlinPackWithoutGate().copy(
+          qaCapability =
+            QaCapabilityDeclaration(
+              setOf(QaPlatform.ANDROID),
+              "qa/android-qa.md",
+            ).takeIf { declaresQa == true },
+        )
+      val service =
+        ideStatusService(
+          TrackingDatabase(
+            work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, "running", "2026-08-06T10:00:00Z")),
+            workflows = IdeStatusWorkflowStates(),
+            goalPage = WorkGoalSubtaskPage(zeroAc46ManifestState(fixture, identity).manifest, 2, null),
+            controls =
+              object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+                override fun controlState(parentWorkflowId: String) =
+                  GoalRunnerControlState(repositoryIdentity = identity)
+              },
+          ),
+          manifestStore = StubGoalManifestStore(zeroAc46ManifestState(fixture, identity)),
+          qaCapabilities =
+            QaCapabilityResolver(
+              RecordingWorkflowGitOperations().apply {
+                trackedPathsValue = listOf("runtime-kotlin/src/Main.kt")
+              },
+            ) { listOf(pack) },
+        )
+
+      val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+      assertEquals(declaresQa, "qa" in detail.goalFinishPipeline)
+      assertEquals(declaresQa, "qa_fix" in detail.goalFinishPipeline)
+      assertTrue(listOf("pr", "monitor", "monitor_fix").all { it in detail.goalFinishPipeline })
+    }
+  }
+
   @Test
   fun `reopened goal ignores historical completion in status and work detail`() {
     listOf("running", "completed").forEach { parentState ->

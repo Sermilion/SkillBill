@@ -34,6 +34,7 @@ class TransitionNotificationCoordinatorTest {
     needsYou = loadedList(emptyList(), hasMore = false),
     goals = loadedList(listOf(item), hasMore = false),
     phases = loadedList(emptyList(), hasMore = false),
+    operations = loadedList(emptyList(), hasMore = false),
     recent = loadedList(emptyList(), hasMore = false),
     store = store,
     observation = store,

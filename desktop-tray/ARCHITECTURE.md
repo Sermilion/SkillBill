@@ -89,7 +89,7 @@ template image, and puts the running count in the status title. The macOS
 adapter source is `composeApp/src/jvmMain/native/macos/MacStatusItemBridge.m`.
 macOS hosts compile it with `:composeApp:compileMacTrayNative` from the
 desktop-application convention plugin, and it is packaged as a jvmMain
-application resource. Its native menu groups the current Goals and Phases and
+application resource. Its native menu groups the current goals, phases and operations and
 exposes the shared app actions.
 
 The main window opens on launch and remains available when its Linux window is
@@ -126,7 +126,7 @@ timestamps, and lease heartbeats may advance after the user reads the goal.
 Changing the database, execution, or runner owner still rejects the request.
 An accepted request does not claim completion.
 
-Needs you, live goals, live phases, History, and recent completions have separate
+Needs you, live goals, live phases, live operations, History, and recent completions have separate
 desktop queries. Search runs in SQL before the ten-row result limit. The desktop
 can inspect up to forty candidate rows per request and retries up to three times
 when another process changes the observed snapshot. The shared status read is
@@ -183,10 +183,15 @@ limits process use to four named files. Desktop CI watches runtime-library chang
 and builds the composite dependencies from source.
 
 The runtime owns shared work policy and the desktop renders its typed verdicts.
+Verification belongs to the operations group. The sidebar and tray list operations
+separately from standalone phases, and History has an operations filter. Verify
+detail shows its current step, elapsed time and operation activity. It omits phase
+metrics, phase pipelines and subtask timers. Operations use the existing workflow
+change topic for board and detail invalidation.
 `IdeStatusPolicy.work` emits the per-item facts (`controlEligible`, which includes
 freshness, `pauseEligible`, `running`, `recentlyFinishedPhase`, `doneWithinDay`, and
 `membershipDeadline`), and `IdeStatusPolicy.arrange` owns the board order, the
-live and finished phase lists, the counts, and the tray status. The desktop reaches
+live and finished phase and operation lists, the counts, and the tray status. The desktop reaches
 it through `WorkPolicyRepository`, keeps the result in `TrayUiState.arrangement`,
 and only resolves identities and renders. A declaration-aware source rule in
 `DesktopArchitectureTest` walks the desktop and feature surfaces and rejects code that sorts

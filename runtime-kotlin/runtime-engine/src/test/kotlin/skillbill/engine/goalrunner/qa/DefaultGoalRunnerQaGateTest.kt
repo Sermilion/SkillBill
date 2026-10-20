@@ -4,8 +4,10 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -16,6 +18,7 @@ import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.scaffold.model.PlatformManifest
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -23,6 +26,7 @@ import java.nio.file.Path
 import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class DefaultGoalRunnerQaGateTest {
   @TempDir lateinit var home: Path
@@ -52,10 +56,21 @@ class DefaultGoalRunnerQaGateTest {
     assertEquals(GoalQaGateResult.Skipped(GoalQaSkipReason.ALREADY_SETTLED_ON_TREE), result)
   }
 
+  @Test
+  fun `a pack without QA omits the goal QA run before reading acceptance criteria`() {
+    val git = RecordingWorkflowGitOperations().apply { trackedPathsValue = listOf("runtime-kotlin/src/Application.kt") }
+    val result =
+      gate(git, QaGateOutcomeStore(), Clock.systemUTC(), listOf(kotlinPackWithoutGate())).run(state(), request())
+
+    assertEquals(GoalQaGateResult.Skipped(GoalQaSkipReason.UNSUPPORTED_TARGET), result)
+    assertNull(phaseRunDatabase(home, Clock.systemUTC()).read { it.featureTaskQaOutcomes.find("goal-parent") })
+  }
+
   private fun gate(
     git: RecordingWorkflowGitOperations,
     outcomes: GoalRunnerWorkflowOutcomeStore,
     clock: Clock,
+    manifests: List<PlatformManifest> = emptyList(),
   ): DefaultGoalRunnerQaGate {
     val database = phaseRunDatabase(home, clock)
     val phaseEntry =
@@ -78,6 +93,7 @@ class DefaultGoalRunnerQaGateTest {
       clock,
       testActivityStampWriter(),
       FeatureTaskQaOutcomeRecorder(database, clock),
+      QaCapabilityResolver(git) { manifests },
     )
   }
 

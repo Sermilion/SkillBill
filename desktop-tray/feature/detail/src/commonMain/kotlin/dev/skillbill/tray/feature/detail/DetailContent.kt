@@ -157,6 +157,7 @@ private fun LoadedDetail(
   val fresh = effectiveFreshness(item, false, load.readError != null) == Freshness.FRESH
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val frozen = !fresh
+  val operation = item.family == WorkFamily.FEATURE_VERIFY
   val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
   val blockReason = item.exactPauseReason
     ?: detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.result
@@ -173,7 +174,7 @@ private fun LoadedDetail(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           StatusChip(item.outcomeLabel(), item.statusColor(), item.lifecycle, stalled = item.stalled())
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
-          StatusChip(if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
+          StatusChip(if (operation) "operation" else if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
@@ -213,18 +214,20 @@ private fun LoadedDetail(
     }
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-      DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
-      MetricDivider()
+      if (!operation) {
+        DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
+        MetricDivider()
+      }
       DetailMetric(
-        if (standalone) "Step" else "Phase",
-        if (planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
+        if (standalone || operation) "Step" else "Phase",
+        if (operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
         if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else item.phaseExecution?.label() ?: "",
         Modifier.weight(1f),
       )
       MetricDivider()
       val duration = detailDuration(item, now, frozen)
       DetailMetric(duration.label, duration.value, duration.note, Modifier.weight(1f))
-      if (!standalone) {
+      if (!standalone && !operation) {
         MetricDivider()
         DetailMetric("Subtask active", subtaskTime, if (frozen) "last known duration" else if (item.lifecycle == Lifecycle.ACTIVE) "ticking" else "", Modifier.weight(1f))
       }
@@ -232,7 +235,7 @@ private fun LoadedDetail(
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.weight(1f).fillMaxWidth()) {
       Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).padding(horizontal = 26.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        if (detail.subtasks.isNotEmpty()) {
+        if (!operation && detail.subtasks.isNotEmpty()) {
           Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Subtasks", color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text("from the goal manifest", color = dim, fontFamily = mono, fontSize = 11.sp)
@@ -288,7 +291,7 @@ private fun LoadedDetail(
             }
           }
           PageFooter(state.append(DetailList.SUBTASKS)) { onAction(DetailAction.LoadMore(DetailList.SUBTASKS)) }
-        } else if (detail.stepPipeline.isNotEmpty()) {
+        } else if (!operation && detail.stepPipeline.isNotEmpty()) {
           DesignLabel("Phase pipeline")
           FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             detail.stepPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, 0) }
@@ -310,17 +313,17 @@ private fun LoadedDetail(
             }
           }
         }
-        PageFooter(state.append(DetailList.PHASES)) { onAction(DetailAction.LoadMore(DetailList.PHASES)) }
+        if (!operation) PageFooter(state.append(DetailList.PHASES)) { onAction(DetailAction.LoadMore(DetailList.PHASES)) }
         val event = detail.latestActivity.event
         val edit = detail.latestActivity.edit
         val activity = buildList {
           item.lastAgentActivityLabel?.let { add("Agent activity" to "$it${item.lastAgentActivityAt?.let { at -> " · ${age((now - at).coerceNonNegative())} ago" }.orEmpty()}") }
           edit?.let { add("Last edit" to "${it.paths.joinToString { path -> "…/" + path.substringAfterLast('/') }} +${it.insertions ?: 0} −${it.deletions ?: 0}${it.recordedAt?.let { at -> " · ${age((now - at).coerceNonNegative())} ago" }.orEmpty()}") }
           event?.let { add("Event" to listOfNotNull(it.workflowPhase, it.workerRole, it.summary).joinToString(" · ")) }
-          item.activity?.let { add("Phase event" to it) }
+          item.activity?.let { add((if (operation) "Operation event" else "Phase event") to it) }
         }
         if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked || detail.phaseResults.isNotEmpty() || detail.goalQa != null) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          DesignLabel(if (standalone) "Phase activity" else "Goal activity")
+          DesignLabel(if (operation) "Operation activity" else if (standalone) "Phase activity" else "Goal activity")
           goalBlockReason?.let { reason ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
               Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {

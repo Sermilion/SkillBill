@@ -53,7 +53,7 @@ class DetailPresentationTest {
   @Test
   fun `a title ignores lifecycle, failure reasons and structured phase output`() {
     Lifecycle.entries.forEach { lifecycle ->
-      val phase = workItem("phase", lifecycle, WorkFamily.FEATURE_VERIFY, issueKey = "SKILL-phase").copy(
+      val phase = workItem("phase", lifecycle, family = null, issueKey = "SKILL-phase").copy(
         scope = ExecutionScope.STANDALONE_PHASE,
         phaseId = "validation",
         summary = "{\"status\":\"failed\",\"summary\":\"Build failed because a command exited\"}",

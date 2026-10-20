@@ -30,14 +30,16 @@ internal fun candidateQuery(section: WorkSection, cutoff: String, through: Strin
   val condition = when (section) {
     WorkSection.NEEDS_YOU -> "finished_at IS NULL"
     WorkSection.GOALS -> "family = 'goal' AND finished_at IS NULL"
-    WorkSection.PHASES -> "family <> 'goal' AND finished_at IS NULL"
+    WorkSection.PHASES -> "family NOT IN ('goal', 'verify') AND finished_at IS NULL"
+    WorkSection.OPERATIONS -> "family = 'verify' AND finished_at IS NULL"
     WorkSection.HISTORY, WorkSection.RECENT -> "finished_at IS NOT NULL AND julianday(finished_at) >= julianday(?) AND julianday(finished_at) <= julianday(?)"
   }
   val ordering = if (section in setOf(WorkSection.HISTORY, WorkSection.RECENT)) "finished_at" else "started_at"
   val familyCondition = when (historyFilter) {
     HistoryFilter.ALL -> "1 = 1"
     HistoryFilter.GOALS -> "family = 'goal'"
-    HistoryFilter.PHASES -> "family <> 'goal'"
+    HistoryFilter.PHASES -> "family NOT IN ('goal', 'verify')"
+    HistoryFilter.OPERATIONS -> "family = 'verify'"
   }
   val goalPhaseFilter = """
         AND NOT EXISTS (

@@ -1,5 +1,7 @@
 package skillbill.di.core
 
+import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.work.IdeStatusProjector
@@ -206,6 +208,7 @@ private class SnapshotFixture(
           featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
           manifestStore = EmptyManifestStore,
           diagnostics = NoopRuntimeDiagnostics,
+          qaCapabilities = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
         ),
       ideStatusValidator = NoopIdeStatusValidator,
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },

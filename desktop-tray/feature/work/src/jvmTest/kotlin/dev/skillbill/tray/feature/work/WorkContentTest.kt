@@ -13,6 +13,7 @@ import androidx.compose.ui.use
 import dev.skillbill.tray.core.designsystem.DesignSystemTheme
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.QaVerdict
 import dev.skillbill.tray.core.testing.workItem
 import dev.skillbill.tray.core.ui.loadedList
@@ -44,6 +45,18 @@ class WorkContentTest {
         it.config.getOrNull(SemanticsProperties.Text).orEmpty().map { text -> text.text }
       }
     }
+  }
+
+  @Test
+  fun `verification appears in its own operations section`() {
+    val verify = workItem("verify", family = WorkFamily.FEATURE_VERIFY, issueKey = null).copy(
+      currentStepLabel = "Code review",
+    )
+    val shown = texts(WorkUiState(operations = loadedList(listOf(verify), hasMore = false)))
+
+    assertTrue("OPERATIONS · 1" in shown, shown.joinToString())
+    assertTrue("STANDALONE PHASES · 0" in shown, shown.joinToString())
+    assertTrue(shown.any { "Verify" in it && "Code review" in it }, shown.joinToString())
   }
 
   @Test

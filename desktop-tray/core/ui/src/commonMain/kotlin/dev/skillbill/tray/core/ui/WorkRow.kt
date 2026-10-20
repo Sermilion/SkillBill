@@ -33,6 +33,7 @@ import dev.skillbill.tray.core.designsystem.raised
 import dev.skillbill.tray.core.designsystem.sidebar
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.finished
 import dev.skillbill.tray.core.domain.model.needsAttention
 import dev.skillbill.tray.core.domain.model.showsAsStandalonePhase
@@ -50,7 +51,7 @@ fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Unit) {
         val status = item.outcomeLabel().takeIf { item.showsAsStandalonePhase() || item.finished() || item.stalled() }
         val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.TERMINAL || item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
         Text(
-          listOfNotNull(item.issueKey ?: item.phaseId, status, step).joinToString(" · "),
+          listOfNotNull(item.issueKey ?: item.phaseId ?: "Verify".takeIf { item.family == WorkFamily.FEATURE_VERIFY }, status, step).joinToString(" · "),
           color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else if (item.stalled()) amber else muted,
           fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )

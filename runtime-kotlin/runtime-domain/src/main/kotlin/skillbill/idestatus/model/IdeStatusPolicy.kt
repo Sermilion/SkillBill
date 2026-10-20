@@ -80,9 +80,9 @@ data class IdeStatusWorkPolicyFacts(
   val successfulGoalCompletion: Boolean = false,
 )
 
-enum class IdeStatusLiveSection { NEEDS_YOU, GOALS, PHASES }
+enum class IdeStatusLiveSection { NEEDS_YOU, GOALS, PHASES, OPERATIONS }
 
-enum class IdeStatusDisplayGroup { GOALS, PHASES }
+enum class IdeStatusDisplayGroup { GOALS, PHASES, OPERATIONS }
 
 data class IdeStatusWorkPolicy(
   val liveSection: IdeStatusLiveSection?,
@@ -114,6 +114,8 @@ data class IdeStatusBoardArrangement(
   val goals: List<IdeStatusBoardEntry>,
   val livePhases: List<IdeStatusBoardEntry>,
   val finishedPhases: List<IdeStatusBoardEntry>,
+  val liveOperations: List<IdeStatusBoardEntry>,
+  val finishedOperations: List<IdeStatusBoardEntry>,
 )
 
 object IdeStatusPolicy {
@@ -122,6 +124,7 @@ object IdeStatusPolicy {
       entries.filter { it.policy.displayGroup == IdeStatusDisplayGroup.GOALS && it.policy.liveSection != null }
         .sortedWith(compareBy({ it.policy.displayPriority }, { it.key }, { it.repositoryIdentity }))
     val phases = entries.filter { it.policy.displayGroup == IdeStatusDisplayGroup.PHASES }
+    val operations = entries.filter { it.policy.displayGroup == IdeStatusDisplayGroup.OPERATIONS }
     val running = entries.count { it.policy.running }
     val needsYou = entries.count { it.policy.requiresAttention }
     return IdeStatusBoardArrangement(
@@ -138,6 +141,8 @@ object IdeStatusPolicy {
       goals = goals,
       livePhases = phases.filter { it.policy.liveSection != null },
       finishedPhases = phases.filter { it.policy.recentlyFinishedPhase },
+      liveOperations = operations.filter { it.policy.liveSection != null },
+      finishedOperations = operations.filter { it.policy.recentlyFinishedPhase },
     )
   }
 
@@ -200,7 +205,12 @@ object IdeStatusPolicy {
         facts.freshness == IdeStatusFreshness.FRESH
     val liveSection = liveSection(facts, goal)
     val displayGroup = displayGroup(facts, goal)
-    val recent = windowed(facts, RECENT_PHASE_WINDOW, displayGroup == IdeStatusDisplayGroup.PHASES)
+    val recent =
+      windowed(
+        facts,
+        RECENT_PHASE_WINDOW,
+        displayGroup in setOf(IdeStatusDisplayGroup.PHASES, IdeStatusDisplayGroup.OPERATIONS),
+      )
     val done =
       windowed(
         facts,
@@ -217,7 +227,13 @@ object IdeStatusPolicy {
           (goal && facts.lifecycle == IdeStatusLifecycleState.IDLE && facts.finishedAt == null),
       displayGroup = displayGroup,
       displayPriority = displayPriority(facts),
-      running = liveSection == IdeStatusLiveSection.GOALS || liveSection == IdeStatusLiveSection.PHASES,
+      running =
+        liveSection in
+          setOf(
+            IdeStatusLiveSection.GOALS,
+            IdeStatusLiveSection.PHASES,
+            IdeStatusLiveSection.OPERATIONS,
+          ),
       recentlyFinishedPhase = recent.within,
       doneWithinDay = done.within,
       membershipDeadline = listOfNotNull(recent.nextChange, done.nextChange).minOrNull(),
@@ -251,7 +267,12 @@ object IdeStatusPolicy {
       when (facts.lifecycle) {
         IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED, IdeStatusLifecycleState.PAUSED ->
           IdeStatusLiveSection.NEEDS_YOU
-        IdeStatusLifecycleState.ACTIVE -> if (goal) IdeStatusLiveSection.GOALS else IdeStatusLiveSection.PHASES
+        IdeStatusLifecycleState.ACTIVE ->
+          when {
+            goal -> IdeStatusLiveSection.GOALS
+            facts.family == IdeStatusWorkflowFamily.FEATURE_VERIFY -> IdeStatusLiveSection.OPERATIONS
+            else -> IdeStatusLiveSection.PHASES
+          }
         IdeStatusLifecycleState.IDLE -> IdeStatusLiveSection.NEEDS_YOU.takeIf { goal }
         else -> null
       }
@@ -273,10 +294,11 @@ object IdeStatusPolicy {
   ): IdeStatusDisplayGroup? =
     if (goal) {
       IdeStatusDisplayGroup.GOALS
+    } else if (facts.family == IdeStatusWorkflowFamily.FEATURE_VERIFY) {
+      IdeStatusDisplayGroup.OPERATIONS
     } else {
       IdeStatusDisplayGroup.PHASES.takeIf {
         facts.family == IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME ||
-          facts.family == IdeStatusWorkflowFamily.FEATURE_VERIFY ||
           facts.scope == IdeStatusExecutionScope.STANDALONE_PHASE
       }
     }

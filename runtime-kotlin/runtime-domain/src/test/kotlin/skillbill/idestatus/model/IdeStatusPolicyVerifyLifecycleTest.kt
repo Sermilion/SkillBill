@@ -31,7 +31,32 @@ class IdeStatusPolicyVerifyLifecycleTest {
       )
 
     assertEquals(IdeStatusLifecycleState.ACTIVE, lifecycle)
-    assertEquals(IdeStatusLiveSection.PHASES, IdeStatusPolicy.work(facts(lifecycle)).liveSection)
+    val policy = IdeStatusPolicy.work(facts(lifecycle))
+    assertEquals(IdeStatusLiveSection.OPERATIONS, policy.liveSection)
+    assertEquals(IdeStatusDisplayGroup.OPERATIONS, policy.displayGroup)
+    assertEquals(true, policy.running)
+    val entry = IdeStatusBoardEntry("verify", "repo", lifecycle, policy)
+    val board = IdeStatusPolicy.arrange(listOf(entry))
+    assertEquals(listOf(entry), board.liveOperations)
+    assertEquals(emptyList(), board.livePhases)
+    assertEquals(1, board.running)
+  }
+
+  @Test
+  fun `finished verification stays in recent operations without becoming a finished phase`() {
+    val policy =
+      IdeStatusPolicy.work(
+        facts(IdeStatusLifecycleState.TERMINAL).copy(
+          finishedAt = observedAt.minusSeconds(30),
+          observedAt = observedAt,
+        ),
+      )
+    val entry = IdeStatusBoardEntry("verify", "repo", IdeStatusLifecycleState.TERMINAL, policy)
+    val board = IdeStatusPolicy.arrange(listOf(entry))
+
+    assertEquals(listOf(entry), board.finishedOperations)
+    assertEquals(emptyList(), board.finishedPhases)
+    assertEquals(0, board.running)
   }
 
   @Test

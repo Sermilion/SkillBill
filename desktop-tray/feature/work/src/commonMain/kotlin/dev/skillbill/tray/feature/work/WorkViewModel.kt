@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Owns the work sections (needs you, goals, standalone phases, recently finished) one main window shows. There is one instance per main
+ * Owns the work sections (needs you, goals, standalone phases, operations, recently finished) one main window shows. There is one instance per main
  * window; the tray and the transition notifications observe the board with their own owners, so none of them reads this one.
  * The window passes the sidebar filter text in with [WorkAction.FilterChanged]; it narrows only what this screen shows,
  * finished work included.
@@ -27,7 +27,7 @@ class WorkViewModel(
   private val navigation = NavigationEffects<WorkEffect>()
 
   val state: StateFlow<WorkUiState> = sections.state
-    .map { WorkUiState(needsYou = it.needsYou, goals = it.goals, phases = it.phases, finished = it.recent, store = it.store) }
+    .map { WorkUiState(needsYou = it.needsYou, goals = it.goals, phases = it.phases, operations = it.operations, finished = it.recent, store = it.store) }
     .stateIn(viewModelScope, SharingStarted.Eagerly, WorkUiState())
 
   val effects: Flow<WorkEffect> = navigation.flow

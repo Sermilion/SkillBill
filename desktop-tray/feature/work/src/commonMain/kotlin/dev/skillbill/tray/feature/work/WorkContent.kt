@@ -41,7 +41,7 @@ import dev.skillbill.tray.core.ui.SidebarWorkRow
 import kotlin.time.Instant
 
 /**
- * The sidebar's work as rows of the window's one sidebar list: the needs-you, standalone-phase and goal-run sections, then
+ * The sidebar's work as rows of the window's one sidebar list: the needs-you, standalone-phase, operation and goal-run sections, then
  * what finished since [today], the start of the local day. The window owns the list, its [scroll] state and the filter text,
  * so work and history share one scroll region.
  */
@@ -56,6 +56,7 @@ fun LazyListScope.workSections(
   val shown = mutableSetOf<WorkIdentity>()
   workSection("Needs you", WorkSection.NEEDS_YOU, state.needsYou, shown, filtering, selected, scroll, onAction, first = true)
   workSection("Standalone phases", WorkSection.PHASES, state.phases, shown, filtering, selected, scroll, onAction)
+  workSection("Operations", WorkSection.OPERATIONS, state.operations, shown, filtering, selected, scroll, onAction)
   workSection("Goal runs", WorkSection.GOALS, state.goals, shown, filtering, selected, scroll, onAction)
   // The recent section holds the last 24 hours, latest first; rows from before today's start drop out, and so do older pages.
   workSection("Finished today", WorkSection.RECENT, state.finished, shown, filtering, selected, scroll, onAction, empty = "Nothing finished today") {

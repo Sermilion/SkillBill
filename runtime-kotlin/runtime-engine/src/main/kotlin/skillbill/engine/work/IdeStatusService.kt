@@ -613,7 +613,7 @@ class IdeStatusService(
         finishedAt = completion.first,
         finishedAtSource = completion.second,
         goalManifest = goalPage?.manifest,
-        goalFinishPipeline = if (goalPage == null) emptyList() else GOAL_FINISH_PIPELINE,
+        goalFinishPipeline = if (goalPage == null) emptyList() else projector.goalFinishPipeline(context.repoRoot),
         runtimeStatus = runtimeStatus,
         goalStatus = goalStatus,
         pageOffset = position.offset,

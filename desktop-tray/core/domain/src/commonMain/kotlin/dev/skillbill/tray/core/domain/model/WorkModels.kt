@@ -221,6 +221,8 @@ data class BoardArrangement(
   val goals: List<WorkIdentity>,
   val livePhases: List<WorkIdentity>,
   val finishedPhases: List<WorkIdentity>,
+  val liveOperations: List<WorkIdentity> = emptyList(),
+  val finishedOperations: List<WorkIdentity> = emptyList(),
 )
 
 data class BoardRetention(
@@ -282,7 +284,7 @@ enum class ControlConfirmation {
   TERMINATION_ATTEMPTED,
 }
 
-enum class HistoryFilter { ALL, GOALS, PHASES }
+enum class HistoryFilter { ALL, GOALS, PHASES, OPERATIONS }
 
 data class AppSettings(
   val databasePath: String? = null,
@@ -304,7 +306,7 @@ sealed interface SettingsState {
   data class Failed(val problem: Problem) : SettingsState
 }
 
-enum class WorkSection { NEEDS_YOU, GOALS, PHASES, HISTORY, RECENT }
+enum class WorkSection { NEEDS_YOU, GOALS, PHASES, OPERATIONS, HISTORY, RECENT }
 
 val allowedTransitions = listOf("blocked", "failed", "goal_completed", "pause_took_effect", "standalone_phase_finished")
 val defaultNotifications = mapOf("blocked" to true, "failed" to true, "goal_completed" to true, "pause_took_effect" to true, "standalone_phase_finished" to false)

@@ -417,7 +417,7 @@ class FeatureTaskRuntimeQaExecutionTest {
         git,
         workspaces,
         leases,
-        QaCapabilityResolver {
+        QaCapabilityResolver(git) {
           capabilityReads++
           listOf(pack)
         },

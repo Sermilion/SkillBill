@@ -86,7 +86,15 @@ internal fun qaStandalonePhaseRun(
 ): QaStandalonePhaseRun {
   val validator = QaReceiptValidator(QaReceiptSchemaValidator())
   return QaStandalonePhaseRun(
-    execution = testQaExecutionLifecycle(gitOperations, workspaces, leases, QaCapabilityResolver { manifests }),
+    execution =
+      testQaExecutionLifecycle(
+        gitOperations,
+        workspaces,
+        leases,
+        QaCapabilityResolver(gitOperations) {
+          manifests
+        },
+      ),
     settlement = QaReceiptSettlement(validator, workspaces, NoopRuntimeDiagnostics),
     validator = validator,
   )

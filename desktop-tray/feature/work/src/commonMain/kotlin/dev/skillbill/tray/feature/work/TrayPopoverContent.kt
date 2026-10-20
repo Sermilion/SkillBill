@@ -109,7 +109,7 @@ fun TrayPopoverContent(
     }
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
-      listOf(PopoverTab.GOALS to state.popoverGoals, PopoverTab.PHASES to state.popoverLivePhases).forEach { (tab, rows) ->
+      listOf(PopoverTab.GOALS to state.popoverGoals, PopoverTab.PHASES to state.popoverLivePhases, PopoverTab.OPERATIONS to state.popoverLiveOperations).forEach { (tab, rows) ->
         val active = state.popoverTab == tab
         Column(Modifier.weight(1f).clickable { onAction(TrayAction.ChooseTab(tab)) }) {
           Row(Modifier.fillMaxWidth().padding(top = 11.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
@@ -122,7 +122,16 @@ fun TrayPopoverContent(
       }
     }
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
-    val rows = if (state.popoverTab == PopoverTab.GOALS) state.popoverGoals else state.popoverLivePhases
+    val rows = when (state.popoverTab) {
+      PopoverTab.GOALS -> state.popoverGoals
+      PopoverTab.PHASES -> state.popoverLivePhases
+      PopoverTab.OPERATIONS -> state.popoverLiveOperations
+    }
+    val finished = when (state.popoverTab) {
+      PopoverTab.GOALS -> emptyList()
+      PopoverTab.PHASES -> state.popoverFinishedPhases
+      PopoverTab.OPERATIONS -> state.popoverFinishedOperations
+    }
     state.liveProblem?.let {
       Text(it.summary, Modifier.fillMaxWidth().background(orange.copy(alpha = .12f)).padding(12.dp), color = amber, fontFamily = body, fontSize = 11.sp)
     }
@@ -134,7 +143,7 @@ fun TrayPopoverContent(
       )
     }
     val scroll = rememberLazyListState()
-    val liveLists = listOf(state.sections.needsYou, state.sections.goals, state.sections.phases)
+    val liveLists = listOf(state.sections.needsYou, state.sections.goals, state.sections.phases, state.sections.operations)
     val loading = liveLists.any { it is PagedListState.Content && it.append == AppendState.Loading }
     LoadNextPageOnScroll(scroll, state.hasMoreLive, loading) { onAction(TrayAction.LoadMoreLive) }
     LazyColumn(Modifier.weight(1f), state = scroll) {
@@ -144,9 +153,9 @@ fun TrayPopoverContent(
       items(rows, key = { it.identity }) { item ->
         PopoverWorkRow(item, selected == item.identity, now, state.stale) { onAction(TrayAction.Select(item.identity)); openMain() }
       }
-      if (state.popoverTab == PopoverTab.PHASES && state.popoverFinishedPhases.isNotEmpty()) {
+      if (finished.isNotEmpty()) {
         item { DesignLabel("Finished in the last hour", Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) }
-        items(state.popoverFinishedPhases, key = { it.identity }) { item ->
+        items(finished, key = { it.identity }) { item ->
           PopoverWorkRow(item, false, now, state.stale) { onAction(TrayAction.Select(item.identity)); openMain() }
         }
       }

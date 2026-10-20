@@ -146,7 +146,7 @@ JNIEXPORT void JNICALL Java_dev_skillbill_tray_infrastructure_macos_MacStatusIte
     [goalsMenu release];
     [menu addItem:goalGroup];
     [goalGroup release];
-    NSMenuItem *phaseGroup = [[NSMenuItem alloc] initWithTitle:@"Phases" action:nil keyEquivalent:@""];
+    NSMenuItem *phaseGroup = [[NSMenuItem alloc] initWithTitle:@"Phases and operations" action:nil keyEquivalent:@""];
     NSMenu *phasesMenu = submenu(phaseLabels, 1000);
     phaseGroup.submenu = phasesMenu;
     [phasesMenu release];

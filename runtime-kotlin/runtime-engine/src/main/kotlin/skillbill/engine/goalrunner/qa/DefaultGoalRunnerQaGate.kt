@@ -8,6 +8,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
+import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.goalrunner.model.GoalProgressEventDraft
@@ -41,6 +43,7 @@ class DefaultGoalRunnerQaGate(
   private val clock: Clock,
   private val activityStampWriter: AgentActivityStampWriter,
   private val qaOutcomes: FeatureTaskQaOutcomeRecorder,
+  private val capabilities: QaCapabilityResolver,
 ) : GoalRunnerQaGate {
   override fun run(
     state: GoalRunnerManifestState,
@@ -50,12 +53,15 @@ class DefaultGoalRunnerQaGate(
     val parentOutcome = outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)
     val currentTree = gitOperations.repositoryTreeIdentity(request.repoRoot)
     val settledOutcome = parentOutcome?.outcome
-    if (
-      settledOutcome in setOf(StandaloneQaOutcome.PASSED, StandaloneQaOutcome.SKIPPED) &&
-      currentTree is WorkflowGitOperationResult.Ok && currentTree.value == parentOutcome?.testedTreeIdentity
-    ) {
-      return GoalQaGateResult.Skipped(GoalQaSkipReason.ALREADY_SETTLED_ON_TREE)
-    }
+    val skipReason =
+      when {
+        settledOutcome in setOf(StandaloneQaOutcome.PASSED, StandaloneQaOutcome.SKIPPED) &&
+          currentTree is WorkflowGitOperationResult.Ok && currentTree.value == parentOutcome?.testedTreeIdentity ->
+          GoalQaSkipReason.ALREADY_SETTLED_ON_TREE
+        capabilities.resolve(request.repoRoot) is QaCapabilityResolution.Absent -> GoalQaSkipReason.UNSUPPORTED_TARGET
+        else -> null
+      }
+    if (skipReason != null) return GoalQaGateResult.Skipped(skipReason)
     val invariants =
       when (
         val read =
