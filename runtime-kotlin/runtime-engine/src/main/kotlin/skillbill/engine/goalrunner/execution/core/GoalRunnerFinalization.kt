@@ -343,7 +343,7 @@ class GoalRunnerFinalization(
     if (manifest.specSource == SpecSource.LINEAR) {
       deleteGoalSpecScratchOnSuccess(manifest, request)
     }
-    unfinishedGitOperationReason(request.repoRoot)?.let { return it }
+    warnUnfinishedGitOperation(request.repoRoot)
     val before = gitOperations.worktreeStatus(request.repoRoot)
     if (before !is WorkflowGitOperationResult.Ok) {
       return "Goal finalization could not verify worktree cleanliness: ${before.error}"
@@ -357,15 +357,17 @@ class GoalRunnerFinalization(
     return commitAndPushDirtyWorktree(manifest, request, featureBranch, implementationPaths)
   }
 
-  private fun unfinishedGitOperationReason(repoRoot: Path): String? {
+  // An interrupted monitor repair can leave a merge behind. Commit-all concludes it with the remaining
+  // worktree changes; the CI monitor checks the pushed result like any other commit.
+  private fun warnUnfinishedGitOperation(repoRoot: Path) {
     val inProgress = gitOperations.inProgressOperation(repoRoot)
-    if (inProgress !is WorkflowGitOperationResult.Ok) {
-      return "Goal finalization could not check '$repoRoot' for an unfinished git operation: ${inProgress.error}"
-    }
-    val operation = inProgress.value.trim().ifBlank { return null }
-    return "Goal finalization found an unfinished git $operation in '$repoRoot' and will not commit it. " +
-      "An interrupted monitor repair can leave one behind. Check and finish it, or discard it with " +
-      "`git $operation --abort`, then resume the goal."
+    val operation = (inProgress as? WorkflowGitOperationResult.Ok)?.value?.trim().orEmpty()
+    if (operation.isBlank()) return
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Goal finalization found an unfinished git $operation in '$repoRoot' and commits it with the remaining " +
+        "worktree changes.",
+    )
   }
 
   private fun commitAndPushDirtyWorktree(

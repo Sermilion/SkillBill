@@ -222,6 +222,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertIsNot
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -2006,7 +2007,7 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
-  fun `finalize refuses to commit an unfinished merge left by an interrupted monitor repair`() {
+  fun `finalize commits an unfinished merge left by an interrupted monitor repair and continues`() {
     val repoRoot = Files.createTempDirectory("goal-unfinished-merge-finalize")
     val git =
       CommitAllRecordingGitOperations(
@@ -2015,14 +2016,13 @@ class GoalRunnerLinearScratchFinalizeTest {
         inProgressOperation = "merge",
       )
     val pullRequests = RecordingPullRequestPort()
-    val store =
-      InMemoryGoalManifestStore(
-        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
-      )
     val runner =
       testGoalRunner(
         goalRunnerDeps(
-          manifestStore = store,
+          manifestStore =
+            InMemoryGoalManifestStore(
+              manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+            ),
           subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
           outcomeStore = RecordingOutcomeStore(),
           pullRequestPort = pullRequests,
@@ -2031,14 +2031,13 @@ class GoalRunnerLinearScratchFinalizeTest {
         ),
       )
 
-    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(linearRunRequest(repoRoot)))
-    assertEquals(GoalRunnerStopReason.PULL_REQUEST_FAILED, stopped.stop.reason)
-    assertContains(stopped.stop.blockedReason, "unfinished git merge")
-    assertContains(stopped.stop.blockedReason, "git merge --abort")
-    assertTrue(git.stagePathsCalls.isEmpty())
-    assertTrue(git.commitMessages.isEmpty())
-    assertTrue(git.pushedBranches.isEmpty())
-    assertEquals(0, pullRequests.openCount)
+    val report = runner.run(linearRunRequest(repoRoot))
+
+    assertIsNot<GoalRunnerRunReport.Stopped>(report)
+    assertEquals(listOf(listOf("src/Merged.kt")), git.stagePathsCalls)
+    assertEquals(1, git.commitMessages.size)
+    assertEquals(listOf("feat/SKILL-56-goal"), git.pushedBranches)
+    assertEquals(1, pullRequests.openCount)
   }
 
   @Test
