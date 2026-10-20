@@ -1,6 +1,6 @@
 # SKILL-431 subtask 1 - goal-level QA run in finalization
 
-Parent spec: `.feature-specs/SKILL-431-run-qa-once-per-goal-after-all-subtasks-and-before-the-pr/spec.md`
+Parent spec: `spec.md`
 
 ## Scope
 

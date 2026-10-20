@@ -1,6 +1,6 @@
 # SKILL-431 subtask 2 - goal children without QA and goal-level selection
 
-Parent spec: `.feature-specs/SKILL-431-run-qa-once-per-goal-after-all-subtasks-and-before-the-pr/spec.md`
+Parent spec: `spec.md`
 
 ## Scope
 
@@ -45,7 +45,7 @@ Validate runs the full repository gate. Implement and audit only read the tree.
 
 ## Implementation Details
 
-Ordered tasks. Every path is under `runtime-kotlin/` unless it says otherwise. Facts come from the preplan digest. Lines marked "Assumption" are decisions made without reading the file; implement confirms them and adjusts locally if the code disagrees.
+Ordered tasks. Every path is under `../../../runtime-kotlin` unless it says otherwise. Facts come from the preplan digest. Lines marked "Assumption" are decisions made without reading the file; implement confirms them and adjusts locally if the code disagrees.
 
 ### Task 1. Goal-child revision 4 in the skeleton catalog (AC1)
 

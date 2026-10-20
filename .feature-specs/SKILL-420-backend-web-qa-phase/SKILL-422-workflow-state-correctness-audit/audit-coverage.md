@@ -17,7 +17,7 @@ Maps every upstream scope item, seven deliverable groups, and SKILL-414/417/418 
 
 | Scope item | Current source owner | Transition-matrix entry | Regression or finding ID | Limitation | Execution status |
 | --- | --- | --- | --- | --- | --- |
-| DatabaseSchema.tableNames vs migration-created tables | `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/core/schema/DatabaseSchema.kt` `tableNames`; omissions per inventory registry table | none — schema registry coherence | none | registry omits settlements, review_accounting, operation_proposals, work_store_identity, desktop_change_revisions, room_master_table | source-complete |
+| DatabaseSchema.tableNames vs migration-created tables | `../../../runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/core/schema/DatabaseSchema.kt` `tableNames`; omissions per inventory registry table | none — schema registry coherence | none | registry omits settlements, review_accounting, operation_proposals, work_store_identity, desktop_change_revisions, room_master_table | source-complete |
 | schema_migrations | `DatabaseSchemaStatements`; migration insert into `schema_migrations` | none — supporting/telemetry family | none | none | source-complete |
 | feature_task_phase_settlements | `SqliteFeatureTaskPhaseSettlementStore` / `FeatureTaskPhaseSettlementService`; MCP `McpFeatureTaskSettlementHandlers` | Phase / step — settlement admission | F2; T1-02 | not in `DatabaseSchema.tableNames` | tests authored / pending validate |
 | operation_proposals | `SqliteOperationProposalStore` / `OperationConfirmationGate` | none — supporting/telemetry family | none | none | source-complete |
@@ -63,8 +63,8 @@ Maps every upstream scope item, seven deliverable groups, and SKILL-414/417/418 
 | feedback_events | findings/learnings pipelines | none — supporting/telemetry family | none | none | source-complete |
 | learnings | learnings store; MCP `resolve_learnings` | none — supporting/telemetry family | none | none | source-complete |
 | session_learnings | session learnings store | none — supporting/telemetry family | none | none | source-complete |
-| Pre-install preserve wipe | `uninstall.sh` `remove_state_dir_preserving_source` (794+); `install.sh` `run_pre_install_uninstall` (742–766) | Subtask 3 — preserve pre-install cleanup | T3-01; F13 verified no-finding | none | tests authored / pending validate |
-| Explicit shell uninstall | `uninstall.sh` `remove_state_dir_full` (776+) | Subtask 3 — explicit shell destructive | T3-04; F14 verified no-finding | none | tests authored / pending validate |
+| Pre-install preserve wipe | `../../../uninstall.sh` `remove_state_dir_preserving_source` (794+); `install.sh` `run_pre_install_uninstall` (742–766) | Subtask 3 — preserve pre-install cleanup | T3-01; F13 verified no-finding | none | tests authored / pending validate |
+| Explicit shell uninstall | `../../../uninstall.sh` `remove_state_dir_full` (776+) | Subtask 3 — explicit shell destructive | T3-04; F14 verified no-finding | none | tests authored / pending validate |
 | Application uninstall | `SkillBillUninstallService.apply` → `removeRecursively(stateRoot)` | Subtask 3 — application destructive | T3-04 | none | tests authored / pending validate |
 | Session factory recovery | `SQLiteDatabaseSessionFactory` / `DatabaseRuntime` | Subtask 3 — session open boundary | T3-03; F15 verified no-finding | none | tests authored / pending validate |
 | Nested write rollback | `ConnectionTransactions` / `inNestedWriteTransaction` | Subtask 3 — transactional rollback | T3-02; F13 context | none | tests authored / pending validate |
@@ -154,7 +154,7 @@ Maps every upstream scope item, seven deliverable groups, and SKILL-414/417/418 
 | MCP feature_verify_workflow_* | `McpWorkflowToolHandlers` → `WorkflowService` | Lifecycle — verify MCP | T2-11 | none | tests authored / pending validate |
 | MCP feature_task_phase_complete / block | `McpFeatureTaskSettlementHandlers` | Phase / step — settlement | F2; T1-02 | none | tests authored / pending validate |
 | IntelliJ status refresh ordering | `intellij-plugin/.../StatusRefreshCoordinator.acceptsNewerStatus` (`isPostChildMonitor`) | Subtask 2 — display ordering | T2-10 | SKILL-417 child implement snapshot hold | tests authored / pending validate |
-| VS Code companion status refresh | `vscode-extension/src/application/StatusRefreshCoordinator.ts` | Subtask 2 — display ordering | T2-10 | same SKILL-417 requirement | tests authored / pending validate |
+| VS Code companion status refresh | `../../../vscode-extension/src/application/StatusRefreshCoordinator.ts` | Subtask 2 — display ordering | T2-10 | same SKILL-417 requirement | tests authored / pending validate |
 | Desktop tray presentation | `DashboardController` / `TrayPresentation` | Display — tray counts | F10; T2-09 | none | tests authored / pending validate |
 | Desktop data/control (Room + WorkControlService) | `RoomBoardSource` implements board/detail/control repos; `WorkControlService.request` PAUSE/STOP/CANCEL/LAUNCH | Controls — desktop mutations | SKILL-418 desktop row below | SKILL-423 Room/SQLite reads; mutations not CLI-only | source-complete |
 

@@ -1,6 +1,6 @@
 # SKILL-419 subtask 2: Feature-task `qa` and `qa_fix` in the goal runtime
 
-Parent spec: `.feature-specs/SKILL-419-mobile-qa-phase/spec.md`
+Parent spec: `spec.md`
 
 ## Scope
 
@@ -18,7 +18,7 @@ Put the subtask 1 QA strategy into the full run after a satisfied acceptance aud
 - Pre-QA resume (decision D3): the semanticRevision 2 GOAL_CHILD and STANDALONE definitions stay resolvable with their pre-QA slot lists, and new definitions at semanticRevision 3 include QA. The `SkeletonDefinition` lookup supports two revisions per id without `byId` picking the wrong one for new launches. A recorded revision-2 plan resumes on its recorded composition with no qa step; a new launch gets revision 3.
 - If adding a QA policy id, register it in `FeatureTaskRuntimeEffectivePolicies` and in the compatibility policy set.
 - Each full-run QA settlement writes its outcome (attempted, passed, findings, skipped, incomplete), skip or incomplete reason, and consumed qa_fix attempts to the runtime database, and the pull request the goal opens summarizes each subtask's QA outcome. Progress, IDE status, and CLI reports do not display the full-run outcome yet; the stored record is what a later change surfaces. Every fallback, target substitution, retry, and cleanup failure emits a diagnostic record without credentials or device log bodies.
-- `skills/skill-bill/content.md` documents `qa:auto|off` on the full run, its translation to `--qa <value>`, and the usage error when `qa:` reaches a form that does not accept it. `docs/runtime-command-guidance.md` updates the child phase sequence to show audit, optional qa, then review.
+- `../../../skills/skill-bill/content.md` documents `qa:auto|off` on the full run, its translation to `--qa <value>`, and the usage error when `qa:` reaches a form that does not accept it. `docs/runtime-command-guidance.md` updates the child phase sequence to show audit, optional qa, then review.
 
 ## Acceptance Criteria
 
@@ -31,7 +31,7 @@ Put the subtask 1 QA strategy into the full run after a satisfied acceptance aud
 7. `qa:auto|off` reaches the execution plan through the `--qa` flag, its environment variable, and the goal continuation artifact; omission resolves to auto; `off` yields a `disabled_policy` skip with no probing; unknown, duplicate, or conflicting values raise usage errors; and a resume with a different selection is refused.
 8. The execution-plan contract is at "0.3" with `qa_selection`, "0.2" records decode with QA not composed, and revision-2 goal-child and standalone definitions remain resolvable so a pre-QA workflow resumes on its recorded composition while new launches use the QA-bearing revision.
 9. Each full-run QA settlement durably records its outcome (attempted, passed, findings, skipped, or incomplete), its skip or incomplete reason, and its consumed qa_fix attempts in the runtime database; the pull request the goal opens states each subtask's QA outcome and reason; and every fallback, target substitution, retry, and cleanup failure emits a diagnostic record without credentials or device log bodies. Displaying the full-run outcome in progress, IDE status, or CLI reports is out of scope.
-10. `skills/skill-bill/content.md` and `docs/runtime-command-guidance.md` document the full-run `qa:auto|off` token and the audit, qa, review ordering.
+10. `../../../skills/skill-bill/content.md` and `docs/runtime-command-guidance.md` document the full-run `qa:auto|off` token and the audit, qa, review ordering.
 
 ## Non-goals
 
@@ -59,7 +59,7 @@ Assumption for implement to confirm: the run loop can express "audit after qa_fi
 
 ## Implementation Details
 
-All paths below are relative to `runtime-kotlin/` unless they start with `orchestration/`, `skills/`, or `docs/`. Package prefixes are abbreviated as in the preplan digest. Subtask 1 is assumed merged: it supplies `PhaseSlot.QA` (steps `qa`, `qa_fix`), the `FeatureTaskRuntimePhaseIds.QA`/`QA_FIX` ids, the qa-receipt schema with `QaReceiptPayloadKeys` and its shared validator, the `QaCapabilityResolver`, the device lease port, and the base `QaStrategy`. If any of these landed under a different name, implement uses subtask 1's name and does not duplicate it.
+All paths below are relative to `../../../runtime-kotlin` unless they start with `orchestration/`, `skills/`, or `docs/`. Package prefixes are abbreviated as in the preplan digest. Subtask 1 is assumed merged: it supplies `PhaseSlot.QA` (steps `qa`, `qa_fix`), the `FeatureTaskRuntimePhaseIds.QA`/`QA_FIX` ids, the qa-receipt schema with `QaReceiptPayloadKeys` and its shared validator, the `QaCapabilityResolver`, the device lease port, and the base `QaStrategy`. If any of these landed under a different name, implement uses subtask 1's name and does not duplicate it.
 
 ### Task 1. Feature-run slot, ids, and workflow graph (AC 1)
 
@@ -86,7 +86,7 @@ All paths below are relative to `runtime-kotlin/` unless they start with `orches
 
 - New `runtime-domain/.../model/skeleton/FeatureTaskRuntimeQaSelection.kt` (or the package holding `FeatureTaskRuntimeQualityGateSelection`): enum `AUTO("auto")`, `OFF("off")` with `fromWire` throwing a new `UnknownQaSelectionError` (pattern of `UnknownQualityGateSelectionError`).
 - `ResolvedPhaseExecutionPlan`: add `qaSelection: FeatureTaskRuntimeQaSelection?` after `qualityGateSelection`; update `withTraversal`, `withEffectivePolicies`, and every positional constructor call, including the two in `AuditPlanningExecutionPlanMapping` and test fixtures. Null means "pre-QA composition" (D5).
-- `orchestration/contracts/feature-task-runtime-execution-plan.yaml`: bump `contract_version` const to "0.3", add required `qa_selection` with enum [auto, off, null]. Keep the 0.2 file as the older version alongside 0.1 if that is how 0.1 is kept; implement follows the existing multi-version layout.
+- `../../../orchestration/contracts/feature-task-runtime-execution-plan.yaml`: bump `contract_version` const to "0.3", add required `qa_selection` with enum [auto, off, null]. Keep the 0.2 file as the older version alongside 0.1 if that is how 0.1 is kept; implement follows the existing multi-version layout.
 - `runtime-contracts/.../contracts/workflow/identity/task/FeatureTaskRuntimeExecutionPlanContract.kt`: version const "0.3", key const `QA_SELECTION = "qa_selection"`.
 - `runtime-engine/.../featuretask/lifecycle/execution/FeatureTaskRuntimeExecutionPlanCodec.kt` and `FeatureTaskRuntimeExecutionPlanDecode.kt`: encode 0.3 with qa_selection; decode 0.3 requiring the key; decode 0.2 records with `qaSelection = null`, never AUTO. A malformed or unknown version still fails with the existing typed error.
 - `FeatureTaskRuntimeExecutionPlanCompatibility.kt`: a rev-2 plan must carry null qaSelection; a rev-3 plan must carry non-null. Any other pairing is `UnsupportedFeatureTaskRuntimeExecutionPlanError`.
@@ -113,30 +113,30 @@ All paths below are relative to `runtime-kotlin/` unless they start with `orches
 
 ### Task 7. qa-repair state contract (AC 5, AC 12 of the parent)
 
-- New `orchestration/contracts/qa-repair-state-schema.yaml`, Draft 2020-12, `contract_version` "0.1", modeled on `acceptance-criterion-repair-state-schema.yaml`: subtask id, `qa_fix_step_id`, `max_attempts` (3), `consumed_attempts`, `attempts[]` {attempt_number, receipt_tree_identity, consumed_finding_ids, repair_output_ref, outcome}, `open_findings[]` {id, affected_criteria, receipt_ref}, `last_receipt_tree_identity`. Evidence by reference only.
+- New `../../../orchestration/contracts/qa-repair-state-schema.yaml`, Draft 2020-12, `contract_version` "0.1", modeled on `acceptance-criterion-repair-state-schema.yaml`: subtask id, `qa_fix_step_id`, `max_attempts` (3), `consumed_attempts`, `attempts[]` {attempt_number, receipt_tree_identity, consumed_finding_ids, repair_output_ref, outcome}, `open_findings[]` {id, affected_criteria, receipt_ref}, `last_receipt_tree_identity`. Evidence by reference only.
 - `runtime-contracts`: `QA_REPAIR_STATE_CONTRACT_VERSION`, a `QaRepairStatePayloadKeys` object, and `FeatureTaskRuntimeFailureCode.INVALID_QA_REPAIR_STATE_SCHEMA` with a `SkillBillRuntimeException` subclass under `skillbill.error.featuretask`. The producer and every reader validate through the real schema validator.
 
 ### Task 8. Re-audit scope after qa_fix (AC 4)
 
 - Narrowest hook on the acceptance audit strategy (`slot/audit/AcceptanceAuditStrategy` and its prompt sections / `AcceptanceAuditLoopRules`): when audit is entered from the qa_fix → audit edge, the audit input carries a scope equal to the union of `affected_criteria` over open findings in the qa-repair state. Accepted criteria outside that set stay accepted. An empty scope makes audit return SATISFIED without re-checking and QA decides closure. The audit prompt states the scope and the reason. No second audit step.
-- Record D1, D2, D3, and D8 in `agent/decisions.md`.
+- Record D1, D2, D3, and D8 in `../../../agent/decisions.md`.
 
 ### Task 9. Receipt invalidation by tree identity (AC 6)
 
-- The qa receipt carries the tree identity from `orchestration/contracts/feature-task-runtime-checkpoint-identity-schema.yaml`. Under the existing "review-invalidation" policy, when review repair, implement_fix, or any later edit before write_history yields a tree identity different from the receipt's, the runtime marks the receipt invalid and routes back to audit through a declared cross-slot backward edge (review/implement_fix → audit, `crossSlot` set), after which audit → qa runs again. A message-only amend with the same tree keeps the receipt.
+- The qa receipt carries the tree identity from `../../../orchestration/contracts/feature-task-runtime-checkpoint-identity-schema.yaml`. Under the existing "review-invalidation" policy, when review repair, implement_fix, or any later edit before write_history yields a tree identity different from the receipt's, the runtime marks the receipt invalid and routes back to audit through a declared cross-slot backward edge (review/implement_fix → audit, `crossSlot` set), after which audit → qa runs again. A message-only amend with the same tree keeps the receipt.
 - Assumption for implement to confirm: the invalidation check sits where review-invalidation already compares reviewed tree identity; implement extends that site instead of adding a new hook. When qa was skipped by `disabled_policy`, there is no device-bound evidence to invalidate and the edge does not fire. Re-entering audit through this edge uses the Task 8 scoping with an empty findings set, so accepted criteria are not re-checked.
 
 ### Task 10. Durable QA outcome and goal pull request (AC 9)
 
 - Persistence: when the qa step settles in a full run, write the outcome (attempted while running, then the receipt verdict mapped to passed, findings, skipped, or incomplete), the skip or incomplete reason, and the consumed qa_fix attempts to the runtime database, keyed by workflow. A schema change follows the migration and contract-version rules; the IDE status contract (`ide-status-schema.yaml`) and its clients stay unchanged.
 - Goal pull request: the PR the goal opens lists each subtask's QA outcome and reason, read from the stored record. A pre-QA subtask states that QA was not composed.
-- Diagnostics: each fallback, target substitution, retry, and cleanup failure emits a record per `docs/observability-policy.md`. Device ids appear only in the redacted or hashed receipt form; no evidence bodies, device logs, or credentials.
+- Diagnostics: each fallback, target substitution, retry, and cleanup failure emits a record per `../../../docs/observability-policy.md`. Device ids appear only in the redacted or hashed receipt form; no evidence bodies, device logs, or credentials.
 - Out of scope: showing the full-run outcome in progress, IDE status, desktop, or CLI status output.
 
 ### Task 11. Docs (AC 10)
 
-- `skills/skill-bill/content.md`: Token Forwarding documents full-run `qa:auto|off` → `--qa <value>` and the usage error when `qa:` reaches a form that does not accept it (verify's `qa:on|off` belongs to subtask 3). Edit only content.md; the generated SKILL.md is install output and is not hand-edited.
-- `docs/runtime-command-guidance.md`: line 152 child sequence becomes audit, optional qa, review, validate, write_history; mention qa_fix's three-attempt cap.
+- `../../../skills/skill-bill/content.md`: Token Forwarding documents full-run `qa:auto|off` → `--qa <value>` and the usage error when `qa:` reaches a form that does not accept it (verify's `qa:on|off` belongs to subtask 3). Edit only content.md; the generated SKILL.md is install output and is not hand-edited.
+- `../../../docs/runtime-command-guidance.md`: line 152 child sequence becomes audit, optional qa, review, validate, write_history; mention qa_fix's three-attempt cap.
 
 ### Test obligations (written in implement, run only by validate)
 

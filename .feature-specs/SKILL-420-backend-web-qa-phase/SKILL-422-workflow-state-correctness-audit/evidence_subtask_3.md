@@ -29,7 +29,7 @@ Subtask 1–2 findings F1–F12 unchanged; F4/F5/F11/F12 carry-over statuses pre
 | AC | Implement evidence | Validate closure |
 | --- | --- | --- |
 | AC-001 | `state-ownership-inventory.md` subtask 3 table; `findings-register.md` F13–F15; this file | audit + doc cross-check |
-| AC-002 | Source review: `uninstall.sh` preserve patterns; T3-01/T3-04 definitions | T3-01, T3-04 execution |
+| AC-002 | Source review: `../../../uninstall.sh` preserve patterns; T3-01/T3-04 definitions | T3-01, T3-04 execution |
 | AC-003 | `SqliteMaintenanceRecoveryRegressionTest`, `InstallerShellMaintenanceRecoveryTest`, fixtures in `SqliteTestDatabaseFixtures.kt` | integrity_check + row assertions in validate |
 | AC-004 | T3-03/T3-05; EL-422-WAL limitation | typed failure + byte retention in validate |
 | AC-005 | `audit-coverage.md` | audit phase mapping completeness |

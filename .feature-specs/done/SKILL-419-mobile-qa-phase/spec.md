@@ -101,7 +101,7 @@ Started processes, temporary artifacts, and owned test resources have bounded cl
 
 Shared QA composition, verdict semantics, evidence, budgets, repair policy, and verify integration belong to existing horizontal orchestration and runtime owners. Platform-specific guidance and capability declarations belong in manifest-declared packs. CLI and MCP adapters parse and render; engine coordinates; infrastructure owns external tooling; the existing composition root wires collaborators. Do not introduce a generic plugin framework, second composition root, or duplicated mobile workflow.
 
-Apply `docs/runtime-command-guidance.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, `docs/observability-policy.md`, and `docs/skill-source-generation.md`. Authored guidance is `content.md`; generated pointers and provider outputs are not committed. Run `./install.sh` when implementing skill, renderer, or support-pointer changes.
+Apply `../../../docs/runtime-command-guidance.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, `docs/observability-policy.md`, and `docs/skill-source-generation.md`. Authored guidance is `content.md`; generated pointers and provider outputs are not committed. Run `./install.sh` when implementing skill, renderer, or support-pointer changes.
 
 Base branch is `main`. This request creates requirements only and does not start implementation or create a decomposition manifest. Planning must use current source and preserve the user's ongoing SKILL-418 work.
 

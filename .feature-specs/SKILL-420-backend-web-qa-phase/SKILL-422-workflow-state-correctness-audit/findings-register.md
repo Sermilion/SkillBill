@@ -23,7 +23,7 @@ Severity uses project consequence ordering: **critical** (false completion / dat
 | After / intended | Same terminal snapshot; no regression to `running`, `finished_at` remains set |
 | Pending capture recipe | Isolated temp DB + `WorkflowStateStore`: save running row, then completed terminal row, then `saveOrdinary` with late snapshot (`workflow_status=running`, `current_step_id=implement`, `finished_at=null`); reopen DB; capture row `workflow_status`, `finished_at`, `steps_json`, `artifacts_json`, and `WorkflowStateWriteResult` |
 | Root cause | Late non-terminal write meets `saveOrdinary` terminal guard: when current runtime row is terminal and `sameTerminalSnapshot` fails (status, `currentStepId`, `stepsJson`, `artifactsJson`, `finishedAt`), Kotlin returns `TerminalRefused`; `Connection.upsertFeatureTaskWorkflowRow` WHERE clause also refuses non-identical terminal replacement — causal path is late write + SQL/Kotlin fence, not a missing predicate in one method alone |
-| Production owner | `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/WorkflowStateWrites.kt` (`upsertFeatureTaskWorkflowRow`); `WorkflowStateStore.saveOrdinary` (`WorkflowStateStore.kt`) |
+| Production owner | `../../../runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/WorkflowStateWrites.kt` (`upsertFeatureTaskWorkflowRow`); `WorkflowStateStore.saveOrdinary` (`WorkflowStateStore.kt`) |
 | Isolated reproduction — inputs | Late snapshot on `workflow_id=wftr-terminal-reopen`: `workflow_status=running`, `current_step_id=implement`, `finished_at=null` against authoritative completed row above |
 | Isolated reproduction — expected outcome | `WorkflowStateWriteResult.TerminalRefused`; reopened row still `completed` with `finished_at=2026-10-13T12:00:00Z` |
 | Repair — rejected bytes (provenance: authored isolated store scenario; field shapes match production write path) | **Refused late snapshot:** `workflow_id=wftr-terminal-reopen`, `session_id=ftr-terminal-reopen`, `workflow_status=running`, `current_step_id=implement`, `finished_at=null`. **Authoritative terminal row retained:** `workflow_status=completed`, `current_step_id=pr`, `finished_at=2026-10-13T12:00:00Z` |
@@ -54,7 +54,7 @@ Severity uses project consequence ordering: **critical** (false completion / dat
 | After / intended | First envelope retained; no second row; no overwrite of `envelope_json` |
 | Pending capture recipe | Isolated `SqliteFeatureTaskPhaseSettlementStore.upsert` then contradictory upsert on same key; capture both `envelope_json` values, write result, and `find()` |
 | Root cause | `INSERT ... ON CONFLICT DO NOTHING` then kind/envelope compare; mismatch yields `Conflicting` without overwrite; `FeatureTaskPhaseSettlementService.persist` maps conflict to error status and withholds late envelope |
-| Production owner | `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/SqliteFeatureTaskPhaseSettlementStore.kt`; `FeatureTaskPhaseSettlementService` (`runtime-engine/.../FeatureTaskPhaseSettlementService.kt`) |
+| Production owner | `../../../runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/SqliteFeatureTaskPhaseSettlementStore.kt`; `FeatureTaskPhaseSettlementService` (`runtime-engine/.../FeatureTaskPhaseSettlementService.kt`) |
 | Isolated reproduction — inputs | Same key `(wftr-conflict, implement, 2)`; first `kind=complete` with envelope A; second `kind=block` with envelope B |
 | Isolated reproduction — expected outcome | Store `Conflicting`; repository/service `PHASE_SETTLEMENT_CONFLICT`; `find()` returns first envelope only |
 | Repair — rejected bytes (provenance: authored repository fixture envelopes) | **Kept:** `{"status":"completed","produced_outputs":{"value":"accepted"}}`, `kind=complete`, `recorded_at=2026-10-13T19:00:00Z` at `(wftr-conflict, implement, 2)`. **Refused:** `{"status":"blocked","produced_outputs":{"value":"late"}}`, `kind=block`, `recorded_at=2026-10-13T19:01:00Z` at same key |
@@ -330,7 +330,7 @@ Subtask 3 owns SQLite maintenance closure and overall coverage reconciliation pe
 | Trigger | Pre-install `remove_state_dir_preserving_source` with open WAL writer and committed workflow/settlement/progress rows |
 | Identities — workflow | `wftr-maint-422` |
 | Identities — issue | `SKILL-422` |
-| Production owner | `uninstall.sh` `remove_state_dir_preserving_source`; `install.sh` `run_pre_install_uninstall` |
+| Production owner | `../../../uninstall.sh` `remove_state_dir_preserving_source`; `install.sh` `run_pre_install_uninstall` |
 | Isolated reproduction — inputs | Disposable home with `review-metrics.db` seeded via `seedMaintenanceWorkflowHistory`; held JDBC writer; `SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1` |
 | Isolated reproduction — expected outcome | `runtime/` cleared; DB + WAL/SHM retained; `PRAGMA integrity_check` ok; identity/settlement/`goal_issue_progress` rows unchanged after reopen |
 | Test pointer (validate-owned) | T3-01 `InstallerShellMaintenanceRecoveryTest` |
@@ -344,7 +344,7 @@ Subtask 3 owns SQLite maintenance closure and overall coverage reconciliation pe
 | Classification | verified no-finding area (contract separation) |
 | Severity | n/a |
 | Trigger | Operator expects explicit uninstall to remove state root while reinstall preserve wipe retains DB files |
-| Production owner | `uninstall.sh` full wipe vs `SkillBillUninstallService.apply` `removeRecursively(plan.stateRoot)` |
+| Production owner | `../../../uninstall.sh` full wipe vs `SkillBillUninstallService.apply` `removeRecursively(plan.stateRoot)` |
 | Isolated reproduction — inputs | Same disposable home: preserve wipe then explicit shell wipe; separate application `apply` with real `removeTree` |
 | Isolated reproduction — expected outcome | Preserve path keeps `review-metrics.db`; explicit shell and application paths remove state root; failed `removeTree` sets `failed` without deleting tree |
 | Test pointer (validate-owned) | T3-04 `InstallerShellMaintenanceRecoveryTest`, `SkillBillUninstallDestructiveSemanticsTest` |

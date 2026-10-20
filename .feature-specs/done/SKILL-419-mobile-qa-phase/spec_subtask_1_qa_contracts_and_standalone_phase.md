@@ -1,25 +1,25 @@
 # SKILL-419 subtask 1: QA contracts, pack capability, and standalone `phase qa`
 
-Parent spec: `.feature-specs/SKILL-419-mobile-qa-phase/spec.md`
+Parent spec: `spec.md`
 
 ## Scope
 
 This subtask lands everything the two later integrations consume, plus the first working entry point.
 
-- A canonical QA receipt contract: `orchestration/contracts/qa-receipt-schema.yaml` (Draft 2020-12, `contract_version` "0.1"), a Kotlin `*_CONTRACT_VERSION` constant, a `QaReceiptPayloadKeys` object in runtime-contracts as the single owner of its wire keys, and typed failure codes (for example `INVALID_QA_RECEIPT_SCHEMA`) in `FeatureTaskRuntimeFailureCode` with matching `SkillBillRuntimeException` subclasses.
+- A canonical QA receipt contract: `../../../orchestration/contracts/qa-receipt-schema.yaml` (Draft 2020-12, `contract_version` "0.1"), a Kotlin `*_CONTRACT_VERSION` constant, a `QaReceiptPayloadKeys` object in runtime-contracts as the single owner of its wire keys, and typed failure codes (for example `INVALID_QA_RECEIPT_SCHEMA`) in `FeatureTaskRuntimeFailureCode` with matching `SkillBillRuntimeException` subclasses.
 - Receipt fields: verdict `passed | findings_open | skipped | incomplete`; repository checkpoint and uncommitted tree identity; built artifact identity; policy; target (platform, redacted or hashed device identity, `physical | simulator`, selection `explicit | single | substituted`); tool versions where obtainable; exercised and untested flows with reasons and a hardware-only flag; assertions mapped to acceptance criteria when available; findings (id, affected criteria, steps, expected, observed, evidence references); `skip_reason` enum (`capability_absent`, `unsupported_target`, `disabled_policy`, `isolation_unavailable`, `ambiguous_target`, `unauthorized_target`, `offline_target`, `device_contended`, `empty_scope`); `incomplete_reason` enum (`interrupted`, `automation_broken`, `budget_exhausted`, `device_lost`, `other`); bounded evidence references, never bodies; cleanup outcome with retained resource identities and guidance.
 - One shared receipt validator in the engine that every consumer calls. Beyond schema shape it enforces the semantic rules of AC-010: `passed` requires at least one exercised flow with at least one assertion and no untested selected flow; the receipt's tree identity must equal the identity the caller expects; `skipped` must carry a `skip_reason`; `incomplete` must carry an `incomplete_reason`; a simulator target cannot mark a hardware-only flow as exercised. Malformed output loud-fails with the typed failure code and never degrades to a skip.
 - A pack-declared QA capability. `platform-pack-schema.yaml` gains an optional, `x-runtime-anchored` `qa_capability` object (platforms `android | ios`, a pack-relative guidance file, plus whatever discovery hints the guidance needs). The `PlatformManifest` model and `ShellContentLoaderPackBuild` loader read it and throw `InvalidManifestSchemaError` on malformed shapes. A `QaCapabilityResolver`, modeled on `ValidationGateResolver`, returns Declared, Absent, or Incompatible through dominant-pack routing with no slug branching. Absent becomes an `unsupported_target` skip with a reason; Incompatible or malformed fails loudly.
-- Pack content: `platform-packs/kmp/` gets Android ADB QA guidance and `platform-packs/ios/` gets iOS guidance covering project XCUITest reuse, Appium XCUITest driver with WebDriverAgent on a physical device, `devicectl` for device and app lifecycle, simulator fallback and Maestro reuse, prerequisite discovery (macOS host, Xcode, pairing, Developer Mode, signing, runner readiness) with an actionable skip for each, and the rule that simulator runs never claim hardware coverage. Android guidance covers authorized, unauthorized, offline, absent, and ambiguous device states, explicit or single-device selection, artifact build or location for the tested revision, install, lifecycle, input, screenshots, UI hierarchy, filtered logs, and existing UI automation reuse. Both are pack-owned `.md` files declared in each manifest, not listed skills.
+- Pack content: `../../../platform-packs/kmp` gets Android ADB QA guidance and `platform-packs/ios/` gets iOS guidance covering project XCUITest reuse, Appium XCUITest driver with WebDriverAgent on a physical device, `devicectl` for device and app lifecycle, simulator fallback and Maestro reuse, prerequisite discovery (macOS host, Xcode, pairing, Developer Mode, signing, runner readiness) with an actionable skip for each, and the rule that simulator runs never claim hardware coverage. Android guidance covers authorized, unauthorized, offline, absent, and ambiguous device states, explicit or single-device selection, artifact build or location for the tested revision, install, lifecycle, input, screenshots, UI hierarchy, filtered logs, and existing UI automation reuse. Both are pack-owned `.md` files declared in each manifest, not listed skills.
 - A device lease port in runtime-ports with an infra adapter: lease records under `.git/skill-bill/qa/` keyed by device identity, carrying owner token, pid liveness, and invocation id. A live foreign owner yields `device_contended`. A stale owner is reclaimed through the same live/stale checks the standalone monitor ownership uses. Release happens on success, skip, failure, and cancellation; a release failure emits a record and lands in the receipt's cleanup section.
 - Standalone `skill-bill phase qa [<instructions>] --agent <agent>`: a `SkeletonDefinition.QA` (IN_MEMORY, `standaloneInvocable = true`) whose `stepIds` contain only `qa` (no `qa_fix`), the `PhaseSlot.QA("qa", listOf(qa, qa_fix))` slot placed between AUDIT and CODE_REVIEW, the `qa`/`qa_fix` ids in `FeatureTaskRuntimePhaseIds`, and a QA strategy registered in `RuntimeFeatureTaskSlotProvides`. The standalone run compares a tracked-file and HEAD baseline before and after (mirroring verify's worktree baseline) and fails on any change. Generated scripts and evidence go under `.git/skill-bill/qa/<invocation>/`. A valid receipt with findings exits 0; a malformed or missing receipt exits 1. Standalone phase status and `ide-status-schema.yaml` gain a QA outcome that distinguishes attempted, passed, findings, skipped, and incomplete.
-- `skills/skill-bill/content.md` gains a `phase:qa` routing row, frontmatter description mention, and a "Phase QA" section. `docs/runtime-command-guidance.md` lists `qa` among in-memory standalone phases. `PhaseCommand`'s description text names qa.
+- `../../../skills/skill-bill/content.md` gains a `phase:qa` routing row, frontmatter description mention, and a "Phase QA" section. `docs/runtime-command-guidance.md` lists `qa` among in-memory standalone phases. `PhaseCommand`'s description text names qa.
 
 Placing `PhaseSlot.QA` in the enum here does not add it to `FEATURE_RUN_SLOTS`; that change and its resume handling belong to subtask 2.
 
 ## Acceptance Criteria
 
-1. `orchestration/contracts/qa-receipt-schema.yaml` exists with the verdict, identity, target, flow, assertion, finding, skip reason, incomplete reason, evidence reference, and cleanup fields listed in Scope, and a matching Kotlin contract version constant, a `QaReceiptPayloadKeys` keys object, and typed QA failure codes exist in runtime-contracts.
+1. `../../../orchestration/contracts/qa-receipt-schema.yaml` exists with the verdict, identity, target, flow, assertion, finding, skip reason, incomplete reason, evidence reference, and cleanup fields listed in Scope, and a matching Kotlin contract version constant, a `QaReceiptPayloadKeys` keys object, and typed QA failure codes exist in runtime-contracts.
 2. A single engine receipt validator applies the schema plus the semantic rules from Scope (no `passed` without exercised and asserted flows, tree identity must match the expected identity, reasons required for `skipped` and `incomplete`, simulator cannot exercise a hardware-only flow), and both the standalone QA path and the QA strategy call it.
 3. `platform-pack-schema.yaml`, `PlatformManifest`, and the pack loader support an optional `qa_capability` declaration, and a malformed declaration raises `InvalidManifestSchemaError`.
 4. `QaCapabilityResolver` resolves QA support from manifest declarations without branching on pack slugs, maps an absent declaration to an `unsupported_target` skip with a reason, and fails loudly on an incompatible declaration.
@@ -27,7 +27,7 @@ Placing `PhaseSlot.QA` in the enum here does not add it to `FEATURE_RUN_SLOTS`; 
 6. A device lease port and infra adapter own per-device leases under `.git/skill-bill/qa/`, return `device_contended` for a live foreign owner, reclaim stale owners through live/stale checks, and record cleanup failures with retained resource identities.
 7. `skill-bill phase qa` is a standalone-invocable in-memory phase whose step set excludes `qa_fix`, keeps generated scripts and evidence under `.git/skill-bill/qa/<invocation>/`, fails when tracked files or HEAD change, exits 0 for any valid receipt including findings, and exits 1 for malformed or missing output.
 8. Standalone phase status and `ide-status-schema.yaml` distinguish attempted, passed, findings, skipped, and incomplete QA, and every fallback, target substitution, retry, and cleanup failure in the standalone path emits a record that carries no credentials, raw device serials, or device log bodies.
-9. `skills/skill-bill/content.md` and `docs/runtime-command-guidance.md` document `/skill-bill [<instructions>] phase:qa` mapping to `skill-bill phase qa [<instructions>] --agent <agent>`, and `/skill-bill` stays the only listed skill.
+9. `../../../skills/skill-bill/content.md` and `docs/runtime-command-guidance.md` document `/skill-bill [<instructions>] phase:qa` mapping to `skill-bill phase qa [<instructions>] --agent <agent>`, and `/skill-bill` stays the only listed skill.
 
 ## Non-goals
 
@@ -68,7 +68,7 @@ Paths are abbreviated. `runtime-domain/...` means `runtime-kotlin/runtime-domain
 
 ### Task 2. QA receipt contract, keys, and failure codes (AC 1)
 
-- New `orchestration/contracts/qa-receipt-schema.yaml`, Draft 2020-12, `contract_version` const `"0.1"`, `additionalProperties: false` at every object level. Follow `feature-task-runtime-build-receipt.yaml` for layout. Fields:
+- New `../../../orchestration/contracts/qa-receipt-schema.yaml`, Draft 2020-12, `contract_version` const `"0.1"`, `additionalProperties: false` at every object level. Follow `feature-task-runtime-build-receipt.yaml` for layout. Fields:
   - `verdict` enum `passed | findings_open | skipped | incomplete`.
   - `identity`: `head_revision` (40-hex) and `tree_identity`, the uncommitted tree identity in the shape `feature-task-runtime-checkpoint-identity-schema.yaml` already defines. Reuse that shape through a `$ref` if the contract loader resolves cross-file refs. Otherwise duplicate the field pattern. Implement confirms which.
   - `artifact`: `{ kind, path_ref, sha256 }`. Nullable only when the verdict is `skipped`.
@@ -101,7 +101,7 @@ Paths are abbreviated. `runtime-domain/...` means `runtime-kotlin/runtime-domain
 
 ### Task 4. Pack schema, manifest model, and loader (AC 3)
 
-- `orchestration/contracts/platform-pack-schema.yaml`: add an optional top-level `qa_capability` with `x-runtime-anchored: true` and `additionalProperties: false`. Fields: `platforms` (non-empty unique array of `android | ios`), `guidance_file` (a pack-relative `.md` path pattern), and an optional `discovery_hints` array of bounded strings. Add an `x-coherence-checks` rule that `guidance_file` must appear in `declared_files`. Assumption: `declared_files` accepts arbitrary pack-relative paths. Version: keep `"1.8"` if the loader accepts the optional field without a const change. If the loader pins one constant, bump to `"1.9"` and update every pack `platform.yaml` in the same commit, as the Dependency Notes say.
+- `../../../orchestration/contracts/platform-pack-schema.yaml`: add an optional top-level `qa_capability` with `x-runtime-anchored: true` and `additionalProperties: false`. Fields: `platforms` (non-empty unique array of `android | ios`), `guidance_file` (a pack-relative `.md` path pattern), and an optional `discovery_hints` array of bounded strings. Add an `x-coherence-checks` rule that `guidance_file` must appear in `declared_files`. Assumption: `declared_files` accepts arbitrary pack-relative paths. Version: keep `"1.8"` if the loader accepts the optional field without a const change. If the loader pins one constant, bump to `"1.9"` and update every pack `platform.yaml` in the same commit, as the Dependency Notes say.
 - `runtime-domain/.../scaffold/model/ScaffoldModels.kt`: add `qaCapability: QaCapabilityDeclaration?` to `PlatformManifest`, plus a `QaCapabilityDeclaration(platforms: Set<QaPlatform>, guidanceFile: String, discoveryHints: List<String>)` and a `QaPlatform` enum with `fromWire`.
 - `runtime-infra/skills/.../platformpack/loader/ShellContentLoaderPackBuild.kt`: in `buildPack`, parse `qa_capability`. A missing key becomes null. A wrong type, unknown platform, missing guidance file on disk, or path escaping the pack throws `InvalidManifestSchemaError`, as `validation_gate` does today.
 
@@ -116,7 +116,7 @@ Paths are abbreviated. `runtime-domain/...` means `runtime-kotlin/runtime-domain
 
 ### Task 6. Pack QA guidance (AC 5)
 
-- New `platform-packs/kmp/qa/android-qa.md` and `platform-packs/ios/qa/ios-qa.md`. Add each to its pack's `declared_files` and `qa_capability` (`platforms: [android]` for kmp, `[ios]` for ios). Assumption: the agent-config validator accepts a declared non-skill `.md` outside `addons/`. If it requires governed `.md` files under known roots, move them to whichever root it accepts, without making them skills or add-ons.
+- New `../../../platform-packs/kmp/qa/android-qa.md` and `platform-packs/ios/qa/ios-qa.md`. Add each to its pack's `declared_files` and `qa_capability` (`platforms: [android]` for kmp, `[ios]` for ios). Assumption: the agent-config validator accepts a declared non-skill `.md` outside `addons/`. If it requires governed `.md` files under known roots, move them to whichever root it accepts, without making them skills or add-ons.
 - Android content:
   - Classify `adb devices -l` output into authorized, `unauthorized`, `offline`, absent, and ambiguous (more than one authorized device with no explicit selection). Map each to its `skip_reason`.
   - Explicit or single-device selection, and the hashing rule for `device_fingerprint`.
@@ -136,7 +136,7 @@ Paths are abbreviated. `runtime-domain/...` means `runtime-kotlin/runtime-domain
 
 - New `runtime-ports/.../qa/QaDeviceLeasePort.kt`, an interface with KDoc. `acquire(deviceFingerprint, invocationId): QaLeaseResult` returns `Acquired(lease)` or `Contended(ownerInvocationId)`. `release(lease): QaLeaseReleaseOutcome` returns `Released` or `Failed(retainedIdentity, detail)`. `releaseAllFor(invocationId)` exists for cancellation and end-of-run cleanup.
 - New infra adapter in `runtime-infra`: one file per device at `.git/skill-bill/qa/leases/<fingerprint>.json` holding owner token, pid, process start marker, invocation id, and acquired-at. Create it atomically (temp file plus atomic move, or create-new). On an existing file, run the same live/stale checks `standalone-monitor-ownership` uses. Live and foreign means `Contended`, and the file is not touched. Stale means reclaim, emitting a record. If those checks are private to the monitor adapter, extract them into a shared internal helper in runtime-infra without changing monitor behavior. Implement confirms where they live.
-- Durable record: per AC-012 the lease file is a new durable QA record. Add `orchestration/contracts/qa-device-lease-schema.yaml` (contract `"0.1"`), a Kotlin version constant and `QaDeviceLeasePayloadKeys` in runtime-contracts, and validate the file on read. A malformed lease file throws `QA_DEVICE_LEASE_FAILED`. It is never silently overwritten.
+- Durable record: per AC-012 the lease file is a new durable QA record. Add `../../../orchestration/contracts/qa-device-lease-schema.yaml` (contract `"0.1"`), a Kotlin version constant and `QaDeviceLeasePayloadKeys` in runtime-contracts, and validate the file on read. A malformed lease file throws `QA_DEVICE_LEASE_FAILED`. It is never silently overwritten.
 - Agent access: the runtime does no device discovery, so the agent needs a way to take a lease before installing. Add a small CLI subcommand, `skill-bill qa lease acquire|release --invocation <id> --device <serial>`. It hashes the serial before any storage or output, prints `acquired` or `contended`, and exits 0 for both. The guidance tells the agent to call it, and a `contended` result becomes a `device_contended` skip. This command is the decision this plan settled. Implement may move it under `skill-bill phase qa` if the CLI structure suits that better.
 - Bind the adapter in the existing composition root that wires port adapters (`RuntimeFeatureTaskSlotProvides` or its sibling DI module). No second root.
 
@@ -169,18 +169,18 @@ Paths are abbreviated. `runtime-domain/...` means `runtime-kotlin/runtime-domain
 ### Task 9. Status, IDE schema, and observability (AC 8)
 
 - `runtime-ports/.../idestatus/model/StandalonePhaseStatusModels.kt`: add a `QaOutcome` enum (`ATTEMPTED`, `PASSED`, `FINDINGS`, `SKIPPED`, `INCOMPLETE`) and a nullable `qaOutcome` on the standalone status update. Publish `ATTEMPTED` at launch and the receipt-derived outcome on settle through `StandalonePhaseStatusPublisherFactory`.
-- `orchestration/contracts/ide-status-schema.yaml`: add the matching optional enum property. If the schema pins a contract version, bump it along with its Kotlin constant. Update the projector mapping (`IdeStatusProjectorMapping.kt`) and its keys object.
-- After validation the runtime emits one observability record per `fallbacks` entry (simulator substitution, target substitution, retry), one per stale-lease reclaim, and one per cleanup failure. Use the existing event sink and record shape from `docs/observability-policy.md`. Records carry the fingerprint, kind, and bounded reason only.
+- `../../../orchestration/contracts/ide-status-schema.yaml`: add the matching optional enum property. If the schema pins a contract version, bump it along with its Kotlin constant. Update the projector mapping (`IdeStatusProjectorMapping.kt`) and its keys object.
+- After validation the runtime emits one observability record per `fallbacks` entry (simulator substitution, target substitution, retry), one per stale-lease reclaim, and one per cleanup failure. Use the existing event sink and record shape from `../../../docs/observability-policy.md`. Records carry the fingerprint, kind, and bounded reason only.
 
 ### Task 10. Dispatcher and docs (AC 9)
 
-- `skills/skill-bill/content.md`:
+- `../../../skills/skill-bill/content.md`:
   - Mention `phase:qa` in the frontmatter `description`.
   - Add a Forms and Routing row: `/skill-bill [<instructions>] phase:qa` → `skill-bill phase qa [<instructions>] --agent <currently-executing-agent>`.
   - Add a "Phase QA" section next to "Phase Review". It covers report-only behavior, exit codes, the receipt location, and the fact that platform is resolved by packs, not by the dispatcher.
   - Edit `content.md` only, never generated `SKILL.md`.
-- `docs/runtime-command-guidance.md`: add `qa` to the in-memory standalone phases paragraph and document the `skill-bill qa lease` command.
-- Check `README.md`'s catalog and add `phase:qa` there if it lists phases.
+- `../../../docs/runtime-command-guidance.md`: add `qa` to the in-memory standalone phases paragraph and document the `skill-bill qa lease` command.
+- Check `../../../README.md`'s catalog and add `phase:qa` there if it lists phases.
 - Add no new listed skill.
 
 ### Tests to add (validate runs them)

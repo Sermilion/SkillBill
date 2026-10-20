@@ -1,6 +1,6 @@
 # SKILL-419 subtask 3: Verify `qa:on|off`
 
-Parent spec: `.feature-specs/SKILL-419-mobile-qa-phase/spec.md`
+Parent spec: `spec.md`
 
 ## Scope
 
@@ -14,7 +14,7 @@ Add QA as an opt-in verify evaluator after `completeness_audit` and before `verd
 - Verdict (AC-008): the verdict directive and its parse treat `findings_open` QA findings as consolidated findings that block an unqualified approval, and list skipped or incomplete QA as untested coverage with its reason. Optional unavailability never becomes a product defect.
 - Put QA logic in new files (for example `VerifyQaStep.kt`) so `VerifyOperation.kt` and `VerifyStepSequence.kt` stay under the production line ceilings.
 - Verify state, CLI reports, and `VerifyTelemetry` plus `telemetry-event-schema.yaml` carry a QA outcome that distinguishes not selected, attempted, passed, findings, skipped, and incomplete, without credentials or device log bodies.
-- `skills/skill-bill/content.md` adds `[qa:on|off]` to the verify routing row, the forwarded-token paragraph, and the operation form text, and `docs/runtime-command-guidance.md` adds it to the verify syntax.
+- `../../../skills/skill-bill/content.md` adds `[qa:on|off]` to the verify routing row, the forwarded-token paragraph, and the operation form text, and `docs/runtime-command-guidance.md` adds it to the verify syntax.
 
 ## Acceptance Criteria
 
@@ -24,7 +24,7 @@ Add QA as an opt-in verify evaluator after `completeness_audit` and before `verd
 4. An opted-in QA step runs against a temporary detached worktree at the resolved target head, rejects a receipt whose tree identity differs from that head, cleans up the worktree on every exit path with a recorded failure when cleanup fails, and leaves the operator's source, HEAD, and review target unchanged.
 5. The verdict directive and parser include QA findings in consolidated findings so an unqualified approval cannot ignore them, and present skipped or incomplete QA as untested coverage with its reason.
 6. Verify state, CLI reports, and verify telemetry with its schema distinguish not selected, attempted, passed, findings, skipped, and incomplete QA without credentials or device log bodies.
-7. `skills/skill-bill/content.md` and `docs/runtime-command-guidance.md` document `operation:verify ... [qa:on|off]`.
+7. `../../../skills/skill-bill/content.md` and `docs/runtime-command-guidance.md` document `operation:verify ... [qa:on|off]`.
 
 ## Non-goals
 
@@ -58,7 +58,7 @@ skill-bill goal SKILL-419
 
 ## Implementation Details
 
-All paths are under `runtime-kotlin/` unless they start with `orchestration/`, `skills/`, or `docs/`. Engine paths abbreviate `runtime-engine/src/main/kotlin/skillbill/engine/`. Names this plan takes from subtask 1 (`QaCapabilityResolver`, the shared QA receipt validator, the device-lease port, `QaReceiptPayloadKeys`, the `qa-receipt-schema.yaml` verdict and skip-reason enums, and the QA failure codes) are assumptions. Implement confirms the names subtask 1 landed and uses them; it never adds a second resolver, validator, or lease.
+All paths are under `../../../runtime-kotlin` unless they start with `orchestration/`, `skills/`, or `docs/`. Engine paths abbreviate `runtime-engine/src/main/kotlin/skillbill/engine/`. Names this plan takes from subtask 1 (`QaCapabilityResolver`, the shared QA receipt validator, the device-lease port, `QaReceiptPayloadKeys`, the `qa-receipt-schema.yaml` verdict and skip-reason enums, and the QA failure codes) are assumptions. Implement confirms the names subtask 1 landed and uses them; it never adds a second resolver, validator, or lease.
 
 ### Decisions settled here
 
@@ -115,12 +115,12 @@ All paths are under `runtime-kotlin/` unless they start with `orchestration/`, `
 6. QA outcome in verify state, CLI report, and telemetry. Serves AC-6.
    - Project the D-V7 outcome from the run into the verify workflow state returned by `feature_verify_workflow_get` and `_latest`, and into the CLI report. Implement locates the state projection and report writer.
    - `runtime-engine/.../operation/verify/VerifyTelemetry.kt`: add a `qa_outcome` field to `FeatureVerifyFinishedRequest`, plus an optional skip or incomplete reason drawn from the schema enums.
-   - `orchestration/contracts/telemetry-event-schema.yaml`: add `qa_outcome` (enum of the D-V7 values) and the optional reason to the `feature_verify_finished` event. The field is optional so earlier events stay valid. Bump the contract version and its Kotlin `*_CONTRACT_VERSION` constant if the schema pins one, and keep the existing parity test passing.
+   - `../../../orchestration/contracts/telemetry-event-schema.yaml`: add `qa_outcome` (enum of the D-V7 values) and the optional reason to the `feature_verify_finished` event. The field is optional so earlier events stay valid. Bump the contract version and its Kotlin `*_CONTRACT_VERSION` constant if the schema pins one, and keep the existing parity test passing.
    - Constraint: telemetry carries the enum and reason only, never device ids, logs, or evidence bodies.
 
 7. Docs. Serves AC-7.
-   - `skills/skill-bill/content.md`: add `[qa:on|off]` to the verify row in "Forms and Routing", add `qa:` to the forwarded-operation-token paragraph with its rejection outside verify, and name the QA selection in the verify proposal text under "Operation Forms".
-   - `docs/runtime-command-guidance.md`: add `[qa:on|off]` to the verify syntax under "Operations".
+   - `../../../skills/skill-bill/content.md`: add `[qa:on|off]` to the verify row in "Forms and Routing", add `qa:` to the forwarded-operation-token paragraph with its rejection outside verify, and name the QA selection in the verify proposal text under "Operation Forms".
+   - `../../../docs/runtime-command-guidance.md`: add `[qa:on|off]` to the verify syntax under "Operations".
    - Edit `content.md` only, never generated `SKILL.md`.
 
 ### Tests to add (implement writes them, validate runs them)
@@ -143,5 +143,5 @@ No test for the label renumbering, the doc edits, or the MCP pass-through beyond
 - Report-only. Verify never repairs application code, commits, pushes, or edits the operator's source, HEAD, or review target.
 - The existing evaluators, criteria extraction, and `mode` semantics stay as they are.
 - Production file line ceilings and wire-vocabulary rules apply. New QA logic lives in `VerifyQaSelection.kt`, `VerifyQaStep.kt`, and an optional `VerifyQaVerdictRule.kt`.
-- Every fallback, skip, rejection, and cleanup failure emits an observability record per `docs/observability-policy.md`.
+- Every fallback, skip, rejection, and cleanup failure emits an observability record per `../../../docs/observability-policy.md`.
 - Implement and audit run no build, tests, or checks. Validate owns them.

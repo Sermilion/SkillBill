@@ -71,7 +71,7 @@ Validate captures execution evidence; `tests_executed` remains empty here.
 
 ## Project authoring / static analysis (implement phase)
 
-- **Configuration sources**: root `AGENTS.md`, `docs/architecture-guidelines.md`, `docs/code-principles.md`, Kotlin Spotless/Detekt via `runtime-kotlin` modules.
+- **Configuration sources**: root `../../../AGENTS.md`, `docs/architecture-guidelines.md`, `docs/code-principles.md`, Kotlin Spotless/Detekt via `runtime-kotlin` modules.
 - **Safe commands**: not run — module-scoped Spotless/Detekt can rewrite whole modules; implement defers formatting to validate or file-scoped hooks if available.
 - **tests_executed**: (empty — validate owns execution)
 
