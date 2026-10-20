@@ -32,7 +32,7 @@ import dev.skillbill.tray.core.domain.model.QaRunReport
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
-import dev.skillbill.tray.core.ui.ReasonTooltip
+import dev.skillbill.tray.core.ui.ExpandableReason
 import dev.skillbill.tray.core.ui.formatInstant
 
 /** Review, audit and QA conclusions shown inside the goal activity panel. */
@@ -73,13 +73,14 @@ private fun ReviewPassRow(pass: ReviewPass, conclusion: PhaseConclusion?) {
   if (pass.findings.isNotEmpty()) {
     pass.findings.forEach { FindingRow(it) }
   } else {
-    PhaseBody(conclusion?.summary, conclusion?.detail)
+    PhaseBody("Review", conclusion?.summary, conclusion?.detail)
   }
 }
 
 @Composable
 private fun FindingRow(finding: ReviewFinding) {
   PhaseBody(
+    "Review finding",
     listOf(finding.severity, finding.label).joinToString(" · "),
     finding.text.takeIf { it != finding.label },
   )
@@ -93,7 +94,7 @@ private fun ConclusionRow(phase: String, conclusion: PhaseConclusion) {
     listOfNotNull(conclusion.verdict?.let(::wireLabel), attempts).joinToString(" · ").ifEmpty { "completed" },
     verdictColor(conclusion.verdict),
   )
-  PhaseBody(conclusion.summary, conclusion.detail)
+  PhaseBody(phase, conclusion.summary, conclusion.detail)
 }
 
 @Composable
@@ -108,12 +109,12 @@ private fun QaRow(qa: GoalQaResult) {
     )
     if (qa.criteria.isNotEmpty()) {
       val report = QaRunReport(qa.criteria)
-      PhaseBody(qaCriteriaSummary(report), qa.reason.takeUnless(::isBareQaReasonToken))
+      PhaseBody("Goal QA", qaCriteriaSummary(report), qa.reason.takeUnless(::isBareQaReasonToken))
       qa.criteria.forEach { criterion ->
-        PhaseBody(qaCriterionHeading(criterion), qaCriterionDetail(criterion))
+        PhaseBody("Goal QA criterion", qaCriterionHeading(criterion), qaCriterionDetail(criterion))
       }
     } else {
-      PhaseBody(qa.reason, null)
+      PhaseBody("Goal QA", qa.reason, null)
     }
   }
 }
@@ -126,19 +127,19 @@ private fun PhaseHeading(phase: String, outcome: String, color: Color) {
   }
 }
 
-/** A short line of prose, with longer detail truncated to three lines and readable in full on hover. */
+/** A short line of prose, with longer detail truncated to three lines and readable in full through "Show more". */
 @Composable
-private fun PhaseBody(summary: String?, detail: String?) {
+private fun PhaseBody(title: String, summary: String?, detail: String?) {
   if (summary == null && detail == null) return
   Column(Modifier.padding(start = PHASE_INDENT), verticalArrangement = Arrangement.spacedBy(5.dp)) {
     val compact = detail ?: summary
     val overlapping =
       summary != null && (detail == null || detail == summary || detail.startsWith(summary))
     if (overlapping && compact != null) {
-      ReasonTooltip(compact, color = ink, fontSize = 12.sp, lineHeight = 18.sp)
+      ExpandableReason(compact, title, color = ink, fontSize = 12.sp, lineHeight = 18.sp)
     } else {
       summary?.let { SelectionContainer { Text(it, color = ink, fontFamily = body, fontSize = 12.sp, lineHeight = 18.sp) } }
-      detail?.let { ReasonTooltip(it, fontSize = 11.5.sp, lineHeight = 17.sp) }
+      detail?.let { ExpandableReason(it, title, fontSize = 11.5.sp, lineHeight = 17.sp) }
     }
   }
 }

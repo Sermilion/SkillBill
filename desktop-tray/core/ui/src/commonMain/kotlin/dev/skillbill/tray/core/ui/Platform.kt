@@ -35,6 +35,17 @@ expect fun ReasonTooltip(
   lineHeight: TextUnit = 18.sp,
 )
 
+/** A truncated reason with a "Show more" button that opens its full scrollable text, titled [title], in a dialog. */
+@Composable
+expect fun ExpandableReason(
+  reason: String,
+  title: String,
+  modifier: Modifier = Modifier,
+  color: Color = muted,
+  fontSize: TextUnit = 12.sp,
+  lineHeight: TextUnit = 18.sp,
+)
+
 /** A vertical scrollbar for [state]; the caller aligns it, for example with `Modifier.align(Alignment.CenterEnd)`. */
 @Composable
 expect fun ListScrollbar(state: LazyListState, modifier: Modifier = Modifier)
