@@ -37,7 +37,7 @@ jobs:
       - name: Build runtime CLI
         run: |
           cd runtime-kotlin
-          ./gradlew --no-daemon --no-build-cache -Dorg.gradle.daemon.registry.base="$RUNNER_TEMP/install-smoke-daemon-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" -q :runtime-cli:installDist :runtime-mcp:installDist
+          ./gradlew --no-daemon --no-build-cache --console=plain -Dorg.gradle.daemon.registry.base="$RUNNER_TEMP/install-smoke-daemon-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" :runtime-cli:installDist :runtime-mcp:installDist
 
       - name: Reject mismatched runtime candidates before promotion
         run: bash scripts/runtime_package_parity_smoke_test.sh
