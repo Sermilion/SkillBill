@@ -25,6 +25,7 @@ import {
   PAUSE_REQUESTED_WIRE_KEY,
   PHASE_ID_MAX_LENGTH,
   PHASE_ID_WIRE_KEY,
+  QA_OUTCOME_WIRE_KEY,
   RUN_SEQUENCE_WIRE_KEY,
   STATUS_REVISION_WIRE_KEY,
   STATUS_STORE_ID_WIRE_KEY,
@@ -32,6 +33,7 @@ import {
 import {
   CurrentPhaseExecution,
   CurrentPhaseModel,
+  finishedOutcome,
   GoalPlanningInfo,
   PauseReason,
   SkillBillStatusOutcome,
@@ -285,8 +287,10 @@ export function mapIdeStatusJson(
         stale: isStale,
       };
     case "terminal":
+    case "canceled":
       return {
         kind: "done",
+        outcome: finishedOutcome(lifecycle, getString(root, QA_OUTCOME_WIRE_KEY)),
         observedAt,
         summary,
         repositoryIdentity,

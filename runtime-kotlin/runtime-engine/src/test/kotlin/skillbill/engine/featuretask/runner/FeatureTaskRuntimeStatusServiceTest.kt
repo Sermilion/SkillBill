@@ -6,6 +6,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
+import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -1297,6 +1298,7 @@ internal fun statusHarness(): StatusHarness {
       decomposeTerminalRecorder,
     ),
     repository,
+    FeatureTaskRuntimeGoalContinuationRecorder(database, NoopRuntimeDiagnostics, testHarnessClock),
   )
 }
 
@@ -1306,6 +1308,7 @@ internal class StatusHarness(
   val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   val service: FeatureTaskRuntimeStatusService,
   val repository: StatusInMemoryWorkflowRepository,
+  val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
 ) {
   fun recordRunning(
     phaseId: String,

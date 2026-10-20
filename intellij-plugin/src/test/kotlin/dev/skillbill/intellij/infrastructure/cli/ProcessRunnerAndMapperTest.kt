@@ -4,6 +4,7 @@ import dev.skillbill.intellij.domain.IDE_STATUS_CONTRACT_VERSION
 import dev.skillbill.intellij.domain.NO_MATCHING_WORK_REASON_CODE
 import dev.skillbill.intellij.domain.SkillBillStatusOutcome
 import dev.skillbill.intellij.domain.UnavailableReason
+import dev.skillbill.intellij.presentation.StatusUiMapper
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -231,6 +232,19 @@ class IdeStatusJsonMapperTest {
         outcome as SkillBillStatusOutcome.Done
         assertFalse(outcome.stale)
         assertEquals("SKILL-148", outcome.issueKey)
+    }
+
+    @Test
+    fun `finished work headlines name the recorded outcome`() {
+        val skippedQa = IdeStatusJsonMapper.map(
+            """{"contract_version":"$IDE_STATUS_CONTRACT_VERSION","repository_identity":"repo","execution_scope":"standalone_phase","execution_id":"execution-qa","status_store_id":"store-1","run_sequence":"1","status_revision":"3","invocation_id":"invocation-qa","phase_id":"qa","qa_outcome":"skipped","lifecycle_state":"terminal","current_step":{"id":"qa","label":"qa"},"updated_at":"2026-08-06T11:00:00Z","freshness":"fresh","summary":"Standalone phase qa finished with verdict skipped."}""",
+            now,
+            0,
+        )
+        val cancelledGoal = IdeStatusJsonMapper.map(runtimeFixture(lifecycle = "canceled"), now, 0)
+
+        assertEquals("Skill Bill: skipped", StatusUiMapper.map(skippedQa, now).headline)
+        assertEquals("Skill Bill: SKILL-148 · cancelled", StatusUiMapper.map(cancelledGoal, now).headline)
     }
 
     @Test

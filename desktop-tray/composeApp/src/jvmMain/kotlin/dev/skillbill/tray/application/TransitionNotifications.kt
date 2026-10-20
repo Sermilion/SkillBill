@@ -7,6 +7,7 @@ import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.allowedTransitions
+import dev.skillbill.tray.core.domain.model.finished
 import dev.skillbill.tray.core.domain.model.isFresh
 import dev.skillbill.tray.core.domain.model.successfulGoalCompletion
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
@@ -14,9 +15,14 @@ import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.ui.StoreObservation
 import dev.skillbill.tray.core.ui.TrackedBoardSections
 import dev.skillbill.tray.core.ui.TrackedSections
+import dev.skillbill.tray.core.ui.outcomeLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
+
+/** A finished run's notification names how it ended; live work names the step it reached. */
+fun notificationBody(item: WorkItem): String =
+  if (item.finished()) listOfNotNull(item.phaseId ?: item.issueKey, item.outcomeLabel()).joinToString(" · ") else item.currentStepLabel
 
 fun enabledTransitions(events: List<Pair<WorkItem, String>>, settings: AppSettings): List<Pair<WorkItem, String>> =
   events.filter { (_, transition) -> transition in allowedTransitions && settings.notifications[transition] == true }
@@ -92,7 +98,7 @@ class TransitionNotificationCoordinator(
     }
     val notificationEpoch = epoch
     enabledTransitions(tracker.observe(items), current).forEach { (item, transition) ->
-      native.notifyAuthorized(item.summary, item.currentStepLabel, item.identity, { send ->
+      native.notifyAuthorized(item.summary, notificationBody(item), item.identity, { send ->
         if (notificationEpoch == epoch && current.notifications[transition] == true) send()
       }, onSelect)
     }

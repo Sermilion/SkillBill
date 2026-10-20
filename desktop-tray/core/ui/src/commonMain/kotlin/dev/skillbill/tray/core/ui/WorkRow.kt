@@ -33,6 +33,7 @@ import dev.skillbill.tray.core.designsystem.raised
 import dev.skillbill.tray.core.designsystem.sidebar
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.finished
 import dev.skillbill.tray.core.domain.model.needsAttention
 import dev.skillbill.tray.core.domain.model.showsAsStandalonePhase
 
@@ -45,10 +46,8 @@ fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Unit) {
       WorkDot(item.lifecycle)
       Column(Modifier.weight(1f)) {
         Text(item.repositoryTitle(), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val status = if (item.showsAsStandalonePhase() || item.lifecycle == Lifecycle.CANCELED) {
-          item.lifecycle.name.lowercase().replaceFirstChar(Char::uppercase)
-        } else null
-        val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
+        val status = item.outcomeLabel().takeIf { item.showsAsStandalonePhase() || item.finished() }
+        val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.TERMINAL || item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
         Text(
           listOfNotNull(item.issueKey ?: item.phaseId, status, step).joinToString(" · "),
           color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted,

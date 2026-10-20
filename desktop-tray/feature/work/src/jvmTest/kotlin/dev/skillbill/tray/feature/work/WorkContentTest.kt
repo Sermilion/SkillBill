@@ -11,7 +11,9 @@ import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.use
 import dev.skillbill.tray.core.designsystem.DesignSystemTheme
+import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.QaVerdict
 import dev.skillbill.tray.core.testing.workItem
 import dev.skillbill.tray.core.ui.loadedList
 import kotlinx.coroutines.runBlocking
@@ -65,5 +67,25 @@ class WorkContentTest {
 
     assertTrue("FINISHED TODAY · 0" in shown, shown.joinToString())
     assertTrue("Nothing finished today" in shown, shown.joinToString())
+  }
+
+  @Test
+  fun `finished rows show the outcome each run recorded`() {
+    val at = today + 2.hours
+    val skippedQa = workItem("qa-run", Lifecycle.TERMINAL, family = null, issueKey = null).copy(
+      scope = ExecutionScope.STANDALONE_PHASE, phaseId = "qa", currentStepLabel = "qa", qaVerdict = QaVerdict.SKIPPED, finishedAt = at,
+    )
+    val failedReview = workItem("review-run", Lifecycle.FAILED, family = null, issueKey = null).copy(
+      scope = ExecutionScope.STANDALONE_PHASE, phaseId = "review", currentStepLabel = "review", finishedAt = at,
+    )
+    val cancelledGoal = workItem("G-1", Lifecycle.CANCELED, issueKey = "SKILL-7").copy(finishedAt = at)
+    val state = WorkUiState(finished = loadedList(listOf(skippedQa, failedReview, cancelledGoal), hasMore = false))
+
+    val shown = texts(state)
+
+    assertTrue("qa · Skipped" in shown, shown.joinToString())
+    assertTrue("review · Failed" in shown, shown.joinToString())
+    assertTrue("SKILL-7 · Cancelled" in shown, shown.joinToString())
+    assertFalse(shown.any { "Terminal" in it || "TERMINAL" in it }, shown.joinToString())
   }
 }

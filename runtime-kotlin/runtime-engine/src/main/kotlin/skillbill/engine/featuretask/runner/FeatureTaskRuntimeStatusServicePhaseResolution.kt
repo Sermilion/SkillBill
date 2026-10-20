@@ -42,6 +42,11 @@ fun phaseStatuses(
       )
     }
 
+fun goalChildHiddenPhaseIds(
+  goalChild: Boolean,
+  recordedPhaseIds: Set<String>,
+): Set<String> = if (goalChild) PhaseSlot.QA.steps.toSet() - recordedPhaseIds else emptySet()
+
 fun resolveCurrentPhaseId(
   terminalDecomposeRecorded: Boolean,
   records: Map<String, FeatureTaskRuntimePhaseRecord>,

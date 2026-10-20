@@ -86,7 +86,7 @@ export const SkillBillStatusBarPresentation = {
         case "stale":
           return buildRunBar(`${prefix} · stale`, step, slotSegment, goalText, subtaskText, progressText);
         case "done":
-          return buildRunBar(`${prefix} · done`, step, undefined, goalText, subtaskText, progressText);
+          return buildRunBar(`${prefix} · ${anchored.outcome}`, step, undefined, goalText, subtaskText, progressText);
         case "blocked":
           return `${prefix} · blocked`;
         case "failed":
@@ -432,7 +432,7 @@ function elapsedNoun(state: SkillBillStatusUiState): string {
 }
 
 function lifecycleLabel(state: SkillBillStatusUiState): string {
-  return state.kind;
+  return state.kind === "done" ? state.outcome : state.kind;
 }
 
 function planningStateLabel(state: string): string {

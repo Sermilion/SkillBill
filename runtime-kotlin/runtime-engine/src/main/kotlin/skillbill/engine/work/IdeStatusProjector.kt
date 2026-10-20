@@ -158,7 +158,7 @@ class IdeStatusProjector(
       summary =
         resolveExecutionReason(record, context.unitOfWork).text
           ?: listOfNotNull(
-            "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
+            standalonePhaseStateSummary(record.phaseId, lifecycle, record.lifecycleState, record.qaOutcome),
             record.monitorTargetDetail(),
           ).joinToString(" "),
     )

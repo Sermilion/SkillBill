@@ -2,6 +2,7 @@ package dev.skillbill.tray.feature.work
 
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.ui.outcomeLabel
 
 private const val HOVER_ITEMS_PER_CATEGORY = 4
 
@@ -30,7 +31,7 @@ private fun StringBuilder.appendHoverCategory(label: String, items: List<WorkIte
       else -> "#9C9CA6"
     }
     val identifier = item.issueKey ?: item.phaseId ?: item.currentStepId
-    val step = if (item.lifecycle == Lifecycle.ACTIVE) item.currentStepLabel.lowercase() else item.lifecycle.name.lowercase()
+    val step = if (item.lifecycle == Lifecycle.ACTIVE) item.currentStepLabel.lowercase() else item.outcomeLabel().lowercase()
     val progress = item.progressTotal?.let { " ${item.progressCompleted ?: 0}/$it" }.orEmpty()
     val execution = item.phaseExecution?.let { " ${it.count}/${it.total ?: "?"}" }.orEmpty()
     val repository = item.repositoryRoot.replace('\\', '/').trimEnd('/').substringAfterLast('/').boundedHoverText(22)

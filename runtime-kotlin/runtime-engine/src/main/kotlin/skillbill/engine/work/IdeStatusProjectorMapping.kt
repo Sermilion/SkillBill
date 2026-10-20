@@ -14,6 +14,7 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentSubtask
 import skillbill.ports.idestatus.model.IdeStatusPlanning
 import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
@@ -200,6 +201,19 @@ internal fun goalSummary(
     IdeStatusLifecycleState.IDLE -> "Goal $issueKey is idle."
   }
 
+internal fun standalonePhaseStateSummary(
+  phaseId: String,
+  lifecycle: IdeStatusLifecycleState,
+  recordedState: String,
+  qaOutcome: StandaloneQaOutcome?,
+): String =
+  when {
+    lifecycle != IdeStatusLifecycleState.TERMINAL -> "Standalone phase $phaseId is $recordedState."
+    qaOutcome != null && qaOutcome != StandaloneQaOutcome.ATTEMPTED ->
+      "Standalone phase $phaseId finished with verdict ${qaOutcome.wireValue}."
+    else -> "Standalone phase $phaseId is complete."
+  }
+
 internal fun familySummary(
   family: IdeStatusWorkflowFamily,
   issueKey: String?,
@@ -213,7 +227,7 @@ internal fun familySummary(
     IdeStatusLifecycleState.BLOCKED -> "$subject is blocked at $stepLabel."
     IdeStatusLifecycleState.FAILED -> "$subject failed at $stepLabel."
     IdeStatusLifecycleState.CANCELED -> "$subject was canceled."
-    IdeStatusLifecycleState.TERMINAL -> "$subject is terminal."
+    IdeStatusLifecycleState.TERMINAL -> "$subject is complete."
     IdeStatusLifecycleState.IDLE -> "No matching Skill Bill work for this repository."
   }
 }

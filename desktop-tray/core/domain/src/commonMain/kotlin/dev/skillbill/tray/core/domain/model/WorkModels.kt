@@ -87,6 +87,8 @@ data class WorkItem(
   val repositoryName: String? = null,
   /** A goal planning before its goal exists: recorded as a standalone phase, shown as the goal. */
   val goalLaunched: Boolean = false,
+  /** The verdict a standalone QA phase recorded; absent for every other kind of work. */
+  val qaVerdict: QaVerdict? = null,
 )
 
 data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?)

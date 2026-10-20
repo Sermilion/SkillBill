@@ -73,7 +73,7 @@ object SkillBillStatusBarPresentation {
                 buildRunBar("$scopePrefix · stale", step, slotSegment, goalText, subtaskText, progressText)
 
             is SkillBillStatusUiState.Done ->
-                buildRunBar("$scopePrefix · done", step, null, goalText, subtaskText, progressText)
+                buildRunBar("$scopePrefix · ${anchored.outcome.label}", step, null, goalText, subtaskText, progressText)
 
             is SkillBillStatusUiState.Blocked -> "$scopePrefix · blocked"
             is SkillBillStatusUiState.Failed -> "$scopePrefix · failed"
@@ -353,7 +353,7 @@ object SkillBillStatusBarPresentation {
     private fun lifecycleLabel(state: SkillBillStatusUiState): String =
         when (state) {
             is SkillBillStatusUiState.Idle -> "idle"
-            is SkillBillStatusUiState.Done -> "done"
+            is SkillBillStatusUiState.Done -> state.outcome.label
             is SkillBillStatusUiState.Active -> "active"
             is SkillBillStatusUiState.Paused -> "paused"
             is SkillBillStatusUiState.Stale -> "stale"

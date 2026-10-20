@@ -8,6 +8,7 @@ export const RUN_SEQUENCE_WIRE_KEY = "run_sequence";
 export const STATUS_REVISION_WIRE_KEY = "status_revision";
 export const INVOCATION_ID_WIRE_KEY = "invocation_id";
 export const PHASE_ID_WIRE_KEY = "phase_id";
+export const QA_OUTCOME_WIRE_KEY = "qa_outcome";
 export const CURRENT_ACTIVITY_WIRE_KEY = "current_activity";
 export const CURRENT_ACTIVITY_MAX_CODE_POINTS = 160;
 

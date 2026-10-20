@@ -1,4 +1,10 @@
-import { CurrentPhaseExecution, CurrentPhaseModel, GoalPlanningInfo, PauseReason } from "../domain/SkillBillStatusOutcome";
+import {
+  CurrentPhaseExecution,
+  CurrentPhaseModel,
+  FinishedOutcome,
+  GoalPlanningInfo,
+  PauseReason,
+} from "../domain/SkillBillStatusOutcome";
 
 export function formatDurationMs(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -34,6 +40,7 @@ export type SkillBillStatusUiState = (
     }
   | {
       kind: "done";
+      outcome: FinishedOutcome;
       headline: string;
       detail?: string;
       goalElapsedMs?: number;

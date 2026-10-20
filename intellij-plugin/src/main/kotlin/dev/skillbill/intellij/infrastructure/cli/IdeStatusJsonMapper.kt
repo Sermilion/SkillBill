@@ -23,6 +23,7 @@ import dev.skillbill.intellij.domain.EXECUTION_SCOPE_WIRE_KEY
 import dev.skillbill.intellij.domain.MODEL_MAX_LENGTH
 import dev.skillbill.intellij.domain.PHASE_ID_MAX_LENGTH
 import dev.skillbill.intellij.domain.PHASE_ID_WIRE_KEY
+import dev.skillbill.intellij.domain.QA_OUTCOME_WIRE_KEY
 import dev.skillbill.intellij.domain.GoalPlanningInfo
 import dev.skillbill.intellij.domain.IDE_STATUS_CONTRACT_VERSION
 import dev.skillbill.intellij.domain.INVOCATION_ID_WIRE_KEY
@@ -33,6 +34,7 @@ import dev.skillbill.intellij.domain.PAUSE_REASON_LABEL_MAX_LENGTH
 import dev.skillbill.intellij.domain.PAUSE_REASON_WIRE_KEY
 import dev.skillbill.intellij.domain.PauseReason
 import dev.skillbill.intellij.domain.StatusExecutionMetadata
+import dev.skillbill.intellij.domain.FinishedOutcome
 import dev.skillbill.intellij.domain.boundedDisplaySummary
 import dev.skillbill.intellij.domain.PAUSE_REQUESTED_WIRE_KEY
 import dev.skillbill.intellij.domain.SkillBillStatusOutcome
@@ -321,7 +323,7 @@ object IdeStatusJsonMapper {
                 stale = isStale,
             )
 
-            "terminal" -> SkillBillStatusOutcome.Done(
+            "terminal", "canceled" -> SkillBillStatusOutcome.Done(
                 observedAt = observedAt,
                 summary = summary,
                 repositoryIdentity = repositoryIdentity,
@@ -334,6 +336,7 @@ object IdeStatusJsonMapper {
                 activeDurationMs = activeDurationMs,
                 activeDurationAsOf = activeDurationAsOf,
                 execution = execution.metadata,
+                outcome = FinishedOutcome.of(lifecycle, root.getAsStringPrimitive(QA_OUTCOME_WIRE_KEY)),
             )
 
             else -> SkillBillStatusOutcome.Unavailable(

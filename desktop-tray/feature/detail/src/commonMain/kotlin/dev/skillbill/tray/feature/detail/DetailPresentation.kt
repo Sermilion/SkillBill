@@ -9,18 +9,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.tray.core.domain.model.Detail
+import dev.skillbill.tray.core.domain.model.ExecutionInstance
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.ReasonRestoration
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.standaloneExecutionOutcome
 import dev.skillbill.tray.core.ui.age
 import dev.skillbill.tray.core.ui.durationText
 import dev.skillbill.tray.core.ui.formatInstant
+import dev.skillbill.tray.core.ui.label
+import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.phaseElapsedText
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
+
+/**
+ * The outcome of one run in a standalone phase's history. The run the item describes carries its recorded verdict; an older
+ * run only has its stored lifecycle state.
+ */
+internal fun executionOutcomeLabel(item: WorkItem, instance: ExecutionInstance): String =
+  if (instance.executionId == item.executionId) item.outcomeLabel() else standaloneExecutionOutcome(instance.lifecycleState).label()
 
 internal data class DetailDuration(val label: String, val value: String, val note: String)
 

@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.domain.model.*
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.WorkBoardItem
@@ -20,6 +21,14 @@ internal fun ExecutionReasonRestoration.toDomain(): ReasonRestoration = when (th
   ExecutionReasonRestoration.AMBIGUOUS -> ReasonRestoration.AMBIGUOUS
   ExecutionReasonRestoration.BUDGET_EXCEEDED -> ReasonRestoration.BUDGET_EXCEEDED
   ExecutionReasonRestoration.MISSING_CONTENT -> ReasonRestoration.MISSING_CONTENT
+}
+
+internal fun StandaloneQaOutcome.toDomain(): QaVerdict = when (this) {
+  StandaloneQaOutcome.ATTEMPTED -> QaVerdict.ATTEMPTED
+  StandaloneQaOutcome.PASSED -> QaVerdict.PASSED
+  StandaloneQaOutcome.FINDINGS -> QaVerdict.FINDINGS
+  StandaloneQaOutcome.SKIPPED -> QaVerdict.SKIPPED
+  StandaloneQaOutcome.INCOMPLETE -> QaVerdict.INCOMPLETE
 }
 
 internal fun DatabaseFileObservation.toDomain(): DatabaseFileIdentity = DatabaseFileIdentity(path.toString(), fileKey)
@@ -49,6 +58,7 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     family = workflowFamily?.let { WorkFamily.valueOf(it.name) },
     scope = scope?.let { ExecutionScope.valueOf(it.name) },
     goalLaunched = execution?.launchScope == IdeStatusLaunchScope.GOAL,
+    qaVerdict = execution?.qaOutcome?.toDomain(),
     phaseId = execution?.phaseId,
     activity = currentActivity,
     lifecycle = Lifecycle.valueOf(lifecycleState.name),

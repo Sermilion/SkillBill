@@ -35,6 +35,7 @@ sealed class SkillBillStatusOutcome {
         val subtaskActiveDurationMs: Long? = null,
         val subtaskActiveDurationAsOf: Instant? = null,
         val execution: StatusExecutionMetadata? = null,
+        val outcome: FinishedOutcome = FinishedOutcome.COMPLETE,
     ) : SkillBillStatusOutcome()
 
     data class Active(

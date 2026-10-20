@@ -78,6 +78,7 @@ import dev.skillbill.tray.core.ui.effectiveFreshness
 import dev.skillbill.tray.core.ui.formatInstant
 import dev.skillbill.tray.core.ui.label
 import dev.skillbill.tray.core.ui.lifecycleColor
+import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.phasePipeline
 import dev.skillbill.tray.core.ui.rememberCopyToClipboard
 import dev.skillbill.tray.core.ui.tickingNow
@@ -168,7 +169,7 @@ private fun LoadedDetail(
     Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          StatusChip(if (item.lifecycle == Lifecycle.CANCELED) "Canceled" else item.lifecycle.name.lowercase(), lifecycleColor(item.lifecycle), item.lifecycle)
+          StatusChip(item.outcomeLabel(), lifecycleColor(item.lifecycle), item.lifecycle)
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
           StatusChip(if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
@@ -335,7 +336,7 @@ private fun LoadedDetail(
               val index = detail.executionHistory.indexOf(instance)
               HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
               Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("Run ${detail.executionHistory.size - index} · ${if (standalone) instance.lifecycleState else "Invocation"} · ${formatInstant(instance.startedAt, "d MMM HH:mm:ss")}${if (index == 0) " · latest run" else ""}", color = ink, fontFamily = body, fontSize = 12.sp)
+                Text("Run ${detail.executionHistory.size - index} · ${if (standalone) executionOutcomeLabel(item, instance) else "Invocation"} · ${formatInstant(instance.startedAt, "d MMM HH:mm:ss")}${if (index == 0) " · latest run" else ""}", color = ink, fontFamily = body, fontSize = 12.sp)
                 SelectionContainer { Text(instance.invocationId, color = muted, fontFamily = mono, fontSize = 11.sp) }
                 SelectionContainer { Text("Execution ${instance.executionId}", color = dim, fontFamily = mono, fontSize = 11.sp) }
                 Text("${if (instance.finishedAt != null) "Finished" else "Last update"} ${formatInstant(instance.finishedAt ?: instance.updatedAt, "d MMM HH:mm:ss")}", color = muted, fontSize = 11.sp)

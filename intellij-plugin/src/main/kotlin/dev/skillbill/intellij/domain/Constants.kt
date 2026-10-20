@@ -11,6 +11,7 @@ const val RUN_SEQUENCE_WIRE_KEY: String = "run_sequence"
 const val STATUS_REVISION_WIRE_KEY: String = "status_revision"
 const val INVOCATION_ID_WIRE_KEY: String = "invocation_id"
 const val PHASE_ID_WIRE_KEY: String = "phase_id"
+const val QA_OUTCOME_WIRE_KEY: String = "qa_outcome"
 const val CURRENT_ACTIVITY_WIRE_KEY: String = "current_activity"
 const val CURRENT_ACTIVITY_MAX_CODE_POINTS: Int = 160
 

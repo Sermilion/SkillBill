@@ -43,6 +43,7 @@ object StatusUiMapper {
                     executionScope = outcome.execution?.executionScope,
                     phaseId = outcome.execution?.phaseId,
                     currentActivity = outcome.execution?.currentActivity,
+                    outcome = outcome.outcome,
                 )
 
             is SkillBillStatusOutcome.Active ->
@@ -371,7 +372,7 @@ object StatusUiMapper {
 
     private fun doneHeadline(outcome: SkillBillStatusOutcome.Done): String {
         val key = outcome.issueKey?.let { "$it · " }.orEmpty()
-        return "Skill Bill: ${key}done"
+        return "Skill Bill: $key${outcome.outcome.label}"
     }
 
     private fun activeHeadline(outcome: SkillBillStatusOutcome.Active): String {

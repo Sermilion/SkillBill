@@ -120,7 +120,7 @@ class StatusUiMapperTest {
         val ui = StatusUiMapper.map(done(updatedAt = updated), now)
         assertTrue(ui is SkillBillStatusUiState.Done)
         ui as SkillBillStatusUiState.Done
-        assertEquals("Skill Bill: SKILL-148 · done", ui.headline)
+        assertEquals("Skill Bill: SKILL-148 · complete", ui.headline)
         assertEquals("SKILL-148", ui.issueKey)
         assertEquals(3, ui.progressCompleted)
         assertEquals(3, ui.progressTotal)

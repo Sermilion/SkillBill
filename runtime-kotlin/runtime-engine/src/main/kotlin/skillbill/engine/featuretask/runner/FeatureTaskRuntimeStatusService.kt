@@ -116,7 +116,10 @@ class FeatureTaskRuntimeStatusService(
         durableBlockedPhaseIds +
           ledgerBlockedPhaseIds(normalizedLedger, durableBlockedPhaseIds)
       ).toSet()
-    val phases = phaseStatuses(normalizedRecords, blockedPhaseIds, normalizedLedger)
+    val goalContinuation = recorder.loadGoalContinuation(request.workflowId)
+    val hiddenPhaseIds = goalChildHiddenPhaseIds(goalContinuation != null, normalizedRecords.keys)
+    val phases =
+      phaseStatuses(normalizedRecords, blockedPhaseIds, normalizedLedger).filterNot { it.phaseId in hiddenPhaseIds }
     val terminalDecomposeRecorded = decomposeTerminal != null
     val currentPhaseId =
       resolveCurrentPhaseId(
@@ -125,7 +128,7 @@ class FeatureTaskRuntimeStatusService(
         phases,
         normalizedLedger,
         FeatureTaskRuntimePhaseWorkflowQueries.loopOnlyPhaseIds(
-          recorder.loadGoalContinuation(request.workflowId)?.qualityGateSelection ?: LEGACY_QUALITY_GATE_SELECTION,
+          goalContinuation?.qualityGateSelection ?: LEGACY_QUALITY_GATE_SELECTION,
         ) - setOfNotNull(workflowCurrentStepId),
       )
     val gateRunCount = gateRunCountFor(request, currentPhaseId)

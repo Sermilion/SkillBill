@@ -1,5 +1,22 @@
 import { IDE_STATUS_CONTRACT_VERSION, NO_MATCHING_WORK_REASON_CODE, POLL_FAILED_REASON_CODE } from "./Constants";
 
+export type FinishedOutcome = "complete" | "passed" | "findings" | "skipped" | "incomplete" | "cancelled";
+
+export function finishedOutcome(lifecycle: string, qaOutcome: string | undefined): FinishedOutcome {
+  if (lifecycle === "canceled") {
+    return "cancelled";
+  }
+  switch (qaOutcome) {
+    case "passed":
+    case "findings":
+    case "skipped":
+    case "incomplete":
+      return qaOutcome;
+    default:
+      return "complete";
+  }
+}
+
 export interface StatusDiagnostic {
   exitCode?: number;
   timedOut?: boolean;
@@ -72,6 +89,7 @@ export type SkillBillStatusOutcome = (
     }
   | {
       kind: "done";
+      outcome: FinishedOutcome;
       observedAt: Date;
       summary: string;
       repositoryIdentity?: string;

@@ -2,6 +2,7 @@ package dev.skillbill.intellij.presentation
 
 import dev.skillbill.intellij.domain.CurrentPhaseExecution
 import dev.skillbill.intellij.domain.CurrentPhaseModel
+import dev.skillbill.intellij.domain.FinishedOutcome
 import dev.skillbill.intellij.domain.GoalPlanningInfo
 import dev.skillbill.intellij.domain.PauseReason
 import java.time.Duration
@@ -77,8 +78,9 @@ sealed class SkillBillStatusUiState {
         override val phaseId: String? = null,
         override val currentActivity: String? = null,
         override val stale: Boolean = false,
+        val outcome: FinishedOutcome = FinishedOutcome.COMPLETE,
     ) : SkillBillStatusUiState() {
-        override val accessibilityText: String = "$headline (done)"
+        override val accessibilityText: String = "$headline (${outcome.label})"
     }
 
     data class Active(

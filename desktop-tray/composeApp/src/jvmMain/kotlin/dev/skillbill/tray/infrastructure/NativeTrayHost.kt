@@ -6,6 +6,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
 import dev.skillbill.tray.core.domain.model.TrayStatus
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.infrastructure.macos.MacStatusItemBridge
 
 data class NativeTrayState(val kind: TrayStatus, val running: Int)
@@ -41,7 +42,7 @@ object NativeTrayHost {
     SideEffect {
       MacStatusItemBridge.update(kind, running,
         goals.take(8).map { "${it.issueKey ?: it.currentStepLabel}: ${it.summary.take(50)}" },
-        phases.take(8).map { "${it.phaseId ?: it.currentStepLabel}: ${it.summary.take(50)}" })
+        phases.take(8).map { "${it.phaseId ?: it.currentStepLabel} · ${it.outcomeLabel()}: ${it.summary.take(50)}" })
     }
   }
 }

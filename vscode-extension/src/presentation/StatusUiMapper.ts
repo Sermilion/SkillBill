@@ -1,5 +1,10 @@
 import { POLL_FAILED_REASON_CODE } from "../domain/Constants";
-import { SkillBillStatusOutcome, StatusDiagnostic, GoalPlanningInfo } from "../domain/SkillBillStatusOutcome";
+import {
+  FinishedOutcome,
+  SkillBillStatusOutcome,
+  StatusDiagnostic,
+  GoalPlanningInfo,
+} from "../domain/SkillBillStatusOutcome";
 import { SkillBillStatusUiState } from "./SkillBillStatusUiState";
 
 export const StatusUiMapper = {
@@ -20,7 +25,8 @@ export const StatusUiMapper = {
       case "done":
         return {
           kind: "done",
-          headline: doneHeadline(outcome.issueKey),
+          outcome: outcome.outcome,
+          headline: doneHeadline(outcome.issueKey, outcome.outcome),
           detail: outcome.summary,
           goalElapsedMs: StatusUiMapper.activeElapsedMs(
             outcome.activeDurationMs,
@@ -334,9 +340,9 @@ function relevantPlanning(
   return planning;
 }
 
-function doneHeadline(issueKey: string | undefined): string {
+function doneHeadline(issueKey: string | undefined, finished: FinishedOutcome): string {
   const key = issueKey ? `${issueKey} · ` : "";
-  return `Skill Bill: ${key}done`;
+  return `Skill Bill: ${key}${finished}`;
 }
 
 function activeHeadline(issueKey: string | undefined, stepLabel: string): string {

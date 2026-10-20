@@ -1,7 +1,9 @@
 package dev.skillbill.tray.application
 
 import dev.skillbill.tray.core.domain.model.AppSettings
+import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.QaVerdict
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.defaultNotifications
@@ -157,5 +159,13 @@ class TransitionNotificationCoordinatorTest {
     val unknown = item(Lifecycle.ACTIVE) to "something_else"
 
     assertEquals(listOf(failed), enabledTransitions(listOf(failed, finished, unknown), AppSettings()))
+  }
+
+  @Test
+  fun `a finished standalone phase notification names its recorded outcome`() {
+    val skipped = workItem("qa-run", Lifecycle.TERMINAL, family = null, issueKey = null)
+      .copy(scope = ExecutionScope.STANDALONE_PHASE, phaseId = "qa", currentStepLabel = "qa", qaVerdict = QaVerdict.SKIPPED)
+
+    assertEquals("qa · Skipped", notificationBody(skipped))
   }
 }
