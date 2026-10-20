@@ -211,6 +211,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     val outcomes =
       store.reconcileAuthoritativeOutcomes(
         issueKey = "SKILL-87.1",
+        parentWorkflowId = "wfl-parent",
         activeWorkflowIds = emptySet(),
         gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       )
@@ -239,6 +240,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     val outcomes =
       store.reconcileAuthoritativeOutcomes(
         issueKey = "SKILL-87.1",
+        parentWorkflowId = "wfl-parent",
         activeWorkflowIds = emptySet(),
         gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       )
@@ -269,6 +271,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     val outcomes =
       store.reconcileAuthoritativeOutcomes(
         issueKey = "SKILL-87.1",
+        parentWorkflowId = "wfl-parent",
         activeWorkflowIds = emptySet(),
         gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       )
@@ -299,6 +302,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     val outcomes =
       store.reconcileAuthoritativeOutcomes(
         issueKey = "SKILL-87.1",
+        parentWorkflowId = "wfl-parent",
         activeWorkflowIds = emptySet(),
         gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       )
@@ -324,6 +328,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     val outcomes =
       store.reconcileAuthoritativeOutcomes(
         issueKey = "SKILL-87.1",
+        parentWorkflowId = "wfl-parent",
         activeWorkflowIds = emptySet(),
         gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       )

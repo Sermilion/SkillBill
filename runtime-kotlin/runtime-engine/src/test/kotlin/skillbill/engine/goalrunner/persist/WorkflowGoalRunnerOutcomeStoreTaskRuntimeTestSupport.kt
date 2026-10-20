@@ -74,6 +74,7 @@ internal fun blockedContinuationRecord(fixture: BlockedContinuationRecordFixture
     linkedMapOf<String, Any?>(
       "goal_continuation" to
         mapOf(
+          "parent_workflow_id" to "wfl-parent",
           "issue_key" to "SKILL-176.4",
           "subtask_id" to 4,
           "suppress_pr" to true,
@@ -150,6 +151,7 @@ internal fun completeWithoutShaContinuationRecord(workflowId: String): WorkflowS
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-176.4",
                 "subtask_id" to 4,
                 "suppress_pr" to true,
@@ -196,6 +198,7 @@ internal fun runtimeCandidateRecordNoDeclaredEvent(
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-87.1",
                 "subtask_id" to 1,
                 "suppress_pr" to true,
@@ -233,6 +236,7 @@ internal fun goalReviewWorkflowRecord(
                 issueKey = "SKILL-119",
                 subtaskId = 2,
                 suppressPr = true,
+                parentWorkflowId = "wfl-parent",
                 goalBranch = "feat/SKILL-119",
                 codeReviewMode = CodeReviewExecutionMode.AUTO,
               ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
@@ -282,6 +286,7 @@ internal fun runtimeCandidateRecord(
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-87.1",
                 "subtask_id" to 1,
                 "suppress_pr" to true,
@@ -353,6 +358,7 @@ internal fun tornBlockedReviewRecord(workflowId: String): WorkflowStateRecord {
               ),
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-191",
                 "subtask_id" to 9,
                 "suppress_pr" to true,
@@ -383,6 +389,7 @@ internal fun crashedChildRecord(workflowId: String): WorkflowStateRecord {
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-87.1",
                 "subtask_id" to 1,
                 "suppress_pr" to true,

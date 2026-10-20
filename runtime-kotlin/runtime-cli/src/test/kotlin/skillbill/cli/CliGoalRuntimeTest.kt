@@ -620,7 +620,7 @@ class CliGoalExecutionOptionsTest {
     val fixture = goalFixture(subtaskCount = 1)
     val staleChild = startRunningGoalChild(fixture)
     recordRunningGoalChildProgress(fixture, staleChild, sequence = 9, message = "stale active event")
-    seedAuthoritativeCompleteChild(fixture)
+    seedAuthoritativeCompleteChild(fixture, staleChild)
     val archivedBundle = fixture.tempDir.resolve(".feature-specs/done/SKILL-901-goal")
     Files.createDirectories(archivedBundle.parent)
     Files.move(fixture.parentSpec.parent, archivedBundle)

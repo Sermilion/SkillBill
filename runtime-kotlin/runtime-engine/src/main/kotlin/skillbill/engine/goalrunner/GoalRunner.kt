@@ -176,7 +176,7 @@ class GoalRunner(
     val reconciled =
       reconcileGoalManifest(
         manifest = state.manifest,
-        authoritativeOutcomes = outcomeStore.authoritativeOutcomes(state.manifest.issueKey),
+        authoritativeOutcomes = outcomeStore.authoritativeOutcomes(state.manifest.issueKey, state.parentWorkflowId),
         acceptances = manifestStore.outOfBandAcceptances(state.parentWorkflowId),
         outcomeStore = outcomeStore,
       )

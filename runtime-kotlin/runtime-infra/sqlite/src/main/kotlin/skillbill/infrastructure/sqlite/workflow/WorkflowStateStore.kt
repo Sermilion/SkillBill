@@ -263,7 +263,15 @@ internal class FeatureTaskWorkflowStateStore(
     offset: Int,
     limit: Int,
     subtaskIds: Set<Int>?,
-  ): List<WorkflowStateSnapshot> = goalStatusReads.childPage(normalizedIssueKey, offset, limit, subtaskIds)
+    parentWorkflowId: String?,
+  ): List<WorkflowStateSnapshot> =
+    goalStatusReads.childPage(
+      normalizedIssueKey,
+      offset,
+      limit,
+      subtaskIds,
+      parentWorkflowId,
+    )
 
   override fun readGoalAttemptLedgerPage(
     workflowId: String,

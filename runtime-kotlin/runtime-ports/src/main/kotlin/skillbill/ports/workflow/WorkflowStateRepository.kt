@@ -111,6 +111,7 @@ interface FeatureTaskWorkflowReadRepository {
     offset: Int,
     limit: Int,
     subtaskIds: Set<Int>? = null,
+    parentWorkflowId: String? = null,
   ): List<WorkflowStateSnapshot>
 
   fun readGoalAttemptLedgerPage(

@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
-import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
@@ -176,21 +175,30 @@ class WorkflowGoalRunnerOutcomeStore
     override fun childWorkflowLoopIterations(workflowId: String): Map<String, Int> =
       progressRecording.childWorkflowLoopIterations(workflowId)
 
-    override fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome> =
-      reconcile.authoritativeOutcomes(issueKey)
+    override fun authoritativeOutcomes(
+      issueKey: String,
+      parentWorkflowId: String,
+    ): Map<Int, GoalRunnerStoredOutcome> = reconcile.authoritativeOutcomes(issueKey, parentWorkflowId)
 
     override fun authoritativeOutcomesForSubtasks(
       issueKey: String,
+      parentWorkflowId: String,
       subtaskIds: Set<Int>,
-    ): Map<Int, GoalRunnerStoredOutcome> = reconcile.authoritativeOutcomesForSubtasks(issueKey, subtaskIds)
+    ): Map<Int, GoalRunnerStoredOutcome> =
+      reconcile.authoritativeOutcomesForSubtasks(
+        issueKey,
+        parentWorkflowId,
+        subtaskIds,
+      )
 
     override fun reconcileAuthoritativeOutcomes(
       issueKey: String,
+      parentWorkflowId: String,
       activeWorkflowIds: Set<String>,
       gate: GoalRunnerReconcileGate,
       repoRoot: Path?,
     ): Map<Int, GoalRunnerStoredOutcome> =
-      reconcile.reconcileAuthoritativeOutcomes(issueKey, activeWorkflowIds, gate, repoRoot)
+      reconcile.reconcileAuthoritativeOutcomes(issueKey, parentWorkflowId, activeWorkflowIds, gate, repoRoot)
 
     override fun markBlocked(
       workflowId: String,
@@ -445,6 +453,7 @@ internal class WorkflowGoalRunnerReconcileBridge(
 ) {
   fun reconcileAuthoritativeOutcomes(
     issueKey: String,
+    parentWorkflowId: String,
     activeWorkflowIds: Set<String>,
     gate: GoalRunnerReconcileGate,
     repoRoot: Path?,
@@ -452,26 +461,31 @@ internal class WorkflowGoalRunnerReconcileBridge(
     database.transaction { unitOfWork ->
       outcomeReconcile.reconcileAuthoritativeOutcomesInTransaction(
         unitOfWork,
-        issueKey,
-        activeWorkflowIds,
-        gate,
-        repoRoot,
+        GoalOutcomeReconciliationRequest(issueKey, parentWorkflowId, activeWorkflowIds, gate, repoRoot),
       )
     }
 
   fun authoritativeOutcomesForSubtasks(
     issueKey: String,
+    parentWorkflowId: String,
     subtaskIds: Set<Int>,
   ): Map<Int, GoalRunnerStoredOutcome> =
     database.read {
         unitOfWork ->
-      outcomeReconcile.authoritativeOutcomesForSubtasks(unitOfWork.workflowStates, issueKey, subtaskIds)
+      outcomeReconcile.authoritativeOutcomesForSubtasks(
+        unitOfWork.workflowStates,
+        issueKey,
+        parentWorkflowId,
+        subtaskIds,
+      )
     }
 
-  fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome> =
+  fun authoritativeOutcomes(
+    issueKey: String,
+    parentWorkflowId: String,
+  ): Map<Int, GoalRunnerStoredOutcome> =
     database.read { unitOfWork ->
-      outcomeReconcile.loadContinuationCandidates(unitOfWork.workflowStates, issueKey.trim(), repoRoot = null)
-        .authoritativeOutcomesBySubtask()
+      outcomeReconcile.authoritativeOutcomesForSubtasks(unitOfWork.workflowStates, issueKey, parentWorkflowId, null)
     }
 }
 

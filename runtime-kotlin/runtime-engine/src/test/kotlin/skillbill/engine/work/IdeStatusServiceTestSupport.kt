@@ -837,10 +837,14 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     output: GoalRunnerWirePayload,
   ): GoalRunnerStoredOutcome? = null
 
-  override fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome> = emptyMap()
+  override fun authoritativeOutcomes(
+    issueKey: String,
+    parentWorkflowId: String,
+  ): Map<Int, GoalRunnerStoredOutcome> = emptyMap()
 
   override fun reconcileAuthoritativeOutcomes(
     issueKey: String,
+    parentWorkflowId: String,
     activeWorkflowIds: Set<String>,
     gate: GoalRunnerReconcileGate,
     repoRoot: Path?,

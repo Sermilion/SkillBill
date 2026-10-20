@@ -281,6 +281,7 @@ class GoalRunnerLaunchReconciler(
     }
     return outcomeStore.reconcileAuthoritativeOutcomes(
       issueKey = state.manifest.issueKey,
+      parentWorkflowId = state.parentWorkflowId,
       gate = GoalRunnerReconcileGate(requireStalenessEvidence = false),
       repoRoot = request.repoRoot,
     )[subtaskId]

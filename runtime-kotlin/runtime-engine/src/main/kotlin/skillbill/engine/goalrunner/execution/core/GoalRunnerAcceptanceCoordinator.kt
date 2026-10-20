@@ -50,7 +50,11 @@ class GoalRunnerAcceptanceCoordinator(
     val reconciled =
       reconcileGoalManifest(
         manifest = refreshed.manifest,
-        authoritativeOutcomes = outcomeStore.authoritativeOutcomes(refreshed.manifest.issueKey),
+        authoritativeOutcomes =
+          outcomeStore.authoritativeOutcomes(
+            refreshed.manifest.issueKey,
+            refreshed.parentWorkflowId,
+          ),
         acceptances = manifestStore.outOfBandAcceptances(refreshed.parentWorkflowId),
         outcomeStore = outcomeStore,
       )

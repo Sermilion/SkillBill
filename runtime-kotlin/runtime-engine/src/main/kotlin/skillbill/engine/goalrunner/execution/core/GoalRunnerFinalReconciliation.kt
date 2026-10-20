@@ -22,6 +22,7 @@ class GoalRunnerFinalReconciliation(
   ): GoalRunnerManifestState {
     outcomeStore.reconcileAuthoritativeOutcomes(
       issueKey = state.manifest.issueKey,
+      parentWorkflowId = state.parentWorkflowId,
       activeWorkflowIds = emptySet(),
       gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       repoRoot = request.repoRoot,

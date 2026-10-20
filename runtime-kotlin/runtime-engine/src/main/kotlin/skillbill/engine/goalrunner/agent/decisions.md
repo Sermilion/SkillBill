@@ -138,3 +138,9 @@ Reason: Commit-all sweeps leftover files, but an unfinished operation is half-do
 Context: The 2026-10-19 guard stopped SKILL-432 finalization on a clean, already-resolved merge of main that an interrupted monitor repair left behind. The operator had to commit it by hand and resume. A stop here cost more than the risk it guarded against.
 Decision: Finalization no longer stops on an in-progress merge, rebase, cherry-pick, or revert. It records a best-effort warning naming the operation, then commit-all stages and commits the remaining changes as usual, which concludes a merge. Supersedes "Refuse to conclude an unfinished git operation at finalization".
 Reason: Runs should warn and continue rather than block. The pushed commit goes through the CI monitor like any other, and that monitor repairs a bad merge or a rejected push.
+
+
+## [2026-10-20] Scope child outcome reconciliation to the owning goal
+Context: 0AC-68 status applied an older completed child from another worktree to a live validation child because outcome discovery grouped by issue key and subtask ID across parent goals.
+Decision: Outcome reads and reconciliation require the parent workflow ID. SQLite filters by that parent before pagination and workflow decoding. Stale-outcome cleanup and measured completion writes use the same scope. Completion preference among children of the same parent remains intact.
+Reason: Issue keys and subtask IDs repeat across worktrees and restarted goals. The parent workflow identifies the goal that owns those children.

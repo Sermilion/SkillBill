@@ -5190,6 +5190,7 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun reconcileAuthoritativeOutcomes(
     issueKey: String,
+    parentWorkflowId: String,
     activeWorkflowIds: Set<String>,
     gate: GoalRunnerReconcileGate,
     repoRoot: Path?,
@@ -5198,7 +5199,10 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     return authoritativeOutcomesBySubtask.toMap()
   }
 
-  override fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome> {
+  override fun authoritativeOutcomes(
+    issueKey: String,
+    parentWorkflowId: String,
+  ): Map<Int, GoalRunnerStoredOutcome> {
     lastAuthoritativeOutcomeRequest = issueKey
     return authoritativeOutcomesBySubtask.toMap()
   }

@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.workflow.identity.status.WorkStatusArtifactKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GoalAttemptLedgerStatusEntry
 import skillbill.infrastructure.sqlite.core.ops.bindAll
@@ -43,6 +44,7 @@ internal class GoalStatusReadStore(private val connection: Connection) {
     offset: Int,
     limit: Int,
     subtaskIds: Set<Int>?,
+    parentWorkflowId: String? = null,
   ): List<WorkflowStateSnapshot> {
     require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
     require(subtaskIds == null || subtaskIds.size <= WorkPaginationLimits.MAX_PAGE_SIZE)
@@ -52,9 +54,14 @@ internal class GoalStatusReadStore(private val connection: Connection) {
       subtaskIds?.let {
         "AND json_extract(artifacts_json, '$path.${SharedPayloadKeys.SUBTASK_ID}') IN (${it.joinToString { "?" }})"
       }.orEmpty()
+    val parentPath = "$path.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}"
+    val parent = parentWorkflowId?.let { "AND json_extract(artifacts_json, '$parentPath') = ?" }.orEmpty()
     return snapshots(
-      "mode = ? AND json_extract(artifacts_json, '$path.${SharedPayloadKeys.ISSUE_KEY}') = ? $selected",
-      listOf(FeatureTaskWorkflowMode.RUNTIME.wireValue, issueKey) + subtaskIds.orEmpty(),
+      "mode = ? AND json_extract(artifacts_json, '$path.${SharedPayloadKeys.ISSUE_KEY}') = ? $selected $parent",
+      listOf(
+        FeatureTaskWorkflowMode.RUNTIME.wireValue,
+        issueKey,
+      ) + subtaskIds.orEmpty() + listOfNotNull(parentWorkflowId),
       limit,
       offset,
     )

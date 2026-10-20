@@ -2049,6 +2049,7 @@ class GoalRunnerCommitShaRecoveryTest {
             mapOf(
               "goal_continuation" to
                 mapOf(
+                  "parent_workflow_id" to "wfl-parent",
                   "issue_key" to "SKILL-52.1",
                   "subtask_id" to 1,
                   "suppress_pr" to true,
@@ -2102,7 +2103,12 @@ class GoalRunnerCommitShaRecoveryTest {
         gitOperations = HeadShaGitOperations,
       )
 
-    val reconciled = store.reconcileAuthoritativeOutcomes(issueKey = "SKILL-52.1", repoRoot = Path.of("."))
+    val reconciled =
+      store.reconcileAuthoritativeOutcomes(
+        issueKey = "SKILL-52.1",
+        parentWorkflowId = "wfl-parent",
+        repoRoot = Path.of("."),
+      )
 
     val outcome = requireNotNull(reconciled[1])
     assertEquals(GoalRunnerTerminalStatus.COMPLETE, outcome.status)
@@ -2123,7 +2129,7 @@ class GoalRunnerCommitShaRecoveryTest {
         gitOperations = HeadShaGitOperations,
       )
 
-    store.reconcileAuthoritativeOutcomes(issueKey = "SKILL-52.1")
+    store.reconcileAuthoritativeOutcomes(issueKey = "SKILL-52.1", parentWorkflowId = "wfl-parent")
     val durable = requireNotNull(store.terminalOutcome("wfl-child", "SKILL-52.1", 1))
 
     assertNull(durable.commitSha, "a read-only reconciliation must not backfill a measured SHA")
@@ -2156,6 +2162,7 @@ class GoalRunnerCommitShaRecoveryTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "SKILL-52.1",
                     "subtask_id" to 1,
                     "suppress_pr" to true,
@@ -2196,6 +2203,7 @@ class GoalRunnerCommitShaRecoveryTest {
             mapOf(
               "goal_continuation" to
                 mapOf(
+                  "parent_workflow_id" to "wfl-parent",
                   "issue_key" to "SKILL-52.1",
                   "subtask_id" to 1,
                   "suppress_pr" to true,
@@ -2246,6 +2254,7 @@ class GoalRunnerCommitShaRecoveryTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "SKILL-52.1",
                     "subtask_id" to 1,
                     "suppress_pr" to true,
@@ -2380,6 +2389,7 @@ class WorkflowGoalRunnerOutcomeStoreTest {
             mapOf(
               "goal_continuation" to
                 mapOf(
+                  "parent_workflow_id" to "wfl-parent",
                   "issue_key" to "SKILL-52.1",
                   "subtask_id" to 1,
                   "suppress_pr" to true,
@@ -2429,7 +2439,12 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val outcomes = store.reconcileAuthoritativeOutcomes("SKILL-52.1", setOf("wfl-stale", "wfl-authoritative"))
+    val outcomes =
+      store.reconcileAuthoritativeOutcomes(
+        "SKILL-52.1",
+        "wfl-parent",
+        setOf("wfl-stale", "wfl-authoritative"),
+      )
 
     val subtaskOutcome = requireNotNull(outcomes[1])
     assertEquals(GoalRunnerTerminalStatus.COMPLETE, subtaskOutcome.status)
@@ -2464,6 +2479,7 @@ class WorkflowGoalRunnerReconciliationTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "SKILL-52.1",
                     "subtask_id" to 1,
                     "suppress_pr" to true,
@@ -2482,7 +2498,7 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val outcomes = store.reconcileAuthoritativeOutcomes("SKILL-52.1", emptySet())
+    val outcomes = store.reconcileAuthoritativeOutcomes("SKILL-52.1", "wfl-parent", emptySet())
 
     val outcome = requireNotNull(outcomes[1])
     assertEquals(GoalRunnerTerminalStatus.BLOCKED, outcome.status)
@@ -2516,6 +2532,7 @@ class WorkflowGoalRunnerReconciliationTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "SKILL-52.1",
                     "subtask_id" to 1,
                     "suppress_pr" to true,
@@ -2534,7 +2551,7 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val outcomes = store.reconcileAuthoritativeOutcomes("SKILL-52.1", setOf("wfl-active"))
+    val outcomes = store.reconcileAuthoritativeOutcomes("SKILL-52.1", "wfl-parent", setOf("wfl-active"))
 
     assertTrue(outcomes.isEmpty())
     val active = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-active")).toSnapshot()
@@ -2554,7 +2571,7 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val outcomes = store.reconcileAuthoritativeOutcomes("SKILL-52.1", setOf("wfl-active"))
+    val outcomes = store.reconcileAuthoritativeOutcomes("SKILL-52.1", "wfl-parent", setOf("wfl-active"))
 
     val outcome = requireNotNull(outcomes[1])
     assertEquals(GoalRunnerTerminalStatus.BLOCKED, outcome.status)
@@ -2592,6 +2609,7 @@ class WorkflowGoalRunnerReconciliationTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "SKILL-52.1",
                     "subtask_id" to 1,
                     "suppress_pr" to true,
@@ -2647,6 +2665,7 @@ class WorkflowGoalRunnerReconciliationTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "SKILL-85",
                     "subtask_id" to 1,
                     "suppress_pr" to true,
@@ -2704,6 +2723,7 @@ class WorkflowGoalRunnerReconciliationTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "PS-24",
                     "subtask_id" to 2,
                     "suppress_pr" to true,
@@ -2759,6 +2779,7 @@ class WorkflowGoalRunnerReconciliationTest {
               mapOf(
                 "goal_continuation" to
                   mapOf(
+                    "parent_workflow_id" to "wfl-parent",
                     "issue_key" to "PS-24",
                     "subtask_id" to 3,
                     "suppress_pr" to true,
@@ -2844,6 +2865,7 @@ private fun staleRunningChildRecord(definition: WorkflowDefinition) =
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-52.1",
                 "subtask_id" to 1,
                 "suppress_pr" to true,
@@ -2875,6 +2897,7 @@ private fun authoritativeCompleteChildRecord(definition: WorkflowDefinition) =
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-52.1",
                 "subtask_id" to 1,
                 "suppress_pr" to true,
@@ -2915,6 +2938,7 @@ private fun blockedSiblingChildRecord(definition: WorkflowDefinition) =
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-52.1",
                 "subtask_id" to 1,
                 "suppress_pr" to true,
@@ -2946,6 +2970,7 @@ private fun activeRetryChildRecord(definition: WorkflowDefinition) =
           mapOf(
             "goal_continuation" to
               mapOf(
+                "parent_workflow_id" to "wfl-parent",
                 "issue_key" to "SKILL-52.1",
                 "subtask_id" to 1,
                 "suppress_pr" to true,

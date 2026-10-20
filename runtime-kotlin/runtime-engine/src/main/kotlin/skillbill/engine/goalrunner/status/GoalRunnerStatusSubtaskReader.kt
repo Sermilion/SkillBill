@@ -85,7 +85,7 @@ internal class GoalRunnerStatusSubtaskReader(
     return reconcileGoalSubtasks(
       request.issueKey,
       subtasks,
-      outcomes.authoritativeOutcomesForSubtasks(request.issueKey, ids),
+      outcomes.authoritativeOutcomesForSubtasks(request.issueKey, parentId, ids),
       unit.goalRunnerControls.outOfBandAcceptancesForSubtasks(parentId, ids),
       outcomes,
     )

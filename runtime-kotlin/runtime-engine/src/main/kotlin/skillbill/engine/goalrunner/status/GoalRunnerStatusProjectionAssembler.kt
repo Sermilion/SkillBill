@@ -96,7 +96,11 @@ class GoalRunnerStatusProjectionAssembler(
     val manifest =
       reconcileGoalManifest(
         manifest = loadedState.manifest,
-        authoritativeOutcomes = outcomeStore.authoritativeOutcomes(loadedState.manifest.issueKey),
+        authoritativeOutcomes =
+          outcomeStore.authoritativeOutcomes(
+            loadedState.manifest.issueKey,
+            loadedState.parentWorkflowId,
+          ),
         acceptances = acceptances,
         outcomeStore = outcomeStore,
       )

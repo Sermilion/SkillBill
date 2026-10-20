@@ -168,6 +168,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeBlockedTest {
     val first =
       store.reconcileAuthoritativeOutcomes(
         issueKey = "SKILL-176.4",
+        parentWorkflowId = "wfl-parent",
         activeWorkflowIds = setOf("wftr-stale-idempotent"),
         gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       )
@@ -188,6 +189,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeBlockedTest {
     val second =
       store.reconcileAuthoritativeOutcomes(
         issueKey = "SKILL-176.4",
+        parentWorkflowId = "wfl-parent",
         activeWorkflowIds = setOf("wftr-stale-idempotent"),
         gate = GoalRunnerReconcileGate(requireStalenessEvidence = true),
       )

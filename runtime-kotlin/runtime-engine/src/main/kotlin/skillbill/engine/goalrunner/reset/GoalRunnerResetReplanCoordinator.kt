@@ -91,6 +91,7 @@ class GoalRunnerResetReplanCoordinator(
   private fun reconcileResetState(loaded: GoalRunnerManifestState) {
     outcomeStore.reconcileAuthoritativeOutcomes(
       issueKey = loaded.manifest.issueKey,
+      parentWorkflowId = loaded.parentWorkflowId,
       activeWorkflowIds = emptySet(),
       gate = GoalRunnerReconcileGate(allowInactiveReconciliation = true),
     )

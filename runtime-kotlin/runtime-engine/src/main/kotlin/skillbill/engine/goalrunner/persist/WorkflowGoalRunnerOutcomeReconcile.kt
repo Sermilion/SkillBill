@@ -20,7 +20,6 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
@@ -28,6 +27,14 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+
+internal data class GoalOutcomeReconciliationRequest(
+  val issueKey: String,
+  val parentWorkflowId: String,
+  val activeWorkflowIds: Set<String>,
+  val gate: GoalRunnerReconcileGate,
+  val repoRoot: Path?,
+)
 
 internal class WorkflowGoalRunnerOutcomeReconcile(
   private val engine: WorkflowEngine,
@@ -38,16 +45,19 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
 ) {
   fun reconcileAuthoritativeOutcomesInTransaction(
     unitOfWork: UnitOfWork,
-    issueKey: String,
-    activeWorkflowIds: Set<String>,
-    gate: GoalRunnerReconcileGate,
-    repoRoot: Path?,
+    request: GoalOutcomeReconciliationRequest,
   ): Map<Int, GoalRunnerStoredOutcome> {
-    val normalizedIssueKey = issueKey.trim()
-    val activeSet = activeWorkflowIds.map(String::trim).filter(String::isNotBlank).toSet()
-    displaceStaleBlockedOutcomes(unitOfWork, normalizedIssueKey)
-    val initialCandidates = loadContinuationCandidates(unitOfWork.workflowStates, normalizedIssueKey, repoRoot)
-    persistMeasuredCompletions(unitOfWork, initialCandidates, repoRoot)
+    val normalizedIssueKey = request.issueKey.trim()
+    val activeSet = request.activeWorkflowIds.map(String::trim).filter(String::isNotBlank).toSet()
+    displaceStaleBlockedOutcomes(unitOfWork, normalizedIssueKey, request.parentWorkflowId)
+    val initialCandidates =
+      loadContinuationCandidates(
+        unitOfWork.workflowStates,
+        normalizedIssueKey,
+        request.parentWorkflowId,
+        request.repoRoot,
+      )
+    persistMeasuredCompletions(unitOfWork, initialCandidates, request.repoRoot)
     val initialAuthoritative = initialCandidates.authoritativeOutcomesBySubtask()
     blockStaleRunningCandidates(
       StaleRunningCandidatesBlockRequest(
@@ -56,18 +66,24 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
         candidates = initialCandidates,
         initialAuthoritative = initialAuthoritative,
         activeSet = activeSet,
-        gate = gate,
+        gate = request.gate,
       ),
     )
-    return loadContinuationCandidates(unitOfWork.workflowStates, normalizedIssueKey, repoRoot)
+    return loadContinuationCandidates(
+      unitOfWork.workflowStates,
+      normalizedIssueKey,
+      request.parentWorkflowId,
+      request.repoRoot,
+    )
       .authoritativeOutcomesBySubtask()
   }
 
   private fun displaceStaleBlockedOutcomes(
     unitOfWork: UnitOfWork,
     issueKey: String,
+    parentWorkflowId: String,
   ) {
-    loadContinuationCandidates(unitOfWork.workflowStates, issueKey, repoRoot = null)
+    loadContinuationCandidates(unitOfWork.workflowStates, issueKey, parentWorkflowId, repoRoot = null)
       .forEach { candidate ->
         terminalPersistence.displaceStaleBlockedContinuationOutcomeIfPresent(
           unitOfWork.workflowStates,
@@ -146,42 +162,47 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
     return staleByInactivity || supersededByAuthoritative
   }
 
-  fun loadContinuationCandidates(
+  private fun loadContinuationCandidates(
     workflowStates: WorkflowStateRepository,
     issueKey: String,
-    repoRoot: Path? = null,
+    parentWorkflowId: String,
+    repoRoot: Path?,
   ): List<GoalContinuationCandidate> =
-    listOf(WorkflowFamily.TASK_RUNTIME).flatMap { family ->
-      workflowStates
-        .findFeatureTaskWorkflowsForIssue(
-          FeatureTaskWorkflowMode.RUNTIME,
-          issueKey.trim().uppercase(),
-        )
-        .map { it.toSnapshot() }
-        .mapNotNull { snapshot ->
-          engine.snapshotView(family.definition, snapshot)
-          val artifacts = snapshot.artifacts
-          val goalContinuation =
-            DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation() ?: return@mapNotNull null
-          if (goalContinuation.issueKey != issueKey) {
-            return@mapNotNull null
-          }
-          GoalContinuationCandidate(
-            family = family,
-            snapshot = snapshot,
-            goalContinuation = goalContinuation,
-            outcome =
-              terminalOutcomeFor(snapshot, artifacts, goalContinuation) {
-                repoRoot?.let { root -> gitOperations.headCommitSha(root).measuredCommitSha() }
-              },
+    buildList {
+      var offset = 0
+      do {
+        val page =
+          workflowStates.readGoalStatusChildPage(
+            issueKey.trim(),
+            offset,
+            WorkPaginationLimits.MAX_PAGE_SIZE,
+            parentWorkflowId = parentWorkflowId,
+          )
+        page.forEach { projected ->
+          val snapshot = workflowStates.getFeatureTaskWorkflow(projected.workflowId)?.toSnapshot() ?: return@forEach
+          engine.snapshotView(WorkflowFamily.TASK_RUNTIME.definition, snapshot)
+          val continuation = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation() ?: return@forEach
+          add(
+            GoalContinuationCandidate(
+              family = WorkflowFamily.TASK_RUNTIME,
+              snapshot = snapshot,
+              goalContinuation = continuation,
+              outcome =
+                terminalOutcomeFor(snapshot, snapshot.artifacts, continuation) {
+                  repoRoot?.let { root -> gitOperations.headCommitSha(root).measuredCommitSha() }
+                },
+            ),
           )
         }
+        offset += page.size
+      } while (page.size == WorkPaginationLimits.MAX_PAGE_SIZE)
     }
 
   fun authoritativeOutcomesForSubtasks(
     workflowStates: WorkflowStateRepository,
     issueKey: String,
-    subtaskIds: Set<Int>,
+    parentWorkflowId: String,
+    subtaskIds: Set<Int>?,
   ): Map<Int, GoalRunnerStoredOutcome> {
     val winners = mutableMapOf<Int, GoalContinuationCandidate>()
     var offset = 0
@@ -192,6 +213,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
           offset,
           WorkPaginationLimits.MAX_PAGE_SIZE,
           subtaskIds,
+          parentWorkflowId,
         )
       page.forEach { snapshot ->
         engine.snapshotView(WorkflowFamily.TASK_RUNTIME.definition, snapshot)

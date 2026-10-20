@@ -95,15 +95,24 @@ interface GoalRunnerAttemptLedgerStore {
 }
 
 interface GoalRunnerWorkflowOutcomeMutationStore {
-  fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome>
+  fun authoritativeOutcomes(
+    issueKey: String,
+    parentWorkflowId: String,
+  ): Map<Int, GoalRunnerStoredOutcome>
 
   fun authoritativeOutcomesForSubtasks(
     issueKey: String,
+    parentWorkflowId: String,
     subtaskIds: Set<Int>,
-  ): Map<Int, GoalRunnerStoredOutcome> = authoritativeOutcomes(issueKey).filterKeys(subtaskIds::contains)
+  ): Map<Int, GoalRunnerStoredOutcome> =
+    authoritativeOutcomes(
+      issueKey,
+      parentWorkflowId,
+    ).filterKeys(subtaskIds::contains)
 
   fun reconcileAuthoritativeOutcomes(
     issueKey: String,
+    parentWorkflowId: String,
     activeWorkflowIds: Set<String> = emptySet(),
     gate: GoalRunnerReconcileGate = GoalRunnerReconcileGate(),
     repoRoot: Path? = null,

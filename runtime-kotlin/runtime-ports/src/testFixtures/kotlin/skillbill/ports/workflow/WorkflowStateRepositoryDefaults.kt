@@ -21,7 +21,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.artifact.phaseLedger
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 
 abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
   open override fun readGoalStatusSnapshot(workflowId: String): WorkflowStateSnapshot? =
@@ -32,12 +32,14 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
     offset: Int,
     limit: Int,
     subtaskIds: Set<Int>?,
+    parentWorkflowId: String?,
   ): List<WorkflowStateSnapshot> =
     findFeatureTaskWorkflowsForIssue(FeatureTaskWorkflowMode.RUNTIME, normalizedIssueKey)
       .map { it.toSnapshot() }
       .filter { snapshot ->
-        val continuation = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation()
-        continuation != null && (subtaskIds == null || continuation.subtaskId in subtaskIds)
+        val continuation = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuationArtifact()
+        continuation != null && (subtaskIds == null || continuation.subtaskId in subtaskIds) &&
+          (parentWorkflowId == null || continuation.parentWorkflowId == parentWorkflowId)
       }.drop(offset).take(limit)
 
   open override fun readGoalAttemptLedgerPage(
