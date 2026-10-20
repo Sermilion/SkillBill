@@ -5123,7 +5123,9 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     requested: FeatureTaskRuntimeQaSelection?,
   ): FeatureTaskRuntimeQaSelection? = qaSelections[workflowId] ?: requested
 
-  override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
+  var goalQaOutcome: FeatureTaskQaOutcome? = null
+
+  override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = goalQaOutcome
 
   private val outcomes: MutableMap<String, GoalRunnerStoredOutcome> = mutableMapOf()
   private val reviewStates: MutableMap<String, GoalSubtaskReviewState> = mutableMapOf()

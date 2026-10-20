@@ -132,6 +132,15 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
               run.executedWorkUnits, run.executedChecks, run.command, run.exitCode) })
         })
     },
+    phaseResults = goal?.completedSubtaskPhaseResults.orEmpty().map { result ->
+      SubtaskPhaseResults(result.subtaskId,
+        result.reviewPasses.map { pass -> ReviewPass(pass.passNumber, pass.verdict, pass.unresolvedFindingCount,
+          pass.findings.map { ReviewFinding(it.severity, it.label, it.text) }) },
+        result.audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) })
+    },
+    goalQa = goal?.goalQaResult?.let { qa ->
+      GoalQaResult(qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant())
+    },
     latestActivity = LatestActivity(
       event = goal?.latestObservabilityEvent?.let { ActivityEvent(it.workflowPhase, it.workerRole, it.activitySummary, it.timestamp?.toKotlinInstant()) },
       edit = goal?.latestWorktreeEdit?.let { WorktreeEdit(it.recordedAt?.toKotlinInstant(), it.pathSample, it.netInsertions, it.netDeletions, it.phaseId) },

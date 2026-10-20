@@ -13,6 +13,7 @@ import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffH
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
+import java.time.Instant
 
 enum class GoalPlanningStatusState(val wireValue: String) {
   NOT_STARTED("not_started"),
@@ -110,6 +111,8 @@ data class GoalRunnerStatusProjection(
   val findingsInScope: Int? = null,
   val outOfBandAcceptances: List<GoalRunnerAcceptedSubtask> = emptyList(),
   val completedSubtaskValidation: List<GoalRunnerSubtaskValidationEvidence> = emptyList(),
+  val completedSubtaskPhaseResults: List<GoalRunnerSubtaskPhaseResults> = emptyList(),
+  val goalQaResult: GoalRunnerQaResult? = null,
   val paused: Boolean = false,
   val pauseRequested: Boolean = false,
   val pauseReason: String? = null,
@@ -158,6 +161,39 @@ data class GoalRunnerSubtaskValidationEvidence(
     )
 }
 
+data class GoalRunnerSubtaskPhaseResults(
+  val subtaskId: Int,
+  val reviewPasses: List<GoalRunnerReviewPassResult> = emptyList(),
+  val audit: GoalRunnerPhaseConclusion? = null,
+)
+
+data class GoalRunnerReviewPassResult(
+  val passNumber: Int,
+  val verdict: String,
+  val unresolvedFindingCount: Int,
+  val findings: List<GoalRunnerReviewFinding>,
+)
+
+data class GoalRunnerReviewFinding(
+  val severity: String,
+  val label: String,
+  val text: String,
+)
+
+data class GoalRunnerPhaseConclusion(
+  val verdict: String?,
+  val summary: String?,
+  val detail: String?,
+  val attemptCount: Int,
+)
+
+data class GoalRunnerQaResult(
+  val outcome: String,
+  val reason: String?,
+  val qaFixAttempts: Int,
+  val recordedAt: Instant,
+)
+
 data class GoalRunnerAcceptedSubtask(
   val subtaskId: Int,
   val commitSha: String,
@@ -182,6 +218,8 @@ data class GoalRunnerStatusProjectionRuntimeInputs(
   val findingsInScope: Int? = null,
   val outOfBandAcceptances: List<GoalRunnerAcceptedSubtask> = emptyList(),
   val completedSubtaskValidation: List<GoalRunnerSubtaskValidationEvidence> = emptyList(),
+  val completedSubtaskPhaseResults: List<GoalRunnerSubtaskPhaseResults> = emptyList(),
+  val goalQaResult: GoalRunnerQaResult? = null,
   val paused: Boolean = false,
   val pauseRequested: Boolean = false,
   val pauseReason: String? = null,

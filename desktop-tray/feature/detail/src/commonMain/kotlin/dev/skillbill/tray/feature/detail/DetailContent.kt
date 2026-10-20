@@ -316,7 +316,7 @@ private fun LoadedDetail(
           event?.let { add("Event" to listOfNotNull(it.workflowPhase, it.workerRole, it.summary).joinToString(" · ")) }
           item.activity?.let { add("Phase event" to it) }
         }
-        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked || detail.phaseResults.isNotEmpty() || detail.goalQa != null) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           DesignLabel(if (standalone) "Phase activity" else "Goal activity")
           goalBlockReason?.let { reason ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
@@ -329,6 +329,7 @@ private fun LoadedDetail(
           }
           if (goalBlocked && goalBlockReason == null) Text("The full block reason was not saved for this attempt.", color = muted, fontSize = 12.sp)
           activity.forEach { (label, value) -> DesignKv(label, value) }
+          PhaseResultsSection(detail.phaseResults, detail.goalQa) { id -> detail.subtasks.firstOrNull { it.id == id }?.name }
           LazyColumn(state = executionScroll, modifier = Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(detail.executionHistory, key = { detail.key("execution", "${it.invocationId}:${it.executionId}") }) { instance ->
               val index = detail.executionHistory.indexOf(instance)

@@ -8,6 +8,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
@@ -47,6 +48,19 @@ class FeatureTaskRuntimePhaseQuery
           workflowId,
           setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS),
         )?.phaseRecords()
+      }
+
+    fun loadPhaseResultArtifacts(workflowId: String): DurableWorkflowArtifacts? =
+      database.read { unitOfWork ->
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS,
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION,
+            DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE,
+            DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_RESULTS,
+          ),
+        )
       }
 
     fun visitPhaseLedger(

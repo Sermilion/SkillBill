@@ -110,6 +110,8 @@ data class Detail(
   val phases: List<WorkPhase> = emptyList(),
   val attempts: DetailAttempts = DetailAttempts(),
   val validation: List<SubtaskValidation> = emptyList(),
+  val phaseResults: List<SubtaskPhaseResults> = emptyList(),
+  val goalQa: GoalQaResult? = null,
   val latestActivity: LatestActivity = LatestActivity(),
   val executionHistory: List<ExecutionInstance> = emptyList(),
   val observedAt: Instant? = null,
@@ -138,6 +140,12 @@ data class SubtaskValidation(
   val evidence: List<ValidationCommand>,
   val result: ValidationResult?,
 )
+/** Review passes and the audit conclusion of one completed subtask. */
+data class SubtaskPhaseResults(val subtaskId: Int, val reviewPasses: List<ReviewPass>, val audit: PhaseConclusion?)
+data class ReviewPass(val passNumber: Int, val verdict: String, val unresolvedFindingCount: Int, val findings: List<ReviewFinding>)
+data class ReviewFinding(val severity: String, val label: String, val text: String)
+data class PhaseConclusion(val verdict: String?, val summary: String?, val detail: String?, val attemptCount: Int)
+data class GoalQaResult(val outcome: String, val reason: String?, val fixAttempts: Int, val recordedAt: Instant)
 data class ValidationCommand(val command: String, val exitCode: Int)
 data class ValidationResult(val status: String, val checks: List<String>, val gateRunCount: Int?, val gates: List<ValidationGateRun>)
 data class ValidationGateRun(

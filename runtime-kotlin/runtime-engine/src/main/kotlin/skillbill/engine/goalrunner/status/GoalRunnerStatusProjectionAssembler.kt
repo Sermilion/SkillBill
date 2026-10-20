@@ -30,9 +30,14 @@ import skillbill.goalrunner.model.GoalNoChangeState
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
+import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
+import skillbill.goalrunner.model.GoalRunnerQaResult
+import skillbill.goalrunner.model.GoalRunnerReviewFinding
+import skillbill.goalrunner.model.GoalRunnerReviewPassResult
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.goalrunner.model.GoalRunnerStatusProjectionRuntimeInputs
 import skillbill.goalrunner.model.GoalRunnerStatusProjector
+import skillbill.goalrunner.model.GoalRunnerSubtaskPhaseResults
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.idestatus.model.summary
@@ -54,9 +59,13 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
+import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
+import java.time.Instant
 
 @Inject
 class GoalRunnerStatusProjectionAssembler(
@@ -128,6 +137,8 @@ class GoalRunnerStatusProjectionAssembler(
             request = request,
             planning = subject.planning,
             validation = subject.validationSubtasks.map(::completedSubtaskValidationFor),
+            phaseResults = subject.validationSubtasks.map { completedSubtaskPhaseResultsFor(it, durableRead) },
+            goalQaResult = goalQaResult(parentWorkflowId, durableRead),
             currentSubtask = subject.current,
             acceptances = subject.acceptances,
             durableRead = durableRead,
@@ -265,6 +276,13 @@ class GoalRunnerStatusProjectionAssembler(
           } else {
             emptyList()
           },
+        phaseResults =
+          if (request.includeCompletedSubtaskValidation) {
+            completedSubtaskPhaseResults(manifest, request.completedSubtaskValidationIds, durableRead)
+          } else {
+            emptyList()
+          },
+        goalQaResult = goalQaResult(loadedState.parentWorkflowId, durableRead),
         currentSubtask = currentSubtask,
         acceptances = acceptances,
         durableRead = durableRead,
@@ -283,6 +301,8 @@ class GoalRunnerStatusProjectionAssembler(
     val request: GoalRunnerStatusRequest,
     val planning: GoalPlanningStatusSnapshot?,
     val validation: List<GoalRunnerSubtaskValidationEvidence>,
+    val phaseResults: List<GoalRunnerSubtaskPhaseResults>,
+    val goalQaResult: GoalRunnerQaResult?,
     val currentSubtask: DecompositionSubtask?,
     val acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
     val durableRead: GoalRunnerStatusDurableReadTracker,
@@ -322,6 +342,8 @@ class GoalRunnerStatusProjectionAssembler(
       findingsInScope = assembly.ledgerSummary?.findingsInScope,
       outOfBandAcceptances = assembly.acceptances.toAcceptedSubtasks(),
       completedSubtaskValidation = assembly.validation,
+      completedSubtaskPhaseResults = assembly.phaseResults,
+      goalQaResult = assembly.goalQaResult,
       paused = assembly.loadedState.controlState.paused,
       pauseRequested = assembly.loadedState.controlState.pauseRequested,
       pauseReason = assembly.loadedState.controlState.pauseReason,
@@ -475,6 +497,83 @@ class GoalRunnerStatusProjectionAssembler(
         },
     )
   }
+
+  private fun completedSubtaskPhaseResults(
+    manifest: DecompositionManifest,
+    selectedIds: Set<Int>?,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): List<GoalRunnerSubtaskPhaseResults> =
+    manifest.subtasks
+      .filter { selectedIds == null || it.id in selectedIds }
+      .filter { it.status.decompositionStatus() == DecompositionStatus.COMPLETE }
+      .map { subtask -> completedSubtaskPhaseResultsFor(subtask, durableRead) }
+
+  private fun completedSubtaskPhaseResultsFor(
+    subtask: DecompositionSubtask,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): GoalRunnerSubtaskPhaseResults {
+    val workflowId =
+      subtask.workflowId?.takeIf(String::isNotBlank)
+        ?: return GoalRunnerSubtaskPhaseResults(subtask.id)
+    return runCatching {
+      val artifacts =
+        phaseQuery.loadPhaseResultArtifacts(workflowId) ?: return GoalRunnerSubtaskPhaseResults(subtask.id)
+      GoalRunnerSubtaskPhaseResults(
+        subtaskId = subtask.id,
+        reviewPasses =
+          GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts)?.passResults.orEmpty().map { pass ->
+            GoalRunnerReviewPassResult(
+              passNumber = pass.passNumber,
+              verdict = pass.verdict.wireValue,
+              unresolvedFindingCount = pass.unresolvedFindingCount,
+              findings = pass.findings.map { GoalRunnerReviewFinding(it.severity, it.label, it.text) },
+            )
+          },
+        audit = artifacts.phaseRecords()[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT]?.toConclusion(),
+      )
+    }.getOrElse { error ->
+      durableRead.recordDegradedRead(
+        seam = "goal-status.subtask_phase_results",
+        expected = "review_and_audit_results",
+        used = "omitted",
+        error = error,
+      )
+      GoalRunnerSubtaskPhaseResults(subtask.id)
+    }
+  }
+
+  private fun FeatureTaskRuntimePhaseRecord.toConclusion(): GoalRunnerPhaseConclusion {
+    val envelope =
+      outputArtifact
+        ?.let(JsonCodec::parseObjectOrNull)
+        ?.let(JsonCodec::jsonElementToValue)
+        ?.let(JsonCodec::anyToStringAnyMap)
+    val produced = envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)?.let(JsonCodec::anyToStringAnyMap)
+    return GoalRunnerPhaseConclusion(
+      verdict = (envelope?.get(SharedPayloadKeys.VERDICT) as? String)?.takeIf(String::isNotBlank),
+      summary = (envelope?.get(SharedPayloadKeys.SUMMARY) as? String)?.trim()?.takeIf(String::isNotBlank),
+      detail = (produced?.get(SharedPayloadKeys.VALUE) as? String)?.trim()?.takeIf(String::isNotBlank),
+      attemptCount = attemptCount,
+    )
+  }
+
+  private fun goalQaResult(
+    parentWorkflowId: String,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): GoalRunnerQaResult? =
+    runCatching {
+      outcomeStore.recordedGoalQaOutcome(parentWorkflowId)?.let {
+        GoalRunnerQaResult(it.outcome.wireValue, it.reason, it.qaFixAttempts, Instant.parse(it.recordedAt))
+      }
+    }.getOrElse { error ->
+      durableRead.recordDegradedRead(
+        seam = "goal-status.goal_qa_result",
+        expected = "goal_qa_outcome",
+        used = "omitted",
+        error = error,
+      )
+      null
+    }
 
   private fun durablePlanningStatus(
     loadedState: GoalRunnerManifestState,
