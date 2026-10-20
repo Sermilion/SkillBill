@@ -1,6 +1,7 @@
 package dev.skillbill.tray.core.ui
 
 import androidx.compose.ui.graphics.Color
+import dev.skillbill.tray.core.designsystem.amber
 import dev.skillbill.tray.core.designsystem.green
 import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
@@ -12,6 +13,7 @@ import dev.skillbill.tray.core.domain.model.PhaseExecution
 import dev.skillbill.tray.core.domain.model.PhaseExecutionKind
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.WorkPhase
+import dev.skillbill.tray.core.domain.model.stalled
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -76,6 +78,15 @@ fun phasePipeline(detail: Detail): List<WorkPhase> {
     )
   }
 }
+
+/** The status color of an item: amber while the runtime reports the active run stalled, otherwise its lifecycle color. */
+fun WorkItem.statusColor(): Color = if (stalled()) amber else lifecycleColor(lifecycle)
+
+/** The Liveness value: the runtime's liveness word, or how long a stalled run has gone without progress. */
+fun livenessText(liveness: String, item: WorkItem, now: Instant): String =
+  item.stalledSince?.takeIf { item.stalled() }
+    ?.let { "stalled · no progress for ${age((now - it).coerceNonNegative())}" }
+    ?: liveness
 
 fun lifecycleColor(lifecycle: Lifecycle): Color = when (lifecycle) {
   Lifecycle.ACTIVE -> green

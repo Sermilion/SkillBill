@@ -60,6 +60,7 @@ internal fun goalWatchRefreshText(refresh: GoalWatchRefreshPresentation): String
         "current_subtask=${projection?.currentSubtaskId ?: "none"} " +
         "current_step=${projection?.currentStep ?: "none"} " +
         "execution_liveness=${projection?.executionLiveness?.wireValue ?: "unknown"} " +
+        projection?.progressStall?.let { "progress_stalled=\"${it.describe()}\" " }.orEmpty() +
         "liveness=${projection?.latestLivenessSignal ?: "none"}",
     )
     projection?.latestObservabilityEvent?.let { event ->

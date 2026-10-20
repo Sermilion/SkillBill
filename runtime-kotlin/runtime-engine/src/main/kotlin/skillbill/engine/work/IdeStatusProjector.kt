@@ -271,6 +271,8 @@ class IdeStatusProjector(
         activeDurationAsOf = projection?.liveActiveDurationAnchor(),
         lastAgentActivityAt = activityAt,
         lastAgentActivityLabel = activityLabel,
+        stalledSince =
+          projection?.progressStall?.lastProgressAt?.takeIf { lifecycle == IdeStatusLifecycleState.ACTIVE },
         updatedAt = candidate.updatedAt,
         freshness = IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt),
         summary =

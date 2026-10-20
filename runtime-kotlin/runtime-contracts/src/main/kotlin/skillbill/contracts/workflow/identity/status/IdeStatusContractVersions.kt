@@ -6,9 +6,9 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
-const val IDE_STATUS_CONTRACT_VERSION: String = "0.5"
+const val IDE_STATUS_CONTRACT_VERSION: String = "0.6"
 const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
-const val WORK_DETAIL_CONTRACT_VERSION: String = "1.1"
+const val WORK_DETAIL_CONTRACT_VERSION: String = "1.2"
 
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
@@ -21,6 +21,7 @@ object IdeStatusPayloadKeys {
   const val INVOCATION_ID = "invocation_id"
   const val CURRENT_ACTIVITY = "current_activity"
   const val QA_OUTCOME = "qa_outcome"
+  const val STALLED_SINCE = "stalled_since"
 }
 
 object WorkBoardPayloadKeys {
@@ -71,6 +72,7 @@ object WorkDetailPayloadKeys {
   const val EFFORT = "effort"
   const val ACTIVE_AGENT = "active_agent"
   const val EXECUTION_LIVENESS = "execution_liveness"
+  const val PROGRESS_STALLED_SINCE = "progress_stalled_since"
   const val PHASE_ATTEMPT_COUNTS = "phase_attempt_counts"
   const val CUMULATIVE_FIX_ITERATIONS = "cumulative_fix_iterations"
   const val RE_ATTEMPT_CAUSE_COUNTS = "re_attempt_cause_counts"

@@ -98,6 +98,7 @@ data class GoalRunnerStatusProjection(
   val currentStep: String?,
   val activeAgent: String?,
   val executionLiveness: ExecutionLiveness = ExecutionLiveness.UNKNOWN,
+  val progressStall: ExecutionProgressStall? = null,
   val planning: GoalPlanningStatusSnapshot? = null,
   val latestLivenessSignal: String? = null,
   val latestObservabilityEvent: GoalObservabilityEvent? = null,
@@ -203,6 +204,7 @@ data class GoalRunnerAcceptedSubtask(
 
 data class GoalRunnerStatusProjectionRuntimeInputs(
   val executionLiveness: ExecutionLiveness = ExecutionLiveness.UNKNOWN,
+  val progressStall: ExecutionProgressStall? = null,
   val planning: GoalPlanningStatusSnapshot? = null,
   val currentStepOverride: String? = null,
   val currentWorkflowStatus: WorkflowStatus? = null,

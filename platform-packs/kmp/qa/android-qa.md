@@ -53,6 +53,16 @@ Record a booted AVD as `target.kind: simulator` and `target.selection: substitut
 
 When the run finishes, stop only an emulator this run booted, with `adb -s <serial> emu kill`, and report `cleanup.outcome: released`. Leave an emulator that was already running alone. If the kill fails, report `cleanup.outcome: retained` with a `retained_resources` entry of `kind: emulator` and the AVD name, plus `guidance` telling the user how to stop it.
 
+## Background processes
+
+A command that never exits holds your shell, so the run never finishes and the receipt never settles.
+
+- Start every long-running process the run needs detached so the command returns: a local backend, API simulator, mock server, Metro or another packager, or a log tail. Use `nohup <cmd> > <invocation dir>/<name>.log 2>&1 &` and record its PID from `$!`.
+- Wait for readiness by polling a health URL or a log line in a bounded loop, for example every 2 seconds for up to 120 seconds. Never run the process in the foreground to watch it start.
+- Never run a command that does not end on its own in the foreground: servers, watch modes, `tail -f`, or `adb logcat` without `-d`. Use bounded forms such as `adb logcat -d` or `timeout <seconds> <cmd>`.
+- Before writing the receipt, stop every process this run started by its recorded PID and report it in `cleanup`. Leave processes that were already running alone. If a stop fails, report `cleanup.outcome: retained` with a `retained_resources` entry of `kind: process` and the command name, plus `guidance` telling the user how to stop it.
+- Write the receipt last, then exit. Nothing this run started may keep running in your foreground after the receipt is written.
+
 ## Device lease
 
 Before installing anything, run:
@@ -74,7 +84,7 @@ skill-bill qa lease acquire --invocation <invocation id> --device <serial>
 - Prefer existing automation. Reuse instrumentation tests (`./gradlew connectedDebugAndroidTest` filtered to the changed screens) or Maestro flows already in the repository before writing new steps.
 - Otherwise drive the app with `adb shell input tap|text|swipe|keyevent`, reading positions from `adb shell uiautomator dump`.
 - After each step that matters, capture `adb exec-out screencap -p` and a `uiautomator dump` into the invocation directory.
-- Read `adb logcat --pid=$(adb shell pidof -s <applicationId>)` and keep only the excerpt that explains a failure, saved as a file under the invocation directory.
+- Read `adb logcat -d --pid=$(adb shell pidof -s <applicationId>)` and keep only the excerpt that explains a failure, saved as a file under the invocation directory.
 
 Each assertion names the flow it checks, what it verified, and its outcome. A finding records the steps, expected and observed behavior, and evidence refs.
 

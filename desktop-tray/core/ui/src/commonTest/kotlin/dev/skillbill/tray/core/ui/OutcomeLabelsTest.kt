@@ -6,6 +6,8 @@ import dev.skillbill.tray.core.domain.model.QaVerdict
 import dev.skillbill.tray.core.testing.workItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 class OutcomeLabelsTest {
   private fun qa(verdict: QaVerdict?) = workItem("qa-run", Lifecycle.TERMINAL, family = null, issueKey = null)
@@ -26,5 +28,16 @@ class OutcomeLabelsTest {
         workItem("goal", Lifecycle.FAILED).outcomeLabel(),
       ),
     )
+  }
+
+  @Test
+  fun `a stalled active run reads as Stalled with how long it has gone without progress`() {
+    val now = Instant.parse("2026-10-20T11:35:00Z")
+    val stalled = workItem("goal").copy(stalledSince = now - 106.minutes)
+    val live = workItem("goal")
+
+    assertEquals(listOf("Stalled", "Active"), listOf(stalled.outcomeLabel(), live.outcomeLabel()))
+    assertEquals("stalled · no progress for 1h 46m", livenessText("live", stalled, now))
+    assertEquals("live", livenessText("live", live, now))
   }
 }

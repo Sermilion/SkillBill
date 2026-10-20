@@ -187,6 +187,7 @@ data class IdeStatusSnapshot(
   val activeDurationAsOf: Instant? = null,
   val lastAgentActivityAt: Instant? = null,
   val lastAgentActivityLabel: AgentActivityLabel? = null,
+  val stalledSince: Instant? = null,
   val problem: IdeStatusProblem? = null,
   val execution: IdeStatusExecutionIdentity? = null,
   val currentActivity: String? = null,

@@ -67,7 +67,7 @@ class WorkPayloadSchemaValidatorTest {
     val payload =
       JsonCodec.mapToJsonString(
         mapOf(
-          "contract_version" to "1.1",
+          "contract_version" to "1.2",
           "page_size" to 20,
           "next_cursor" to null,
           "observed_at" to Instant.EPOCH.toString(),
@@ -103,7 +103,7 @@ class WorkPayloadSchemaValidatorTest {
         validator.validateDetail(
           JsonCodec.mapToJsonString(
             mapOf(
-              "contract_version" to "1.1",
+              "contract_version" to "1.2",
               "page_size" to 20,
               "next_cursor" to null,
               "observed_at" to Instant.EPOCH.toString(),

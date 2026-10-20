@@ -52,6 +52,17 @@ internal object QaPromptSections {
     |- An app launch alone is never a pass. `passed` needs at least one exercised flow with a passing assertion.
     |- A simulator run never marks a `hardware_only` flow exercised.
     |- Never put raw device serials, credentials, or log bodies in the receipt. Reference evidence by path and sha256.
+    |- Start every long-running process the run needs (local backend, API simulator, mock server, Metro or another
+    |  packager, log tailing) detached so the command returns:
+    |  `nohup <cmd> > ${qa.workspace.directory}/<name>.log 2>&1 &`. Record its PID and wait for readiness by
+    |  polling a health URL or log line with a bounded timeout, never by running it in the foreground.
+    |- Never run a command that does not end on its own in the foreground: servers, watch modes, `tail -f`, or
+    |  `adb logcat` without `-d`. Use bounded forms such as `adb logcat -d` or `timeout <seconds> <cmd>`.
+    |- Before writing the receipt, stop every process this run started by its recorded PID and report it in
+    |  `cleanup`. Leave processes that were already running alone. If a stop fails, report
+    |  `cleanup.outcome: retained` with a `retained_resources` entry and `guidance` telling the user how to stop it.
+    |- Write the receipt last, then exit promptly. Nothing this run started may keep running in your foreground
+    |  after the receipt is written.
       """.trimMargin()
   }
 }

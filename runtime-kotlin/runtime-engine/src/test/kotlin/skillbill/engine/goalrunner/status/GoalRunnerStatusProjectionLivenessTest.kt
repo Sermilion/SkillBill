@@ -16,6 +16,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.goalrunner.model.GoalRunnerProgressEvent
+import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -26,9 +28,14 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalRunnerStatusProjectionLivenessTest {
@@ -204,6 +211,73 @@ class GoalRunnerStatusProjectionLivenessTest {
     assertEquals("monitor", status.currentStep)
     assertEquals("claude", status.activeAgent)
   }
+
+  @Test
+  fun `live goal whose last durable progress is past the stall threshold reports stalled despite child heartbeats`() {
+    val lastProgress = stallObservedAt.minus(Duration.ofMinutes(106))
+    val status = liveGoalStatus(qaProgress(lastDurableProgressAt = lastProgress))
+
+    assertEquals(ExecutionLiveness.LIVE, status.executionLiveness)
+    assertEquals(lastProgress, status.progressStall?.lastProgressAt)
+    assertEquals("no progress for 1h 46m", status.progressStall?.describe())
+  }
+
+  @Test
+  fun `live goal with recent durable progress is not stalled`() {
+    val status = liveGoalStatus(qaProgress(lastDurableProgressAt = stallObservedAt.minus(Duration.ofMinutes(5))))
+
+    assertEquals(ExecutionLiveness.LIVE, status.executionLiveness)
+    assertNull(status.progressStall)
+  }
+
+  private val stallObservedAt: Instant = Instant.parse("2026-10-20T11:35:00Z")
+
+  private fun liveGoalStatus(parentProgress: GoalRunnerWorkflowProgress): GoalRunnerStatusProjection {
+    val store =
+      InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+        .apply { executionLeaseForTest = liveLease() }
+    val outcomes = RecordingOutcomeStore()
+    outcomes.progresses["wfl-parent"] = parentProgress
+    return requireNotNull(
+      testGoalRunnerStatusService(
+        manifestStore = store,
+        outcomeStore = outcomes,
+        clock = Clock.fixed(stallObservedAt, ZoneOffset.UTC),
+        ports = GoalRunnerStatusTestPorts(workerSupervisor = liveSupervisor),
+      ).status(GoalRunnerStatusRequest(issueKey = "SKILL-56")),
+    )
+  }
+
+  private fun qaProgress(lastDurableProgressAt: Instant): GoalRunnerWorkflowProgress =
+    GoalRunnerWorkflowProgress(
+      workflowId = "wfl-parent",
+      workflowStatus = WorkflowStatus.RUNNING,
+      currentStepId = "qa",
+      progressToken = "qa-running",
+      latestDurableProgressEvent =
+        GoalRunnerProgressEvent(
+          stepId = "qa",
+          attemptCount = 1,
+          kind = "heartbeat",
+          message = "receipt written",
+          sequence = 3,
+          timestamp = lastDurableProgressAt.toString(),
+        ),
+      latestDeclaredProgressEvent =
+        GoalProgressEvent(
+          eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+          workflowId = "wfl-parent",
+          workflowPhase = "qa",
+          processAlive = true,
+          sequenceNumber = 9,
+          timestamp = stallObservedAt.minusSeconds(30),
+          stepId = "qa",
+          operationName = "The 'qa' child is active; source progress is not confirmed.",
+          operationKind = GOAL_FINALIZATION_OPERATION_KIND,
+          expectedLong = true,
+          outcome = GoalProgressOutcome.NONE,
+        ),
+    )
 
   private fun parkedParentWithGoalFinalizationOnMonitor(): GoalRunnerWorkflowProgress =
     GoalRunnerWorkflowProgress(

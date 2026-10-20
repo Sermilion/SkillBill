@@ -5,6 +5,7 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
@@ -74,6 +75,7 @@ class DefaultGoalRunnerQaGateTest {
         override fun read(specPath: Path) = error("Skipped goal QA must not read the parent spec.")
       },
       clock,
+      testActivityStampWriter(),
     )
   }
 

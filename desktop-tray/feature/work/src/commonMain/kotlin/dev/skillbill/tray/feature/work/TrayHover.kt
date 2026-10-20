@@ -2,6 +2,7 @@ package dev.skillbill.tray.feature.work
 
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.outcomeLabel
 
 private const val HOVER_ITEMS_PER_CATEGORY = 4
@@ -24,14 +25,14 @@ private fun StringBuilder.appendHoverCategory(label: String, items: List<WorkIte
   if (items.isEmpty()) append("<br/>No active work")
   items.take(HOVER_ITEMS_PER_CATEGORY).forEach { item ->
     val color = when (item.lifecycle) {
-      Lifecycle.ACTIVE -> "#3FB950"
+      Lifecycle.ACTIVE -> if (item.stalled()) "#F3C462" else "#3FB950"
       Lifecycle.BLOCKED -> "#E2703C"
       Lifecycle.FAILED -> "#F0555B"
       Lifecycle.CANCELED -> "#B59AF4"
       else -> "#9C9CA6"
     }
     val identifier = item.issueKey ?: item.phaseId ?: item.currentStepId
-    val step = if (item.lifecycle == Lifecycle.ACTIVE) item.currentStepLabel.lowercase() else item.outcomeLabel().lowercase()
+    val step = if (item.lifecycle == Lifecycle.ACTIVE && !item.stalled()) item.currentStepLabel.lowercase() else item.outcomeLabel().lowercase()
     val progress = item.progressTotal?.let { " ${item.progressCompleted ?: 0}/$it" }.orEmpty()
     val execution = item.phaseExecution?.let { " ${it.count}/${it.total ?: "?"}" }.orEmpty()
     val repository = item.repositoryRoot.replace('\\', '/').trimEnd('/').substringAfterLast('/').boundedHoverText(22)

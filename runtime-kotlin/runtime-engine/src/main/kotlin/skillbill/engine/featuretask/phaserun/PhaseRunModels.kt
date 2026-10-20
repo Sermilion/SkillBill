@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
+import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
@@ -41,6 +42,7 @@ data class PhaseRunRequest(
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
   val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
   val activityOutput: ((String, String) -> Unit)? = null,
+  val activityStampSink: AgentRunActivityStampSink = AgentRunActivityStampSink.NONE,
   val launchArguments: List<String>? = null,
   val recoverStaleOwner: String? = null,
   val qaExecution: QaExecutionContext? = null,

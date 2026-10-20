@@ -67,6 +67,7 @@ import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkFamily
+import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.FeedbackTone
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.ReasonTooltip
@@ -77,10 +78,11 @@ import dev.skillbill.tray.core.ui.durationText
 import dev.skillbill.tray.core.ui.effectiveFreshness
 import dev.skillbill.tray.core.ui.formatInstant
 import dev.skillbill.tray.core.ui.label
-import dev.skillbill.tray.core.ui.lifecycleColor
+import dev.skillbill.tray.core.ui.livenessText
 import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.phasePipeline
 import dev.skillbill.tray.core.ui.rememberCopyToClipboard
+import dev.skillbill.tray.core.ui.statusColor
 import dev.skillbill.tray.core.ui.tickingNow
 import kotlin.time.Instant
 
@@ -169,7 +171,7 @@ private fun LoadedDetail(
     Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          StatusChip(item.outcomeLabel(), lifecycleColor(item.lifecycle), item.lifecycle)
+          StatusChip(item.outcomeLabel(), item.statusColor(), item.lifecycle, stalled = item.stalled())
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
           StatusChip(if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
@@ -354,7 +356,7 @@ private fun LoadedDetail(
           listOfNotNull(
             item.workflowId?.let { "Workflow" to it }, item.invocationId?.let { "Invocation" to it },
             detail.activeAgent?.let { "Agent" to it }, item.currentModel?.let { "Model" to "$it${item.currentEffort?.let { effort -> " · $effort" }.orEmpty()}" },
-            detail.executionLiveness?.let { "Liveness" to it }, item.startedAt?.let { "Started" to formatInstant(it, "d MMM HH:mm") },
+            detail.executionLiveness?.let { "Liveness" to livenessText(it, item, now) }, item.startedAt?.let { "Started" to formatInstant(it, "d MMM HH:mm") },
             "Last update" to formatInstant(item.updatedAt, "HH:mm:ss"),
           ),
         )
@@ -404,7 +406,7 @@ private fun DetailMetric(label: String, value: String, hint: String, modifier: M
 private fun MetricDivider() = Box(Modifier.width(1.dp).fillMaxHeight().background(dev.skillbill.tray.core.designsystem.border))
 
 @Composable
-private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null) {
+private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null, stalled: Boolean = false) {
   Row(
     Modifier.background(if (lifecycle == Lifecycle.ACTIVE) green.copy(alpha = .12f) else Color.Transparent, RoundedCornerShape(50))
       .border(1.dp, if (color == muted) strongBorder else color.copy(alpha = .45f), RoundedCornerShape(50))
@@ -412,7 +414,7 @@ private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    lifecycle?.let { WorkDot(it) }
+    lifecycle?.let { WorkDot(it, stalled = stalled) }
     Text(label, color = color, fontFamily = mono, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 11.sp)
   }
 }

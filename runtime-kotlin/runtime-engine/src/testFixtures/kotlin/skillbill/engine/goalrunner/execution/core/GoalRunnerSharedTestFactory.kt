@@ -107,6 +107,7 @@ fun testGoalRunnerStatusService(
       workerSupervisor = ports.workerSupervisor,
       diagnostics = ports.diagnostics,
       runtimeStatusService = ports.runtimeStatusService,
+      clock = clock,
     )
   val repairCoordinator = testGoalRunnerRepairCoordinator(manifestStore, outcomeStore, phaseRecorder, clock, ports)
   return GoalRunnerStatusService(

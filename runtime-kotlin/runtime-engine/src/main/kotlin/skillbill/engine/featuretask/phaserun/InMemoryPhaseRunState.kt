@@ -128,10 +128,11 @@ internal class InMemoryPhaseRunState(
   override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget? = null
 
   override fun launchObservation(stepName: String): PhaseLaunchObservation {
+    val durableStamps = facts.request.activityStampSink
     val output =
       facts.request.activityOutput
         ?: return PhaseLaunchObservation(
-          AgentRunActivityStampSink.NONE,
+          durableStamps,
           AgentRunWorktreeEditObserver.NONE,
         )
     var lastKind: String? = null
@@ -158,6 +159,7 @@ internal class InMemoryPhaseRunState(
     }
     val stampSink =
       AgentRunActivityStampSink { label ->
+        durableStamps.stamp(label)
         publish(label.wireValue, activityFor(label, stepName))
       }
     val progressEmitter: (AgentRunProgressEmission) -> Unit = { emission ->

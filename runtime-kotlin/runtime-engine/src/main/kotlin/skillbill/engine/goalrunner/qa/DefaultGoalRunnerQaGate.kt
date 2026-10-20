@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.qa
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.resolvedParentSpecPath
+import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -35,6 +36,7 @@ class DefaultGoalRunnerQaGate(
   private val gitOperations: WorkflowGitOperations,
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val clock: Clock,
+  private val activityStampWriter: AgentActivityStampWriter,
 ) : GoalRunnerQaGate {
   override fun run(
     state: GoalRunnerManifestState,
@@ -78,6 +80,7 @@ class DefaultGoalRunnerQaGate(
           acceptanceCriteria = invariants.acceptanceCriteria,
           eventSink = FeatureTaskRuntimeRunEventSink { event -> record(state, request, event) },
           activityOutput = { stepName, activity -> recordActivity(state, request, stepName, activity) },
+          activityStampSink = activityStampWriter.sink(state.parentWorkflowId, parentWorkflowId = null),
         ),
         state.parentWorkflowId,
         branch,

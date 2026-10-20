@@ -53,6 +53,7 @@ import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.needsAttention
+import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.AppendState
 import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
@@ -63,10 +64,10 @@ import dev.skillbill.tray.core.ui.coerceNonNegative
 import dev.skillbill.tray.core.ui.durationText
 import dev.skillbill.tray.core.ui.effectiveFreshness
 import dev.skillbill.tray.core.ui.label
-import dev.skillbill.tray.core.ui.lifecycleColor
 import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.phaseElapsedText
 import dev.skillbill.tray.core.ui.repositoryTitle
+import dev.skillbill.tray.core.ui.statusColor
 import dev.skillbill.tray.core.ui.tickingNow
 import kotlin.time.Instant
 
@@ -173,18 +174,18 @@ private fun PopoverStat(label: String, value: Int, color: Color, modifier: Modif
 
 @Composable
 internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, stale: Boolean, select: () -> Unit) {
-  val color = lifecycleColor(item.lifecycle)
+  val color = item.statusColor()
   val attention = item.needsAttention()
   Row(Modifier.fillMaxWidth().background(if (attention) color.copy(alpha = .07f) else if (selected) mint.copy(alpha = .06f) else Color.Transparent).clickable(onClick = select).height(IntrinsicSize.Min)) {
     Box(Modifier.width(2.dp).fillMaxHeight().background(if (attention) color else if (selected) mint else Color.Transparent))
     Column(Modifier.weight(1f).padding(start = 14.dp, end = 16.dp, top = 10.dp, bottom = 11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        WorkDot(item.lifecycle)
+        WorkDot(item.lifecycle, stalled = item.stalled())
         Text(item.repositoryTitle(), Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(item.issueKey ?: item.phaseId ?: item.currentStepId, Modifier.border(1.dp, color.copy(alpha = .45f), RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 3.dp), color = color, fontFamily = mono, fontSize = 10.5.sp)
       }
       val planning = item.currentStepId == "planning"
-      val phase = if (item.lifecycle == Lifecycle.ACTIVE) item.currentStepLabel else item.outcomeLabel()
+      val phase = if (item.stalled()) "${item.outcomeLabel()} · ${item.currentStepLabel}" else if (item.lifecycle == Lifecycle.ACTIVE) item.currentStepLabel else item.outcomeLabel()
       val duration = if (item.scope == ExecutionScope.STANDALONE_PHASE) phaseElapsedText(item, now, stale) else durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, stale)
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(

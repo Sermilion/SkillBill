@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.goalrunner.RecordingOutcomeStore
+import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -300,7 +301,13 @@ class PhaseMonitorRunTest {
     git(repoRoot, "worktree", "add", linked.toString(), "-b", "kept-worktree", "main")
     val worktrees = worktreePaths()
     val outcomes = RecordingOutcomeStore()
-    val monitor = DefaultGoalRunnerCiMonitor(entry(checks = checks, agentLauncher = repairLauncher), outcomes, clock)
+    val monitor =
+      DefaultGoalRunnerCiMonitor(
+        entry(checks = checks, agentLauncher = repairLauncher),
+        outcomes,
+        clock,
+        testActivityStampWriter(),
+      )
     val result =
       monitor.monitor(
         GoalRunnerManifestState(

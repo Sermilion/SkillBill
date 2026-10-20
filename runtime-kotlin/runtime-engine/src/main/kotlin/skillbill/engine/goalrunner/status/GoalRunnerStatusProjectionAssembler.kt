@@ -26,6 +26,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
+import skillbill.goalrunner.model.ExecutionProgressStall
 import skillbill.goalrunner.model.GoalNoChangeState
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
@@ -65,6 +66,7 @@ import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifac
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
+import java.time.Clock
 import java.time.Instant
 
 @Inject
@@ -78,6 +80,7 @@ class GoalRunnerStatusProjectionAssembler(
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
   private val runtimeStatusService: FeatureTaskRuntimeStatusService?,
+  private val clock: Clock,
 ) {
   fun project(
     loadedState: GoalRunnerManifestState,
@@ -320,13 +323,15 @@ class GoalRunnerStatusProjectionAssembler(
     val goalCompletedAt = assembly.loadedState.controlState.goalCompletedAt
     val currentStepOverride =
       assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId)
+    val executionLiveness =
+      resolveExecutionLiveness(
+        parentWorkflowId = assembly.loadedState.parentWorkflowId,
+        currentSubtask = assembly.currentSubtask,
+        durableRead = assembly.durableRead,
+      )
     return GoalRunnerStatusProjectionRuntimeInputs(
-      executionLiveness =
-        resolveExecutionLiveness(
-          parentWorkflowId = assembly.loadedState.parentWorkflowId,
-          currentSubtask = assembly.currentSubtask,
-          durableRead = assembly.durableRead,
-        ),
+      executionLiveness = executionLiveness,
+      progressStall = progressStall(executionLiveness, assembly),
       planning = assembly.planning,
       currentStepOverride = currentStepOverride,
       currentWorkflowStatus = assembly.progress?.workflowStatus,
@@ -360,6 +365,42 @@ class GoalRunnerStatusProjectionAssembler(
       goalCompletedAt = goalCompletedAt,
     )
   }
+
+  private fun progressStall(
+    liveness: ExecutionLiveness,
+    assembly: GoalStatusProjectionRuntimeAssembly,
+  ): ExecutionProgressStall? {
+    if (liveness != ExecutionLiveness.LIVE) return null
+    val signals =
+      GoalProgressStallSignals(
+        progress = assembly.progress,
+        agentActivityStamps =
+          agentActivityStamps(
+            listOfNotNull(assembly.loadedState.parentWorkflowId, assembly.childWorkflowId),
+            assembly.durableRead,
+          ),
+        latestWorktreeEdit = assembly.latestWorktreeEdit,
+      )
+    return ExecutionProgressStall.detect(liveness, signals.latestProgressAt(), clock.instant())
+  }
+
+  private fun agentActivityStamps(
+    workflowIds: List<String>,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): List<Instant> =
+    runCatching {
+      database.read { unit ->
+        workflowIds.distinct().mapNotNull { workflowId -> unit.agentActivityStamps.read(workflowId)?.recordedAt }
+      }
+    }.getOrElse { error ->
+      durableRead.recordDegradedRead(
+        seam = "goal-status.agent_activity_stamp",
+        expected = "agent_activity_stamp",
+        used = "absent",
+        error = error,
+      )
+      emptyList()
+    }
 
   private fun readLedgerSummary(
     issueKey: String,

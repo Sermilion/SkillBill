@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.monitoring
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -18,6 +19,11 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.net.URI
 import java.time.Clock
 
+internal const val CI_WAITING_OPERATION_PREFIX: String = "Waiting for CI"
+
+internal fun isCiWaitingOperation(operationName: String?): Boolean =
+  operationName?.startsWith(CI_WAITING_OPERATION_PREFIX) == true
+
 fun interface GoalRunnerCiMonitor {
   fun monitor(
     state: GoalRunnerManifestState,
@@ -30,6 +36,7 @@ class DefaultGoalRunnerCiMonitor(
   private val phaseRunEntry: PhaseRunEntry,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val clock: Clock,
+  private val activityStampWriter: AgentActivityStampWriter,
 ) : GoalRunnerCiMonitor {
   override fun monitor(
     state: GoalRunnerManifestState,
@@ -46,6 +53,7 @@ class DefaultGoalRunnerCiMonitor(
         modelAssignment = request.modelAssignment,
         eventSink = FeatureTaskRuntimeRunEventSink { event -> record(state, request, event) },
         activityOutput = { stepName, activity -> recordActivity(state, request, stepName, activity) },
+        activityStampSink = activityStampWriter.sink(state.parentWorkflowId, parentWorkflowId = null),
       ),
       state.parentWorkflowId,
       state.manifest.featureBranch.orEmpty(),
@@ -141,13 +149,13 @@ class DefaultGoalRunnerCiMonitor(
 
   private fun ciWaitingOperationName(event: FeatureTaskRuntimeRunEvent.CiStillRunning): String =
     if (event.pendingChecks.isEmpty()) {
-      "Waiting for CI check registration"
+      "$CI_WAITING_OPERATION_PREFIX check registration"
     } else {
       val names =
         event.pendingChecks
           .take(MAX_VISIBLE_CHECKS)
           .joinToString(", ") { check -> check.name.filterNot(Char::isISOControl).take(MAX_CHECK_NAME_LENGTH) }
-      "Waiting for CI checks: $names"
+      "$CI_WAITING_OPERATION_PREFIX checks: $names"
     }
 
   private fun ciWaitingActivity(event: FeatureTaskRuntimeRunEvent.CiStillRunning): String {

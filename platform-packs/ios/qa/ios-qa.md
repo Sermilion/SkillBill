@@ -32,6 +32,16 @@ More than one available device with none named by the user is `ambiguous_target`
 
 `device_fingerprint` is the lowercase hex sha256 of the trimmed device UDID. It is the same value `skill-bill qa lease` prints.
 
+## Background processes
+
+A command that never exits holds your shell, so the run never finishes and the receipt never settles.
+
+- Start every long-running process the run needs detached so the command returns: a local backend, API simulator, mock server, Metro or another packager, an Appium server, or a log tail. Use `nohup <cmd> > <invocation dir>/<name>.log 2>&1 &` and record its PID from `$!`.
+- Wait for readiness by polling a health URL or a log line in a bounded loop, for example every 2 seconds for up to 120 seconds. Never run the process in the foreground to watch it start.
+- Never run a command that does not end on its own in the foreground: servers, watch modes, `tail -f`, or `log stream`. Use bounded forms such as `log show --last 5m` or `timeout <seconds> <cmd>`.
+- Before writing the receipt, stop every process this run started by its recorded PID and report it in `cleanup`. Leave processes that were already running alone. If a stop fails, report `cleanup.outcome: retained` with a `retained_resources` entry of `kind: process` and the command name, plus `guidance` telling the user how to stop it.
+- Write the receipt last, then exit. Nothing this run started may keep running in your foreground after the receipt is written.
+
 ## Device lease
 
 Before installing anything, run:

@@ -77,6 +77,7 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     startedAt = startedAt?.toKotlinInstant(),
     lastAgentActivityLabel = lastAgentActivityLabel?.wireValue,
     lastAgentActivityAt = lastAgentActivityAt?.toKotlinInstant(),
+    stalledSince = stalledSince?.toKotlinInstant(),
     activeDurationMs = activeDurationMs,
     activeDurationAsOf = activeDurationAsOf?.toKotlinInstant(),
     subtaskActiveDurationMs = currentSubtask?.activeDurationMs,

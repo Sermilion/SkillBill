@@ -116,6 +116,9 @@ private fun goalStatusWireMap(projection: GoalRunnerStatusProjection): Map<Strin
   buildMap {
     put(WorkDetailPayloadKeys.ACTIVE_AGENT, projection.activeAgent)
     put(WorkDetailPayloadKeys.EXECUTION_LIVENESS, projection.executionLiveness.wireValue)
+    projection.progressStall?.let { stall ->
+      put(WorkDetailPayloadKeys.PROGRESS_STALLED_SINCE, stall.lastProgressAt.toString())
+    }
     put(WorkDetailPayloadKeys.PHASE_ATTEMPT_COUNTS, projection.phaseAttemptCounts)
     put(WorkDetailPayloadKeys.CUMULATIVE_FIX_ITERATIONS, projection.cumulativeFixIterations)
     put(WorkDetailPayloadKeys.RE_ATTEMPT_CAUSE_COUNTS, projection.reAttemptCauseCounts)

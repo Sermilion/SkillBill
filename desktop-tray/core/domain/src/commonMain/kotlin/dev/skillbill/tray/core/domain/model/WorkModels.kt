@@ -44,6 +44,8 @@ data class WorkItem(
   val startedAt: Instant? = null,
   val lastAgentActivityLabel: String? = null,
   val lastAgentActivityAt: Instant? = null,
+  /** When the runtime last saw durable progress or agent output on a run whose process is still alive; set only once that is past the runtime's stall threshold. */
+  val stalledSince: Instant? = null,
   val activeDurationMs: Long?,
   val activeDurationAsOf: Instant?,
   val subtaskActiveDurationMs: Long?,
@@ -301,6 +303,9 @@ val defaultNotifications = mapOf("blocked" to true, "failed" to true, "goal_comp
 
 fun WorkItem.needsAttention(): Boolean =
   requiresAttention
+
+/** The runtime judged this active run stalled: its process is alive but it has made no progress past the threshold. */
+fun WorkItem.stalled(): Boolean = lifecycle == Lifecycle.ACTIVE && stalledSince != null
 
 fun WorkItem.successfulGoalCompletion(): Boolean =
   family == WorkFamily.FEATURE_GOAL &&

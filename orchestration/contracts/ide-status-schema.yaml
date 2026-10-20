@@ -19,7 +19,7 @@ required:
 properties:
   contract_version:
     type: string
-    const: "0.5"
+    const: "0.6"
     description: >
       Pinned to IDE_STATUS_CONTRACT_VERSION. Bump the schema const and Kotlin
       constant together.
@@ -364,6 +364,15 @@ properties:
     description: >
       Closed vocabulary for the latest agent-activity stamp. Omitted with
       last_agent_activity_at when no stamp exists.
+  stalled_since:
+    type: string
+    minLength: 1
+    description: >
+      Instant of the latest durable progress or agent output while the run's owner
+      process is alive and that instant is at least the stall threshold (20 minutes)
+      old. Present only on active feature-goal snapshots; absence means the run is
+      progressing or its liveness is not provable. Consumers render it as stalled,
+      "no progress for now - stalled_since"; the runtime never stops the run on it.
   updated_at:
     type: string
     minLength: 1

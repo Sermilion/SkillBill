@@ -76,6 +76,7 @@ internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(issueKey: String): M
       "current_step" to it.currentStep,
       "active_agent" to it.activeAgent,
       "execution_liveness" to it.executionLiveness.wireValue,
+      "progress_stalled_since" to it.progressStall?.lastProgressAt?.toString(),
       "degraded_durable_read" to it.degradedDurableRead,
       "latest_liveness_signal" to it.latestLivenessSignal,
       "paused" to it.paused,
@@ -169,6 +170,7 @@ internal fun GoalRunnerStatusProjection?.toBoundedGoalStatusCliMap(issueKey: Str
       "execution_liveness" to it.executionLiveness.wireValue,
       "resumable_state" to it.monitorResumableState(),
     ).apply {
+      it.progressStall?.let { stall -> put("progress_stalled_since", stall.lastProgressAt.toString()) }
       it.latestWorktreeEdit?.let { edit ->
         put(
           WorktreeEditJournalPayloadKeys.WORKTREE_EDITS,
@@ -272,11 +274,18 @@ private fun StringBuilder.appendGoalStatusExecutionSummary(projection: GoalRunne
   appendLine("current_step: ${projection?.currentStep ?: "none"}")
   appendLine("active_agent: ${projection?.activeAgent ?: "none"}")
   appendLine("execution_liveness: ${projection?.executionLiveness?.wireValue ?: "unknown"}")
+  projection?.let { appendProgressStallLine(it) }
   appendLine("latest_liveness_signal: ${projection?.latestLivenessSignal ?: "none"}")
   appendLine("paused: ${projection?.paused ?: false}")
   appendLine("pause_requested: ${projection?.pauseRequested ?: false}")
   appendLine("pause_reason: ${projection?.pauseReason ?: "none"}")
   appendLine("stop_after_subtask: ${projection?.stopAfterSubtaskId ?: "none"}")
+}
+
+private fun StringBuilder.appendProgressStallLine(projection: GoalRunnerStatusProjection) {
+  projection.progressStall?.let { stall ->
+    appendLine("progress_stalled: ${stall.describe()} (last progress ${stall.lastProgressAt})")
+  }
 }
 
 private fun StringBuilder.appendPlanningStatusLines(projection: GoalRunnerStatusProjection) {
@@ -357,6 +366,7 @@ internal fun goalMonitorStatusText(
       appendLine("current_subtask: ${projection.currentSubtaskId ?: "none"}")
       appendLine("current_step: ${projection.currentStep ?: "none"}")
       appendLine("execution_liveness: ${projection.executionLiveness.wireValue}")
+      appendProgressStallLine(projection)
       appendLine("resumable_state: ${projection.monitorResumableState()}")
       appendWorktreeEditLines(projection)
     }

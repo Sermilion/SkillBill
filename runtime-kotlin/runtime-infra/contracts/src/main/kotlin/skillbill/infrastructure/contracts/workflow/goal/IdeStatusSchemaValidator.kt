@@ -227,6 +227,7 @@ private fun MutableMap<String, Any?>.putActivityFields(snapshot: IdeStatusSnapsh
     put("last_agent_activity_at", at.toString())
     put("last_agent_activity_label", label.wireValue)
   }
+  snapshot.stalledSince?.let { put(IdeStatusPayloadKeys.STALLED_SINCE, it.toString()) }
 }
 
 private fun problemWireMap(problem: IdeStatusProblem): Map<String, Any?> =

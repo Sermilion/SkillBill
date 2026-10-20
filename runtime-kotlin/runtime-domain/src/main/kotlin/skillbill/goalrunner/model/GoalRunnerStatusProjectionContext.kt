@@ -57,6 +57,7 @@ internal fun assembleGoalRunnerStatusProjection(
         },
     activeAgent = activeAgent?.takeIf(String::isNotBlank),
     executionLiveness = extras.executionLiveness,
+    progressStall = extras.progressStall,
     planning = extras.planning,
     latestLivenessSignal = extras.latestLivenessSignal?.takeIf { it.isNotBlank() && !context.staleSignal },
     latestObservabilityEvent = extras.latestObservabilityEvent?.takeUnless { context.staleSignal },

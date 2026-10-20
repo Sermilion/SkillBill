@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, observed_at, item, page_size, next_cursor]
 properties:
-  contract_version: {type: string, const: "1.1"}
+  contract_version: {type: string, const: "1.2"}
   page_size: {type: integer, minimum: 1, maximum: 100}
   next_cursor: {type: [string, "null"], minLength: 1}
   observed_at: {type: string, format: date-time}
@@ -71,6 +71,7 @@ $defs:
       goal_finish_pipeline: {type: array, items: {type: string}}
       active_agent: {type: [string, "null"]}
       execution_liveness: {type: [string, "null"]}
+      progress_stalled_since: {type: string, format: date-time}
       phase_attempt_counts: {type: object}
       cumulative_fix_iterations: {type: object}
       re_attempt_cause_counts: {type: object}

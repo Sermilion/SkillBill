@@ -36,6 +36,7 @@ import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.finished
 import dev.skillbill.tray.core.domain.model.needsAttention
 import dev.skillbill.tray.core.domain.model.showsAsStandalonePhase
+import dev.skillbill.tray.core.domain.model.stalled
 
 /** One work item in a sidebar list; the work and history screens share it so both read the same. */
 @Composable
@@ -43,14 +44,14 @@ fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Unit) {
   Row(Modifier.padding(horizontal = 8.dp).fillMaxWidth().background(if (selected) raised else sidebar, RoundedCornerShape(8.dp)).clickable(onClick = onSelect).heightIn(min = 47.dp)) {
     Box(Modifier.width(2.dp).height(47.dp).background(if (selected) mint else sidebar))
     Row(Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-      WorkDot(item.lifecycle)
+      WorkDot(item.lifecycle, stalled = item.stalled())
       Column(Modifier.weight(1f)) {
         Text(item.repositoryTitle(), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val status = item.outcomeLabel().takeIf { item.showsAsStandalonePhase() || item.finished() }
+        val status = item.outcomeLabel().takeIf { item.showsAsStandalonePhase() || item.finished() || item.stalled() }
         val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.TERMINAL || item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
         Text(
           listOfNotNull(item.issueKey ?: item.phaseId, status, step).joinToString(" · "),
-          color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted,
+          color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else if (item.stalled()) amber else muted,
           fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         val branch = item.branch?.takeIf { item.showsAsStandalonePhase() }
