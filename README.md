@@ -163,6 +163,10 @@ This [scripted playback](docs/assets/generate_demo_gif.py) illustrates interrupt
 
 `/skill-bill` is the only listed skill. Everything else is a form of it:
 
+| Command | What it does |
+| --- | --- |
+| `/skill-bill` | Prepare new work from `<intake>`, or resume an existing spec or goal, then run it |
+
 - **Full run** (`/skill-bill <intake>`) is the durable workflow above. It can pause and resume.
 - **Phases** (`phase:<name>`) run part of the pipeline on their own, in memory. They leave no workflow row, branch, or checkpoint commit. `phase:plan` is the one durable phase.
 - **Operations** (`operation:<name>`) are standalone jobs. Any operation that edits files, tags, or pushes stops at `awaiting_confirmation` and acts only after you confirm with `confirm:<token>`.
