@@ -1,52 +1,74 @@
+<div align="center">
+
 ![Skill Bill, governed workflows for AI coding agents](docs/assets/skill-bill-readme-hero.svg)
 
 # Skill Bill
 
-
+**Governed feature workflows for AI coding agents.**
+Issue in, reviewed and tested pull request out, with progress that survives interruptions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-4c1.svg)](LICENSE)
 ![Latest release](https://img.shields.io/github/v/release/Sermilion/SkillBill?include_prereleases&sort=semver)
 ![Validate agent configs](https://img.shields.io/github/actions/workflow/status/Sermilion/SkillBill/validate-agent-configs.yml?branch=main&label=validate)
 
-Skill Bill takes feature work from an issue and acceptance criteria through planning, implementation, simplification, review, and a PR. A local runtime saves progress between phases, so interrupted work can continue from durable state.
+[Quickstart](#quickstart) · [How it works](#how-it-works) · [Commands](#commands) · [Watching runs](#watching-and-controlling-runs) · [Platform packs](#platform-packs) · [Configuration](#configuration) · [Docs](#documentation)
 
-Use it with Claude Code, Codex, or Cursor. One listed skill, `/skill-bill`, runs the full feature workflow, a single phase such as review or validation, or a runtime operation. You review the resulting changes before merging. The project is pre-1.0.
+</div>
 
-[Quickstart](#quickstart) · [Glossary](#glossary) · [Workflow](#feature-workflow) · [Skills](#skills) · [Platform packs](#platform-packs) · [IDE integrations](#agents-and-ide-integrations) · [Execution matrix](#execution-matrix) · [Documentation](#learn-more)
+---
+
+Skill Bill turns an issue and its acceptance criteria into a pull request. It plans the work, implements it, audits it against the criteria, reviews and fixes it, runs your project's checks, tests the app on a device, and opens the PR. A local runtime records every phase, so a crashed or paused run picks up where it stopped.
+
+It works with Claude Code, Codex, and Cursor. You install one skill, `/skill-bill`, and review the result before merging. The project is pre-1.0.
+
+## Why Skill Bill
+
+- **Durable runs.** Phase outputs and continuation state live in a local database. Resume with any compatible agent, because the state belongs to Skill Bill, not the agent session.
+- **Acceptance criteria are checked, not assumed.** An audit compares the code and tests to each criterion and repairs gaps before review.
+- **Review that fixes.** Findings are verified, Blocker and Major ones are fixed, and the rest are reported with a verdict.
+- **Your project's real checks.** Validation discovers the required checks from your instructions, build files, scripts, and CI, then runs and repairs them.
+- **Mobile QA.** On Android and iOS projects, an agent drives the built app on a device or simulator and fixes what it finds before the PR.
+- **Stack-aware.** Platform packs route review to specialists for Go, iOS, Kotlin, KMP, PHP, Python, Rust, and TypeScript.
+- **Large work splits cleanly.** Bigger features become dependency-ordered subtasks, each with a fresh context and one commit.
 
 ## Quickstart
 
-Install and authenticate your coding agent's CLI, then install Skill Bill:
+**1. Install.** Install and sign in to your coding agent's CLI first, then run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh | bash
 ```
 
-Choose your agents and telemetry level when prompted. The installer always installs every manifest-discovered platform pack. The installer downloads a self-contained runtime, renders `/skill-bill` with all packs' review specialists as its internal sidecars, links it into agent directories, and registers the MCP server. Prebuilt installs need no system JDK or Gradle. Installing over an older version removes the retired `bill-*` skills; see [Upgrading from the `bill-*` skills](#upgrading-from-the-bill--skills).
+The installer asks which agents to set up and which telemetry level to use. It downloads a self-contained runtime (no JDK or Gradle needed), installs every platform pack and the desktop app, links `/skill-bill` into your agents, and registers the MCP server.
 
-Check the installation:
+**2. Check the install.**
 
 ```bash
 skill-bill version
 skill-bill doctor
 ```
 
-Open your coding agent in the target repository and start a feature:
+**3. Start a feature.** Open your agent in the target repository:
 
 ```text
 /skill-bill APP-123 Add CSV export for the filtered orders list
 ```
 
-New requirements without a key use the next local key by default. `/skill-bill` reads `.feature-specs/`, including ignored, untracked, completed, and archived bundles, and increments the highest issue number for the project's prefix. For example, bundles through `NEWS-151` select `NEWS-152`. "Next available key" uses the same rule. If the local prefix is missing or ambiguous, it asks for a prefix, not a tracker connection. Supply a key yourself to override allocation. Include observable acceptance criteria, constraints, and any design reference in the requirements. A tracker reference without requirements uses the connected tracker after local existing-work checks. To resume, pass the key or path of an existing spec. The runtime prepares missing spec artifacts and resumes existing work. Direct CLI launches require the resolved key and requirements. Use `/skill-bill APP-123 phase:plan` to prepare a spec without starting implementation, or `/skill-bill phase:review target:uncommitted` to review existing changes. These examples use slash notation; use your agent's skill invocation syntax.
+Include observable acceptance criteria, constraints, and any design reference. That's it. The runtime prepares a spec under `.feature-specs/`, plans, implements, and opens the PR.
+
+**Update later:**
+
+```bash
+skill-bill operation update-check
+skill-bill update
+```
 
 <details>
-<summary>Install requirements, PATH setup, and source builds</summary>
+<summary>Requirements, PATH setup, source builds, and uninstalling</summary>
 
-Prebuilt targets are `macos-arm64`, `macos-x64`, `linux-x64`, and `windows-x64`. The installer needs Bash, `curl`, `tar`, `unzip`, and either `shasum` or `sha256sum` to download and checksum-verify the release bundle and runtime images. On Windows, use a Bash environment with symlink support. The installer reports how to enable it when unavailable.
+Prebuilt targets are `macos-arm64`, `macos-x64`, `linux-x64`, and `windows-x64`. The installer needs Bash, `curl`, `tar`, `unzip`, and either `shasum` or `sha256sum` to download and checksum-verify the release bundle. On Windows, use a Bash environment with symlink support; the installer explains how to enable it when it is missing. Feature work also needs the target project's build tools and credentials for Git push and PR creation.
 
-Feature work also needs the target project's build tools and credentials for any Git push or PR creation.
-
-To inspect the installer before running it:
+To read the installer before running it:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh -o install.sh
@@ -54,13 +76,13 @@ less install.sh
 bash install.sh
 ```
 
-If `skill-bill` is not found, add its launcher directory to your `PATH`. For the default directory, add this to your Bash or Zsh startup file:
+If `skill-bill` is not found, add the launcher directory to your `PATH` in your Bash or Zsh startup file:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-A full local checkout builds from source by default. Contributors can make that choice explicit:
+A local checkout builds from source. Source builds need JDK 21 or newer; set `SKILL_BILL_JAVA_HOME` if the installer cannot find one. Unsupported prebuilt hosts fall back to the source build.
 
 ```bash
 git clone https://github.com/Sermilion/SkillBill.git
@@ -68,239 +90,173 @@ cd SkillBill
 ./install.sh --from-source
 ```
 
-Source builds require JDK 21 or newer. Set `SKILL_BILL_JAVA_HOME` if the installer cannot find a suitable JDK. Unsupported prebuilt hosts fall back to the source path and need its prerequisites. Use `bash install.sh --release <tag>` to select a published release; `--from-source` ignores release selection.
+Use `bash install.sh --release <tag>` to pick a published release. `--from-source` ignores release selection.
 
-The installer always installs the desktop app. Local checkouts build it from source; standalone installs download a matching release build. Desktop installation failures stop the installer. Installation initializes the runtime database so the desktop app can open before the first workflow. An upgrade restarts the app if it is running.
+The installer always installs the desktop app: local checkouts build it, standalone installs download the matching release build. A desktop install failure stops the installer. An upgrade restarts the app if it is running. Installing over an older version removes the retired `bill-*` skills (see [Upgrading from the `bill-*` skills](#upgrading-from-the-bill--skills)).
 
-Both `./uninstall.sh` and `skill-bill uninstall` remove the desktop app and its launcher along with Skill Bill. They preserve databases, SQLite journals, and `backups/` under `~/.skill-bill/` so reinstalling retains workflow history and telemetry. To erase that data, remove `~/.skill-bill/` manually after uninstalling.
+Runtime files and rendered skills live under `~/.skill-bill/`. User configuration lives at `~/.config/skill-bill/config.json`, survives reinstalls, and can be moved with `SKILL_BILL_CONFIG_PATH`.
 
-Runtime files and rendered skills live under `~/.skill-bill/`. User configuration lives at `~/.config/skill-bill/config.json` and survives reinstalling. `SKILL_BILL_CONFIG_PATH` overrides that location. See [Getting Started](docs/getting-started.md) for install paths and troubleshooting.
+`./uninstall.sh` and `skill-bill uninstall` remove Skill Bill and the desktop app. They keep databases, SQLite journals, and `backups/` under `~/.skill-bill/`, so a reinstall keeps your history and telemetry. Delete `~/.skill-bill/` yourself to erase that data.
+
+See [Getting Started](docs/getting-started.md) for install paths and troubleshooting.
 
 </details>
 
-To update later:
+## How it works
 
-```bash
-skill-bill operation update-check
-skill-bill update
+`/skill-bill <intake>` starts a **goal**. A small feature is one subtask; larger work is split into dependency-ordered subtasks. Each subtask is implemented, checked, and committed on its own. When every subtask is done, the goal runs QA once and opens the PR.
+
+```mermaid
+flowchart LR
+    A[Intake] --> B[Preplan] --> C[Plan]
+    C --> S
+
+    subgraph S [Each subtask]
+        direction LR
+        D[Implement + simplify] --> E[Audit] --> F[Code review] --> G[Validate] --> H[Write history] --> I[Commit]
+    end
+
+    S --> Q[Mobile QA] --> P[Push + PR] --> M[Monitor CI]
 ```
 
-## Glossary
-
-- **goal.** A full run keyed by an issue, URL, or spec. The runtime owns preparation, planning (intake, preplan, plan), execution, and durable state. A single feature is a one-subtask goal.
-- **workflow.** Persisted runtime state for one goal, standalone phase, or operation.
-- **subtask.** One independently shipped unit of a decomposed goal.
-- **phase.** A standalone-invocable skeleton id: `review`, `validation`, `plan`, `pr`, `monitor`. Invoked as `skill-bill phase <name>`. `verify` is not a phase.
-- **slot.** One of the 12 `PhaseSlot` wire values: `preplan`, `plan`, `implementation`, `audit`, `code_review`, `quality_gate`, `write_history`, `commit_push`, `pull_request`, `monitor`, `standalone_review`, `qa`. `standalone_review` is the report-only operator review slot that `phase:review` runs, and `qa` is the report-only mobile QA slot that `phase:qa` runs.
-- **step.** An internal workflow step id, distinct from phases and slots.
-- **operation.** A `skill-bill operation <name>` command. `verify` and `update-check` are operations.
-- **pack.** A platform pack under `platform-packs/<slug>/` that owns review routing and `validation_gate`.
-- **lane.** A specialist review area routed to a pack skill.
-- **add-on.** A pack-owned add-on under `platform-packs/<slug>/addons/` or a user agent add-on under `agent-addons/<slug>/`, selected after dominant-stack routing.
-
-## Feature workflow
-
-`/skill-bill <intake>` launches the goal runtime. The runtime prepares a missing spec, plans the work, and runs it. If a spec or goal already exists, it resumes that instead. A small feature uses one subtask. Larger work can use dependency-ordered subtasks, each with a fresh execution context and durable handoff artifacts.
-
-The runtime defines 12 slots. A full run uses the first ten in this order; `standalone_review` runs only for `phase:review` and `qa` only for `phase:qa`:
-
-| Slot | What happens |
+| Stage | What happens |
 | --- | --- |
-| `preplan` | Collect repository instructions and relevant durable artifacts. For a goal, this runs once and every subtask shares it. |
-| `plan` | Plan the subtask's implementation. |
-| `implementation` | Implement the plan, then run a mandatory simplification pass scoped to the subtask's changes. |
-| `audit` | Check the acceptance criteria against the current code and tests, then plan and repair gaps. |
-| `code_review` | Review the subtask commit, verify findings, and fix them in bounded rounds. |
-| `quality_gate` | Run full project validation, or a compile-only build for goal subtasks before the last. |
+| `intake` | Turn the issue or requirements into a parent spec under `.feature-specs/`. |
+| `preplan` | Collect repository instructions and relevant history. Runs once per goal; every subtask shares it. |
+| `plan` | Split the goal into subtasks and plan each one. |
+| `implementation` | Implement the plan, then simplify the subtask's changes. |
+| `audit` | Check each acceptance criterion against the code and tests, then repair gaps. |
+| `code_review` | Review the subtask, verify findings, and fix them in bounded rounds. |
+| `quality_gate` | Run the project's full validation and repair failures. |
 | `write_history` | Record boundary history and decisions in area-owned `agent/` files. |
-| `commit_push` | Commit and push the subtask: one commit per subtask on the feature branch. |
-| `pull_request` | Create or update the PR once every subtask is complete. |
-| `monitor` | Watch CI on the open PR and repair failing checks. |
-| `standalone_review` | Report-only operator review. `phase:review` runs this slot. |
-| `qa` | Report-only mobile QA on an Android or iOS device or simulator, driven by the routed platform pack's QA guidance. `phase:qa` runs this slot. |
+| `commit_push` | One commit per subtask on the feature branch. |
+| `qa` | Build the app, test the goal's acceptance criteria on a device, fix findings, and re-test. Up to three repair attempts. Never blocks the goal. |
+| `pull_request` | Create or update the PR, including the QA outcome. |
+| `monitor` | Watch CI and repair failing checks and merge conflicts. |
 
-Each standalone phase runs a subset of these slots through the same run loop. For example, `phase:review` runs `standalone_review`, and `phase:plan` runs `intake`, `preplan` and `plan`. Runs differ in which slots they include and where they keep state, not in how a slot runs.
+QA runs only when the routed pack supports it (currently `kmp` and `ios`). Pass `qa:off` to skip it. If QA changed code, full validation runs once more before the PR.
 
-The quality phases have different purposes:
-
-| Phase or command | Checks |
-| --- | --- |
-| `validate` | An agent discovers and runs the project's required checks from repository instructions, build configuration, scripts, and CI. The runtime advances only when the agent reports that those checks passed. |
-| `build` | Every goal subtask except the last runs the dominant pack's declared build command, then a cache-bypassing confirmation. This proves buildability and does not run the full test suite. |
-| Standalone quality check | `/skill-bill phase:validation` runs the same full project checks and repair loop as goal validation. |
-
-An unknown quality-gate selection value fails as a usage error.
-
-Specs live under `.feature-specs/`, with a parent spec, executable subtask specs, and a decomposition manifest. Local specs are the default; optional Linear-backed preparation records issues and supports spec rehydration. The default commit model leaves one commit per completed subtask on the feature branch.
-
-The runtime saves phase outputs and continuation state in a local database. Resuming uses those records and the current repository. Invalid contracts or ambiguous continuation records stop the run with an explicit error.
+Specs live in `.feature-specs/` as a parent spec, per-subtask specs, and a decomposition manifest. Local specs are the default; Linear-backed preparation is optional.
 
 <details>
-<summary>Watch an illustrated feature run</summary>
+<summary>Issue keys, resuming, and planning only</summary>
+
+- **No key given.** Skill Bill reads every bundle in `.feature-specs/` (ignored, untracked, completed, and archived) and picks the next number for the project's prefix. After `NEWS-151` comes `NEWS-152`. If the prefix is missing or ambiguous, it asks for one.
+- **Tracker reference without requirements.** It uses the connected tracker after checking for existing local work.
+- **Resume.** Pass the key or spec path of existing work: `/skill-bill APP-123`.
+- **Plan only.** `/skill-bill APP-123 phase:plan` writes the spec bundle and stops, with no branch or commit. `skill-bill APP-123` later finishes the plan if needed and starts implementation without re-running planning.
+
+These examples use slash notation. Use your agent's skill invocation syntax.
+
+</details>
+
+<details>
+<summary>Watch an illustrated run</summary>
 
 ![Scripted illustration of a feature run interrupted and resumed](docs/assets/skill-bill-demo.gif)
 
-This [scripted playback](docs/assets/generate_demo_gif.py) illustrates interruption and continuation. It is not a recording of the current runtime; the stages above describe current behavior.
+This [scripted playback](docs/assets/generate_demo_gif.py) illustrates interruption and continuation. It is not a recording of the current runtime.
 
 </details>
 
-### Inspect, pause, and continue
+## Commands
 
-Run these from the repository that owns the goal:
+`/skill-bill` is the only listed skill. Everything else is a form of it:
 
-| Command | Effect |
+- **Full run** (`/skill-bill <intake>`) is the durable workflow above. It can pause and resume.
+- **Phases** (`phase:<name>`) run part of the pipeline on their own, in memory. They leave no workflow row, branch, or checkpoint commit. `phase:plan` is the one durable phase.
+- **Operations** (`operation:<name>`) are standalone jobs. Any operation that edits files, tags, or pushes stops at `awaiting_confirmation` and acts only after you confirm with `confirm:<token>`.
+
+### Phases
+
+| Command | What it does |
 | --- | --- |
-| `skill-bill goal status APP-123` | Read-only goal state and subtask details |
-| `skill-bill work status --format json` | Repository work snapshot used by the IDE integrations |
-| `skill-bill goal pause APP-123` | Request a pause after the current subtask |
-| `skill-bill goal stop APP-123` | Record an operator stop and terminate the running goal |
-| `skill-bill goal resume APP-123` | Clear known stale resume wedges and the durable pause without launching work |
+| `/skill-bill <intake> phase:plan` | Write the spec bundle and planning checkpoints, then stop |
+| `/skill-bill phase:review` | Review a PR, commit, or working-tree change and fix Blocker and Major findings |
+| `/skill-bill phase:validation` | Discover and run the project's full checks and repair failures |
+| `/skill-bill [<instructions>] phase:qa` | Report-only mobile QA on a device or simulator |
+| `/skill-bill phase:pr` | Commit pending changes, push, open or update the PR, and monitor CI |
+| `/skill-bill [<issue-key\|pr-url>] phase:monitor` | Watch one PR's CI from a temporary worktree and repair failures or merge conflicts |
 
-To continue a paused goal from the CLI, clear its pause and launch it with an explicit agent:
+### Operations
 
-```bash
-skill-bill goal resume APP-123
-skill-bill goal APP-123 --agent claude
-```
+| Command | What it does |
+| --- | --- |
+| `operation:verify <issue\|requirements\|spec:<path>> [target:<pr\|branch\|base..head>] [qa:on\|off]` | Audit a change against its acceptance criteria and report a verdict |
+| `[<pr>] operation:pr-review-fix` | Triage unresolved PR threads, fix the ones you select, reply, and push with `push:on` |
+| `[<scope>] operation:unit-test-value-check` | Find tests that cannot catch a realistic regression. Read-only |
+| `<intake> operation:feature-guard` | Put an implementation behind a feature flag |
+| `<intake> operation:feature-guard-cleanup` | Remove a rolled-out flag and its legacy path |
+| `operation:release bump:<patch\|minor\|major>` | Propose a changelog and version, then tag and push after confirmation |
+| `operation:update-check` | Compare the installed runtime with GitHub releases |
 
-Use the agent ID for your installed CLI, such as `claude`, `codex`, or `cursor`. `/skill-bill APP-123` starts or resumes the full workflow. Recovery can use another compatible agent because workflow state belongs to Skill Bill.
+Each form maps to a CLI command: `/skill-bill phase:review` runs `skill-bill phase review`, and so on. Agents run phases and operations only when you ask for them.
 
-## Review and quality checks
-
-Name the work you want reviewed:
+### Review
 
 ```text
+/skill-bill phase:review                            # uncommitted changes, or HEAD when clean
 /skill-bill phase:review target:pr
-/skill-bill phase:review target:HEAD
-/skill-bill phase:review target:uncommitted mode:inline
 /skill-bill phase:review target:staged mode:delegated
 ```
 
-Review also accepts `target:unstaged` or a commit sha. Without `target:`, it reviews uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
+Targets are `pr`, `HEAD`, `uncommitted`, `staged`, `unstaged`, or a commit sha. `inline` (the default) runs one review worker across the routed areas. `delegated` is the experimental full-depth mode with a separate worker per specialist. A standalone review never commits.
 
-Review fixes what it finds. Both modes verify their findings, fix Blocker and Major ones in the working tree, and report the rest with a verdict. A standalone review creates no commit.
+### Validation
 
-`inline` is the default. It runs one review worker over the routed areas at reduced depth. `auto` also resolves to inline. `delegated` is the experimental full-depth mode, with separate specialist workers, and requires explicit `mode:delegated` on a standalone review. Feature and goal workflows accept `code-review:auto|inline` and use inline review. A required worker that cannot launch blocks the review rather than silently reducing its depth.
+`/skill-bill phase:validation` checks the whole project, whatever changed. It needs no platform pack: an agent finds the required checks in your instructions, build configuration, scripts, and CI, runs them, and repairs failures. If it finds no applicable checks, it warns and completes.
 
-For full project validation:
+## Watching and controlling runs
 
-```text
-/skill-bill phase:validation
-```
+**Desktop app.** Installed with Skill Bill. It lists live, recent, and stalled work, shows each goal's pipeline and activity (review, audit, and QA results, including which QA findings were fixed), and can stop, resume, and re-run work from the window or the tray.
 
-The phase uses the same agent strategy as goal validate. It discovers required checks from repository instructions, build configuration, scripts, and CI, then runs those checks and repairs failures. Validation covers the full project regardless of which files changed and requires no platform pack or declared validation command. If discovery finds no applicable commands, the agent prints a warning and completes the step. Unreadable configuration or failed discovery blocks validation.
+**CLI.** Run these from the repository that owns the goal:
 
-## Skills
-
-`/skill-bill` is the only listed skill. Phases and operations are forms of it, not separate commands. Stack-specific review skills install as its internal sidecars.
-
-There are three kinds of form:
-
-- The full run (`/skill-bill <intake>`) runs the ten feature-run slots (`preplan` through `monitor`) with durable state, so it can pause and resume.
-- A phase (`phase:<name>`) runs a few slots in memory. It writes no workflow row, branch, or checkpoint commit, and it cannot be resumed. `phase:plan` is the exception: it is a durable, resumable plan workflow that stops after the spec bundle, creates no branch or commit, and is finished by `skill-bill <KEY>`. `commit_push` is not available as a standalone phase.
-- An operation (`operation:<name>`) is a standalone job outside the feature workflow. Operations that edit files, tag a release, or push stop at `awaiting_confirmation` and act only after you confirm.
-
-| Form | Purpose | Runs |
-|------|---------|------|
-| `/skill-bill` | Prepare new feature work from an `<intake>`, or resume an existing spec or goal, then run it | `skill-bill goal` |
-| `/skill-bill <intake> phase:plan` | Plan durably: seed the parent spec, author implementation-ready subtask specs and a manifest, save all planning checkpoints, then stop. `skill-bill <KEY>` finishes an unfinished plan or starts implementation from the completed plan | `skill-bill phase plan` |
-| `/skill-bill phase:review` | Review a PR, commit, or working-tree change with inline or delegated depth | `skill-bill phase review` |
-| `/skill-bill phase:validation` | Run full project validation and repair findings, using the goal validation strategy | `skill-bill phase validation` |
-| `/skill-bill phase:pr` | Commit pending changes, push the branch, create or update a PR, and monitor its CI | `skill-bill phase pr` |
-| `/skill-bill [<issue-key\|pr-url>] phase:monitor` | Watch CI on the checked-out branch's PR and fix failures, up to three attempts | `skill-bill phase monitor` |
-| `/skill-bill <intake> operation:feature-guard` | Guard an implementation with a feature flag | `skill-bill operation feature-guard` |
-| `/skill-bill <intake> operation:feature-guard-cleanup` | Remove a rolled-out feature flag and its legacy path | `skill-bill operation feature-guard-cleanup` |
-| `/skill-bill operation:verify <linear-issue\|requirements\|spec:<path>> [target:<pr\|branch\|base..head>]` | Verify a change against a Linear issue, requirements text, or a task spec | `skill-bill operation verify` |
-| `/skill-bill [<pr>] operation:pr-review-fix` | Triage PR feedback, then apply selected fixes, reply, and push after approval | `skill-bill operation pr-review-fix` |
-| `/skill-bill [<scope>] operation:unit-test-value-check` | Identify tests that cannot catch a realistic regression | `skill-bill operation unit-test-value-check` |
-| `/skill-bill operation:release bump:<patch\|minor\|major>` | Prepare a changelog, confirm the requested semver bump, and push an annotated tag | `skill-bill operation release` |
-| `/skill-bill operation:update-check` | Compare the installed runtime version with GitHub releases | `skill-bill operation update-check` |
-
-Boundary history and decisions are written by the goal's `write_history` slot. Goal status is CLI-only: run `skill-bill goal status <KEY>`.
-
-```text
-/skill-bill APP-123 Add CSV export               # full workflow from intake
-/skill-bill APP-123 phase:plan                   # skill-bill phase plan APP-123
-/skill-bill phase:review mode:delegated target:HEAD
-```
-
-Standalone phases and operations are operator tools. Agents invoke them only
-when explicitly requested and never select them as full-run steps or recovery
-actions. New full-run work uses supplied requirements and defaults to the next
-local key from `.feature-specs/` when no key is given. A tracker connection is
-optional. An existing spec key or path resumes that spec. `skill-bill <intake>` routes to
-the goal runtime, which prepares new work and resumes existing specs without
-invoking a standalone phase command.
-
-The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. Release first prints the proposed version and changelog and exits `awaiting_confirmation`; confirming it with `confirm:<token>` creates and pushes the tag. `[<scope>] operation:unit-test-value-check` reviews unit tests without editing. `<intake> operation:feature-guard` and `<intake> operation:feature-guard-cleanup` print a plan and exit `awaiting_confirmation`. They edit only on `confirm:<token>`. `[<pr>] operation:pr-review-fix` prints a per-thread matrix for the PR's unresolved review threads and exits `awaiting_confirmation`; the dispatcher asks which threads to fix and re-runs it with `confirm:<token>` and `select:`. It pushes only with `push:on`.
-
-### Upgrading from the `bill-*` skills
-
-Earlier versions installed a separate listed skill for each job. Those skills are retired, and reinstalling removes their links and copies. Use the matching `/skill-bill` form instead:
-
-| Retired skill | Use instead |
+| Command | Effect |
 | --- | --- |
-| `bill-feature` | `/skill-bill <intake>` |
-| `bill-feature-spec` | `/skill-bill <intake> phase:plan` |
-| `bill-code-review` | `/skill-bill phase:review` |
-| `bill-code-check` | `/skill-bill phase:validation` |
-| `bill-pr-description` | `/skill-bill phase:pr` |
-| `bill-boundary-history`, `bill-boundary-decisions` | The goal's `write_history` slot |
-| `bill-feature-verify` | `/skill-bill operation:verify` |
-| `bill-feature-guard` | `/skill-bill <intake> operation:feature-guard` |
-| `bill-feature-guard-cleanup` | `/skill-bill <intake> operation:feature-guard-cleanup` |
-| `bill-pr-review-fix` | `/skill-bill operation:pr-review-fix` |
-| `bill-unit-test-value-check` | `/skill-bill operation:unit-test-value-check` |
-| `bill-release` | `/skill-bill operation:release bump:<patch\|minor\|major>` |
-| `bill-update-check` | `/skill-bill operation:update-check` |
-| `bill-monitor` | `skill-bill goal status <KEY>` from the CLI |
+| `skill-bill goal status APP-123` | Goal state, subtasks, and QA findings |
+| `skill-bill goal pause APP-123` | Pause after the current subtask |
+| `skill-bill goal stop APP-123` | Stop the running goal |
+| `skill-bill goal resume APP-123` | Clear the pause and known stale blockers without launching work |
+| `skill-bill goal APP-123 --agent claude` | Launch or continue the goal with a given agent |
+| `skill-bill work status --format json` | Repository work snapshot for integrations |
 
-Telemetry and stored workflow rows still use some retired names, such as `bill-code-check` as the quality-check `routed_skill`, so existing dashboards and in-flight workflows keep working.
+**IDE plugins.** The [IntelliJ plugin](intellij-plugin/README.md) and [VS Code extension](vscode-extension/README.md) show work status, planning progress, the active phase, and elapsed time, with stop and pause controls. They ship separately as `plugin-v*` and `extension-v*` releases.
 
 ## Platform packs
 
-Platform packs live under `platform-packs/<slug>/`. Their manifests declare routing signals, review areas, native workers, add-ons, and quality commands. Discovery and routing use those declarations, so teams can add or replace packs without editing a hard-coded platform list.
+Packs live under `platform-packs/<slug>/`. Each manifest declares routing signals, review areas, add-ons, a validation gate, and optional QA support. Routing reads the manifests, so you can add or replace a pack without touching a hard-coded list.
 
-| Pack | Scope |
-| --- | --- |
-| `generic` | Review fallback for unsupported, documentation-only, and unresolved paths; supplies the code-quality lane only when no routed pack owns one |
-| `go` | Go modules and workspaces, services, libraries, and CLIs |
-| `ios` | Native iOS, Swift, SwiftUI/UIKit, and Xcode/SPM projects |
-| `kotlin` | Kotlin/JVM and the baseline review layer for KMP |
-| `kmp` | Android and Kotlin Multiplatform, composed with the Kotlin baseline |
-| `php` | PHP applications, services, and Composer projects |
-| `python` | Python applications, libraries, services, and CLIs |
-| `rust` | Rust crates and Cargo workspaces |
-| `typescript` | TypeScript and TSX applications, libraries, and services |
+| Pack | Scope | Mobile QA |
+| --- | --- | :---: |
+| `generic` | Fallback for unsupported, docs-only, and unresolved paths | |
+| `go` | Go modules, services, libraries, and CLIs | |
+| `ios` | Swift, SwiftUI/UIKit, Xcode and SPM projects | ✓ |
+| `kotlin` | Kotlin/JVM, and the baseline layer for KMP | |
+| `kmp` | Android and Kotlin Multiplatform | ✓ |
+| `php` | PHP applications and Composer projects | |
+| `python` | Python applications, libraries, services, and CLIs | |
+| `rust` | Rust crates and Cargo workspaces | |
+| `typescript` | TypeScript and TSX applications, libraries, and services | |
 
-The ten failure-review areas are `architecture`, `performance`, `platform-correctness`, `security`, `testing`, `api-contracts`, `persistence`, `reliability`, `ui`, and `ux-accessibility`. Every shipped pack also owns a required `code-quality` lane; KMP's local lane takes precedence over Kotlin's baseline lane. Legacy packs can use generic code-quality as a fallback when installed. If neither owner is available, review keeps its compatibility behavior and records the omission. These specialists install as unlisted sidecars and native-agent inputs, while `/skill-bill` remains the only listed skill. KMP declares seven failure areas of its own and takes `performance`, `testing`, and `api-contracts` from Kotlin. KMP has its own quality gate with no Kotlin fallback. The other shipped packs each declare all ten failure areas.
+<details>
+<summary>Review areas and routing rules</summary>
 
-Concrete path ownership takes precedence over the generic review fallback. Content signals break ties between equal positive path matches. The fallback owner is manifest-declared and replaceable; declaring more than one fails validation.
+The ten failure-review areas are `architecture`, `performance`, `platform-correctness`, `security`, `testing`, `api-contracts`, `persistence`, `reliability`, `ui`, and `ux-accessibility`. Every shipped pack also owns a required `code-quality` lane.
 
-Pack review skills install as internal sidecars of `/skill-bill`. Run `/skill-bill phase:review`; the stack-specific skills are not separate user commands. Pack validation checks specialist substance as well as manifest shape. See the [source-generation guide](docs/skill-source-generation.md) and [review substance standard](orchestration/review-orchestrator/platform-pack-substance-standard.md) for authoring requirements.
+KMP declares seven areas and takes `performance`, `testing`, and `api-contracts` from Kotlin. KMP's code-quality lane overrides Kotlin's, and KMP has its own quality gate with no Kotlin fallback. The other packs declare all ten areas.
 
-## Agents and IDE integrations
+Concrete path ownership beats the generic fallback, and content signals break ties between equal path matches. The fallback owner is declared in a manifest; declaring more than one fails validation.
 
-The installer supports Claude Code, Codex, Cursor, and JetBrains Junie. It generates each provider's skill and native-agent files from shared sources and registers the local MCP server. Runtime review launch support depends on the provider's isolation capabilities. Claude, Codex, and Cursor have governed review launch adapters; Junie's adapter currently rejects governed review launches that require tool and MCP isolation.
+Specialists install as internal sidecars of `/skill-bill`, not as separate commands. See the [source-generation guide](docs/skill-source-generation.md) and [review substance standard](orchestration/review-orchestrator/platform-pack-substance-standard.md) to author a pack.
 
-Two separately packaged IDE integrations show repository work status, planning progress, the active phase, and elapsed time:
+</details>
 
-- [IntelliJ plugin](intellij-plugin/README.md), distributed as a plugin ZIP under `plugin-v*` releases.
-- [VS Code extension](vscode-extension/README.md), distributed as a VSIX under `extension-v*` releases.
+## Configuration
 
-Both offer stop and pause-after-subtask controls. Launch and resume stay in the CLI or agent session. Install the plugins from their release artifacts; they are separate from the Skill Bill runtime installer. Their READMEs include compatibility requirements and source build instructions.
+### Choose models per phase
 
-## Execution matrix
-
-Use `execution_matrix` to choose the model and effort for feature-task phases, including goal children. Add it to your machine-wide `~/.config/skill-bill/config.json`, or the file selected by `SKILL_BILL_CONFIG_PATH`. Merge it into the existing JSON object so your telemetry and other settings remain intact. These preferences apply across repositories; `.skill-bill/config.yaml` does not own them.
-
-The matrix selects a model for the agent already assigned to a phase. It does not switch agents. You can configure several agents in one file and keep only the entries you use.
-
-Each example below is a complete JSON object for one agent. To configure several agents, combine their entries under the same `execution_matrix.agents` object. Model availability depends on your provider and account; use model IDs accepted by your installed CLI.
-
-### Claude Code
-
-The `claude` entry accepts model aliases or full model IDs. The runtime forwards `effort` through Claude's `--effort` option.
+Add an `execution_matrix` to `~/.config/skill-bill/config.json` to pick a model and effort for each tier of work. Merge it into the existing object so your other settings stay intact. The matrix picks a model for the agent already running a phase; it never switches agents.
 
 ```json
 {
@@ -315,11 +271,10 @@ The `claude` entry accepts model aliases or full model IDs. The runtime forwards
 }
 ```
 
-When using a custom `ANTHROPIC_BASE_URL`, the adapter lets `ANTHROPIC_MODEL` override a Claude model name or alias when that environment variable is set.
+<details>
+<summary>Codex, Cursor, and Junie</summary>
 
-### Codex
-
-The `codex` entry uses a model ID and optional reasoning effort. The runtime passes these through `--model` and `--config model_reasoning_effort=...`.
+**Codex** takes a model ID and optional effort, passed as `--model` and `--config model_reasoning_effort=...`:
 
 ```json
 {
@@ -334,9 +289,7 @@ The `codex` entry uses a model ID and optional reasoning effort. The runtime pas
 }
 ```
 
-### Cursor
-
-The `cursor` entry uses model IDs from `agent --list-models`. This example selects a reasoning model with effort encoded in its ID and Composer for implementation.
+**Cursor** takes model IDs from `agent --list-models`:
 
 ```json
 {
@@ -351,34 +304,30 @@ The `cursor` entry uses model IDs from `agent --list-models`. This example selec
 }
 ```
 
-For Cursor, a separate `effort` field becomes a model parameter, such as `model[effort=high]`. If the model already contains an `[effort=...]` parameter, the values must agree. For parameterized models with other options, put the complete model string in `model` and omit `effort`.
+A separate `effort` becomes a model parameter such as `model[effort=high]`. If the model already has `[effort=...]`, the values must agree. For models with other parameters, put the full string in `model` and omit `effort`.
 
-### Junie
+**Claude** accepts aliases or full model IDs and forwards `effort` as `--effort`. With a custom `ANTHROPIC_BASE_URL`, a set `ANTHROPIC_MODEL` overrides the model.
 
-Junie's runtime adapter does not support model or effort overrides. Omit `junie` from `execution_matrix.agents`. Assigning a directive to a Junie phase fails before launch.
+**Junie** does not support model or effort overrides. Leave it out of `execution_matrix.agents`; a directive for Junie fails before launch.
+
+</details>
 
 <details>
-<summary>Default phase tiers, per-phase overrides, and precedence</summary>
-
-### Phase tiers and overrides
-
-The default tier assignments are:
+<summary>Default tiers, per-phase overrides, and precedence</summary>
 
 | Tier | Phases |
 | --- | --- |
-| `reasoning` | `plan`, `review`, `verify_findings`, `audit`, `validate` |
-| `implementation` | `preplan`, `implement`, `simplify`, `implement_fix`, `build`, `write_history`, `commit_push`, `pr` |
+| `reasoning` | `plan`, `plan_subtasks`, `review`, `verify_findings`, `audit`, `audit_plan_fix`, `validate`, `present_findings` |
+| `implementation` | `intake`, `preplan`, `implement`, `simplify`, `implement_fix`, `audit_implement_fix`, `build`, `qa`, `qa_fix`, `write_history`, `commit_push`, `pr`, `monitor`, `monitor_fix` |
 
-These are model defaults for agent launches. They do not make runtime-owned operations, such as goal-subtask commit and push, launch an agent.
+Tiers only choose models for agent launches. Runtime-owned steps, such as goal-subtask commit and push, launch no agent.
 
-Use `phase_tiers` to move a phase to another tier for all configured agents. To override one phase for one agent, put the phase ID beside that agent's tier entries. For example, this moves `preplan` to the reasoning tier and gives Codex review its own effort setting:
+Move a phase to another tier with `phase_tiers`, or override one phase for one agent next to its tier entries:
 
 ```json
 {
   "execution_matrix": {
-    "phase_tiers": {
-      "preplan": "reasoning"
-    },
+    "phase_tiers": { "preplan": "reasoning" },
     "agents": {
       "codex": {
         "reasoning": { "model": "gpt-6-astra", "effort": "high" },
@@ -390,55 +339,105 @@ Use `phase_tiers` to move a phase to another tier for all configured agents. To 
 }
 ```
 
-Resolution order is an explicit `feature-task --phase-model phase=model@effort` assignment, then the agent's phase entry, then its tier entry. With no matching directive, Skill Bill leaves model selection to the provider's launch defaults. The `--phase-model` option belongs to the lower-level `skill-bill feature-task` commands that goal children run on, not `skill-bill goal` or `/skill-bill`.
+Precedence: `feature-task --phase-model phase=model@effort`, then the agent's phase entry, then its tier entry. With no match, the provider's default applies. `--phase-model` belongs to the lower-level `skill-bill feature-task` commands, not `skill-bill goal` or `/skill-bill`.
 
-Every directive requires a non-blank `model`. Omit `effort` to leave it unspecified; an empty string or `null` is invalid. Unknown fields, agent IDs, phase IDs, and tier names fail with the offending config path. The runtime validates this structure; the provider validates model availability and supported effort values.
+Every directive needs a non-blank `model`. Omit `effort` to leave it unset; `""` and `null` are invalid. Unknown fields, agents, phases, and tiers fail with the offending config path.
 
 </details>
 
-## Customize and extend
+### Customize and extend
 
-Put repository-wide instructions in `AGENTS.md` and skill-specific guidance in `.agents/skill-overrides.md`. The [override example](.agents/skill-overrides.example.md) shows the section format. Boundary history and decisions live beside the code in area-owned `agent/history.md` and `agent/decisions.md` files.
+- **Repository instructions** go in `AGENTS.md`. Skill-specific guidance goes in `.agents/skill-overrides.md` ([example](.agents/skill-overrides.example.md)).
+- **Boundary history and decisions** live next to the code in `agent/history.md` and `agent/decisions.md`.
+- **Platform-pack add-ons** add stack-specific guidance after routing. [External add-on sources](docs/external-addons.md) keep private guidance outside the shared repo.
+- **Agent add-ons** are opt-in. The shipped `execution-budget` add-on keeps Codex runs inside your stopping boundary: `/skill-bill APP-123 agent-addon:execution-budget`. See [agent add-on authoring](docs/skill-source-generation.md#agent-add-on-authored-sources).
+- **New skills and packs** start with `skill-bill new`, then `show`, `fill`, `edit`, `validate`, and `render`. Authored content lives in `content.md`; the installer generates `SKILL.md` and provider files, so keep those out of source. Re-run `./install.sh` after changing sources.
 
-Platform-pack add-ons supply stack-specific guidance after routing. [External add-on sources](docs/external-addons.md) let teams keep private guidance outside the shared repository.
+## Supported agents
 
-Agent add-ons are separate, explicitly selected extensions. The shipped `execution-budget` add-on applies to Codex feature work and reinforces the user's stopping boundary, compact handoffs, and delegation constraints:
+| Agent | Skill install | Governed review launches | Model overrides |
+| --- | :---: | :---: | :---: |
+| Claude Code | ✓ | ✓ | ✓ |
+| Codex | ✓ | ✓ | ✓ |
+| Cursor | ✓ | ✓ | ✓ |
+| JetBrains Junie | ✓ | | |
 
-```text
-/skill-bill APP-123 agent-addon:execution-budget
-```
-
-Its source is `agent-addons/<slug>/agent-addon.yaml` plus `content.md`. See [agent add-on authoring](docs/skill-source-generation.md#agent-add-on-authored-sources) for compatibility, precedence, staging, and resume behavior.
-
-To author skills or packs, start with `skill-bill new`, then use `show`, `fill`, `edit`, `validate`, and `render`. Authored skill content lives in `content.md`. The installer generates `SKILL.md`, support pointers, and provider-specific native-agent files into staging; those generated files do not belong in source. Re-run `./install.sh` after changing skill sources, rendering, or support pointer generation.
-
-See [Contributing](CONTRIBUTING.md), [source generation](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing these contracts. The runtime, IntelliJ plugin, and VS Code extension have separate builds.
+Junie's adapter rejects governed review launches that need tool and MCP isolation.
 
 ## Telemetry
 
-The default telemetry level is `anonymous`. The installer lets you choose `anonymous`, `full`, or `off`. Events go to the configured telemetry proxy, using the shipped relay by default. You can [self-host the proxy](docs/cloudflare-telemetry-proxy/README.md).
-
-To disable transmission:
+Telemetry defaults to `anonymous`; the installer also offers `full` and `off`. Events go to the shipped relay unless you [self-host the proxy](docs/cloudflare-telemetry-proxy/README.md). Turn it off with:
 
 ```bash
 skill-bill telemetry disable
 ```
 
-Some diagnostic events still queue locally while telemetry is off. [Telemetry Privacy](docs/telemetry-privacy.md) documents the fields, destinations, correlation identifiers, retention, and what happens if you enable telemetry later. Workflow state remains local and supports continuation independently of telemetry transmission.
+Some diagnostic events still queue locally while telemetry is off. Workflow state is always local. [Telemetry Privacy](docs/telemetry-privacy.md) lists every field, destination, and retention rule.
 
-## Learn more
+## Upgrading from the `bill-*` skills
 
-- [Getting Started](docs/getting-started.md): installation, CLI commands, MCP tools, and recovery.
-- [Getting Started for Teams](docs/getting-started-for-teams.md): rollout and project customization.
-- [Runtime Command Guidance](docs/runtime-command-guidance.md): full-run, phase, and operation behavior, plus goal commit rules.
-- [Capability Deep-dive](docs/capabilities.md): workflows, packs, memory, and governance.
-- [Token Economy](docs/token-economy.md): bounded context and durable handoffs for long goals.
-- [Review Telemetry](docs/review-telemetry.md): review measurements, learnings, and local statistics.
-- [Runtime Architecture](runtime-kotlin/ARCHITECTURE.md): module ownership, persistence, and contract enforcement.
-- [Observability Policy](docs/observability-policy.md): required records for failures and degraded behavior.
-- [Teams Roadmap](docs/team-control-plane-roadmap.md): proposed hosted team controls and open product questions.
+Earlier versions installed one skill per job. Reinstalling removes them. Use the matching `/skill-bill` form:
+
+<details>
+<summary>Migration table</summary>
+
+| Retired skill | Use instead |
+| --- | --- |
+| `bill-feature` | `/skill-bill <intake>` |
+| `bill-feature-spec` | `/skill-bill <intake> phase:plan` |
+| `bill-code-review` | `/skill-bill phase:review` |
+| `bill-code-check` | `/skill-bill phase:validation` |
+| `bill-pr-description` | `/skill-bill phase:pr` |
+| `bill-boundary-history`, `bill-boundary-decisions` | The goal's `write_history` stage |
+| `bill-feature-verify` | `/skill-bill operation:verify` |
+| `bill-feature-guard` | `/skill-bill <intake> operation:feature-guard` |
+| `bill-feature-guard-cleanup` | `/skill-bill <intake> operation:feature-guard-cleanup` |
+| `bill-pr-review-fix` | `/skill-bill operation:pr-review-fix` |
+| `bill-unit-test-value-check` | `/skill-bill operation:unit-test-value-check` |
+| `bill-release` | `/skill-bill operation:release bump:<patch\|minor\|major>` |
+| `bill-update-check` | `/skill-bill operation:update-check` |
+| `bill-monitor` | `skill-bill goal status <KEY>` or the desktop app |
+
+Telemetry and stored workflow rows still use some retired names, such as `bill-code-check` as the quality-check `routed_skill`, so existing dashboards and in-flight workflows keep working.
+
+</details>
+
+## Glossary
+
+<details>
+<summary>Terms used across the docs</summary>
+
+- **goal.** A full run keyed by an issue, URL, or spec. A single feature is a one-subtask goal.
+- **workflow.** Persisted runtime state for one goal, standalone phase, or operation.
+- **subtask.** One independently committed unit of a goal.
+- **phase.** A standalone form: `plan`, `review`, `validation`, `qa`, `pr`, `monitor`. Run as `skill-bill phase <name>`.
+- **slot.** A stage of the pipeline as stored by the runtime: `intake`, `preplan`, `plan`, `implementation`, `audit`, `qa`, `code_review`, `quality_gate`, `write_history`, `commit_push`, `pull_request`, `monitor`, and `standalone_review` (used only by `phase:review`).
+- **step.** An internal step inside a slot, such as `implement`, `simplify`, `qa_fix`, or `verify_findings`.
+- **operation.** A `skill-bill operation <name>` command, such as `verify` or `update-check`.
+- **pack.** A platform pack under `platform-packs/<slug>/` that owns review routing, the validation gate, and optional QA.
+- **lane.** A specialist review area routed to a pack skill.
+- **add-on.** Extra guidance from a pack (`platform-packs/<slug>/addons/`) or an opt-in agent add-on (`agent-addons/<slug>/`).
+
+</details>
+
+## Documentation
+
+| Guide | Covers |
+| --- | --- |
+| [Getting Started](docs/getting-started.md) | Installation, CLI commands, MCP tools, and recovery |
+| [Getting Started for Teams](docs/getting-started-for-teams.md) | Rollout and project customization |
+| [Runtime Command Guidance](docs/runtime-command-guidance.md) | Exact behavior of every run, phase, and operation |
+| [Capability Deep-dive](docs/capabilities.md) | Workflows, packs, memory, and governance |
+| [Token Economy](docs/token-economy.md) | Bounded context and durable handoffs for long goals |
+| [Review Telemetry](docs/review-telemetry.md) | Review measurements, learnings, and local statistics |
+| [Runtime Architecture](runtime-kotlin/ARCHITECTURE.md) | Module ownership, persistence, and contract enforcement |
+| [Observability Policy](docs/observability-policy.md) | Required records for failures and degraded behavior |
+| [Teams Roadmap](docs/team-control-plane-roadmap.md) | Proposed hosted team controls |
+
+## Contributing
+
+See [Contributing](CONTRIBUTING.md), the [source-generation guide](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing contracts. The runtime, desktop app, IntelliJ plugin, and VS Code extension build separately.
 
 ## License
 
-Skill Bill is licensed under the [MIT License](LICENSE). See the
-[licensing summary](docs/licensing.md) for details.
+[MIT](LICENSE). See the [licensing summary](docs/licensing.md) for details.
