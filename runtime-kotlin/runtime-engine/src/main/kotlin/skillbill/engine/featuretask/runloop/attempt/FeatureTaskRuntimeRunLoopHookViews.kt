@@ -244,6 +244,8 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     PhaseLoopContext(
       request = request,
       gitOperations = gitOperations.repositoryObservations(),
+      diagnostics = diagnostics,
+      loopIteration = { loopId -> progress.loop(loopId).iteration },
       noChangePause = { recorder.loadNoChangePause(request.workflowId) },
       phaseRecord = { stepId -> progress.phase(stepId).record },
     )

@@ -9,6 +9,8 @@ data class QaExecutionContext(
   val expected: QaExpectedIdentity,
   val target: QaExecutionTarget,
   val policy: QaPolicy = QaPolicy.STANDALONE,
+  val preparationWarnings: List<String> = emptyList(),
+  val baselineStatus: String? = null,
 )
 
 sealed interface QaExecutionTarget {

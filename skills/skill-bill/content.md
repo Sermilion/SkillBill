@@ -126,7 +126,10 @@ subtasks and before the PR (skipped when `qa:off`). QA findings enter `qa_fix`,
 then full validation, then QA again, for up to three attempts. QA never blocks
 the goal: findings left after the third attempt, and any QA run that cannot
 settle, are reported as warnings in the run output and the PR body, and the goal
-continues to `commit_push`. A `qa:` token on a form that does not accept it is a
+continues to `commit_push`. An unavailable QA capability and a repository change
+made during QA are reported the same way. A subtask recorded before QA moved to
+the goal re-runs QA after a tree change at most three times, then continues with
+a stale-QA warning. A `qa:` token on a form that does not accept it is a
 usage error.
 
 `phase:review` forwards `mode:inline|delegated` and

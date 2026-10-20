@@ -55,13 +55,24 @@ class QaExecutionLifecycle(
       workspaceOwner.use {
         leaseOwner.use {
           val target = target(repoRoot, policy, warnings)
-          val result = execute(QaExecutionContext(workspace, expected, target, policy))
+          val result =
+            execute(QaExecutionContext(workspace, expected, target, policy, warnings.toList(), baseline.status))
           warnings += listOfNotNull(warnIfChanged(repoRoot, expected), statusChange(repoRoot, baseline.status))
           result
         }
       }
     return QaExecutionResult(value, retained, expected, warnings)
   }
+
+  internal fun outputWarnings(
+    repoRoot: Path,
+    qa: QaExecutionContext,
+  ): List<String> =
+    qa.preparationWarnings +
+      listOfNotNull(
+        warnIfChanged(repoRoot, qa.expected),
+        qa.baselineStatus?.let { status -> statusChange(repoRoot, status) },
+      )
 
   internal fun warnIfChanged(
     repoRoot: Path,

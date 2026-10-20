@@ -28,6 +28,7 @@ import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaPlatform
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -249,7 +250,7 @@ class FeatureTaskRuntimeQaExecutionTest {
     assertEquals(1, launched.count { it == "write_history" })
     val stored = assertNotNull(fixture.storedQaOutcome())
     assertEquals(StandaloneQaOutcome.FINDINGS, stored.outcome)
-    assertEquals("findings left open: F-1", stored.reason)
+    assertTrue(assertNotNull(stored.reason).startsWith("findings left open: F-1"))
     assertEquals(3, stored.qaFixAttempts)
     val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
     assertContains(assertNotNull(qa.outputArtifact), "remain after 3 qa_fix attempts")
@@ -290,7 +291,7 @@ class FeatureTaskRuntimeQaExecutionTest {
     assertContains(assertNotNull(qa.outputArtifact), "\"incomplete_reason\":\"interrupted\"")
     val stored = assertNotNull(fixture.storedQaOutcome())
     assertEquals(StandaloneQaOutcome.INCOMPLETE, stored.outcome)
-    assertEquals("interrupted", stored.reason)
+    assertTrue(assertNotNull(stored.reason).startsWith("interrupted"))
   }
 
   @Test
@@ -325,6 +326,62 @@ class FeatureTaskRuntimeQaExecutionTest {
     assertEquals(1, launched.count { it == "write_history" })
     val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
     assertContains(assertNotNull(qa.outputArtifact), "7".repeat(64))
+  }
+
+  @Test
+  fun `a resumed revision-3 plan whose tree keeps changing after QA reaches commit with a stale-QA warning`() {
+    var qaVisits = 0
+    var interrupted = false
+    lateinit var fixture: Fixture
+    fixture =
+      fixture(
+        QaVerdict.PASSED,
+        receiptForVisit = { _, expected ->
+          qaVisits++
+          qaTestReceipt(QaVerdict.PASSED, expected)
+        },
+        onPhase = { phase ->
+          if (phase == "validate") fixture.git.repositoryFingerprintValue = "%064x".format(qaVisits + 10)
+          if (phase == "audit" && qaVisits == 2 && !interrupted) {
+            interrupted = true
+            throw CancellationException("restart inside the second QA invalidation")
+          }
+        },
+        identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" },
+      )
+
+    assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
+    val report = fixture.harness.runner.run(fixture.harness.request)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    val launched = fixture.launcher.requests.map { phaseIdFromPrompt(it.skillRunRequest.promptOverride.orEmpty()) }
+    assertTrue(qaVisits > 3, launched.toString())
+    assertEquals(1, launched.count { it == "write_history" })
+    val records = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID))
+    assertEquals(WorkflowStepStatus.COMPLETED, records["write_history"]?.status)
+    assertEquals(WorkflowStepStatus.COMPLETED, records["commit_push"]?.status)
+    assertContains(assertNotNull(fixture.storedQaOutcome()?.reason), "QA results are stale")
+  }
+
+  @Test
+  fun `a worktree change made during subtask QA is reported in qa_warnings and the outcome`() {
+    lateinit var fixture: Fixture
+    fixture =
+      fixture(
+        QaVerdict.PASSED,
+        onPhase = { phase ->
+          if (phase == "qa") fixture.git.worktreeStatusValue = " M src/Foo.kt\n?? qa-scratch.txt"
+        },
+      )
+
+    val report = fixture.harness.runner.run(fixture.harness.request)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
+    val warnings =
+      Regex("\"qa_warnings\":\\[[^\\]]*\\]").find(assertNotNull(qa.outputArtifact))?.value.orEmpty()
+    assertContains(warnings, "the worktree status differs from before QA")
+    assertContains(assertNotNull(fixture.storedQaOutcome()?.reason), "qa-scratch.txt")
   }
 
   private fun fixture(

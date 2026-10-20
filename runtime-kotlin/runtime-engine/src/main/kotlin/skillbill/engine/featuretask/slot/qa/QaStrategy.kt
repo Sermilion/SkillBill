@@ -89,7 +89,7 @@ class QaStrategy(
 
   override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = PhaseExecutionBindingKind.QA_FINDINGS
 
-  override val loopRules: PhaseLoopRules = QaLoopRules
+  override val loopRules: PhaseLoopRules = QaLoopRules(outcomes)
 
   override fun resumeRules(stepId: String): PhaseResumeRules =
     if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) QaResumeRules else PhaseResumeRules.None
@@ -295,7 +295,6 @@ class QaStrategy(
       ): NormalizedFeatureTaskRuntimePhaseOutput {
         if (output.status == "blocked" || output.status == "failed") return output
         val qa = run.qaExecution ?: return output
-        execution.warnIfChanged(run.request.repoRoot, qa.expected)
         return withReceipt(run, state, output, receipts.settle(qa))
       }
 
@@ -308,7 +307,10 @@ class QaStrategy(
         val qa = checkNotNull(run.qaExecution)
         val criterionIds =
           run.request.runInvariants.acceptanceCriteria.indices.map { canonicalAcceptanceCriterionRef(it + 1) }
-        val restricted = settledReceipt.restrictedToCriteria(criterionIds.toSet())
+        val executionWarnings = execution.outputWarnings(run.request.repoRoot, qa)
+        val restricted =
+          settledReceipt.copy(warnings = (settledReceipt.warnings + executionWarnings).distinct())
+            .restrictedToCriteria(criterionIds.toSet())
         val record =
           JsonCodec.parseObjectOrNull(output.canonicalJson)
             ?.let(JsonCodec::jsonElementToValue)

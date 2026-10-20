@@ -1298,7 +1298,14 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   child runs `audit -> review -> validate -> write_history`. `GOAL_CHILD_REVISION_3`
   keeps the `qa` slot and stays in `entries`, so an in-flight child recorded on
   revision 3 resolves its recorded step list and still runs child-level `qa` and
-  `qa_fix`. `standalone_review` is outside that list. The
+  `qa_fix`. On those children `QaLoopRules` settles `write_history` as `qa_invalidated`
+  when the tree changed after the last QA pass with device evidence, re-entering audit and
+  QA. Once the `qa_invalidation` loop has used its three iterations, or when the tree cannot
+  be read, it records a stale-QA warning in runtime diagnostics and on the subtask's QA
+  outcome row (which the goal PR body prints) and lets `write_history` launch. The edge
+  still declares `BLOCK` so recorded revision-3 traversals stay compatible, but the rule
+  never emits the verdict at the cap, so that branch is unreachable.
+  `standalone_review` is outside that list. The
   retired `STANDALONE` definition still uses all nine slots. It stays declared,
   listed in `entries` and bound to strategies so a stored `standalone` plan keeps
   decoding, but no run is admitted on it and it is not `standaloneInvocable`.
@@ -1318,7 +1325,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `qa_fix_revalidate` edge to `validate` (the full project gate) and the `qa_requalify` edge
   back to `qa`, capped at three. QA never blocks: once three `qa_fix` attempts are consumed,
   the `qa` output carries `qa_repairs_exhausted` and `QaVerdictRule` advances with the open
-  findings reported, and a gate that cannot settle returns `GoalQaGateResult.Warned`, which
+  findings reported. The `qa` output's `qa_warnings` also lists capability-unavailable
+  warnings from QA preparation and any HEAD, tree, or worktree status change made while QA
+  ran, and the recorded QA outcome reason appends every `qa_warnings` entry, so they reach
+  the PR body. A gate that cannot settle returns `GoalQaGateResult.Warned`, which
   goal finalization prints and writes into the PR body before `commit_push`. Both loops are composed only when `audit` is absent
   (`composedOnlyWithoutSteps`), so they never reach goal-child runs. The gate skips when
   every child ran and recorded child-level QA, or when a goal QA outcome already passed or

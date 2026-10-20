@@ -37,4 +37,16 @@ class FeatureTaskQaOutcomeRecorder(
       )
     }
   }
+
+  fun recordWarning(
+    workflowId: String,
+    warning: String,
+  ) {
+    database.transaction { unitOfWork ->
+      val outcomes = unitOfWork.featureTaskQaOutcomes
+      val recorded = outcomes.find(workflowId) ?: return@transaction
+      if (recorded.reason?.contains(warning) == true) return@transaction
+      outcomes.upsert(recorded.copy(reason = listOfNotNull(recorded.reason, warning).joinToString("; ")))
+    }
+  }
 }

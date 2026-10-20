@@ -19,13 +19,21 @@ internal fun qaOutcomeReason(
   verdict: QaVerdict,
   receipt: Map<String, Any?>,
   produced: Map<String, Any?>,
-): String? =
-  when (verdict) {
-    QaVerdict.SKIPPED -> receipt[QaReceiptPayloadKeys.SKIP_REASON] as? String
-    QaVerdict.INCOMPLETE -> receipt[QaReceiptPayloadKeys.INCOMPLETE_REASON] as? String
-    QaVerdict.FINDINGS_OPEN -> openFindingsReason(produced)
-    QaVerdict.PASSED -> null
-  }?.takeIf(String::isNotBlank)
+): String? {
+  val verdictReason =
+    when (verdict) {
+      QaVerdict.SKIPPED -> receipt[QaReceiptPayloadKeys.SKIP_REASON] as? String
+      QaVerdict.INCOMPLETE -> receipt[QaReceiptPayloadKeys.INCOMPLETE_REASON] as? String
+      QaVerdict.FINDINGS_OPEN -> openFindingsReason(produced)
+      QaVerdict.PASSED -> null
+    }
+  val warnings = (produced[QaPhaseOutputKeys.WARNINGS] as? List<*>).orEmpty().filterIsInstance<String>()
+  return (listOfNotNull(verdictReason) + warnings)
+    .filter(String::isNotBlank)
+    .distinct()
+    .joinToString("; ")
+    .takeIf(String::isNotBlank)
+}
 
 private fun openFindingsReason(produced: Map<String, Any?>): String? {
   if (produced[QaPhaseOutputKeys.REPAIRS_EXHAUSTED] != true) return null

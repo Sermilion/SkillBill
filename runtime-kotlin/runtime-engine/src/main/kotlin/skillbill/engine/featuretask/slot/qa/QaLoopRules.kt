@@ -3,16 +3,19 @@ package skillbill.engine.featuretask.slot.qa
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.qa.QaReceiptPayloadKeys
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.qa.receipt.QaPhaseOutputKeys
 import skillbill.engine.featuretask.qa.receipt.QaVerdict
 import skillbill.engine.featuretask.slot.PhaseLoopContext
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.error.featuretask.qa.qaRepositoryUnreadable
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object QaLoopRules : PhaseLoopRules {
+internal class QaLoopRules(
+  private val outcomes: FeatureTaskQaOutcomeRecorder,
+) : PhaseLoopRules {
   override fun crossSlotSettlement(
     stepId: String,
     context: PhaseLoopContext,
@@ -21,8 +24,25 @@ internal object QaLoopRules : PhaseLoopRules {
     if (stepId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY) return null
     val tested = testedTreeWithEvidence(state) ?: return null
     val current = context.gitOperations.repositoryTreeIdentity(context.request.repoRoot)
-    if (!current.ok || current.value.isBlank()) throw qaRepositoryUnreadable(current.error)
-    return FeatureTaskRuntimeVerdict.QA_INVALIDATED.takeIf { current.value != tested }
+    val invalidations = context.loopIteration(FeatureTaskRuntimePhaseWorkflowDefinition.QA_INVALIDATION_LOOP_ID)
+    val warning =
+      when {
+        !current.ok || current.value.isBlank() -> "$UNCHECKED_WARNING ${current.error}".trim()
+        current.value == tested -> null
+        invalidations < FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_INVALIDATIONS ->
+          return FeatureTaskRuntimeVerdict.QA_INVALIDATED
+        else -> STALE_WARNING
+      }
+    warning?.let { recordStaleQa(context, it) }
+    return null
+  }
+
+  private fun recordStaleQa(
+    context: PhaseLoopContext,
+    warning: String,
+  ) {
+    RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, warning)
+    outcomes.recordWarning(context.request.workflowId, warning)
   }
 
   private fun testedTreeWithEvidence(state: PhaseAcceptedStepExecution): String? {
@@ -40,5 +60,15 @@ internal object QaLoopRules : PhaseLoopRules {
         ?.let(JsonCodec::anyToStringAnyMap)
         ?: return null
     return JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS])
+  }
+
+  private companion object {
+    const val STALE_WARNING =
+      "QA results are stale: code changed after the last QA pass, and the " +
+        "${FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_INVALIDATIONS} QA re-runs that a changed tree allows " +
+        "are used up. The run continues to history and commit."
+    const val UNCHECKED_WARNING =
+      "QA results may be stale: the runtime could not read the repository tree to compare it with the last QA " +
+        "pass. The run continues to history and commit."
   }
 }
