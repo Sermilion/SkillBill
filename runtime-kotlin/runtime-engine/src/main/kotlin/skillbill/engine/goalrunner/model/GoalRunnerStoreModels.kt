@@ -71,6 +71,7 @@ data class GoalRunnerWorkflowProgress(
   val latestDeclaredProgressEvent: GoalProgressEvent? = null,
   val latestLivenessSignal: String? = null,
   val lastSnapshotUpdatedAt: String? = null,
+  val currentStepEnteredAt: Instant? = null,
 ) {
   constructor(
     workflowId: String,

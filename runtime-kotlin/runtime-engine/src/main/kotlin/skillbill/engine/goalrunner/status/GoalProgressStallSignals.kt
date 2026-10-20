@@ -20,6 +20,7 @@ internal data class GoalProgressStallSignals(
           progress?.latestDurableProgressEvent?.timestamp?.let(::parseInstantOrNull),
           progress?.latestDeclaredProgressEvent?.takeIf(::reportsProgress)?.timestamp,
           latestWorktreeEdit?.recordedAt,
+          progress?.currentStepEnteredAt,
         )
     ).maxOrNull()
 

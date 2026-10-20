@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT
+import skillbill.goalrunner.goalProgressCurrentStepEnteredAt
 import skillbill.goalrunner.ledger.backwardEdgeCountsFromLedger
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
@@ -80,6 +81,7 @@ private val PROGRESS_POLL_ARTIFACT_KEYS =
     WorkStatusArtifactKeys.PROGRESS_EVENT,
     DurableWorkflowArtifactFamily.GOAL_PROGRESS_LATEST_EVENT.label(),
     DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_LATEST_EVENT.label(),
+    DurableWorkflowArtifactFamily.GOAL_PROGRESS_RUN_HISTORY.label(),
   )
 
 internal class WorkflowGoalRunnerProgressRecording(
@@ -124,6 +126,7 @@ internal class WorkflowGoalRunnerProgressRecording(
           latestGoalObservabilityEvent = observabilityEvent?.toProgressEvent(),
           latestDeclaredProgressEvent = declaredProgressEvent,
           lastSnapshotUpdatedAt = record.updatedAt?.toString(),
+          currentStepEnteredAt = DurableWorkflowArtifacts.fromMap(artifacts).goalProgressCurrentStepEnteredAt(),
         )
       progress.copy(latestLivenessSignal = progress.resolvedLivenessSignal())
     }
