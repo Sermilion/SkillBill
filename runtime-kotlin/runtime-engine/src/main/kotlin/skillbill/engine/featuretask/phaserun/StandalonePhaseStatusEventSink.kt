@@ -11,6 +11,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaReport
 import java.time.Clock
@@ -31,6 +32,7 @@ class StandalonePhaseStatusEventSink(
   private var monitorCleanup: StandaloneMonitorCleanup? = null
   private var qaOutcome: StandaloneQaOutcome? = null
   private var qaReport: StandaloneQaReport? = null
+  private var planReport: StandalonePlanReport? = null
 
   fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
     monitorCleanup = cleanup
@@ -102,9 +104,11 @@ class StandalonePhaseStatusEventSink(
   fun settlePlan(
     result: String,
     workflowId: String? = null,
+    report: StandalonePlanReport? = null,
   ) {
     runCatching {
       ensureRegistered(workflowId)
+      planReport = report
       persist(
         state = "terminal",
         finishedAt = clock.instant(),
@@ -171,6 +175,7 @@ class StandalonePhaseStatusEventSink(
             monitorCleanup = monitorCleanup,
             qaOutcome = qaOutcome,
             qaReport = qaReport,
+            planReport = planReport,
           ),
         )
       }

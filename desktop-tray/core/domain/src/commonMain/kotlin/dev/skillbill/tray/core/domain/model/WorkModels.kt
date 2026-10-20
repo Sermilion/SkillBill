@@ -356,7 +356,12 @@ data class ExecutionInstance(
   val restoration: ReasonRestoration? = null,
   val qaVerdict: QaVerdict? = null,
   val qaReport: QaRunReport? = null,
+  val planReport: PlanRunReport? = null,
 )
+
+/** The feature a standalone plan run settled and the subtasks it split the feature into. */
+data class PlanRunReport(val featureName: String, val parentSpecPath: String, val subtasks: List<PlannedSubtask>)
+data class PlannedSubtask(val id: Int, val name: String, val specPath: String, val dependsOn: List<Int>)
 
 data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)
 

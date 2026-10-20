@@ -12,6 +12,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandalonePlanReport
+import skillbill.ports.idestatus.model.StandalonePlanSubtask
 import skillbill.ports.idestatus.model.StandaloneQaCheck
 import skillbill.ports.idestatus.model.StandaloneQaCriterion
 import skillbill.ports.idestatus.model.StandaloneQaCriterionFinding
@@ -374,6 +376,44 @@ class StandalonePhaseStatusStoreTest {
     assertEquals(report, record?.qaReport)
     assertEquals(StandaloneQaOutcome.FINDINGS, record?.qaOutcome)
     assertEquals("QA verdict: findings_open.", record?.terminalResult)
+  }
+
+  @Test
+  fun `a settled plan run keeps the subtasks it planned`() {
+    val directory = Files.createTempDirectory("standalone-plan-report")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-20T16:58:18Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        monitorRegistration("plan", started, started.plusSeconds(3600)).copy(phaseId = "plan"),
+      )
+    }
+    val report =
+      StandalonePlanReport(
+        "Record in-workflow review runs",
+        ".feature-specs/SKILL-433-review-runs/spec.md",
+        listOf(
+          StandalonePlanSubtask(1, "Persist review runs", ".feature-specs/SKILL-433-review-runs/01.md", emptyList()),
+          StandalonePlanSubtask(2, "Show review runs", ".feature-specs/SKILL-433-review-runs/02.md", listOf(1)),
+        ),
+      )
+    val settle =
+      StandalonePhaseStatusUpdate(
+        executionId = "execution-plan", expectedRevision = "1", leaseOwner = "owner", leaseGeneration = 1,
+        lifecycleState = "terminal", currentStep = "plan", currentActivity = null, updatedAt = started,
+        finishedAt = started, terminalResult = "completed", planReport = report,
+      )
+
+    assertEquals(
+      StandalonePhaseStatusUpdateResult.ACCEPTED,
+      database.transaction {
+        it.standalonePhaseStatuses.update(settle)
+      },
+    )
+
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-plan") }
+    assertEquals(report, record?.planReport)
+    assertEquals("completed", record?.terminalResult)
   }
 
   @Test

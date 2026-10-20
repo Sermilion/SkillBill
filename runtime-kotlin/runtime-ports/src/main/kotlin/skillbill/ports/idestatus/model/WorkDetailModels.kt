@@ -110,6 +110,7 @@ data class WorkExecutionInstance(
   val runSequence: String = "",
   val qaOutcome: StandaloneQaOutcome? = null,
   val qaReport: StandaloneQaReport? = null,
+  val planReport: StandalonePlanReport? = null,
 )
 
 enum class ExecutionReasonRestoration { EXACT, RESTORED, MISSING, AMBIGUOUS, BUDGET_EXCEEDED, MISSING_CONTENT }

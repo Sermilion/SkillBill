@@ -15,6 +15,8 @@ import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.idestatus.model.StandalonePlanReport
+import skillbill.ports.idestatus.model.StandalonePlanSubtask
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -209,7 +211,7 @@ class StandalonePlanRun(
           terminal.decompositionManifestPath,
           terminal.subtaskSpecPaths,
         )
-      statusPublisher.settlePlan("completed", result.workflowId)
+      statusPublisher.settlePlan("completed", result.workflowId, planReport(issueKey, repoRoot))
       return result
     }
     return refused(
@@ -245,7 +247,7 @@ class StandalonePlanRun(
         protectedSpecSha256 =
           if (resolution.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR) specHash(plannedPath) else null,
       )
-    return runEntry(input, statusPublisher)
+    return runEntry(input, repoRoot, statusPublisher)
   }
 
   private fun resume(
@@ -288,11 +290,12 @@ class StandalonePlanRun(
         planIntake = intake,
         protectedSpecSha256 = protectedSpecSha256,
       )
-    return runEntry(input, statusPublisher)
+    return runEntry(input, repoRoot, statusPublisher)
   }
 
   private fun runEntry(
     input: FeatureTaskRuntimeRunInput,
+    repoRoot: Path,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
     val report =
@@ -301,7 +304,7 @@ class StandalonePlanRun(
       }.onFailure { error ->
         statusPublisher?.settleFailure(error, input.explicitWorkflowId)
       }.getOrThrow()
-    return settle(statusPublisher, report)
+    return settle(statusPublisher, report, repoRoot)
   }
 
   private fun refused(
@@ -316,6 +319,7 @@ class StandalonePlanRun(
   private fun settle(
     statusSink: StandalonePhaseStatusEventSink?,
     report: FeatureTaskRuntimeRunReport,
+    repoRoot: Path,
   ): StandalonePlanResult {
     val result =
       when (report) {
@@ -332,7 +336,8 @@ class StandalonePlanRun(
           StandalonePlanResult.Blocked(report.workflowId, "The plan finished without authoring a spec bundle.")
       }
     when (result) {
-      is StandalonePlanResult.Completed -> statusSink?.settlePlan("completed", result.workflowId)
+      is StandalonePlanResult.Completed ->
+        statusSink?.settlePlan("completed", result.workflowId, planReport(report.issueKey, repoRoot))
       is StandalonePlanResult.Blocked -> statusSink?.settleBlocked(result.reason, result.workflowId)
       is StandalonePlanResult.Refused -> statusSink?.settleBlocked(result.reason, result.workflowId)
     }
@@ -346,6 +351,20 @@ class StandalonePlanRun(
   ): Boolean =
     decompositionPlanner.existingParentSpec(repoRoot, issueKey)
       ?.let { resolved -> repoRoot.resolve(resolved).normalize() == repoRoot.resolve(specPath).normalize() } == true
+
+  private fun planReport(
+    issueKey: String,
+    repoRoot: Path,
+  ): StandalonePlanReport? =
+    manifestStore.readByIssueKeyIfPresent(issueKey, repoRoot)?.manifest?.let { manifest ->
+      StandalonePlanReport(
+        manifest.featureName,
+        manifest.parentSpecPath,
+        manifest.subtasks.map { subtask ->
+          StandalonePlanSubtask(subtask.id, subtask.name, subtask.specPath, subtask.dependencies.map { it.subtaskId })
+        },
+      )
+    }
 
   private fun specHash(specPath: Path): String = sha256HexUtf8(fileStore.readText(specPath))
 }

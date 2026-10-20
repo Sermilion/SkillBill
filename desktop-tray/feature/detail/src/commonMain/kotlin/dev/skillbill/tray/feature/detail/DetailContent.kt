@@ -348,6 +348,7 @@ private fun LoadedDetail(
                 Text("${if (instance.finishedAt != null) "Finished" else "Last update"} ${formatInstant(instance.finishedAt ?: instance.updatedAt, "d MMM HH:mm:ss")}", color = muted, fontSize = 11.sp)
                 instance.result?.let { reason -> ReasonTooltip(reason) }
                 instance.qaReport?.let { QaCriteriaSection(it) }
+                instance.planReport?.let { PlanReportSection(it) }
               }
             }
           }

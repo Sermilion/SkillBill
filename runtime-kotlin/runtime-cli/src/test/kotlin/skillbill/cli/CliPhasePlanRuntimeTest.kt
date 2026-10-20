@@ -94,6 +94,10 @@ class CliPhasePlanRuntimeTest {
     assertEquals(0, result.exitCode, result.stdout + result.stderr)
     assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals("Concurrent edit", Files.readString(tempDir.resolve("outside-plan.txt")))
+    val report = requireNotNull(JsonCodec.parseObjectOrNull(requireNotNull(planReport())))
+    val subtasks = (report["subtasks"] as JsonArray).map { it as JsonObject }
+    assertEquals(listOf("first part", "second part"), subtasks.map { it["name"].toString().trim('"') })
+    assertEquals("[1]", subtasks[1]["depends_on"].toString())
     assertEquals(
       listOf("standalone" to listOf("phase", "plan", "$ISSUE_KEY split the work", "--agent", "codex")),
       planLaunches(),
@@ -349,6 +353,16 @@ class CliPhasePlanRuntimeTest {
               add(rows.getString(1) to arguments.map { it.toString() })
             }
           }
+        }
+      }
+    }
+
+  private fun planReport(): String? =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT plan_report FROM standalone_phase_status WHERE phase_id = 'plan'").use { rows ->
+          assertTrue(rows.next())
+          rows.getString(1)
         }
       }
     }

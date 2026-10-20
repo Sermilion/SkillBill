@@ -108,6 +108,7 @@ internal fun workExecutionHistory(
           it.runSequence,
           it.qaOutcome,
           it.qaReport,
+          it.planReport,
         )
       }
   } else {
