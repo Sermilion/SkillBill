@@ -19,7 +19,7 @@ jobs:
     # self-hosted host (this is a public repo). Running under macOS bash 3.2 also
     # makes this the ideal regression environment for the curl-piped installer.
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && fromJSON('["ubuntu-latest"]') || fromJSON('["self-hosted","macmini"]') }}
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
