@@ -88,6 +88,7 @@ internal object AuditPlanningExecutionPlanMapping {
         (current.resumeInterpretationIdentities - omitted).mapValues { (step, identity) ->
           if (step in auditSteps) "${audit.strategyId}/$revision:$step" else identity
         },
+        recorded.stepLaunchAssignments,
       ),
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,
@@ -110,6 +111,7 @@ internal object AuditPlanningExecutionPlanMapping {
       ResolvedPhaseStepRecords(
         current.stepPolicyIdentities,
         current.resumeInterpretationIdentities,
+        recorded.stepLaunchAssignments,
       ),
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,

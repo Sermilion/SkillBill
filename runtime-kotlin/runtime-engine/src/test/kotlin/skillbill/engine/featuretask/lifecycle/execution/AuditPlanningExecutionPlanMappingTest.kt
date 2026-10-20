@@ -10,6 +10,8 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
+import skillbill.workflow.taskruntime.model.skeleton.passThroughLaunchModel
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -18,6 +20,32 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class AuditPlanningExecutionPlanMappingTest {
+  @Test
+  fun `resuming an archived audit preserves recorded agent and model assignments without rewriting evidence`() {
+    val assignments =
+      listOf("audit", "audit_plan_fix", "audit_implement_fix", "implement").associateWith { step ->
+        StepLaunchAssignment(step, "codex", passThroughLaunchModel("gpt-6.1-sol", "high"))
+      }
+    val fixture = ExecutionPlanAdmissionFixture(stepLaunchAssignments = assignments)
+    val repository = InMemoryRuntimeWorkflowRepository()
+    val encoded = ArchivedAuditExecutionPlanFixture.legacyAuditPlan(fixture, 3)
+    fixture.seed(
+      repository,
+      "assigned-audit-resume",
+      descriptor = fixture.validator.read(encoded, "archived assigned audit"),
+    )
+    val before = repository.getFeatureTaskWorkflow("assigned-audit-resume")
+
+    val supported = fixture.compatibility.requireSupportedExecution(encoded, fixture.inputs)
+    val admitted = fixture.admission.admit(repository, "assigned-audit-resume", fixture.inputs)
+    admitted.requireCurrent(repository, "assigned-audit-resume")
+
+    assertEquals(assignments, supported.stepLaunchAssignments)
+    assertEquals(assignments, admitted.plan.stepLaunchAssignments)
+    assertEquals(before, repository.getFeatureTaskWorkflow("assigned-audit-resume"))
+    assertEquals(4, admitted.plan.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }.semanticRevision)
+  }
+
   @Test
   fun `archived audit descriptors map to prose planning for every quality gate`() {
     val fixture = ExecutionPlanAdmissionFixture(definition = SkeletonDefinition.GOAL_CHILD_REVISION_2)

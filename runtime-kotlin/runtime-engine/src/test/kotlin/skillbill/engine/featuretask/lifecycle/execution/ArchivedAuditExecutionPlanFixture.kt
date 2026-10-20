@@ -84,6 +84,7 @@ internal object ArchivedAuditExecutionPlanFixture {
           (current.resumeInterpretationIdentities - omitted).mapValues { (step, identity) ->
             if (step in steps) "${audit.strategyId}/$revision:$step" else identity
           },
+          current.stepLaunchAssignments - omitted,
         ),
         current.effectivePolicies,
         current.effectivePolicySettings,

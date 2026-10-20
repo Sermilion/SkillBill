@@ -43,6 +43,7 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import java.nio.file.Path
 
 class ExecutionPlanAdmissionFixture(
@@ -55,6 +56,7 @@ class ExecutionPlanAdmissionFixture(
   selectedStrategies: PhaseStrategyLookup? = null,
   supervisor: FeatureTaskRuntimeWorkerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
   diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  stepLaunchAssignments: Map<String, StepLaunchAssignment> = emptyMap(),
 ) {
   private val routeScope =
     if (definition.id == SkeletonDefinition.GOAL_CHILD.id) {
@@ -104,6 +106,7 @@ class ExecutionPlanAdmissionFixture(
           qualityGate,
           FeatureTaskRuntimeQaSelection.AUTO.takeIf { PhaseSlot.QA in definition.slots },
         ),
+        stepLaunchAssignments,
       ),
     )
   val encoded = codec.encodeExecution(plan, inputs)
