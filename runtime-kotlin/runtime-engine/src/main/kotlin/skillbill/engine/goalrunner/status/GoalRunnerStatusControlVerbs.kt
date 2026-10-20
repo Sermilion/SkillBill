@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.status
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.telemetry.lifecycle.asWorkerOwnership
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult

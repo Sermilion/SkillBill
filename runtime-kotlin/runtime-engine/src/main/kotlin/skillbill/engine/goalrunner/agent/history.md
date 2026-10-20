@@ -1,5 +1,17 @@
 # goalrunner boundary history
 
+## [2026-10-19] SKILL-432 repair stale goal runs and bound generated spec paths
+Areas: runtime-engine goalrunner and featuretask/prepare, runtime-application telemetry/lifecycle, runtime-infra/sqlite telemetry and goalrunner controls, runtime-ports telemetry/lifecycle/model, runtime-contracts telemetry
+- MEDIUM correctness fix. An inserted goal start atomically abandons eligible strictly older same-key segments with superseded_by_new_run and emits their existing finish events. Replay and late finishes preserve first-terminal evidence.
+- Same-parent cleanup retains the new running aggregate. Other-parent aggregate abandonment requires confirmed non-live ownership, a transitioned latest segment and no protected open segment; historical ends cannot overwrite latest progress or add supersession blocks.
+- Ownership policy reuses typed control-state decoding and the worker supervisor. Live, uncertain or conflicting owners remain protected; missing-lease and parentless cleanup requires no protected conflict. Deferred cleanup and unavailable progress emit diagnostics.
+- Catchable post-start failures close the segment as blocked with goal_run_failed, preserve the original throwable and interruption state, and suppress closure failures. Settled terminals cannot close twice or fabricate logical completion.
+- The preparation writer shares deterministic UTF-8 component naming across planning, writes and references. Oversized normalized slugs retain a prefix and 16 SHA-256 hex characters; display titles and explicit parent paths remain authoritative.
+- Reusable: the existing lifecycle transaction owns insertion, supersession, logical progress and outbox together. GoalStartedPreparation and GoalStartedSupersession carry typed evidence between application policy and SQLite persistence.
+- Limit: generated components cap at 230 bytes rather than the planned 240 to reserve atomic-write temporary suffix space. Names above 230 bytes now hash; insufficient issue-identity budgets fail through the existing typed error.
+- Integration change: the lifecycle repository exposes preparation/reconciliation and persisted child-progress operations. Existing status and event formats remain; hard kills wait for a later admitted start, and uncertain ownership can defer cleanup.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
 ## [2026-10-19] SKILL-431 subtask 2: goal children without QA
 Areas: runtime-domain skeleton and goalrunner control model, runtime-engine goalrunner (launch, execution/core, model, manifest, status), featuretask (lifecycle/execution, runloop/durable, runner, slot/skeleton), runtime-infra sqlite goalrunner control codec and launcher agentrun, slotbaseline fixtures
 - GOAL_CHILD is now semantic revision 4: the rev-2 feature-run slots minus PULL_REQUEST and MONITOR, so no qa or qa_fix. The old rev 3 stays in entries as GOAL_CHILD_REVISION_3 with QA. byId and admittedForRun pick rev 4, and admission is id-based, so recorded rev-3 children still resume with their QA steps.

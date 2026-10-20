@@ -795,6 +795,7 @@ private fun disabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory):
       DisabledRuntimeTelemetrySettingsProvider,
       Clock.systemUTC(),
       NoopRuntimeDiagnostics,
+      workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
     ),
     NoopRuntimeDiagnostics,
   )
@@ -1302,6 +1303,7 @@ private fun enabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory): 
       EnabledRuntimeTelemetrySettingsProvider,
       Clock.systemUTC(),
       NoopRuntimeDiagnostics,
+      workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
     ),
     NoopRuntimeDiagnostics,
   )
@@ -1506,6 +1508,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
         DisabledRuntimeTelemetrySettingsProvider,
         Clock.systemUTC(),
         NoopRuntimeDiagnostics,
+        workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
       ),
       NoopRuntimeDiagnostics,
     ),

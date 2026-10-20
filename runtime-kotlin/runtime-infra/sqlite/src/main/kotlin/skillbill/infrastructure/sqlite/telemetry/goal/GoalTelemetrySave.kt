@@ -1,14 +1,20 @@
 package skillbill.infrastructure.sqlite.telemetry.goal
 
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.telemetry.GoalRunTerminalReason
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.listJson
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.toSqlInt
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
 import skillbill.telemetry.model.GoalStartedRecord
 import skillbill.telemetry.model.GoalSubtaskFinishedRecord
+import skillbill.workflow.model.WorkflowStatus
 import java.sql.Connection
+import java.time.Duration
+import java.time.Instant
 
 private const val SQLITE_TIMESTAMP_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 
@@ -17,6 +23,11 @@ internal enum class GoalStartedSaveOutcome { INSERTED, DUPLICATE }
 internal enum class GoalFinishedSaveOutcome { FIRST_TERMINAL, DUPLICATE }
 
 internal data class GoalIssueFinishedSaveOutcome(val persisted: Boolean, val suppressionReason: String? = null)
+
+internal data class GoalSupersessionResult(
+  val invocationWorkflowIds: List<String>,
+  val abandonedIssues: List<GoalIssueFinishedRecord>,
+)
 
 internal fun saveGoalStarted(
   connection: Connection,
@@ -45,6 +56,123 @@ internal fun saveGoalStarted(
     }
   return if (inserted) GoalStartedSaveOutcome.INSERTED else GoalStartedSaveOutcome.DUPLICATE
 }
+
+internal fun supersedeEligibleSegments(
+  connection: Connection,
+  record: GoalStartedRecord,
+  candidates: List<GoalStartedSupersession>,
+): GoalSupersessionResult {
+  val startedAt = Instant.parse(record.startedAt)
+  val transitioned = mutableListOf<GoalStartedSupersession>()
+  candidates.groupBy { it.candidate.workflowId }.values.forEach { decisions ->
+    val owners =
+      decisions.flatMap {
+        listOfNotNull(it.candidate.parentWorkflowId, it.candidate.latestSegmentParentWorkflowId)
+      }.distinct()
+    if (decisions.any { !it.eligible } || owners.size > 1) return@forEach
+    val candidate = decisions.first()
+    val previousStart = Instant.parse(candidate.candidate.startedAt)
+    if (!previousStart.isBefore(startedAt)) return@forEach
+    val elapsed = Duration.between(previousStart, startedAt).toMillis().coerceAtLeast(0)
+    val changed =
+      connection.prepareStatement(
+        """
+        UPDATE goal_run_sessions SET
+          status = '${WorkflowStatus.ABANDONED.wireValue}', finished_at = ?, finished_duration_ms = ?,
+          subtasks_complete = ?, subtasks_blocked = ?, subtasks_skipped = ?,
+          stop_reason = ?
+        WHERE workflow_id = ? AND status IS NULL AND finished_at IS NULL
+          AND UPPER(TRIM(issue_key)) = UPPER(TRIM(?))
+          AND started_at = ?
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(
+          record.startedAt,
+          elapsed,
+          candidate.complete.coerceAtLeast(0),
+          candidate.blocked.coerceAtLeast(0),
+          candidate.skipped.coerceAtLeast(0),
+          GoalRunTerminalReason.SUPERSEDED_BY_NEW_RUN.wireValue,
+          candidate.candidate.workflowId,
+          record.issueKey,
+          candidate.candidate.startedAt,
+        )
+        statement.executeUpdate() == 1
+      }
+    if (changed) transitioned += candidate
+  }
+  val abandonedIssues =
+    transitioned.mapNotNull { segment ->
+      val parent =
+        segment.candidate.parentWorkflowId ?: segment.candidate.latestSegmentParentWorkflowId
+          ?: return@mapNotNull null
+      if (parent == record.parentWorkflowId || !segment.confirmedNonLiveOwner) return@mapNotNull null
+      val aggregates = latestIssueSegments(connection, parent, record.issueKey)
+      val aggregate =
+        aggregates.singleOrNull { it.latestWorkflowId == segment.candidate.workflowId }
+          ?: return@mapNotNull null
+      if (hasOpenIssueSegment(connection, parent, aggregate.issueKey)) return@mapNotNull null
+      GoalIssueFinishedRecord(
+        issueKey = aggregate.issueKey,
+        parentWorkflowId = parent,
+        status = WorkflowStatus.ABANDONED.wireValue,
+        subtasksComplete = segment.complete.coerceAtLeast(0),
+        subtasksBlocked = segment.blocked.coerceAtLeast(0),
+        subtasksSkipped = segment.skipped.coerceAtLeast(0),
+        finishedAt = record.startedAt,
+        mode = segment.candidate.mode,
+      )
+    }.distinctBy { it.parentWorkflowId to it.issueKey }
+  return GoalSupersessionResult(transitioned.map { it.candidate.workflowId }, abandonedIssues)
+}
+
+private data class LatestIssueSegment(val issueKey: String, val latestWorkflowId: String)
+
+private fun latestIssueSegments(
+  connection: Connection,
+  parent: String,
+  issue: String,
+): List<LatestIssueSegment> =
+  connection.prepareStatement(
+    """
+    SELECT issue_key, latest_segment_workflow_id FROM goal_issue_progress
+    WHERE parent_workflow_id = ? AND UPPER(TRIM(issue_key)) = UPPER(TRIM(?))
+      AND status IN ('running', 'blocked') AND finished_at IS NULL
+    """.trimIndent(),
+  ).use { statement ->
+    statement.bindAll(parent, issue)
+    statement.executeQuery().use { rows ->
+      buildList {
+        while (rows.next()) add(
+          LatestIssueSegment(rows.getString(SharedPayloadKeys.ISSUE_KEY), rows.getString("latest_segment_workflow_id")),
+        )
+      }
+    }
+  }
+
+private fun hasOpenIssueSegment(
+  connection: Connection,
+  parent: String,
+  issue: String,
+): Boolean =
+  connection.prepareStatement(
+    """
+    SELECT 1 FROM goal_run_sessions
+    WHERE UPPER(TRIM(issue_key)) = UPPER(TRIM(?))
+      AND (status IS NULL OR finished_at IS NULL)
+      AND (
+        parent_workflow_id = ? OR EXISTS (
+          SELECT 1 FROM goal_issue_progress progress
+          WHERE progress.latest_segment_workflow_id = goal_run_sessions.workflow_id
+            AND progress.parent_workflow_id = ?
+        )
+      )
+    LIMIT 1
+    """.trimIndent(),
+  ).use { statement ->
+    statement.bindAll(issue, parent, parent)
+    statement.executeQuery().use { rows -> rows.next() }
+  }
 
 internal fun saveGoalFinished(
   connection: Connection,
@@ -137,7 +265,14 @@ private fun insertGoalFinished(
 internal fun recordGoalIssueSegmentStarted(
   connection: Connection,
   segment: GoalIssueSegmentStart,
-) {
+): Boolean {
+  val persistedIssueKey =
+    resolveOpenGoalIssueKey(
+      connection,
+      segment.parentWorkflowId,
+      segment.issueKey,
+    ) ?: return false
+  val identity = segment.copy(issueKey = persistedIssueKey)
   connection.prepareStatement(
     """
     INSERT INTO goal_issue_progress (
@@ -163,20 +298,43 @@ internal fun recordGoalIssueSegmentStarted(
         ELSE goal_issue_progress.state_entered_at_estimated
       END
     WHERE goal_issue_progress.finished_at IS NULL
-      AND COALESCE(goal_issue_progress.status, '') NOT IN ('completed', 'failed', 'abandoned')
+      AND COALESCE(goal_issue_progress.status, '') NOT IN ('completed', 'completed_no_change', 'failed', 'abandoned')
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
-      segment.parentWorkflowId,
-      segment.issueKey,
-      segment.resumed.toSqlInt(),
-      segment.startedAt,
-      segment.startedAt,
-      segment.workflowId,
-      segment.mode,
-      segment.startedAt,
+      identity.parentWorkflowId,
+      identity.issueKey,
+      identity.resumed.toSqlInt(),
+      identity.startedAt,
+      identity.startedAt,
+      identity.workflowId,
+      identity.mode,
+      identity.startedAt,
     )
     statement.executeUpdate()
+  }
+  return true
+}
+
+internal fun resolveOpenGoalIssueKey(
+  connection: Connection,
+  parent: String,
+  requestedIssue: String,
+): String? {
+  val identities =
+    connection.prepareStatement(
+      """
+      SELECT issue_key FROM goal_issue_progress
+      WHERE parent_workflow_id = ? AND UPPER(TRIM(issue_key)) = UPPER(TRIM(?))
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(parent, requestedIssue)
+      statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }
+    }
+  return when (identities.size) {
+    0 -> requestedIssue
+    1 -> identities.single()
+    else -> null
   }
 }
 
@@ -196,6 +354,13 @@ internal fun recordGoalIssueSegmentEnd(
   workflowId: String,
   status: String,
 ) {
+  val persistedIssueKey =
+    connection.prepareStatement(
+      "SELECT issue_key FROM goal_issue_progress WHERE parent_workflow_id = ? AND latest_segment_workflow_id = ?",
+    ).use { statement ->
+      statement.bindAll(parentWorkflowId, workflowId)
+      statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else issueKey }
+    }
   val blocked = status != "paused"
   val blockedColumns =
     if (blocked) {
@@ -223,11 +388,12 @@ internal fun recordGoalIssueSegmentEnd(
         last_activity_at = CURRENT_TIMESTAMP
     WHERE parent_workflow_id = ?
       AND issue_key = ?
+      AND latest_segment_workflow_id = ?
       AND finished_at IS NULL
-      AND COALESCE(status, '') NOT IN ('completed', 'failed', 'abandoned')
+      AND COALESCE(status, '') NOT IN ('completed', 'completed_no_change', 'failed', 'abandoned')
     """.trimIndent(),
   ).use { statement ->
-    val tail = listOf(status, status, status, parentWorkflowId, issueKey)
+    val tail = listOf(status, status, status, parentWorkflowId, persistedIssueKey, workflowId)
     val params = if (blocked) listOf(workflowId) + tail else tail
     statement.bindAll(params)
     statement.executeUpdate()

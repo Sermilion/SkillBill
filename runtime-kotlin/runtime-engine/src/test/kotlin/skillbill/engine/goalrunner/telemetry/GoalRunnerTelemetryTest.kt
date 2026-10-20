@@ -21,6 +21,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
@@ -31,12 +32,14 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class GoalRunnerTelemetryTest {
@@ -83,6 +86,102 @@ class GoalRunnerTelemetryTest {
     assertTrue(telemetry.subtaskFinished.isEmpty())
     assertTrue(telemetry.issueFinished.isEmpty())
     assertTrue(launcher.requests.isEmpty())
+  }
+
+  @Test
+  fun `planning failure closes the started segment and rethrows the same throwable`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val telemetry = RecordingGoalLifecycleTelemetryEmitter()
+    val failure = IllegalStateException("planning failed")
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
+          outcomeStore = outcomes,
+          pullRequestPort = RecordingPullRequestPort(),
+        ).copy(
+          telemetry = telemetry,
+          clock = fixedClock(),
+          goalPlanningSource = GoalPlanningSource { _, _ -> throw failure },
+        ),
+      )
+
+    val thrown = assertFailsWith<IllegalStateException> { runner.run(runRequest()) }
+
+    assertSame(failure, thrown)
+    assertEquals(1, telemetry.started.size)
+    assertEquals(1, telemetry.finished.size)
+    assertEquals(telemetry.started.single().workflowId, telemetry.finished.single().workflowId)
+    assertEquals("blocked", telemetry.finished.single().status)
+    assertEquals("goal_run_failed", telemetry.finished.single().stopReason)
+    assertTrue(telemetry.subtaskFinished.isEmpty())
+    assertTrue(telemetry.issueFinished.isEmpty())
+  }
+
+  @Test
+  fun `launch failure closes the started segment without fabricating a subtask terminal`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val telemetry = RecordingGoalLifecycleTelemetryEmitter()
+    val failure = IllegalStateException("launch failed")
+    val runner = telemetryRunner(store, RecordingSubtaskLauncher { throw failure }, outcomes, telemetry)
+
+    val thrown = assertFailsWith<IllegalStateException> { runner.run(runRequest()) }
+
+    assertSame(failure, thrown)
+    assertEquals(1, telemetry.finished.size)
+    assertEquals("goal_run_failed", telemetry.finished.single().stopReason)
+    assertTrue(telemetry.subtaskFinished.isEmpty())
+    assertTrue(telemetry.issueFinished.isEmpty())
+  }
+
+  @Test
+  fun `cancellation closes the segment and propagates unchanged`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val telemetry = RecordingGoalLifecycleTelemetryEmitter()
+    val failure = CancellationException("cancelled")
+    val runner = planningFailureRunner(store, outcomes, telemetry, failure)
+
+    val thrown = assertFailsWith<CancellationException> { runner.run(runRequest()) }
+
+    assertSame(failure, thrown)
+    assertEquals("goal_run_failed", telemetry.finished.single().stopReason)
+  }
+
+  @Test
+  fun `interruption closes the segment and restores the interrupt flag`() {
+    Thread.interrupted()
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val telemetry = RecordingGoalLifecycleTelemetryEmitter()
+    val failure = InterruptedException("interrupted")
+    val runner = planningFailureRunner(store, outcomes, telemetry, failure)
+
+    try {
+      val thrown = assertFailsWith<InterruptedException> { runner.run(runRequest()) }
+      assertSame(failure, thrown)
+      assertEquals("goal_run_failed", telemetry.finished.single().stopReason)
+      assertTrue(Thread.currentThread().isInterrupted)
+    } finally {
+      Thread.interrupted()
+    }
+  }
+
+  @Test
+  fun `failure closure errors are suppressed on the original failure`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val telemetry = RecordingGoalLifecycleTelemetryEmitter(failOn = setOf(TelemetryEvent.FINISHED))
+    val failure = IllegalStateException("planning failed")
+    val runner = planningFailureRunner(store, outcomes, telemetry, failure)
+
+    val thrown = assertFailsWith<IllegalStateException> { runner.run(runRequest()) }
+
+    assertSame(failure, thrown)
+    assertEquals(TelemetryEvent.FINISHED, thrown.suppressed.single().let { (it as TelemetryWriteFailure).event })
   }
 
   @Test
@@ -368,7 +467,7 @@ class GoalRunnerTelemetryTest {
     val failure = assertFailsWith<TelemetryWriteFailure> { runner.run(runRequest()) }
     assertEquals(TelemetryEvent.SUBTASK_FINISHED, failure.event)
     assertEquals(1, telemetry.started.size)
-    assertTrue(telemetry.finished.isEmpty())
+    assertEquals("goal_run_failed", telemetry.finished.single().stopReason)
   }
 
   @Test
@@ -417,6 +516,25 @@ class GoalRunnerTelemetryTest {
       ).copy(
         telemetry = telemetry,
         clock = fixedClock(),
+      ),
+    )
+
+  private fun planningFailureRunner(
+    store: InMemoryGoalManifestStore,
+    outcomes: RecordingOutcomeStore,
+    telemetry: RecordingGoalLifecycleTelemetryEmitter,
+    failure: Throwable,
+  ): GoalRunner =
+    testGoalRunner(
+      goalRunnerDeps(
+        manifestStore = store,
+        subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
+        outcomeStore = outcomes,
+        pullRequestPort = RecordingPullRequestPort(),
+      ).copy(
+        telemetry = telemetry,
+        clock = fixedClock(),
+        goalPlanningSource = GoalPlanningSource { _, _ -> throw failure },
       ),
     )
 

@@ -186,47 +186,56 @@ class GoalRunner(
     val observability = GoalRunnerObservabilityEmitter(outcomeStore, clock, diagnostics)
     val ledger = GoalRunnerLedgerRecorder(outcomeStore, effectiveRequest, clock, diagnostics)
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
-    val telemetryEmitter =
-      GoalRunnerTelemetryEmitter(telemetry, clock, state)
-        .also { it.goalStarted() }
-    pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
-      val pausedReport = requireNotNull(paused.report)
-      closeGoalTelemetrySegment(telemetryEmitter, state, pausedReport, emptyList())
-      return pausedReport
-    }
-    val sweepOutcome =
-      if (GoalRunnerPlanner.selectNext(state.manifest) is GoalRunnerSelection.Done) {
-        GoalPlanningSweepOutcome.PreparedAll()
-      } else {
-        goalPlanningSource.prepare(state, effectiveRequest)
+    val telemetryEmitter = GoalRunnerTelemetryEmitter(telemetry, clock, state)
+    return runCatching {
+      telemetryEmitter.goalStarted()
+      pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
+        val pausedReport = requireNotNull(paused.report)
+        closeGoalTelemetrySegment(telemetryEmitter, state, pausedReport, emptyList())
+        return@runCatching pausedReport
       }
-    if (sweepOutcome is GoalPlanningSweepOutcome.Stopped) {
-      return planningStoppedReport(effectiveRequest, state, telemetryEmitter, emptyList(), sweepOutcome)
+      val sweepOutcome =
+        if (GoalRunnerPlanner.selectNext(state.manifest) is GoalRunnerSelection.Done) {
+          GoalPlanningSweepOutcome.PreparedAll()
+        } else {
+          goalPlanningSource.prepare(state, effectiveRequest)
+        }
+      if (sweepOutcome is GoalPlanningSweepOutcome.Stopped) {
+        return@runCatching planningStoppedReport(effectiveRequest, state, telemetryEmitter, emptyList(), sweepOutcome)
+      }
+      val prepared = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll
+      state = prepared.state ?: state
+      val validationQualityState = GoalRunnerValidationQualityPendingState(manifestStore)
+      validationQualityState.bind(state.parentWorkflowId)
+      val pendingState = GoalRunnerIterationPendingState(validationQualityState)
+      val goalLoop = perRunLoopAssembler.assemble()
+      val loopResult =
+        goalLoop.driveGoalLoop(
+          DriveGoalLoopArgs(
+            initialState = state,
+            request = effectiveRequest,
+            observability = observability,
+            ledger = ledger,
+            telemetryEmitter = telemetryEmitter,
+            planning = prepared,
+            pendingState = pendingState,
+          ),
+        )
+      state = loopResult.state
+      val finalReport = requireNotNull(loopResult.report)
+      closeGoalTelemetrySegment(telemetryEmitter, state, finalReport, loopResult.attempted)
+      recordGoalCompletion(state.parentWorkflowId, finalReport)
+      emitCompletedGoalEvent(effectiveRequest, finalReport)
+      finalReport.withParentWorkflowId(state.parentWorkflowId)
+    }.getOrElse { failure ->
+      if (failure is InterruptedException) Thread.currentThread().interrupt()
+      runCatching { telemetryEmitter.goalFailed() }
+        .onFailure { cleanupFailure ->
+          if (cleanupFailure is InterruptedException) Thread.currentThread().interrupt()
+          if (cleanupFailure !== failure) failure.addSuppressed(cleanupFailure)
+        }
+      throw failure
     }
-    val prepared = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll
-    state = prepared.state ?: state
-    val validationQualityState = GoalRunnerValidationQualityPendingState(manifestStore)
-    validationQualityState.bind(state.parentWorkflowId)
-    val pendingState = GoalRunnerIterationPendingState(validationQualityState)
-    val goalLoop = perRunLoopAssembler.assemble()
-    val loopResult =
-      goalLoop.driveGoalLoop(
-        DriveGoalLoopArgs(
-          initialState = state,
-          request = effectiveRequest,
-          observability = observability,
-          ledger = ledger,
-          telemetryEmitter = telemetryEmitter,
-          planning = prepared,
-          pendingState = pendingState,
-        ),
-      )
-    state = loopResult.state
-    val finalReport = requireNotNull(loopResult.report)
-    recordGoalCompletion(state.parentWorkflowId, finalReport)
-    closeGoalTelemetrySegment(telemetryEmitter, state, finalReport, loopResult.attempted)
-    emitCompletedGoalEvent(effectiveRequest, finalReport)
-    return finalReport.withParentWorkflowId(state.parentWorkflowId)
   }
 
   private fun planningStoppedReport(

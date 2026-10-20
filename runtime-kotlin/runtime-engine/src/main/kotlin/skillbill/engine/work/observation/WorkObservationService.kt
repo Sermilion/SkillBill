@@ -1,7 +1,7 @@
 package skillbill.engine.work.observation
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
+import skillbill.application.telemetry.lifecycle.asWorkerOwnership
 import skillbill.engine.work.observation.model.WorkObservationRegistration
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.databaseMissing

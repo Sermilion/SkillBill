@@ -1,3 +1,9 @@
+## [2026-10-19] Reserve atomic-write suffix space in generated spec names
+Context: Long feature and subtask titles exceed filesystem component limits, and atomic writes append a temporary suffix to the generated filename.
+Decision: Use one 230-byte UTF-8 component budget, retaining the full issue prefix and fixed suffix. Hash oversized normalized slugs with 16 SHA-256 hex characters; use the final names for planned paths, writes, manifest references and links.
+Reason: The implementation tightens the planned 240-byte cap so a dot, up to 20 decimal digits and .tmp also fit within 255 bytes. Hashing the complete normalized slug distinguishes long names sharing a prefix without shortening display titles or changing explicit parent paths.
+Alternatives considered: Plain truncation risks collisions. Truncating issue identity breaks bundle identity, so insufficient fixed-identity budgets use the existing typed preparation error.
+
 ## [2026-10-17] Map settlement store conflict and refusal to an ERROR acknowledgment
 Context: A second settlement at the same workflow, phase, and attempt with a different envelope, or an admission refusal, could look like a completed persist at the service edge.
 Decision: Persist treats Accepted and IdenticalReplay as OK. Conflicting maps to PHASE_SETTLEMENT_CONFLICT; Refused maps to the refusal reason name. The late envelope is withheld. The SQLite repository returns the store result and does not throw.

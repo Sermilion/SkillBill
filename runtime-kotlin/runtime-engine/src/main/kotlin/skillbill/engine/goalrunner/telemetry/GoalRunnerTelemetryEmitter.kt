@@ -5,6 +5,7 @@ import skillbill.application.telemetry.model.GoalFinishedRequest
 import skillbill.application.telemetry.model.GoalIssueFinishedRequest
 import skillbill.application.telemetry.model.GoalStartedRequest
 import skillbill.application.telemetry.model.GoalSubtaskFinishedRequest
+import skillbill.contracts.telemetry.GoalRunTerminalReason
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
@@ -12,6 +13,7 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.decompositionStatus
 import java.time.Clock
 import java.time.Duration
@@ -33,6 +35,8 @@ class GoalRunnerTelemetryEmitter(
       .toSet()
   private val subtasksEmittedThisSegment: MutableSet<Int> = mutableSetOf()
   private val subtaskStartedAt: MutableMap<Int, Instant> = mutableMapOf()
+  private var startPersisted = false
+  private var terminalSettled = false
 
   fun goalStarted() {
     telemetry.goalStarted(
@@ -48,6 +52,7 @@ class GoalRunnerTelemetryEmitter(
         parentWorkflowId = state.parentWorkflowId,
       ),
     )
+    startPersisted = true
   }
 
   fun markSubtaskStarted(subtaskId: Int) {
@@ -132,6 +137,30 @@ class GoalRunnerTelemetryEmitter(
         parentWorkflowId = state.parentWorkflowId,
       ),
     )
+    terminalSettled = true
+  }
+
+  fun goalFailed() {
+    if (!startPersisted || terminalSettled) return
+    val finishedAt = clock.instant()
+    telemetry.goalFinished(
+      GoalFinishedRequest(
+        issueKey = state.manifest.issueKey,
+        workflowId = segmentWorkflowId,
+        status = WorkflowStatus.BLOCKED.wireValue,
+        startedAt = segmentStartedAt.toString(),
+        finishedAt = finishedAt.toString(),
+        durationMs = durationMs(segmentStartedAt, finishedAt),
+        subtasksComplete = 0,
+        subtasksBlocked = 0,
+        subtasksSkipped = 0,
+        mode = "runtime",
+        stopReason = GoalRunTerminalReason.GOAL_RUN_FAILED.wireValue,
+        noChangeReason = null,
+        parentWorkflowId = state.parentWorkflowId,
+      ),
+    )
+    terminalSettled = true
   }
 
   private fun noChangeReasonOf(report: GoalRunnerRunReport): String? =

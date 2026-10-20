@@ -18,6 +18,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.repository.ReviewRepository
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
@@ -249,6 +250,7 @@ class TelemetryLevelMutationServiceTest {
         settingsProvider = fixture.settingsProvider,
         clock = Clock.systemUTC(),
         diagnostics = NoopRuntimeDiagnostics,
+        workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
       )
 
     val result =

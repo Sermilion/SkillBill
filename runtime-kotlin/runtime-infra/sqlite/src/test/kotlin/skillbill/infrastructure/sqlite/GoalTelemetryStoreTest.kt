@@ -7,6 +7,7 @@ import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
+import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
@@ -420,6 +421,155 @@ class GoalTelemetryStoreTest {
       assertEquals("2026-06-04T10:00:00Z", payload["first_started_at"])
       assertEquals(1_800L, assertIs<Number>(payload["duration_seconds"]).toLong())
       assertTrue("duration_ms" !in payload)
+    }
+  }
+
+  @Test
+  fun `fresh same-parent start abandons older open segment once and keeps the new issue run active`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      val newStart = startSupersedingSegmentAndReplayLateFinish(store)
+
+      val oldRow =
+        connection.prepareStatement(
+          "SELECT status, finished_at, finished_duration_ms, stop_reason FROM goal_run_sessions WHERE workflow_id = ?",
+        ).use { statement ->
+          statement.setString(1, "wf-parent:old")
+          statement.executeQuery().use { rows ->
+            assertTrue(rows.next())
+            listOf(
+              rows.getString("status"),
+              rows.getString("finished_at"),
+              rows.getLong("finished_duration_ms").toString(),
+              rows.getString("stop_reason"),
+            )
+          }
+        }
+      val progress =
+        connection.prepareStatement(
+          "SELECT status, latest_segment_workflow_id, total_invocations, total_blocks " +
+            "FROM goal_issue_progress WHERE parent_workflow_id = ? AND issue_key = ?",
+        ).use { statement ->
+          statement.setString(1, "wf-parent")
+          statement.setString(2, "SKILL-66")
+          statement.executeQuery().use { rows ->
+            assertTrue(rows.next())
+            listOf(
+              rows.getString("status"),
+              rows.getString("latest_segment_workflow_id"),
+              rows.getInt("total_invocations"),
+              rows.getInt("total_blocks"),
+            )
+          }
+        }
+      val protectedOtherParent =
+        connection.prepareStatement(
+          "SELECT status, finished_at FROM goal_run_sessions WHERE workflow_id = ?",
+        ).use { statement ->
+          statement.setString(1, "wf-other:old")
+          statement.executeQuery().use { rows ->
+            assertTrue(rows.next())
+            listOf(rows.getString("status"), rows.getString("finished_at"))
+          }
+        }
+      val outbox = pendingOutbox(connection)
+      val stats = ReviewStatsRuntime.goalStats(connection)
+
+      assertEquals(listOf("abandoned", newStart.startedAt, "3600000", "superseded_by_new_run"), oldRow)
+      assertEquals(listOf("running", "wf-parent:new", 2, 0), progress)
+      assertEquals(listOf(null, null), protectedOtherParent)
+      assertEquals(3, outbox.count { it.eventName == "skillbill_goal_started" })
+      assertEquals(1, outbox.count { it.eventName == "skillbill_goal_finished" })
+      assertEquals(
+        "abandoned",
+        parsePayload(outbox.single { it.eventName == "skillbill_goal_finished" }.payloadJson)["status"],
+      )
+      assertEquals("wf-parent:new", requireNotNull(stats.mostRecentRun).workflowId)
+      assertEquals(2, stats.inProgressRuns)
+      assertEquals(1, stats.completionStatusCounts["abandoned"])
+    }
+  }
+
+  private fun startSupersedingSegmentAndReplayLateFinish(store: LifecycleTelemetryStore): GoalStartedRecord {
+    val oldStart =
+      startedRecord("wf-parent:old", subtaskTotal = 2, resumed = false, startedAt = "2026-06-04T10:00:00+01:00")
+        .copy(parentWorkflowId = "wf-parent")
+    val newStart =
+      startedRecord("wf-parent:new", subtaskTotal = 2, resumed = true, startedAt = "2026-06-04T10:00:00Z")
+        .copy(parentWorkflowId = "wf-parent")
+    val otherParentStart =
+      startedRecord("wf-other:old", subtaskTotal = 1, resumed = false, startedAt = "2026-06-04T09:00:00Z")
+        .copy(parentWorkflowId = "wf-other")
+
+    store.goalStarted(oldStart, "full")
+    store.goalStarted(otherParentStart, "full")
+    store.goalStarted(newStart, "full")
+    store.goalStarted(newStart, "full")
+    store.goalFinished(
+      finishedRecord("wf-parent:old", status = "blocked", startedAt = oldStart.startedAt)
+        .copy(parentWorkflowId = "wf-parent"),
+      "full",
+    )
+    return newStart
+  }
+
+  @Test
+  fun `different-parent supersession abandons the old logical goal only with confirmed non-live ownership`() {
+    listOf(false, true).forEach { confirmedNonLive ->
+      withConnection { connection ->
+        val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+        store.goalStarted(
+          startedRecord("wf-old:seg:1", subtaskTotal = 1, resumed = false, startedAt = "2026-06-04T09:00:00Z")
+            .copy(parentWorkflowId = "wf-old"),
+          "full",
+        )
+        val newStart =
+          startedRecord("wf-new:seg:1", subtaskTotal = 1, resumed = false, startedAt = "2026-06-04T10:00:00Z")
+            .copy(parentWorkflowId = "wf-new")
+
+        val prepared = store.prepareGoalStarted(newStart)
+        val candidate = prepared.candidates.single { it.workflowId == "wf-old:seg:1" }
+        store.reconcileGoalStarted(
+          newStart,
+          prepared.inserted,
+          listOf(
+            GoalStartedSupersession(
+              candidate = candidate,
+              eligible = true,
+              complete = 0,
+              blocked = 0,
+              skipped = 0,
+              confirmedNonLiveOwner = confirmedNonLive,
+            ),
+          ),
+          "full",
+        )
+
+        val invocationStatus =
+          connection.prepareStatement("SELECT status FROM goal_run_sessions WHERE workflow_id = ?").use { statement ->
+            statement.setString(1, "wf-old:seg:1")
+            statement.executeQuery().use { rows ->
+              assertTrue(rows.next())
+              rows.getString("status")
+            }
+          }
+        val oldIssueStatus =
+          connection.prepareStatement(
+            "SELECT status FROM goal_issue_progress WHERE parent_workflow_id = ? AND issue_key = ?",
+          ).use { statement ->
+            statement.setString(1, "wf-old")
+            statement.setString(2, "SKILL-66")
+            statement.executeQuery().use { rows ->
+              assertTrue(rows.next())
+              rows.getString("status")
+            }
+          }
+        val issueFinished = pendingOutbox(connection).count { it.eventName == "skillbill_goal_issue_finished" }
+
+        assertEquals("abandoned", invocationStatus)
+        assertEquals(if (confirmedNonLive) "abandoned" else "running", oldIssueStatus)
+        assertEquals(if (confirmedNonLive) 1 else 0, issueFinished)
+      }
     }
   }
 

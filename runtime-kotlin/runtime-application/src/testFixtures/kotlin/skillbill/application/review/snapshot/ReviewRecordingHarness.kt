@@ -1,5 +1,6 @@
 package skillbill.application.review.snapshot
 
+import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.governed.stubGovernedReviewEvidenceEndpointBinder
 import skillbill.application.review.learnings.ReviewLearningsResolver
@@ -512,7 +513,7 @@ private fun recordingDatabase(
 }
 
 private fun recordingLifecycleTelemetry(recorder: ReviewRecorder): LifecycleTelemetryRepository =
-  object : LifecycleTelemetryRepository {
+  object : LifecycleTelemetryRepository by RecordingLifecycleTelemetryRepository() {
     override fun reviewStageDegradation(record: ReviewStageDegradationMeasurement) {
       check(!recorder.failStageDegradationWrite) { "the degradation store rejected the write" }
       recorder.stageDegradations += record

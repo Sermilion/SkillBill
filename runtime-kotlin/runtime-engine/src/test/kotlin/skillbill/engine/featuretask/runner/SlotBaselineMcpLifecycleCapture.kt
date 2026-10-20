@@ -6,6 +6,7 @@ import skillbill.application.telemetry.model.QualityCheckFinishedRequest
 import skillbill.application.telemetry.model.QualityCheckStartedRequest
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 
 internal object SlotBaselineMcpLifecycleCapture {
   private const val ROUTED_SKILL = "bill-kotlin-code-check"
@@ -22,6 +23,7 @@ internal object SlotBaselineMcpLifecycleCapture {
           EnabledRuntimeTelemetrySettingsProvider,
           SlotBaselineFullRunCapture.sqliteClock,
           NoopRuntimeDiagnostics,
+          workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
         )
       val started =
         service.qualityCheckStarted(
