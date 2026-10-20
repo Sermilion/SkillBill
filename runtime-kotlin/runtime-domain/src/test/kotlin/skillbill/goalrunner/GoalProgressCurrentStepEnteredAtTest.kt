@@ -32,13 +32,33 @@ class GoalProgressCurrentStepEnteredAtTest {
     assertNull(currentStepEnteredAt(history))
   }
 
+  @Test
+  fun `a resumed attempt of the same step counts from its phase start`() {
+    val history =
+      listOf(
+        event(11, "qa", "2026-10-20T09:25:20Z", GoalProgressEventKind.PHASE_STARTED),
+        event(14, "qa", "2026-10-20T09:25:43Z", GoalProgressEventKind.PHASE_COMPLETED),
+        event(19, "qa", "2026-10-20T10:11:55Z", GoalProgressEventKind.PHASE_STARTED),
+        heartbeat(21, "qa", "2026-10-20T10:13:26Z"),
+      )
+
+    assertEquals(Instant.parse("2026-10-20T10:11:55Z"), currentStepEnteredAt(history))
+  }
+
   private fun heartbeat(
     sequence: Int,
     step: String,
     at: String,
+  ): GoalProgressEvent = event(sequence, step, at, GoalProgressEventKind.OPERATION_HEARTBEAT)
+
+  private fun event(
+    sequence: Int,
+    step: String,
+    at: String,
+    kind: GoalProgressEventKind,
   ): GoalProgressEvent =
     GoalProgressEvent(
-      eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+      eventKind = kind,
       workflowId = "wftr-goal",
       workflowPhase = step,
       processAlive = true,

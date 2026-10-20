@@ -7,6 +7,7 @@ import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.time.Instant
 
 internal fun DurableWorkflowArtifacts.goalProgressLatestEvent(): GoalProgressEvent? = declaredProgressEventFrom(this)
@@ -32,8 +33,11 @@ internal fun currentStepEnteredAt(history: List<GoalProgressEvent>): Instant? {
   val ordered = history.sortedBy(GoalProgressEvent::sequenceNumber)
   val currentStep = ordered.lastOrNull()?.reportedStep() ?: return null
   val previousStepIndex = ordered.indexOfLast { it.reportedStep() != currentStep }
-  if (previousStepIndex < 0) return null
-  return ordered[previousStepIndex + 1].timestamp
+  val stepChangedAt = if (previousStepIndex < 0) null else ordered[previousStepIndex + 1].timestamp
+  val attemptStartedAt =
+    ordered.lastOrNull { it.eventKind == GoalProgressEventKind.PHASE_STARTED && it.reportedStep() == currentStep }
+      ?.timestamp
+  return listOfNotNull(stepChangedAt, attemptStartedAt).maxOrNull()
 }
 
 private fun GoalProgressEvent.reportedStep(): String = stepId ?: workflowPhase
