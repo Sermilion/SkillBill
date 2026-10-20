@@ -127,6 +127,7 @@ data class StandalonePhaseStatusUpdate(
   val acceptedResult: String? = null,
   val monitorCleanup: StandaloneMonitorCleanup? = null,
   val qaOutcome: StandaloneQaOutcome? = null,
+  val qaReport: StandaloneQaReport? = null,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -170,6 +171,7 @@ data class StandalonePhaseStatusRecord(
   val monitorTarget: StandaloneMonitorTarget? = null,
   val monitorCleanup: StandaloneMonitorCleanup? = null,
   val qaOutcome: StandaloneQaOutcome? = null,
+  val qaReport: StandaloneQaReport? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500

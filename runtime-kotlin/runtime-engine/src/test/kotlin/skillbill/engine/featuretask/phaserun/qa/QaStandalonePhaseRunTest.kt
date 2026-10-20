@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun.qa
 
+import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
@@ -50,6 +51,37 @@ class QaStandalonePhaseRunTest {
     val qa = requireNotNull(launched.single())
     assertEquals(qaTestExpected(INVOCATION), qa.expected)
     assertEquals(setOf(QaPlatform.ANDROID), assertIs<QaExecutionTarget.Supported>(qa.target).platforms)
+  }
+
+  @Test
+  fun `a finding fails its criterion even when every check on that criterion passed`() {
+    val result =
+      assertIs<PhaseRunResult.Completed>(
+        runQa {
+          fun check(criterion: String) =
+            mapOf(
+              "flow_id" to "login",
+              "description" to "$criterion holds.",
+              "outcome" to "pass",
+              "criteria" to listOf(criterion),
+            )
+          val receipt = qaTestReceipt(QaVerdict.FINDINGS_OPEN, it.expected)
+          val finding =
+            JsonCodec.anyToStringAnyMapList(receipt["findings"]).orEmpty().single() +
+              ("affected_criteria" to listOf("AC-2"))
+          val checks = listOf(check("AC-10"), check("AC-2"), check("AC-1"))
+          qaTestJson(receipt + mapOf("assertions" to checks, "findings" to listOf(finding)))
+        },
+      )
+
+    val report = requireNotNull(result.qaReport)
+    assertEquals(listOf("AC-1", "AC-2", "AC-10"), report.criteria.map { it.id })
+    assertEquals(listOf("AC-2"), report.failed.map { it.id })
+    val failure = report.failed.single().findings.single()
+    assertEquals("The home screen shows the user name.", failure.expected)
+    assertEquals("The home screen stays blank.", failure.observed)
+    assertContains(result.targetReport, "Criteria: 2 passed, 1 failed")
+    assertContains(result.targetReport, "      Observed: The home screen stays blank.")
   }
 
   @Test

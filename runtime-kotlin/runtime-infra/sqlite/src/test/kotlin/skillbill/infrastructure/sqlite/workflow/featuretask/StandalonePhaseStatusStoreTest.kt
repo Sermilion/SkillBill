@@ -12,6 +12,12 @@ import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.StandaloneQaCheck
+import skillbill.ports.idestatus.model.StandaloneQaCriterion
+import skillbill.ports.idestatus.model.StandaloneQaCriterionFinding
+import skillbill.ports.idestatus.model.StandaloneQaCriterionStatus
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import java.nio.file.Files
 import java.sql.DriverManager
@@ -312,6 +318,62 @@ class StandalonePhaseStatusStoreTest {
         )
       }
     }
+  }
+
+  @Test
+  fun `a settled QA run keeps its per-criterion report and outcome`() {
+    val directory = Files.createTempDirectory("standalone-qa-report")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-20T14:46:26Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        monitorRegistration("qa", started, started.plusSeconds(3600)).copy(phaseId = "qa"),
+      )
+    }
+    val report =
+      StandaloneQaReport(
+        listOf(
+          StandaloneQaCriterion(
+            "AC-1",
+            StandaloneQaCriterionStatus.PASSED,
+            listOf(StandaloneQaCheck("Picker opens.", true)),
+            emptyList(),
+          ),
+          StandaloneQaCriterion(
+            "AC-2",
+            StandaloneQaCriterionStatus.FAILED,
+            listOf(StandaloneQaCheck("Card field stays empty.", false)),
+            listOf(
+              StandaloneQaCriterionFinding("QA-1", listOf("Delete the card"), "Field is empty.", "Field shows 4444."),
+            ),
+          ),
+          StandaloneQaCriterion(
+            null,
+            StandaloneQaCriterionStatus.PASSED,
+            listOf(StandaloneQaCheck("App launches.", true)),
+            emptyList(),
+          ),
+        ),
+      )
+    val settle =
+      StandalonePhaseStatusUpdate(
+        executionId = "execution-qa", expectedRevision = "1", leaseOwner = "owner", leaseGeneration = 1,
+        lifecycleState = "terminal", currentStep = "qa", currentActivity = null, updatedAt = started,
+        finishedAt = started, terminalResult = "QA verdict: findings_open.",
+        qaOutcome = StandaloneQaOutcome.FINDINGS, qaReport = report,
+      )
+
+    assertEquals(
+      StandalonePhaseStatusUpdateResult.ACCEPTED,
+      database.transaction {
+        it.standalonePhaseStatuses.update(settle)
+      },
+    )
+
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-qa") }
+    assertEquals(report, record?.qaReport)
+    assertEquals(StandaloneQaOutcome.FINDINGS, record?.qaOutcome)
+    assertEquals("QA verdict: findings_open.", record?.terminalResult)
   }
 
   @Test

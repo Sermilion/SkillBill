@@ -349,6 +349,7 @@ data class ExecutionInstance(
   val result: String?,
   val restoration: ReasonRestoration? = null,
   val qaVerdict: QaVerdict? = null,
+  val qaReport: QaRunReport? = null,
 )
 
 data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)

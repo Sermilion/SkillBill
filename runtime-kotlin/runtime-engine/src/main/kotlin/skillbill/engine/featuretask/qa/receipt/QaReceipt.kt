@@ -110,12 +110,16 @@ data class QaAssertion(
   val flowId: String,
   val outcome: QaAssertionOutcome,
   val criteria: List<String> = emptyList(),
+  val description: String = "",
 )
 
 data class QaFinding(
   val id: String,
   val affectedCriteria: List<String> = emptyList(),
   val evidencePaths: List<String>,
+  val steps: List<String> = emptyList(),
+  val expected: String = "",
+  val observed: String = "",
 )
 
 data class QaFallback(

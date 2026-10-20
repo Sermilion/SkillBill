@@ -23,6 +23,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatu
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaOutcomes
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -841,5 +842,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 62,
       name = "record-feature-task-qa-findings-summary",
       operation = ::recordFeatureTaskQaFindingsSummary,
+    ),
+    DatabaseMigration(
+      version = 63,
+      name = "record-standalone-qa-report",
+      operation = ::recordStandaloneQaReport,
     ),
   )

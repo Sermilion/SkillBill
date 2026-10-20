@@ -368,7 +368,7 @@ to its honest verdict (for example `passed` with an untested flow becomes
 or a stopped QA agent settles `incomplete`; a run that could not start settles
 `skipped`. A repository change made during QA is kept and named in a warning.
 Each case prints a `Warning:` line with the verdict. Relay the printed warnings,
-verdict, flows, findings, and cleanup as a phase form.
+verdict, flows, findings, per-criterion results, and cleanup as a phase form.
 
 ## Phase PR
 

@@ -64,6 +64,7 @@ class QaStandalonePhaseRun(
       value = receipt.reasonDetail ?: "QA verdict: ${receipt.verdict.wireValue}.",
       targetReport = warnings.map(::warningLine) + receipt.targetReport(),
       qaOutcome = receipt.qaOutcome(),
+      qaReport = receipt.qaReport(),
     )
   }
 

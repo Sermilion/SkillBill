@@ -23,6 +23,7 @@ internal fun decodeQaReceipt(wire: Map<String, Any?>): QaReceipt {
           flowId = assertion.text(QaReceiptPayloadKeys.FLOW_ID),
           outcome = assertion.wireEnum(QaReceiptPayloadKeys.OUTCOME, QaAssertionOutcome::fromWire),
           criteria = assertion.stringList(QaReceiptPayloadKeys.CRITERIA),
+          description = assertion.text(QaReceiptPayloadKeys.DESCRIPTION),
         )
       },
     findings =
@@ -32,6 +33,9 @@ internal fun decodeQaReceipt(wire: Map<String, Any?>): QaReceipt {
           affectedCriteria = finding.stringList(QaReceiptPayloadKeys.AFFECTED_CRITERIA),
           evidencePaths =
             finding.mapList(QaReceiptPayloadKeys.EVIDENCE_REFS).map { it.text(QaReceiptPayloadKeys.PATH) },
+          steps = finding.stringList(QaReceiptPayloadKeys.STEPS),
+          expected = finding.text(QaReceiptPayloadKeys.EXPECTED),
+          observed = finding.text(QaReceiptPayloadKeys.OBSERVED),
         )
       },
     skipReason =
