@@ -21,10 +21,8 @@ internal object QaPromptSections {
       "later QA receipt decides that."
 
   const val FIX_VALUE_CONTENT: String =
-    "A repair report with one line per open QA finding: `<finding-id>: fixed: <files changed and how>` or " +
-      "`<finding-id>: not changed: <reason with evidence>`. A finding you leave unchanged needs its reason, for " +
-      "example that the tested build predates the code at HEAD, with the file and line that already meet the " +
-      "expected behavior."
+    "A repair report with one line per open QA finding: `<finding-id>: fixed: <files changed and how>`. Every " +
+      "finding must be fixed in source; a finding left unchanged sends this step back to work."
 
   fun repairSupplement(
     findings: List<QaOpenFinding>,
@@ -58,8 +56,8 @@ internal object QaPromptSections {
     |Rules:
     |
     |- Edit source in `$repoRoot`, on the current branch. Leave the changes uncommitted; the goal commits them.
-    |- QA tested the build named in the receipt. When that build predates the code at HEAD, say so in the
-    |  finding's `not changed:` line and name the code that already meets the expected behavior.
+    |- Fix every finding listed above. None may be left unchanged or explained away; QA builds the current code
+    |  itself, so a finding it reports is present at HEAD.
     |- QA runs again on your changes next and decides whether each finding is closed.
       """.trimMargin()
   }

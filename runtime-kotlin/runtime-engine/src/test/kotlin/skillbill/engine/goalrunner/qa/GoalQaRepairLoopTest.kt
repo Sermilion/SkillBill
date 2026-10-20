@@ -58,7 +58,6 @@ import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 
@@ -116,24 +115,28 @@ class GoalQaRepairLoopTest {
   }
 
   @Test
-  fun `a qa_fix that changes no file is sent back until it gives each finding a reason, and the reason is reported`() {
-    val reason = "F-1: not changed: the tested APK predates HEAD; HomeScreen.kt:42 already renders the name."
+  fun `a qa_fix that leaves a finding unfixed is sent back until it fixes it in source`() {
+    var launches = 0
     var reports = 0
     val fixture =
       Fixture(
         verdicts = List(4) { QaVerdict.FINDINGS_OPEN },
-        qaFixOutput = { if (reports++ == 0) "I looked at the home screen." else reason },
+        onQaFix = { git -> if (++launches == 2) git.repositoryFingerprintValue = "5".repeat(64) },
+        qaFixOutput = {
+          if (reports++ == 0) {
+            "F-1: not changed: the tested APK predates HEAD."
+          } else {
+            "F-1: fixed: HomeScreen.kt binds the explicit name."
+          }
+        },
       )
 
     fixture.gate.run(fixture.state, fixture.request)
 
-    val phases = fixture.launchedPhases()
-    assertEquals(listOf("qa", "qa_fix", "qa_fix", "qa"), phases.take(4))
-    assertFalse("validate" in phases)
-    assertContains(fixture.prompts("qa_fix")[1], "Missing: F-1")
-    val outcome = assertNotNull(fixture.storedOutcome())
-    assertContains(assertNotNull(outcome.reason), "changed no file for QA findings F-1")
-    assertContains(assertNotNull(outcome.reason), "the tested APK predates HEAD")
+    assertEquals(listOf("qa", "qa_fix", "qa_fix", "qa"), fixture.launchedPhases().take(4))
+    val retry = fixture.prompts("qa_fix")[1]
+    assertContains(retry, "none may be left unchanged")
+    assertContains(retry, "Not fixed: F-1")
   }
 
   @Test

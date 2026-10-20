@@ -123,7 +123,7 @@ values remain omitted.
 The full run accepts one `qa:auto|off` token and forwards it as `--qa <value>`.
 Omission selects `auto`. In the full run, QA runs once per goal, after all
 subtasks and before the PR (skipped when `qa:off`). QA findings enter `qa_fix`,
-then the compile-only build gate, then QA again, for up to three attempts across
+which must fix every finding in source, then the compile-only build gate, then QA again, for up to three attempts across
 relaunches; full validation runs once after QA settles when the repairs changed
 code. QA never blocks the goal: findings left after the third attempt, a fix the
 build gate cannot make compile, and any QA run that cannot settle are reported as

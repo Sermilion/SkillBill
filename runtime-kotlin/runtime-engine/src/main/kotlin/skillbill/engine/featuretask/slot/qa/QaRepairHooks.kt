@@ -44,21 +44,20 @@ internal class QaRepairHooks(
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck {
     val previous = (state as PhaseQaStepBinding).qaRepairState()
+    val openIds = previous?.openFindings.orEmpty().map(QaOpenFinding::id)
+    if (outputMap[SharedPayloadKeys.STATUS] != COMPLETED || openIds.isEmpty()) return PhaseStepOutputCheck.Accept
     val tested = previous?.lastReceiptTreeIdentity
-    val unchanged =
-      outputMap[SharedPayloadKeys.STATUS] == COMPLETED && tested != null &&
-        execution.currentTreeIdentity(run.request.repoRoot) == tested
-    val report = if (unchanged) NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(outputMap).output.value else ""
-    val unaccounted =
-      previous?.openFindings.orEmpty().map(QaOpenFinding::id).filter { id ->
-        unchanged && !report.hasNoChangeReason(id)
+    val unchanged = tested != null && execution.currentTreeIdentity(run.request.repoRoot) == tested
+    val report = NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(outputMap).output.value
+    val unfixed = if (unchanged) openIds else openIds.filter { report.leavesUnchanged(it) }
+    if (unfixed.isEmpty()) return PhaseStepOutputCheck.Accept
+    val reason =
+      if (unchanged) {
+        "qa_fix changed no file. Every QA finding must be fixed in source; none may be left unchanged."
+      } else {
+        "qa_fix left QA findings unchanged. Every QA finding must be fixed in source."
       }
-    if (unaccounted.isEmpty()) return PhaseStepOutputCheck.Accept
-    return PhaseStepOutputCheck.OweFindings(
-      "qa_fix changed no file. Fix each open QA finding in source, or give it a line `<finding-id>: not changed: " +
-        "<reason with evidence>`. Missing: ${unaccounted.joinToString()}.",
-      unaccounted.toSet(),
-    )
+    return PhaseStepOutputCheck.OweFindings("$reason Not fixed: ${unfixed.joinToString()}.", unfixed.toSet())
   }
 
   override fun interpretedOutput(
@@ -128,10 +127,8 @@ internal class QaRepairHooks(
           .orEmpty()
     }
 
-    private fun String.hasNoChangeReason(findingId: String): Boolean =
-      lines().any { line ->
-        line.substringAfter(findingId, "").lowercase().substringAfter(NO_CHANGE_MARKER, "").isNotBlank()
-      }
+    private fun String.leavesUnchanged(findingId: String): Boolean =
+      lines().any { line -> line.substringAfter(findingId, "").contains(NO_CHANGE_MARKER, ignoreCase = true) }
 
     private const val MAX_REASON_LENGTH = 600
   }

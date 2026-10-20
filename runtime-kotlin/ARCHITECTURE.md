@@ -1334,9 +1334,9 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `VALIDATION` because the tree changed. The `qa_fix` briefing lists each open
   finding with the receipt's steps, expected and observed behavior, and evidence paths, and
   `qa_fix` edits the goal branch working tree, which goal finalization commits with the goal.
-  A `qa_fix` that leaves the tree unchanged must give every open finding a
-  `<finding-id>: not changed: <reason>` line or it is sent back for the missing findings, and the
-  next `qa` output records that attempt and its reasons in `qa_warnings`. QA never blocks: once
+  `qa_fix` must fix every open finding in source and report each as
+  `<finding-id>: fixed: <files and how>`; a `qa_fix` that leaves the tree unchanged, or marks a
+  finding `not changed`, is sent back for those findings. QA never blocks: once
   three `qa_fix` attempts are consumed, the `qa` output carries `qa_repairs_exhausted` and
   `QaVerdictRule` advances with the open findings reported. A `qa_fix` attempt also updates the
   parent's `feature_task_qa_outcomes.qa_fix_attempts`, and a relaunched goal seeds its repair state
