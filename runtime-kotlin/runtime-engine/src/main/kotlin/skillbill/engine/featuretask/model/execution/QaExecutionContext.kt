@@ -23,4 +23,5 @@ data class QaExpectedIdentity(
   val headRevision: String,
   val treeIdentity: String,
   val evidencePrefix: String,
+  val acceptanceCriteria: Set<String> = emptySet(),
 )

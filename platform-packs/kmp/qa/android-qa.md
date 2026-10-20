@@ -81,6 +81,7 @@ skill-bill qa lease acquire --invocation <invocation id> --device <serial>
 
 ## Exercise the change
 
+- Derive flows from the run's acceptance criteria only. Every flow checks at least one criterion, and every assertion names the criteria it checks. Do not add flows the criteria do not ask for; report anything else you notice as a finding.
 - Prefer existing automation. Reuse instrumentation tests (`./gradlew connectedDebugAndroidTest` filtered to the changed screens) or Maestro flows already in the repository before writing new steps.
 - Otherwise drive the app with `adb shell input tap|text|swipe|keyevent`, reading positions from `adb shell uiautomator dump`.
 - After each step that matters, capture `adb exec-out screencap -p` and a `uiautomator dump` into the invocation directory.
@@ -90,7 +91,7 @@ Each assertion names the flow it checks, what it verified, and its outcome. A fi
 
 ## Verdict
 
-- `passed`: every selected flow was exercised, each has a passing assertion, and there are no findings.
+- `passed`: every acceptance criterion has a passing assertion on an exercised flow, no assertion failed, and there are no findings. A listed flow left untested is recorded `incomplete` unless that holds.
 - `findings_open`: at least one finding.
 - `incomplete`: the run started but could not finish, with `incomplete_reason`.
 - `skipped`: the run could not start, with `skip_reason` and `reason_detail` holding the fix-it line.

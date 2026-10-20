@@ -59,6 +59,7 @@ skill-bill qa lease acquire --invocation <invocation id> --device <udid>
 
 ## Exercise the change
 
+- Derive flows from the run's acceptance criteria only. Every flow checks at least one criterion, and every assertion names the criteria it checks. Do not add flows the criteria do not ask for; report anything else you notice as a finding.
 - Prefer existing automation. Reuse the project's XCUITest schemes for the changed screens before writing new steps.
 - Otherwise drive the device through the Appium XCUITest driver with WebDriverAgent. Save screenshots and page source after each step that matters.
 - Keep only the log excerpt that explains a failure, saved as a file under the invocation directory.
@@ -69,11 +70,11 @@ When no physical device can run the flow, a simulator may stand in:
 
 - Boot one with `xcrun simctl boot`, install with `xcrun simctl install`, and reuse Maestro flows when the repository has them.
 - Set `target.kind: simulator` and `target.selection: substituted`, and add a `fallbacks` entry with `kind: simulator_substitution` and the reason.
-- A simulator never marks a `hardware_only` flow exercised. Mark it `untested` with the reason. A run with an untested flow cannot pass.
+- A simulator never marks a `hardware_only` flow exercised. Mark it `untested` with the reason. The run cannot pass unless every acceptance criterion passed on another exercised flow.
 
 ## Verdict
 
-- `passed`: every selected flow was exercised, each has a passing assertion, and there are no findings.
+- `passed`: every acceptance criterion has a passing assertion on an exercised flow, no assertion failed, and there are no findings. A listed flow left untested is recorded `incomplete` unless that holds.
 - `findings_open`: at least one finding.
 - `incomplete`: the run started but could not finish, with `incomplete_reason`.
 - `skipped`: the run could not start, with `skip_reason` and `reason_detail` holding the fix-it line.

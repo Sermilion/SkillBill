@@ -3274,3 +3274,7 @@ Decision D4: QA selection is recorded on new execution plans and goal continuati
 Decision D5: Execution-plan contract `0.2` remains readable with QA unselected. Contract `0.3` records `qa_selection` and its explicit cross-slot traversal allowances.
 
 Decision D8: Code review still requires a satisfied audit. QA remains optional and does not become a new review entry gate.
+
+# [0AC-66 follow-up] QA flow coverage
+
+Decision: A `passed` receipt with an untested flow stays `passed`, with a warning, when the runtime knows the admitted acceptance criteria and each one has a passing assertion on an exercised flow. Otherwise it records `incomplete` with `untested_flows`. Why: a QA agent added a flow no criterion asked for, skipped it, and turned a fully covered run into `incomplete`. The admitted criteria travel on `QaExpectedIdentity` so every re-validation of the same receipt reaches the same verdict. Standalone `phase qa` and verify QA pass no criteria and keep the strict rule.

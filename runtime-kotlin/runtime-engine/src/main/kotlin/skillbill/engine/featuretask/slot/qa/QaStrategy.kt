@@ -133,7 +133,7 @@ class QaStrategy(
       }
     if (recordsGoalOutcome) outcomes.recordAttempted(run.request.workflowId)
     val result =
-      execution.withExecution(run.request.repoRoot, policy) { qa ->
+      execution.withExecution(run.request.repoRoot, policy, acceptanceCriteria = criterionIds(run).toSet()) { qa ->
         execute(run.copy(qaExecution = qa))
       }
     if (recordsGoalOutcome) {
@@ -216,6 +216,9 @@ class QaStrategy(
     return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) repairHooks else hooks
   }
 
+  private fun criterionIds(run: PhaseRun): List<String> =
+    run.request.runInvariants.acceptanceCriteria.indices.map { canonicalAcceptanceCriterionRef(it + 1) }
+
   private fun findingSupplement(state: PhaseStepBinding): String {
     val findings = (state as PhaseQaStepBinding).qaRepairState()?.openFindings.orEmpty()
     if (findings.isEmpty()) return ""
@@ -272,8 +275,7 @@ class QaStrategy(
         settledReceipt: QaReceipt,
       ): NormalizedFeatureTaskRuntimePhaseOutput {
         val qa = checkNotNull(run.qaExecution)
-        val criterionIds =
-          run.request.runInvariants.acceptanceCriteria.indices.map { canonicalAcceptanceCriterionRef(it + 1) }
+        val criterionIds = criterionIds(run)
         val executionWarnings = execution.outputWarnings(run.request.repoRoot, qa)
         val restricted =
           settledReceipt.copy(warnings = (settledReceipt.warnings + executionWarnings).distinct())

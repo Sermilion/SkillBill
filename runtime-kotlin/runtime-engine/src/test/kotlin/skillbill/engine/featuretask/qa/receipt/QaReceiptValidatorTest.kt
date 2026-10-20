@@ -62,6 +62,31 @@ class QaReceiptValidatorTest {
   }
 
   @Test
+  fun `an untested flow keeps passed when every admitted criterion passed on an exercised flow`() {
+    val untestedFlow = qaTestFlow() + mapOf("id" to "extra", "status" to "untested", "untested_reason" to "No time.")
+    val wire = qaTestReceipt(QaVerdict.PASSED) + ("flows" to listOf(qaTestFlow(), untestedFlow))
+
+    val receipt = validator.validate(qaTestJson(wire), expected.copy(acceptanceCriteria = setOf("AC-1")))
+
+    assertEquals(QaVerdict.PASSED, receipt.verdict)
+    assertEquals(1, receipt.warnings.size, receipt.warnings.toString())
+    assertTrue(receipt.warnings.single().endsWith("kept passed."))
+  }
+
+  @Test
+  fun `an untested flow records incomplete with untested_flows when an admitted criterion has no passing assertion`() {
+    val untestedFlow = qaTestFlow() + mapOf("id" to "logout", "status" to "untested", "untested_reason" to "No time.")
+    val wire = qaTestReceipt(QaVerdict.PASSED) + ("flows" to listOf(qaTestFlow(), untestedFlow))
+
+    listOf(emptySet(), setOf("AC-1", "AC-2")).forEach { criteria ->
+      val receipt = validator.validate(qaTestJson(wire), expected.copy(acceptanceCriteria = criteria))
+
+      assertEquals(QaVerdict.INCOMPLETE, receipt.verdict)
+      assertEquals(QaIncompleteReason.UNTESTED_FLOWS, receipt.incompleteReason)
+    }
+  }
+
+  @Test
   fun `production_only is an accepted skip reason`() {
     val receipt =
       validator.validate(qaTestJson(qaTestReceipt(QaVerdict.SKIPPED) + ("skip_reason" to "production_only")), expected)

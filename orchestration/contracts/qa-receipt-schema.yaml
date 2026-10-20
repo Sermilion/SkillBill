@@ -260,6 +260,7 @@ properties:
       - automation_broken
       - budget_exhausted
       - device_lost
+      - untested_flows
       - other
   reason_detail:
     type: string

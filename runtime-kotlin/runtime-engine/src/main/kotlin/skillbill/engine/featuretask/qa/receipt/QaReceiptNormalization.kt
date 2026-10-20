@@ -8,7 +8,10 @@ internal data class QaReceiptNormalization(
   val warnings: List<String>,
 )
 
-internal fun normalizeQaReceiptClaims(receipt: QaReceipt): QaReceiptNormalization? {
+internal fun normalizeQaReceiptClaims(
+  receipt: QaReceipt,
+  acceptanceCriteria: Set<String> = emptySet(),
+): QaReceiptNormalization? {
   val warnings = mutableListOf<String>()
   val demoted = simulatorHardwareFlowIds(receipt)
   if (demoted.isNotEmpty()) {
@@ -20,14 +23,15 @@ internal fun normalizeQaReceiptClaims(receipt: QaReceipt): QaReceiptNormalizatio
     receipt.flows.map { flow ->
       if (flow.id in demoted) flow.copy(status = QaFlowStatus.UNTESTED, untestedReason = SIMULATOR_REASON) else flow
     }
-  val verdict = honestVerdict(receipt, flows, warnings)
+  val honest = honestVerdict(receipt, flows, acceptanceCriteria, warnings)
+  val verdict = honest.verdict
   if (warnings.isEmpty()) return null
   val wire =
     receipt.wire.toMutableMap().apply {
       if (demoted.isNotEmpty()) put(QaReceiptPayloadKeys.FLOWS, demotedFlowsWire(receipt.wire, demoted))
       if (verdict != receipt.verdict) put(QaReceiptPayloadKeys.VERDICT, verdict.wireValue)
       if (verdict == QaVerdict.INCOMPLETE && receipt.verdict != QaVerdict.INCOMPLETE) {
-        put(QaReceiptPayloadKeys.INCOMPLETE_REASON, QaIncompleteReason.OTHER.wireValue)
+        put(QaReceiptPayloadKeys.INCOMPLETE_REASON, honest.incompleteReason.wireValue)
         put(
           QaReceiptPayloadKeys.REASON_DETAIL,
           receipt.reasonDetail ?: warnings.joinToString(" ").take(MAX_REASON_DETAIL),
@@ -73,49 +77,67 @@ private fun restrictedEntries(
     entry + (key to (entry[key] as? List<*>).orEmpty().filter { it in accepted })
   }
 
+private data class HonestVerdict(
+  val verdict: QaVerdict,
+  val incompleteReason: QaIncompleteReason = QaIncompleteReason.OTHER,
+)
+
 private fun honestVerdict(
   receipt: QaReceipt,
   flows: List<QaFlow>,
+  acceptanceCriteria: Set<String>,
   warnings: MutableList<String>,
-): QaVerdict =
+): HonestVerdict =
   when (receipt.verdict) {
-    QaVerdict.PASSED -> passedVerdict(receipt, flows, warnings)
+    QaVerdict.PASSED -> passedVerdict(receipt, flows, acceptanceCriteria, warnings)
     QaVerdict.FINDINGS_OPEN ->
       if (receipt.findings.isEmpty()) {
         warnings += "The QA receipt claimed findings_open without a finding; recorded incomplete."
-        QaVerdict.INCOMPLETE
+        HonestVerdict(QaVerdict.INCOMPLETE)
       } else {
-        QaVerdict.FINDINGS_OPEN
+        HonestVerdict(QaVerdict.FINDINGS_OPEN)
       }
-    QaVerdict.SKIPPED, QaVerdict.INCOMPLETE -> receipt.verdict
+    QaVerdict.SKIPPED, QaVerdict.INCOMPLETE -> HonestVerdict(receipt.verdict)
   }
 
 private fun passedVerdict(
   receipt: QaReceipt,
   flows: List<QaFlow>,
+  acceptanceCriteria: Set<String>,
   warnings: MutableList<String>,
-): QaVerdict {
+): HonestVerdict {
   val failedFlows =
     receipt.assertions.filter { it.outcome == QaAssertionOutcome.FAIL }.map(QaAssertion::flowId).toSet()
   val exercised = flows.filter { it.status == QaFlowStatus.EXERCISED }.map(QaFlow::id).toSet()
-  val passing =
-    receipt.assertions.any { assertion ->
+  val passingAssertions =
+    receipt.assertions.filter { assertion ->
       assertion.outcome == QaAssertionOutcome.PASS && assertion.flowId in exercised && assertion.flowId !in failedFlows
     }
+  val uncovered = acceptanceCriteria - passingAssertions.flatMap(QaAssertion::criteria).toSet()
   val untested = flows.filter { it.status == QaFlowStatus.UNTESTED }
+  val untestedNames = untested.joinToString { "'${it.name}'" }
   val (verdict, warning) =
     when {
       receipt.findings.isNotEmpty() ->
-        QaVerdict.FINDINGS_OPEN to "$PASSED_CLAIM with ${receipt.findings.size} finding(s); recorded findings_open."
+        HonestVerdict(QaVerdict.FINDINGS_OPEN) to
+          "$PASSED_CLAIM with ${receipt.findings.size} finding(s); recorded findings_open."
       failedFlows.isNotEmpty() ->
-        QaVerdict.INCOMPLETE to "$PASSED_CLAIM with a failed assertion and no finding; recorded incomplete."
-      untested.isNotEmpty() ->
-        QaVerdict.INCOMPLETE to
-          "$PASSED_CLAIM but left ${untested.joinToString { "'${it.name}'" }} untested; recorded incomplete."
-      !passing ->
-        QaVerdict.INCOMPLETE to
+        HonestVerdict(QaVerdict.INCOMPLETE) to
+          "$PASSED_CLAIM with a failed assertion and no finding; recorded incomplete."
+      untested.isNotEmpty() && (acceptanceCriteria.isEmpty() || uncovered.isNotEmpty()) ->
+        HonestVerdict(QaVerdict.INCOMPLETE, QaIncompleteReason.UNTESTED_FLOWS) to
+          "$PASSED_CLAIM but left $untestedNames untested" +
+          uncovered.takeIf(Set<String>::isNotEmpty)
+            ?.let { ", and ${it.sorted().joinToString()} has no passing assertion" }.orEmpty() +
+          "; recorded incomplete."
+      passingAssertions.isEmpty() ->
+        HonestVerdict(QaVerdict.INCOMPLETE) to
           "$PASSED_CLAIM without an exercised flow that has a passing assertion; recorded incomplete."
-      else -> return QaVerdict.PASSED
+      untested.isNotEmpty() ->
+        HonestVerdict(QaVerdict.PASSED) to
+          "The QA receipt left $untestedNames untested, but every acceptance criterion passed on an exercised " +
+          "flow; kept passed."
+      else -> return HonestVerdict(QaVerdict.PASSED)
     }
   warnings += warning
   return verdict

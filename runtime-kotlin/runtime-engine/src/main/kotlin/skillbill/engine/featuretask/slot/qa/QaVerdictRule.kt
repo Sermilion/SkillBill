@@ -34,6 +34,8 @@ internal class QaVerdictRule(
         headRevision = produced.text(QaPhaseOutputKeys.HEAD_REVISION),
         treeIdentity = produced.text(QaPhaseOutputKeys.TREE_IDENTITY),
         evidencePrefix = produced.text(QaPhaseOutputKeys.EVIDENCE_PREFIX),
+        acceptanceCriteria =
+          (produced[QaPhaseOutputKeys.CRITERION_IDS] as? List<*>).orEmpty().filterIsInstance<String>().toSet(),
       )
     val receipt = validator.validate(JsonCodec.mapToJsonString(rawReceipt), expected)
     if (produced[QaPhaseOutputKeys.REPAIRS_EXHAUSTED] == true) return FeatureTaskRuntimeVerdict.ADVANCE

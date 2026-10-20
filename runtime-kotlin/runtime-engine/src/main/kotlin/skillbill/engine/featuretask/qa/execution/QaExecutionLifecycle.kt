@@ -40,12 +40,13 @@ class QaExecutionLifecycle(
     repoRoot: Path,
     policy: QaPolicy,
     invocationId: String = "qa-${identifiers.randomToken()}",
+    acceptanceCriteria: Set<String> = emptySet(),
     execute: (QaExecutionContext) -> T,
   ): QaExecutionResult<T> {
     val baseline = gitOperations.worktreeBaseline(repoRoot, ::cannotStart)
     val tree = treeIdentity(repoRoot)
     val workspace = workspaces.open(repoRoot, invocationId)
-    val expected = QaExpectedIdentity(baseline.head, tree, workspace.evidencePrefix)
+    val expected = QaExpectedIdentity(baseline.head, tree, workspace.evidencePrefix, acceptanceCriteria)
     var retained = emptyList<QaRetainedResource>()
     val warnings = mutableListOf<String>()
     val workspaceOwner = AutoCloseable { retained = retained + closeWorkspace(workspace) }

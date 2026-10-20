@@ -31,7 +31,7 @@ class QaReceiptValidator(
     val receipt = decodeQaReceipt(wire)
     checkIdentity(receipt, expected)
     checkStructure(receipt, expected)
-    val normalized = normalizeQaReceiptClaims(receipt) ?: return receipt
+    val normalized = normalizeQaReceiptClaims(receipt, expected.acceptanceCriteria) ?: return receipt
     val normalizedJson = JsonCodec.mapToJsonString(normalized.wire)
     schema.violation(normalizedJson)?.let { invalid("the normalized receipt fails the schema: $it") }
     return decodeQaReceipt(normalized.wire).copy(warnings = normalized.warnings)

@@ -92,8 +92,12 @@ internal object QaPromptSections {
     |  simulator backend is available, else staging. Never use production. When only production is available,
     |  exercise no flow: settle `skipped` with `production_only` and name the missing environment in
     |  `reason_detail`.
+    |- Derive flows from this run's acceptance criteria only. Every flow checks at least one criterion, and every
+    |  assertion names the criteria it checks. Do not add flows the criteria do not ask for; report anything else
+    |  you notice as a finding.
     |- QA never blocks the run. A missing or contradictory receipt is recorded with a warning and the run continues,
-    |  so report honestly: an untested flow means `incomplete`, never `passed`.
+    |  so report honestly: a listed flow left untested records `incomplete` unless every acceptance criterion has a
+    |  passing assertion on an exercised flow.
     |- An app launch alone is never a pass. `passed` needs at least one exercised flow with a passing assertion.
     |- A simulator run never marks a `hardware_only` flow exercised.
     |- Never put raw device serials, credentials, or log bodies in the receipt. Reference evidence by path and sha256.

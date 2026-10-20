@@ -62,6 +62,7 @@ enum class QaIncompleteReason(val wireValue: String) {
   AUTOMATION_BROKEN("automation_broken"),
   BUDGET_EXHAUSTED("budget_exhausted"),
   DEVICE_LOST("device_lost"),
+  UNTESTED_FLOWS("untested_flows"),
   OTHER("other"),
   ;
 
