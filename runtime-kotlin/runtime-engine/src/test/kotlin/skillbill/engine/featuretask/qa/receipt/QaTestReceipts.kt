@@ -7,8 +7,12 @@ internal const val QA_TEST_HEAD = "1111111111111111111111111111111111111111"
 internal const val QA_TEST_TREE = "2222222222222222222222222222222222222222222222222222222222222222"
 internal const val QA_TEST_DIGEST = "3333333333333333333333333333333333333333333333333333333333333333"
 
+internal const val QA_TEST_QA_ROOT = "/home/qa/.skill-bill/qa/app-0123456789abcdef"
+
+internal fun qaTestEvidencePrefix(invocationId: String): String = "$QA_TEST_QA_ROOT/$invocationId/"
+
 internal fun qaTestExpected(invocationId: String = "phr-qa-test"): QaExpectedIdentity =
-  QaExpectedIdentity(QA_TEST_HEAD, QA_TEST_TREE, ".git/skill-bill/qa/$invocationId/")
+  QaExpectedIdentity(QA_TEST_HEAD, QA_TEST_TREE, qaTestEvidencePrefix(invocationId))
 
 internal fun qaTestReceipt(
   verdict: QaVerdict,

@@ -77,7 +77,7 @@ class QaFindingSettlementTest {
 
   @Test
   fun `historical evidence uses the workspace adapter prefix instead of rebuilding it from the path`() {
-    val identity = qaTestExpected("original").copy(evidencePrefix = ".git/skill-bill/qa/retained-evidence/")
+    val identity = qaTestExpected("original").copy(evidencePrefix = qaTestEvidencePrefix("retained-evidence"))
     val raw = qaTestJson(qaTestReceipt(QaVerdict.FINDINGS_OPEN, identity))
     val storage =
       object : QaWorkspacePort by workspaces {

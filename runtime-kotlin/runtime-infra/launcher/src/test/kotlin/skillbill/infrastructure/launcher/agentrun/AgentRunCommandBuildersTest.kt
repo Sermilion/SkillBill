@@ -18,6 +18,7 @@ import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -232,6 +233,21 @@ class AgentRunCommandBuildersTest {
       ),
       builder.build(request()).command,
     )
+  }
+
+  @Test
+  fun `a QA launch can write its invocation directory without bypass permissions`() {
+    val invocation = Path.of("/home/qa/.skill-bill/qa/app-0123456789abcdef/phr-qa")
+    val qaLaunch = request().copy(additionalWritableDirectories = listOf(invocation))
+
+    val claude = ClaudeAgentRunCommandBuilder(emptyMap()).build(qaLaunch).command
+    val codex = CodexAgentRunCommandBuilder().build(qaLaunch).command
+
+    assertEquals(
+      listOf("--add-dir", "/tmp/skillbill-agent-run", "--add-dir", invocation.toString()),
+      claude.takeLast(4),
+    )
+    assertEquals(listOf("--add-dir", invocation.toString()), codex.windowed(2).single { it.first() == "--add-dir" })
   }
 
   @Test

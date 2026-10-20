@@ -8,6 +8,7 @@ import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
 import skillbill.error.featuretask.qa.qaDeviceLeaseReason
 import skillbill.infrastructure.workflow.monitor.RecordedProcessLiveness
 import skillbill.infrastructure.workflow.monitor.livenessOf
+import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.qa.QaDeviceLeasePort
@@ -28,13 +29,14 @@ class FileSystemQaDeviceLeases(
   private val inspector: MonitorProcessInspector,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
+  private val environment: EnvironmentContext,
 ) : QaDeviceLeasePort {
   override fun acquire(
     repoRoot: Path,
     deviceFingerprint: String,
     invocationId: String,
   ): QaLeaseResult {
-    val qaRoot = QaPaths.qaRoot(repoRoot)
+    val qaRoot = QaPaths.qaRoot(environment, repoRoot)
     val ownerFile = QaPaths.ownerFile(QaPaths.invocationDirectory(qaRoot, invocationId))
     val owner =
       readQaRecord(ownerFile)?.let { QaLeaseRecordCodec.decodeOwner(it, ownerFile.toString()) }
@@ -64,7 +66,7 @@ class FileSystemQaDeviceLeases(
     lease: QaDeviceLease,
   ): QaLeaseReleaseOutcome =
     try {
-      val qaRoot = QaPaths.qaRoot(repoRoot)
+      val qaRoot = QaPaths.qaRoot(environment, repoRoot)
       val leaseFile = QaPaths.leaseFile(qaRoot, lease.deviceFingerprint)
       withLeaseLock(qaRoot) {
         val current = readQaRecord(leaseFile)?.let { QaLeaseRecordCodec.decodeLease(it, leaseFile.toString()) }
@@ -86,7 +88,7 @@ class FileSystemQaDeviceLeases(
   ): List<QaLeaseReleaseOutcome> {
     val qaRoot =
       try {
-        QaPaths.qaRoot(repoRoot)
+        QaPaths.qaRoot(environment, repoRoot)
       } catch (failure: SkillBillRuntimeException) {
         failure.rethrowUnless(failure.isQaDeviceLeaseFailure)
         return listOf(QaLeaseReleaseOutcome.Failed(invocationId, failure.qaDeviceLeaseReason))

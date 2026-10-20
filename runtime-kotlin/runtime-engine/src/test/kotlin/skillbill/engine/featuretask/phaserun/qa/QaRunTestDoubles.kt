@@ -2,8 +2,10 @@ package skillbill.engine.featuretask.phaserun.qa
 
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
+import skillbill.engine.featuretask.qa.receipt.QA_TEST_QA_ROOT
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.receipt.qaTestEvidencePrefix
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.qa.QaDeviceLeasePort
@@ -27,14 +29,14 @@ internal class InMemoryQaWorkspaces : QaWorkspacePort {
     repoRoot: Path,
     invocationId: String,
   ): QaWorkspace {
-    val directory = repoRoot.resolve(".git/skill-bill/qa/$invocationId")
-    return QaWorkspace(invocationId, directory, directory.resolve("receipt.json"), ".git/skill-bill/qa/$invocationId/")
+    val directory = Path.of(QA_TEST_QA_ROOT, invocationId)
+    return QaWorkspace(invocationId, directory, directory.resolve("receipt.json"), qaTestEvidencePrefix(invocationId))
       .also { current = it }
   }
 
   override fun readReceipt(receiptPath: Path): QaReceiptSource? =
     (if (receiptPath == current?.receiptPath) receipt else receipts[receiptPath])?.let { raw ->
-      QaReceiptSource(raw, ".git/skill-bill/qa/${receiptPath.parent.fileName}/")
+      QaReceiptSource(raw, "${receiptPath.parent}/")
     }
 
   override fun readRetainedReceipt(
@@ -42,8 +44,7 @@ internal class InMemoryQaWorkspaces : QaWorkspacePort {
     receiptReference: String,
   ): QaReceiptSource? =
     receipts[Path.of(receiptReference)]?.let { raw ->
-      val invocationId = Path.of(receiptReference).parent.fileName.toString()
-      QaReceiptSource(raw, ".git/skill-bill/qa/$invocationId/", receiptReference)
+      QaReceiptSource(raw, "${Path.of(receiptReference).parent}/", receiptReference)
     }
 
   override fun close(workspace: QaWorkspace) {

@@ -10,11 +10,13 @@ import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
+import skillbill.engine.featuretask.qa.receipt.QA_TEST_QA_ROOT
 import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
 import skillbill.engine.featuretask.qa.receipt.QaFallbackKind
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
 import skillbill.engine.featuretask.qa.receipt.QaVerdict
+import skillbill.engine.featuretask.qa.receipt.qaTestEvidencePrefix
 import skillbill.engine.featuretask.qa.receipt.qaTestJson
 import skillbill.engine.featuretask.qa.receipt.qaTestReceipt
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
@@ -93,9 +95,11 @@ class FeatureTaskRuntimeQaExecutionTest {
       val report = fixture.harness.runner.run(fixture.harness.request)
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
-      val prompt =
-        fixture.launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }
-          .single { phaseIdFromPrompt(it) == "qa" }
+      val qaLaunch =
+        fixture.launcher.requests.map { it.skillRunRequest }
+          .single { phaseIdFromPrompt(it.promptOverride.orEmpty()) == "qa" }
+      val prompt = assertNotNull(qaLaunch.promptOverride)
+      assertEquals(listOf(Path.of(QA_TEST_QA_ROOT, "qa-test-invocation")), qaLaunch.additionalWritableDirectories)
       assertContains(prompt, "`policy` set to `auto`")
       assertContains(prompt, "qa/android-qa.md")
       assertContains(prompt, QA_TEST_TREE)
@@ -402,7 +406,7 @@ class FeatureTaskRuntimeQaExecutionTest {
     val workspaces = InMemoryQaWorkspaces()
     val diagnostics = RecordingQaDiagnostics()
     val leases = RecordingQaLeases()
-    val expected = QaExpectedIdentity(QA_TEST_HEAD, QA_TEST_TREE, ".git/skill-bill/qa/qa-test-invocation/")
+    val expected = QaExpectedIdentity(QA_TEST_HEAD, QA_TEST_TREE, qaTestEvidencePrefix("qa-test-invocation"))
     val pack =
       kotlinPackWithValidationGate().copy(
         qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), "qa/android-qa.md"),
@@ -432,7 +436,7 @@ class FeatureTaskRuntimeQaExecutionTest {
             } else {
               expected.copy(
                 treeIdentity = checkNotNull(git.repositoryFingerprintValue),
-                evidencePrefix = ".git/skill-bill/qa/qa-test-invocation-$visit/",
+                evidencePrefix = qaTestEvidencePrefix("qa-test-invocation-$visit"),
               )
             }
           val receipt = receiptForVisit?.invoke(visit, identity) ?: qaTestReceipt(verdict, identity)

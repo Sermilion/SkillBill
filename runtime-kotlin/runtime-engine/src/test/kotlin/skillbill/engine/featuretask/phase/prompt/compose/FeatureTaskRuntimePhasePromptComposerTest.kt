@@ -168,6 +168,17 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
+  fun `qa may build and run device tests while qa_fix keeps the build and validation bans`() {
+    val qaPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA)
+    val fixPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX)
+
+    assertFalse(qaPrompt.contains("## Build ownership"), qaPrompt)
+    assertFalse(qaPrompt.contains("## Validation ownership"), qaPrompt)
+    assertContains(fixPrompt, "## Build ownership")
+    assertContains(fixPrompt, "## Validation ownership")
+  }
+
+  @Test
   fun `audit reports completed inspection while runtime owns repair admission`() {
     val prompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
 

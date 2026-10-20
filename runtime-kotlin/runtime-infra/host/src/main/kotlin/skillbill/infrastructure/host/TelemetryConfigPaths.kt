@@ -5,7 +5,7 @@ import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
 
-internal fun resolveTelemetryStateDir(
+fun resolveTelemetryStateDir(
   environment: Map<String, String>,
   userHome: Path,
 ): Path =

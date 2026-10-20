@@ -36,6 +36,7 @@ data class PhaseStepFacts(
   val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
   val streamOutputForLiveness: Boolean = false,
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
+  val additionalWritableDirectories: List<Path> = emptyList(),
 )
 
 data class PhaseStepOutput(

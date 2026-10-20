@@ -108,16 +108,15 @@ class QaStrategy(
   override fun promptSections(
     stepId: String,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
-  ): PhaseStepPromptSections =
-    PhaseStepPromptSections(
+  ): PhaseStepPromptSections {
+    val qaStep = stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA
+    return PhaseStepPromptSections(
       taskDirective = directiveFor(stepId),
-      valueContent =
-        if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) {
-          QaPromptSections.FIX_VALUE_CONTENT
-        } else {
-          QaPromptSections.VALUE_CONTENT
-        },
+      runsValidationGate = qaStep,
+      runsBuildGate = qaStep,
+      valueContent = if (qaStep) QaPromptSections.VALUE_CONTENT else QaPromptSections.FIX_VALUE_CONTENT,
     )
+  }
 
   override fun withPreparedRun(
     run: PhaseRun,

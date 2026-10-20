@@ -119,6 +119,7 @@ class DefaultPhaseRunner(
         SkillRunRequest(
           issueKey = facts.issueKey,
           repoRoot = facts.repoRoot,
+          additionalWritableDirectories = facts.additionalWritableDirectories,
           subtaskId = facts.subtaskId,
           timeout = facts.timeout,
           modelOverride = facts.modelOverride,

@@ -1,7 +1,7 @@
 # QA device lease schema (canonical source of truth).
 #
-# One record per device lives at <git common dir>/skill-bill/qa/leases/<device_fingerprint>.json and names the QA
-# invocation that owns the device. The invocation owner record, <git common dir>/skill-bill/qa/<invocation>/owner.json,
+# One record per device lives at <state dir>/qa/<repo-key>/leases/<device_fingerprint>.json and names the QA
+# invocation that owns the device. The invocation owner record, <state dir>/qa/<repo-key>/<invocation>/owner.json,
 # uses the invocation_owner shape below and names the long-lived runtime process whose liveness keeps the lease.
 #
 # Versioning rule:

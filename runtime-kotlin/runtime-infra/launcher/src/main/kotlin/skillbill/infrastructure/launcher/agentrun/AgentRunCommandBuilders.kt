@@ -187,8 +187,10 @@ internal class ClaudeAgentRunCommandBuilder(
             add(governedReviewToolList(request.reviewFanOut))
           }
           add("--dangerously-skip-permissions")
-          add("--add-dir")
-          add(request.repoRoot.toString())
+          (listOf(request.repoRoot) + request.additionalWritableDirectories).forEach { directory ->
+            add("--add-dir")
+            add(directory.toString())
+          }
         },
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
@@ -235,6 +237,10 @@ internal class CodexAgentRunCommandBuilder(
           add("--json")
           add("--cd")
           add(request.repoRoot.toString())
+          request.additionalWritableDirectories.forEach { directory ->
+            add("--add-dir")
+            add(directory.toString())
+          }
           if (request.reviewEvidenceBroker == null) {
             add("--dangerously-bypass-approvals-and-sandbox")
             add("--config")

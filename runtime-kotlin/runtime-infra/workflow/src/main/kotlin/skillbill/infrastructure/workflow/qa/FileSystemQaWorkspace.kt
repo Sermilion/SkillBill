@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.qa
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
+import skillbill.model.EnvironmentContext
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaReceiptSource
@@ -22,12 +23,13 @@ private const val RECEIPT_FILE = "receipt.json"
 class FileSystemQaWorkspace(
   private val inspector: MonitorProcessInspector,
   private val clock: Clock,
+  private val environment: EnvironmentContext,
 ) : QaWorkspacePort {
   override fun open(
     repoRoot: Path,
     invocationId: String,
   ): QaWorkspace {
-    val directory = QaPaths.invocationDirectory(QaPaths.qaRoot(repoRoot), invocationId)
+    val directory = QaPaths.invocationDirectory(QaPaths.qaRoot(environment, repoRoot), invocationId)
     try {
       Files.createDirectories(directory)
     } catch (failure: IOException) {
@@ -45,7 +47,7 @@ class FileSystemQaWorkspace(
       invocationId = invocationId,
       directory = directory,
       receiptPath = directory.resolve(RECEIPT_FILE),
-      evidencePrefix = QaPaths.evidencePrefix(invocationId),
+      evidencePrefix = QaPaths.evidencePrefix(directory),
     )
   }
 
@@ -57,8 +59,8 @@ class FileSystemQaWorkspace(
         Files.size(file) > MAX_RECEIPT_BYTES ->
           throw invalidQaReceipt("the receipt is larger than $MAX_RECEIPT_BYTES bytes")
         else -> {
-          val invocation = file.parent?.fileName ?: throw invalidQaReceipt("receipt has no invocation directory")
-          QaReceiptSource(Files.readString(file), QaPaths.evidencePrefix(invocation.toString()))
+          val invocation = file.parent ?: throw invalidQaReceipt("receipt has no invocation directory")
+          QaReceiptSource(Files.readString(file), QaPaths.evidencePrefix(invocation))
         }
       }
     } catch (failure: IOException) {
@@ -95,7 +97,7 @@ class FileSystemQaWorkspace(
       }
       return QaReceiptSource(
         String(bytes, Charsets.UTF_8),
-        QaPaths.evidencePrefix(invocationId),
+        QaPaths.evidencePrefix(invocationDirectory),
         reference.toString(),
       )
     } catch (failure: IOException) {

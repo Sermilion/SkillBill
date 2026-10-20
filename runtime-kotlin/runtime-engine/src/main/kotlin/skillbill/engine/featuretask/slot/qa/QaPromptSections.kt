@@ -40,7 +40,9 @@ internal object QaPromptSections {
     |
     |Rules:
     |
-    |- QA is report-only. Never edit tracked files, commit, push, or open a pull request.
+    |- QA may build and install the app artifact the pack guidance names, and may run device or instrumentation
+    |  tests for the changed flows. QA stays report-only: never edit tracked files, commit, push, or open a pull
+    |  request.
     |- QA runs on a test account with test data. Every in-app action is allowed: create, edit, and delete
     |  records, add profiles, remove cards, log out. Never leave a flow untested to protect device or account state.
     |- When the app or build offers an environment, flavor, or server choice, use Local when a local backend or

@@ -143,7 +143,8 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         assertTrue(recorder.start(phase(f, "audit", 3)) == RequiredPhaseWrite.Acknowledged)
         assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
 
-        saveQaFindings(f, QaOpenFinding("F-1", listOf("AC-002"), listOf("/repo/.git/skill-bill/qa/q1/receipt.json")))
+        val receiptRef = "/home/qa/.skill-bill/qa/app-0123456789abcdef/q1/receipt.json"
+        saveQaFindings(f, QaOpenFinding("F-1", listOf("AC-002"), listOf(receiptRef)))
         val reaudit = phase(f, "audit", 4)
         assertTrue(recorder.start(reaudit) == RequiredPhaseWrite.Acknowledged)
         val admitted = assertNotNull(scope.snapshot)

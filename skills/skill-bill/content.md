@@ -355,7 +355,8 @@ the installed packs, not the dispatcher: the routed pack's `qa_capability` names
 its guidance, and a repository with no declaring pack completes as a skipped
 `unsupported_target` run without launching an agent. The QA agent drives one
 device or simulator and writes its receipt and evidence under
-`.git/skill-bill/qa/<invocation>/`, never in the working tree. It runs on a
+`~/.skill-bill/qa/<repo-key>/<invocation>/` (or under `SKILL_BILL_STATE_DIR`),
+never in the working tree or `.git/`. It runs on a
 test account, so every in-app action is allowed, and it picks a Local or staging
 environment, never production; a production-only app settles `skipped` with
 `production_only`. It never edits tracked files, commits, pushes, or opens a PR.

@@ -216,7 +216,7 @@ class VerifyQaStep(
   ): VerifyQaAttempt {
     val directive =
       VerifyPromptSections.qaDirective(worktree, run.target.headRevision) + QaPromptSections.supplement(qa)
-    val context = run.context.copy(repoRoot = worktree)
+    val context = run.context.copy(repoRoot = worktree, additionalWritableDirectories = listOf(qa.workspace.directory))
     val receipt =
       when (val step = run.context.steps.runReportOnly(context, VerifyPromptSections.QA_STEP, directive, prior)) {
         is OperationStepResult.Failed -> stopped(qa, step.reason)
@@ -317,6 +317,7 @@ class VerifyQaStep(
     const val MAX_RECORD_REASON = 200
     const val LEASE_GUIDANCE =
       "Run `skill-bill qa lease release --invocation <id> --device <serial>` or delete the lease file under " +
-        ".git/skill-bill/qa/leases/ once no QA run uses the device."
+        "<state dir>/qa/<repo-key>/leases/ (state dir: SKILL_BILL_STATE_DIR, else ~/.skill-bill) once no QA run " +
+        "uses the device."
   }
 }

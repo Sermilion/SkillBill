@@ -101,6 +101,7 @@ class QaStandalonePhaseRun(
   private companion object {
     const val RETAINED_GUIDANCE =
       "Run `skill-bill qa lease release --invocation <id> --device <serial>` or delete the lease file under " +
-        ".git/skill-bill/qa/leases/ once no QA run uses the device."
+        "<state dir>/qa/<repo-key>/leases/ (state dir: SKILL_BILL_STATE_DIR, else ~/.skill-bill) once no QA run " +
+        "uses the device."
   }
 }

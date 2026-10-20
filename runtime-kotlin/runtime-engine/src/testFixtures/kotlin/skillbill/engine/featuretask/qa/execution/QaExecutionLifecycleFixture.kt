@@ -39,8 +39,8 @@ private class TestQaWorkspaces : QaWorkspacePort {
     repoRoot: Path,
     invocationId: String,
   ): QaWorkspace {
-    val directory = repoRoot.resolve(".git/skill-bill/qa/$invocationId")
-    return QaWorkspace(invocationId, directory, directory.resolve("receipt.json"), ".git/skill-bill/qa/$invocationId/")
+    val directory = Path.of("/home/qa/.skill-bill/qa/app-0123456789abcdef", invocationId)
+    return QaWorkspace(invocationId, directory, directory.resolve("receipt.json"), "$directory/")
   }
 
   override fun readReceipt(receiptPath: Path): QaReceiptSource? = null

@@ -72,6 +72,7 @@ data class OperationContext(
   val arguments: OperationArguments,
   val instructions: String?,
   val steps: OperationStepRunner,
+  val additionalWritableDirectories: List<Path> = emptyList(),
 ) {
   val confirming: Boolean get() = arguments.confirm != null
 }

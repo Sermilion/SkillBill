@@ -24,6 +24,7 @@ import kotlin.time.Duration
 data class SkillRunRequest(
   val issueKey: String,
   val repoRoot: Path,
+  val additionalWritableDirectories: List<Path> = emptyList(),
   val subtaskId: Int? = null,
   val timeout: Duration? = null,
   val progressIdleTimeout: Duration? = null,

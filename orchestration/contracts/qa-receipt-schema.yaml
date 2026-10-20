@@ -3,12 +3,18 @@
 # The settled output of one QA run: the agent drives a device or simulator from pack guidance and writes this
 # receipt under the invocation directory; the runtime validates it before any consumer reads it.
 #
+# The invocation directory is <state dir>/qa/<repo-key>/<invocation>/, where the state dir is SKILL_BILL_STATE_DIR or
+# ~/.skill-bill and the repo key is shared by every worktree of one repository. It stays outside .git/ because agent
+# hosts refuse writes there.
+#
 # Versioning rule:
 #
 # - contract_version is pinned by QA_RECEIPT_CONTRACT_VERSION in
 #   runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/qa/QaReceiptContract.kt.
 # - Evidence is referenced by path and digest only. No object carries a body, content, or data field, so an inline
 #   body fails additionalProperties.
+# - An evidence path is absolute. The schema checks only that shape; the runtime validator requires the exact
+#   invocation directory prefix and rejects any ".." segment.
 # - Only passed and findings_open must name the built artifact and the target. An incomplete receipt may stop before
 #   either exists, and the runtime writes one itself when the agent's receipt is missing or unusable.
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -382,7 +388,7 @@ $defs:
       path:
         type: string
         maxLength: 512
-        pattern: "^\\.git/skill-bill/qa/[A-Za-z0-9._/-]+$"
+        pattern: "^/(?:[^/]+/)+[^/]+$"
       sha256:
         type: string
         pattern: "^[0-9a-f]{64}$"

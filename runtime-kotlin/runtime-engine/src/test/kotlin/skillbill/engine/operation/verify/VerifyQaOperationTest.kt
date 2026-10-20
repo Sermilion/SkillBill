@@ -2,6 +2,7 @@ package skillbill.engine.operation.verify
 
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
 import skillbill.engine.featuretask.qa.receipt.QaVerdict
+import skillbill.engine.featuretask.qa.receipt.qaTestEvidencePrefix
 import skillbill.engine.featuretask.qa.receipt.qaTestJson
 import skillbill.engine.featuretask.qa.receipt.qaTestReceipt
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
@@ -174,7 +175,7 @@ class VerifyQaOperationTest {
     verdict: QaVerdict,
     tree: String = harness.treeIdentity(harness.qaWorktree(token)),
   ): String {
-    val expected = QaExpectedIdentity(harness.head, tree, ".git/skill-bill/qa/${VerifyOperationHarness.QA_INVOCATION}/")
+    val expected = QaExpectedIdentity(harness.head, tree, qaTestEvidencePrefix(VerifyOperationHarness.QA_INVOCATION))
     return qaTestJson(qaTestReceipt(verdict, expected) + ("policy" to "on"))
   }
 

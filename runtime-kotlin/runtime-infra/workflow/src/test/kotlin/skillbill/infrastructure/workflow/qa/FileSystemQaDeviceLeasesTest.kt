@@ -1,9 +1,11 @@
 package skillbill.infrastructure.workflow.qa
 
 import skillbill.infrastructure.workflow.monitor.FakeMonitorProcessInspector
+import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.qa.model.QaLeaseResult
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -17,6 +19,9 @@ import kotlin.test.assertTrue
 
 class FileSystemQaDeviceLeasesTest {
   private val repoRoot: Path = Files.createTempDirectory("skillbill-qa-lease").also(::gitInit)
+  private val stateDir: Path = Files.createTempDirectory("skillbill-qa-lease-state")
+  private val environment =
+    EnvironmentContext(environment = mapOf(STATE_DIR_ENVIRONMENT_KEY to stateDir.toString()), userHome = stateDir)
   private val inspector = FakeMonitorProcessInspector(FeatureTaskRuntimeProcessInspection.ExactLive)
   private val warnings = mutableListOf<String>()
   private val diagnostics =
@@ -33,19 +38,20 @@ class FileSystemQaDeviceLeasesTest {
         error: Throwable?,
       ) = Unit
     }
-  private val leases = FileSystemQaDeviceLeases(inspector, Clock.systemUTC(), diagnostics)
+  private val leases = FileSystemQaDeviceLeases(inspector, Clock.systemUTC(), diagnostics, environment)
   private val leaseFile: Path
 
   init {
-    val workspaces = FileSystemQaWorkspace(inspector, Clock.systemUTC())
+    val workspaces = FileSystemQaWorkspace(inspector, Clock.systemUTC(), environment)
     workspaces.open(repoRoot, FIRST)
     workspaces.open(repoRoot, SECOND)
-    leaseFile = QaPaths.leaseFile(QaPaths.qaRoot(repoRoot), DEVICE)
+    leaseFile = QaPaths.leaseFile(QaPaths.qaRoot(environment, repoRoot), DEVICE)
   }
 
   @AfterTest
   fun cleanUp() {
     repoRoot.toFile().deleteRecursively()
+    stateDir.toFile().deleteRecursively()
   }
 
   @Test
