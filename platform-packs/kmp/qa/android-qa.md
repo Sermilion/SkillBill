@@ -17,8 +17,8 @@ Run `adb devices -l` and classify each line:
 |---|---|---|
 | `device` | authorized and online | candidate |
 | `unauthorized` | the host key is not accepted on the device | skip with `unauthorized_target`. Fix: unlock the device and accept the USB debugging prompt. |
-| `offline` | adb sees the device but cannot talk to it | skip with `offline_target`. Fix: reconnect the cable or run `adb kill-server && adb start-server`. |
-| no lines | nothing attached | skip with `unsupported_target`. Fix: attach a device or start an emulator. |
+| `offline` | adb sees the device but cannot talk to it | An `emulator-*` serial that is still booting: wait for boot as in [Emulator boot](#emulator-boot), then classify again. Otherwise skip with `offline_target`. Fix: reconnect the cable or run `adb kill-server && adb start-server`. |
+| no lines | nothing attached | boot an AVD as in [Emulator boot](#emulator-boot). |
 
 Selection:
 
@@ -27,6 +27,25 @@ Selection:
 - When more than one authorized candidate exists and the user named none, skip with `ambiguous_target` and list how to name one, without printing serials into the receipt.
 
 `device_fingerprint` is the lowercase hex sha256 of the trimmed serial. It is the same value `skill-bill qa lease` prints.
+
+## Emulator boot
+
+When `adb devices -l` lists nothing, start an emulator instead of skipping.
+
+1. Find the emulator binary at `$ANDROID_HOME/emulator/emulator`, `$ANDROID_SDK_ROOT/emulator/emulator`, or `<sdk.dir>/emulator/emulator` from the repository's `local.properties`. When none exists, skip with `unsupported_target`. Fix: install the Android Emulator from the SDK Manager.
+2. Run `<emulator> -list-avds`.
+   - When the user named an AVD, use it. If it is not listed, skip with `unsupported_target` and name the listed AVDs in `reason_detail`.
+   - When exactly one AVD is listed, use it.
+   - When more than one is listed and the user named none, skip with `ambiguous_target`. Name the listed AVDs in `reason_detail` and tell the user to pass the AVD name in the phase instructions.
+   - When none is listed, skip with `unsupported_target`. Fix: create an AVD in Android Studio's Device Manager or with `avdmanager create avd`.
+3. Start it detached so it outlives the command: `nohup <emulator> -avd <name> -no-snapshot-save -no-boot-anim > <invocation dir>/emulator.log 2>&1 &`. Add `-no-window` when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set.
+4. Run `adb wait-for-device`, then poll `adb -s <serial> shell getprop sys.boot_completed` every few seconds until it prints `1`, for up to 300 seconds. The serial is the `emulator-*` line that `adb devices` now shows.
+5. If boot does not finish in time, stop the emulator with `adb -s <serial> emu kill` and skip with `unsupported_target`. Put the last lines of `emulator.log` in `reason_detail` without serials.
+6. Unlock the screen with `adb -s <serial> shell input keyevent 82`, then continue with the device lease.
+
+Record a booted AVD as `target.kind: simulator` and `target.selection: substituted`, and add a `fallbacks` entry with `kind: simulator_substitution` and the reason, for example "No device attached; booted the only AVD."
+
+When the run finishes, stop only an emulator this run booted, with `adb -s <serial> emu kill`, and report `cleanup.outcome: released`. Leave an emulator that was already running alone. If the kill fails, report `cleanup.outcome: retained` with a `retained_resources` entry of `kind: emulator` and the AVD name, plus `guidance` telling the user how to stop it.
 
 ## Device lease
 
