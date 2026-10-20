@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
@@ -27,7 +28,7 @@ class StandaloneQaSchemaCompatibilityTest {
         }
         statement.executeQuery("PRAGMA user_version").use { rows ->
           assertTrue(rows.next())
-          assertEquals(63, rows.getInt(1))
+          assertEquals(DesktopReadSchema.VERSION, rows.getInt(1))
         }
       }
     }

@@ -129,25 +129,19 @@ class GoalRunnerValidationEvidenceProjectionTest {
     val workflowId = "wfl-phase-results"
     val recorder = goalRunnerDefaultPhaseRecorder()
     recorder.openTestWorkflow(workflowId, "goal-phase-results")
+    val review =
+      GoalRunnerPhaseConclusion(
+        "approved",
+        "No production-blocking findings.",
+        "The retained field values survive a restart.",
+        1,
+      )
+    val audit = GoalRunnerPhaseConclusion("satisfied", "All criteria met.", "AC-001 met.\nAC-002 met.", 2)
     recorder.recordPhaseState(
-      phaseConclusionRequest(
-        workflowId,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
-        verdict = "approved",
-        summary = "No production-blocking findings.",
-        detail = "The retained field values survive a restart.",
-        attemptCount = 1,
-      ),
+      phaseConclusionRequest(workflowId, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, review),
     )
     recorder.recordPhaseState(
-      phaseConclusionRequest(
-        workflowId,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-        verdict = "satisfied",
-        summary = "All criteria met.",
-        detail = "AC-001 met.\nAC-002 met.",
-        attemptCount = 2,
-      ),
+      phaseConclusionRequest(workflowId, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, audit),
     )
     val manifest = completedManifest(workflowId)
     val outcomeStore =
@@ -175,19 +169,8 @@ class GoalRunnerValidationEvidenceProjectionTest {
     val phaseResults = result.completedSubtaskPhaseResults.single()
     assertEquals(1, phaseResults.subtaskId)
     assertEquals(emptyList(), phaseResults.reviewPasses)
-    assertEquals(
-      GoalRunnerPhaseConclusion(
-        "approved",
-        "No production-blocking findings.",
-        "The retained field values survive a restart.",
-        1,
-      ),
-      phaseResults.review,
-    )
-    assertEquals(
-      GoalRunnerPhaseConclusion("satisfied", "All criteria met.", "AC-001 met.\nAC-002 met.", 2),
-      phaseResults.audit,
-    )
+    assertEquals(review, phaseResults.review)
+    assertEquals(audit, phaseResults.audit)
     assertEquals(
       GoalRunnerQaResult(
         "findings",
@@ -268,16 +251,13 @@ class GoalRunnerValidationEvidenceProjectionTest {
   private fun phaseConclusionRequest(
     workflowId: String,
     phaseId: String,
-    verdict: String,
-    summary: String,
-    detail: String,
-    attemptCount: Int,
+    conclusion: GoalRunnerPhaseConclusion,
   ): FeatureTaskRuntimePhaseStateRequest =
     FeatureTaskRuntimePhaseStateRequest(
       workflowId = workflowId,
       phaseId = phaseId,
       status = "completed",
-      attemptCount = attemptCount,
+      attemptCount = conclusion.attemptCount,
       resolvedAgentId = "claude",
       finished = true,
       outputArtifact =
@@ -286,9 +266,9 @@ class GoalRunnerValidationEvidenceProjectionTest {
             SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
             SharedPayloadKeys.PHASE_ID to phaseId,
             SharedPayloadKeys.STATUS to "completed",
-            SharedPayloadKeys.SUMMARY to summary,
-            SharedPayloadKeys.VERDICT to verdict,
-            SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to detail),
+            SharedPayloadKeys.SUMMARY to conclusion.summary,
+            SharedPayloadKeys.VERDICT to conclusion.verdict,
+            SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to conclusion.detail),
           ),
         ),
     )
