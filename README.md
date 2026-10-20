@@ -214,6 +214,14 @@ Targets are `pr`, `HEAD`, `uncommitted`, `staged`, `unstaged`, or a commit sha. 
 
 **Desktop app.** Installed with Skill Bill. It lists live, recent, and stalled work, shows each goal's pipeline and activity (review, audit, and QA results, including which QA findings were fixed), and can stop, resume, and re-run work from the window or the tray.
 
+![Skill Bill desktop app showing a three-subtask goal in its monitor phase, with pause, stop, and cancel controls](docs/assets/desktop-goal-run.png)
+
+A goal run. The sidebar groups work that needs you, standalone phases, goal runs, and history. The main pane shows subtask progress from the goal manifest, the current phase, elapsed time, attempts per phase, and dependencies between subtasks.
+
+![Skill Bill desktop app showing goal activity with review, audit, and goal QA results for a subtask](docs/assets/desktop-goal-activity.png)
+
+Goal activity for another run. Each subtask lists its review verdict, audit result with attempt count, and goal QA outcome, next to the agent, liveness, and validation status.
+
 **CLI.** Run these from the repository that owns the goal:
 
 | Command | Effect |
