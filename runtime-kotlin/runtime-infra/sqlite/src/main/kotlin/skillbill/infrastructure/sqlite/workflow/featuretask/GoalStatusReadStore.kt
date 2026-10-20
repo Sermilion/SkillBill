@@ -23,6 +23,7 @@ internal class GoalStatusReadStore(private val connection: Connection) {
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME.label(),
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.label(),
       DurableWorkflowArtifactFamily.GOAL_PROGRESS_LATEST_EVENT.label(),
+      DurableWorkflowArtifactFamily.GOAL_PROGRESS_RUN_HISTORY.label(),
       DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_LATEST_EVENT.label(),
       DecompositionManifestPayloadKeys.COMMIT_PUSH_RESULT,
       DecompositionManifestPayloadKeys.BLOCKED_REASON,
