@@ -42,6 +42,7 @@ import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.admitQaReaudit
+import skillbill.workflow.taskruntime.model.audit.continueReservedRepair
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import skillbill.workflow.taskruntime.model.audit.retainClarification
 import skillbill.workflow.taskruntime.model.audit.retainProseProgress
@@ -720,6 +721,8 @@ class AcceptanceCriterionRepairPersistence(
           )?.clearPendingClarification()
         }
       }
+      is AcceptanceCriterionRepairMutation.ContinueRepair ->
+        state?.continueReservedRepair(mutation.reservationId, mutation.evidenceRef)
       is AcceptanceCriterionRepairMutation.RepairCompleted -> {
         if (repairCompletedReplays(state, mutation)) {
           state
@@ -798,6 +801,10 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.Reserve ->
         expected.revision == state?.reservation?.revision?.minus(1) &&
           expected.currentCriterionRef == state?.currentCriterionRef && expected.reservationId == null
+      is AcceptanceCriterionRepairMutation.ContinueRepair ->
+        expected.revision == state?.revision?.minus(1) &&
+          expected.currentCriterionRef == state?.currentCriterionRef &&
+          expected.reservationId == state?.reservation?.reservationId
       is AcceptanceCriterionRepairMutation.RepairCompleted ->
         expected.revision ==
           state

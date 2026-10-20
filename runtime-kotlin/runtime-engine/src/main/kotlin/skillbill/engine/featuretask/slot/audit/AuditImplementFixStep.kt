@@ -28,7 +28,8 @@ internal object AuditImplementFixStep : PhaseStepHooks {
     }
     return AttemptResult.incompleteWork(
       "The repair report says production work remains.",
-      "Continue the reserved repair cycle through its serial outcome owner.",
+      "Continue the saved repair plan in the same reservation. " +
+        "Finish all remaining production work before reporting satisfied.",
       capture.fileManifest,
       attested,
     )

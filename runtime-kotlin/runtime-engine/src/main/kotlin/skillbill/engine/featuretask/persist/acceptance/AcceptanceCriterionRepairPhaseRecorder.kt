@@ -196,7 +196,17 @@ class AcceptanceCriterionRepairPhaseRecorder(
           FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
         )
     val clarification = needsClarification(conclusion)
-    val evidence = CompletionEvidence(ref, digest, prose, tree, checkpoint, satisfied, clarification)
+    val evidence =
+      CompletionEvidence(
+        ref,
+        digest,
+        prose,
+        tree,
+        checkpoint,
+        satisfied,
+        clarification,
+        conclusion == FeatureTaskRuntimeVerdict.PROGRESS.wireValue,
+      )
     return completionMutation(state, phase.phaseId, evidence, session.steps)?.let { mutation ->
       commit(
         session,
@@ -224,6 +234,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val checkpoint: String,
     val satisfied: Boolean,
     val clarification: Boolean,
+    val continuing: Boolean,
   )
 
   private data class CommitContext(
@@ -293,8 +304,12 @@ class AcceptanceCriterionRepairPhaseRecorder(
         AcceptanceCriterionRepairMutation.RepairCompleted(live.reservationId, prose, tree, checkpoint)
       } else {
         AcceptanceCriterionRepairMutation.Clarification(
-          "Read-only repair-report admission. Decide whether this report leaves production work unfinished. " +
-            "Report advance for unfinished production work, satisfied if the repair is complete. " + prose,
+          "Read-only repair-report admission. Inspect the report and current source for this criterion. " +
+            "Report progress when production work remains and can continue, " +
+            "including an agent stopping after a partial edit. " +
+            "Report satisfied only when the repair is complete. Report advance only for a concrete external " +
+            "obstacle that prevents further repair, naming the missing input or external action. " +
+            "Task size and unfinished implementation are not external obstacles. " + prose,
         )
       }
     }
@@ -306,7 +321,9 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): AcceptanceCriterionRepairMutation? =
     with(evidence) {
       val live = state.reservation ?: return@with null
-      if (clarification) {
+      if (continuing) {
+        AcceptanceCriterionRepairMutation.ContinueRepair(live.reservationId, prose)
+      } else if (clarification) {
         AcceptanceCriterionRepairMutation.Clarification(prose)
       } else if (satisfied) {
         AcceptanceCriterionRepairMutation.RepairCompleted(
@@ -431,8 +448,11 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): RequiredPhaseWrite {
     val additionalPhaseId =
       session.steps.repair.takeIf {
-        phase.phaseId == session.steps.audit && mutation is AcceptanceCriterionRepairMutation.Outcome &&
-          mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
+        phase.phaseId == session.steps.audit && (
+          mutation is AcceptanceCriterionRepairMutation.ContinueRepair ||
+            mutation is AcceptanceCriterionRepairMutation.Outcome &&
+            mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
+        )
       }
     val scope = session.accounting
     val state = context.expectedState

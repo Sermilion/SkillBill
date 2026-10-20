@@ -58,6 +58,72 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class FeatureTaskRuntimeSerialRepairTest {
   @Test
+  fun `partial reports and retryable source gap blocks continue one plan without consuming criterion failures`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val reservations = mutableListOf<String>()
+    var repairs = 0
+    var plans = 0
+    var audits = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phase = phaseIdFromPrompt(assertNotNull(request.skillRunRequest.promptOverride))
+        val state = accounting.get()?.snapshot
+        facts(
+          when (phase) {
+            "audit" -> {
+              audits++
+              continuingAuditOutput(state, repairs, audits)
+            }
+            "audit_plan_fix" -> {
+              plans++
+              defaultPhaseOutput(request)
+            }
+            "audit_implement_fix" -> {
+              repairs++
+              reservations += assertNotNull(state?.reservation?.reservationId)
+              assertTrue(assertNotNull(state).unsuccessfulTotals.isEmpty())
+              when (repairs) {
+                1 ->
+                  defaultPhaseOutput(request).replace(
+                    "\"status\": \"completed\",",
+                    "\"status\": \"completed\", \"verdict\": \"progress\",",
+                  )
+                2, 3 ->
+                  """{
+              "contract_version":"0.7","phase_id":"audit_implement_fix","status":"blocked",
+              "failure_disposition":"retryable","summary":"Only one guard was added.",
+              "produced_outputs":{"value":"Source work remains and no external obstacle prevents it."}
+            }"""
+                4 -> defaultPhaseOutput(request)
+                else -> error("The repair should have completed after the fourth source session.")
+              }
+            }
+            else -> defaultPhaseOutput(request)
+          },
+        )
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+      assertEquals(4, repairs)
+      assertEquals(1, plans)
+      assertEquals(1, reservations.distinct().size)
+      assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
+      assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+      assertEquals(1, scope.snapshot?.outcomes?.size)
+      assertContains(harness.launchOrder(), "review")
+    }
+  }
+
+  @Test
   fun `a rejected full no-change claim cannot charge another criterion's gap to the focused audit`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     var repaired = false
@@ -251,6 +317,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           "audit",
           "audit_plan_fix",
           "audit_implement_fix",
+          "audit",
           "audit_plan_fix",
           "audit_implement_fix",
           "audit",
@@ -530,7 +597,8 @@ class FeatureTaskRuntimeSerialRepairTest {
           facts(
             when {
               state == null -> serialDiscoveryOutput()
-              prompt.contains("Read-only repair-report admission") -> settledAuditSatisfiedRecord()
+              prompt.contains("Read-only repair-report admission") ->
+                budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
               state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
                 serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
               else -> {
@@ -561,14 +629,21 @@ class FeatureTaskRuntimeSerialRepairTest {
           val attempt = repairsByCriterion.getOrDefault(current, 0) + 1
           repairsByCriterion[current] = attempt
           assertContains(prompt, current)
-          if (attempt == 3 && (current == "AC-001" || secondCriterionSucceeds)) {
+          if (repairAcceptedOnThirdAttempt(current, attempt, secondCriterionSucceeds)) {
             facts(defaultPhaseOutput(request))
+          } else if (attempt == 1) {
+            facts(
+              defaultPhaseOutput(request).replace(
+                "\"status\": \"completed\",",
+                "\"status\": \"completed\", \"verdict\": \"no_progress\",",
+              ),
+            )
           } else {
             facts(
               """{
                   "contract_version":"0.7","phase_id":"audit_implement_fix","status":"blocked",
-                  "failure_disposition":"retryable","summary":"The selected caller still needs repair.",
-                  "produced_outputs":{"value":"The production caller for $current remains incomplete."}
+                  "failure_disposition":"retryable","summary":"The external dependency refused the repair.",
+                  "produced_outputs":{"value":"The required external dependency for $current is unavailable."}
                 }""",
             )
           }
@@ -635,6 +710,51 @@ class FeatureTaskRuntimeSerialRepairTest {
     }
   }
 
+  private fun continuingAuditOutput(
+    state: AcceptanceCriterionRepairState?,
+    repairs: Int,
+    audits: Int,
+  ): String =
+    when {
+      state == null -> serialDiscoveryOutput()
+      state.pendingClarificationQuestion != null -> {
+        if (repairs < 4) {
+          settledAuditSatisfiedRecord().replace("satisfied", "progress")
+        } else {
+          settledAuditSatisfiedRecord()
+        }
+      }
+      state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
+        serialStructuredAuditOutput(audits, state, "The complete production repair is present.")
+      else ->
+        auditRemainingAcOutput("Open criteria: AC-001").replace(
+          "\"status\": \"completed\",",
+          "\"status\": \"completed\", \"verdict\": \"advance\",",
+        )
+    }
+
+  private fun budgetAdmissionOutput(
+    criterionRef: String?,
+    repairsByCriterion: Map<String, Int>,
+    secondCriterionSucceeds: Boolean,
+  ): String =
+    if (repairAcceptedOnThirdAttempt(
+        criterionRef,
+        repairsByCriterion.getOrDefault(criterionRef, 0),
+        secondCriterionSucceeds,
+      )
+    ) {
+      settledAuditSatisfiedRecord()
+    } else {
+      settledAuditSatisfiedRecord().replace("satisfied", "advance")
+    }
+
+  private fun repairAcceptedOnThirdAttempt(
+    criterionRef: String?,
+    attempt: Int,
+    secondCriterionSucceeds: Boolean,
+  ): Boolean = attempt == 3 && (criterionRef == "AC-001" || secondCriterionSucceeds)
+
   private fun serialLauncher(
     repairs: AtomicInteger,
     validationFailures: Int = 0,
@@ -650,8 +770,8 @@ class FeatureTaskRuntimeSerialRepairTest {
       when (phase) {
         "audit" -> {
           audit++
-          if (audit <= 3) assertContains(prompt, "AC-1")
-          if (audit == 4) assertContains(prompt, "AC-2")
+          if (audit <= 4) assertContains(prompt, "AC-1")
+          if (audit == 7) assertContains(prompt, "AC-2")
           val state = currentState()
           if (audit == 1) {
             facts(serialDiscoveryOutput())
@@ -659,7 +779,7 @@ class FeatureTaskRuntimeSerialRepairTest {
             facts(serialStructuredAuditOutput(audit, state, "Current production behavior meets this requirement."))
           } else {
             facts(
-              if (audit <= 3) {
+              if (audit <= 4) {
                 auditRemainingAcOutput("There is no caller for the first requirement.").replace(
                   "\"status\": \"completed\",",
                   "\"status\": \"completed\", \"verdict\": \"advance\",",
@@ -685,8 +805,8 @@ class FeatureTaskRuntimeSerialRepairTest {
             facts(
               """{
             "contract_version":"0.7","phase_id":"audit_implement_fix","status":"blocked",
-            "failure_disposition":"retryable","summary":"Partial repair",
-            "produced_outputs":{"value":"The caller is partly connected. The remaining write path needs repair."}
+            "failure_disposition":"retryable","summary":"External dependency refused",
+            "produced_outputs":{"value":"The external dependency refuses access and prevents the remaining write path repair."}
           }""",
             )
           } else {

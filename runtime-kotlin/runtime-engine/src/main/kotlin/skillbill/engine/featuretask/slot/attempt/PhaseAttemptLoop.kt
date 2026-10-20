@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
@@ -20,6 +21,8 @@ import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhase
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -184,18 +187,7 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
     val cycles = recorder as? AcceptanceCriterionRepairCycleRecords
     if (scope == null || !context.serialAcceptanceRepairStep || cycles?.isRepairStep(run.phaseId) != true) return null
     val attempt = context.attempt
-    val normalized =
-      when (attempt) {
-        is AttemptResult.IncompleteWork -> attempt.normalizedOutput
-        is AttemptResult.RetryableTerminal -> attempt.normalizedOutput
-        else -> return null
-      }
-    val kind =
-      if (attempt is AttemptResult.IncompleteWork) {
-        AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
-      } else {
-        AcceptanceCriterionRepairOutcomeKind.BLOCKED
-      }
+    val normalized = serialRepairOutput(attempt) ?: return null
     val phase =
       FeatureTaskRuntimePhaseStateRequest(
         run.request.workflowId, run.phaseId, "completed", context.loop.iteration,
@@ -208,8 +200,17 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
         mutating = run.policy.mutating,
       )
     val committed =
-      (recorder as? AcceptanceCriterionRepairCycleRecords)?.settleUnsuccessfulRepair(phase, kind)
-        ?: return null
+      if (attempt.retryableTerminal?.failureDisposition == FeatureTaskRuntimeFailureDisposition.RETRYABLE) {
+        recorder.recordCompletedPhase(phase) == RequiredPhaseWrite.Acknowledged
+      } else {
+        val kind =
+          if (attempt is AttemptResult.IncompleteWork) {
+            AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
+          } else {
+            AcceptanceCriterionRepairOutcomeKind.BLOCKED
+          }
+        cycles.settleUnsuccessfulRepair(phase, kind) ?: return null
+      }
     return if (!committed) {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
         context.progress,
@@ -228,6 +229,16 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
       acknowledgeCommitted(context, phase, normalized, scope)
     }
   }
+
+  private fun serialRepairOutput(attempt: AttemptResult): NormalizedFeatureTaskRuntimePhaseOutput? =
+    when (attempt) {
+      is AttemptResult.IncompleteWork ->
+        attempt.normalizedOutput.takeIf {
+          it.envelopeWireMap()[SharedPayloadKeys.VERDICT] == FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue
+        }
+      is AttemptResult.RetryableTerminal -> attempt.normalizedOutput
+      else -> null
+    }
 
   private fun acknowledgeCommitted(
     context: FixLoopBranchContext,

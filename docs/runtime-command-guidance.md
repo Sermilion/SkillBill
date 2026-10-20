@@ -292,7 +292,16 @@ markers, or a strict adoption receipt in an audit or repair plan.
 criterion's remaining defect class: the latest gap plus sibling production paths of
 the same forbidden pattern. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
-repair cycle records at most one unsuccessful outcome. The third unsuccessful
+repair cycle records at most one unsuccessful outcome. A partial source-work report with
+verdict `progress` stays in the same reserved repair cycle, retains its saved plan
+and edits, and does not consume a criterion failure. A retryable block first goes
+to read-only report admission. That admission returns `progress` for unfinished
+implementation that can continue, `satisfied` for a completed repair awaiting
+independent source verification, or `advance` for a concrete external obstacle.
+An agent stopping after one partial edit is not an external obstacle. Explicit
+`no_progress` reports, failed independent verification, and admitted failures
+retain the per-criterion cap.
+The third unsuccessful
 outcome blocks that criterion. Explicit operator resume of the blocked goal resets
 the active failure counts to zero and grants three new outcomes per criterion,
 while retaining prior outcome identities and source evidence. An ordinary state

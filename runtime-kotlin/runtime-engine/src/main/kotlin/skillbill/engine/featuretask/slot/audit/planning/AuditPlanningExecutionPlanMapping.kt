@@ -8,7 +8,7 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object AuditPlanningExecutionPlanMapping {
-  const val SEMANTIC_REVISION: Int = 3
+  const val SEMANTIC_REVISION: Int = 4
 
   fun map(
     recorded: ResolvedPhaseExecutionPlan,
@@ -17,7 +17,7 @@ internal object AuditPlanningExecutionPlanMapping {
   ): PhaseExecutionPlanMapping? {
     val identity = recorded.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT }
     if (
-      identity?.strategyId != audit.strategyId || identity.semanticRevision !in 1..2 ||
+      identity?.strategyId != audit.strategyId || identity.semanticRevision !in 1 until SEMANTIC_REVISION ||
       audit.semanticRevision != SEMANTIC_REVISION
     ) {
       return null
@@ -44,7 +44,7 @@ internal object AuditPlanningExecutionPlanMapping {
       }
     val omitted = if (revision == 1) setOf(planStep) else emptySet()
     val traversal =
-      if (revision == 2) {
+      if (revision >= 2) {
         current.traversal
       } else {
         current.traversal.copy(

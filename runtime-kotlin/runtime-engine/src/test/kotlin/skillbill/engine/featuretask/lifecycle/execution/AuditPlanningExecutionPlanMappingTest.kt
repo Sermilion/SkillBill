@@ -22,12 +22,12 @@ class AuditPlanningExecutionPlanMappingTest {
   fun `archived audit descriptors map to prose planning for every quality gate`() {
     val fixture = ExecutionPlanAdmissionFixture(definition = SkeletonDefinition.GOAL_CHILD_REVISION_2)
     listOf("goal-child-build", "goal-child-validate").forEach { mode ->
-      listOf(1, 2).forEach { revision ->
+      listOf(1, 2, 3).forEach { revision ->
         val encoded = ArchivedAuditExecutionPlanFixture.archive(fixture, mode, revision)
         val mapped = fixture.compatibility.requireSupportedComposition(encoded)
         val expected = ArchivedAuditExecutionPlanFixture.currentArchive(fixture, mode)
         assertContentEquals(expected, fixture.codec.encode(mapped))
-        assertEquals(3, mapped.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }.semanticRevision)
+        assertEquals(4, mapped.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }.semanticRevision)
       }
     }
   }

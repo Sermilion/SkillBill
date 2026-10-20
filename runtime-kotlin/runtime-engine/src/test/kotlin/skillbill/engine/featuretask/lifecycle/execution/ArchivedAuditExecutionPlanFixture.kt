@@ -14,7 +14,7 @@ internal object ArchivedAuditExecutionPlanFixture {
     mode: String,
     revision: Int = 1,
   ): ByteArray {
-    val prefix = if (revision == 1) "audit-mapping" else "audit-mapping-v2"
+    val prefix = if (revision == 1) "audit-mapping" else "audit-mapping-v$revision"
     return restoreDigests(fixture, resourcePayload("featuretask/$prefix-$mode.json"))
   }
 

@@ -106,6 +106,8 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
           } else {
             steps.planning
           }
+        AcceptanceCriterionRepairStage.REPAIR_RESERVED ->
+          if (state.pendingClarificationQuestion != null) steps.audit else steps.repair
         else -> steps.audit
       }
     if (target == steps.planning) {

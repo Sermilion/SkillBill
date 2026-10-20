@@ -40,11 +40,14 @@ internal object AuditImplementFixPromptSections {
       "`no_change` argument of feature_task_phase_complete, with per-criterion evidence, instead of a repair report. " +
       "Either change files or return a no-change claim, never both. " +
       ImplementationPromptSections.NO_CHANGE_CLAIM_DIRECTIVE + " " +
-      "The runtime returns to a fresh audit after this step. " +
+      "Completed repairs return to a fresh source audit. " +
       "When every in-scope production finding is addressed, report that in ordinary prose. " +
-      "Never report completion while any production gap remains; " +
-      "finish the selected criterion's repair before returning to audit. Do not use generic semantic " +
-      "continuations to launch another repair mutation; report incomplete work for the serial owner to settle. " +
+      "Finish every production item in the saved plan before reporting the repair satisfied. " +
+      "One guard or one safe edit is not completion when the saved plan still has missing behavior. " +
+      "If the session ends with unfinished source work, call feature_task_phase_complete with verdict progress " +
+      "and explain the remaining work in prose. The runtime retains the same reservation and continues repair, " +
+      "without replanning or charging a failed criterion outcome. Never use feature_task_phase_block or a " +
+      "retryable failure to hand off unfinished implementation. " +
       "The runtime preserves applied edits and saved repair reports across continuation sessions. " +
       "Known unfinished production work is not a needs_user_action blocker. Use that disposition only " +
       "when a concrete missing input or external action prevents further repair, and identify the required " +
@@ -92,9 +95,9 @@ internal object AuditImplementFixPromptSections {
       Prior repair sessions changed the current checkout but left unfinished work. Reconcile their reports
       with the latest audit and current source. Preserve completed edits and continue the saved plan for
       the runtime-selected criterion. Prior completion claims and test-only classifications remain claims
-      to verify. If this accepted repair output is incomplete, report the remaining production gaps so the
-      serial owner can settle the cycle and return to planning; do not start another mutation through a
-      generic continuation.
+      to verify. Continue every remaining production item in the saved plan in this repair reservation.
+      Report verdict progress only if the session ends before that work is finished. This retains the
+      reservation and does not spend a criterion failure. Do not replace the plan with another partial guard.
 
       $reports
 

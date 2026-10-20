@@ -282,6 +282,70 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   }
 
   @Test
+  fun `admitted partial work survives recovery with the same reservation and no failed outcome`() {
+    SerialRepairSqliteFixture().use { f ->
+      var reservationId: String? = null
+      f.owned { worker ->
+        val scope =
+          AcceptanceCriterionRepairRunState(
+            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+            f.binding,
+          )
+        val recorder =
+          requireNotNull(
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
+              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+          )
+        audit(f, recorder, 1, false, "The first requirement needs a caller.")
+        val repair = phase(f, "audit_implement_fix", 1)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
+        reservationId = scope.snapshot?.reservation?.reservationId
+        assertEquals(
+          RequiredPhaseWrite.Acknowledged,
+          recorder.complete(output(repair, "advance", "Only the first caller is connected.")),
+        )
+        val admission = phase(f, "audit", 2)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(admission))
+        val continued =
+          output(admission, "progress", "The second caller needs connection and source work can continue.")
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(continued))
+        val saved = scope.snapshot
+        val ledger = decodePhaseLedger(f.snapshot().artifacts)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(continued))
+        assertEquals(saved, scope.snapshot)
+        assertEquals(ledger, decodePhaseLedger(f.snapshot().artifacts))
+        assertEquals("audit_implement_fix", f.snapshot().currentStepId)
+        assertEquals(
+          FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE,
+          decodeImplementationAttemptsFromArtifact(
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.value(f.snapshot().artifacts),
+          ).last().status,
+        )
+      }
+      f.owned { worker ->
+        val scope =
+          AcceptanceCriterionRepairRunState(
+            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+            f.binding,
+          )
+        val state = assertNotNull(scope.snapshot)
+        assertEquals(reservationId, state.reservation?.reservationId)
+        assertEquals(AcceptanceCriterionRepairStage.REPAIR_RESERVED, state.stage)
+        assertNull(state.pendingClarificationQuestion)
+        assertTrue(state.unsuccessfulTotals.isEmpty())
+        assertTrue(state.outcomes.isEmpty())
+        val recorder =
+          requireNotNull(
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
+              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+          )
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(phase(f, "audit_implement_fix", 2)))
+        assertEquals(reservationId, scope.snapshot?.reservation?.reservationId)
+      }
+    }
+  }
+
+  @Test
   fun `duplicate starts preserve the live ledger and completed attempts cannot reopen`() {
     SerialRepairSqliteFixture().use { f ->
       f.owned { worker ->

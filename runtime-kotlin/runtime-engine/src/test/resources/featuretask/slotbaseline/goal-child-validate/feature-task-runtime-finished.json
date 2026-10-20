@@ -46,7 +46,7 @@
     },
     "phase_strategies": {
         "audit": {
-            "semantic_revision": 3,
+            "semantic_revision": 4,
             "strategy_id": "acceptance-audit"
         },
         "commit_push": {
