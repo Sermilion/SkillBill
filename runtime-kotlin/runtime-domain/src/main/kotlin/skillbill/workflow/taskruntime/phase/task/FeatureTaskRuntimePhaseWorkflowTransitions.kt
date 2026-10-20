@@ -101,9 +101,18 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
       FeatureTaskRuntimeBackwardEdge(
         fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
         triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+        loopId = FeatureTaskRuntimePhaseWorkflowDefinition.QA_FIX_BUILD_LOOP_ID,
+        perEdgeCap = null,
+        crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
+      ),
+      FeatureTaskRuntimeBackwardEdge(
+        fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+        triggeringVerdict = FeatureTaskRuntimeVerdict.SATISFIED,
         destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
         loopId = FeatureTaskRuntimePhaseWorkflowDefinition.QA_REQUALIFY_LOOP_ID,
         perEdgeCap = null,
+        crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
       ),
       FeatureTaskRuntimeBackwardEdge(
         fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
@@ -125,6 +134,8 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
 
   val composedOnlyWithoutSteps: Map<String, Set<String>> =
     mapOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.QA_FIX_BUILD_LOOP_ID to
+        setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT),
       FeatureTaskRuntimePhaseWorkflowDefinition.QA_REQUALIFY_LOOP_ID to
         setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT),
     )

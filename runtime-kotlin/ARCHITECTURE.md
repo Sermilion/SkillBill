@@ -1317,12 +1317,21 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `IN_MEMORY`) that a phase run drives on its own. `QA` (the `qa` slot, with only `qa`) is
   in-memory too; `PhaseRunEntry` hands it to `QaStandalonePhaseRun`, which prepares the QA
   workspace, resolves the routed pack's `qa_capability`, and validates the receipt. `GOAL_QA`
-  (`goal-qa`, slot `qa`, steps `qa` and `qa_fix`) is the
+  (`goal-qa`, slots `qa` and `quality_gate`, steps `qa`, `qa_fix` and `build`) is the
   in-memory definition goal finalization runs once per goal, after every child completes and
   before `commit_push`. `DefaultGoalRunnerQaGate` drives it through `PhaseRunEntry.runForGoal`
   on the goal branch, and its `qa` step runs through `QaStrategy`, not `QaStandalonePhaseRun`.
-  QA findings take `qa -> qa_fix`, and the `qa_requalify` edge returns `qa_fix` straight to
-  `qa`; nothing after the loop routes back into it. The `qa_fix` briefing lists each open
+  QA findings take `qa -> qa_fix`, the `qa_fix_build` edge sends `qa_fix` to `build`
+  (`PackBuildStrategy`, the pack's compile-only gate with its `PackBuildGateCycle` repair turns),
+  and the `qa_requalify` edge returns a `satisfied` build to `qa`; nothing after the loop routes
+  back into it. `build` is loop-only there through the skeleton-scoped `loopOnlyStepIds`, because
+  as the `quality_gate` strategy's entry step it would otherwise run forward after a passing `qa`.
+  `qa_fix` keeps the build and validation ownership bans; `build` owns compile proof. When the
+  build gate still fails after its repair turns, the run blocks at `build`, and
+  `DefaultGoalRunnerQaGate` turns that block into a warning instead of re-testing: it appends
+  `qa_fix left the app without a passing build, so QA did not re-test the fix` and the gate's
+  reason to the recorded QA outcome reason, returns `GoalQaGateResult.Warned`, and still runs
+  `VALIDATION` because the tree changed. The `qa_fix` briefing lists each open
   finding with the receipt's steps, expected and observed behavior, and evidence paths, and
   `qa_fix` edits the goal branch working tree, which goal finalization commits with the goal.
   A `qa_fix` that leaves the tree unchanged must give every open finding a
@@ -1338,9 +1347,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   warnings from QA preparation and any HEAD, tree, or worktree status change made while QA
   ran, and the recorded QA outcome reason appends every `qa_warnings` entry, so they reach
   the PR body. A gate that stops or warns returns `GoalQaGateResult.Warned`, which
-  goal finalization prints and writes into the PR body before `commit_push`. The
-  `qa_requalify` loop is composed only when `audit` is absent (`composedOnlyWithoutSteps`), so it
-  never reaches goal-child runs. The gate skips when
+  goal finalization prints and writes into the PR body before `commit_push`; the PR body omits a
+  `Warned` reason that the recorded QA outcome reason already contains. The `qa_fix_build` and
+  `qa_requalify` loops are composed only when `audit` is absent (`composedOnlyWithoutSteps`), so
+  they never reach goal-child or standalone runs. The gate skips when
   every child ran and recorded child-level QA, or when a goal QA outcome already passed or
   skipped on the current tree. `PLAN` (`intake`, `preplan`,
   `plan`, and `plan_subtasks`) is durable: `skill-bill phase plan` runs it as a standalone workflow

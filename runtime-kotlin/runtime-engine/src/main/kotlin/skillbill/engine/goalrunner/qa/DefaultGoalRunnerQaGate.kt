@@ -8,6 +8,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.goalrunner.model.GoalProgressEventDraft
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
@@ -26,6 +28,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 
@@ -37,6 +40,7 @@ class DefaultGoalRunnerQaGate(
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val clock: Clock,
   private val activityStampWriter: AgentActivityStampWriter,
+  private val qaOutcomes: FeatureTaskQaOutcomeRecorder,
 ) : GoalRunnerQaGate {
   override fun run(
     state: GoalRunnerManifestState,
@@ -83,27 +87,45 @@ class DefaultGoalRunnerQaGate(
         recordedGoalQaOutcome = parentOutcome,
       )
     val qaResult = phaseRunEntry.runForGoal(goalQaRequest, state.parentWorkflowId, branch)
-    val qaWarning = (qaResult as? PhaseRunResult.Blocked)?.let { "QA stopped at '${it.stepId}': ${it.reason}" }
+    return settleAfterQa(state, request, GoalQaRun(goalQaRequest, branch, currentTree, qaResult))
+  }
+
+  private fun settleAfterQa(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    run: GoalQaRun,
+  ): GoalQaGateResult {
+    val buildWarning = buildAfterQaFixWarning(run.result)
+    buildWarning?.let { qaOutcomes.recordWarning(state.parentWorkflowId, it) }
+    val qaWarning =
+      buildWarning ?: (run.result as? PhaseRunResult.Blocked)?.let { "QA stopped at '${it.stepId}': ${it.reason}" }
     val treeAfterQa = gitOperations.repositoryTreeIdentity(request.repoRoot)
     val validationWarnings =
-      if (sameTree(currentTree, treeAfterQa)) {
+      if (sameTree(run.startTree, treeAfterQa)) {
         emptyList()
       } else {
         val validation =
           phaseRunEntry.runForGoal(
-            goalQaRequest.copy(definitionId = SkeletonDefinition.VALIDATION.id, recordedGoalQaOutcome = null),
+            run.request.copy(definitionId = SkeletonDefinition.VALIDATION.id, recordedGoalQaOutcome = null),
             state.parentWorkflowId,
-            branch,
+            run.branch,
           )
         listOfNotNull(
           (validation as? PhaseRunResult.Blocked)?.let { blocked ->
             "Validation after QA stopped at '${blocked.stepId}': ${blocked.reason}"
           },
-          codeChangedAfterQa(state, request),
+          codeChangedAfterQa(state, request).takeIf { buildWarning == null },
         )
       }
     val warnings = listOfNotNull(qaWarning) + validationWarnings
     return if (warnings.isEmpty()) GoalQaGateResult.Passed else GoalQaGateResult.Warned(warnings.joinToString(" "))
+  }
+
+  private fun buildAfterQaFixWarning(result: PhaseRunResult): String? {
+    val blocked = result as? PhaseRunResult.Blocked ?: return null
+    if (blocked.stepId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) return null
+    return "qa_fix left the app without a passing build, so QA did not re-test the fix. The build gate allows " +
+      "${FeatureTaskRuntimeBuildGateCoordinator.MAX_REPAIR_TURNS} build repairs and stopped: ${blocked.reason}"
   }
 
   private fun sameTree(
@@ -222,6 +244,13 @@ class DefaultGoalRunnerQaGate(
       agentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
     )
 }
+
+private data class GoalQaRun(
+  val request: PhaseRunRequest,
+  val branch: String,
+  val startTree: WorkflowGitOperationResult,
+  val result: PhaseRunResult,
+)
 
 private const val MAX_ACTIVITY_LENGTH = 500
 private const val MAX_OPERATION_NAME_LENGTH = 160

@@ -645,8 +645,12 @@ class PhaseStrategyCompositionTest {
     val plan = lookup.executionPlan(facts)
 
     val excludedGate =
-      if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) PHASE_VALIDATE else PHASE_BUILD
-    val expectedSteps = definition.stepIds - excludedGate
+      when {
+        qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PHASE_VALIDATE
+        definition == SkeletonDefinition.GOAL_QA -> null
+        else -> PHASE_BUILD
+      }
+    val expectedSteps = definition.stepIds - setOfNotNull(excludedGate)
     assertEquals(expectedSteps.toSet(), plan.selectedStepIds, definition.id)
     assertEquals(expectedSteps, plan.traversal.forwardPhaseIds, definition.id)
     assertEquals(definition.slots, plan.selectedSlots, definition.id)
@@ -722,6 +726,7 @@ class PhaseStrategyCompositionTest {
   ): String =
     when {
       definition == SkeletonDefinition.VALIDATION -> AgentValidateStrategy.ID
+      definition == SkeletonDefinition.GOAL_QA -> PackBuildStrategy.ID
       qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
       else -> AgentValidateStrategy.ID
     }

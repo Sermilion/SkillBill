@@ -168,21 +168,23 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `goal QA loops qa_fix straight back to qa with no phase after it that re-enters QA`() {
-    val goalQa = SkeletonDefinition.GOAL_QA.declaration()
+  fun `goal QA builds after qa_fix before qa re-tests, and nothing after the loop re-enters QA`() {
+    val definition = SkeletonDefinition.GOAL_QA
+    val goalQa = definition.traversal(definition.stepIds.toSet(), entryStepIds = setOf("qa", "build"))
 
-    assertEquals(listOf("qa", "qa_fix"), goalQa.forwardPhaseIds)
-    assertEquals(setOf("qa_fix"), goalQa.loopOnlyPhaseIds)
+    assertEquals(listOf("qa", "qa_fix", "build"), goalQa.forwardPhaseIds)
+    assertEquals(setOf("qa_fix", "build"), goalQa.loopOnlyPhaseIds)
     assertEquals(
       setOf(
         Triple("qa", FeatureTaskRuntimeVerdict.QA_FINDINGS, "qa_fix"),
-        Triple("qa_fix", FeatureTaskRuntimeVerdict.ADVANCE, "qa"),
+        Triple("qa_fix", FeatureTaskRuntimeVerdict.ADVANCE, "build"),
+        Triple("build", FeatureTaskRuntimeVerdict.SATISFIED, "qa"),
       ),
       goalQa.backwardEdges.map { Triple(it.fromPhaseId, it.triggeringVerdict, it.destinationPhaseId) }.toSet(),
     )
     assertFalse(
-      SkeletonDefinition.entries.filter { it != SkeletonDefinition.GOAL_QA }.any { definition ->
-        definition.declaration().backwardEdges.any { it.loopId == "qa_requalify" }
+      SkeletonDefinition.entries.filter { it != definition }.any { other ->
+        other.declaration().backwardEdges.any { it.loopId in setOf("qa_fix_build", "qa_requalify") }
       },
     )
   }

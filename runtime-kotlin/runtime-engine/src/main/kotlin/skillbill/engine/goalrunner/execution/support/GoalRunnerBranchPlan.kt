@@ -112,5 +112,8 @@ private fun GoalQaSummary.pullRequestText(): String =
     GoalQaSummary.NotRecorded -> "no goal-level QA outcome recorded"
     is GoalQaSummary.Recorded -> GoalSubtaskQaSummary.Recorded(outcome).pullRequestText()
     is GoalQaSummary.Warned ->
-      outcome?.let { GoalSubtaskQaSummary.Recorded(it).pullRequestText() + "; " }.orEmpty() + "warning: $reason"
+      listOfNotNull(
+        outcome?.let { GoalSubtaskQaSummary.Recorded(it).pullRequestText() },
+        "warning: $reason".takeUnless { outcome?.reason?.contains(reason) == true },
+      ).joinToString("; ")
   }

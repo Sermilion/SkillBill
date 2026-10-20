@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.committedRepoBranchSetup
 import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.kotlinPackWithBuildGate
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
@@ -40,12 +41,18 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
+import skillbill.ports.validation.ValidationGateRunner
+import skillbill.ports.validation.model.ValidationGateFinding
+import skillbill.ports.validation.model.ValidationGateRunRequest
+import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaPlatform
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.test.Test
@@ -59,7 +66,7 @@ class GoalQaRepairLoopTest {
   @TempDir lateinit var home: Path
 
   @Test
-  fun `goal QA hands the finding to qa_fix, retests the repaired tree, then validates once without re-entering QA`() {
+  fun `goal QA hands the finding to qa_fix, builds and retests the repaired tree, then validates once`() {
     val fixture =
       Fixture(
         verdicts = listOf(QaVerdict.FINDINGS_OPEN, QaVerdict.PASSED),
@@ -70,7 +77,7 @@ class GoalQaRepairLoopTest {
 
     val result = fixture.gate.run(fixture.state, fixture.request)
 
-    assertEquals(listOf("qa", "qa_fix", "qa", "validate"), fixture.launchedPhases())
+    assertEquals(listOf("qa", "qa_fix", "build", "qa", "validate"), fixture.startedPhases())
     val repairPrompt = fixture.prompts("qa_fix").single()
     assertContains(repairPrompt, "### F-1")
     assertContains(repairPrompt, "- Steps: Open the app; Log in")
@@ -81,6 +88,31 @@ class GoalQaRepairLoopTest {
     assertEquals(1, outcome.qaFixAttempts)
     assertEquals(REPAIRED_TREE, outcome.testedTreeIdentity)
     assertContains(assertIs<GoalQaGateResult.Warned>(result).reason, "validate changed code after QA settled")
+  }
+
+  @Test
+  fun `a qa_fix that leaves the app failing to compile past the build repair cap settles QA with a warning`() {
+    val fixture =
+      Fixture(
+        verdicts = listOf(QaVerdict.FINDINGS_OPEN),
+        onQaFix = { git -> git.repositoryFingerprintValue = REPAIRED_TREE },
+        qaFixOutput = { "F-1: fixed: HomeScreen.kt now renders the signed-in user name." },
+        buildGateRunner = FailingBuildGateRunner,
+      )
+
+    val result = fixture.gate.run(fixture.state, fixture.request)
+
+    val phases = fixture.startedPhases()
+    assertEquals(listOf("qa", "qa_fix", "build"), phases.take(3))
+    assertEquals(1, phases.count { it == "qa" })
+    assertEquals("validate", phases.last())
+    assertEquals(3, fixture.launchedPhases().count { it == "build" })
+    val warning = assertIs<GoalQaGateResult.Warned>(result).reason
+    assertContains(warning, "qa_fix left the app without a passing build, so QA did not re-test the fix")
+    assertContains(warning, "after 3 repair turns")
+    val outcome = assertNotNull(fixture.storedOutcome())
+    assertEquals(StandaloneQaOutcome.FINDINGS, outcome.outcome)
+    assertContains(assertNotNull(outcome.reason), "QA did not re-test the fix")
   }
 
   @Test
@@ -130,6 +162,7 @@ class GoalQaRepairLoopTest {
     onQaFix: (RecordingWorkflowGitOperations) -> Unit = {},
     onValidate: (RecordingWorkflowGitOperations) -> Unit = {},
     recordedAttempts: Int = 0,
+    buildGateRunner: ValidationGateRunner? = null,
   ) {
     private val clock = Clock.systemUTC()
     private val database: DatabaseSessionFactory = phaseRunDatabase(home, clock)
@@ -163,11 +196,13 @@ class GoalQaRepairLoopTest {
               "QA settled."
             }
             "qa_fix" -> qaFixOutput().also { onQaFix(git) }
+            "build" -> "Build repair attempted."
             else -> "Validation passed.".also { onValidate(git) }
           }
         facts(output)
       }
     private val outcomes = FeatureTaskQaOutcomeRecorder(database, clock)
+    private val progress = DatabaseGoalQaOutcomes(database)
 
     val state =
       GoalRunnerManifestState(
@@ -212,6 +247,8 @@ class GoalQaRepairLoopTest {
             ),
           qaReceipts =
             QaReceiptSettlement(QaReceiptValidator(QaReceiptSchemaValidator()), workspaces, NoopRuntimeDiagnostics),
+          validationGateRunner = buildGateRunner,
+          validationGatePlatformManifests = listOf(kotlinPackWithBuildGate()),
         )
       val harness = telemetryRunnerHarness(runtimeConfig = config, databaseFactory = { database })
       val entry =
@@ -225,7 +262,7 @@ class GoalQaRepairLoopTest {
       gate =
         DefaultGoalRunnerQaGate(
           entry,
-          DatabaseGoalQaOutcomes(database),
+          progress,
           git,
           object : FeatureTaskRuntimeRunInvariantsSource {
             override fun read(specPath: Path) =
@@ -239,11 +276,14 @@ class GoalQaRepairLoopTest {
           },
           clock,
           testActivityStampWriter(),
+          outcomes,
         )
     }
 
     fun launchedPhases(): List<String> =
       launcher.requests.map { phaseIdFromPrompt(requireNotNull(it.skillRunRequest.promptOverride)) }
+
+    fun startedPhases(): List<String> = progress.startedPhases
 
     fun prompts(phase: String): List<String> =
       launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }.filter { phaseIdFromPrompt(it) == phase }
@@ -257,7 +297,26 @@ class GoalQaRepairLoopTest {
     override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? =
       database.read { it.featureTaskQaOutcomes.find(parentWorkflowId) }
 
-    override fun recordProgressEvent(request: GoalRunnerProgressEventRecordRequest): Boolean = true
+    val startedPhases = mutableListOf<String>()
+
+    override fun recordProgressEvent(request: GoalRunnerProgressEventRecordRequest): Boolean {
+      if (request.draft.eventKind == GoalProgressEventKind.PHASE_STARTED) startedPhases += request.draft.workflowPhase
+      return true
+    }
+  }
+
+  private object FailingBuildGateRunner : ValidationGateRunner {
+    override fun run(request: ValidationGateRunRequest) =
+      ValidationGateRunResult(
+        exitCode = 1,
+        durationMs = 1,
+        outcome = ValidationGateRunOutcome.FAILED,
+        cacheMode = request.cacheMode,
+        executedWorkUnits = 1,
+        executedCheckIdentities = emptyList(),
+        findings = listOf(ValidationGateFinding("app", "compileKotlin", "Unresolved reference: userName", "A.kt")),
+        command = request.argv.joinToString(" "),
+      )
   }
 
   private companion object {

@@ -1,3 +1,9 @@
+## [2026-10-20] Goal QA builds after qa_fix before QA re-tests
+Context: The goal-qa loop ran qa -> qa_fix -> qa, and qa_fix is barred from compiling, building and testing. A qa_fix edit that broke compilation reached QA, which spent a device run on an app that could not build.
+Decision: GOAL_QA adds the quality_gate slot with the build step bound to PackBuildStrategy (Opus variant PackBuildOpus55Strategy). The qa_fix_build edge runs qa_fix -> build on advance, and qa_requalify now runs build -> qa on satisfied, the runtime-owned build receipt verdict. Both loops are composed only when audit is absent. The skeleton-scoped loopOnlyStepIds returns, holding build for GOAL_QA, because the selected quality_gate strategy's entry step is otherwise removed from the loop-only set and would run forward after a passing qa. A build that still fails after PackBuildGateCycle's repair turns blocks the in-memory run at build; DefaultGoalRunnerQaGate maps that block to a warning, appends it to the parent's feature_task_qa_outcomes reason through FeatureTaskQaOutcomeRecorder.recordWarning, skips the validate-changed-code warning (QA never tested the final tree), and still runs VALIDATION because the tree changed. The PR body drops a Warned reason that the recorded outcome reason already contains. GOAL_QA is in-memory, so no recorded traversal needs migration.
+Reason: The owner requires a compiling app before QA re-tests a fix, while qa_fix keeps its build bans and QA never blocks. Reusing the build gate keeps its existing repair cap and receipt instead of adding compile work to qa_fix. Mapping the block in the gate keeps PackBuildGateCycle unchanged for goal children and standalone runs.
+Revisit when: a QA-capable pack has no validation_gate.build_command, since the build step then blocks after every qa_fix and QA never re-tests.
+
 # runtime-kotlin/ boundary decisions
 
 ## [2026-10-20] Goal QA loops qa_fix straight back to qa and validates once after
