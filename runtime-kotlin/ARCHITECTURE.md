@@ -1344,9 +1344,12 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   from that count, so the three-attempt cap spans goal processes. Each settled goal `qa` round
   also merges its receipt into `feature_task_qa_outcomes.findings_summary`
   (`FeatureTaskQaOutcomeRecords.mergedFindings`): receipt findings are `not_fixed`, and a stored
-  finding missing from a `passed` or `findings_open` receipt becomes `fixed`. The goal status
-  projection exposes that list as `GoalRunnerQaResult.findings` for the desktop QA findings
-  section and the `goal status` `qa_findings:` line, and the PR body names the not-fixed ones.
+  finding missing from a `passed` or `findings_open` receipt becomes `fixed`. The same
+  settlement writes `QaReceipt.qaReport()` into `feature_task_qa_outcomes.criteria_summary`.
+  The goal status projection exposes findings as `GoalRunnerQaResult.findings` for the desktop
+  QA findings section and the `goal status` `qa_findings:` line, and criteria as
+  `GoalRunnerQaResult.criteria` for the Goal QA rows and the `qa_criteria:` line. The PR body
+  names the not-fixed findings.
   When the QA loop leaves the tree
   different from the one it started on, the gate then runs `VALIDATION` once through
   `runForGoal`. Validation repairs never re-run QA; a validation run that changes the tree QA

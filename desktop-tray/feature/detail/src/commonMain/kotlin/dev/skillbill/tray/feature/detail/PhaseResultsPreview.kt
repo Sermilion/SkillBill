@@ -19,6 +19,9 @@ import dev.skillbill.tray.core.designsystem.panel
 import dev.skillbill.tray.core.domain.model.GoalQaFinding
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
+import dev.skillbill.tray.core.domain.model.QaCheckResult
+import dev.skillbill.tray.core.domain.model.QaCriterionFinding
+import dev.skillbill.tray.core.domain.model.QaCriterionResult
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
@@ -60,6 +63,14 @@ private fun PhaseResultsWithFindingsPreview() = PhaseResultsPreviewFrame(
       GoalQaFinding("F-1", "The login button does nothing after a cold start.", "/home/me/.skill-bill/qa/repo/run-1/login.png", fixed = true),
       GoalQaFinding("F-2", "The home screen stays blank after sign-in.", "/home/me/.skill-bill/qa/repo/run-4/home.png", fixed = false),
     ),
+    criteria = listOf(
+      QaCriterionResult(
+        "AC-001", false,
+        listOf(QaCheckResult("The home screen shows the signed-in user.", false)),
+        listOf(QaCriterionFinding("F-2", listOf("Open the app", "Log in"), "The home screen shows the user name.", "The home screen stays blank.")),
+      ),
+      QaCriterionResult("AC-002", true, listOf(QaCheckResult("The pause flag is written with run state.", true)), emptyList()),
+    ),
   ),
   subtaskName = mapOf(1 to "Persist pause state", 2 to "Retry flaky store reads")::get,
 )
@@ -72,6 +83,12 @@ private fun PhaseResultsAllClearPreview() = PhaseResultsPreviewFrame(
       subtaskId = 1,
       reviewPasses = listOf(ReviewPass(passNumber = 1, verdict = "approved", unresolvedFindingCount = 0, findings = emptyList())),
       audit = PhaseConclusion(verdict = "satisfied", summary = "All criteria met.", detail = null, attemptCount = 1),
+      review = PhaseConclusion(
+        verdict = "approved",
+        summary = "No production-blocking findings; the retained field values survive a restart.",
+        detail = "Reviewed the pause-state persistence and the detail query. The retained values are written with the rest of the run state and read back on restart.",
+        attemptCount = 1,
+      ),
     ),
   ),
   qa = GoalQaResult(
@@ -88,7 +105,17 @@ private fun PhaseResultsAllClearPreview() = PhaseResultsPreviewFrame(
 @Composable
 private fun PhaseResultsQaOnlyPreview() = PhaseResultsPreviewFrame(
   results = emptyList(),
-  qa = GoalQaResult("skipped", "No device or simulator was available.", 0, Instant.parse("2026-10-20T10:15:30Z")),
+  qa = GoalQaResult(
+    "incomplete", "other", 0, Instant.parse("2026-10-20T16:14:00Z"),
+    criteria = listOf(
+      QaCriterionResult(
+        "AC-001", false,
+        listOf(QaCheckResult("Retained field values survive a restart.", false)),
+        listOf(QaCriterionFinding("F-1", emptyList(), "Values are still there.", "Values are empty.")),
+      ),
+      QaCriterionResult("AC-002", true, listOf(QaCheckResult("The pause flag is written with run state.", true)), emptyList()),
+    ),
+  ),
   subtaskName = { null },
 )
 

@@ -3,12 +3,16 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.qa.QaReceiptPayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_CRITERIA_SUMMARY_COLUMN
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.decodeStandaloneQaReport
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeStandaloneQaReport
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaReport
 import java.sql.Connection
 
 internal class SqliteFeatureTaskQaOutcomeStore(
@@ -18,15 +22,17 @@ internal class SqliteFeatureTaskQaOutcomeStore(
     connection.prepareStatement(
       """
       INSERT INTO feature_task_qa_outcomes (
-        workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
+        criteria_summary
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(workflow_id) DO UPDATE SET
         outcome = excluded.outcome,
         reason = excluded.reason,
         qa_fix_attempts = excluded.qa_fix_attempts,
         tested_tree_identity = excluded.tested_tree_identity,
         recorded_at = excluded.recorded_at,
-        findings_summary = excluded.findings_summary
+        findings_summary = excluded.findings_summary,
+        criteria_summary = excluded.criteria_summary
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -37,6 +43,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         outcome.testedTreeIdentity,
         outcome.recordedAt,
         outcome.findings.takeIf(List<FeatureTaskQaFinding>::isNotEmpty)?.let(::encodeFindings),
+        outcome.report?.let(::encodeStandaloneQaReport),
       )
       statement.executeUpdate()
     }
@@ -45,7 +52,8 @@ internal class SqliteFeatureTaskQaOutcomeStore(
   override fun find(workflowId: String): FeatureTaskQaOutcome? =
     connection.prepareStatement(
       """
-      SELECT workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary
+      SELECT workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
+             criteria_summary
       FROM feature_task_qa_outcomes
       WHERE workflow_id = ?
       """.trimIndent(),
@@ -64,6 +72,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
           testedTreeIdentity = rows.getString("tested_tree_identity"),
           recordedAt = rows.getString("recorded_at"),
           findings = rows.getString("findings_summary")?.let(::decodeFindings).orEmpty(),
+          report = rows.getString(QA_CRITERIA_SUMMARY_COLUMN)?.let(::decodeCriteria),
         )
       }
     }
@@ -102,6 +111,9 @@ internal class SqliteFeatureTaskQaOutcomeStore(
       )
     }
   }
+
+  private fun decodeCriteria(json: String): StandaloneQaReport =
+    decodeStandaloneQaReport(json) { reason -> invalidStoredFindings(reason) }
 
   private fun invalidStoredFindings(reason: String): Nothing = throw invalidWorkflowStateSchemaError(reason)
 }

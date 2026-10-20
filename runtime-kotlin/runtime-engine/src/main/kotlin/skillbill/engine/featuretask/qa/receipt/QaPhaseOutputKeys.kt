@@ -23,7 +23,11 @@ internal fun qaOutcomeReason(
   val verdictReason =
     when (verdict) {
       QaVerdict.SKIPPED -> receipt[QaReceiptPayloadKeys.SKIP_REASON] as? String
-      QaVerdict.INCOMPLETE -> receipt[QaReceiptPayloadKeys.INCOMPLETE_REASON] as? String
+      QaVerdict.INCOMPLETE ->
+        listOfNotNull(
+          receipt[QaReceiptPayloadKeys.INCOMPLETE_REASON] as? String,
+          (receipt[QaReceiptPayloadKeys.REASON_DETAIL] as? String)?.trim()?.takeIf(String::isNotBlank),
+        ).joinToString(" · ").takeIf(String::isNotBlank)
       QaVerdict.FINDINGS_OPEN -> openFindingsReason(produced)
       QaVerdict.PASSED -> null
     }

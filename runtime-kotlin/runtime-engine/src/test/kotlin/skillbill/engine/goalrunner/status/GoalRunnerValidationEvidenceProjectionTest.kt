@@ -13,13 +13,21 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
+import skillbill.goalrunner.model.GoalRunnerQaCheck
+import skillbill.goalrunner.model.GoalRunnerQaCriterion
+import skillbill.goalrunner.model.GoalRunnerQaCriterionFinding
 import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.FIXED
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.NOT_FIXED
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaCheck
+import skillbill.ports.idestatus.model.StandaloneQaCriterion
+import skillbill.ports.idestatus.model.StandaloneQaCriterionFinding
+import skillbill.ports.idestatus.model.StandaloneQaCriterionStatus
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -117,29 +125,28 @@ class GoalRunnerValidationEvidenceProjectionTest {
   }
 
   @Test
-  fun `completed subtask status projects the audit conclusion and the goal QA outcome`() {
+  fun `completed subtask status projects the review and audit conclusions and the goal QA outcome`() {
     val workflowId = "wfl-phase-results"
     val recorder = goalRunnerDefaultPhaseRecorder()
     recorder.openTestWorkflow(workflowId, "goal-phase-results")
     recorder.recordPhaseState(
-      FeatureTaskRuntimePhaseStateRequest(
-        workflowId = workflowId,
-        phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-        status = "completed",
+      phaseConclusionRequest(
+        workflowId,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
+        verdict = "approved",
+        summary = "No production-blocking findings.",
+        detail = "The retained field values survive a restart.",
+        attemptCount = 1,
+      ),
+    )
+    recorder.recordPhaseState(
+      phaseConclusionRequest(
+        workflowId,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+        verdict = "satisfied",
+        summary = "All criteria met.",
+        detail = "AC-001 met.\nAC-002 met.",
         attemptCount = 2,
-        resolvedAgentId = "claude",
-        finished = true,
-        outputArtifact =
-          JsonCodec.mapToJsonString(
-            mapOf(
-              SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-              SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-              SharedPayloadKeys.STATUS to "completed",
-              SharedPayloadKeys.SUMMARY to "All criteria met.",
-              SharedPayloadKeys.VERDICT to "satisfied",
-              SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to "AC-001 met.\nAC-002 met."),
-            ),
-          ),
       ),
     )
     val manifest = completedManifest(workflowId)
@@ -154,6 +161,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
             testedTreeIdentity = null,
             recordedAt = "2026-10-20T10:15:30Z",
             findings = storedQaFindings,
+            report = storedQaReport,
           )
       }
     val result =
@@ -168,6 +176,15 @@ class GoalRunnerValidationEvidenceProjectionTest {
     assertEquals(1, phaseResults.subtaskId)
     assertEquals(emptyList(), phaseResults.reviewPasses)
     assertEquals(
+      GoalRunnerPhaseConclusion(
+        "approved",
+        "No production-blocking findings.",
+        "The retained field values survive a restart.",
+        1,
+      ),
+      phaseResults.review,
+    )
+    assertEquals(
       GoalRunnerPhaseConclusion("satisfied", "All criteria met.", "AC-001 met.\nAC-002 met.", 2),
       phaseResults.audit,
     )
@@ -178,6 +195,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
         1,
         Instant.parse("2026-10-20T10:15:30Z"),
         projectedQaFindings,
+        projectedQaCriteria,
       ),
       result.goalQaResult,
     )
@@ -196,6 +214,40 @@ class GoalRunnerValidationEvidenceProjectionTest {
       GoalRunnerQaFinding("F-2", "Home is blank.", "/qa/r.json", fixed = false),
     )
 
+  private val storedQaReport =
+    StandaloneQaReport(
+      listOf(
+        StandaloneQaCriterion(
+          "AC-001",
+          StandaloneQaCriterionStatus.FAILED,
+          listOf(StandaloneQaCheck("Login works.", false)),
+          listOf(StandaloneQaCriterionFinding("F-2", emptyList(), "Home shows user.", "Home is blank.")),
+        ),
+        StandaloneQaCriterion(
+          "AC-002",
+          StandaloneQaCriterionStatus.PASSED,
+          listOf(StandaloneQaCheck("Settings open.", true)),
+          emptyList(),
+        ),
+      ),
+    )
+
+  private val projectedQaCriteria =
+    listOf(
+      GoalRunnerQaCriterion(
+        "AC-001",
+        false,
+        listOf(GoalRunnerQaCheck("Login works.", false)),
+        listOf(GoalRunnerQaCriterionFinding("F-2", emptyList(), "Home shows user.", "Home is blank.")),
+      ),
+      GoalRunnerQaCriterion(
+        "AC-002",
+        true,
+        listOf(GoalRunnerQaCheck("Settings open.", true)),
+        emptyList(),
+      ),
+    )
+
   private fun completedManifest(workflowId: String): DecompositionManifest =
     manifest(1).copy(
       status = "complete",
@@ -209,6 +261,34 @@ class GoalRunnerValidationEvidenceProjectionTest {
             status = "complete",
             workflowId = workflowId,
             commitSha = "sha-1",
+          ),
+        ),
+    )
+
+  private fun phaseConclusionRequest(
+    workflowId: String,
+    phaseId: String,
+    verdict: String,
+    summary: String,
+    detail: String,
+    attemptCount: Int,
+  ): FeatureTaskRuntimePhaseStateRequest =
+    FeatureTaskRuntimePhaseStateRequest(
+      workflowId = workflowId,
+      phaseId = phaseId,
+      status = "completed",
+      attemptCount = attemptCount,
+      resolvedAgentId = "claude",
+      finished = true,
+      outputArtifact =
+        JsonCodec.mapToJsonString(
+          mapOf(
+            SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+            SharedPayloadKeys.PHASE_ID to phaseId,
+            SharedPayloadKeys.STATUS to "completed",
+            SharedPayloadKeys.SUMMARY to summary,
+            SharedPayloadKeys.VERDICT to verdict,
+            SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to detail),
           ),
         ),
     )

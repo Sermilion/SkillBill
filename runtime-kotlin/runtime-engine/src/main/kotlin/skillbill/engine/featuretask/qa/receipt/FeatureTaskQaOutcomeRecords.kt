@@ -4,11 +4,13 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.qa.QaReceiptPayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.phaserun.qa.qaReport
 import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -28,6 +30,7 @@ internal object FeatureTaskQaOutcomeRecords {
       null,
       "$recordedAt",
       previous?.findings.orEmpty(),
+      previous?.report,
     )
 
   fun settled(
@@ -57,6 +60,7 @@ internal object FeatureTaskQaOutcomeRecords {
         receipt,
         produced[QaPhaseOutputKeys.RECEIPT_REF] as? String,
       ),
+      criteriaReport(receipt) ?: previous?.report,
     )
   }
 
@@ -116,4 +120,9 @@ internal object FeatureTaskQaOutcomeRecords {
       QaVerdict.SKIPPED -> StandaloneQaOutcome.SKIPPED
       QaVerdict.INCOMPLETE -> StandaloneQaOutcome.INCOMPLETE
     }
+
+  fun criteriaReport(receipt: Map<String, Any?>): StandaloneQaReport? {
+    if (receipt.isEmpty()) return null
+    return decodeQaReceipt(receipt).qaReport()
+  }
 }

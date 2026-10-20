@@ -90,6 +90,7 @@ class GoalQaRepairLoopTest {
     assertEquals(StandaloneQaOutcome.PASSED, outcome.outcome)
     assertEquals(1, outcome.qaFixAttempts)
     assertEquals(REPAIRED_TREE, outcome.testedTreeIdentity)
+    assertEquals(listOf("AC-001"), outcome.report?.criteria?.map { it.id })
     assertContains(assertIs<GoalQaGateResult.Warned>(result).reason, "validate changed code after QA settled")
   }
 

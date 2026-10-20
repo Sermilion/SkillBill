@@ -32,6 +32,9 @@ import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
+import skillbill.goalrunner.model.GoalRunnerQaCheck
+import skillbill.goalrunner.model.GoalRunnerQaCriterion
+import skillbill.goalrunner.model.GoalRunnerQaCriterionFinding
 import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.goalrunner.model.GoalRunnerReviewFinding
@@ -48,6 +51,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
+import skillbill.ports.idestatus.model.StandaloneQaCriterionStatus
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -561,6 +565,7 @@ class GoalRunnerStatusProjectionAssembler(
     return runCatching {
       val artifacts =
         phaseQuery.loadPhaseResultArtifacts(workflowId) ?: return GoalRunnerSubtaskPhaseResults(subtask.id)
+      val records = artifacts.phaseRecords()
       GoalRunnerSubtaskPhaseResults(
         subtaskId = subtask.id,
         reviewPasses =
@@ -572,7 +577,8 @@ class GoalRunnerStatusProjectionAssembler(
               findings = pass.findings.map { GoalRunnerReviewFinding(it.severity, it.label, it.text) },
             )
           },
-        audit = artifacts.phaseRecords()[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT]?.toConclusion(),
+        review = records[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW]?.toConclusion(),
+        audit = records[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT]?.toConclusion(),
       )
     }.getOrElse { error ->
       durableRead.recordDegradedRead(
@@ -617,6 +623,16 @@ class GoalRunnerStatusProjectionAssembler(
               finding.title,
               finding.evidencePath,
               finding.status == FeatureTaskQaFindingStatus.FIXED,
+            )
+          },
+          it.report?.criteria.orEmpty().map { criterion ->
+            GoalRunnerQaCriterion(
+              criterion.id,
+              criterion.status == StandaloneQaCriterionStatus.PASSED,
+              criterion.checks.map { check -> GoalRunnerQaCheck(check.description, check.passed) },
+              criterion.findings.map { finding ->
+                GoalRunnerQaCriterionFinding(finding.id, finding.steps, finding.expected, finding.observed)
+              },
             )
           },
         )

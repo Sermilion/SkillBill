@@ -165,6 +165,7 @@ data class GoalRunnerSubtaskValidationEvidence(
 data class GoalRunnerSubtaskPhaseResults(
   val subtaskId: Int,
   val reviewPasses: List<GoalRunnerReviewPassResult> = emptyList(),
+  val review: GoalRunnerPhaseConclusion? = null,
   val audit: GoalRunnerPhaseConclusion? = null,
 )
 
@@ -194,6 +195,7 @@ data class GoalRunnerQaResult(
   val qaFixAttempts: Int,
   val recordedAt: Instant,
   val findings: List<GoalRunnerQaFinding> = emptyList(),
+  val criteria: List<GoalRunnerQaCriterion> = emptyList(),
 )
 
 data class GoalRunnerQaFinding(
@@ -201,6 +203,25 @@ data class GoalRunnerQaFinding(
   val title: String,
   val evidencePath: String?,
   val fixed: Boolean,
+)
+
+data class GoalRunnerQaCriterion(
+  val id: String?,
+  val passed: Boolean,
+  val checks: List<GoalRunnerQaCheck>,
+  val findings: List<GoalRunnerQaCriterionFinding>,
+)
+
+data class GoalRunnerQaCheck(
+  val description: String,
+  val passed: Boolean,
+)
+
+data class GoalRunnerQaCriterionFinding(
+  val id: String,
+  val steps: List<String>,
+  val expected: String,
+  val observed: String,
 )
 
 data class GoalRunnerAcceptedSubtask(

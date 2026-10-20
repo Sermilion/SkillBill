@@ -1,6 +1,7 @@
 package skillbill.ports.featuretask.model
 
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaReport
 
 data class FeatureTaskQaOutcome(
   val workflowId: String,
@@ -10,6 +11,7 @@ data class FeatureTaskQaOutcome(
   val testedTreeIdentity: String?,
   val recordedAt: String,
   val findings: List<FeatureTaskQaFinding> = emptyList(),
+  val report: StandaloneQaReport? = null,
 ) {
   init {
     require(workflowId.isNotBlank()) { "FeatureTaskQaOutcome.workflowId must not be blank." }

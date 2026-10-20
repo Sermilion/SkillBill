@@ -159,12 +159,20 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
       SubtaskPhaseResults(result.subtaskId,
         result.reviewPasses.map { pass -> ReviewPass(pass.passNumber, pass.verdict, pass.unresolvedFindingCount,
           pass.findings.map { ReviewFinding(it.severity, it.label, it.text) }) },
-        result.audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) })
+        result.audit?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) },
+        result.review?.let { PhaseConclusion(it.verdict, it.summary, it.detail, it.attemptCount) })
     },
     goalQa = goal?.goalQaResult?.let { qa ->
       GoalQaResult(
         qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
         qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePath, it.fixed) },
+        qa.criteria.map { criterion ->
+          QaCriterionResult(
+            criterion.id, criterion.passed,
+            criterion.checks.map { QaCheckResult(it.description, it.passed) },
+            criterion.findings.map { QaCriterionFinding(it.id, it.steps, it.expected, it.observed) },
+          )
+        },
       )
     },
     latestActivity = LatestActivity(

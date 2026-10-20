@@ -60,3 +60,14 @@ internal fun recordFeatureTaskQaFindingsSummary(connection: Connection) {
     "TEXT CHECK ($QA_FINDINGS_SUMMARY_COLUMN IS NULL OR json_valid($QA_FINDINGS_SUMMARY_COLUMN))",
   )
 }
+
+internal const val QA_CRITERIA_SUMMARY_COLUMN: String = "criteria_summary"
+
+internal fun recordFeatureTaskQaCriteriaSummary(connection: Connection) {
+  DatabaseColumnMigrations.ensureColumn(
+    connection,
+    "feature_task_qa_outcomes",
+    QA_CRITERIA_SUMMARY_COLUMN,
+    "TEXT CHECK ($QA_CRITERIA_SUMMARY_COLUMN IS NULL OR json_valid($QA_CRITERIA_SUMMARY_COLUMN))",
+  )
+}

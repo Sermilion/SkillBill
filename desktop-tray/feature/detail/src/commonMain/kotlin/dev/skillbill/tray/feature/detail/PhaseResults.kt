@@ -1,13 +1,11 @@
 package dev.skillbill.tray.feature.detail
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -16,22 +14,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.core.designsystem.DesignLabel
 import dev.skillbill.tray.core.designsystem.blue
 import dev.skillbill.tray.core.designsystem.body
 import dev.skillbill.tray.core.designsystem.border
-import dev.skillbill.tray.core.designsystem.dim
 import dev.skillbill.tray.core.designsystem.green
 import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.mono
 import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
-import dev.skillbill.tray.core.designsystem.red
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
+import dev.skillbill.tray.core.domain.model.QaCriterionResult
+import dev.skillbill.tray.core.domain.model.QaRunReport
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
@@ -41,7 +38,7 @@ import dev.skillbill.tray.core.ui.formatInstant
 /** Review, audit and QA conclusions shown inside the goal activity panel. */
 @Composable
 internal fun PhaseResultsSection(results: List<SubtaskPhaseResults>, qa: GoalQaResult?, subtaskName: (Int) -> String?) {
-  val shown = results.filter { it.reviewPasses.isNotEmpty() || it.audit != null }
+  val shown = results.filter { it.reviewPasses.isNotEmpty() || it.review != null || it.audit != null }
   if (shown.isEmpty() && qa == null) return
   HorizontalDivider(color = border)
   DesignLabel("Phase results")
@@ -51,48 +48,52 @@ internal fun PhaseResultsSection(results: List<SubtaskPhaseResults>, qa: GoalQaR
         "#${result.subtaskId}${subtaskName(result.subtaskId)?.let { " · $it" }.orEmpty()}",
         color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp,
       )
-      result.reviewPasses.forEach { ReviewPassRow(it) }
-      result.audit?.let { AuditRow(it) }
+      if (result.reviewPasses.isNotEmpty()) {
+        result.reviewPasses.forEachIndexed { index, pass ->
+          val last = index == result.reviewPasses.lastIndex
+          ReviewPassRow(pass, result.review.takeIf { last && pass.findings.isEmpty() })
+        }
+      } else {
+        result.review?.let { ConclusionRow("Review", it) }
+      }
+      result.audit?.let { ConclusionRow("Audit", it) }
     }
   }
   qa?.let { QaRow(it) }
 }
 
 @Composable
-private fun ReviewPassRow(pass: ReviewPass) {
+private fun ReviewPassRow(pass: ReviewPass, conclusion: PhaseConclusion?) {
   val unresolved = if (pass.unresolvedFindingCount > 0) "${pass.unresolvedFindingCount} unresolved" else null
   PhaseHeading(
     "Review",
     listOfNotNull("pass ${pass.passNumber}", wireLabel(pass.verdict), unresolved).joinToString(" · "),
     verdictColor(pass.verdict),
   )
-  if (pass.findings.isNotEmpty()) Column(Modifier.padding(start = PHASE_INDENT), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+  if (pass.findings.isNotEmpty()) {
     pass.findings.forEach { FindingRow(it) }
+  } else {
+    PhaseBody(conclusion?.summary, conclusion?.detail)
   }
 }
 
 @Composable
 private fun FindingRow(finding: ReviewFinding) {
-  Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.Top) {
-    SeverityChip(finding.severity)
-    SelectionContainer(Modifier.weight(1f)) {
-      Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(finding.label, color = ink, fontFamily = body, fontSize = 12.sp, lineHeight = 17.sp)
-        if (finding.text != finding.label) Text(finding.text, color = muted, fontFamily = body, fontSize = 11.5.sp, lineHeight = 17.sp)
-      }
-    }
-  }
+  PhaseBody(
+    listOf(finding.severity, finding.label).joinToString(" · "),
+    finding.text.takeIf { it != finding.label },
+  )
 }
 
 @Composable
-private fun AuditRow(audit: PhaseConclusion) {
-  val attempts = if (audit.attemptCount > 1) "${audit.attemptCount} attempts" else null
+private fun ConclusionRow(phase: String, conclusion: PhaseConclusion) {
+  val attempts = if (conclusion.attemptCount > 1) "${conclusion.attemptCount} attempts" else null
   PhaseHeading(
-    "Audit",
-    listOfNotNull(audit.verdict?.let(::wireLabel), attempts).joinToString(" · ").ifEmpty { "completed" },
-    verdictColor(audit.verdict),
+    phase,
+    listOfNotNull(conclusion.verdict?.let(::wireLabel), attempts).joinToString(" · ").ifEmpty { "completed" },
+    verdictColor(conclusion.verdict),
   )
-  PhaseBody(audit.summary, audit.detail)
+  PhaseBody(conclusion.summary, conclusion.detail)
 }
 
 @Composable
@@ -105,7 +106,15 @@ private fun QaRow(qa: GoalQaResult) {
       listOfNotNull(wireLabel(qa.outcome), fixes, formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
       verdictColor(qa.outcome),
     )
-    PhaseBody(qa.reason, null)
+    if (qa.criteria.isNotEmpty()) {
+      val report = QaRunReport(qa.criteria)
+      PhaseBody(qaCriteriaSummary(report), qa.reason.takeUnless(::isBareQaReasonToken))
+      qa.criteria.forEach { criterion ->
+        PhaseBody(qaCriterionHeading(criterion), qaCriterionDetail(criterion))
+      }
+    } else {
+      PhaseBody(qa.reason, null)
+    }
   }
 }
 
@@ -122,31 +131,39 @@ private fun PhaseHeading(phase: String, outcome: String, color: Color) {
 private fun PhaseBody(summary: String?, detail: String?) {
   if (summary == null && detail == null) return
   Column(Modifier.padding(start = PHASE_INDENT), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-    summary?.let { SelectionContainer { Text(it, color = ink, fontFamily = body, fontSize = 12.sp, lineHeight = 18.sp) } }
-    detail?.takeIf { it != summary }?.let { ReasonTooltip(it, fontSize = 11.5.sp, lineHeight = 17.sp) }
+    val compact = detail ?: summary
+    val overlapping =
+      summary != null && (detail == null || detail == summary || detail.startsWith(summary))
+    if (overlapping && compact != null) {
+      ReasonTooltip(compact, color = ink, fontSize = 12.sp, lineHeight = 18.sp)
+    } else {
+      summary?.let { SelectionContainer { Text(it, color = ink, fontFamily = body, fontSize = 12.sp, lineHeight = 18.sp) } }
+      detail?.let { ReasonTooltip(it, fontSize = 11.5.sp, lineHeight = 17.sp) }
+    }
   }
-}
-
-@Composable
-private fun SeverityChip(severity: String) {
-  val color = severityColor(severity)
-  Text(
-    severity.uppercase(),
-    Modifier.width(62.dp).border(1.dp, color.copy(alpha = .45f), RoundedCornerShape(4.dp)).padding(vertical = 2.dp),
-    color = color, fontFamily = mono, fontWeight = FontWeight.SemiBold, fontSize = 9.5.sp, lineHeight = 12.sp,
-    letterSpacing = .6.sp, textAlign = TextAlign.Center,
-  )
 }
 
 private val PHASE_INDENT = 64.dp
 
 private fun wireLabel(value: String): String = value.replace('_', ' ')
 
-private fun severityColor(severity: String): Color = when (severity.lowercase()) {
-  "blocker", "critical" -> red
-  "major", "high" -> orange
-  "minor", "medium" -> blue
-  else -> dim
+private val BARE_QA_REASON_TOKEN = Regex("^[a-z]+(?:_[a-z]+)*$")
+
+private fun isBareQaReasonToken(reason: String?): Boolean = reason != null && BARE_QA_REASON_TOKEN.matches(reason)
+
+private fun qaCriterionHeading(criterion: QaCriterionResult): String =
+  "${criterion.id ?: "Unlinked"} · ${if (criterion.passed) "passed" else "failed"}"
+
+private fun qaCriterionDetail(criterion: QaCriterionResult): String? {
+  val checks = criterion.checks.filter { it.passed == criterion.passed }.map { it.description }
+  val findings =
+    criterion.findings.map { finding ->
+      listOfNotNull(
+        finding.expected.takeIf(String::isNotBlank)?.let { "Expected: $it" },
+        finding.observed.takeIf(String::isNotBlank)?.let { "Observed: $it" },
+      ).joinToString("\n")
+    }
+  return (checks + findings).filter { it.isNotBlank() }.joinToString("\n").takeIf(String::isNotBlank)
 }
 
 private fun verdictColor(verdict: String?): Color = when (verdict) {

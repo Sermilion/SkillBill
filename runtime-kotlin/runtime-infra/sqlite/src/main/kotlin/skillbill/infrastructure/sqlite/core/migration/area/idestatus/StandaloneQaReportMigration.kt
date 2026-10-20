@@ -30,45 +30,45 @@ internal fun recordStandaloneQaReport(connection: Connection) {
   )
 }
 
-internal fun StandaloneQaReport?.columnValue(): String? =
-  this?.let { report ->
-    JsonCodec.valueToJsonString(
-      report.criteria.map { criterion ->
-        mapOf(
-          QaReceiptPayloadKeys.ID to criterion.id,
-          QaReceiptPayloadKeys.STATUS to criterion.status.wireValue,
-          SqliteStandaloneQaReportKeys.CHECKS to
-            criterion.checks.map {
-              mapOf(
-                QaReceiptPayloadKeys.DESCRIPTION to it.description,
-                SqliteStandaloneQaReportKeys.PASSED to it.passed,
-              )
-            },
-          QaReceiptPayloadKeys.FINDINGS to
-            criterion.findings.map {
-              mapOf(
-                QaReceiptPayloadKeys.ID to it.id,
-                QaReceiptPayloadKeys.STEPS to it.steps,
-                QaReceiptPayloadKeys.EXPECTED to it.expected,
-                QaReceiptPayloadKeys.OBSERVED to it.observed,
-              )
-            },
-        )
-      },
-    )
-  }
+internal fun StandaloneQaReport?.columnValue(): String? = this?.let(::encodeStandaloneQaReport)
 
-internal fun ResultSet.readQaReport(sourceLabel: String): StandaloneQaReport? {
-  val raw = getString(QA_REPORT_COLUMN) ?: return null
+internal fun encodeStandaloneQaReport(report: StandaloneQaReport): String =
+  JsonCodec.valueToJsonString(
+    report.criteria.map { criterion ->
+      mapOf(
+        QaReceiptPayloadKeys.ID to criterion.id,
+        QaReceiptPayloadKeys.STATUS to criterion.status.wireValue,
+        SqliteStandaloneQaReportKeys.CHECKS to
+          criterion.checks.map {
+            mapOf(
+              QaReceiptPayloadKeys.DESCRIPTION to it.description,
+              SqliteStandaloneQaReportKeys.PASSED to it.passed,
+            )
+          },
+        QaReceiptPayloadKeys.FINDINGS to
+          criterion.findings.map {
+            mapOf(
+              QaReceiptPayloadKeys.ID to it.id,
+              QaReceiptPayloadKeys.STEPS to it.steps,
+              QaReceiptPayloadKeys.EXPECTED to it.expected,
+              QaReceiptPayloadKeys.OBSERVED to it.observed,
+            )
+          },
+      )
+    },
+  )
 
-  fun invalid(reason: String): Nothing = throw invalidIdeStatusSchemaError(sourceLabel, QA_REPORT_COLUMN, reason)
-  val criteria = JsonCodec.anyToStringAnyMapList(JsonCodec.parseValue(raw)) ?: invalid("Not a list of criteria.")
+internal fun decodeStandaloneQaReport(
+  json: String,
+  onInvalid: (String) -> Nothing,
+): StandaloneQaReport {
+  val criteria = JsonCodec.anyToStringAnyMapList(JsonCodec.parseValue(json)) ?: onInvalid("Not a list of criteria.")
   return StandaloneQaReport(
     criteria.map { criterion ->
       val status = criterion[QaReceiptPayloadKeys.STATUS] as? String
       StandaloneQaCriterion(
         id = criterion[QaReceiptPayloadKeys.ID] as? String,
-        status = StandaloneQaCriterionStatus.fromWire(status) ?: invalid("Unknown criterion status '$status'."),
+        status = StandaloneQaCriterionStatus.fromWire(status) ?: onInvalid("Unknown criterion status '$status'."),
         checks =
           JsonCodec.anyToStringAnyMapList(criterion[SqliteStandaloneQaReportKeys.CHECKS]).orEmpty().map {
             StandaloneQaCheck(
@@ -79,7 +79,7 @@ internal fun ResultSet.readQaReport(sourceLabel: String): StandaloneQaReport? {
         findings =
           JsonCodec.anyToStringAnyMapList(criterion[QaReceiptPayloadKeys.FINDINGS]).orEmpty().map {
             StandaloneQaCriterionFinding(
-              id = it[QaReceiptPayloadKeys.ID] as? String ?: invalid("A criterion finding has no id."),
+              id = it[QaReceiptPayloadKeys.ID] as? String ?: onInvalid("A criterion finding has no id."),
               steps = JsonCodec.anyToStringList(it[QaReceiptPayloadKeys.STEPS]).orEmpty(),
               expected = (it[QaReceiptPayloadKeys.EXPECTED] as? String).orEmpty(),
               observed = (it[QaReceiptPayloadKeys.OBSERVED] as? String).orEmpty(),
@@ -88,4 +88,11 @@ internal fun ResultSet.readQaReport(sourceLabel: String): StandaloneQaReport? {
       )
     },
   )
+}
+
+internal fun ResultSet.readQaReport(sourceLabel: String): StandaloneQaReport? {
+  val raw = getString(QA_REPORT_COLUMN) ?: return null
+  return decodeStandaloneQaReport(raw) { reason ->
+    throw invalidIdeStatusSchemaError(sourceLabel, QA_REPORT_COLUMN, reason)
+  }
 }

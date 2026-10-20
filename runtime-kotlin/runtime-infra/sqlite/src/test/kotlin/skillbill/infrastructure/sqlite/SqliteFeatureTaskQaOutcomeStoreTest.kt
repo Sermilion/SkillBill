@@ -5,7 +5,13 @@ import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaCheck
+import skillbill.ports.idestatus.model.StandaloneQaCriterion
+import skillbill.ports.idestatus.model.StandaloneQaCriterionFinding
+import skillbill.ports.idestatus.model.StandaloneQaCriterionStatus
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaReport
 import java.nio.file.Files
 import java.sql.DriverManager
 import kotlin.test.Test
@@ -63,6 +69,51 @@ class SqliteFeatureTaskQaOutcomeStoreTest {
 
       assertEquals(legacy.copy(findings = findings), store.find("wfl-goal"))
       assertEquals("/qa/run-4/receipt.json", store.find("wfl-goal")?.notFixedFindings?.single()?.evidencePath)
+    }
+  }
+
+  @Test
+  fun `a QA outcome stores the per-criterion report and reads it back`() {
+    val dbPath = Files.createTempDirectory("skillbill-qa-criteria-summary").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).close()
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      val store = SqliteFeatureTaskQaOutcomeStore(connection)
+      val report =
+        StandaloneQaReport(
+          listOf(
+            StandaloneQaCriterion(
+              "AC-001",
+              StandaloneQaCriterionStatus.FAILED,
+              listOf(StandaloneQaCheck("Retained field values survive a restart.", false)),
+              listOf(
+                StandaloneQaCriterionFinding(
+                  "F-1",
+                  listOf("Restart the app"),
+                  "Values are still there.",
+                  "Values are empty.",
+                ),
+              ),
+            ),
+            StandaloneQaCriterion(
+              "AC-002",
+              StandaloneQaCriterionStatus.PASSED,
+              listOf(StandaloneQaCheck("The pause flag is written with run state.", true)),
+              emptyList(),
+            ),
+          ),
+        )
+      val outcome =
+        FeatureTaskQaOutcome(
+          "wfl-goal",
+          StandaloneQaOutcome.INCOMPLETE,
+          "other · The login flow crashed on launch.",
+          0,
+          "tree-1",
+          "2026-10-20T16:14:00Z",
+          report = report,
+        )
+      store.upsert(outcome)
+      assertEquals(outcome, store.find("wfl-goal"))
     }
   }
 }

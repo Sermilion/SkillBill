@@ -26,7 +26,7 @@ class FeatureTaskQaOutcomeRecorder(
   ) {
     database.transaction { unitOfWork ->
       val outcomes = unitOfWork.featureTaskQaOutcomes
-      val previous = outcomes.find(workflowId)?.findings.orEmpty()
+      val previous = outcomes.find(workflowId)
       outcomes.upsert(
         FeatureTaskQaOutcome(
           workflowId,
@@ -36,11 +36,12 @@ class FeatureTaskQaOutcomeRecorder(
           tested.treeIdentity,
           "${clock.instant()}",
           FeatureTaskQaOutcomeRecords.mergedFindings(
-            previous,
+            previous?.findings.orEmpty(),
             tested.receiptVerdict,
             tested.receipt,
             tested.receiptPath,
           ),
+          FeatureTaskQaOutcomeRecords.criteriaReport(tested.receipt) ?: previous?.report,
         ),
       )
     }

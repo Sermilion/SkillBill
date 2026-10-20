@@ -119,6 +119,13 @@ class FeatureTaskRuntimeQaExecutionTest {
       assertEquals(QA_TEST_TREE, stored.testedTreeIdentity)
       assertEquals(0, stored.qaFixAttempts)
       if (verdict == QaVerdict.INCOMPLETE) assertEquals("device_lost", stored.reason)
+      assertEquals(
+        when (verdict) {
+          QaVerdict.SKIPPED -> emptyList()
+          else -> listOf("AC-001")
+        },
+        stored.report?.criteria?.map { it.id }.orEmpty(),
+      )
     }
   }
 
