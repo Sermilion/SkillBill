@@ -442,34 +442,8 @@ class WorkRunControlsTest {
       val component = component(fixture.tempDir, fixture.dbPath, launcher)
       val identity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}"
       val now = Instant.now().minusSeconds(60)
-      val steps = FeatureVerifyWorkflowDefinition.definition.stepIds
       component.databaseSession.transaction { unit ->
-        unit.workflowStates.saveRecord(
-          WorkflowFamily.VERIFY,
-          WorkflowStateRecord(
-            workflowId = "wfv-open",
-            sessionId = "session-wfv-open",
-            workflowName = "bill-feature-verify",
-            contractVersion = "0.1",
-            workflowStatus = WorkflowStatus.RUNNING.wireValue,
-            currentStepId = steps[1],
-            stepsJson =
-              steps.mapIndexed { index, step ->
-                val status =
-                  when (index) {
-                    0 -> "completed"
-                    1 -> "running"
-                    else -> "pending"
-                  }
-                """{"step_id":"$step","status":"$status","attempt_count":1}"""
-              }.joinToString(prefix = "[", postfix = "]"),
-            artifactsJson = "{}",
-            startedAt = now.toString(),
-            updatedAt = now.toString(),
-            finishedAt = null,
-            issueKey = "SKILL-779",
-          ),
-        )
+        unit.workflowStates.saveRecord(WorkflowFamily.VERIFY, runningVerifyRecord("wfv-open", now))
         unit.standalonePhaseStatuses.registerWorkflow(
           IdeStatusWorkflowRegistration(
             identity,
@@ -797,6 +771,37 @@ class WorkRunControlsTest {
         OptionalCallbacks(workRunLauncher = launcher),
       ),
     )
+
+  private fun runningVerifyRecord(
+    workflowId: String,
+    at: Instant,
+  ): WorkflowStateRecord {
+    val steps = FeatureVerifyWorkflowDefinition.definition.stepIds
+    val stepsJson =
+      steps.mapIndexed { index, step ->
+        val status =
+          when (index) {
+            0 -> "completed"
+            1 -> "running"
+            else -> "pending"
+          }
+        """{"step_id":"$step","status":"$status","attempt_count":1}"""
+      }.joinToString(prefix = "[", postfix = "]")
+    return WorkflowStateRecord(
+      workflowId = workflowId,
+      sessionId = "session-$workflowId",
+      workflowName = "bill-feature-verify",
+      contractVersion = "0.1",
+      workflowStatus = WorkflowStatus.RUNNING.wireValue,
+      currentStepId = steps[1],
+      stepsJson = stepsJson,
+      artifactsJson = "{}",
+      startedAt = at.toString(),
+      updatedAt = at.toString(),
+      finishedAt = null,
+      issueKey = "SKILL-779",
+    )
+  }
 
   private fun registration(root: Path): StandalonePhaseStatusRegistration {
     val now = Instant.now().minusSeconds(30)
