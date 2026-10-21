@@ -17,40 +17,28 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
-import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunCheckpoints
-import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunGoal
-import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunSettlements
-import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableLaunch
-import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.shellcontent.featureTaskRuntimeOperatorDecisionRejected
-import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
-import java.time.Clock
 
 @Inject
 class FeatureTaskRuntimeRunnerExecutePrepared(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val strategies: PhaseStrategyLookup,
-  private val clock: Clock,
   private val gitOperations: WorkflowGitOperations,
   private val specGate: FeatureTaskRuntimeSpecGate,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val launchOutcomes: FeatureTaskRuntimeLaunchOutcomes,
   private val phaseSettlementService: FeatureTaskPhaseSettlementService,
-  private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
-  private val database: DatabaseSessionFactory,
+  private val durableRuns: FeatureTaskRuntimeDurableRunFactory,
 ) {
   internal fun acceptanceRepairSteps(plan: ResolvedPhaseExecutionPlan): AcceptanceCriterionRepairStepRoles? {
     val audit = plan.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
@@ -65,37 +53,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
     observability: FeatureTaskRuntimeRunObservability,
     state: FeatureTaskRuntimeRunState,
   ): FeatureTaskRuntimeRunReport {
-    val session =
-      FeatureTaskRuntimeRunLoopSession(
-        operatorBlockRetry =
-          recorder
-            .loadOperatorBlockRetry(runRequest.workflowId)
-            ?.takeIf { retry ->
-              state.phase(retry.phaseId).record?.status.let { status ->
-                status == null || status.workflowStepStatus() == WorkflowStepStatus.PENDING
-              }
-            },
-        initialPendingReentry = null,
-      )
-    val runState =
-      FeatureTaskRuntimeRunLoopDurableState(
-        state,
-        session,
-        observability,
-        specSource,
-        executionPlan,
-        strategies,
-        DurablePhaseRunGoal(goalContinuationRecorder, requireNotNull(runRequest.admittedExecution)),
-        DurablePhaseRunSettlements(
-          database,
-          requireNotNull(runRequest.admittedExecution),
-          clock,
-          phaseSettlementService,
-        ),
-        DurablePhaseRunCheckpoints(gitOperations),
-        durableLaunch,
-        clock,
-      )
+    val runState = durableRuns.create(runRequest, specSource, executionPlan, observability, state)
     val context = runLoopEntry.context(runRequest, runState)
     if (isGoalContinuationRun(runRequest)) {
       when (

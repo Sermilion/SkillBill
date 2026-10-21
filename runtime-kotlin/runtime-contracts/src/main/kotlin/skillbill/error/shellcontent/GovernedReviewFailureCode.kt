@@ -5,6 +5,7 @@ import skillbill.error.core.SkillBillRuntimeException
 
 enum class GovernedReviewFailureCode : RuntimeFailureCode {
   UNADDRESSED_FINDINGS_LEDGER_ABSENT,
+  REVIEW_RUN_PARENT_MISSING,
   INVALID_LEDGER_SCHEMA,
   EVIDENCE_TRANSPORT,
   INLINE_PARALLEL_UNSUPPORTED,
