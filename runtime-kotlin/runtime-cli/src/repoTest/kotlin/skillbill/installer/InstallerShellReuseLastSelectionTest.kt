@@ -165,6 +165,7 @@ class InstallerShellReuseLastSelectionTest {
     Files.writeString(mcpBin, "#!/usr/bin/env bash\nexit 0\n")
     cliBin.toFile().setExecutable(true)
     mcpBin.toFile().setExecutable(true)
+    InstallerDesktopFixtures.writeBuildIdentity(cliBin.parent.parent)
   }
 
   private fun runtimeCliStub(): String =

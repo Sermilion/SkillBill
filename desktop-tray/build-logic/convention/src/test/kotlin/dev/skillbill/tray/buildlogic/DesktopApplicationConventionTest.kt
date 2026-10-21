@@ -1,8 +1,10 @@
 package dev.skillbill.tray.buildlogic
 
+import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -32,5 +34,43 @@ class DesktopApplicationConventionTest {
     listOf("createDistributable", "packageAppImage", "stageAppImage", "compileMacTrayNative", "compileAppImageLauncher").forEach { name ->
       assertTrue(name in tasks, "Task '$name' is not registered:\n$tasks")
     }
+  }
+
+  @Test
+  fun `identity-only changes replace the identity in an existing application image`() {
+    val fixture = ConventionFixture(directory, mapOf(
+      "app" to """
+        plugins { id("skillbill.desktop.application") }
+        compose.desktop.application {
+          mainClass = "MainKt"
+          nativeDistributions.appResourcesRootDir.set(layout.projectDirectory.dir("app-resources"))
+        }
+        configurations.configureEach {
+          resolutionStrategy.dependencySubstitution {
+            substitute(module("dev.skillbill:runtime-cli")).using(project(":runtime-cli"))
+          }
+        }
+      """,
+      "runtime-cli" to """
+        plugins { `java-library` }
+        group = "dev.skillbill"
+        version = "1.0"
+      """,
+    ))
+    fixture.write("app/src/jvmMain/kotlin/Main.kt", "fun main() = Unit")
+    val identity = "app/app-resources/common/build-identity.properties"
+    fixture.write(identity, "commit=first\ndirty=false")
+    val nativeTask = if (System.getProperty("os.name").contains("linux", true)) "compileLinuxTrayNative" else "compileMacTrayNative"
+    val arguments = arrayOf(":app:createDistributable", "-x", ":app:$nativeTask")
+
+    assertEquals(TaskOutcome.SUCCESS, fixture.run(*arguments).task(":app:createDistributable")?.outcome)
+    assertEquals(TaskOutcome.UP_TO_DATE, fixture.run(*arguments).task(":app:createDistributable")?.outcome)
+
+    fixture.write(identity, "commit=second\ndirty=true\ninstall_run_id=next-install")
+
+    assertEquals(TaskOutcome.SUCCESS, fixture.run(*arguments).task(":app:createDistributable")?.outcome)
+    val packagedIdentity = fixture.file("app/build/compose/binaries/main/app").walkTopDown()
+      .single { it.isFile && it.name == "build-identity.properties" }
+    assertEquals(fixture.file(identity).readText(), packagedIdentity.readText())
   }
 }

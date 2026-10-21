@@ -1,6 +1,8 @@
 package dev.skillbill.tray.core.data.session
 
 import dev.skillbill.tray.core.common.di.AppScope
+import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
+import dev.skillbill.tray.core.domain.model.RuntimeBuildRefusedException
 import dev.skillbill.tray.core.domain.model.WorkSection
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
@@ -44,7 +46,9 @@ internal sealed interface SessionSlot {
 
 /**
  * Owns which database the app reads. Selecting a database closes the previous session, builds a fresh one and publishes
- * it, so state of an old database can never be read against a new one.
+ * it, so state of an old database can never be read against a new one. A selection the [gate] refuses ends with no
+ * session: nothing is created for the new database, so no connection opens and no runtime migrates it. A refresh asks
+ * [checkRuntimeBuild] first and reselects on a refusal, so a runtime replaced by another build closes the open session.
  */
 @Inject
 @SingleIn(AppScope::class)
@@ -52,6 +56,7 @@ internal sealed interface SessionSlot {
 class WorkStoreSessionManager(
   private val factory: SessionFactory,
   private val generations: DatabaseGenerations,
+  private val gate: RuntimeBuildGate,
 ) : WorkStoreSession {
   private val lock = Mutex()
 
@@ -77,6 +82,7 @@ class WorkStoreSessionManager(
     var published = false
     try {
       previous?.session?.closeAndJoin()
+      gate.check()?.let { refusal -> throw RuntimeBuildRefusedException(refusal) }
       val parts = factory.create(path)
       try {
         parts.session.open()
@@ -94,6 +100,8 @@ class WorkStoreSessionManager(
     }
     switchEvents.tryEmit(WorkSection.entries.toSet())
   }
+
+  override suspend fun checkRuntimeBuild(): RuntimeBuildProblem? = lock.withLock { gate.check() }
 
   override fun close() {
     closed.value = true

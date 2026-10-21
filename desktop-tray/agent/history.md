@@ -1,3 +1,28 @@
+## [2026-10-21] SKILL-430 subtask 2 single runtime copy
+Areas: desktop-tray, composeApp/bootstrap, core/data, build-logic/convention, packaged-data smoke, .github/workflows, install.sh, README.md
+- MEDIUM feature. Desktop production dependencies on runtime modules are compileOnly; tests retain their provisioned runtime. Packaging removes Skill Bill runtime modules and duplicate shared libraries, retaining launcher stdlib.
+- The bootstrap reuses BuildIdentityRecord and runtime-root resolution, refuses missing or mismatched installs before runtime loading, and offers a JDK-only Retry window. An isolated application loader delegates to the app with the installed runtime jars.
+- Runtime-facing reads, controls, commit signals and launch adapters keep their implementations. The installed runtime alone supplies migrations and schema compatibility.
+- reusable: verifyPackagedRuntimeFree combines module names from the runtime dependency graph with Skill Bill class detection. Smoke and release archive checks also inspect class contents, accepting Compose runtime jars and rejecting renamed Skill Bill code.
+- Packaged smoke enters through the bootstrap with a provisioned runtime. CI and release packaging provision matching identities; architecture and install documentation describe the matched pair.
+- The source guard admits method-handle lookup only in DesktopBootstrap.kt under the spec-approved deviation. Other production sources remain covered.
+- Limits: desktop launch now requires a matching installed runtime. macOS and Windows execution remain for their CI hosts.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
+## [2026-10-21] SKILL-430 subtask 1 build identity gate
+Areas: desktop-tray (core/domain, core/data, core/common, composeApp, feature/work, feature/detail, build-logic, gradle catalog)
+- MEDIUM feature. WorkStoreSessionManager asks a RuntimeBuildGate before SessionFactory.create. A refused build opens no Room database and runs no migration.
+- core/data identity/BuildIdentityRecord parses build-identity.properties and compares records with JDK and stdlib only, so subtask 2's bootstrap can reuse it (reusable).
+- jvmMain InstalledRuntimeBuildGate rereads both records on every check. The installed one is at SKILL_BILL_RUNTIME_DIR, else ~/.skill-bill/runtime, plus runtime-cli/build-identity.properties.
+- New ProblemKind runtime_build_mismatch carries a RuntimeBuildReason (mismatch, missing, unreadable, not installed), both identities and the reinstall command. StoreSessionCoordinator.retry reselects the database. The router Refresh and the ProblemBanner Retry call it; the tray popover Refresh does not.
+- HostEnvironment.appResourcesDirectory supplies compose.application.resources.dir. A stageBuildIdentityResource Sync feeds appResourcesRootDir. The record sits under lib/app/resources on Linux/macOS and app/resources on Windows.
+- verifySharedRuntimeVersions (SharedRuntimeVersions.kt) resolves dev.skillbill:runtime-cli and fails check and createDistributable when a shared group:module version differs from jvmRuntimeClasspath (reusable).
+- Root build declares skillbill.build-identity apply false; without it a second KGP copy breaks clean. gradle.properties raises Metaspace to 1g after a kspKotlinJvm OOM.
+- Limits: no re-check runs while a session is active. Releases tagged before SKILL-430 carry no record and are refused.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-15] SKILL-424 subtask 6 deletion and delivery proof
 Areas: desktop-tray (composeApp architecture tests, docs, ARCHITECTURE.md), runtime-kotlin (runtime-cli repoTest installer fixtures, runtime-infra/sqlite worklist stores)
 

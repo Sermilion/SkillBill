@@ -566,6 +566,7 @@ internal object InstallerShellFixtures {
     Files.writeString(mcpBin, fakeRuntimeMcpScript)
     cliBin.toFile().setExecutable(true)
     mcpBin.toFile().setExecutable(true)
+    InstallerDesktopFixtures.writeBuildIdentity(cliBin.parent.parent)
   }
 
   private val fakeInstallerRuntimeMiddleBlocks: String =
@@ -693,6 +694,8 @@ internal object InstallerShellFixtures {
       |exit 0
       |RUNTIME_MCP
       |chmod +x "${'$'}cli_bin" "${'$'}mcp_bin"
+      |cli_home="${'$'}root/runtime-cli/build/install/runtime-cli"
+      |${InstallerDesktopFixtures.buildIdentityPrintf} > "${'$'}cli_home/build-identity.properties"
       """.trimMargin(),
     )
     gradlew.toFile().setExecutable(true)
@@ -709,14 +712,21 @@ internal object InstallerShellFixtures {
       |root="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
       |app_root="${'$'}root/composeApp/build/compose/binaries/main/app"
       |case "${'$'}(uname -s)" in
-      |  Darwin*) app="${'$'}app_root/Skill Bill.app/Contents/MacOS/Skill Bill" ;;
-      |  Linux*) app="${'$'}app_root/Skill Bill/bin/Skill Bill" ;;
-      |  MINGW*|MSYS*|CYGWIN*) app="${'$'}app_root/Skill Bill/bin/Skill Bill.bat" ;;
+      |  Darwin*)
+      |    app="${'$'}app_root/Skill Bill.app/Contents/MacOS/Skill Bill"
+      |    resources="${'$'}app_root/Skill Bill.app/Contents/app/resources" ;;
+      |  Linux*)
+      |    app="${'$'}app_root/Skill Bill/bin/Skill Bill"
+      |    resources="${'$'}app_root/Skill Bill/lib/app/resources" ;;
+      |  MINGW*|MSYS*|CYGWIN*)
+      |    app="${'$'}app_root/Skill Bill/bin/Skill Bill.bat"
+      |    resources="${'$'}app_root/Skill Bill/app/resources" ;;
       |  *) printf '%s\n' 'Unsupported desktop fixture host' >&2; exit 1 ;;
       |esac
-      |mkdir -p "${'$'}(dirname "${'$'}app")"
+      |mkdir -p "${'$'}(dirname "${'$'}app")" "${'$'}resources"
       |printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${'$'}app"
       |chmod +x "${'$'}app"
+      |${InstallerDesktopFixtures.buildIdentityPrintf} > "${'$'}resources/build-identity.properties"
       """.trimMargin(),
     )
     gradlew.toFile().setExecutable(true)
@@ -920,6 +930,9 @@ internal object PrebuiltReleaseStager {
     Files.createDirectories(launcher.parent)
     Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
     if (!os.contains("win")) launcher.toFile().setExecutable(true)
+    InstallerDesktopFixtures.writeBuildIdentity(
+      staging.resolve(appRoot.substringBefore('/')).resolve(InstallerDesktopFixtures.resourcesPath()),
+    )
     val archive = releaseDir.resolve("skill-bill-desktop-$VERSION-$token.tar.gz")
     runOrThrow(staging, listOf("tar", "-czf", archive.toString(), appRoot.substringBefore('/')))
     writeChecksumSibling(archive, corrupt = false)
@@ -932,6 +945,9 @@ internal object PrebuiltReleaseStager {
     Files.createDirectories(launcher.parent)
     Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
     launcher.toFile().setExecutable(true)
+    InstallerDesktopFixtures.writeBuildIdentity(
+      staging.resolve(launcherPath.substringBefore('/')).resolve(InstallerDesktopFixtures.resourcesPath()),
+    )
     val archive = releaseDir.resolve("skill-bill-desktop-$VERSION-${hostToken()}.tar.gz")
     runOrThrow(staging, listOf("tar", "-czf", archive.toString(), launcherPath.substringBefore('/')))
     writeChecksumSibling(archive, corrupt = false)
@@ -957,6 +973,7 @@ internal object PrebuiltReleaseStager {
     val lib = staging.resolve("$base/lib")
     Files.createDirectories(lib)
     Files.writeString(lib.resolve("$base.jar"), "stub")
+    InstallerDesktopFixtures.writeBuildIdentity(staging.resolve(base))
     ZipOutputStream(Files.newOutputStream(zipPath)).use { zip ->
       Files.walk(staging.resolve(base)).use { paths ->
         paths.filter(Files::isRegularFile).forEach { path ->

@@ -7,6 +7,7 @@ plugins {
   id("skillbill.governed-resources")
 
   id("skillbill.runtime-image")
+  id("skillbill.build-identity")
 }
 
 dependencies {
@@ -23,6 +24,7 @@ dependencies {
   implementation(libs.json.schema.validator)
   implementation(libs.jackson.databind)
   implementation(libs.jackson.dataformat.yaml)
+  constraints { runtimeOnly(libs.jetbrains.annotations) }
   ksp(libs.kotlin.inject.compiler)
   kspTest(libs.kotlin.inject.compiler)
 

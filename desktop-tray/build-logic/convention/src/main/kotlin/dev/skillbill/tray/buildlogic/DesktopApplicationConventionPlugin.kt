@@ -6,6 +6,7 @@ import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.tasks.Exec
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.Sync
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
@@ -15,6 +16,7 @@ import org.gradle.kotlin.dsl.register
 import org.jetbrains.compose.ComposeExtension
 import org.jetbrains.compose.desktop.DesktopExtension
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 const val APP_IMAGE_TOOL_VERSION = "1.9.1"
@@ -53,6 +55,25 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     val isMac = osName.contains("mac", true)
     registerNativeTasks(javaHome, isLinux, isMac)
     registerAppImageTasks(isLinux)
+    registerSharedRuntimeVersionCheck()
+    tasks.withType(AbstractJPackageTask::class.java).configureEach {
+      inputs.dir(appResourcesDir).withPropertyName("applicationResources").optional().withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+    pluginManager.withPlugin("skillbill.build-identity") { packageBuildIdentity() }
+  }
+
+  // The record is an app resource, so the packaged app and install.sh both read it as a plain file. Compose's own
+  // prepareAppResources copies it into the distribution and points `compose.application.resources.dir` at it for `run`.
+  private fun Project.packageBuildIdentity() {
+    val resourcesRoot = layout.buildDirectory.dir("generated/app-resources")
+    val stage = tasks.register<Sync>("stageBuildIdentityResource") {
+      from(tasks.named("writeBuildIdentity"))
+      into(resourcesRoot.map { it.dir("common") })
+    }
+    extensions.getByType(ComposeExtension::class.java).extensions.getByType(DesktopExtension::class.java).application {
+      nativeDistributions { appResourcesRootDir.set(resourcesRoot) }
+    }
+    tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(stage) }
   }
 
   private fun Project.configureComposePeerRecovery() {

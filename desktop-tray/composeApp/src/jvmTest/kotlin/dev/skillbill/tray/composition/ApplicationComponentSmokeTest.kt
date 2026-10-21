@@ -1,6 +1,5 @@
 package dev.skillbill.tray.composition
 
-import dev.skillbill.tray.core.common.HostEnvironment
 import dev.skillbill.tray.core.datastore.LegacyPreferencesSource
 import dev.skillbill.tray.core.domain.model.Board
 import dev.skillbill.tray.core.domain.model.Retention
@@ -46,8 +45,7 @@ class ApplicationComponentSmokeTest {
           ),
         )
       }
-      // A non-empty environment: an empty one makes the runtime fall back to the host environment.
-      val host = HostEnvironment(mapOf("SKILL_BILL_TEST" to "1"), home.toString(), home.toString())
+      val host = matchedBuildHost(home)
       val application = createApplicationComponent(host, NoLegacyPreferences)
       try {
         assertIs<SettingsState.Ready>(withTimeout(10_000) { application.settings.settings.first { it !is SettingsState.Loading } })

@@ -28,6 +28,7 @@ import dev.skillbill.tray.core.data.session.DatabaseGenerations
 import dev.skillbill.tray.core.data.session.DatabaseSelection
 import dev.skillbill.tray.core.data.session.DatabaseSession
 import dev.skillbill.tray.core.data.session.MonotonicClock
+import dev.skillbill.tray.core.data.session.RuntimeBuildGate
 import dev.skillbill.tray.core.data.session.SessionFactory
 import dev.skillbill.tray.core.data.session.SessionParts
 import dev.skillbill.tray.core.data.session.TimeSourceMonotonicClock
@@ -85,6 +86,8 @@ class WorkStack(
   val ownerRegistrations: AtomicInteger,
   /** Counts collected commit-signal observations; zero means the file watch was released. */
   val signalRegistrations: AtomicInteger,
+  /** Counts sessions the session factory built; zero means no runtime was created for any selection. */
+  val sessionsCreated: AtomicInteger,
 ) : WorkBoardRepository by boards,
   WorkDetailRepository by details,
   WorkControlRepository by controls,
@@ -99,12 +102,14 @@ fun workStack(
   onCandidateQuery: () -> Unit = {},
   /** Answers a control request in place of the runtime when it returns a result, so a test can script an outcome. */
   scriptedControl: (ControlAction) -> ControlResult? = { null },
+  gate: RuntimeBuildGate = RuntimeBuildGate { null },
 ): WorkStack {
   val diagnostics = RecordingDiagnostics()
   val readWork = AtomicInteger()
   val openConnections = AtomicInteger()
   val ownerRegistrations = AtomicInteger()
   val signalRegistrations = AtomicInteger()
+  val sessionsCreated = AtomicInteger()
   val dispatchers = DispatcherProvider(io = Dispatchers.IO, ui = Dispatchers.IO)
   val generations = DatabaseGenerations()
   // A non-empty map: an empty one makes the runtime fall back to the host environment.
@@ -113,6 +118,7 @@ fun workStack(
   val signals = CountingSignals(commitSignals(diagnostics), signalRegistrations)
   val classifier = JvmFailureClassifier()
   val sessions = SessionFactory { path ->
+    sessionsCreated.incrementAndGet()
     val selection = DatabaseSelection().also { it.choose(path) }
     val runtime = object : RuntimeSessionProviders {}.runtimeComponent(selection, host)
     val gateway = CountingGateway(RuntimeWorkAdapter(runtime), readWork, ownerRegistrations, scriptedControl)
@@ -124,7 +130,7 @@ fun workStack(
       RuntimeWorkControlRepository(session, diagnostics),
     )
   }
-  val manager = WorkStoreSessionManager(sessions, generations)
+  val manager = WorkStoreSessionManager(sessions, generations, gate)
   return WorkStack(
     SessionWorkBoardRepository(manager),
     SessionWorkDetailRepository(manager),
@@ -135,6 +141,7 @@ fun workStack(
     openConnections,
     ownerRegistrations,
     signalRegistrations,
+    sessionsCreated,
   )
 }
 

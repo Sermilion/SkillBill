@@ -9,7 +9,7 @@ Production shape:
 - After a successful durable review persist, call `FeatureTaskPhaseSettlementService.complete` internally with `phaseId` `FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW`, attempt equal to the step iteration, and `value` from the envelope summary. `CodeReviewStep.complete` currently returns `PhaseOutcome.completed` without that call.
 - Do not add a second settlement table. Do not change `agentSettledPhaseIds`. Do not require an agent MCP `featureTaskPhaseComplete` call for runtime-owned review.
 - Leftover policy, settled from preplan evidence: the 30 `unaddressed_findings` rows from 13-20 Oct 2026 are unrestorable leftovers. Their 10 `review_run_id`s exist only on that ledger. Inventing empty `review_runs` parents would make stats report 0 findings for runs whose ledger has 30 findings. Deleting the ledger rows is forbidden. Leave the rows in place. Stats keep reading `findings`, so they exclude the leftovers honestly. Do not add a foreign key on `unaddressed_findings.review_run_id`.
-- Do not edit `orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, or IdeStatusService work-detail pagination. Remote proxy workflow support and stats auth stay out of scope. They are not needed for local `review_stats`.
+- Do not edit `../../../orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, or IdeStatusService work-detail pagination. Remote proxy workflow support and stats auth stay out of scope. They are not needed for local `review_stats`.
 
 Assumption for implement to confirm: `FeatureTaskPhaseSettlementService.complete` is reachable from the durable review complete path without a new settlement type. If that call would create a dependency cycle, use the narrowest already-used settlement port and keep writing `feature_task_phase_settlements`.
 
@@ -21,7 +21,7 @@ This spec does not freeze production wiring, test setup, formatting, or lint rep
 
 1. Completed durable review phases have a `feature_task_phase_settlements` row for the review phase, written internally after a successful durable persist.
 2. The 30 existing orphan `unaddressed_findings` rows from 13-20 Oct 2026 across 10 `review_run_id`s (`rvw-20261016` through `rvw-20261019`) and issues SKILL-419, SKILL-431, SKILL-422, SKILL-428, 0AC-54, 0AC-63, 0AC-65 remain stored as unrestorable leftovers. No empty `review_runs` parents are invented for them. Stats continue to exclude them. No foreign key is added on `unaddressed_findings.review_run_id`.
-3. Work-detail JSON is unchanged: `orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, and IdeStatusService work-detail pagination are not edited for this feature.
+3. Work-detail JSON is unchanged: `../../../orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, and IdeStatusService work-detail pagination are not edited for this feature.
 
 ## Non-Goals
 
@@ -70,13 +70,13 @@ Assumption: settlement is for durable feature-task and goal review only. Standal
 Assumption for implement to confirm: `workflowId`, `attempt`, `prompt`, `summary`, `verdict`, and `noChange` are available on the durable complete path (`CodeReviewStep.complete` / `completeReview` / `persistGoalReviewCompletion`). If a field is missing, take it from the same envelope `InlineReviewEnvelope.assemble` already puts on `produced_outputs`, without reshaping that envelope.
 
 Paths and symbols:
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/codereview/CodeReviewStep.kt` (`complete`, `recordAndSettle`)
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/runloop/state/FeatureTaskRuntimeRunLoopStepBindings.kt` (`completeReview`)
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/review/goal/FeatureTaskRuntimeGoalReviewCompletionRecorder.kt` (`persistGoalReviewCompletion` / `completeGoalReviewPhase`)
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/codereview/CodeReviewStep.kt` (`complete`, `recordAndSettle`)
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/runloop/state/FeatureTaskRuntimeRunLoopStepBindings.kt` (`completeReview`)
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/review/goal/FeatureTaskRuntimeGoalReviewCompletionRecorder.kt` (`persistGoalReviewCompletion` / `completeGoalReviewPhase`)
 - `FeatureTaskPhaseSettlementService.complete`, `FeatureTaskPhaseSettlementCompleteRequest`
 - `FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW`, `agentSettledPhaseIds`
 - `SqliteFeatureTaskPhaseSettlementStore`
-- `runtime-kotlin/runtime-mcp/src/main/kotlin/skillbill/mcp/featuretask/McpFeatureTaskSettlementHandlers.kt` (do not require this tool)
+- `../../../runtime-kotlin/runtime-mcp/src/main/kotlin/skillbill/mcp/featuretask/McpFeatureTaskSettlementHandlers.kt` (do not require this tool)
 
 Tests:
 - Extend `FeatureTaskPhaseSettlementServiceTest.kt` so a durable completed review leaves a `feature_task_phase_settlements` row for phase `review`. Realistic bug: `CodeReviewStep.complete` still skips `complete()`, matching last week's 35 `verify_findings` rows and 0 `review` rows. Drive this from durable completion, not a second isolated `complete()` insert in `SqliteFeatureTaskPhaseSettlementRepositoryTest.kt`.
@@ -120,7 +120,7 @@ Constraints:
 
 Serves: Acceptance Criterion 3 (parent AC-6).
 
-Do not edit `orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, or IdeStatusService work-detail pagination. Remote proxy workflow support and stats auth stay out of scope; they are not needed for local `review_stats`. Teaching the telemetry proxy `feature-task-runtime` stats and backfilling remote org telemetry remain non-goals.
+Do not edit `../../../orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, or IdeStatusService work-detail pagination. Remote proxy workflow support and stats auth stay out of scope; they are not needed for local `review_stats`. Teaching the telemetry proxy `feature-task-runtime` stats and backfilling remote org telemetry remain non-goals.
 
 Tests: none. Work-detail freeze is a do-not-touch constraint. Audit reads the named files. No test obligation.
 

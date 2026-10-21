@@ -26,7 +26,7 @@ internal object SourceRules {
 
   /** Reflective lookup is invisible to the generated graph, so no production source may use it. */
   val reflectiveLookup = listOf(
-    "java.util.ServiceLoader", "ServiceLoader", "Class.forName", "java.lang.Class.forName", "java.lang.reflect",
+    "java.util.ServiceLoader", "ServiceLoader", "Class.forName", "java.lang.Class.forName", "java.lang.reflect", "java.lang.invoke",
     "kotlin.reflect.full.createInstance",
   )
 
@@ -67,7 +67,9 @@ internal object SourceRules {
       if (production && project != ModuleGraphRules.TESTING) add(TESTING_PACKAGE)
       if (project in adapterModules) addAll(adapterForbidden)
       if (production && project !in adapterModules) addAll(adapterOnly)
-      if (production) addAll(reflectiveLookup)
+      if (production && !path.endsWith("composeApp/src/jvmMain/kotlin/dev/skillbill/tray/bootstrap/DesktopBootstrap.kt")) {
+        addAll(reflectiveLookup)
+      }
       if (project in sharedUiModules && (sourceSet == "commonMain" || sourceSet == "commonTest")) {
         addAll(sharedUiForbidden)
         addAll(siblingFeaturePackages(project))

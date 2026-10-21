@@ -13,10 +13,12 @@ kotlin {
     implementation(libs.paging.common)
   }
   sourceSets.jvmMain.dependencies {
-    implementation("dev.skillbill:runtime-core")
-    implementation("dev.skillbill:runtime-contracts")
+    compileOnly("dev.skillbill:runtime-core")
+    compileOnly("dev.skillbill:runtime-contracts")
   }
   sourceSets.jvmTest.dependencies {
+    implementation("dev.skillbill:runtime-core")
+    implementation("dev.skillbill:runtime-contracts")
     implementation("dev.skillbill:runtime-infra-host")
     implementation("dev.skillbill:runtime-infra-contracts")
     implementation(projects.core.testing)
@@ -27,6 +29,7 @@ kotlin {
 
 dependencies {
   add("jvmTestImplementation", testFixtures("dev.skillbill:runtime-infra-sqlite"))
+  constraints { add("jvmMainImplementation", libs.slf4j.api) }
 }
 
 tasks.named<Test>("jvmTest") {

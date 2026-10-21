@@ -175,6 +175,7 @@ fun main() {
           { owner.router.dispatch(HostIntent.ShowMain); trayPopoverVisible = false },
           { owner.router.dispatch(HostIntent.OpenSettings); trayPopoverVisible = false },
           { owner.router.dispatch(HostIntent.Quit) },
+          { owner.router.dispatch(HostIntent.Refresh) },
         )
       }
     }
@@ -248,6 +249,7 @@ private fun MainWindow(
             window = windowOwner,
             session = session,
             shellProblem = shellProblem,
+            onRefreshShell = { owner.router.dispatch(HostIntent.Refresh) },
             onOpenSettings = { owner.router.dispatch(HostIntent.OpenSettings) },
             onCloseWindow = closeRequest,
           )

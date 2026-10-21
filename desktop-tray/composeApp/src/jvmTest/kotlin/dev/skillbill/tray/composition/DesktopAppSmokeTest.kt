@@ -1,7 +1,6 @@
 package dev.skillbill.tray.composition
 
 import dev.skillbill.tray.application.FakeNativeServices
-import dev.skillbill.tray.core.common.HostEnvironment
 import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.Board
 import dev.skillbill.tray.core.domain.model.Detail
@@ -60,8 +59,7 @@ class DesktopAppSmokeTest {
           ),
         )
       }
-      // A non-empty environment without PATH: an empty one makes the runtime fall back to the host environment.
-      val host = HostEnvironment(mapOf("SKILL_BILL_TEST" to "1"), home.toString(), home.toString())
+      val host = matchedBuildHost(home)
       val application = createApplicationComponent(host, NoLegacyPreferences)
       val outliving = CoroutineScope(SupervisorJob())
       val exited = CompletableDeferred<Unit>()

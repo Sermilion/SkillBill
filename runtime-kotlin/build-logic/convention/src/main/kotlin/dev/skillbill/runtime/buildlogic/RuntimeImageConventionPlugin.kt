@@ -81,6 +81,9 @@ class RuntimeImageConventionPlugin : Plugin<Project> {
         registerLicenseVerification(repositoryLicense),
         registerSidecarTask(imageZipFile, zipName),
       )
+      pluginManager.withPlugin(BUILD_IDENTITY_PLUGIN_ID) {
+        packageBuildIdentity()
+      }
     }
   }
 
@@ -121,6 +124,32 @@ class RuntimeImageConventionPlugin : Plugin<Project> {
           from(licenseSource)
         }
       }
+    }
+  }
+
+  private fun Project.packageBuildIdentity() {
+    val writeBuildIdentity = tasks.named(WRITE_BUILD_IDENTITY_TASK)
+    extensions.configure<DistributionContainer> {
+      named("main") {
+        contents {
+          from(writeBuildIdentity)
+        }
+      }
+    }
+    val installedIdentity =
+      tasks.named<Sync>("installDist").map { install ->
+        File(install.destinationDir, BUILD_IDENTITY_RECORD)
+      }
+    val verification =
+      tasks.register<VerifyRuntimeImageBuildIdentityTask>("verifyRuntimeImageBuildIdentity") {
+        group = "verification"
+        description = "Verify the install and runtime images carry this build's identity record unchanged."
+        dependsOn("installDist", "runtime")
+        buildIdentity.fileProvider(writeBuildIdentity.map { task -> task.outputs.files.singleFile })
+        packagedIdentities.from(installedIdentity, layout.buildDirectory.file("image/$BUILD_IDENTITY_RECORD"))
+      }
+    tasks.named("runtimeZip") {
+      dependsOn(verification)
     }
   }
 

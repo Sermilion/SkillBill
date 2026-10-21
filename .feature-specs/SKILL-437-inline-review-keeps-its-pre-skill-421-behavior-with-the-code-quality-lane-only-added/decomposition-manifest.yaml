@@ -1,4 +1,4 @@
----
+  ---
 contract_version: "0.5"
 issue_key: "SKILL-437"
 feature_name: "inline-review-keeps-its-pre-skill-421-behavior-with-the-code-quality-lane-only-added"

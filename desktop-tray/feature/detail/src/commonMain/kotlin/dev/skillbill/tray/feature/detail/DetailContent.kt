@@ -88,13 +88,18 @@ import kotlin.time.Instant
 
 /**
  * One work item's detail. It reads everything it shows from its own state: whether the detail read is behind the store comes from
- * the load, and whether run controls are offered from [DetailUiState.controllable].
+ * the load, and whether run controls are offered from [DetailUiState.controllable]. A refresh also calls [onRefresh], the shell's,
+ * which checks the installed runtime.
  */
 @Composable
-fun DetailRoute(viewModel: DetailViewModel, modifier: Modifier = Modifier, onBackToList: (() -> Unit)? = null) {
+fun DetailRoute(viewModel: DetailViewModel, modifier: Modifier = Modifier, onBackToList: (() -> Unit)? = null, onRefresh: () -> Unit = {}) {
   val state by viewModel.state.collectAsState()
   val now by tickingNow()
-  DetailContent(state, now, viewModel::onAction, modifier, onBackToList)
+  val onAction: (DetailAction) -> Unit = { action ->
+    if (action == DetailAction.Refresh) onRefresh()
+    viewModel.onAction(action)
+  }
+  DetailContent(state, now, onAction, modifier, onBackToList)
 }
 
 /** [onBackToList], when given, is offered next to Refresh where the item cannot be read, so a missing item never strands the pane. */

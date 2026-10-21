@@ -11,8 +11,25 @@ import zipfile
 project = Path(__file__).resolve().parents[1]
 image = project / "composeApp/build/compose/binaries/main/app"
 classes = project / "core/data/build/classes/kotlin/jvm/test"
-if not image.is_dir() or not classes.is_dir():
-    raise SystemExit("Run `./gradlew packagedDataSmoke` (it builds the distribution and the smoke classes first).")
+runtime_install = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+if not image.is_dir() or not classes.is_dir() or runtime_install is None or not runtime_install.is_dir():
+    raise SystemExit("Run `./gradlew packagedDataSmoke` (it builds the distribution, runtime install image and smoke classes first).")
+
+for path in image.rglob("*.jar"):
+    if path.parent.name == "app":
+        with zipfile.ZipFile(path) as archive:
+            if any(name.startswith("skillbill/") and name.endswith(".class") for name in archive.namelist()):
+                raise SystemExit(f"The desktop image contains Skill Bill runtime classes: {path}")
+runtime_identity = runtime_install / "build-identity.properties"
+desktop_identities = list(image.rglob("build-identity.properties"))
+if not runtime_identity.is_file() or len(desktop_identities) != 1:
+    raise SystemExit("Expected one desktop build identity and the runtime build identity before packaged smoke.")
+runtime_record = runtime_identity.read_text()
+desktop_record = desktop_identities[0].read_text()
+if ("dirty=true" in runtime_record or "dirty=true" in desktop_record) and not os.environ.get("SKILL_BILL_INSTALL_RUN_ID"):
+    raise SystemExit("Dirty runtime and desktop builds need the same SKILL_BILL_INSTALL_RUN_ID.")
+if runtime_record != desktop_record:
+    raise SystemExit("The packaged runtime and desktop build identities do not match.")
 
 with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as directory:
     root = Path(directory)
@@ -20,6 +37,9 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     shutil.copytree(image, packaged)
     home = root / "home"
     home.mkdir()
+    runtime_root = home / ".skill-bill/runtime"
+    runtime_root.mkdir(parents=True)
+    shutil.copytree(runtime_install, runtime_root / "runtime-cli")
     empty_path = root / "empty-path"
     empty_path.mkdir()
     (home / "tmp").mkdir()
@@ -32,10 +52,13 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
         for class_file in classes.rglob("*.class"):
             archive.write(class_file, class_file.relative_to(classes))
     content = cfg.read_text()
-    content = content.replace("app.mainclass=dev.skillbill.tray.composition.MainKt",
-                              "app.mainclass=dev.skillbill.tray.core.data.PackagedDataSmoke")
     content = content.replace("[JavaOptions]", "app.classpath=$APPDIR/packaged-data-smoke.jar\n\n[JavaOptions]")
-    content += f"\njava-options=-Duser.home={home}\njava-options=-Djava.util.prefs.userRoot={home / 'preferences'}\njava-options=-Djava.io.tmpdir={home / 'tmp'}\n"
+    content += (
+        f"\njava-options=-Dskillbill.desktop.mainClass=dev.skillbill.tray.core.data.PackagedDataSmoke"
+        f"\njava-options=-Duser.home={home}"
+        f"\njava-options=-Djava.util.prefs.userRoot={home / 'preferences'}"
+        f"\njava-options=-Djava.io.tmpdir={home / 'tmp'}\n"
+    )
     cfg.write_text(content)
     if sys.platform == "darwin":
         launcher = packaged / "Skill Bill.app/Contents/MacOS/Skill Bill"
@@ -46,6 +69,7 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     environment = os.environ.copy()
     environment.update(PATH=str(empty_path), HOME=str(home), USERPROFILE=str(home))
     environment.pop("CLASSPATH", None)
+    environment.pop("SKILL_BILL_RUNTIME_DIR", None)
     environment.pop("_JPACKAGE_LAUNCHER", None)
     try:
         result = subprocess.run([str(launcher), str(home)], cwd=home, env=environment,

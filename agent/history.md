@@ -1,3 +1,16 @@
+## [2026-10-21] SKILL-430 subtask 1 build identity records and matched-pair install
+Areas: build-identity (new included plugin build), install.sh, .github/workflows/release.yml, runtime-kotlin (catalog, runtime-cli, runtime-mcp, build-logic), desktop-tray, scripts smoke tests
+- build-identity/ adds plugin skillbill.build-identity. writeBuildIdentity writes commit, dirty, release_tag, install_run_id in fixed order with no timestamp; all four are task inputs. Both builds include it from settings (reusable).
+- A git failure writes commit=unknown, dirty=true. Untracked files count as dirty, so .feature-specs makes local builds dirty; they match only through SKILL_BILL_INSTALL_RUN_ID.
+- runtime-cli and runtime-mcp ship the record at the distribution root; verifyRuntimeImageBuildIdentity guards installDist and the image, and runtimeZip depends on it.
+- install.sh stages runtime and desktop, compares the records, then activates the runtime and finally the desktop. A desktop stage failure or a mismatch prints both identities and exits non-zero before any live rm or mv.
+- The source install strips the leading v from the stamped version so jpackage accepts it and both records carry the same tag. Skip-hatch runs with no build compare against the live runtime record.
+- release.yml cmps the runtime-cli install record against the desktop app record. Watch the first release run for CRLF or untracked files marking the tree dirty.
+- Runtime catalog moved to kotlin 2.4.21, ksp 2.3.12, serialization 1.9.0. slf4j-api 2.0.17 and org.jetbrains:annotations 23.0.0 are pinned on both sides.
+- Smoke-script sed function lists must include new install.sh stage and activate functions.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-08-27] SKILL-210-remove-copilot-support
 Areas: runtime-kotlin/install, install.sh, uninstall.sh, docs, orchestration/review-delegation
 - Removed GitHub Copilot as a supported Skill Bill install agent; `InstallAgent` and install-plan schema 0.3 now list only `claude`, `codex`, `junie`, and `cursor`.

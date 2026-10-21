@@ -59,10 +59,10 @@ Override `recordReviewRun(reviewRunId: String, result: ParallelCodeReviewResult,
 
 Paths and symbols:
 
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/runloop/durable/FeatureTaskRuntimeRunLoopDurableState.kt`
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/state/PhaseRunState.kt`
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/codereview/CodeReviewStep.kt` (`recordAndSettle` already calls `state.recordReviewRun` before settle; keep that call)
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/phaserun/InMemoryPhaseRunState.kt` (reference for `persistReviewPassClaims`; do not change its body)
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/runloop/durable/FeatureTaskRuntimeRunLoopDurableState.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/state/PhaseRunState.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/codereview/CodeReviewStep.kt` (`recordAndSettle` already calls `state.recordReviewRun` before settle; keep that call)
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/phaserun/InMemoryPhaseRunState.kt` (reference for `persistReviewPassClaims`; do not change its body)
 
 Assumption for implement to confirm: durable state can reach the same `ParallelCodeReviewRunnerResultAssembly.persistReviewPassClaims` seam `InMemoryPhaseRunState` already calls, and the same `ReviewRepository.saveImportedReview` port `ReviewService.importReview` already uses. If it cannot, route through the narrowest already-used seam. Do not invent a second findings store.
 
@@ -91,11 +91,11 @@ Assumption for implement to confirm: fields `ImportedReview` needs that `mergeRe
 
 Paths and symbols:
 
-- `runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/review/parallel/runner/ParallelCodeReviewRunnerResultAssembly.kt` (`persistReviewPassClaims`)
+- `../../../runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/review/parallel/runner/ParallelCodeReviewRunnerResultAssembly.kt` (`persistReviewPassClaims`)
 - `ReviewRepository.saveImportedReview` / `persistImportedReview` / `upsertReviewRun` / `replaceFindings`
 - `ImportedReview`, `ImportedFinding`
-- `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/review/stage/ReviewLaneAttribution.kt` (`reserveReviewRun`, `recordReviewPassClaims`)
-- `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/review/stats/ReviewStatsRuntime.kt` and `ReviewFindingStats.kt` (read `findings`, not `unaddressed_findings`; do not change them)
+- `../../../runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/review/stage/ReviewLaneAttribution.kt` (`reserveReviewRun`, `recordReviewPassClaims`)
+- `../../../runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/review/stats/ReviewStatsRuntime.kt` and `ReviewFindingStats.kt` (read `findings`, not `unaddressed_findings`; do not change them)
 - CLI `ReviewStatsCommand` and MCP `reviewStats` stay as `ReviewService.reviewStats`. Do not change the telemetry proxy or remote org stats.
 
 Tests: Test Obligation 1 (empty stub counted as 0) and Test Obligation 2 (non-empty count) on a durable completed review in `PhaseReviewRunTest.kt`. Drive stats from that persist, not a new fixture-only `ReviewStatsRuntimeTest` sibling. Do not add tests in `ParallelCodeReviewRunnerTest.kt`. Its `recordReviewPassClaims` stub stays.
@@ -112,7 +112,7 @@ At `replaceLedgerForPass`, reject a write whose `review_run_id` is non-null and 
 
 Paths and symbols:
 
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/review/goal/FeatureTaskRuntimeGoalReviewCompletionRecorder.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/review/goal/FeatureTaskRuntimeGoalReviewCompletionRecorder.kt`
 - `UnaddressedFindingsLedgerRuntime.replaceLedgerForPass`
 - `FeatureTaskRuntimeRunLoopStepBindings.completeReview`, `FeatureTaskRuntimeRunLoopReviewCompletion.persistGoalReviewCompletion`
 - `DatabaseSchemaStatements.kt` `CREATE TABLE unaddressed_findings` (leave schema as-is)
@@ -123,7 +123,7 @@ Tests: Test Obligation 3 in `UnaddressedFindingsRuntimeTest.kt` (dangling `revie
 
 - Reuse `review_runs`, `findings`, and pass claims. Do not invent a second findings store.
 - Do not change review admission, severity, or repair policy. Do not change Goal QA criterion display.
-- Do not change work-detail JSON, `orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, or IdeStatusService work-detail pagination.
+- Do not change work-detail JSON, `../../../orchestration/contracts/work-detail-schema.yaml`, `WorkDetailPayloadMapping.kt`, `WorkCliCommands.kt`, or IdeStatusService work-detail pagination.
 - Do not teach the telemetry proxy `feature-task-runtime` stats or backfill remote org telemetry.
 - No `//` or block comments in runtime-kotlin. KDoc only on interfaces and members.
 - Wire keys stay in owning `*Keys` objects. Do not restate wire strings.
