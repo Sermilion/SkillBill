@@ -110,7 +110,7 @@ class WorkRunActions(
     listOfNotNull(workflowId, item.goalStatus?.currentChildWorkflowId).distinct().forEach { id ->
       val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
       if (workflow?.workflowStatus == WorkflowStatus.ABANDONED) {
-        unit.workflowStates.save(
+        unit.workflowStates.saveAcceptedSnapshotMutation(
           WorkflowFamily.TASK_RUNTIME,
           workflow.copy(workflowStatus = WorkflowStatus.PAUSED, finishedAt = null, updatedAt = now),
         )
