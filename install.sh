@@ -96,6 +96,7 @@ The desktop app builds from source for local checkouts and downloads a matching
 release build for standalone installs. Desktop installation is required.
 Both paths install a matched runtime and desktop pair: the installer stages
 both builds and replaces nothing when their build identities differ.
+The desktop starts only when the installed runtime has the same build identity.
 
 Options:
   --from-source            Force building the runtime from source with Gradle.

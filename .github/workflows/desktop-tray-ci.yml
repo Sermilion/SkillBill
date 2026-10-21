@@ -7,6 +7,7 @@ on:
       - "desktop-tray/**"
       - "!desktop-tray/**/*.md"
       - "runtime-kotlin/**"
+      - "build-identity/**"
       - ".github/workflows/desktop-tray-ci.yml"
 
 permissions:
@@ -24,6 +25,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
+      SKILL_BILL_INSTALL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
       GIT_CONFIG_COUNT: 1
       GIT_CONFIG_KEY_0: core.longpaths
       GIT_CONFIG_VALUE_0: "true"
@@ -42,6 +44,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes build-essential pkg-config libsystemd-dev xvfb xauth
+      - name: Provision runtime for desktop packaging
+        run: (cd runtime-kotlin && ./gradlew :runtime-cli:installDist)
       - name: Run desktop checks
         run: |
           cd desktop-tray

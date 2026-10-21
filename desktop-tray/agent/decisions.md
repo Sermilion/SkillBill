@@ -1,3 +1,23 @@
+## [2026-10-21] Identify packaged Skill Bill runtime by modules and classes
+Context: The single-runtime packaging guard rejected Compose and Lifecycle jars because their filenames also start with runtime-. Renaming a Skill Bill jar could bypass a filename-only guard.
+Decision: The image verifier checks declared Skill Bill runtime module names and skillbill/ class entries. Packaged smoke and release archive checks inspect class entries. Module discovery includes composite project components.
+Reason: A shared filename prefix does not identify Skill Bill code. Class inspection accepts required third-party runtime libraries and detects renamed Skill Bill code; declared module names also catch resource-only runtime modules.
+Alternatives considered: Rejecting every runtime-* jar breaks valid desktop images. Checking only filenames misses renamed runtime classes.
+
+## [2026-10-19] Load the installed runtime after checking build identity
+Context: The desktop previously bundled the runtime modules, so both the desktop and installed CLI could own schema compatibility and migrations. The desktop still needs runtime services for in-process reads and controls.
+Decision: The packaged desktop starts through a JDK-only bootstrap. It resolves `SKILL_BILL_RUNTIME_DIR` or `~/.skill-bill/runtime`, compares the installed runtime and desktop build identity records, then loads desktop and runtime jars together from a separate application class loader. Runtime migrations remain owned by the installed runtime. This changes [2026-10-12] Read work through the runtime store by requiring the installed runtime at launch; [2026-10-11] Keep the desktop build independent still applies to build ownership.
+Reason: One installed runtime must own migrations and schema compatibility. The identity gate prevents a desktop from calling runtime code from another build.
+Alternatives considered: Bundling runtime modules preserves standalone launch but keeps a second copy of runtime code in the desktop image.
+Revisit when: The desktop no longer calls runtime services in process.
+
+## [2026-10-19] Allow the desktop bootstrap to invoke the app entry point by handle
+Context: The bootstrap must load the app after creating a class loader that contains the installed runtime. The source graph cannot see a method handle lookup.
+Decision: Operator-approved deviation: `composeApp/src/jvmMain/kotlin/dev/skillbill/tray/bootstrap/DesktopBootstrap.kt` uses `MethodHandles.publicLookup().findStatic` for the delegated entry point. The parent spec constraint is the operator approval. The reflective lookup guard covers `java.lang.invoke` everywhere else.
+Reason: A static source edge would load the application entry point before the installed runtime class loader exists.
+Alternatives considered: A direct call would resolve application classes in the bootstrap loader and bypass the isolated runtime class loader.
+Revisit when: The bootstrap no longer needs to defer loading the application entry point.
+
 ## [2026-10-21] Refuse the work store when the installed runtime is a different build
 Context: On 2026-10-19 a desktop paired with a runtime from another build migrated the shared database. Compatible-looking schema versions did not prove the two halves agreed.
 Decision: Compare the installed runtime's build-identity record with the desktop's own record before SessionFactory.create. Any mismatch, missing or unreadable record publishes runtime_build_mismatch and opens nothing. Retry rereads both records.

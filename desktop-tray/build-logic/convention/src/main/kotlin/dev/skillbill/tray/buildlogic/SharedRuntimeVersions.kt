@@ -12,6 +12,7 @@ import org.gradle.api.attributes.java.TargetJvmEnvironment
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
+import org.gradle.kotlin.dsl.exclude
 import org.gradle.kotlin.dsl.register
 import org.gradle.work.DisableCachingByDefault
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
@@ -65,8 +66,31 @@ internal fun Project.registerSharedRuntimeVersionCheck() {
       configurations.named("jvmRuntimeClasspath").flatMap { it.incoming.resolutionResult.rootComponent }.map { it.moduleVersions() },
     )
   }
+  val runtimeComponents = runtime.incoming.resolutionResult.allComponents
+  val runtimeModules = runtimeComponents.mapNotNull { component ->
+    component.moduleVersion?.takeIf { it.group == FIRST_PARTY_GROUP }?.name
+  }.toSet()
+  val sharedLibraries = runtimeComponents.mapNotNull { component ->
+    (component.id as? ModuleComponentIdentifier)?.takeIf { it.group != FIRST_PARTY_GROUP }
+      ?.takeUnless { it.module in setOf("kotlin-stdlib", "annotations") }
+      ?.let { it.group to it.module }
+  }.toSet()
+  configurations.matching { it.name == "jvmRuntimeClasspath" }.configureEach {
+    exclude(group = FIRST_PARTY_GROUP)
+    sharedLibraries.forEach { (group, module) -> exclude(group = group, module = module) }
+  }
+  val verifyImage = tasks.register<VerifyPackagedRuntimeFreeTask>("verifyPackagedRuntimeFree") {
+    group = "verification"
+    description = "Fails when the desktop application image packages Skill Bill runtime module jars."
+    imageDirectory.set(layout.buildDirectory.dir("compose/binaries/main/app"))
+    runtimeModuleNames.set(runtimeModules)
+  }
   tasks.named("check") { dependsOn(verification) }
-  tasks.matching { it.name == "createDistributable" }.configureEach { dependsOn(verification) }
+  tasks.matching { it.name == "createDistributable" }.configureEach {
+    dependsOn(verification)
+    finalizedBy(verifyImage)
+  }
+  verifyImage.configure { dependsOn("createDistributable") }
 }
 
 private fun ResolvedComponentResult.moduleVersions(): Map<String, String> {

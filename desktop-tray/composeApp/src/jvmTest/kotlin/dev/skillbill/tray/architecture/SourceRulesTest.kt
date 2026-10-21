@@ -96,11 +96,19 @@ class SourceRulesTest {
       "java.lang.Class.forName" to "class Bad { val type = java.lang.Class.forName(\"x.Y\") }",
       "kotlin.reflect.full.createInstance" to "import kotlin.reflect.full.createInstance\nclass Bad",
       "java.lang.reflect.Constructor" to "import java.lang.reflect.Constructor\nclass Bad",
+      "java.lang.invoke" to "import java.lang.invoke.MethodHandles\nclass Bad",
     )
     rejected.forEach { (expected, text) ->
       val violations = violationsFor(prod, text)
       assertTrue(violations.any { expected in it }, "Expected a violation mentioning '$expected' but got $violations")
     }
+    assertEquals(
+      emptyList(),
+      violationsFor(
+        "composeApp/src/jvmMain/kotlin/dev/skillbill/tray/bootstrap/DesktopBootstrap.kt",
+        "import java.lang.invoke.MethodHandles\nclass DesktopBootstrap",
+      ),
+    )
     assertEquals(emptyList(), violationsFor("composeApp/src/jvmTest/kotlin/dev/skillbill/tray/FooTest.kt", "import java.util.ServiceLoader\nclass FooTest"))
   }
 

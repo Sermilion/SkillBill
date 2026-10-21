@@ -39,12 +39,14 @@ kotlin {
     implementation(libs.nucleus.notification.common)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.autolaunch)
-    // The generated component names the runtime component type that the data layer provides per database session.
-    implementation("dev.skillbill:runtime-core")
-    implementation("dev.skillbill:runtime-contracts")
+    // The bootstrap loads runtime classes from the installed runtime after checking its build identity.
+    compileOnly("dev.skillbill:runtime-core")
+    compileOnly("dev.skillbill:runtime-contracts")
     implementation(projects.core.designsystem)
   }
   sourceSets.jvmTest.dependencies {
+    implementation("dev.skillbill:runtime-core")
+    implementation("dev.skillbill:runtime-contracts")
     implementation("dev.skillbill:runtime-infra-host")
     implementation("dev.skillbill:runtime-infra-contracts")
     implementation(libs.kotlin.compiler.embeddable)
@@ -61,7 +63,7 @@ dependencies {
 
 compose.desktop {
   application {
-    mainClass = "dev.skillbill.tray.composition.MainKt"
+    mainClass = "dev.skillbill.tray.bootstrap.DesktopBootstrapKt"
   }
 }
 
@@ -70,9 +72,13 @@ compose.desktop {
 tasks.register<Exec>("packagedDataSmoke") {
   group = "verification"
   description = "Loads work data through the createDistributable image's own launcher, JDK and libraries."
-  dependsOn("createDistributable", ":core:data:compileTestKotlinJvm")
+  dependsOn("createDistributable", ":core:data:compileTestKotlinJvm", gradle.includedBuild("runtime-kotlin").task(":runtime-cli:installDist"))
   val python = if (System.getProperty("os.name").contains("windows", true)) "python" else "python3"
-  commandLine(python, rootDir.resolve("scripts/packaged-data-smoke.py").absolutePath)
+  commandLine(
+    python,
+    rootDir.resolve("scripts/packaged-data-smoke.py").absolutePath,
+    runtimeRoot.resolve("runtime-cli/build/install/runtime-cli").absolutePath,
+  )
 }
 
 tasks.named<Test>("jvmTest") {

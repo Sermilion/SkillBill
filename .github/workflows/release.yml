@@ -101,12 +101,16 @@ jobs:
       # on Windows runs the POSIX wrapper).
       - name: Build runtime images
         shell: bash
+        env:
+          SKILL_BILL_INSTALL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           cd runtime-kotlin
           ./gradlew --no-configuration-cache :runtime-cli:runtimeZip :runtime-mcp:runtimeZip
 
       - name: Build desktop tray distribution
         shell: bash
+        env:
+          SKILL_BILL_INSTALL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: (cd desktop-tray && ./gradlew clean check createDistributable --no-build-cache --no-configuration-cache)
 
       # The installer refuses a runtime and desktop pair whose build identity
@@ -153,6 +157,26 @@ jobs:
             digest="$(shasum -a 256 "$archive" | awk '{print $1}')"
           fi
           printf '%s  %s\n' "$digest" "$archive" > "${archive}.sha256"
+
+      - name: Verify desktop archive excludes runtime modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="skill-bill-desktop-${RELEASE_VERSION}-${{ matrix.host_token }}.tar.gz"
+          python3 - "$archive" <<'PYTHON'
+          import io
+          import sys
+          import tarfile
+          import zipfile
+
+          with tarfile.open(sys.argv[1]) as archive:
+              for member in archive.getmembers():
+                  if not member.isfile() or not member.name.endswith(".jar"):
+                      continue
+                  with zipfile.ZipFile(io.BytesIO(archive.extractfile(member).read())) as jar:
+                      if any(name.startswith("skillbill/") and name.endswith(".class") for name in jar.namelist()):
+                          raise SystemExit(f"Desktop release archive contains Skill Bill runtime classes: {member.name}")
+          PYTHON
 
       - name: Verify packaged licenses and checksums
         shell: bash

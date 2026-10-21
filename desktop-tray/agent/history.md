@@ -1,3 +1,15 @@
+## [2026-10-21] SKILL-430 subtask 2 single runtime copy
+Areas: desktop-tray, composeApp/bootstrap, core/data, build-logic/convention, packaged-data smoke, .github/workflows, install.sh, README.md
+- MEDIUM feature. Desktop production dependencies on runtime modules are compileOnly; tests retain their provisioned runtime. Packaging removes Skill Bill runtime modules and duplicate shared libraries, retaining launcher stdlib.
+- The bootstrap reuses BuildIdentityRecord and runtime-root resolution, refuses missing or mismatched installs before runtime loading, and offers a JDK-only Retry window. An isolated application loader delegates to the app with the installed runtime jars.
+- Runtime-facing reads, controls, commit signals and launch adapters keep their implementations. The installed runtime alone supplies migrations and schema compatibility.
+- reusable: verifyPackagedRuntimeFree combines module names from the runtime dependency graph with Skill Bill class detection. Smoke and release archive checks also inspect class contents, accepting Compose runtime jars and rejecting renamed Skill Bill code.
+- Packaged smoke enters through the bootstrap with a provisioned runtime. CI and release packaging provision matching identities; architecture and install documentation describe the matched pair.
+- The source guard admits method-handle lookup only in DesktopBootstrap.kt under the spec-approved deviation. Other production sources remain covered.
+- Limits: desktop launch now requires a matching installed runtime. macOS and Windows execution remain for their CI hosts.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-21] SKILL-430 subtask 1 build identity gate
 Areas: desktop-tray (core/domain, core/data, core/common, composeApp, feature/work, feature/detail, build-logic, gradle catalog)
 - MEDIUM feature. WorkStoreSessionManager asks a RuntimeBuildGate before SessionFactory.create. A refused build opens no Room database and runs no migration.

@@ -2,7 +2,10 @@
 
 The desktop app uses the `desktop-tray` Gradle build and package prefix
 `dev.skillbill.tray`. Its composite build links runtime libraries from
-`../runtime-kotlin`. Work reads and controls run in process. The modules are
+`../runtime-kotlin` for compilation and tests. The packaged app excludes runtime
+modules. `DesktopBootstrapKt` checks the installed runtime's build identity, then
+loads desktop jars with the jars in `runtime-cli/lib` through an application
+class loader. Work reads and controls run in process. The modules are
 `:core:common`, `:core:domain`, `:core:designsystem`, `:core:ui`, `:core:data`,
 `:core:datastore`, `:core:testing`, the screens `:feature:work`, `:feature:detail`,
 `:feature:history` and `:feature:settings`, and the `:composeApp` shell. There is no
@@ -107,12 +110,14 @@ content density. Native density takes precedence to prevent double scaling.
 `SKILL_BILL_DESKTOP_UI_SCALE` or `-Dskillbill.desktop.uiScale` provides an
 explicit override, with values such as `1.5` or `150%`.
 
-Room 3.0.3 reads the runtime-owned SQLite store through the bundled SQLite
-2.7.1 driver with read-only connections. Runtime migration 52 installs Room's
+Room 3.0.3 reads the runtime-owned SQLite store through the SQLite 2.7.1 driver
+supplied by the installed runtime. Runtime migration 52 installs Room's
 identity hash and committed change revisions. Room owns neither migrations nor
 a private copy of workflow state. Missing, incompatible, and corrupt stores are
-refused before queries run. Apply migrations through the runtime's supported
-write path, then reconnect the app.
+refused before queries run. The desktop bundles no runtime module or migration
+list. Its bootstrap refuses to load the app when the installed runtime is absent
+or its build identity differs. Apply migrations through the installed runtime's
+supported write path, then retry the desktop.
 
 The repository resolves the selected database through the existing runtime
 composition root. A blank preference uses runtime path precedence. The app does
@@ -179,8 +184,10 @@ records and discards those saved values. The only process launcher in the
 desktop source set is Linux AppImage `AppRun`, which starts the packaged app.
 Native notification/autolaunch libraries, the macOS status-item JNI bridge, and
 Linux AppRun are host integration code owned by `:composeApp`; `DeletionRulesTest`
-limits process use to four named files. Desktop CI watches runtime-library changes
-and builds the composite dependencies from source.
+limits process use to four named files. Desktop CI watches runtime-library and
+build-identity changes and builds the runtime before packaging. The
+`verifyPackagedRuntimeFree` task fails if the application image contains a Skill
+Bill runtime module jar.
 
 The runtime owns shared work policy and the desktop renders its typed verdicts.
 Verification belongs to the operations group. The sidebar and tray list operations

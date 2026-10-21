@@ -39,7 +39,7 @@ It works with Claude Code, Codex, and Cursor. You install one skill, `/skill-bil
 curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh | bash
 ```
 
-The installer asks which agents to set up and which telemetry level to use. It downloads a self-contained runtime (no JDK or Gradle needed), installs every platform pack and the desktop app, links `/skill-bill` into your agents, and registers the MCP server.
+The installer asks which agents to set up and which telemetry level to use. It downloads a self-contained runtime (no JDK or Gradle needed), installs every platform pack and the matched desktop app, links `/skill-bill` into your agents, and registers the MCP server. The desktop starts only when the installed runtime has the same build identity.
 
 **2. Check the install.**
 
@@ -92,7 +92,7 @@ cd SkillBill
 
 Use `bash install.sh --release <tag>` to pick a published release. `--from-source` ignores release selection.
 
-The installer always installs the desktop app: local checkouts build it, standalone installs download the matching release build. A desktop install failure stops the installer. An upgrade restarts the app if it is running. Installing over an older version removes the retired `bill-*` skills (see [Upgrading from the `bill-*` skills](#upgrading-from-the-bill--skills)).
+The installer always installs the desktop app: local checkouts build it, standalone installs download the matching release build. The desktop loads runtime jars from the installed runtime and starts only when the pair has the same build identity. A desktop install failure stops the installer. An upgrade restarts the app if it is running. Installing over an older version removes the retired `bill-*` skills (see [Upgrading from the `bill-*` skills](#upgrading-from-the-bill--skills)).
 
 Runtime files and rendered skills live under `~/.skill-bill/`. User configuration lives at `~/.config/skill-bill/config.json`, survives reinstalls, and can be moved with `SKILL_BILL_CONFIG_PATH`.
 
