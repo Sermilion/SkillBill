@@ -69,6 +69,12 @@ The selected step hook supplies the fallback output as a run fact. Shared failur
 settlement persists that output without branching on phase names. Other steps keep
 their blocking behavior. Rejected agent output stays in private diagnostics.
 
+## [2026-10-21] Push timeouts reconcile publication before blocking
+Context: a push timed out after 600 seconds although GitHub already held the exact local commit. The runtime treated the missing response as proof of failed publication and blocked the run.
+Decision: the shared Git transport adapter resolves uncertain results against the actual push URL and pinned local branch commit. It restores tracking when publication is confirmed, otherwise retries that commit once without force, then verifies again. A changed branch or destination refuses recovery. Existing runtime commit ownership and workflow settlement remain intact.
+Reason: publication can succeed before the sender loses its acknowledgement. Remote commit identity is stronger evidence than a timeout. The singleton transport adapter has no injected diagnostics port, so fixed recovery labels use its own bounded java.util.logging seam, consistent with the existing Git diff adapter. No URL or raw error enters that log.
+Revisit when: commit publication gains a shared injected transport diagnostics owner or agent-driven recovery for failures beyond uncertain publication.
+
 ## [2026-10-20] Standalone plan records the subtasks it planned
 Context: `phase plan` settled its status with the bare result `completed`. The desktop phase activity panel showed that word under the run and nothing about what the plan decided, although the plan had just written a decomposition manifest naming the feature and every subtask.
 Decision: When a standalone plan settles as completed, StandalonePlanRun reads the manifest back with `readByIssueKeyIfPresent` and passes a StandalonePlanReport (feature name, parent spec path, and each subtask's id, name, spec path, and dependency ids) to `settlePlan`. StandalonePhaseStatusEventSink persists it in the new nullable `standalone_phase_status.plan_report` JSON column (migration 65, DesktopReadSchema.VERSION 65), and WorkExecutionInstance exposes it to the desktop, which renders it under the run in phase activity. Second consumers of the ports model: runtime-infra/sqlite and the desktop data mapper. Plan runs settled before migration 65 keep a null report. The work-detail JSON contract is unchanged.

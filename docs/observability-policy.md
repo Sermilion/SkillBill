@@ -59,6 +59,11 @@ these seams:
 - worktree edit journal cap: when `trimToCap` drops rows records
   `seam=worktree_edit_journal_cap value_expected=rows_within_cap value_used=dropped_oldest_ticks`
   with `dropped_rows`
+- branch push recovery: `GitBranchPush` logs `seam=git_push_recovery` before
+  remote verification and the single normal-push retry, and after confirmation or
+  exhausted recovery. Records contain fixed cause and outcome labels. They exclude
+  remote URLs, credentials and command output. Returned failures retain the initial
+  failure, bounded retry outcome and verified remote or connection result.
 - review diff queries: `FileSystemDiffResolver` logs a WARNING with `seam=diff_resolver_query`,
   the query, value used, value expected, and cause for every unavailable result (timeout, launch
   failure, rejected exit, over-cap output, I/O failure, malformed index record, PR diff fallback

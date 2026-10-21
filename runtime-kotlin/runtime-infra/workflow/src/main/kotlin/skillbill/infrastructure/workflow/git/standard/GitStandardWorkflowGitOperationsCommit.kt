@@ -7,7 +7,6 @@ import skillbill.infrastructure.workflow.process.withValue
 import skillbill.ports.workflow.gitops.WorkflowGitRemoteOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.workflow.gitops.ProtectedBranches
 import java.nio.file.Path
 
 internal fun gitBranchExists(
@@ -68,29 +67,6 @@ private val NOTHING_TO_COMMIT_MARKERS =
     "nothing to commit",
     "nothing added to commit",
   )
-
-internal fun gitPushBranch(
-  repoRoot: Path,
-  branch: String,
-  withLease: Boolean,
-): WorkflowGitOperationResult {
-  val normalized = branch.trim()
-  if (normalized.isBlank()) {
-    return WorkflowGitOperationResult.Failed(error = "Branch name is required to push.")
-  }
-  val args =
-    if (withLease) {
-      ProtectedBranches.protectedName(normalized)?.let { protected ->
-        return WorkflowGitOperationResult.Failed(
-          error = "Refusing to force-push protected branch '$protected'.",
-        )
-      }
-      listOf("push", "--force-with-lease", "-u", "origin", normalized)
-    } else {
-      listOf("push", "-u", "origin", normalized)
-    }
-  return runGitCommand(repoRoot, args).withValue(normalized)
-}
 
 internal fun gitFetchRemoteBranch(
   repoRoot: Path,

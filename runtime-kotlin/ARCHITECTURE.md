@@ -2182,6 +2182,7 @@ The remaining `java.util.logging` owners are `InstallStaging`,
 `FileSystemDiffResolver` (bounded git-diff failure context);
 `FileSystemFeatureTaskRuntimeSharedEvidenceStore` (projection-cache
 degradation export);
+`GitBranchPush` (uncertain push verification and bounded transport retry);
 `SkillRemoveJvmFileSystemApply` (uninstall cleanup);
 `NativeAgentCompositionSchemaValidator` (schema drift before a typed failure);
 `PlatformPackSchemaValidator` (tolerated legacy manifest version);
@@ -2192,8 +2193,9 @@ degradation export);
 (schema drift before typed rejection); and `JdkRuntimeDiagnostics`,
 `JvmAgentRunProcessRunner`, and `ProcessRunDegradationRecorder` (the JDK
 adapter and bounded process/degradation export seams have no injectable
-secondary sink). These are intentional adapter-boundary logs; new fallback
-degradations use `RuntimeDiagnostics`.
+secondary sink). These are intentional adapter-boundary logs; fallbacks in injected use cases use `RuntimeDiagnostics`. The singleton Git
+transport adapter records recovery through `GitBranchPush` without introducing
+workflow or agent dependencies into process execution.
 
 `runtime-infra/skills` remains the owner of these filesystem mechanics: platform
 manifest discovery and schema parsing, base-skill directory scans, agent
