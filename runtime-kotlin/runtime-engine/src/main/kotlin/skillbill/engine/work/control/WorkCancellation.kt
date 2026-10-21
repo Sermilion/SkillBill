@@ -27,6 +27,7 @@ import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.isTerminal
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
@@ -286,7 +287,7 @@ class WorkCancellation(
     }
     item.goalStatus?.currentChildWorkflowId?.let { id ->
       val child = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
-      if (child != null && child.workflowStatus !in setOf(WorkflowStatus.COMPLETED, WorkflowStatus.ABANDONED)) {
+      if (child != null && !child.workflowStatus.isTerminal) {
         unit.workflowStates.save(
           WorkflowFamily.TASK_RUNTIME,
           child.copy(workflowStatus = WorkflowStatus.ABANDONED, updatedAt = now, finishedAt = now),
@@ -294,7 +295,7 @@ class WorkCancellation(
       }
     }
     val workflow = unit.workflowStates.get(family, workflowId)
-    if (workflow != null) {
+    if (workflow != null && !workflow.workflowStatus.isTerminal) {
       unit.workflowStates.save(
         family,
         workflow.copy(workflowStatus = WorkflowStatus.ABANDONED, updatedAt = now, finishedAt = now),

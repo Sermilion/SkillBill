@@ -1,5 +1,7 @@
 package skillbill.engine.work.control
 
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerManifestStore
@@ -36,8 +38,85 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class WorkRunActionsTest {
+  @ParameterizedTest
+  @EnumSource(WorkflowStatus::class, names = ["ABANDONED", "COMPLETED", "FAILED"])
+  fun `canceling an unfinished goal preserves terminal workflow snapshots`(terminalStatus: WorkflowStatus) {
+    establishTemporarySchemaReadiness("cancel-terminal-goal").use { fixture ->
+      val root = fixture.tempDir.toRealPath()
+      val database = sqliteSessionFactoryForTests(root, fixture.dbPath.toString(), emptyMap(), ideStatusClock)
+      val manifests = testWorkflowGoalRunnerManifestStore(database, TestDecompositionManifestStore, ideStatusClock)
+      val state = goalManifestState(root, testGoalRepositoryIdentity(root), "w-child")
+      seedUnfinishedGoal(database, fixture.connection)
+      manifests.save(state)
+      manifests.persistControlState("goal-1", state.controlState)
+      val terminal =
+        database.transaction { unit ->
+          listOf("goal-1", "w-child").map { id ->
+            val snapshot = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id))
+            snapshot.copy(
+              workflowStatus = terminalStatus,
+              finishedAt = ideStatusObservedAt.minusSeconds(30),
+            ).let {
+              unit.workflowStates.save(WorkflowFamily.TASK_RUNTIME, it)
+              assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)).toRecord()
+            }
+          }
+        }
+      val status = ideStatusService(database, manifests)
+      val goals = testGoalRunnerStatusService(manifests, EmptyOutcomeStore, database = database, clock = ideStatusClock)
+      val launcher =
+        object : WorkRunLauncher {
+          override fun start(request: WorkRunLaunchRequest) = WorkRunLaunchResult.Refused("Unused")
+
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+        }
+      val cancellation =
+        WorkCancellation(database, status, goals, NoopFeatureTaskRuntimeWorkerSupervisor, ideStatusClock, launcher)
+      val item = assertNotNull(status.detail(WorkDetailRequest("goal-1")).item)
+      val target =
+        WorkRunTarget(
+          "goal-1",
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt,
+          assertNotNull(item.databaseFileObservation),
+        )
+
+      assertEquals(WorkControlResult.Accepted, cancellation.cancel(target))
+
+      database.read { unit ->
+        terminal.forEach { prior ->
+          assertEquals(
+            prior,
+            unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, prior.workflowId)?.toRecord(),
+          )
+        }
+      }
+      val canceled = assertNotNull(status.detail(WorkDetailRequest("goal-1")).item)
+      assertEquals(IdeStatusLifecycleState.CANCELED, canceled.snapshot.lifecycleState)
+      assertNull(canceled.liveSection)
+      assertFalse(canceled.requiresAttention)
+      val actions =
+        WorkRunActions(
+          database,
+          status,
+          goals,
+          CheckedOutBranchSource(::fixtureCheckedOutBranch),
+          NoopFeatureTaskRuntimeWorkerSupervisor,
+          launcher,
+          ideStatusClock,
+        )
+      val options = database.read { unit -> actions.options(canceled, unit) }
+      assertFalse(options.canCancel)
+      assertTrue(options.canLaunch)
+    }
+  }
+
   @Test
   fun `run again reopens canceled parent and child snapshots without losing saved work`() {
     establishTemporarySchemaReadiness("restart-canceled-goal").use { fixture ->
