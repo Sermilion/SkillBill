@@ -2,6 +2,7 @@ plugins {
   id("skillbill.desktop.application")
   id("skillbill.kotlin.inject")
   id("skillbill.kotlin.serialization")
+  id("skillbill.build-identity")
 }
 
 group = "dev.skillbill.tray"

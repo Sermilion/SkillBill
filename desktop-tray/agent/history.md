@@ -1,3 +1,16 @@
+## [2026-10-21] SKILL-430 subtask 1 build identity gate
+Areas: desktop-tray (core/domain, core/data, core/common, composeApp, feature/work, feature/detail, build-logic, gradle catalog)
+- MEDIUM feature. WorkStoreSessionManager asks a RuntimeBuildGate before SessionFactory.create. A refused build opens no Room database and runs no migration.
+- core/data identity/BuildIdentityRecord parses build-identity.properties and compares records with JDK and stdlib only, so subtask 2's bootstrap can reuse it (reusable).
+- jvmMain InstalledRuntimeBuildGate rereads both records on every check. The installed one is at SKILL_BILL_RUNTIME_DIR, else ~/.skill-bill/runtime, plus runtime-cli/build-identity.properties.
+- New ProblemKind runtime_build_mismatch carries a RuntimeBuildReason (mismatch, missing, unreadable, not installed), both identities and the reinstall command. StoreSessionCoordinator.retry reselects the database. The router Refresh and the ProblemBanner Retry call it; the tray popover Refresh does not.
+- HostEnvironment.appResourcesDirectory supplies compose.application.resources.dir. A stageBuildIdentityResource Sync feeds appResourcesRootDir. The record sits under lib/app/resources on Linux/macOS and app/resources on Windows.
+- verifySharedRuntimeVersions (SharedRuntimeVersions.kt) resolves dev.skillbill:runtime-cli and fails check and createDistributable when a shared group:module version differs from jvmRuntimeClasspath (reusable).
+- Root build declares skillbill.build-identity apply false; without it a second KGP copy breaks clean. gradle.properties raises Metaspace to 1g after a kspKotlinJvm OOM.
+- Limits: no re-check runs while a session is active. Releases tagged before SKILL-430 carry no record and are refused.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-15] SKILL-424 subtask 6 deletion and delivery proof
 Areas: desktop-tray (composeApp architecture tests, docs, ARCHITECTURE.md), runtime-kotlin (runtime-cli repoTest installer fixtures, runtime-infra/sqlite worklist stores)
 

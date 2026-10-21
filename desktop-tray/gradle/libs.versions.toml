@@ -17,6 +17,7 @@ savedstate = "1.4.0"
 room = "3.0.3"
 sqlite = "2.7.1"
 sqlite-jdbc = "3.53.0.0"
+slf4j = "2.0.17"
 datastore = "1.2.1"
 paging = "3.5.2"
 
@@ -56,5 +57,6 @@ room-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room" }
 sqlite-api = { module = "androidx.sqlite:sqlite", version.ref = "sqlite" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "datastore" }
 paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }

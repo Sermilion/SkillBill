@@ -94,6 +94,8 @@ By default a local checkout builds and installs from source. A standalone
 downloaded installer uses checksum-verified prebuilt release images.
 The desktop app builds from source for local checkouts and downloads a matching
 release build for standalone installs. Desktop installation is required.
+Both paths install a matched runtime and desktop pair: the installer stages
+both builds and replaces nothing when their build identities differ.
 
 Options:
   --from-source            Force building the runtime from source with Gradle.
@@ -389,6 +391,9 @@ cleanup_prebuilt_work_dir() {
 # (the runtime apply moves into the live skills/ dir, which is not a candidate path).
 cleanup_install_exit() {
   cleanup_prebuilt_work_dir
+  if [[ -n "${STAGED_RUNTIME_ROOT:-}" && -d "$STAGED_RUNTIME_ROOT" ]]; then
+    rm -rf "$STAGED_RUNTIME_ROOT"
+  fi
   # discard_authored_candidates is defined later in this file; on an early-exit before
   # its definition the candidate dirs do not exist yet, so guard the call.
   if declare -f discard_authored_candidates >/dev/null 2>&1; then
@@ -765,6 +770,81 @@ locate_packaged_runtime_bin() {
   fi
 }
 
+# SKILL-430: every runtime and desktop build carries a build-identity.properties
+# record written by the shared skillbill.build-identity Gradle plugin. The
+# installer stages both builds, compares their records with the same rule the
+# desktop uses at startup, and replaces nothing live unless they match.
+BUILD_IDENTITY_RECORD="build-identity.properties"
+STAGED_RUNTIME_ROOT=""
+STAGED_RUNTIME_ORIGIN=""
+STAGED_DESKTOP_APP_SOURCE=""
+DEFER_RUNTIME_ACTIVATION=0
+
+read_build_identity_field() {
+  local record="$1" key="$2"
+  sed -n "s/^$key=//p" "$record" | tr -d '\r' | head -n1
+}
+
+# A dirty record names no exact source, so it matches only another dirty record
+# of the same commit from the same install run. Clean records match on commit
+# and release tag.
+build_identities_match() {
+  local runtime="$1" desktop="$2"
+  [[ -f "$runtime" && -f "$desktop" ]] || return 1
+  local runtime_commit desktop_commit runtime_dirty desktop_dirty runtime_run
+  runtime_commit="$(read_build_identity_field "$runtime" commit)"
+  desktop_commit="$(read_build_identity_field "$desktop" commit)"
+  runtime_dirty="$(read_build_identity_field "$runtime" dirty)"
+  desktop_dirty="$(read_build_identity_field "$desktop" dirty)"
+  [[ -n "$runtime_commit" && "$runtime_commit" == "$desktop_commit" ]] || return 1
+  [[ "$runtime_dirty" == true || "$runtime_dirty" == false ]] || return 1
+  [[ "$desktop_dirty" == true || "$desktop_dirty" == false ]] || return 1
+  if [[ "$runtime_dirty" == true || "$desktop_dirty" == true ]]; then
+    runtime_run="$(read_build_identity_field "$runtime" install_run_id)"
+    [[ "$runtime_dirty" == true && "$desktop_dirty" == true && -n "$runtime_run" &&
+      "$runtime_run" == "$(read_build_identity_field "$desktop" install_run_id)" ]]
+    return
+  fi
+  [[ "$(read_build_identity_field "$runtime" release_tag)" == "$(read_build_identity_field "$desktop" release_tag)" ]]
+}
+
+describe_build_identity() {
+  local record="$1"
+  if [[ ! -f "$record" ]]; then
+    printf 'no build identity record (%s)' "$record"
+    return 0
+  fi
+  local commit tag dirty run description
+  commit="$(read_build_identity_field "$record" commit)"
+  tag="$(read_build_identity_field "$record" release_tag)"
+  dirty="$(read_build_identity_field "$record" dirty)"
+  run="$(read_build_identity_field "$record" install_run_id)"
+  description="commit ${commit:0:12}"
+  [[ -z "$tag" ]] || description="release $tag, $description"
+  if [[ "$dirty" == true && -n "$run" ]]; then
+    description="$description (dirty, run $run)"
+  elif [[ "$dirty" != false ]]; then
+    description="$description (dirty)"
+  fi
+  printf '%s' "$description"
+}
+
+# Compose Desktop packages app resources under a different directory per OS.
+desktop_app_build_identity_path() {
+  local os="$1" app="$2"
+  case "$os" in
+    macos)
+      printf '%s/Contents/app/resources/%s' "$app" "$BUILD_IDENTITY_RECORD"
+      ;;
+    windows)
+      printf '%s/app/resources/%s' "$app" "$BUILD_IDENTITY_RECORD"
+      ;;
+    *)
+      printf '%s/lib/app/resources/%s' "$app" "$BUILD_IDENTITY_RECORD"
+      ;;
+  esac
+}
+
 stage_packaged_runtime_distribution() {
   local source_dir="$1" target_dir="$2" label="$3"
   local tmp_dir="$target_dir.tmp"
@@ -795,6 +875,58 @@ install_packaged_runtime_pair() {
       return 1
     fi
   done
+  if [[ "${DEFER_RUNTIME_ACTIVATION:-0}" == "1" ]]; then
+    STAGED_RUNTIME_ROOT="$candidate_root"
+    return 0
+  fi
+  activate_staged_runtime_pair "$candidate_root"
+}
+
+discard_staged_runtime() {
+  if [[ -n "${STAGED_RUNTIME_ROOT:-}" ]]; then
+    rm -rf "$STAGED_RUNTIME_ROOT"
+    STAGED_RUNTIME_ROOT=""
+  fi
+}
+
+# The staged runtime's record, or the live one when the test escape hatch
+# staged none.
+staged_runtime_build_identity_record() {
+  if [[ -n "$STAGED_RUNTIME_ROOT" ]]; then
+    printf '%s' "$STAGED_RUNTIME_ROOT/runtime-cli.tmp/$BUILD_IDENTITY_RECORD"
+  else
+    printf '%s' "$RUNTIME_CLI_INSTALL_DIR/$BUILD_IDENTITY_RECORD"
+  fi
+}
+
+# The staged runtime must be the same build as the staged desktop app before
+# either replaces anything live.
+verify_staged_build_identities() {
+  local runtime_record desktop_record
+  runtime_record="$(staged_runtime_build_identity_record)"
+  desktop_record="$(desktop_app_build_identity_path "$(host_os)" "$STAGED_DESKTOP_APP_SOURCE")"
+  if build_identities_match "$runtime_record" "$desktop_record"; then
+    info "Runtime and desktop app are the same build: $(describe_build_identity "$runtime_record")"
+    return 0
+  fi
+  err "Installation stopped: the runtime and desktop app are not the same build. Nothing was replaced."
+  err "  Runtime:     $(describe_build_identity "$runtime_record")"
+  err "  Desktop app: $(describe_build_identity "$desktop_record")"
+  return 1
+}
+
+# Call before discard_staged_runtime, which deletes the staged runtime record.
+report_unstaged_desktop_app() {
+  err "Installation stopped: the desktop app could not be staged ($DESKTOP_APP_INSTALL_RESULT). Nothing was replaced."
+  err "  Runtime:     $(describe_build_identity "$(staged_runtime_build_identity_record)")"
+  err "  Desktop app: not staged ($DESKTOP_APP_INSTALL_RESULT)"
+}
+
+# Replace the live runtime-cli and runtime-mcp with a pair that
+# install_packaged_runtime_pair staged and contract-checked under candidate_root.
+activate_staged_runtime_pair() {
+  local candidate_root="$1"
+  local cli_target="$candidate_root/runtime-cli" mcp_target="$candidate_root/runtime-mcp"
   if ! clean_install_state_if_requested || ! run_pre_install_uninstall; then
     rm -rf "$candidate_root"
     return 1
@@ -1007,6 +1139,10 @@ install_packaged_runtime_distributions() {
   install_packaged_runtime_pair \
     "$RUNTIME_KOTLIN_DIR/runtime-cli/build/install/runtime-cli" \
     "$RUNTIME_KOTLIN_DIR/runtime-mcp/build/install/runtime-mcp" || return 1
+  if [[ "${DEFER_RUNTIME_ACTIVATION:-0}" == "1" ]]; then
+    ok "Kotlin runtime staged"
+    return 0
+  fi
   locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI" || return 1
   locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP" || return 1
   ok "Kotlin runtime installed"
@@ -1069,6 +1205,11 @@ install_prebuilt_runtime_distributions() {
 
   info "Installing packaged Kotlin runtime to: $RUNTIME_INSTALL_ROOT"
   install_packaged_runtime_pair "$cli_src" "$mcp_src" || return 1
+  if [[ "${DEFER_RUNTIME_ACTIVATION:-0}" == "1" ]]; then
+    STAGED_RUNTIME_ORIGIN=" from prebuilt release"
+    ok "Kotlin runtime staged from prebuilt release"
+    return 0
+  fi
   locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI" || return 1
   locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP" || return 1
   ok "Kotlin runtime installed from prebuilt release"
@@ -1111,6 +1252,16 @@ release_version_for_untracked_build_tree() {
   resolve_release_installer_tag 2>/dev/null || true
 }
 
+# The runtime source build resolves this once, in the parent shell, and the
+# desktop source build reuses it, so both build identity records carry the same
+# release tag. The leading v is dropped because jpackage rejects it.
+source_build_release_version() {
+  if [[ -z "${SOURCE_BUILD_RELEASE_VERSION+x}" ]]; then
+    SOURCE_BUILD_RELEASE_VERSION="$(release_version_for_untracked_build_tree)"
+    SOURCE_BUILD_RELEASE_VERSION="${SOURCE_BUILD_RELEASE_VERSION#v}"
+  fi
+}
+
 build_kotlin_runtime_distributions() {
   # Build output path: Gradle application installDist bin scripts at:
   # runtime-kotlin/runtime-cli/build/install/runtime-cli/bin/runtime-cli
@@ -1138,8 +1289,8 @@ build_kotlin_runtime_distributions() {
     return 1
   fi
 
-  local stamped_version
-  stamped_version="$(release_version_for_untracked_build_tree)"
+  source_build_release_version
+  local stamped_version="$SOURCE_BUILD_RELEASE_VERSION"
 
   info "Building packaged Kotlin runtime distributions..."
   rm -rf \
@@ -1622,12 +1773,16 @@ build_source_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="source missing"
     return 1
   fi
-  ensure_build_jvm || return 1
+  if ! ensure_build_jvm; then
+    DESKTOP_APP_INSTALL_RESULT="build JVM unavailable"
+    return 1
+  fi
   info "Building desktop tray app from source."
   # --no-daemon still starts a single-use daemon. Keep it outside the shared
   # registry so another checkout's gradlew --stop cannot cancel this build.
-  if ! (cd "$desktop_dir" && ./gradlew --no-daemon \
-    -Dorg.gradle.daemon.registry.base="$PWD/.gradle/installer-daemon" -q createDistributable); then
+  if ! (cd "$desktop_dir" || exit 1
+    [[ -z "${SOURCE_BUILD_RELEASE_VERSION:-}" ]] || export RELEASE_VERSION="$SOURCE_BUILD_RELEASE_VERSION"
+    ./gradlew --no-daemon -Dorg.gradle.daemon.registry.base="$PWD/.gradle/installer-daemon" -q createDistributable); then
     warn "Could not build the desktop app from source; keeping the existing app install."
     DESKTOP_APP_INSTALL_RESULT="build failed"
     return 1
@@ -1636,7 +1791,15 @@ build_source_desktop_app() {
 }
 
 install_selected_desktop_app() {
-  local os token archive work_dir extract_dir app_source app_target legacy_target executable install_root staged_app backup_app
+  stage_selected_desktop_app && activate_staged_desktop_app
+}
+
+# Build or fetch the desktop app and validate it without touching the live
+# install. Leaves the app directory in STAGED_DESKTOP_APP_SOURCE.
+stage_selected_desktop_app() {
+  local os token archive work_dir extract_dir app_source
+  STAGED_DESKTOP_APP_SOURCE=""
+  DESKTOP_APP_INSTALL_RESULT="staging failed"
   os="$(host_os)"
   if [[ "$INSTALL_SOURCE" == "source" ]]; then
     build_source_desktop_app "$os" || return 1
@@ -1660,6 +1823,11 @@ install_selected_desktop_app() {
 
     init_prebuilt_work_dir
     work_dir="$(prebuilt_work_dir)"
+    if [[ -z "$work_dir" ]]; then
+      err "Could not create a work directory for the desktop tray download."
+      DESKTOP_APP_INSTALL_RESULT="download failed"
+      return 1
+    fi
     info "Fetching desktop tray app for $token."
     if ! archive="$(fetch_release_asset "$RESOLVED_DESKTOP_APP_ASSET")" || ! verify_sha256 "$archive"; then
       warn "Could not download and verify the desktop tray app; keeping the existing app install."
@@ -1668,7 +1836,10 @@ install_selected_desktop_app() {
     fi
 
     extract_dir="$work_dir/extract-desktop"
-    mkdir -p "$extract_dir" || return 1
+    if ! mkdir -p "$extract_dir"; then
+      DESKTOP_APP_INSTALL_RESULT="extract failed"
+      return 1
+    fi
     local member normalized_member
     while IFS= read -r member; do
       normalized_member="${member#./}"
@@ -1701,10 +1872,6 @@ install_selected_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="archive rejected"
     return 1
   fi
-  install_root="$(desktop_app_install_root "$os")" || return 1
-  app_target="$(desktop_app_target_path "$os" "$install_root")"
-  legacy_target="$(desktop_app_legacy_target_path "$os" "$install_root")"
-  executable="$(desktop_app_executable_path "$os" "$app_target")"
   local source_executable
   source_executable="$(desktop_app_executable_path "$os" "$app_source")"
   if [[ ! -f "$source_executable" ]]; then
@@ -1717,6 +1884,19 @@ install_selected_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="archive rejected"
     return 1
   fi
+  DESKTOP_APP_INSTALL_RESULT="staged"
+  STAGED_DESKTOP_APP_SOURCE="$app_source"
+}
+
+# Replace the live desktop app with the one stage_selected_desktop_app staged.
+activate_staged_desktop_app() {
+  local os app_source app_target legacy_target executable install_root staged_app backup_app
+  os="$(host_os)"
+  app_source="$STAGED_DESKTOP_APP_SOURCE"
+  install_root="$(desktop_app_install_root "$os")" || return 1
+  app_target="$(desktop_app_target_path "$os" "$install_root")"
+  legacy_target="$(desktop_app_legacy_target_path "$os" "$install_root")"
+  executable="$(desktop_app_executable_path "$os" "$app_target")"
 
   local -a running_pids=()
   local running_pid
@@ -2300,7 +2480,28 @@ run_full_install() {
     replay_last_install_selection
   fi
   migrate_legacy_config_to_durable_path
+  # A dirty tree has no exact source identity, so both builds of this run share
+  # one run id and only match each other.
+  export SKILL_BILL_INSTALL_RUN_ID="${SKILL_BILL_INSTALL_RUN_ID:-$(date +%s)-$$-$RANDOM}"
+  DEFER_RUNTIME_ACTIVATION=1
   install_runtime_distributions || return 1
+  DEFER_RUNTIME_ACTIVATION=0
+  if ! stage_selected_desktop_app; then
+    report_unstaged_desktop_app
+    discard_staged_runtime
+    return 1
+  fi
+  if ! verify_staged_build_identities; then
+    discard_staged_runtime
+    return 1
+  fi
+  if [[ -n "$STAGED_RUNTIME_ROOT" ]]; then
+    activate_staged_runtime_pair "$STAGED_RUNTIME_ROOT" || return 1
+    STAGED_RUNTIME_ROOT=""
+    locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI" || return 1
+    locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP" || return 1
+    ok "Kotlin runtime installed$STAGED_RUNTIME_ORIGIN"
+  fi
   copy_in_authored_source
   reconcile_and_commit_authored_source_with_recovery
 
@@ -2331,7 +2532,7 @@ run_full_install() {
 
   apply_external_addon_overlay
   apply_runtime_install
-  if ! install_selected_desktop_app; then
+  if ! activate_staged_desktop_app; then
     err "Installation incomplete: the required desktop app step failed. $DESKTOP_APP_INSTALL_RESULT."
     return 1
   fi

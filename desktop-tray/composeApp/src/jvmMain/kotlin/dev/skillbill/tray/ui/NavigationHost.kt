@@ -73,8 +73,11 @@ import dev.skillbill.tray.lifetime.WindowOwner
 import dev.skillbill.tray.navigation.ListStatus
 import dev.skillbill.tray.navigation.Section
 
-/** What an entry can ask of the application around it: open the settings window, or close the window it is in. */
-private class WindowActions(val openSettings: () -> Unit, val closeWindow: () -> Unit)
+/**
+ * What an entry can ask of the application around it: open the settings window, close the window it is in, or refresh through
+ * the shell, which re-reads the installed runtime's build record before anything reloads.
+ */
+private class WindowActions(val openSettings: () -> Unit, val closeWindow: () -> Unit, val refreshShell: () -> Unit)
 
 private val LocalWindowActions = staticCompositionLocalOf<WindowActions> { error("Entries compose inside SkillBillNavHost.") }
 
@@ -102,8 +105,9 @@ fun SkillBillNavHost(
   onOpenSettings: () -> Unit,
   onCloseWindow: () -> Unit,
   modifier: Modifier = Modifier,
+  onRefreshShell: () -> Unit = {},
 ) {
-  val actions = remember(onOpenSettings, onCloseWindow) { WindowActions(onOpenSettings, onCloseWindow) }
+  val actions = remember(onOpenSettings, onCloseWindow, onRefreshShell) { WindowActions(onOpenSettings, onCloseWindow, onRefreshShell) }
   CompositionLocalProvider(LocalViewModelStoreOwner provides window.entryStoreOwner, LocalWindowActions provides actions) {
     key(window.entryStoreOwner) {
       val navigator = window.navigator
@@ -122,8 +126,11 @@ fun SkillBillNavHost(
           Box(Modifier.width(1.dp).fillMaxHeight().background(border))
           Column(Modifier.weight(1f).fillMaxHeight()) {
             val status = navigator.status
-            val problem = status.problem ?: shellProblem
-            if (problem != null) ProblemBanner(problem, status)
+            // A refused runtime build explains every other read failure, and only a shell refresh can clear it.
+            val runtimeRefusal = shellProblem?.takeIf { it.runtimeBuild != null }
+            val problem = runtimeRefusal ?: status.problem ?: shellProblem
+            val retry = if (runtimeRefusal != null) onRefreshShell else { { onRefreshShell(); status.onRefresh() } }
+            if (problem != null) ProblemBanner(problem, status, retry)
             NavigationPane(
               routes.drop(1).ifEmpty { listOf(NoSelection) },
               onBack = { navigator.back() },
@@ -211,8 +218,13 @@ private fun WorkEntry(window: WindowOwner) {
     if (initial != null && navigator.openDetail(initial)) opened = true
   }
 
+  // A section's retry reloads through the shell too, so it re-reads the installed runtime's build record.
+  val onAction: (WorkAction) -> Unit = { action ->
+    if (action is WorkAction.Retry || action == WorkAction.Refresh) actions.refreshShell()
+    work.onAction(action)
+  }
   Sidebar(navigator, memory, scroll, actions.openSettings) {
-    workSections(state, today, memory.filter.isNotBlank(), navigator.selected, scroll, work::onAction)
+    workSections(state, today, memory.filter.isNotBlank(), navigator.selected, scroll, onAction)
   }
 }
 
@@ -232,8 +244,12 @@ private fun HistoryEntry(window: WindowOwner) {
   }
   LaunchedEffect(state.list) { navigator.status = ListStatus(loading = false, onRefresh = { history.onAction(HistoryAction.Retry) }) }
 
+  val onAction: (HistoryAction) -> Unit = { action ->
+    if (action == HistoryAction.Retry) actions.refreshShell()
+    history.onAction(action)
+  }
   Sidebar(navigator, memory, scroll, actions.openSettings) {
-    historySection(state, navigator.selected, scroll, history::onAction)
+    historySection(state, navigator.selected, scroll, onAction)
   }
 }
 
@@ -254,7 +270,12 @@ private fun DetailEntry(route: AppRoute, window: WindowOwner) {
           if (effect is DetailEffect.SelectSuccessor) window.navigator.selectSuccessor(effect.from, effect.successor)
         }
       }
-      DetailRoute(detail, Modifier.fillMaxSize(), onBackToList = { window.navigator.back() })
+      DetailRoute(
+        detail,
+        Modifier.fillMaxSize(),
+        onBackToList = { window.navigator.back() },
+        onRefresh = LocalWindowActions.current.refreshShell,
+      )
     }
   }
 }
@@ -269,7 +290,7 @@ private fun SettingsEntry(window: WindowOwner) {
 @Composable
 private fun EmptyDetailEntry(window: WindowOwner) {
   val status = window.navigator.status
-  val onOpenSettings = LocalWindowActions.current.openSettings
+  val actions = LocalWindowActions.current
   val failed = status.failed
   val title = if (failed) "Couldn't load your work" else if (status.loading) "Loading your work" else if (status.hasMore) "More work is available" else "All quiet"
   val message = if (failed) "Check the database path in Settings, then try refreshing."
@@ -280,21 +301,26 @@ private fun EmptyDetailEntry(window: WindowOwner) {
       Text(title, color = ink, style = MaterialTheme.typography.titleLarge)
       Text(message, color = muted, style = MaterialTheme.typography.bodyMedium)
       if (failed) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = status.onRefresh) { Text("Refresh") }
-        OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
+        Button(onClick = { actions.refreshShell(); status.onRefresh() }) { Text("Refresh") }
+        OutlinedButton(onClick = actions.openSettings) { Text("Settings") }
       }
     }
   }
 }
 
 @Composable
-private fun ProblemBanner(problem: Problem, status: ListStatus) {
+private fun ProblemBanner(problem: Problem, status: ListStatus, onRetry: () -> Unit) {
   Row(Modifier.fillMaxWidth().background(orange.copy(alpha = .10f)).padding(horizontal = 22.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
     Column(Modifier.weight(1f)) {
       Text(problem.summary, color = amber, style = MaterialTheme.typography.bodyMedium)
+      problem.runtimeBuild?.let { build ->
+        Text("Installed runtime: ${build.installedIdentity ?: "none"}", color = muted, style = MaterialTheme.typography.bodySmall)
+        Text("This app: ${build.desktopIdentity}", color = muted, style = MaterialTheme.typography.bodySmall)
+        Text("Install a matched pair with ${build.reinstallCommand}, then retry.", color = muted, style = MaterialTheme.typography.bodySmall)
+      }
       if (status.stale) Text("Showing the last successful update.", color = muted, style = MaterialTheme.typography.bodySmall)
     }
-    TextButton(onClick = status.onRefresh) { Text("Retry", color = amber) }
+    TextButton(onClick = onRetry) { Text("Retry", color = amber) }
   }
 }
 

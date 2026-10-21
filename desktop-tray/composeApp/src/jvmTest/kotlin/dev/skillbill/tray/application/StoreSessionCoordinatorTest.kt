@@ -3,6 +3,9 @@ package dev.skillbill.tray.application
 import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
+import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
+import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
+import dev.skillbill.tray.core.domain.model.RuntimeBuildRefusedException
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.testing.FakeSettingsRepository
 import dev.skillbill.tray.core.testing.FakeWorkStoreSession
@@ -21,7 +24,7 @@ class StoreSessionCoordinatorTest {
   private val native = FakeNativeServices()
 
   private fun TestScope.coordinator(switch: suspend (String?) -> Unit = session::selectDatabase): StoreSessionCoordinator =
-    StoreSessionCoordinator(backgroundScope, settings, switch, native).also { runCurrent() }
+    StoreSessionCoordinator(backgroundScope, settings, switch, session::checkRuntimeBuild, native).also { runCurrent() }
 
   private fun TestScope.change(transform: (AppSettings) -> AppSettings) {
     current = transform(current)
@@ -89,5 +92,20 @@ class StoreSessionCoordinatorTest {
     change { it.copy(startAtLogin = false) }
 
     assertEquals(listOf(true, false), native.loginCalls)
+  }
+
+  @Test
+  fun `a refused runtime build is its own problem until a retry selects the same database`() = runTest {
+    val refusal = RuntimeBuildProblem(RuntimeBuildReason.MISMATCH, "commit aaaa", "commit bbbb", "./install.sh --from-source")
+    var refuse = true
+    val coordinator = coordinator { path -> if (refuse) throw RuntimeBuildRefusedException(refusal) else session.selectDatabase(path) }
+    assertEquals(ProblemCode.RUNTIME_BUILD_MISMATCH, coordinator.problem.value?.code)
+    assertEquals(refusal, coordinator.problem.value?.runtimeBuild)
+
+    refuse = false
+    coordinator.retry()
+
+    assertEquals(listOf<String?>("/a.db"), session.selectedPaths)
+    assertNull(coordinator.problem.value)
   }
 }

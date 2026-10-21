@@ -71,7 +71,10 @@ import dev.skillbill.tray.core.ui.statusColor
 import dev.skillbill.tray.core.ui.tickingNow
 import kotlin.time.Instant
 
-/** The tray popover's content. The window around it (drag area, close button) is the shell's; it arrives as [header]. */
+/**
+ * The tray popover's content. The window around it (drag area, close button) is the shell's; it arrives as [header]. Refresh goes
+ * to [onRefresh], the shell's, which checks the installed runtime before it reloads these sections.
+ */
 @Composable
 fun TrayPopoverRoute(
   viewModel: TrayViewModel,
@@ -79,12 +82,14 @@ fun TrayPopoverRoute(
   openMain: () -> Unit,
   openSettings: () -> Unit,
   onQuit: () -> Unit,
+  onRefresh: () -> Unit,
   modifier: Modifier = Modifier,
   header: @Composable () -> Unit,
 ) {
   val state by viewModel.state.collectAsState()
   val now by tickingNow()
-  TrayPopoverContent(state, selected, now, viewModel::onAction, openMain, openSettings, onQuit, modifier, header)
+  val onAction: (TrayAction) -> Unit = { action -> if (action == TrayAction.Refresh) onRefresh() else viewModel.onAction(action) }
+  TrayPopoverContent(state, selected, now, onAction, openMain, openSettings, onQuit, modifier, header)
 }
 
 @Composable

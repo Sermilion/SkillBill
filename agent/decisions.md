@@ -1,3 +1,14 @@
+## [2026-10-21] Install runtime and desktop as a matched pair or not at all
+Context: A desktop and runtime from different builds share one database, and a half-updated pair caused the SKILL-430 regression.
+Decision: install.sh stages both halves, compares their build-identity records, and activates only on a match. A desktop that cannot be staged fails the whole install before the runtime is replaced (preplan U5).
+Reason: Activating the runtime first and continuing past a desktop failure leaves exactly the mismatched pair this work prevents.
+Alternatives considered: Keeping the old warn-and-continue desktop step was rejected because it reproduces the split.
+
+## [2026-10-21] Dirty builds match only through a shared install run id
+Context: Source installs from a working tree with untracked files produce dirty records, and two dirty builds of one commit can hold different code.
+Decision: A dirty record equals another only when both are dirty, the commits match, and both carry the same non-empty install_run_id. Clean records match on commit and release tag.
+Reason: The commit alone cannot vouch for uncommitted changes. One run id per install.sh run proves both halves came from the same build.
+
 ## [2026-10-17] Discovery names the open criteria in prose and each gap is verified once
 Context: After discovery found any gap, every criterion still got a focused audit, including ones discovery had found met, and each repaired criterion got a second read-only audit after its targeted verification. A subtask with eight criteria spent about fourteen audits where four were needed.
 Decision: The initial full audit ends its prose with one line, `Open criteria: AC-002, AC-005` or `Open criteria: none`. The runtime reads that line leniently: criteria it does not name are accepted at once, named criteria queue in spec order and go straight to plan fix, implement fix and one targeted verification audit, with up to three unsuccessful cycles each. When the queue empties the run moves on. If the line is missing or names no queued criterion, the runtime falls back to auditing every criterion; it never blocks on the line.

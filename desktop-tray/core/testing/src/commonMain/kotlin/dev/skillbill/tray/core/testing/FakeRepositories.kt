@@ -11,6 +11,7 @@ import dev.skillbill.tray.core.domain.model.HistoryFilter
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.Retention
+import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.model.TrayStatus
 import dev.skillbill.tray.core.domain.model.WorkIdentity
@@ -180,6 +181,11 @@ class FakeWorkStoreSession : WorkStoreSession {
     onSelect(path)
     generations.value += 1
   }
+
+  /** What [checkRuntimeBuild] reports; null means the installed runtime is the same build. */
+  var runtimeBuild: RuntimeBuildProblem? = null
+
+  override suspend fun checkRuntimeBuild(): RuntimeBuildProblem? = runtimeBuild
 
   /** A same-path replacement the data layer found on its own: the generation advances with no selection. */
   fun replaceInPlace() {

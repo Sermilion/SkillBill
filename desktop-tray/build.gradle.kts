@@ -1,5 +1,6 @@
 plugins {
   base
+  id("skillbill.build-identity") apply false
 }
 
 group = "dev.skillbill.tray"

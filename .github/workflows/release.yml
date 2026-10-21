@@ -109,6 +109,22 @@ jobs:
         shell: bash
         run: (cd desktop-tray && ./gradlew clean check createDistributable --no-build-cache --no-configuration-cache)
 
+      # The installer refuses a runtime and desktop pair whose build identity
+      # records differ, so a release must never publish one.
+      - name: Verify runtime and desktop build identities match
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_record="runtime-kotlin/runtime-cli/build/install/runtime-cli/build-identity.properties"
+          mapfile -t desktop_records < <(find desktop-tray/composeApp/build/compose/binaries/main/app \
+            -name build-identity.properties -type f)
+          if [[ "${#desktop_records[@]}" -ne 1 ]]; then
+            echo "Expected one desktop build identity record, found ${#desktop_records[@]}." >&2
+            exit 1
+          fi
+          cat "$runtime_record"
+          cmp "$runtime_record" "${desktop_records[0]}"
+
       - name: Bundle skills archive
         if: matrix.host_token == 'linux-x64'
         shell: bash

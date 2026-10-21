@@ -2,6 +2,7 @@ rootProject.name = "skill-bill-desktop-tray"
 
 includeBuild("../runtime-kotlin") {
   dependencySubstitution {
+    substitute(module("dev.skillbill:runtime-cli")).using(project(":runtime-cli"))
     substitute(module("dev.skillbill:runtime-core")).using(project(":runtime-core"))
     substitute(module("dev.skillbill:runtime-contracts")).using(project(":runtime-contracts"))
     substitute(module("dev.skillbill:runtime-infra-host")).using(project(":runtime-infra:host"))
@@ -12,6 +13,7 @@ includeBuild("../runtime-kotlin") {
 
 pluginManagement {
   includeBuild("build-logic")
+  includeBuild("../build-identity")
   repositories {
     gradlePluginPortal()
     google()

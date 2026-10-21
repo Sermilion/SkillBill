@@ -198,6 +198,13 @@ with zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as zf:
 PY
 }
 
+# Every smoke runtime image and desktop bundle is the same clean build, so the
+# installer's build identity comparison accepts the pair.
+write_smoke_build_identity() {
+  mkdir -p "$(dirname "$1")"
+  printf 'commit=5m0ke\ndirty=false\nrelease_tag=0.0.0-smoke\ninstall_run_id=\n' >"$1"
+}
+
 make_runtime_zip() {
   local token="$1" name="$2" bin_name="$3" stub_src="$4" out_dir="$5"
   local work zip_name
@@ -206,6 +213,7 @@ make_runtime_zip() {
   mkdir -p "$work/$name-0.0.0-smoke/bin"
   cp "$stub_src" "$work/$name-0.0.0-smoke/bin/$bin_name"
   chmod +x "$work/$name-0.0.0-smoke/bin/$bin_name"
+  write_smoke_build_identity "$work/$name-0.0.0-smoke/build-identity.properties"
   zip_name="${name}-0.0.0-smoke-${token}.zip"
   write_runtime_zip "$work" "$name-0.0.0-smoke" "$out_dir/$zip_name"
   rm -rf "$work"
@@ -236,12 +244,15 @@ make_desktop_bundle() {
   case "$token" in
     macos-arm64|macos-x64)
       executable="$work/Skill Bill.app/Contents/MacOS/Skill Bill"
+      write_smoke_build_identity "$work/Skill Bill.app/Contents/app/resources/build-identity.properties"
       ;;
     windows-x64)
       executable="$work/Skill Bill/bin/Skill Bill.bat"
+      write_smoke_build_identity "$work/Skill Bill/app/resources/build-identity.properties"
       ;;
     *)
       executable="$work/Skill Bill/bin/Skill Bill"
+      write_smoke_build_identity "$work/Skill Bill/lib/app/resources/build-identity.properties"
       ;;
   esac
   mkdir -p "$(dirname "$executable")"
@@ -784,7 +795,7 @@ DESKTOP_FAILURE_STATUS=0
 DESKTOP_FAILURE_OUTPUT="$(run_install "$FAKE_HOME")" || DESKTOP_FAILURE_STATUS=$?
 mv "$DESKTOP_ARCHIVE.unavailable" "$DESKTOP_ARCHIVE"
 [[ "$DESKTOP_FAILURE_STATUS" -ne 0 ]] || fail "installer succeeded without its desktop archive"
-[[ "$DESKTOP_FAILURE_OUTPUT" == *"required desktop app step failed"* ]] || fail "desktop failure was not reported"
+[[ "$DESKTOP_FAILURE_OUTPUT" == *"the desktop app could not be staged"* ]] || fail "desktop failure was not reported"
 [[ "$DESKTOP_FAILURE_OUTPUT" != *"Installation complete"* ]] || fail "failed desktop install reported completion"
 [[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] || fail "missing desktop archive changed the existing app"
 pass "missing desktop archive fails installation and preserves the existing app"

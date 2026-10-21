@@ -8,7 +8,7 @@ cleanup_calls=0
 clean_install_state_if_requested() { return 0; }
 run_pre_install_uninstall() { cleanup_calls=$((cleanup_calls + 1)); }
 err() { printf '%s\n' "$*" >&2; }
-sed -n '/^stage_packaged_runtime_distribution() {/,/^}/p; /^install_packaged_runtime_pair() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/runtime-pair-functions.sh"
+sed -n '/^stage_packaged_runtime_distribution() {/,/^}/p; /^install_packaged_runtime_pair() {/,/^}/p; /^activate_staged_runtime_pair() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/runtime-pair-functions.sh"
 source "$task_dir/runtime-pair-functions.sh"
 RUNTIME_CLI_INSTALL_DIR="$task_dir/live/runtime-cli"
 RUNTIME_MCP_INSTALL_DIR="$task_dir/live/runtime-mcp"

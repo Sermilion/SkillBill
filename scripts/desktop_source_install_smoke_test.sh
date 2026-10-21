@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
-sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_app_legacy_executable_path() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
+sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^stage_selected_desktop_app() {/,/^}/p; /^activate_staged_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_app_legacy_executable_path() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
 source "$task_dir/install-functions.sh"
 
 RUNTIME_KOTLIN_DIR="$task_dir/checkout/runtime-kotlin"

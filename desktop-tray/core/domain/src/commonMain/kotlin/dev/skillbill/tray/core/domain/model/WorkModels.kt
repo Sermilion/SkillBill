@@ -265,6 +265,7 @@ enum class ProblemCode(val wireValue: String) {
   OBSERVATION_UNAVAILABLE("observation_unavailable"),
   TRAY_UNAVAILABLE("tray_unavailable"),
   UNKNOWN_WORK_ITEM("unknown_work_item"),
+  RUNTIME_BUILD_MISMATCH("runtime_build_mismatch"),
   UNKNOWN("unknown"),
   ;
 
@@ -273,7 +274,27 @@ enum class ProblemCode(val wireValue: String) {
   }
 }
 
-data class Problem(val code: ProblemCode, val summary: String, val storageFailure: StorageFailure? = null)
+data class Problem(
+  val code: ProblemCode,
+  val summary: String,
+  val storageFailure: StorageFailure? = null,
+  val runtimeBuild: RuntimeBuildProblem? = null,
+)
+
+/** Why the installed runtime was refused: no runtime, no record, a record that cannot be read, or another build's record. */
+enum class RuntimeBuildReason { MISMATCH, MISSING, UNREADABLE, NOT_INSTALLED }
+
+/** The desktop refused the installed runtime. Both builds are display text; [installedIdentity] is null when there is none. */
+data class RuntimeBuildProblem(
+  val reason: RuntimeBuildReason,
+  val installedIdentity: String?,
+  val desktopIdentity: String,
+  val reinstallCommand: String,
+)
+
+/** Selecting a database was refused before anything opened it, because the installed runtime is not this desktop's build. */
+class RuntimeBuildRefusedException(val problem: RuntimeBuildProblem) :
+  Exception("The installed runtime build is refused (${problem.reason}): installed ${problem.installedIdentity}, desktop ${problem.desktopIdentity}.")
 
 /** What a goal control request achieved. Feedback names exactly this and never implies a stronger lifecycle change. */
 enum class ControlConfirmation {

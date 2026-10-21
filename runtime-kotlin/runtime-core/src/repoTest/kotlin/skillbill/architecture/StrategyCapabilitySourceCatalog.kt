@@ -1,5 +1,6 @@
 package skillbill.architecture
 
+import org.jetbrains.kotlin.CoreEnvironmentDeprecation
 import org.jetbrains.kotlin.K1Deprecation
 import org.jetbrains.kotlin.cli.extensionsStorage
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
@@ -44,7 +45,12 @@ internal data class CapabilitySymbol(
 )
 
 internal object StrategyCapabilitySourceCatalog {
-  @OptIn(K1Deprecation::class, CompilerConfiguration.Internals::class, ExperimentalCompilerApi::class)
+  @OptIn(
+    K1Deprecation::class,
+    CoreEnvironmentDeprecation::class,
+    CompilerConfiguration.Internals::class,
+    ExperimentalCompilerApi::class,
+  )
   fun parse(sources: List<CapabilitySource>): Map<String, CapabilitySymbol> {
     val disposable = Disposer.newDisposable()
     return try {

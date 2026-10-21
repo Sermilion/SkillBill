@@ -1,3 +1,9 @@
+## [2026-10-21] Refuse the work store when the installed runtime is a different build
+Context: On 2026-10-19 a desktop paired with a runtime from another build migrated the shared database. Compatible-looking schema versions did not prove the two halves agreed.
+Decision: Compare the installed runtime's build-identity record with the desktop's own record before SessionFactory.create. Any mismatch, missing or unreadable record publishes runtime_build_mismatch and opens nothing. Retry rereads both records.
+Reason: The gate must sit before the session factory, or a refused build has already migrated. Rereading on retry lets a reinstall recover without restarting the app.
+Alternatives considered: Compatibility by schema or contract version was rejected; the spec supports only an exact build pair.
+
 ## [2026-10-17] Count and notify only successful goal completion
 Context: Tray treated any FEATURE_GOAL TERMINAL transition as success, so abandoned, cancelled, and superseded rows incremented Done 24h and emitted goal_completed.
 Decision: successfulGoalCompletion requires family FEATURE_GOAL, lifecycle TERMINAL, and finishedAtSource goal_completion. TransitionTracker uses that helper. After the SKILL-423 module split the 24h Done count is runtime-owned: IdeStatusPolicy.work counts doneWithinDay only when the board item's completion source is goal_completion.

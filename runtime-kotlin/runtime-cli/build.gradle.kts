@@ -6,6 +6,7 @@ plugins {
   id("skillbill.quality")
 
   id("skillbill.runtime-image")
+  id("skillbill.build-identity")
 }
 
 dependencies {
@@ -20,6 +21,7 @@ dependencies {
   implementation(libs.kotlin.inject.runtime)
   implementation(libs.kotlinx.serialization.json)
   runtimeOnly(libs.slf4j.nop)
+  constraints { runtimeOnly(libs.jetbrains.annotations) }
   ksp(libs.kotlin.inject.compiler)
 
   testImplementation(testFixtures(project(":runtime-application")))

@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -42,9 +43,18 @@ class AppOwner(
 
   val transitions = SessionTransitionCoordinator(appScope, application.storeSession, ui)
   val windows = WindowRegistry(appScope, { application.windows.create() }, transitions)
-  val router = HostIntentRouter(appScope, windows, refresh, ::quit)
+  val storeSession = StoreSessionCoordinator(
+    shellScope,
+    application.settings,
+    transitions::switchTo,
+    application.storeSession::checkRuntimeBuild,
+    native,
+  )
+
+  // Every refresh re-reads the installed runtime's build record first, so a reinstalled runtime of another build closes the
+  // open database and a reinstalled matching one is picked up, both without a restart.
+  val router = HostIntentRouter(appScope, windows, { withContext(application.dispatchers.io) { storeSession.retry() }; refresh() }, ::quit)
   val tray = TrayAvailability(shellScope, native)
-  val storeSession = StoreSessionCoordinator(shellScope, application.settings, transitions::switchTo, native)
 
   private val notifications = TransitionNotificationCoordinator(notificationScope, application.boards, application.settings, native) { identity ->
     router.dispatch(HostIntent.OpenWork(identity))

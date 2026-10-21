@@ -27,6 +27,7 @@ kotlin {
 
 dependencies {
   add("jvmTestImplementation", testFixtures("dev.skillbill:runtime-infra-sqlite"))
+  constraints { add("jvmMainImplementation", libs.slf4j.api) }
 }
 
 tasks.named<Test>("jvmTest") {

@@ -53,6 +53,22 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     val isMac = osName.contains("mac", true)
     registerNativeTasks(javaHome, isLinux, isMac)
     registerAppImageTasks(isLinux)
+    registerSharedRuntimeVersionCheck()
+    pluginManager.withPlugin("skillbill.build-identity") { packageBuildIdentity() }
+  }
+
+  // The record is an app resource, so the packaged app and install.sh both read it as a plain file. Compose's own
+  // prepareAppResources copies it into the distribution and points `compose.application.resources.dir` at it for `run`.
+  private fun Project.packageBuildIdentity() {
+    val resourcesRoot = layout.buildDirectory.dir("generated/app-resources")
+    val stage = tasks.register<Sync>("stageBuildIdentityResource") {
+      from(tasks.named("writeBuildIdentity"))
+      into(resourcesRoot.map { it.dir("common") })
+    }
+    extensions.getByType(ComposeExtension::class.java).extensions.getByType(DesktopExtension::class.java).application {
+      nativeDistributions { appResourcesRootDir.set(resourcesRoot) }
+    }
+    tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(stage) }
   }
 
   private fun Project.configureComposePeerRecovery() {

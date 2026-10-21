@@ -43,8 +43,9 @@ fun WindowScope.TrayPopover(
   openMain: () -> Unit,
   openSettings: () -> Unit,
   onQuit: () -> Unit,
+  onRefresh: () -> Unit,
 ) {
-  TrayPopoverRoute(tray, selected, openMain, openSettings, onQuit, Modifier.fillMaxSize()) {
+  TrayPopoverRoute(tray, selected, openMain, openSettings, onQuit, onRefresh, Modifier.fillMaxSize()) {
     WindowDraggableArea {
       Row(
         Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(mint.copy(alpha = .07f), Color.Transparent)))
