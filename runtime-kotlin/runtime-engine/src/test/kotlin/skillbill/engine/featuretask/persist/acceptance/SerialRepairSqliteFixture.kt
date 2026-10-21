@@ -17,6 +17,8 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.sha256Hex
+import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
+import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -207,6 +209,7 @@ internal class SerialRepairSqliteFixture(
         workflowPersistence,
         RuntimeOwnedPersistenceBoundary(db, diagnostics),
         validator,
+        FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), clock),
         clock,
       ),
       validator,

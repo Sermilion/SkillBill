@@ -280,11 +280,16 @@ class PhaseReviewRunTest {
     val linkedLedgerRows =
       SlotBaselineSqlite.rows(database.resolveDbPath(), "unaddressed_findings")
         .filter { it["review_run_id"] != null }
+    val reviewSettlements =
+      SlotBaselineSqlite.rows(database.resolveDbPath(), "feature_task_phase_settlements")
+        .filter { it["phase_id"] == PHASE_REVIEW }
     assertTrue(linkedLedgerRows.isNotEmpty(), "The durable goal review must store its findings in the ledger.")
     assertTrue(
       linkedLedgerRows.all { it["review_run_id"] in reviewRunIds },
       "Every ledger review_run_id must have a persisted review_runs parent.",
     )
+    assertTrue(reviewSettlements.isNotEmpty(), "A completed durable review must write its phase settlement.")
+    assertTrue(reviewSettlements.all { it["kind"] == "complete" })
   }
 
   private fun reviewRequest(

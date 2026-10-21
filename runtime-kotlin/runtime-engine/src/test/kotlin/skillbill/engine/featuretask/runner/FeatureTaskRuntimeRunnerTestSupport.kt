@@ -927,7 +927,7 @@ private fun harnessCrashReconciler(
   )
 }
 
-private fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
+internal fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
   FeatureTaskPhaseSettlementService(
     InMemoryFeatureTaskPhaseSettlementRepository(),
     testHarnessClock,
@@ -2114,6 +2114,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
   private val telemetryReconciliationPort: TelemetryReconciliationRepository =
     noopPort(TelemetryReconciliationRepository::class.java)
   private val telemetryOutboxPort: TelemetryOutboxRepository = noopPort(TelemetryOutboxRepository::class.java)
+  private val featureTaskPhaseSettlements = InMemoryFeatureTaskPhaseSettlementRepository()
 
   fun rejectedDiagnostics(): List<RejectedOutputDiagnosticRecord> = diagnosticRecords.values.toList()
 
@@ -2164,6 +2165,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
       override val telemetryOutbox: TelemetryOutboxRepository =
         this@RuntimeFakeDatabaseSessionFactory.telemetryOutboxPort
       override val workflowStates: WorkflowStateRepository = repository
+      override val featureTaskPhaseSettlements = this@RuntimeFakeDatabaseSessionFactory.featureTaskPhaseSettlements
       override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = qaOutcomes
       override val rejectedOutputDiagnosticPermissions =
         RejectedOutputDiagnosticPermissions { }

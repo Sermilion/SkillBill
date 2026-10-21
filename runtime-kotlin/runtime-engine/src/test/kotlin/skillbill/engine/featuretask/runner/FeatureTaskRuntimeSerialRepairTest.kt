@@ -957,6 +957,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         persistence,
         boundary,
         validator,
+        harnessPhaseSettlement(),
         testHarnessClock,
       ),
       validator,

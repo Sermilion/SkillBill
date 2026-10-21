@@ -30,7 +30,13 @@ class FeatureTaskPhaseSettlementService(
   private val repository: FeatureTaskPhaseSettlementRepository,
   private val clock: Clock,
 ) {
-  fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment {
+  fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment =
+    complete(request, repository)
+
+  internal fun complete(
+    request: FeatureTaskPhaseSettlementCompleteRequest,
+    transactionRepository: FeatureTaskPhaseSettlementRepository,
+  ): FeatureTaskPhaseSettlementAcknowledgment {
     require(isSettleablePhase(request.phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
     require(
       request.noChange == null || request.phaseId in FeatureTaskRuntimePhaseWorkflowDefinition.noChangeClaimPhaseIds,
@@ -51,6 +57,7 @@ class FeatureTaskPhaseSettlementService(
         kind = KIND_COMPLETE,
         envelope = envelope,
       ),
+      transactionRepository,
     )
   }
 
@@ -76,6 +83,7 @@ class FeatureTaskPhaseSettlementService(
         kind = KIND_BLOCK,
         envelope = envelope,
       ),
+      repository,
     )
   }
 
@@ -109,10 +117,13 @@ class FeatureTaskPhaseSettlementService(
     attempt: Int,
   ): Boolean = repository.delete(workflowId, phaseId, attempt)
 
-  private fun persist(request: PersistRequest): FeatureTaskPhaseSettlementAcknowledgment {
+  private fun persist(
+    request: PersistRequest,
+    targetRepository: FeatureTaskPhaseSettlementRepository,
+  ): FeatureTaskPhaseSettlementAcknowledgment {
     val envelopeJson = JsonCodec.mapToJsonString(request.envelopeAsMap())
     val result =
-      repository.upsert(
+      targetRepository.upsert(
         FeatureTaskPhaseSettlement(
           workflowId = request.workflowId,
           phaseId = request.phaseId,

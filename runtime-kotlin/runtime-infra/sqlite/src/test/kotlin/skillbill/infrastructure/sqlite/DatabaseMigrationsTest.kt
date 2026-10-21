@@ -1465,6 +1465,51 @@ class DatabaseMigrationsEnsureDatabaseTest {
   }
 
   @Test
+  fun `migrating ledger orphans preserves their rows without inventing review runs`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-review-ledger-orphans").resolve("legacy-ledger.db")
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.execute(
+          """
+          CREATE TABLE unaddressed_findings (
+            issue_key TEXT NOT NULL, workflow_id TEXT NOT NULL, subtask_id INTEGER NOT NULL,
+            review_pass_number INTEGER NOT NULL, finding_ordinal INTEGER NOT NULL,
+            severity TEXT NOT NULL, issue_category TEXT NOT NULL DEFAULT 'other',
+            location TEXT NOT NULL, summary TEXT NOT NULL, recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            review_run_id TEXT, finding_id TEXT,
+            PRIMARY KEY (workflow_id, review_pass_number, finding_ordinal)
+          )
+          """.trimIndent(),
+        )
+        statement.executeUpdate(
+          """
+          INSERT INTO unaddressed_findings
+            (issue_key, workflow_id, subtask_id, review_pass_number, finding_ordinal,
+             severity, location, summary, review_run_id, finding_id)
+          VALUES ('SKILL-433', 'wf-legacy', 2, 1, 1, 'minor', 'Review.kt:4', 'orphan', 'rvw-20261016-a', 'F-001')
+          """.trimIndent(),
+        )
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(1, rowCount(connection, "unaddressed_findings"))
+      assertEquals(0, rowCount(connection, "review_runs"))
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT review_run_id FROM unaddressed_findings").use { rows ->
+          assertTrue(rows.next())
+          assertEquals("rvw-20261016-a", rows.getString(1))
+        }
+      }
+      connection.createStatement().use { statement ->
+        statement.executeQuery("PRAGMA foreign_key_list(unaddressed_findings)").use { rows ->
+          assertFalse(rows.next(), "Existing ledger orphans must not gain a review_run_id foreign key.")
+        }
+      }
+    }
+  }
+
+  @Test
   fun `migrating a copy of a real review metrics store preserves every table row count`() {
     val realStore = requireRealStore()
     val copy = Files.createTempDirectory("runtime-kotlin-real-store").resolve("metrics.db")

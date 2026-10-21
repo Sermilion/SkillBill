@@ -56,6 +56,7 @@ internal fun harnessAcceptanceRecorder(
         persistence,
         boundary,
         validator,
+        harnessPhaseSettlement(),
         testHarnessClock,
       ),
       validator,
