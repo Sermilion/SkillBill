@@ -1,0 +1,24 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-434"
+feature_name: "per-project-phase-instruction-injection"
+parent_spec_path: ".feature-specs/SKILL-434-per-project-phase-instruction-injection/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-434-per-project-phase-instruction-injection"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Phase instruction injection"
+  spec_path: ".feature-specs/SKILL-434-per-project-phase-instruction-injection/spec_subtask_1_phase_instruction_injection.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []

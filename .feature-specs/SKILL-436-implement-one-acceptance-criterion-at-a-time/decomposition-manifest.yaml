@@ -1,0 +1,24 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-436"
+feature_name: "implement-one-acceptance-criterion-at-a-time"
+parent_spec_path: ".feature-specs/SKILL-436-implement-one-acceptance-criterion-at-a-time/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-436-implement-one-acceptance-criterion-at-a-time"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Implement the criterion worker/check loop"
+  spec_path: ".feature-specs/SKILL-436-implement-one-acceptance-criterion-at-a-time/spec_subtask_1_criterion-implementation-loop.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
