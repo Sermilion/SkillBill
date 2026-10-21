@@ -5,14 +5,13 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementComple
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal fun settleReviewPhase(
   unitOfWork: UnitOfWork,
   request: FeatureTaskRuntimePhaseStateRequest,
   service: FeatureTaskPhaseSettlementService,
 ) {
-  if (request.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) return
+  if (request.reviewPassNumber == null) return
   val output = checkNotNull(request.normalizedOutput) { "Completed review requires normalized output." }
   val acknowledgment =
     service.complete(

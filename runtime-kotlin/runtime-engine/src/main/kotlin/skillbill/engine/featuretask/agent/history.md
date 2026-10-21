@@ -1,5 +1,15 @@
 # featuretask runtime boundary history
 
+## [2026-10-21] SKILL-433 subtask 2 - Settle durable reviews and retain historical orphans
+Areas: runtime-engine featuretask phase settlement, phase records, goal review completion and carried-forward review; runtime-infra/sqlite migration coverage
+- MEDIUM feature. Ordinary durable and goal review completion write the existing feature_task_phase_settlements row after phase persistence in the same unit-of-work transaction, using the iteration and normalized review output.
+- Shared persistence recognizes review completion through reviewPassNumber. Carried-forward goal reviews retain that discriminator and acquire their required accounting start before completion.
+- FeatureTaskPhaseSettlementService and the unit-of-work settlement repository are reusable. Runtime-owned review settles internally without an agent MCP call or a second settlement table.
+- Historical ledger orphans remain unrestorable leftovers. Migration coverage protects their retention, absent parents and lack of a ledger foreign key; stats continue to read findings.
+- Limits: no historical backfill or empty parent fabrication. Work-detail schema, mapping, CLI output and pagination retain their contracts; remote telemetry and stats auth remain outside scope.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented for this subtask.
+
 ## [2026-10-21] SKILL-433 subtask 1 - Persist durable review runs
 Areas: runtime-engine featuretask durable state, runner and phase records; runtime-application review result assembly; runtime-contracts governed review failures; runtime-infra/sqlite goal ledger
 - MEDIUM feature. Durable review completion imports non-empty merged findings into the existing review_runs and findings tables before persisting pass claims. Empty passes reserve the existing zero-finding parent, so review_stats without a run id includes both kinds of pass.

@@ -1,3 +1,8 @@
+## [2026-10-21] Settle runtime-owned reviews in the phase transaction
+Context: Durable review completion persisted phase records without the settlement trail used by other completed feature-task phases.
+Decision: Reuse FeatureTaskPhaseSettlementService with the active unit-of-work repository after durable phase persistence, for ordinary and goal reviews. Keep review runtime-owned and leave agentSettledPhaseIds unchanged.
+Reason: The existing settlement owner and table already support review. Sharing the transaction keeps phase persistence and settlement atomic without requiring an agent MCP call or introducing another settlement type or table.
+
 ## [2026-10-21] Reuse the review telemetry store for durable passes
 Context: Durable feature-task review inherited a no-op recorder, so completed passes could create goal ledger references without review telemetry parents.
 Decision: Import non-empty merged findings through the existing ImportedReview persistence path, then persist pass claims. Empty passes use the existing zero-finding reservation. Keep recording before goal review completion.
