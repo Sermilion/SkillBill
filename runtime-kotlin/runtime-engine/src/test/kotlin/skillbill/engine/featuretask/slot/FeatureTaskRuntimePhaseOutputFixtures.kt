@@ -304,3 +304,23 @@ internal object Skill187SyntheticAuditResponses {
       value: "$AUDIT_VALUE_SATISFIED"
     """.trimIndent()
 }
+
+internal const val IMPLEMENTATION_CHECK_PROMPT_MARKER = "fresh read-only check of one acceptance criterion"
+
+internal fun isImplementationCheckPrompt(prompt: String?): Boolean =
+  prompt?.contains(IMPLEMENTATION_CHECK_PROMPT_MARKER) == true
+
+internal fun implementationCheckOutput(
+  verdict: String = "satisfied",
+  value: String = "The criterion is met by the current source.",
+): String =
+  """
+  {
+    "contract_version": "$VERSION",
+    "phase_id": "implement",
+    "status": "completed",
+    "summary": "Criterion check settled.",
+    "verdict": "$verdict",
+    "produced_outputs": {"value":"$value"}
+  }
+  """.trimIndent()

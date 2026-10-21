@@ -135,6 +135,22 @@ object PhaseAttemptContinuations {
     return null
   }
 
+  internal fun settleCriterionTurn(context: FixLoopBranchContext): PhaseOutcome? {
+    val loop = context.loop
+    loop.continuationSegmentCount += 1
+    loop.iteration += 1
+    loop.outputGateFailures = 0
+    loop.priorCorrection = null
+    context.observability.continuation(
+      context.run.phaseId,
+      context.agentId,
+      loop.iteration,
+      loop.continuationSegmentCount,
+      FeatureTaskRuntimeContinuationKind.IMPLEMENTATION_CRITERION_TURN,
+    )
+    return null
+  }
+
   internal fun settleFindingsOwed(
     recorder: PhaseRunRecords,
     context: FixLoopBranchContext,

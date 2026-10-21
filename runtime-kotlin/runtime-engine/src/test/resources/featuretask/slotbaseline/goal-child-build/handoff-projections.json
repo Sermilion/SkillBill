@@ -1,6 +1,6 @@
 {
-    "wftr-20260602-test-0001|implement|1|implement#1|not_required:implement": {
-        "consumer_delivery_iteration": 1,
+    "wftr-20260602-test-0001|implement|4|implement#1|not_required:implement": {
+        "consumer_delivery_iteration": 4,
         "consumer_phase_id": "implement",
         "contract_version": "0.2",
         "handoff_envelope": {
@@ -385,7 +385,7 @@
         ],
         "workflow_id": "wftr-20260602-test-0001"
     },
-    "wftr-20260602-test-0001|write_history|1|build#1,implement#1,write_history#1|slot-baseline-checkpoint": {
+    "wftr-20260602-test-0001|write_history|1|build#1,implement#4,write_history#1|slot-baseline-checkpoint": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "write_history",
         "contract_version": "0.2",
@@ -398,11 +398,11 @@
                         {
                             "kind": "text",
                             "name": "value",
-                            "text": "Fixture implement prose for downstream audit."
+                            "text": "Implement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\n\nAC-001\nWorker 1: Fixture implement prose for downstream audit.\n\nAC-002\nWorker 1: Fixture implement prose for downstream audit."
                         }
                     ],
                     "producer_iteration": {
-                        "iteration": 1,
+                        "iteration": 4,
                         "phase_id": "implement"
                     },
                     "projection_contract_id": "feature_task_runtime.phase_prose",
@@ -429,7 +429,7 @@
                         }
                     ],
                     "producer_iteration": {
-                        "iteration": 1,
+                        "iteration": 4,
                         "phase_id": "implement"
                     },
                     "projection_contract_id": "feature_task_runtime.boundary_candidates",
@@ -562,7 +562,7 @@
         },
         "source_producer_iterations": [
             {
-                "iteration": 1,
+                "iteration": 4,
                 "phase_id": "implement"
             },
             {

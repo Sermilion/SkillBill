@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationTurn
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
@@ -29,6 +30,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val noChangeClaim: String? = null,
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry? = null,
   val implementationContinuation: FeatureTaskRuntimeImplementationContinuation? = null,
+  val implementationTurn: FeatureTaskRuntimeImplementationTurn? = null,
   val validationGateFindings: ValidationFindingSetProjection? = null,
   val validationGateTriagePlan: String? = null,
   val validationGateRepair: Boolean = false,

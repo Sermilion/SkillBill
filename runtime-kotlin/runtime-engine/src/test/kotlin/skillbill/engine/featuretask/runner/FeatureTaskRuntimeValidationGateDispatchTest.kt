@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runner
 
+import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
@@ -13,6 +14,8 @@ import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.workflow.model.WorkflowStepStatus
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -22,6 +25,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class FeatureTaskRuntimeValidationGateDispatchTest {
+  @TempDir
+  lateinit var legacySpecRepo: Path
+
   @Test
   fun `completed output completes validate without command evidence or a runtime rerun`() {
     val harness = validationHarness(validJsonOutput("validate"))
@@ -250,11 +256,19 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
     return JsonCodec.anyToStringAnyMap(envelope?.get("produced_outputs"))?.get("value") as? String
   }
 
+  private fun legacySpecRoot(): Path {
+    val spec = legacySpecRepo.resolve(SPEC_REFERENCE)
+    Files.createDirectories(spec.parent)
+    Files.writeString(spec, "# Legacy spec\n\n## Intended Outcome\nAdmit whole-spec implement prose.\n")
+    return legacySpecRepo
+  }
+
   private fun proseConfig(
     phaseId: String,
     prose: String,
   ): RuntimeHarnessConfig =
     RuntimeHarnessConfig(
+      repoRoot = if (phaseId == "implement") legacySpecRoot() else RuntimeHarnessConfig().repoRoot,
       validationGatePlatformManifests = listOf(kotlinPackWithValidationGate()),
       validationGateRunner =
         object : ValidationGateRunner {

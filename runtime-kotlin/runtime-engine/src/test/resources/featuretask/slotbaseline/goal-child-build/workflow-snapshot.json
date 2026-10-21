@@ -41,8 +41,8 @@
             "contract_version": "0.2"
         },
         "feature_task_runtime_delivered_projections": {
-            "wftr-20260602-test-0001|implement|1|implement#1|not_required:implement": {
-                "consumer_delivery_iteration": 1,
+            "wftr-20260602-test-0001|implement|4|implement#1|not_required:implement": {
+                "consumer_delivery_iteration": 4,
                 "consumer_phase_id": "implement",
                 "contract_version": "0.2",
                 "handoff_envelope": {
@@ -427,7 +427,7 @@
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
             },
-            "wftr-20260602-test-0001|write_history|1|build#1,implement#1,write_history#1|slot-baseline-checkpoint": {
+            "wftr-20260602-test-0001|write_history|1|build#1,implement#4,write_history#1|slot-baseline-checkpoint": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "write_history",
                 "contract_version": "0.2",
@@ -440,11 +440,11 @@
                                 {
                                     "kind": "text",
                                     "name": "value",
-                                    "text": "Fixture implement prose for downstream audit."
+                                    "text": "Implement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\n\nAC-001\nWorker 1: Fixture implement prose for downstream audit.\n\nAC-002\nWorker 1: Fixture implement prose for downstream audit."
                                 }
                             ],
                             "producer_iteration": {
-                                "iteration": 1,
+                                "iteration": 4,
                                 "phase_id": "implement"
                             },
                             "projection_contract_id": "feature_task_runtime.phase_prose",
@@ -471,7 +471,7 @@
                                 }
                             ],
                             "producer_iteration": {
-                                "iteration": 1,
+                                "iteration": 4,
                                 "phase_id": "implement"
                             },
                             "projection_contract_id": "feature_task_runtime.boundary_candidates",
@@ -604,7 +604,7 @@
                 },
                 "source_producer_iterations": [
                     {
-                        "iteration": 1,
+                        "iteration": 4,
                         "phase_id": "implement"
                     },
                     {
@@ -1070,22 +1070,116 @@
                     "agent_id": "agent-implement",
                     "attempt_number": 1,
                     "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=worker-launch criterion=AC-001 worker=1",
                     "recorded_at": "__NORMALIZED_TIMESTAMP__",
                     "sequence_number": 0,
                     "status": "completed",
+                    "value": "Worker 1 of AC-001 launched."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 1,
+                    "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=worker-settled criterion=AC-001 worker=1",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 1,
+                    "status": "completed",
                     "value": "Fixture implement prose for downstream audit."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 2,
+                    "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=check-launch criterion=AC-001 worker=1",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 2,
+                    "status": "completed",
+                    "value": "Fresh read-only check of AC-001 after worker 1 launched."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 2,
+                    "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=check-settled criterion=AC-001 worker=1 decision=satisfied",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 3,
+                    "status": "completed",
+                    "value": "The criterion is met by the current source."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 3,
+                    "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=worker-launch criterion=AC-002 worker=1",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 4,
+                    "status": "completed",
+                    "value": "Worker 1 of AC-002 launched."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 3,
+                    "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=worker-settled criterion=AC-002 worker=1",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 5,
+                    "status": "completed",
+                    "value": "Fixture implement prose for downstream audit."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 4,
+                    "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=check-launch criterion=AC-002 worker=1",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 6,
+                    "status": "completed",
+                    "value": "Fresh read-only check of AC-002 after worker 1 launched."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 4,
+                    "phase_id": "implement",
+                    "prompt": "skill-bill-implementation-turn role=check-settled criterion=AC-002 worker=1 decision=satisfied",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 7,
+                    "status": "completed",
+                    "value": "The criterion is met by the current source."
+                },
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 4,
+                    "phase_id": "implement",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 8,
+                    "status": "completed",
+                    "value": "Implement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\n\nAC-001\nWorker 1: Fixture implement prose for downstream audit.\n\nAC-002\nWorker 1: Fixture implement prose for downstream audit."
                 },
                 {
                     "agent_id": "agent-simplify",
                     "attempt_number": 1,
                     "phase_id": "simplify",
                     "recorded_at": "__NORMALIZED_TIMESTAMP__",
-                    "sequence_number": 1,
+                    "sequence_number": 9,
                     "status": "completed",
                     "value": "{\"projection_kind\":\"simplification_receipt\",\"contract_version\":\"0.1\",\"changed_paths\":[],\"reductions\":[],\"unresolved_items\":[],\"reconciliation_evidence\":{\"reconciled\":true,\"evidence\":\"fixture\"},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"fixture\"}}"
                 }
             ],
             "contract_version": "0.2"
+        },
+        "feature_task_runtime_implementation_progress": {
+            "closed_ids": [
+                "AC-001",
+                "AC-002"
+            ],
+            "contract_version": "0.1",
+            "criterion_ids": [
+                "AC-001",
+                "AC-002"
+            ],
+            "current_index": 2,
+            "launch_count": 4,
+            "worker_count": 0
         },
         "feature_task_runtime_phase_briefings": {
             "implement": {
@@ -1474,7 +1568,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue: Fixture implement prose for downstream audit.\n### from: implement\nchanged_paths:\n  - src/Foo.kt\nboundary_candidates:\n  - src\n### from: build\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  - src/Foo.kt\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue:\n```\nImplement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\n\nAC-001\nWorker 1: Fixture implement prose for downstream audit.\n\nAC-002\nWorker 1: Fixture implement prose for downstream audit.\n```\n### from: implement\nchanged_paths:\n  - src/Foo.kt\nboundary_candidates:\n  - src\n### from: build\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  - src/Foo.kt\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -1487,11 +1581,11 @@
                                 {
                                     "kind": "text",
                                     "name": "value",
-                                    "text": "Fixture implement prose for downstream audit."
+                                    "text": "Implement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\n\nAC-001\nWorker 1: Fixture implement prose for downstream audit.\n\nAC-002\nWorker 1: Fixture implement prose for downstream audit."
                                 }
                             ],
                             "producer_iteration": {
-                                "iteration": 1,
+                                "iteration": 4,
                                 "phase_id": "implement"
                             },
                             "projection_contract_id": "feature_task_runtime.phase_prose",
@@ -1518,7 +1612,7 @@
                                 }
                             ],
                             "producer_iteration": {
-                                "iteration": 1,
+                                "iteration": 4,
                                 "phase_id": "implement"
                             },
                             "projection_contract_id": "feature_task_runtime.boundary_candidates",
@@ -1663,65 +1757,71 @@
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "complete",
-                "attempt_count": 1,
+                "action": "fix_loop_iteration",
+                "attempt_count": 2,
+                "blocked_reason": "continuation:implementation_criterion_turn",
                 "execution_origin": "agent-executed",
+                "fix_loop_iteration": 1,
                 "phase_id": "implement",
                 "resolved_agent_id": "agent-implement",
                 "sequence_number": 1,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "start",
-                "attempt_count": 1,
+                "action": "fix_loop_iteration",
+                "attempt_count": 3,
+                "blocked_reason": "continuation:implementation_criterion_turn",
                 "execution_origin": "agent-executed",
-                "phase_id": "simplify",
-                "resolved_agent_id": "agent-simplify",
+                "fix_loop_iteration": 2,
+                "phase_id": "implement",
+                "resolved_agent_id": "agent-implement",
                 "sequence_number": 2,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
+                "action": "fix_loop_iteration",
+                "attempt_count": 4,
+                "blocked_reason": "continuation:implementation_criterion_turn",
+                "execution_origin": "agent-executed",
+                "fix_loop_iteration": 3,
+                "phase_id": "implement",
+                "resolved_agent_id": "agent-implement",
+                "sequence_number": 3,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 4,
+                "execution_origin": "agent-executed",
+                "phase_id": "implement",
+                "resolved_agent_id": "agent-implement",
+                "sequence_number": 4,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "simplify",
+                "resolved_agent_id": "agent-simplify",
+                "sequence_number": 5,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
                 "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
                 "phase_id": "simplify",
                 "resolved_agent_id": "agent-simplify",
-                "sequence_number": 3,
-                "timestamp": "__NORMALIZED_TIMESTAMP__"
-            },
-            {
-                "action": "start",
-                "attempt_count": 1,
-                "execution_origin": "agent-executed",
-                "phase_id": "audit",
-                "resolved_agent_id": "agent-audit",
-                "sequence_number": 4,
-                "timestamp": "__NORMALIZED_TIMESTAMP__"
-            },
-            {
-                "action": "complete",
-                "attempt_count": 1,
-                "execution_origin": "agent-executed",
-                "phase_id": "audit",
-                "resolved_agent_id": "agent-audit",
-                "sequence_number": 5,
-                "timestamp": "__NORMALIZED_TIMESTAMP__"
-            },
-            {
-                "action": "start",
-                "attempt_count": 1,
-                "execution_origin": "agent-executed",
-                "phase_id": "review",
-                "resolved_agent_id": "agent-review",
                 "sequence_number": 6,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
-                "action": "complete",
+                "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "review",
-                "resolved_agent_id": "agent-review",
+                "phase_id": "audit",
+                "resolved_agent_id": "agent-audit",
                 "sequence_number": 7,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
@@ -1729,8 +1829,8 @@
                 "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "review",
-                "resolved_agent_id": "agent-review",
+                "phase_id": "audit",
+                "resolved_agent_id": "agent-audit",
                 "sequence_number": 8,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
@@ -1738,8 +1838,8 @@
                 "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "verify_findings",
-                "resolved_agent_id": "agent-verify_findings",
+                "phase_id": "review",
+                "resolved_agent_id": "agent-review",
                 "sequence_number": 9,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
@@ -1747,26 +1847,26 @@
                 "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "verify_findings",
-                "resolved_agent_id": "agent-verify_findings",
+                "phase_id": "review",
+                "resolved_agent_id": "agent-review",
                 "sequence_number": 10,
-                "timestamp": "__NORMALIZED_TIMESTAMP__"
-            },
-            {
-                "action": "start",
-                "attempt_count": 1,
-                "execution_origin": "agent-executed",
-                "phase_id": "build",
-                "resolved_agent_id": "agent-build",
-                "sequence_number": 11,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
                 "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "build",
-                "resolved_agent_id": "agent-build",
+                "phase_id": "review",
+                "resolved_agent_id": "agent-review",
+                "sequence_number": 11,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "verify_findings",
+                "resolved_agent_id": "agent-verify_findings",
                 "sequence_number": 12,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
@@ -1774,8 +1874,8 @@
                 "action": "complete",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
-                "phase_id": "build",
-                "resolved_agent_id": "agent-build",
+                "phase_id": "verify_findings",
+                "resolved_agent_id": "agent-verify_findings",
                 "sequence_number": 13,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
@@ -1783,9 +1883,36 @@
                 "action": "start",
                 "attempt_count": 1,
                 "execution_origin": "agent-executed",
+                "phase_id": "build",
+                "resolved_agent_id": "agent-build",
+                "sequence_number": 14,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "build",
+                "resolved_agent_id": "agent-build",
+                "sequence_number": 15,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "build",
+                "resolved_agent_id": "agent-build",
+                "sequence_number": 16,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
                 "phase_id": "write_history",
                 "resolved_agent_id": "agent-write_history",
-                "sequence_number": 14,
+                "sequence_number": 17,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
@@ -1794,7 +1921,7 @@
                 "execution_origin": "agent-executed",
                 "phase_id": "write_history",
                 "resolved_agent_id": "agent-write_history",
-                "sequence_number": 15,
+                "sequence_number": 18,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
@@ -1803,7 +1930,7 @@
                 "execution_origin": "agent-executed",
                 "phase_id": "commit_push",
                 "resolved_agent_id": "agent-commit_push",
-                "sequence_number": 16,
+                "sequence_number": 19,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
@@ -1812,7 +1939,7 @@
                 "execution_origin": "agent-executed",
                 "phase_id": "commit_push",
                 "resolved_agent_id": "agent-commit_push",
-                "sequence_number": 17,
+                "sequence_number": 20,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             },
             {
@@ -1821,7 +1948,7 @@
                 "execution_origin": "agent-executed",
                 "phase_id": "commit_push",
                 "resolved_agent_id": "agent-commit_push",
-                "sequence_number": 18,
+                "sequence_number": 21,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
             }
         ],
@@ -1875,7 +2002,7 @@
                 "status": "completed"
             },
             "implement": {
-                "attempt_count": 1,
+                "attempt_count": 4,
                 "contract_version": "0.2",
                 "duration_millis": "__NORMALIZED_DURATION__",
                 "execution_origin": "agent-executed",
@@ -1887,7 +2014,7 @@
                 ],
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"implement\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture implement prose for downstream audit.\"}}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"implement\",\"status\":\"completed\",\"summary\":\"Implement closed 2 acceptance criteria one at a time.\",\"produced_outputs\":{\"value\":\"Implement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\\n\\nAC-001\\nWorker 1: Fixture implement prose for downstream audit.\\n\\nAC-002\\nWorker 1: Fixture implement prose for downstream audit.\"}}",
                 "phase_id": "implement",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-implement",
@@ -2137,7 +2264,7 @@
             "step_id": "plan_subtasks"
         },
         {
-            "attempt_count": 1,
+            "attempt_count": 4,
             "status": "completed",
             "step_id": "implement"
         },

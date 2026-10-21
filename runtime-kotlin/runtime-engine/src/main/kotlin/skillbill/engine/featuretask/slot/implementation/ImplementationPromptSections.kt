@@ -1,9 +1,11 @@
 package skillbill.engine.featuretask.slot.implementation
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationTurn
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 
 internal object ImplementationPromptSections {
   const val IMPLEMENT_READONLY_REPAIR_SENTENCE: String =
@@ -55,6 +57,51 @@ internal object ImplementationPromptSections {
     """.trimIndent()
 
   fun implement(
+    stepId: String,
+    inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+  ): PhaseStepPromptSections {
+    val turn = inputs.implementationTurn ?: return wholeSpecImplement(stepId, inputs)
+    return if (turn.check) {
+      PhaseStepPromptSections(taskDirective = checkDirective(turn))
+    } else {
+      PhaseStepPromptSections(
+        taskDirective = workerDirective(turn),
+        authoringDiscipline = projectAuthoringDisciplineDirective(),
+        testValueDiscipline = true,
+      )
+    }
+  }
+
+  private fun workerDirective(turn: FeatureTaskRuntimeImplementationTurn): String {
+    val gap =
+      turn.latestGap?.let {
+        "A fresh read-only check found this criterion unsatisfied after the previous worker. Latest gap: $it "
+      }.orEmpty()
+    val cap = FeatureTaskRuntimeImplementationProgress.MAX_WORKERS_PER_CRITERION
+    return "You are worker ${turn.worker} of at most $cap for one acceptance criterion of the selected " +
+      "governed spec. Implement only this criterion:\n\n" +
+      "${turn.criterion}\n\n" +
+      "Read the full spec at `${turn.specReference}` for its scope and planned details, and work against the " +
+      "current working tree, which already holds the changes made for earlier criteria. Make the changes this " +
+      "criterion needs and treat changes already present as a no-op under the mutating-phase idempotency " +
+      "contract below. Leave other criteria to their own workers. $gap" +
+      "Settle through feature_task_phase_complete with status completed and a short prose value: what you " +
+      "changed and where, the tests you added or updated, and anything left unresolved. Do not pass a " +
+      "`no_change` claim; a separate read-only check decides whether ${turn.criterionId} is satisfied. " +
+      "Compilation and build proof belong to build, and tests and full validation belong to validate. " +
+      IMPLEMENT_READONLY_REPAIR_SENTENCE
+  }
+
+  private fun checkDirective(turn: FeatureTaskRuntimeImplementationTurn): String =
+    "You are a fresh read-only check of one acceptance criterion of the selected governed spec. Check only " +
+      "this criterion against the current source:\n\n${turn.criterion}\n\n" +
+      "The full spec at `${turn.specReference}` gives context. Do not edit, create, or delete any file, and do " +
+      "not run builds or tests: a check that changes the working tree cannot close the criterion. Settle " +
+      "through feature_task_phase_complete with status completed and verdict `satisfied` when the source fully " +
+      "meets ${turn.criterionId}, or verdict `unsatisfied` with a short prose value that names the remaining " +
+      "gap for the next worker. Any other verdict is rejected."
+
+  private fun wholeSpecImplement(
     stepId: String,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections =

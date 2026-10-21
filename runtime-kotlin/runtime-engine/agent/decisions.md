@@ -1,3 +1,19 @@
+## [2026-10-21] Criterion progress is one workflow artifact reserved before launch
+Context: SKILL-436 implement must cap workers per criterion across crashes and restarts without a new storage authority.
+Decision: One versioned workflow artifact records the ordered criterion IDs, cursor, worker count and closed IDs. A worker slot is reserved before launch, and closure and advance happen in one owned recorder transaction. Settled work is reconciled from existing attempt and settlement identities.
+Reason: The spec rules out SQL tables, a carryover record and attempt-history schema changes. Reserving first means an uncertain launch can never exceed the cap, and a retained reservation fails loudly instead of resetting the count.
+Revisit when: The inherited launch_count field is accepted or removed in review, since the plan asked for no fifth progress field.
+
+## [2026-10-21] A missing check verdict relaunches a read-only check
+Context: Implement has no fix loop, so a criterion check with no recognized verdict blocked the run through the schema-invalid path.
+Decision: A check with no verdict and no edits schedules another read-only check that spends no worker slot and closes nothing, capped at 3 per worker by the existing CHECK_VERDICT_REJECTION. A missing verdict with edits counts as unsatisfied.
+Reason: An unreadable verdict is not a gap a new worker can fix, and blocking at once cost the whole run. The durable cap keeps checks from looping or bypassing the worker limit.
+
+## [2026-10-21] A check that edits source cannot close its criterion
+Context: The read-only criterion check runs under unchanged provider permissions, so it can still modify files.
+Decision: Any file change during a check makes it unsatisfied and hands the gap to the next worker. The edits stay in the working tree.
+Reason: The spec says source mutation by a check is never evidence of satisfaction. Reverting would discard edits the runtime cannot attribute safely, so they are left for the next worker and later review.
+
 ## [2026-10-17] Public phase monitor uses the prepared standalone path
 Context: The shared monitor definition is also used by goal monitoring. Rebinding it would change goal and phase-pr behavior. The prepared standalone path stayed internal until target rows could be told apart from caller-branch rows.
 Decision: Public phase monitor resolves its target read-only, prepares an owned worktree, then runs the internal standalone monitor. Goal monitoring, phase pr, and the legacy monitor strategies stay on their existing definitions and bindings. The recorded public phase and launch arguments remain monitor.

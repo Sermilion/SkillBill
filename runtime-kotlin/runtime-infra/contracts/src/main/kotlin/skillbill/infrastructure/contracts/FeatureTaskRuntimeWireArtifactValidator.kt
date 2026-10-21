@@ -7,6 +7,7 @@ import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriteri
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeBuildReceiptSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeHandoffEnvelopeSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationAttemptSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationProgressSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePersistenceSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseHandoffSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeProjectionMeasurementSchemaValidator
@@ -90,6 +91,8 @@ class FeatureTaskRuntimeWireArtifactValidator(
         )
       FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE ->
         QaRepairStateSchemaValidator.validate(wireMap)
+      FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS ->
+        FeatureTaskRuntimeImplementationProgressSchemaValidator.validate(wireMap, sourceLabel)
       else -> error("Unexpected non-serial wire artifact $kind")
     }
   }

@@ -295,7 +295,7 @@ object PhaseLaunchPreparation {
       recordLaunchBriefing(context, args, briefing, sharedEvidence)?.let { return it }
       val inputs =
         PhaseLaunchPreparation
-          .run { context.composeLaunchPromptInputs(run, handoff, priorCorrection, briefing, args.boundStep) }
+          .run { context.composeLaunchPromptInputs(args, handoff, briefing) }
           .copy(
             phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
           )
@@ -377,78 +377,87 @@ object PhaseLaunchPreparation {
       ).launchPromptSupplement(run, context.launchHookContext(run, context.stepHooks(run)), boundStep)
 
   private fun PhaseAttemptLaunchPreparationContext.composeLaunchPromptInputs(
-    run: PhaseRun,
+    args: DeclaredLaunchArgs,
     handoff: FeatureTaskRuntimePhaseHandoff,
-    priorCorrection: PriorAttemptCorrection?,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
-    boundStep: PhaseStepBinding,
   ): FeatureTaskRuntimePhasePromptComposeInputs {
-    with(this) {
-      val context = this
-      val resolvedBranchRecord = recorder.loadResolvedBranch(run.request.workflowId)
-      val launchReviewTier =
-        (boundStep as? PhaseReviewPassState)?.let { stepHooks(run).launchReviewTier(run, it) }
-          ?: PhaseLaunchReviewTier(
-            passNumber = null,
-            resolution = null,
-            executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
-          )
-      val checkpointArgs =
-        RepositoryCheckpointResolutionArgs(
-          recorder,
-          goalContinuationRecorder,
-          gitOperations,
-          qualityGateCycles,
-          coupledRunTransitions,
-          session,
-          run,
-          diagnostics,
-          this::extendsOwnedInventory,
-        )
-      val implementationContinuation =
-        FeatureTaskRuntimeRunLoopOutputVerification.implementationContinuationFor(recorder, run)
-      ImplementationChecklistLaunchPreparation.prepare(this, run, implementationContinuation)
-      return FeatureTaskRuntimePhasePromptComposeInputs(
-        issueKey = run.request.issueKey,
-        briefing = briefing,
-        specRewritable = run.request.protectedSpecSha256 == null,
-        codeReviewMode = launchReviewTier.executedTier,
-        reviewPassNumber = launchReviewTier.passNumber,
-        goalSubtaskReviewInput = run.goalReviewInput,
-        baselineUntrackedPaths = resolvedBranchRecord?.baselineUntrackedPaths.orEmpty(),
-        resolvedReviewTier = launchReviewTier.resolution?.let { launchReviewTier.executedTier },
-        reviewDecidingRule = launchReviewTier.resolution?.decidingRule,
-        repairLedger = handoff.repairLedger,
-        priorReviewContext = null,
-        priorTerminalFailure = priorCorrection?.retryableTerminalReason,
-        priorFindingCoverage = priorCorrection?.findingCoverageReason,
-        priorAcceptanceAudit =
-          auditProseValue(
-            progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
-              .output?.normalizedOutput?.envelopeWireMap(),
-          ),
-        currentAcceptanceCriterion = acceptanceCriterionContext(run),
-        noChangeClaim = auditNoChangeClaim(run),
-        operatorBlockRetry =
-          session.operatorBlockRetry
-            ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },
-        implementationContinuation = implementationContinuation,
-        validationGateFindings = run.validationGateFindings,
-        validationGateTriagePlan = run.validationGateTriagePlan,
-        validationGateRepair = run.validationGateRepair,
-        validationGateTriage = run.validationGateTriage,
-        agentRunValidateFallback = run.agentRunValidateFallback,
-        packBuildCommand = packCommand(run, checkpointArgs, carriesBuild = true),
-        mutating = run.policy.mutating,
-        singleAgentSession = run.policy.singleAgentSession,
-        repoRoot = run.request.repoRoot,
-        stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
-        implementationChecklistAddress =
-          implementationChecklistRelativePath(run.request.workflowId)
-            .takeIf { run.request.workflowId.isNotBlank() },
+    val run = args.run
+    val priorCorrection = args.priorCorrection
+    val resolvedBranchRecord = recorder.loadResolvedBranch(run.request.workflowId)
+    val launchReviewTier = launchReviewTierFor(run, args.boundStep)
+    val checkpointArgs =
+      RepositoryCheckpointResolutionArgs(
+        recorder,
+        goalContinuationRecorder,
+        gitOperations,
+        qualityGateCycles,
+        coupledRunTransitions,
+        session,
+        run,
+        diagnostics,
+        this::extendsOwnedInventory,
       )
+    val hooks = stepHooks(run)
+    val implementationTurn =
+      args.iteration?.let { hooks.implementationTurn(run, launchHookContext(run, hooks), it) }
+    val implementationContinuation =
+      FeatureTaskRuntimeRunLoopOutputVerification.implementationContinuationFor(recorder, run)
+        .takeIf { implementationTurn == null }
+    if (implementationTurn == null) {
+      ImplementationChecklistLaunchPreparation.prepare(this, run, implementationContinuation)
     }
+    return FeatureTaskRuntimePhasePromptComposeInputs(
+      issueKey = run.request.issueKey,
+      briefing = briefing,
+      specRewritable = run.request.protectedSpecSha256 == null,
+      codeReviewMode = launchReviewTier.executedTier,
+      reviewPassNumber = launchReviewTier.passNumber,
+      goalSubtaskReviewInput = run.goalReviewInput,
+      baselineUntrackedPaths = resolvedBranchRecord?.baselineUntrackedPaths.orEmpty(),
+      resolvedReviewTier = launchReviewTier.resolution?.let { launchReviewTier.executedTier },
+      reviewDecidingRule = launchReviewTier.resolution?.decidingRule,
+      repairLedger = handoff.repairLedger,
+      priorReviewContext = null,
+      priorTerminalFailure = priorCorrection?.retryableTerminalReason,
+      priorFindingCoverage = priorCorrection?.findingCoverageReason,
+      priorAcceptanceAudit =
+        auditProseValue(
+          progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
+            .output?.normalizedOutput?.envelopeWireMap(),
+        ),
+      currentAcceptanceCriterion = acceptanceCriterionContext(run),
+      noChangeClaim = auditNoChangeClaim(run),
+      operatorBlockRetry =
+        session.operatorBlockRetry
+          ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },
+      implementationContinuation = implementationContinuation,
+      implementationTurn = implementationTurn,
+      validationGateFindings = run.validationGateFindings,
+      validationGateTriagePlan = run.validationGateTriagePlan,
+      validationGateRepair = run.validationGateRepair,
+      validationGateTriage = run.validationGateTriage,
+      agentRunValidateFallback = run.agentRunValidateFallback,
+      packBuildCommand = packCommand(run, checkpointArgs, carriesBuild = true),
+      mutating = run.policy.mutating,
+      singleAgentSession = run.policy.singleAgentSession,
+      repoRoot = run.request.repoRoot,
+      stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
+      implementationChecklistAddress =
+        implementationChecklistRelativePath(run.request.workflowId)
+          .takeIf { run.request.workflowId.isNotBlank() },
+    )
   }
+
+  private fun PhaseAttemptLaunchPreparationContext.launchReviewTierFor(
+    run: PhaseRun,
+    boundStep: PhaseStepBinding,
+  ): PhaseLaunchReviewTier =
+    (boundStep as? PhaseReviewPassState)?.let { stepHooks(run).launchReviewTier(run, it) }
+      ?: PhaseLaunchReviewTier(
+        passNumber = null,
+        resolution = null,
+        executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
+      )
 
   private fun PhaseAttemptLaunchPreparationContext.auditNoChangeClaim(run: PhaseRun): String? =
     NoChangeClaimResolution.activeClaimMap(progress)

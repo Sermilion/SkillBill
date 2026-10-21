@@ -80,6 +80,8 @@ import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
 import skillbill.engine.featuretask.slot.harnessPendingVerifyFindingIds
 import skillbill.engine.featuretask.slot.harnessReviewRunnerSyncingPendingVerifyFindings
+import skillbill.engine.featuretask.slot.implementationCheckOutput
+import skillbill.engine.featuretask.slot.isImplementationCheckPrompt
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
@@ -262,6 +264,10 @@ internal val VALIDATE_REPAIR_WITHOUT_GATE_COUNTS =
   """.trimIndent()
 
 internal const val VALID_REVIEW_OUTPUT = """{"contract_version":"0.7","produced_outputs":{"findings":[]}}"""
+
+internal const val HARNESS_CRITERION_IMPLEMENT_TURNS = 4
+
+internal val HARNESS_CRITERION_IMPLEMENT_ORDER: List<String> = List(HARNESS_CRITERION_IMPLEMENT_TURNS) { "implement" }
 
 internal const val VALID_AUDIT_OUTPUT =
   """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"audit",""" +
@@ -935,7 +941,11 @@ internal fun runnerHarness(
   val agentAssignment = runtimeConfig.agentAssignment ?: core.agentAssignment
   val resolvedSupervision = resolvedHarnessSupervision(runtimeConfig, supervision)
   harnessPendingVerifyFindingIds = emptyList()
-  seedHarnessSpecIntentProjection(runtimeConfig.repoRoot, runtimeConfig.branchSetup.specReference)
+  seedHarnessSpecIntentProjection(
+    runtimeConfig.repoRoot,
+    runtimeConfig.branchSetup.specReference,
+    runtimeConfig.acceptanceCriteria,
+  )
   val specScratchStore = RecordingSpecScratchStore()
   val specStatusWriter = RecordingSpecStatusWriter()
   val database = RuntimeFakeDatabaseSessionFactory(repository)
@@ -1200,7 +1210,11 @@ internal fun telemetryRunnerHarness(
   databaseFactory: (() -> DatabaseSessionFactory)? = null,
 ): TelemetryRunnerHarness {
   val effectiveLauncher = runtimeConfig.launcher ?: launcher
-  seedHarnessSpecIntentProjection(runtimeConfig.repoRoot, runtimeConfig.branchSetup.specReference)
+  seedHarnessSpecIntentProjection(
+    runtimeConfig.repoRoot,
+    runtimeConfig.branchSetup.specReference,
+    runtimeConfig.acceptanceCriteria,
+  )
   val repository = InMemoryRuntimeWorkflowRepository()
   val lifecycle = RecordingLifecycleTelemetryRepository()
   val database = databaseFactory?.invoke() ?: RuntimeFakeDatabaseSessionFactory(repository, lifecycle)
@@ -1577,6 +1591,7 @@ internal fun defaultPhaseOutput(request: GoalRunnerSubtaskLaunchRequest): String
     phaseId == "audit" -> VALID_AUDIT_OUTPUT
     phaseId == "audit_plan_fix" -> auditRepairPlanOutput(requireNotNull(request.skillRunRequest.promptOverride))
     phaseId == "verify_findings" -> verifyFindingsOutput()
+    isImplementationCheckPrompt(request.skillRunRequest.promptOverride) -> implementationCheckOutput()
     else -> validJsonOutput(phaseId)
   }
 }

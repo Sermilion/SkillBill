@@ -30,6 +30,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePause
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
+import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
+import skillbill.engine.featuretask.slot.state.PhaseImplementationProgressRecords
 import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
@@ -56,6 +58,7 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -82,6 +85,22 @@ internal class DurableOwnedNoChangePause(
   }
 }
 
+internal class DurableImplementationProgressRecords(
+  private val recorder: FeatureTaskRuntimePhaseRecorder,
+  private val admitted: AdmittedFeatureTaskRuntimeExecution,
+) : PhaseImplementationProgressRecords {
+  override fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>? =
+    recorder.loadImplementationAttempts(workflowId)
+
+  override fun loadImplementationProgress(workflowId: String): FeatureTaskRuntimeImplementationProgress? =
+    recorder.loadImplementationProgress(workflowId)
+
+  override fun recordImplementationTurn(write: FeatureTaskRuntimeImplementationTurnWrite): RequiredPhaseWrite =
+    admitted.ownedWrite({ recorder.recordOwnedImplementationTurn(write, it) }) {
+      recorder.recordImplementationTurn(write)
+    }
+}
+
 internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
@@ -101,7 +120,8 @@ internal class DurablePhaseRunRecords(
       ): Boolean? = null
     }
   ),
-  FeatureTaskRuntimeNoChangePausePort by DurableOwnedNoChangePause(recorder, admitted) {
+  FeatureTaskRuntimeNoChangePausePort by DurableOwnedNoChangePause(recorder, admitted),
+  PhaseImplementationProgressRecords by DurableImplementationProgressRecords(recorder, admitted) {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
     producerGeneration: Int,
@@ -163,9 +183,6 @@ internal class DurablePhaseRunRecords(
     admitted.ownedWrite({ recorder.recordOwnedIncompleteImplementationAttempt(request, it) }) {
       recorder.recordIncompleteImplementationAttempt(request)
     }
-
-  override fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>? =
-    recorder.loadImplementationAttempts(workflowId)
 
   override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>? =
     recorder.loadPhaseRecords(workflowId)

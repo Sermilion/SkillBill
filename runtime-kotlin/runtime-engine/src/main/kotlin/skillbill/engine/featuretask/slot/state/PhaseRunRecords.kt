@@ -25,6 +25,8 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnMarker
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -41,6 +43,7 @@ internal interface PhaseRunRecords :
   PhaseReviewRecords,
   PhaseLaunchRecords,
   PhasePlanRecords,
+  PhaseImplementationProgressRecords,
   FeatureTaskRuntimeNoChangePausePort {
   fun loadQaRepairState(workflowId: String): QaRepairState?
 
@@ -74,6 +77,29 @@ internal interface PhaseRunRecords :
     ownedPaths: List<String>,
   ): Boolean
 }
+
+/** The criterion progress and turn evidence the implement step keeps while it works one criterion at a time. */
+internal interface PhaseImplementationProgressRecords {
+  /** The progress of [workflowId], or null when none was ever recorded. Present corrupt progress fails loudly. */
+  fun loadImplementationProgress(workflowId: String): FeatureTaskRuntimeImplementationProgress?
+
+  /** Records one turn and its progress in one owned transaction, or rejects it when the expected state moved. */
+  fun recordImplementationTurn(write: FeatureTaskRuntimeImplementationTurnWrite): RequiredPhaseWrite
+
+  /** The recorded implementation attempts of [workflowId], which carry the runtime-authored turn evidence. */
+  fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>?
+}
+
+data class FeatureTaskRuntimeImplementationTurnWrite(
+  val workflowId: String,
+  val phaseId: String,
+  val attemptNumber: Int,
+  val agentId: String,
+  val expectedProgress: FeatureTaskRuntimeImplementationProgress?,
+  val progress: FeatureTaskRuntimeImplementationProgress,
+  val marker: FeatureTaskRuntimeImplementationTurnMarker,
+  val value: String,
+)
 
 /** The plan bundle snapshot and decompose terminal records planning makes for one run. */
 internal interface PhasePlanRecords {
@@ -132,9 +158,6 @@ internal interface PhaseStepRecords {
 
   /** Records an implementation attempt that ended without output. */
   fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean
-
-  /** The recorded implementation attempts of [workflowId]. */
-  fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>?
 
   /** The step records of [workflowId], keyed by step id. */
   fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>?

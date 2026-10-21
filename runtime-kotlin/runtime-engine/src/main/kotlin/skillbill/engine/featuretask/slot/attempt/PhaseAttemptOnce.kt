@@ -33,6 +33,7 @@ import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhase
 import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.engine.featuretask.slot.PhaseLaunchAdmission
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -89,12 +90,50 @@ object PhaseAttemptOnce {
     args: RecordRejectionAttemptArgs,
   ): AttemptResult {
     val run = args.context.run
+    admissionOutcome(context, args)?.let { return AttemptResult.settled(it) }
     val launch = launchAndCapture(context, run, args.context.iteration, args.priorCorrection, args.call)
     val rejection = launch.requiredWriteRejection
     return if (rejection == null) {
       settleRecordRejectionLaunchOutcome(context, args, launch)
     } else {
       AttemptResult.settled(blockRequiredWriteRejection(context, run, rejection))
+    }
+  }
+
+  private fun admissionOutcome(
+    context: PhaseAttemptLaunchCollaborationScope,
+    args: RecordRejectionAttemptArgs,
+  ): PhaseOutcome? {
+    val run = args.context.run
+    val hooks = context.stepHooks(run)
+    return when (
+      val admission =
+        hooks.admitLaunch(
+          run,
+          context.launchHookContext(run, hooks),
+          args.call.acceptedExecution,
+          args.context.iteration,
+        )
+    ) {
+      PhaseLaunchAdmission.Launch -> null
+      is PhaseLaunchAdmission.Settled -> admission.outcome
+      is PhaseLaunchAdmission.WriteRejected -> blockRequiredWriteRejection(context, run, admission.rejection)
+      is PhaseLaunchAdmission.Block -> {
+        val coupling = context.settlementCoupling()
+        FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+          coupling.progress,
+          coupling.transitions,
+          context.recorder,
+          PhaseBlockRequest(
+            run = run,
+            attemptCount = args.context.iteration,
+            reason = admission.reason,
+            observability = context.observability,
+            failureDisposition = admission.disposition,
+            payload = BlockAndPersistPayload(childNeverLaunched = true),
+          ),
+        )
+      }
     }
   }
 

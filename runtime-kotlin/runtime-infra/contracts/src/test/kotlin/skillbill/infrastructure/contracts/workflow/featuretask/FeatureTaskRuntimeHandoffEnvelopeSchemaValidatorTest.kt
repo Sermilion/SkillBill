@@ -37,6 +37,8 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
           "FeatureTaskRuntimeFailureCode.INVALID_QUARANTINE_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT to
           "FeatureTaskRuntimeFailureCode.INVALID_IMPLEMENTATION_ATTEMPT_SCHEMA",
+        FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS to
+          "FeatureTaskRuntimeFailureCode.INVALID_IMPLEMENTATION_PROGRESS_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT to
           "FeatureTaskRuntimeFailureCode.INVALID_BUILD_RECEIPT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_DECLARATION to

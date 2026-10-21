@@ -222,7 +222,16 @@ mandates_and_overrides:
 
 ## Upstream projections (layer 2, declared and validated)
 ### from: implement
-value: Fixture implement prose for downstream audit.
+value:
+```
+Implement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.
+
+AC-001
+Worker 1: Fixture implement prose for downstream audit.
+
+AC-002
+Worker 1: Fixture implement prose for downstream audit.
+```
 ### from: implement
 changed_paths:
   - src/Foo.kt

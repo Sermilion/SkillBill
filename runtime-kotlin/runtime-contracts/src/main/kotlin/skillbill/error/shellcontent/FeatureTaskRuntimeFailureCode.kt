@@ -12,6 +12,7 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_CHECKPOINT_IDENTITY_VERSION,
   INVALID_QUARANTINE_SCHEMA,
   INVALID_IMPLEMENTATION_ATTEMPT_SCHEMA,
+  INVALID_IMPLEMENTATION_PROGRESS_SCHEMA,
   INVALID_PHASE_HANDOFF_SCHEMA,
   INVALID_PERSISTENCE_SCHEMA,
   INVALID_PROJECTION_MEASUREMENT_SCHEMA,
@@ -107,6 +108,18 @@ fun invalidFeatureTaskRuntimeImplementationAttemptSchema(
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.INVALID_IMPLEMENTATION_ATTEMPT_SCHEMA,
     "Feature-task-runtime implementation attempt '${sourceLabel.ifBlank { "<unknown>" }}' fails schema " +
+      "validation: $reason",
+    cause,
+  )
+
+fun invalidFeatureTaskRuntimeImplementationProgressSchema(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_IMPLEMENTATION_PROGRESS_SCHEMA,
+    "Feature-task-runtime implementation progress '${sourceLabel.ifBlank { "<unknown>" }}' fails schema " +
       "validation: $reason",
     cause,
   )

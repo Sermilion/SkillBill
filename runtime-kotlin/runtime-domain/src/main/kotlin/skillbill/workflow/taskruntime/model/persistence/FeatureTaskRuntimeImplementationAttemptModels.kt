@@ -181,10 +181,32 @@ fun featureTaskRuntimeAppendImplementationAttempt(
       )
     }
   if (ordered.size <= retentionLimit) return ordered
-  val overflow = ordered.size - retentionLimit
-  val droppableIndices = ordered.indices.filterNot { ordered[it].carriesOpenObligation }.take(overflow)
-  val dropped = if (droppableIndices.size == overflow) droppableIndices.toSet() else (0 until overflow).toSet()
+  val pinned = implementationTurnPins(ordered)
+  val dropped =
+    ordered.indices
+      .sortedBy { index ->
+        when {
+          index in pinned -> 2
+          ordered[index].carriesOpenObligation -> 1
+          else -> 0
+        }
+      }.take(ordered.size - retentionLimit)
+      .toSet()
   return ordered.filterIndexed { index, _ -> index !in dropped }
+}
+
+private fun implementationTurnPins(ordered: List<FeatureTaskRuntimeImplementationAttempt>): Set<Int> {
+  val markers = ordered.indices.mapNotNull { index -> implementationTurnMarkerOf(ordered[index])?.let { index to it } }
+
+  fun lastOf(predicate: (FeatureTaskRuntimeImplementationTurnMarker) -> Boolean): Int? =
+    markers.lastOrNull { predicate(it.second) }?.first
+  val lastLaunch = lastOf { it.role == FeatureTaskRuntimeImplementationTurnRole.WORKER_LAUNCH }
+  val chain = lastLaunch?.let { launch -> markers.map { it.first }.filter { it >= launch } }.orEmpty()
+  return chain.toSet() +
+    listOfNotNull(
+      lastOf { it.role == FeatureTaskRuntimeImplementationTurnRole.REOPEN },
+      lastOf { it.decision == FeatureTaskRuntimeImplementationCheckDecision.UNSATISFIED },
+    )
 }
 
 private fun implementationAttemptError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)

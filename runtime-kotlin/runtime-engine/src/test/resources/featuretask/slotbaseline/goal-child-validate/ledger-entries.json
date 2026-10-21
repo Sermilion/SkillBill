@@ -9,65 +9,71 @@
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "complete",
-        "attempt_count": 1,
+        "action": "fix_loop_iteration",
+        "attempt_count": 2,
+        "blocked_reason": "continuation:implementation_criterion_turn",
         "execution_origin": "agent-executed",
+        "fix_loop_iteration": 1,
         "phase_id": "implement",
         "resolved_agent_id": "agent-implement",
         "sequence_number": 1,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "start",
-        "attempt_count": 1,
+        "action": "fix_loop_iteration",
+        "attempt_count": 3,
+        "blocked_reason": "continuation:implementation_criterion_turn",
         "execution_origin": "agent-executed",
-        "phase_id": "simplify",
-        "resolved_agent_id": "agent-simplify",
+        "fix_loop_iteration": 2,
+        "phase_id": "implement",
+        "resolved_agent_id": "agent-implement",
         "sequence_number": 2,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
+        "action": "fix_loop_iteration",
+        "attempt_count": 4,
+        "blocked_reason": "continuation:implementation_criterion_turn",
+        "execution_origin": "agent-executed",
+        "fix_loop_iteration": 3,
+        "phase_id": "implement",
+        "resolved_agent_id": "agent-implement",
+        "sequence_number": 3,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "complete",
+        "attempt_count": 4,
+        "execution_origin": "agent-executed",
+        "phase_id": "implement",
+        "resolved_agent_id": "agent-implement",
+        "sequence_number": 4,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "start",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
+        "phase_id": "simplify",
+        "resolved_agent_id": "agent-simplify",
+        "sequence_number": 5,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
         "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
         "phase_id": "simplify",
         "resolved_agent_id": "agent-simplify",
-        "sequence_number": 3,
-        "timestamp": "__NORMALIZED_TIMESTAMP__"
-    },
-    {
-        "action": "start",
-        "attempt_count": 1,
-        "execution_origin": "agent-executed",
-        "phase_id": "audit",
-        "resolved_agent_id": "agent-audit",
-        "sequence_number": 4,
-        "timestamp": "__NORMALIZED_TIMESTAMP__"
-    },
-    {
-        "action": "complete",
-        "attempt_count": 1,
-        "execution_origin": "agent-executed",
-        "phase_id": "audit",
-        "resolved_agent_id": "agent-audit",
-        "sequence_number": 5,
-        "timestamp": "__NORMALIZED_TIMESTAMP__"
-    },
-    {
-        "action": "start",
-        "attempt_count": 1,
-        "execution_origin": "agent-executed",
-        "phase_id": "review",
-        "resolved_agent_id": "agent-review",
         "sequence_number": 6,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
-        "action": "complete",
+        "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "review",
-        "resolved_agent_id": "agent-review",
+        "phase_id": "audit",
+        "resolved_agent_id": "agent-audit",
         "sequence_number": 7,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
@@ -75,8 +81,8 @@
         "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "review",
-        "resolved_agent_id": "agent-review",
+        "phase_id": "audit",
+        "resolved_agent_id": "agent-audit",
         "sequence_number": 8,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
@@ -84,8 +90,8 @@
         "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "verify_findings",
-        "resolved_agent_id": "agent-verify_findings",
+        "phase_id": "review",
+        "resolved_agent_id": "agent-review",
         "sequence_number": 9,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
@@ -93,26 +99,26 @@
         "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "verify_findings",
-        "resolved_agent_id": "agent-verify_findings",
+        "phase_id": "review",
+        "resolved_agent_id": "agent-review",
         "sequence_number": 10,
-        "timestamp": "__NORMALIZED_TIMESTAMP__"
-    },
-    {
-        "action": "start",
-        "attempt_count": 1,
-        "execution_origin": "agent-executed",
-        "phase_id": "validate",
-        "resolved_agent_id": "agent-validate",
-        "sequence_number": 11,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
         "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "validate",
-        "resolved_agent_id": "agent-validate",
+        "phase_id": "review",
+        "resolved_agent_id": "agent-review",
+        "sequence_number": 11,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "start",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
+        "phase_id": "verify_findings",
+        "resolved_agent_id": "agent-verify_findings",
         "sequence_number": 12,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
@@ -120,8 +126,8 @@
         "action": "complete",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
-        "phase_id": "validate",
-        "resolved_agent_id": "agent-validate",
+        "phase_id": "verify_findings",
+        "resolved_agent_id": "agent-verify_findings",
         "sequence_number": 13,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
@@ -129,9 +135,36 @@
         "action": "start",
         "attempt_count": 1,
         "execution_origin": "agent-executed",
+        "phase_id": "validate",
+        "resolved_agent_id": "agent-validate",
+        "sequence_number": 14,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "complete",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
+        "phase_id": "validate",
+        "resolved_agent_id": "agent-validate",
+        "sequence_number": 15,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "complete",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
+        "phase_id": "validate",
+        "resolved_agent_id": "agent-validate",
+        "sequence_number": 16,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "start",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
         "phase_id": "write_history",
         "resolved_agent_id": "agent-write_history",
-        "sequence_number": 14,
+        "sequence_number": 17,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
@@ -140,7 +173,7 @@
         "execution_origin": "agent-executed",
         "phase_id": "write_history",
         "resolved_agent_id": "agent-write_history",
-        "sequence_number": 15,
+        "sequence_number": 18,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
@@ -149,7 +182,7 @@
         "execution_origin": "agent-executed",
         "phase_id": "commit_push",
         "resolved_agent_id": "agent-commit_push",
-        "sequence_number": 16,
+        "sequence_number": 19,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
@@ -158,7 +191,7 @@
         "execution_origin": "agent-executed",
         "phase_id": "commit_push",
         "resolved_agent_id": "agent-commit_push",
-        "sequence_number": 17,
+        "sequence_number": 20,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     },
     {
@@ -167,7 +200,7 @@
         "execution_origin": "agent-executed",
         "phase_id": "commit_push",
         "resolved_agent_id": "agent-commit_push",
-        "sequence_number": 18,
+        "sequence_number": 21,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
     }
 ]

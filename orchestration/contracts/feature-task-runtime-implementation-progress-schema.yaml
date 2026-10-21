@@ -1,0 +1,55 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/feature-task-runtime-implementation-progress-schema.yaml"
+title: Feature-task runtime implementation progress
+description: >-
+  Durable progress of an implement step that works one acceptance criterion at a time. The runtime
+  reserves a worker slot before each worker launch and closes a criterion only after a fresh read-only
+  check reports it satisfied. Only an absent artifact means no progress; a present payload that fails
+  this contract is corrupt and is never reset.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - criterion_ids
+  - current_index
+  - worker_count
+  - launch_count
+  - closed_ids
+properties:
+  contract_version: { const: "0.1" }
+  criterion_ids:
+    description: Canonical criterion ids in authored order.
+    type: array
+    minItems: 1
+    maxItems: 999
+    uniqueItems: true
+    items: { type: string, pattern: "^AC-[0-9]{3}$" }
+  current_index:
+    description: Zero-based cursor into criterion_ids. Equal to the criterion count once every criterion closed.
+    type: integer
+    minimum: 0
+    maximum: 999
+  worker_count:
+    description: Workers reserved for the current criterion. Zero at the terminal cursor.
+    type: integer
+    minimum: 0
+    maximum: 3
+  launch_count:
+    description: >-
+      Worker and check launches recorded across every criterion. It survives attempt-history pruning, so
+      process-retry accounting on resume does not depend on retained launch records.
+    type: integer
+    minimum: 0
+  closed_ids:
+    description: Exactly the criterion_ids prefix before current_index.
+    type: array
+    maxItems: 999
+    uniqueItems: true
+    items: { type: string, pattern: "^AC-[0-9]{3}$" }
+x-coherence-checks:
+  - id: cursor-bounds
+    description: current_index is at most the number of criterion_ids.
+  - id: closed-prefix
+    description: closed_ids equals the criterion_ids prefix before current_index, in order.
+  - id: terminal-count
+    description: worker_count is zero when current_index equals the number of criterion_ids.

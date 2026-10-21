@@ -19,6 +19,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.operatorBlockRetryFromWorkflowArtifacts
 import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecords
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
+import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.db.DatabaseSessionFactory
@@ -31,6 +32,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
 import skillbill.workflow.taskruntime.artifact.asQaRepairStateWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
@@ -42,6 +44,8 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnMarker
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeAppendImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
@@ -58,7 +62,9 @@ class FeatureTaskRuntimePhaseStateRecorder(
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
   private val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val clock: Clock,
-) : FeatureTaskRuntimePhaseStatePort, FeatureTaskRuntimePhaseStateQueries {
+) : FeatureTaskRuntimePhaseStatePort,
+  FeatureTaskRuntimePhaseStateQueries,
+  FeatureTaskRuntimeImplementationProgressPort {
   internal fun serialPhasePatch(
     artifacts: Map<String, Any?>,
     request: FeatureTaskRuntimePhaseStateRequest,
@@ -266,6 +272,92 @@ class FeatureTaskRuntimePhaseStateRecorder(
       true
     }
 
+  override fun loadImplementationProgress(workflowId: String): FeatureTaskRuntimeImplementationProgress? =
+    database.read { unitOfWork ->
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?.let { workflowPersistence.implementationProgressFrom(it.artifacts) }
+    }
+
+  override fun recordImplementationTurn(write: FeatureTaskRuntimeImplementationTurnWrite): RequiredPhaseWrite =
+    recordImplementationTurn(write, null)
+
+  override fun recordOwnedImplementationTurn(
+    write: FeatureTaskRuntimeImplementationTurnWrite,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): RequiredPhaseWrite = recordImplementationTurn(write, admitted)
+
+  private fun recordImplementationTurn(
+    write: FeatureTaskRuntimeImplementationTurnWrite,
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
+  ): RequiredPhaseWrite =
+    database.transaction { unitOfWork ->
+      fun rejected(detail: String) =
+        RequiredPhaseWrite.Rejected(
+          RequiredPhaseWriteKind.IMPLEMENTATION_PROGRESS,
+          write.workflowId,
+          write.phaseId,
+          write.attemptNumber,
+          detail = detail,
+        )
+      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, write.workflowId, clock)) {
+        return@transaction rejected("This process no longer owns the workflow.")
+      }
+      val record =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, write.workflowId)
+          ?: return@transaction rejected("The authoritative workflow record is missing.")
+      val phase = decodePhaseRecords(record.artifacts)[write.phaseId]
+      if (phase == null || phase.attemptCount != write.attemptNumber || phase.status == WorkflowStepStatus.COMPLETED) {
+        return@transaction rejected("The implement start for this attempt is not the current running start.")
+      }
+      if (workflowPersistence.implementationProgressFrom(record.artifacts) != write.expectedProgress) {
+        return@transaction rejected("The criterion progress moved since this turn was decided.")
+      }
+      workflowPersistence.persistArtifactsPatch(
+        unitOfWork.workflowStates,
+        record,
+        implementationTurnPatch(record.artifacts, write),
+      )
+      RequiredPhaseWrite.Acknowledged
+    }
+
+  private fun implementationTurnPatch(
+    artifacts: Map<String, Any?>,
+    write: FeatureTaskRuntimeImplementationTurnWrite,
+  ): Map<String, Any?> {
+    val existing = implementationAttemptsFrom(artifacts)
+    val attempts =
+      featureTaskRuntimeAppendImplementationAttempt(
+        existing = existing,
+        entry =
+          FeatureTaskRuntimeImplementationAttempt(
+            sequenceNumber = (existing.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
+            phaseId = write.phaseId,
+            attemptNumber = write.attemptNumber,
+            agentId = write.agentId,
+            status = FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED,
+            recordedAt = clock.instant().toString(),
+            value = write.value,
+            prompt = write.marker.encode(),
+          ),
+      )
+    val attemptWire = implementationAttemptRecordWorkflowArtifact(attempts)
+    implementationAttemptValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(attemptWire),
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.label(),
+    )
+    val progressWire = write.progress.asImplementationProgressWireMap()
+    implementationAttemptValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS,
+      progressWire,
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS.label(),
+    )
+    return mapOf(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.entry(attemptWire),
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS.entry(progressWire),
+    )
+  }
+
   override fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>? =
     database.read { unitOfWork ->
       val record =
@@ -347,7 +439,10 @@ class FeatureTaskRuntimePhaseStateRecorder(
         ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]) }
     val value = produced?.get(SharedPayloadKeys.VALUE)?.toString()?.trim().orEmpty()
     if (produced == null || value.isBlank()) return emptyMap()
-    val prompt = produced[SharedPayloadKeys.PROMPT]?.toString()?.trim()?.takeIf(String::isNotBlank)
+    val prompt =
+      produced[SharedPayloadKeys.PROMPT]?.toString()?.trim()
+        ?.takeIf(String::isNotBlank)
+        ?.takeUnless(FeatureTaskRuntimeImplementationTurnMarker::isMarker)
     val existing = implementationAttemptsFrom(artifacts)
     val appended =
       featureTaskRuntimeAppendImplementationAttempt(
