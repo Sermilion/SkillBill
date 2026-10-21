@@ -168,7 +168,9 @@ class WorkCancellation(
       val worker =
         phase?.workerOwnership()
           ?: workflowId?.let(unit.workflowStates::getFeatureTaskRuntimeWorkerOwnership)
-      if (worker == null && item.snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE) {
+      // Verify runs are driven by an agent over MCP and never hold a worker lease.
+      val leaseExpected = item.snapshot.workflowFamily != IdeStatusWorkflowFamily.FEATURE_VERIFY
+      if (worker == null && leaseExpected && item.snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE) {
         return@transactionFenced Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
       }
       val inspection = worker?.let(supervisor::inspect) ?: FeatureTaskRuntimeProcessInspection.NotRunning

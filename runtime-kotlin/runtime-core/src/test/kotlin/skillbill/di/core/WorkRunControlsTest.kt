@@ -30,6 +30,10 @@ import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -421,6 +425,84 @@ class WorkRunControlsTest {
       assertEquals(
         IdeStatusLifecycleState.CANCELED,
         component.ideStatusService.detail(WorkDetailRequest("beating-goal")).item?.snapshot?.lifecycleState,
+      )
+    }
+  }
+
+  @Test
+  fun `canceling an active verify operation abandons it although agent-driven verify runs hold no worker lease`() {
+    establishTemporarySchemaReadiness("verify-cancel").use { fixture ->
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult =
+            WorkRunLaunchResult.Started(fixture.tempDir.resolve("verify.log"))
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      val identity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}"
+      val now = Instant.now().minusSeconds(60)
+      val steps = FeatureVerifyWorkflowDefinition.definition.stepIds
+      component.databaseSession.transaction { unit ->
+        unit.workflowStates.saveRecord(
+          WorkflowFamily.VERIFY,
+          WorkflowStateRecord(
+            workflowId = "wfv-open",
+            sessionId = "session-wfv-open",
+            workflowName = "bill-feature-verify",
+            contractVersion = "0.1",
+            workflowStatus = WorkflowStatus.RUNNING.wireValue,
+            currentStepId = steps[1],
+            stepsJson =
+              steps.mapIndexed { index, step ->
+                val status =
+                  when (index) {
+                    0 -> "completed"
+                    1 -> "running"
+                    else -> "pending"
+                  }
+                """{"step_id":"$step","status":"$status","attempt_count":1}"""
+              }.joinToString(prefix = "[", postfix = "]"),
+            artifactsJson = "{}",
+            startedAt = now.toString(),
+            updatedAt = now.toString(),
+            finishedAt = null,
+            issueKey = "SKILL-779",
+          ),
+        )
+        unit.standalonePhaseStatuses.registerWorkflow(
+          IdeStatusWorkflowRegistration(
+            identity,
+            "feat/SKILL-779-verify",
+            "SKILL-779",
+            "wfv-open",
+            "verify-invocation",
+            "verify-execution",
+            "active",
+            now,
+          ),
+        )
+      }
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("wfv-open")).item)
+      assertEquals(IdeStatusLifecycleState.ACTIVE, item.snapshot.lifecycleState)
+      val target =
+        WorkRunTarget(
+          "wfv-open",
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt,
+          assertNotNull(item.databaseFileObservation),
+        )
+      assertTrue(assertNotNull(component.workControlService.options(target)).canCancel)
+      assertEquals(WorkControlResult.Accepted, component.cancelRun(target))
+      val canceled = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("wfv-open")).item)
+      assertEquals(IdeStatusLifecycleState.CANCELED, canceled.snapshot.lifecycleState)
+      assertNull(canceled.liveSection)
+      assertEquals(
+        WorkflowStatus.ABANDONED,
+        component.databaseSession.read { it.workflowStates.get(WorkflowFamily.VERIFY, "wfv-open") }?.workflowStatus,
       )
     }
   }
