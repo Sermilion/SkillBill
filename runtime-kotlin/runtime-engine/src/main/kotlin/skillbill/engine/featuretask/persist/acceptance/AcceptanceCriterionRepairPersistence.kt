@@ -341,7 +341,7 @@ class AcceptanceCriterionRepairPersistence(
         refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
       else -> {
         val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
-        val next = transition(previous, request.mutation, digest)
+        val next = transition(previous, request.mutation, digest, request.expected.revision)
         val legacySafe =
           previous != null || mayAdopt(record, request, binding, worker, repositoryRoot)
         val refusal = candidateRefusal(previous, next, request, binding, legacySafe)
@@ -679,6 +679,7 @@ class AcceptanceCriterionRepairPersistence(
     state: AcceptanceCriterionRepairState?,
     mutation: AcceptanceCriterionRepairMutation,
     auditDigest: String?,
+    expectedRevision: Long?,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
       is AcceptanceCriterionRepairMutation.ProseAudit,
@@ -686,7 +687,7 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.Clarification,
       is AcceptanceCriterionRepairMutation.QaReaudit,
       -> proseTransition(state, mutation)
-      else -> repairTransition(state, mutation, auditDigest)
+      else -> repairTransition(state, mutation, auditDigest, expectedRevision)
     }
 
   private fun proseTransition(
@@ -706,6 +707,7 @@ class AcceptanceCriterionRepairPersistence(
     state: AcceptanceCriterionRepairState?,
     mutation: AcceptanceCriterionRepairMutation,
     auditDigest: String?,
+    expectedRevision: Long?,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
       is AcceptanceCriterionRepairMutation.Discover -> {
@@ -722,7 +724,7 @@ class AcceptanceCriterionRepairPersistence(
         }
       }
       is AcceptanceCriterionRepairMutation.ContinueRepair ->
-        state?.continueReservedRepair(mutation.reservationId, mutation.evidenceRef)
+        expectedRevision?.let { state?.continueReservedRepair(mutation.reservationId, mutation.evidenceRef, it) }
       is AcceptanceCriterionRepairMutation.RepairCompleted -> {
         if (repairCompletedReplays(state, mutation)) {
           state

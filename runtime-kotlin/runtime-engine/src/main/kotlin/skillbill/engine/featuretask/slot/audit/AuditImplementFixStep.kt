@@ -21,9 +21,7 @@ internal object AuditImplementFixStep : PhaseStepHooks {
   ): AttemptResult? {
     if (capture.run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) return null
     val verdict = outputMap[SharedPayloadKeys.VERDICT]
-    if (verdict != FeatureTaskRuntimeVerdict.PROGRESS.wireValue &&
-      verdict != FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue
-    ) {
+    if (verdict != FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue) {
       return null
     }
     return AttemptResult.incompleteWork(

@@ -282,7 +282,14 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   }
 
   @Test
-  fun `admitted partial work survives recovery with the same reservation and no failed outcome`() {
+  fun `admitted partial work survives recovery with the same reservation and no failed outcome`() =
+    assertPartialWorkSurvivesRecovery(directProgress = false)
+
+  @Test
+  fun `direct partial work survives recovery with the same reservation and incomplete attempt`() =
+    assertPartialWorkSurvivesRecovery(directProgress = true)
+
+  private fun assertPartialWorkSurvivesRecovery(directProgress: Boolean) {
     SerialRepairSqliteFixture().use { f ->
       var reservationId: String? = null
       f.owned { worker ->
@@ -300,14 +307,17 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         val repair = phase(f, "audit_implement_fix", 1)
         assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
         reservationId = scope.snapshot?.reservation?.reservationId
-        assertEquals(
-          RequiredPhaseWrite.Acknowledged,
-          recorder.complete(output(repair, "advance", "Only the first caller is connected.")),
-        )
-        val admission = phase(f, "audit", 2)
-        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(admission))
+        val report =
+          output(repair, if (directProgress) "progress" else "advance", "Only the first caller is connected.")
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(report))
         val continued =
-          output(admission, "progress", "The second caller needs connection and source work can continue.")
+          if (directProgress) {
+            report
+          } else {
+            val admission = phase(f, "audit", 2)
+            assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(admission))
+            output(admission, "progress", "The second caller needs connection and source work can continue.")
+          }
         assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(continued))
         val saved = scope.snapshot
         val ledger = decodePhaseLedger(f.snapshot().artifacts)

@@ -16,6 +16,7 @@ fun AcceptanceCriterionRepairState.retainProseProgress(): AcceptanceCriterionRep
 fun AcceptanceCriterionRepairState.continueReservedRepair(
   reservationId: String,
   evidenceRef: String,
+  expectedRevision: Long,
 ): AcceptanceCriterionRepairState? {
   val live = reservation?.takeIf { stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED } ?: return null
   if (live.reservationId != reservationId ||
@@ -23,11 +24,11 @@ fun AcceptanceCriterionRepairState.continueReservedRepair(
   ) {
     return null
   }
-  if (pendingClarificationQuestion == null && criteria.single {
-      it.canonicalRef == live.criterionRef
-    }.evidenceRef == evidenceRef
-  ) {
-    return this
+  if (revision != expectedRevision) {
+    return takeIf {
+      revision == expectedRevision + 1 && pendingClarificationQuestion == null &&
+        criteria.single { it.canonicalRef == live.criterionRef }.evidenceRef == evidenceRef
+    }
   }
   return copy(
     criteria = criteria.map { if (it.canonicalRef == live.criterionRef) it.copy(evidenceRef = evidenceRef) else it },

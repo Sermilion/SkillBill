@@ -306,10 +306,10 @@ outcome blocks that criterion. Explicit operator resume of the blocked goal rese
 the active failure counts to zero and grants three new outcomes per criterion,
 while retaining prior outcome identities and source evidence. Repair reports
 marked `progress` or `no_progress` still leave the selected criterion unfinished.
-Each consumes one unsuccessful outcome, so a report of partial progress cannot
-relaunch the same repair indefinitely. An ordinary state reload does not reset
-the budget. A successful outcome closes source work for it without erasing
-earlier failures.
+Only `no_progress` consumes an unsuccessful outcome; `progress` continues the
+reserved cycle with its saved plan and existing failure count. An ordinary state
+reload does not reset the budget. A successful outcome closes source work for it
+without erasing earlier failures.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted

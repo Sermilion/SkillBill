@@ -1,4 +1,22 @@
+## [2026-10-21] Continue partial acceptance repairs without spending failure budget
+
+Context: Direct `progress` repair reports took the same incomplete-work path as
+`no_progress`, while read-only admission already continued partial work without
+charging a failure. Three partial reports could block an unfinished repair.
+
+Decision: Direct `progress` uses the existing reserved-repair continuation. It
+retains the reservation, saved plan, prior failures and source evidence, and marks
+the implementation attempt incomplete. Continuations fence the expected revision
+so identical reports in later sessions remain distinct and acknowledged replay
+stays idempotent. Only independent source verification can accept the criterion. Explicit `no_progress`, failed verification and admitted
+failures retain the three-outcome cap. This supersedes guidance that charged
+partial progress as an unsuccessful outcome.
+
+Reason: Partial implementation can require several sessions before verification.
+A session ending with work remaining does not establish a failed repair.
+
 ## [2026-10-21] Settle runtime-owned reviews in the phase transaction
+
 Context: Durable review completion persisted phase records without the settlement trail used by other completed feature-task phases.
 Decision: Reuse FeatureTaskPhaseSettlementService with the active unit-of-work repository after durable phase persistence, for ordinary and goal reviews. Keep review runtime-owned and leave agentSettledPhaseIds unchanged.
 Reason: The existing settlement owner and table already support review. Sharing the transaction keeps phase persistence and settlement atomic without requiring an agent MCP call or introducing another settlement type or table.

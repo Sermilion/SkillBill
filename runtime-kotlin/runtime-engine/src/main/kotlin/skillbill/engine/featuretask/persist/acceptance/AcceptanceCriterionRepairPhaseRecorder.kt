@@ -212,7 +212,14 @@ class AcceptanceCriterionRepairPhaseRecorder(
         session,
         phase,
         mutation,
-        CommitContext(auditEvidence(mutation, envelope), expectedState = state),
+        CommitContext(
+          auditEvidence(mutation, envelope),
+          expectedState = state,
+          attemptStatus =
+            FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE.takeIf {
+              phase.phaseId == session.steps.repair && mutation is AcceptanceCriterionRepairMutation.ContinueRepair
+            },
+        ),
       )
     } ?: rejected(phase, "The audit result does not match the active repair stage.")
   }
@@ -300,7 +307,9 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): AcceptanceCriterionRepairMutation? =
     with(evidence) {
       val live = state.reservation ?: return@with null
-      if (satisfied) {
+      if (continuing) {
+        AcceptanceCriterionRepairMutation.ContinueRepair(live.reservationId, prose)
+      } else if (satisfied) {
         AcceptanceCriterionRepairMutation.RepairCompleted(live.reservationId, prose, tree, checkpoint)
       } else {
         AcceptanceCriterionRepairMutation.Clarification(
