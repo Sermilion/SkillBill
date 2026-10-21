@@ -129,6 +129,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
       liveSection = liveSection?.let { WorkSection.valueOf(it.name) }, controlEligible = controlEligible,
       pauseEligible = pauseEligible, requiresAttention = requiresAttention, displayGroup = displayGroup?.let { WorkSection.valueOf(it.name) },
       displayPriority = displayPriority, exactPauseReason = exactPauseReason,
+      controlLeaseOwner = controlLease?.ownerToken, controlLeaseGeneration = controlLease?.generation,
       databaseFile = databaseFileObservation?.toDomain()),
     stepPipeline = stepPipeline,
     goalFinishPipeline = goalFinishPipeline,

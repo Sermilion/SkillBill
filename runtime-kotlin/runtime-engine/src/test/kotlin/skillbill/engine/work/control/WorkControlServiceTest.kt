@@ -23,6 +23,7 @@ import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.WorkBoardRequest
+import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -55,6 +56,17 @@ class WorkControlServiceTest {
 
       assertEquals(GOAL_PAUSE_REASON_OPERATOR_STOP, fixture.control().pauseReason)
       assertTrue(fixture.control().paused)
+      assertEquals(listOf(rendered.leaseOwnerToken), fixture.terminated.map { it.ownerToken })
+    }
+  }
+
+  @Test
+  fun `stop accepts a target built from the detail projection of a leased runner`() {
+    GoalControlsFixture().use { fixture ->
+      val rendered = fixture.detailTarget()
+
+      assertEquals(WorkControlResult.ExitConfirmed, fixture.service.request(rendered, WorkControlAction.STOP))
+
       assertEquals(listOf(rendered.leaseOwnerToken), fixture.terminated.map { it.ownerToken })
     }
   }
@@ -233,6 +245,18 @@ private class GoalControlsFixture : AutoCloseable {
       "goal-1", identity, root, "SKILL-148", snapshot.execution?.executionId, snapshot.execution?.statusRevision,
       snapshot.execution?.statusStoreId, snapshot.execution?.runSequence, snapshot.updatedAt,
       lease.ownerToken, lease.generation, board.observation, item.databaseFileObservation,
+    )
+  }
+
+  fun detailTarget(): WorkControlTarget {
+    val detail = status.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt))
+    val item = assertNotNull(detail.item, detail.problem.toString())
+    val snapshot = item.snapshot
+    val lease = assertNotNull(item.controlLease)
+    return WorkControlTarget(
+      "goal-1", identity, root, "SKILL-148", snapshot.execution?.executionId, snapshot.execution?.statusRevision,
+      snapshot.execution?.statusStoreId, snapshot.execution?.runSequence, snapshot.updatedAt,
+      lease.ownerToken, lease.generation, item.observation, item.databaseFileObservation,
     )
   }
 

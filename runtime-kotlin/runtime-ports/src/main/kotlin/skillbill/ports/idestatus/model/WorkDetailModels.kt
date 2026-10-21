@@ -1,6 +1,7 @@
 package skillbill.ports.idestatus.model
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusDisplayGroup
 import skillbill.ports.filesystem.model.DatabaseFileObservation
@@ -74,6 +75,7 @@ data class WorkDetailItem(
   val databaseFileObservation: DatabaseFileObservation? = null,
   val pauseEligible: Boolean = false,
   val listAnchors: Map<WorkDetailList, String> = emptyMap(),
+  val controlLease: GoalRunnerExecutionLease? = null,
 )
 
 data class WorkDetailRuntimeStatus(
