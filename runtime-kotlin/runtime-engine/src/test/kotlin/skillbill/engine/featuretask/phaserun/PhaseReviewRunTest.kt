@@ -35,8 +35,10 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
+import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
@@ -178,7 +180,11 @@ class PhaseReviewRunTest {
   fun `phase runs and durable runs drive the same run loop entry`() {
     val loopEntry = RecordingRunLoopEntry()
     val phaseEntry = inlineEntry(fixLauncher(), runLoopEntry = loopEntry) { APPROVED_REVIEW }
-    val durable = telemetryRunnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
+    val durable =
+      telemetryRunnerHarness(
+        runtimeConfig = RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()),
+        databaseFactory = { database },
+      )
 
     phaseEntry.run(reviewRequest(mode = null))
     val durableReport = durable.withRunLoopEntry(loopEntry).run(durable.request)
@@ -186,7 +192,104 @@ class PhaseReviewRunTest {
     assertIs<FeatureTaskRuntimeRunReport.Completed>(durableReport, durableReport.toString())
     assertEquals(2, loopEntry.runStates.size, loopEntry.runStates.toString())
     assertIs<InMemoryPhaseRunState>(loopEntry.runStates[0])
-    assertIs<FeatureTaskRuntimeRunLoopDurableState>(loopEntry.runStates[1])
+    val durableState = assertIs<FeatureTaskRuntimeRunLoopDurableState>(loopEntry.runStates[1])
+    val durableReviewRows = SlotBaselineSqlite.rows(database.resolveDbPath(), "review_runs")
+    assertTrue(durableReviewRows.size >= 2, "The durable completed review must persist its own review_runs parent.")
+    assertEquals(0, database.transaction { it.reviews.reviewStats(null).stats.totalFindings })
+    val nonEmptyResult =
+      inlineEntry(fixLauncher()) { BLOCKER_REVIEW }
+        .run(reviewRequest(CodeReviewExecutionMode.INLINE))
+        .reviewResult
+    val findingsBeforeDurablePersist = database.transaction { it.reviews.reviewStats(null).stats.totalFindings }
+    val review = requireNotNull(nonEmptyResult)
+    val nit = review.mergeResult.findings.single().copy(fNumber = "F-002", severity = ParallelReviewSeverity.NIT)
+    val reviewWithNit = review.copy(mergeResult = review.mergeResult.copy(findings = review.mergeResult.findings + nit))
+    durableState.recordReviewRun("rvw-durable-findings", reviewWithNit, laneTelemetryRecorded = true)
+
+    assertEquals(
+      1,
+      SlotBaselineSqlite.rows(database.resolveDbPath(), "review_runs")
+        .count { it["review_run_id"] == "rvw-durable-findings" },
+    )
+    assertEquals(
+      2,
+      SlotBaselineSqlite.rows(database.resolveDbPath(), "findings")
+        .count { it["review_run_id"] == "rvw-durable-findings" },
+    )
+    assertEquals(
+      findingsBeforeDurablePersist + 2,
+      database.transaction { it.reviews.reviewStats(null).stats.totalFindings },
+      "Stats without a run id must include durable review findings.",
+    )
+    assertEquals(
+      1,
+      database.transaction {
+        it.reviews.reviewStats(
+          "rvw-durable-findings",
+        ).stats.unresolvedSeverityCounts[ParallelReviewSeverity.NIT.displayName]
+      },
+    )
+    assertDurableReviewLedgerLink()
+  }
+
+  private fun assertDurableReviewLedgerLink() {
+    val goalFinding =
+      UnaddressedFinding(
+        issueKey = "SKILL-433",
+        subtaskId = 1,
+        workflowId = "workflow-433",
+        reviewPassNumber = 1,
+        findingOrdinal = 1,
+        severity = "blocker",
+        issueCategory = "other",
+        location = DELEGATED_REVIEWED_PATH,
+        summary = REVIEW_BLOCKER_MESSAGE,
+        reviewRunId = "rvw-durable-findings",
+        findingId = "F-001",
+      )
+    database.transaction {
+      it.unaddressedFindings.replaceLedgerForPass("workflow-433", 1, listOf(goalFinding))
+    }
+    assertEquals(
+      listOf(goalFinding),
+      database.transaction { it.unaddressedFindings.fetchLedger("SKILL-433") },
+    )
+  }
+
+  @Test
+  fun `durable goal review persists its parent before linking ledger findings`() {
+    val loopEntry = RecordingRunLoopEntry()
+    val durable =
+      telemetryRunnerHarness(
+        runtimeConfig =
+          RuntimeHarnessConfig(
+            repoRoot = repoRoot,
+            branchSetup = BranchSetupTestConfig(gitOperations = git),
+            launcher = fixLauncher(),
+            reviewRunner = scriptedReviewPhaseRunner { BLOCKER_REVIEW },
+          ),
+        databaseFactory = { database },
+      )
+
+    durable.withRunLoopEntry(loopEntry).run(durable.request)
+
+    val reviewRunIds =
+      SlotBaselineSqlite.rows(database.resolveDbPath(), "review_runs").mapNotNull {
+        it["review_run_id"] as? String
+      }.toSet()
+    val linkedLedgerRows =
+      SlotBaselineSqlite.rows(database.resolveDbPath(), "unaddressed_findings")
+        .filter { it["review_run_id"] != null }
+    val reviewSettlements =
+      SlotBaselineSqlite.rows(database.resolveDbPath(), "feature_task_phase_settlements")
+        .filter { it["phase_id"] == PHASE_REVIEW }
+    assertTrue(linkedLedgerRows.isNotEmpty(), "The durable goal review must store its findings in the ledger.")
+    assertTrue(
+      linkedLedgerRows.all { it["review_run_id"] in reviewRunIds },
+      "Every ledger review_run_id must have a persisted review_runs parent.",
+    )
+    assertTrue(reviewSettlements.isNotEmpty(), "A completed durable review must write its phase settlement.")
+    assertTrue(reviewSettlements.all { it["kind"] == "complete" })
   }
 
   private fun reviewRequest(

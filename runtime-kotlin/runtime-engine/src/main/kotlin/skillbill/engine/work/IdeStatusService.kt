@@ -579,7 +579,6 @@ class IdeStatusService(
     val goal = item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
     val goalRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = false)
     val validationRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = true)
-    val goalPage = goalRead?.page
     val validationPage = validationRead?.page
     val goalStatus = goal?.let { work -> detailGoalStatus(work, validationPage, context) }
     val dependencies = detailDependencies(goal, context.unitOfWork.workList, request, position)
@@ -598,7 +597,7 @@ class IdeStatusService(
     val moreLists =
       detailContinuationLists(
         history.size > pageSize,
-        (goalPage?.remainingCount ?: 0) > pageSize,
+        (goalRead?.page?.remainingCount ?: 0) > pageSize,
         (validationPage?.remainingCount ?: 0) > pageSize,
         runtimeRead?.hasMore == true && request.includesDetailList(WorkDetailList.PHASES),
       )
@@ -612,8 +611,8 @@ class IdeStatusService(
         stepPipeline = standalone?.let { standaloneStepPipeline(it.phaseId) } ?: runtimeStatus?.phaseIds.orEmpty(),
         finishedAt = completion.first,
         finishedAtSource = completion.second,
-        goalManifest = goalPage?.manifest,
-        goalFinishPipeline = if (goalPage == null) emptyList() else projector.goalFinishPipeline(context.repoRoot),
+        goalManifest = goalRead?.page?.manifest,
+        goalFinishPipeline = goalRead?.page?.let { projector.goalFinishPipeline(context.repoRoot) }.orEmpty(),
         runtimeStatus = runtimeStatus,
         goalStatus = goalStatus,
         pageOffset = position.offset,
@@ -631,6 +630,7 @@ class IdeStatusService(
         displayPriority = workDisplayPriority(snapshot, completion.first),
         exactPauseReason = projection.exactPauseReason,
         databaseFileObservation = context.unitOfWork.databaseFileObservation,
+        controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
       )
     return ProjectedDetailItem(
       detailItem,

@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.persist.workflowStatusFor
+import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.operatorBlockRetryFromWorkflowArtifacts
@@ -61,6 +62,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
   private val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
+  private val phaseSettlementService: FeatureTaskPhaseSettlementService,
   private val clock: Clock,
 ) : FeatureTaskRuntimePhaseStatePort,
   FeatureTaskRuntimePhaseStateQueries,
@@ -579,6 +581,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
           clock.instant(),
         ),
       )
+      settleReviewPhase(unitOfWork, request, phaseSettlementService)
       true
     }
 }

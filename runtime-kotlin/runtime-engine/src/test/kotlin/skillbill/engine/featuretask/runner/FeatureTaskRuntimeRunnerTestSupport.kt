@@ -7,8 +7,10 @@ import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.review.spec.SpecIntentProjectionExtractor
 import skillbill.application.review.spec.SpecIntentProjectionResolver
+import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.seedHarnessSpecIntentProjection
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.application.testDecompositionManifestValidator
@@ -925,7 +927,7 @@ private fun harnessCrashReconciler(
   )
 }
 
-private fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
+internal fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
   FeatureTaskPhaseSettlementService(
     InMemoryFeatureTaskPhaseSettlementRepository(),
     testHarnessClock,
@@ -1083,25 +1085,37 @@ private fun harnessRunner(
       deps.recorder,
       deps.goalContinuationRecorder,
       strategies,
-      testHarnessClock,
       gitOperations,
       specGate,
       entry,
       launchOutcomes,
       deps.settlement,
-      FeatureTaskRuntimeRunLoopDurableLaunch(
-        gateDeps.branchSetupRunner,
-        AgentActivityStampWriter(deps.database, Clock.systemUTC(), deps.diagnostics, TimeSource.Monotonic),
-        WorktreeEditJournalWriter(
-          deps.database,
-          Clock.systemUTC(),
-          deps.diagnostics,
-          NoopWorkflowGitOperations,
+      FeatureTaskRuntimeDurableRunFactory(
+        deps.goalContinuationRecorder,
+        strategies,
+        testHarnessClock,
+        gitOperations,
+        deps.settlement,
+        FeatureTaskRuntimeRunLoopDurableLaunch(
+          gateDeps.branchSetupRunner,
+          AgentActivityStampWriter(deps.database, Clock.systemUTC(), deps.diagnostics, TimeSource.Monotonic),
+          WorktreeEditJournalWriter(
+            deps.database,
+            Clock.systemUTC(),
+            deps.diagnostics,
+            NoopWorkflowGitOperations,
+          ),
+          entry,
+          testDecompositionPlanner(),
         ),
-        entry,
-        testDecompositionPlanner(),
+        deps.database,
+        ParallelCodeReviewRunnerResultAssembly(
+          GoalRunnerSubtaskLauncher { error("A durable review must not launch an integration pass.") },
+          ReviewContextEnvelopeValidator { _, _ -> },
+          RuntimeOwnedPersistenceBoundary(deps.database, deps.diagnostics),
+          testHarnessClock,
+        ),
       ),
-      deps.database,
     )
   return assembleHarnessRunner(deps, strategies, executePrepared, lifecycleTelemetry, entry)
 }
@@ -1288,25 +1302,37 @@ private class TelemetryExecutePreparedSetup(
       workflow.recorder,
       workflow.goalContinuationRecorder,
       strategies,
-      testHarnessClock,
       runtimeConfig.harnessGitOperations,
       specGate,
       runLoopEntry,
       launchOutcomes,
       settlement,
-      FeatureTaskRuntimeRunLoopDurableLaunch(
-        branchSetupRunner,
-        AgentActivityStampWriter(database, Clock.systemUTC(), NoopRuntimeDiagnostics, TimeSource.Monotonic),
-        WorktreeEditJournalWriter(
-          database,
-          Clock.systemUTC(),
-          NoopRuntimeDiagnostics,
-          NoopWorkflowGitOperations,
+      FeatureTaskRuntimeDurableRunFactory(
+        workflow.goalContinuationRecorder,
+        strategies,
+        testHarnessClock,
+        runtimeConfig.harnessGitOperations,
+        settlement,
+        FeatureTaskRuntimeRunLoopDurableLaunch(
+          branchSetupRunner,
+          AgentActivityStampWriter(database, Clock.systemUTC(), NoopRuntimeDiagnostics, TimeSource.Monotonic),
+          WorktreeEditJournalWriter(
+            database,
+            Clock.systemUTC(),
+            NoopRuntimeDiagnostics,
+            NoopWorkflowGitOperations,
+          ),
+          configuredEntry,
+          testDecompositionPlanner(),
         ),
-        configuredEntry,
-        testDecompositionPlanner(),
+        database,
+        ParallelCodeReviewRunnerResultAssembly(
+          GoalRunnerSubtaskLauncher { error("A durable review must not launch an integration pass.") },
+          ReviewContextEnvelopeValidator { _, _ -> },
+          RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics),
+          testHarnessClock,
+        ),
       ),
-      database,
     )
 }
 
@@ -2088,6 +2114,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
   private val telemetryReconciliationPort: TelemetryReconciliationRepository =
     noopPort(TelemetryReconciliationRepository::class.java)
   private val telemetryOutboxPort: TelemetryOutboxRepository = noopPort(TelemetryOutboxRepository::class.java)
+  private val featureTaskPhaseSettlements = InMemoryFeatureTaskPhaseSettlementRepository()
 
   fun rejectedDiagnostics(): List<RejectedOutputDiagnosticRecord> = diagnosticRecords.values.toList()
 
@@ -2138,6 +2165,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
       override val telemetryOutbox: TelemetryOutboxRepository =
         this@RuntimeFakeDatabaseSessionFactory.telemetryOutboxPort
       override val workflowStates: WorkflowStateRepository = repository
+      override val featureTaskPhaseSettlements = this@RuntimeFakeDatabaseSessionFactory.featureTaskPhaseSettlements
       override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = qaOutcomes
       override val rejectedOutputDiagnosticPermissions =
         RejectedOutputDiagnosticPermissions { }

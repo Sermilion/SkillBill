@@ -3,34 +3,40 @@ contract_version: "0.5"
 issue_key: "SKILL-433"
 feature_name: "record-in-workflow-review-runs-so-review-telemetry-shows-whether-reviews-found-findings"
 parent_spec_path: ".feature-specs/SKILL-433-record-in-workflow-review-runs-so-review-telemetry-shows-whether-reviews-found-findings/spec.md"
-status: "pending"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-433-record-in-workflow-review-runs-so-review-telemetry-shows-whether-reviews-found-findings"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Persist durable review runs so stats count them"
   spec_path: ".feature-specs/SKILL-433-record-in-workflow-review-runs-so-review-telemetry-shows-whether-reviews-found-findings/spec_subtask_1_persist-durable-review-runs.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261021-153702-lb33"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "Settle review phases and name leftover orphans"
   spec_path: ".feature-specs/SKILL-433-record-in-workflow-review-runs-so-review-telemetry-shows-whether-reviews-found-findings/spec_subtask_2_settle-review-and-orphan-policy.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261021-160718-ezc8"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false

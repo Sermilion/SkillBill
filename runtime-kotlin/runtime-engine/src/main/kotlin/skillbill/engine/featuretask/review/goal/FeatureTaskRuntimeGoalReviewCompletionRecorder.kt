@@ -11,12 +11,14 @@ import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.persist.workflowStatusFor
+import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.record.completedPhaseRequestMatches
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
 import skillbill.engine.featuretask.phase.record.phaseEventAdmissible
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
+import skillbill.engine.featuretask.phase.record.settleReviewPhase
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
@@ -48,6 +50,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
+  private val phaseSettlementService: FeatureTaskPhaseSettlementService,
   private val clock: Clock,
 ) {
   fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean {
@@ -123,6 +126,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
         stepUpdates = stepUpdatesFrom(write.persisted.updatedRecords),
       ),
     )
+    settleReviewPhase(unitOfWork, request, phaseSettlementService)
     return true
   }
 

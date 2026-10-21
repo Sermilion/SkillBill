@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutpu
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingRecorder
+import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeFindingVerificationPort
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewCheckpointRecorder
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewGenerationPort
@@ -71,6 +72,7 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
     rejectedOutputDiagnosticMetadataValidator: RejectedOutputDiagnosticMetadataValidator,
     producerOutputEvidenceValidator: ProducerOutputEvidenceValidator,
     diagnostics: RuntimeDiagnostics,
+    phaseSettlementService: FeatureTaskPhaseSettlementService,
     clock: Clock,
   ) : this(
     phaseRecorderParts(
@@ -81,6 +83,7 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
         rejectedOutputDiagnosticMetadataValidator,
         producerOutputEvidenceValidator,
         diagnostics,
+        phaseSettlementService,
         clock,
       ),
     ),
@@ -256,6 +259,7 @@ private data class FeatureTaskRuntimePhaseRecorderInjected(
   val rejectedOutputDiagnosticMetadataValidator: RejectedOutputDiagnosticMetadataValidator,
   val producerOutputEvidenceValidator: ProducerOutputEvidenceValidator,
   val diagnostics: RuntimeDiagnostics,
+  val phaseSettlementService: FeatureTaskPhaseSettlementService,
   val clock: Clock,
 )
 
@@ -305,6 +309,7 @@ private fun phaseRecorderParts(
         workflowPersistence,
         runtimeOwnedPersistence,
         injected.wireArtifactValidator,
+        injected.phaseSettlementService,
         injected.clock,
       ),
     reviewCheckpoint =
@@ -319,6 +324,7 @@ private fun phaseRecorderParts(
         injected.database,
         workflowPersistence,
         runtimeOwnedPersistence,
+        injected.phaseSettlementService,
         injected.clock,
       ),
     briefingRecorder =

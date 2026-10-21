@@ -29,6 +29,7 @@ import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcom
 import skillbill.review.context.model.accounting.ReviewParentAnalysisConsumption
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewRunLaneSegmentAccountingJson
+import skillbill.review.model.ImportedReview
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ReviewCoverageReport
@@ -55,6 +56,15 @@ class ParallelCodeReviewRunnerResultAssembly(
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
   private val clock: Clock,
 ) {
+  fun saveImportedReview(review: ImportedReview) {
+    runtimeOwnedPersistence.requiredWrite(
+      seam = "ParallelCodeReviewRunnerResultAssembly.saveImportedReview",
+      expected = "durable review run and findings",
+    ) { unitOfWork ->
+      unitOfWork.reviews.saveImportedReview(review, sourcePath = null)
+    }
+  }
+
   internal fun runIntegrationPass(
     initial: ParallelCodeReviewInitialRun,
     outcomes: ParallelReviewLaneRunResult,

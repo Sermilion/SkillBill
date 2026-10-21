@@ -6,6 +6,7 @@ import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.review.model.FindingOutcomeRow
 import skillbill.review.model.FindingOutcomeType
+import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewFindingDetail
 import skillbill.review.model.ReviewFindingStats
 import skillbill.review.model.ReviewSummary
@@ -159,7 +160,7 @@ internal fun shouldSkipReviewFinishedTelemetry(
     (!reviewSummary.reviewFinishedAt.isNullOrEmpty() || !reviewSummary.reviewFinishedEventEmittedAt.isNullOrEmpty())
 }
 
-internal fun emptySeverityCounts(): Map<String, Int> = mapOf("Blocker" to 0, "Major" to 0, "Minor" to 0)
+internal fun emptySeverityCounts(): Map<String, Int> = ParallelReviewSeverity.entries.associate { it.displayName to 0 }
 
 private fun buildFindingOutcomeFilters(reviewRunId: String?): FindingQueryFilter =
   if (reviewRunId == null) {

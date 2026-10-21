@@ -98,8 +98,8 @@ internal interface PhaseRunState :
 
   /**
    * Records the review run [reviewRunId] and its [result] where the state keeps review history, emitting the pass's
-   * stage telemetry only when [laneTelemetryRecorded] says the review strategy did not already record it. A durable
-   * run records review history through its workflow records and keeps this a no-op.
+   * stage telemetry only when [laneTelemetryRecorded] says the review strategy did not already record it. The default
+   * is a no-op for states whose review history is recorded by another owner.
    */
   fun recordReviewRun(
     reviewRunId: String,

@@ -31,6 +31,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredPro
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
@@ -46,6 +47,9 @@ internal interface PhaseRunRecords :
   PhaseImplementationProgressRecords,
   FeatureTaskRuntimeNoChangePausePort {
   fun loadQaRepairState(workflowId: String): QaRepairState?
+
+  /** The operator retry recorded for this workflow, if it has not been consumed. */
+  fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry?
 
   /** Appends a ledger entry. */
   fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean

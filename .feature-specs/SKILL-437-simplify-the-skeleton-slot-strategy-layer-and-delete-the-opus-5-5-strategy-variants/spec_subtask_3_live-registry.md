@@ -1,0 +1,55 @@
+# Subtask 3 Keep only reachable registrations and share runner ownership
+
+## Scope
+
+Complete R5 in RuntimeFeatureTaskSlotProvides.kt, PullRequestPhaseStrategies.kt, the registry and their fixtures. Delete DelegatedReviewStrategy and remaining dead full-run registrations, runner allocations and tests that exist only for dead selection. Fold InjectedPhaseStrategies into one core registration list without moving composition into engine. Keep legitimate injected services and the lazy planIntake provider.
+
+## Acceptance Criteria
+
+1. Every registered slot/strategy pair is selectable through a live SkeletonDefinition and supported selection facts; the set contains the seventeen reachable canonical registrations described by preplan, including supported standalone and QA definitions, and excludes DelegatedReviewStrategy and the unused AgentPlanStrategy registration.
+2. One DefaultPhaseRunner instance supplies all production registrations and reachable review strategies, retaining only its launcher and gitOperations collaborators while sessions and launch state remain per call.
+3. runtime-kotlin/agent/decisions.md records that delegated full-run review is not planned and distinguishes it from retained delegated standalone review.
+
+## Non-goals
+
+Do not delete AgentPlanStrategy's class, which PlanFanOutStrategy uses internally. Do not delete delegated standalone review or any live definition to force a total of twelve. Do not change lazy planIntake lifetime or add a new composition root.
+
+## Dependency notes
+
+Depends on subtask 2. The parent explicitly corrects the intake's literal registry count using preplan evidence. Confirm seventeen by real selection over definitions and fact combinations, rather than declared strategyIds membership alone. Keep historical aliases outside the count. If implement finds different evidence, surface that discrepancy without sacrificing supported behavior.
+
+## Test Obligations
+
+- Bug caught, DI registers a strategy that no definition/fact combination can select. Add universal live-selection reachability in PhaseStrategyRegistryTest and align RuntimeFeatureTaskSlotProvidesTest with that set. Include historical and current feature definitions plus REVIEW, VALIDATION, QA, GOAL_QA, PLAN, PR, MONITOR and STANDALONE_MONITOR. Retain fan-out selection for both planning steps and ambiguous-fact rejection.
+- Bug caught, DI constructs multiple runners or a shared runner retains another invocation's session. Assert shared production runner identity at the registration boundary and use distinct accepted invocations to establish isolated launch outcomes where existing session coverage does not already prove it. Do not add tests that merely count provider calls.
+- Remove unreachable-only expectations and obsolete authority rows only where removal proves they are unused; retain shared behavior coverage and the source catalog parser.
+
+## Next path
+
+Subtask 4, replace runtime binding selection with typed strategy-owned families.
+
+## Shared constraints
+
+The parent spec's constraints, non-goals, decisions and phase ownership apply. Paths describe affected owners without preventing necessary review or validation repairs. Do not weaken behavior, assertions, architecture guards or durable identity checks. Keep existing unrelated workspace edits. No directive text, classifier identity or telemetry-column changes are allowed.
+
+## Validation Strategy
+
+Implement authors production and test changes; audit inspects repository facts. Neither executes builds, tests or generators. The later build phase owns compile/buildability proof. The later validate phase runs the required focused obligations below and the full project validation strategy, including repoTest guards. Preserve all existing relevant regression coverage and allow repairs required by those checks. Review, history, commit, publication and workflow advancement remain runtime-owned.
+
+## Implementation Details
+
+Use the preplan digest as the planning evidence. Path prefixes below are relative to `runtime-kotlin`: E is `runtime-engine/src/main/kotlin/skillbill/engine/featuretask`, ET is `runtime-engine/src/test/kotlin/skillbill/engine/featuretask`, C is `runtime-core/src/main/kotlin/skillbill/di/featuretask`, and A is `runtime-core/src/repoTest/kotlin/skillbill/architecture`.
+
+1. Remove unreachable production registrations after subtask 2's wrapper removal and historical-alias support are present. Serves acceptance criterion 1. In `C/RuntimeFeatureTaskSlotProvides.kt` and `C/PullRequestPhaseStrategies.kt`, remove delegated full-run review registration and its dedicated runner allocation, plus the unselected `AgentPlanStrategy` registration. Delete `E/slot/codereview/DelegatedReviewStrategy.kt`. Subtask 2 is assumed to have removed the Opus variants and their registrations; implementation must reconcile any remaining references without separating deletion from the alias compatibility already required there. Keep `AgentPlanStrategy` as the helper used by `PlanFanOutStrategy`, including its policies, prompts, hooks and resume behavior. Preserve delegated standalone review, standalone monitor, QA and every live definition. Historical aliases remain registry lookup entries outside `PhaseStrategyRegistry.strategies`, and aliases targeting the removed delegated full-run owner need no new unreachable registration. Preserve all supported recorded-plan compatibility established by subtask 2.
+
+2. Consolidate registration and runner ownership in core DI. Serves acceptance criteria 1 and 2. Fold `InjectedPhaseStrategies.registrations` into the single registration list in `C/RuntimeFeatureTaskSlotProvides.kt`; remove `InjectedPhaseStrategies` from `C/PullRequestPhaseStrategies.kt` once its consumers are updated. Retain `PullRequestPhaseStrategies` and legitimate injected services where still needed. Resolve one `DefaultPhaseRunner` for all production registration entries and for reachable review strategies that retain a runner. Replace repeated `runner()` calls and separate default-runner allocations with that shared instance. Keep the lazy `planIntake: () -> FeatureTaskRuntimePlanIntake` provider and its lifetime unchanged. `E/slot/runner/DefaultPhaseRunner.kt` should continue to hold only launcher and gitOperations collaborators. Its `run` methods must create or receive sessions per invocation, without storing launch state on the shared runner. Do not move DI into engine or introduce a service argument bag.
+
+3. Add boundary coverage for the reachable registration set and shared runner. Serves acceptance criteria 1 and 2 and the first two Test Obligations. Update `ET/slot/PhaseStrategyRegistryTest.kt`, `runtime-core/src/test/kotlin/skillbill/di/featuretask/RuntimeFeatureTaskSlotProvidesTest.kt` and `runtime-engine/src/testFixtures/kotlin/skillbill/engine/featuretask/slot/PhaseStrategyRegistryFixtures.kt` as needed. The concrete reachability bug is a production registration that no supported definition/fact combination selects. Exercise real selection across historical and current feature definitions and REVIEW, VALIDATION, QA, GOAL_QA, PLAN, PR, MONITOR and STANDALONE_MONITOR. Derive selected slot/strategy pairs through supported review, gate and QA fact combinations and participating steps, then compare them with production registrations. Assert the seventeen canonical registrations and exclude aliases from that count. Keep coverage that PLAN selects fan-out for both `plan` and `plan_subtasks`, and retain ambiguous-fact rejection. The digest does not enumerate all seventeen pairs; implementation must derive their exact identities from live selection rather than inventing a list or deleting behavior to meet a count. Any discrepancy requires an explicit report while preserving supported behavior.
+
+   The runner bug is separate production entries retaining different default runners, or one accepted invocation observing another's session. Assert reference identity for the runners supplied by the production registration boundary and retained by reachable review strategies. Reuse existing session-isolation coverage if it already proves distinct accepted invocations yield independent launch outcomes. Otherwise add one boundary regression with distinct invocation state and observable isolated outcomes. A no-launch registry fixture cannot prove accepted execution, and provider-call counts alone cannot prove the required behavior. Avoid new prompt snapshots or tests that duplicate selection-table literals.
+
+4. Remove coverage and authority entries made obsolete by deleted owners. Serves acceptance criterion 1 and the third Test Obligation. Update affected composition and registry expectations in `ET/slot/PhaseStrategyCompositionTest.kt` and the test owners above without dropping shared reachable behavior. In `A/StrategyCapabilityBoundaryArchitectureTest.kt`, `StrategyCapabilityTransitiveGraph.kt` and their writer inventory, remove only references whose sole production owner was deleted. `StrategyCapabilitySourceCatalog.kt` is a dynamic PSI parser, so preserve it and its unresolved-edge refusals. Retain raw `PhaseRunState` and `PhaseRunner` authority protections, existing review exceptions and synthetic rejection coverage. Do not add baselines, exemptions or catalog allowances. Typed-family guard changes belong to subtask 4, not this registration cleanup.
+
+5. Record the ownership decision and hand off validation. Serves acceptance criterion 3. Add an entry to `runtime-kotlin/agent/decisions.md` stating that delegated full-run review is not planned, its unreachable strategy and registration were deleted, and delegated standalone review remains supported. Include the reason for retaining the unregistered `AgentPlanStrategy` helper and for using seventeen reachable registrations instead of the intake's literal twelve. Leave the broader SKILL-403 supersession and model-extension documentation to subtask 6. The later validate phase runs the focused registry, DI, composition and any needed accepted-session regressions, followed by the required repoTest architecture guards and full project validation. The build phase owns buildability proof. This planning phase runs none of those commands, and tests_executed remains empty.
+
+Across these steps, keep immutable plans, recorded launch assignments, admission, codec, digests, policy/resume identities and capability narrowing unchanged. No durable field or contract-version change is needed. Preserve unrelated workspace edits, including the already modified `E/runloop/state/FeatureTaskRuntimeRunLoopStepBindings.kt`; this subtask does not redesign that owner. Follow the architecture rules summarized in preplan, especially A1/A2 module ownership, A3 composition ownership, A5 deletion, A6 owned wire keys, A7 typed refusals and A8 injected environment. Add no Kotlin line or block comments. Keep directive resources, classifier inputs and launched-model telemetry unchanged. Necessary later review and validation repairs remain allowed within the parent constraints. Do not execute another phase or advance the workflow from this subtask.
