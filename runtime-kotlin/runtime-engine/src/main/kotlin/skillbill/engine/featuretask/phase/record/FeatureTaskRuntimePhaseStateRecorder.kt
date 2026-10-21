@@ -538,9 +538,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
       val existingRecords = decodePhaseRecords(artifacts)
       val previous = existingRecords[request.phaseId]
       if (previous?.status == WorkflowStepStatus.COMPLETED) {
-        val matches = completedPhaseRequestMatches(request, previous)
-        if (matches) settleReviewPhase(unitOfWork, request, phaseSettlementService)
-        return@requiredWrite matches
+        return@requiredWrite completedPhaseRequestMatches(request, previous)
       }
       if (!phaseEventAdmissible(request, previous, phaseStart = false)) return@requiredWrite false
       val updatedRecords =
