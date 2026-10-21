@@ -8,11 +8,14 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckSta
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.infrastructure.sqlite.SqliteFeatureTaskPhaseSettlementRepository
+import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
+import java.nio.file.Files
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,6 +25,32 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FeatureTaskPhaseSettlementServiceTest {
+  @Test
+  fun `accepted and replayed block settlement share one immutable incident`() {
+    val home = Files.createTempDirectory("phase-settlement-block-incident")
+    val database = sqliteSessionFactoryForTests(home, environment = emptyMap(), clock = testHarnessClock)
+    val repository = SqliteFeatureTaskPhaseSettlementRepository(database)
+    val service = FeatureTaskPhaseSettlementService(repository, testHarnessClock, database)
+    val request =
+      FeatureTaskPhaseSettlementBlockRequest(
+        workflowId = "wftr-test",
+        phaseId = "preplan",
+        attempt = 1,
+        reason = "planning input is missing",
+      )
+
+    assertEquals(FeatureTaskPhaseSettlementAckStatus.OK, service.block(request).status)
+    assertEquals(FeatureTaskPhaseSettlementAckStatus.OK, service.block(request).status)
+    assertEquals(
+      FeatureTaskPhaseSettlementAckStatus.ERROR,
+      service.block(request.copy(reason = "a different failure")).status,
+    )
+    val incidents = database.read { it.blockIncidents.pending(8) }
+
+    assertEquals(1, incidents.size)
+    assertEquals("planning input is missing", incidents.single().occurrence.reason)
+  }
+
   @Test
   fun `complete then findEnvelope returns stuffed value`() {
     val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)

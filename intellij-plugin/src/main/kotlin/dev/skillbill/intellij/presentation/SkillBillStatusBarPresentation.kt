@@ -443,7 +443,7 @@ object SkillBillStatusBarPresentation {
             "semantic_loop" -> "$phase loop ${execution.count}"
             "pass" -> "$phase pass ${execution.count}"
             "gate_run" -> "$phase gate ${execution.count}"
-            "attempt" -> "$phase attempt ${execution.count}"
+            "attempt" -> "$phase run ${execution.count}"
             "bounded_edge" -> {
                 val total = execution.total
                 if (total != null) "$phase ${execution.count}/$total" else "$phase ${execution.count}"

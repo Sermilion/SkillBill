@@ -4,9 +4,11 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.UnavailableRejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.UnavailableRejectedOutputDiagnosticRepository
+import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
+import skillbill.ports.blockincident.InMemoryBlockIncidentRepository
 import skillbill.ports.featuretask.UnavailableFeatureTaskPhaseSettlementRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.UnavailableUnaddressedFindingsRepository
@@ -87,6 +89,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
     UnavailableFeatureTaskPhaseSettlementRepository
   open override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository()
   open override val operationProposals: OperationProposalRepository = UnavailableOperationProposalRepository
+  open override val blockIncidents: BlockIncidentRepository = InMemoryBlockIncidentRepository()
 
   override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
 

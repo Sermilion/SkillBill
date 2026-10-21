@@ -17,6 +17,7 @@ dependencies {
   testImplementation(testFixtures(project(":runtime-ports")))
   testFixturesImplementation(project(":runtime-ports"))
   testFixturesImplementation(project(":runtime-contracts"))
+  testFixturesImplementation(project(":runtime-infra:contracts"))
   testFixturesImplementation(project(":runtime-domain"))
   testFixturesImplementation(libs.sqlite.jdbc)
 }

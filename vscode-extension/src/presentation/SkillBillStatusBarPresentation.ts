@@ -462,7 +462,7 @@ function executionWording(execution: CurrentPhaseExecution): string {
     case "gate_run":
       return `${phase} gate ${execution.count}`;
     case "attempt":
-      return `${phase} attempt ${execution.count}`;
+      return `${phase} run ${execution.count}`;
     case "bounded_edge":
       return execution.total !== undefined
         ? `${phase} ${execution.count}/${execution.total}`

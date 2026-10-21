@@ -44,6 +44,57 @@ private val GOAL_REVIEW_POLICY_ARTIFACT_KEY =
 
 class DatabaseMigrationsTest {
   @Test
+  fun `block incident migration upgrades version 65 without changing existing workflows`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-block-incident-upgrade").resolve("upgrade.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feature_task_workflows(workflow_id, mode, contract_version) " +
+            "VALUES ('wftr-existing', 'prose', '1.0')",
+        )
+        statement.execute("DROP TABLE block_incident_aliases")
+        statement.execute("DROP TABLE block_incidents")
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 66")
+        statement.execute("PRAGMA user_version = 65")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-existing'"))
+      assertEquals(66, scalarInt(connection, "PRAGMA user_version"))
+      assertTrue(
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'block_incidents'",
+        ) > 0,
+      )
+    }
+  }
+
+  @Test
+  fun `block incident migration preserves immutable occurrence rows and publishes revisions`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-block-incidents").resolve("incidents.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
+            "observed_at, evidence_availability, deadline) VALUES " +
+            "('bi_${"a".repeat(64)}', '0.1', 1, 'accepted_phase_block', 'original failure', " +
+            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z')",
+        )
+        assertFailsWith<SQLException> {
+          statement.executeUpdate(
+            "UPDATE block_incidents SET reason = 'rewritten failure' WHERE occurrence_token = 'bi_${"a".repeat(64)}'",
+          )
+        }
+      }
+      assertEquals(1, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
+      assertEquals(1, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'phases'"))
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents"))
+    }
+  }
+
+  @Test
   fun `immediate transaction rolls back non SQL failures and remains reusable`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-db-immediate-rollback").resolve("rollback.db")
 
@@ -2150,4 +2201,5 @@ private val expectedMigrationDefinitions =
     63 to "record-standalone-qa-report",
     64 to "record-feature-task-qa-criteria-summary",
     65 to "record-standalone-plan-report",
+    66 to "add-durable-block-incidents",
   )

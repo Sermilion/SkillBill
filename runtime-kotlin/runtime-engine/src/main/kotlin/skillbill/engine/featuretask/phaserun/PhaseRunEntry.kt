@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phaserun
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -46,8 +47,10 @@ class PhaseRunEntry(
   private val agentRunLauncher: AgentRunLauncher,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val standaloneRunners: StandalonePhaseRunners,
+  private val blockIncidentReconciler: BlockIncidentEntryReconciler,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
+    blockIncidentReconciler.reconcileOnEntry()
     if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
     val invocationId = newInvocationId()
     return withStatus(request, invocationId, request.definitionId) { statusRequest ->

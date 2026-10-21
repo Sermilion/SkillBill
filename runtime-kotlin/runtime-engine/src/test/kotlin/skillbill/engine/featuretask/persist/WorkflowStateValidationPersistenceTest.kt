@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.persist
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
@@ -40,6 +41,7 @@ class WorkflowStateValidationPersistenceTest {
         NoopRuntimeDiagnostics,
         WorkflowStateSchemaValidator(),
         "test-runtime-version",
+        BlockIncidentSchemaValidator(),
       )
     database.transaction { unit ->
       unit.workflowStates.saveRecord(

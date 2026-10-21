@@ -10,7 +10,13 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknow
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.BlockIncidentService
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
@@ -29,6 +35,7 @@ import java.time.Clock
 class FeatureTaskPhaseSettlementService(
   private val repository: FeatureTaskPhaseSettlementRepository,
   private val clock: Clock,
+  private val database: DatabaseSessionFactory? = null,
 ) {
   fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment =
     complete(request, repository)
@@ -75,16 +82,45 @@ class FeatureTaskPhaseSettlementService(
         verdict = request.verdict?.takeIf(String::isNotBlank),
         failureDisposition = request.failureDisposition,
       ).envelopeWireMap()
-    return persist(
+    val persistRequest =
       PersistRequest(
         workflowId = request.workflowId,
         phaseId = request.phaseId,
         attempt = request.attempt,
         kind = KIND_BLOCK,
         envelope = envelope,
-      ),
-      repository,
-    )
+      )
+    val sessionFactory = database
+      ?: return persist(persistRequest, repository).let { acknowledgment ->
+        if (acknowledgment.status != FeatureTaskPhaseSettlementAckStatus.OK) {
+          acknowledgment
+        } else {
+          acknowledgment.copy(
+            status = FeatureTaskPhaseSettlementAckStatus.ERROR,
+            diagnosticCode = INCIDENT_CAPTURE_UNAVAILABLE,
+          )
+        }
+      }
+    return sessionFactory.transaction { unitOfWork ->
+      val acknowledgment = persist(persistRequest, unitOfWork.featureTaskPhaseSettlements)
+      if (acknowledgment.status == FeatureTaskPhaseSettlementAckStatus.OK) {
+        BlockIncidentService.observeBlock(
+          unitOfWork.blockIncidents,
+          clock,
+          BlockIncidentObservation(
+            workflowId = request.workflowId,
+            phaseId = request.phaseId,
+            attempt = request.attempt,
+            reason = request.reason,
+            origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+            identityAvailability = BlockIncidentIdentityAvailability.PARTIAL,
+            exitBehavior = BlockIncidentExitBehavior.EXIT_CODE_UNAVAILABLE,
+            failureDisposition = request.failureDisposition,
+          ),
+        )
+      }
+      acknowledgment
+    }
   }
 
   fun findEnvelope(
@@ -195,6 +231,7 @@ class FeatureTaskPhaseSettlementService(
       "no_change is accepted only for implement and audit_implement_fix."
     private const val SUMMARY_MAX_CHARS: Int = 240
     private const val SUMMARY_ELLIPSIS_PREFIX: Int = 237
+    private const val INCIDENT_CAPTURE_UNAVAILABLE = "block_incident_capture_unavailable"
 
     fun isSettleablePhase(phaseId: String): Boolean =
       phaseId in FeatureTaskRuntimePhaseWorkflowDefinition.agentSettledPhaseIds

@@ -14,6 +14,15 @@ import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.persist.workflowStatusFor
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.BlockIncidentService
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReference
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReferenceAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceKind
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceProvenance
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -23,6 +32,7 @@ import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerifica
 import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -53,6 +63,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
+import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
 
@@ -197,6 +208,9 @@ class FeatureTaskRuntimePhaseStateRecorder(
           stepUpdates = stepUpdatesFrom(updatedRecords),
         ),
       )
+      if (request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
+        observeAcceptedBlock(unitOfWork.blockIncidents, request)
+      }
       true
     }
 
@@ -207,6 +221,85 @@ class FeatureTaskRuntimePhaseStateRecorder(
     database.transaction { unitOfWork ->
       requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock) &&
         bindPhaseCoordinates(unitOfWork.workflowStates, request, admitted)
+    }
+
+  internal fun observeAcceptedBlock(
+    repository: BlockIncidentRepository,
+    request: FeatureTaskRuntimePhaseStateRequest,
+    reason: String = request.blockedReason ?: request.failureDisposition?.wireValue.orEmpty(),
+    failureCode: String? = null,
+  ) {
+    BlockIncidentService.observeBlock(
+      repository,
+      clock,
+      BlockIncidentObservation(
+        workflowId = request.workflowId,
+        phaseId = request.phaseId,
+        attempt = request.attemptCount,
+        reason = reason,
+        origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+        identityAvailability = BlockIncidentIdentityAvailability.PARTIAL,
+        exitBehavior = BlockIncidentExitBehavior.EXIT_CODE_UNAVAILABLE,
+        evidenceReferences = request.blockEvidenceReferences(),
+        failureCode = failureCode,
+        failureDisposition = request.failureDisposition?.wireValue,
+      ),
+    )
+  }
+
+  private fun FeatureTaskRuntimePhaseStateRequest.blockEvidenceReferences(): List<BlockIncidentEvidenceReference> {
+    val producerIdentity = resolvedAgentId.takeIf(String::isNotBlank)
+    return buildList {
+      rejectedOutput?.let { output ->
+        add(
+          BlockIncidentEvidenceReference(
+            source = "rejected_phase_output",
+            reference = null,
+            digest = output.sha256Digest(),
+            availability = BlockIncidentEvidenceReferenceAvailability.UNAVAILABLE,
+            kind = BlockIncidentEvidenceKind.REJECTED_OUTPUT_DIAGNOSTIC,
+            provenance = BlockIncidentEvidenceProvenance.REJECTED_OUTPUT,
+            byteSize = output.toByteArray().size.toLong(),
+            sourceIdentity = producerIdentity,
+          ),
+        )
+      }
+      repairEvidence?.let { evidence ->
+        add(
+          BlockIncidentEvidenceReference(
+            source = evidence.sourceLocation.sourceLabel,
+            reference = null,
+            digest = evidence.originalDigest,
+            availability = BlockIncidentEvidenceReferenceAvailability.UNAVAILABLE,
+            kind = BlockIncidentEvidenceKind.PRODUCER_OUTPUT,
+            provenance = BlockIncidentEvidenceProvenance.ORIGINAL_PRODUCER_OUTPUT,
+            sourceIdentity = producerIdentity,
+            sourceOffset = evidence.sourceLocation.offset,
+            sourceLine = evidence.sourceLocation.line,
+            sourceColumn = evidence.sourceLocation.column,
+          ),
+        )
+        add(
+          BlockIncidentEvidenceReference(
+            source = evidence.sourceLocation.sourceLabel,
+            reference = null,
+            digest = evidence.repairedDigest,
+            availability = BlockIncidentEvidenceReferenceAvailability.UNAVAILABLE,
+            kind = BlockIncidentEvidenceKind.PRODUCER_OUTPUT,
+            provenance = BlockIncidentEvidenceProvenance.REPAIRED_PRODUCER_OUTPUT,
+            sourceIdentity = producerIdentity,
+            sourceOffset = evidence.sourceLocation.offset,
+            sourceLine = evidence.sourceLocation.line,
+            sourceColumn = evidence.sourceLocation.column,
+          ),
+        )
+      }
+    }
+  }
+
+  private fun String.sha256Digest(): String =
+    MessageDigest.getInstance("SHA-256").digest(toByteArray()).joinToString("") { byte ->
+      "%02x".format(byte.toInt() and 0xff)
     }
 
   private fun bindPhaseCoordinates(

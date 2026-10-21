@@ -7,6 +7,7 @@ import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
@@ -62,6 +63,7 @@ class FeatureTaskRuntimeRunEntry(
   private val diagnostics: RuntimeDiagnostics,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val repairPersistence: AcceptanceCriterionRepairPersistence,
+  private val blockIncidentReconciler: BlockIncidentEntryReconciler,
 ) {
   private companion object {
     const val MAX_DIAGNOSTIC_ID = 128
@@ -71,6 +73,7 @@ class FeatureTaskRuntimeRunEntry(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
   ): FeatureTaskRuntimeRunReport {
+    blockIncidentReconciler.reconcileOnEntry()
     val request = planningResumeInput(input)
     val goalContinuation = request.goalContinuation
     val scope = routeScope(goalContinuation != null)

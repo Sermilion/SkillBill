@@ -285,6 +285,32 @@ records and commits. The existing scoped-replan liveness and digest checks still
 refuse unsafe changes. Missing specs and invalid planning records stay with their
 existing recovery paths.
 
+## Planning implementability
+
+Preplan checks prerequisite capabilities against authoritative contracts and owning
+source. Bundle planning reconciles requirements across subtasks, and each subtask
+planner checks its final tasks against that evidence before declaring them ready.
+The shared runtime instruction is `slot/plan/planning-feasibility.md` in the engine
+resources; preplan, bundle planning and subtask planning all receive its body,
+including the model-specific strategy variants.
+
+The digest is the starting evidence, not a prohibition on resolving a critical gap.
+Planning may use targeted read-only lookups for a missing or contradictory fact that
+determines implementability. It does not repeat discovery or widen file-write
+ownership. A missing backend capability cannot become an assumption for implement
+to confirm. Local contract changes are valid when their implementations, consumers
+and dependencies are planned. Simulator fixtures do not establish production API
+support, and an unavailable preferred tool need not block another authorized source.
+
+Plans retain a concise criterion-to-evidence and change trace. They reconcile timing,
+failure classification, status precedence and phase authority across tasks and QA
+expectations. Unsupported requirements and unresolved product conflicts are reported
+for a scope decision during planning, before implementation. Operator decisions
+already supplied apply without another approval request. Authorized deferrals remain
+explicitly unclaimed and do not repeatedly block the supported scope. Semantic
+feasibility remains an evidence-based agent check, not a claim that compilation or
+QA ran or a schema validator proved the behavior possible.
+
 ## Acceptance-audit repair planning
 
 The initial `audit` reads every authored acceptance criterion. It records findings

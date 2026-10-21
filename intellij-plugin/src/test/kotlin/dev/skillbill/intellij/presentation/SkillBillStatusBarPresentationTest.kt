@@ -399,8 +399,8 @@ class SkillBillStatusBarPresentationTest {
         val executingMapped = SkillBillStatusBarPresentation.map(executing, now)
         assertFalse(executingMapped.tooltipText.contains("Planning:"))
         assertEquals("Current phase", executingMapped.details.selectedSlotLabel)
-        assertEquals("Implement attempt 1", executingMapped.details.selectedSlotText)
-        assertTrue(executingMapped.barText.contains("Implement attempt 1"))
+        assertEquals("Implement run 1", executingMapped.details.selectedSlotText)
+        assertTrue(executingMapped.barText.contains("Implement run 1"))
     }
 
     @Test
@@ -466,7 +466,7 @@ class SkillBillStatusBarPresentationTest {
             ),
             now,
         )
-        assertEquals("Implement attempt 2", attempt.details.selectedSlotText)
+        assertEquals("Implement run 2", attempt.details.selectedSlotText)
         assertFalse(attempt.details.selectedSlotText!!.contains("/"))
 
         val gate = SkillBillStatusBarPresentation.map(

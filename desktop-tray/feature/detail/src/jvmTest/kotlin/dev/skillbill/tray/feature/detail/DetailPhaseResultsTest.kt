@@ -48,7 +48,7 @@ class DetailPhaseResultsTest {
     onNodeWithText("pass 1 · approved").assertExists()
     onNodeWithText("No production-blocking findings; the retained field values survive a restart.").assertExists()
     onNodeWithText("Reviewed pause-state persistence and the detail query.").assertExists()
-    onNodeWithText("satisfied · 2 attempts").assertExists()
+    onNodeWithText("satisfied · 2 runs").assertExists()
     onNodeWithText("All criteria met.").assertExists()
   }
 

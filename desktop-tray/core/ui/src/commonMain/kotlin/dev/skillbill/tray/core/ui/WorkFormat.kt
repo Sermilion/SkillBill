@@ -33,7 +33,7 @@ fun PhaseExecution.label(): String = when (kind) {
   PhaseExecutionKind.SEMANTIC_LOOP -> "loop $count"
   PhaseExecutionKind.GATE_RUN -> "gate run $count"
   PhaseExecutionKind.BOUNDED_EDGE -> total?.let { "$count/$it" } ?: "edge $count"
-  PhaseExecutionKind.ATTEMPT -> "attempt $count"
+  PhaseExecutionKind.ATTEMPT -> "run $count"
 }
 
 /** A running clock that ticks forward from its last fresh reading and never runs backwards; a stale clock is frozen. */

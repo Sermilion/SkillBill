@@ -17,6 +17,7 @@ import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
 import skillbill.ports.diagnostics.model.evidenceKey
+import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -190,6 +191,36 @@ internal class SqliteRejectedOutputDiagnosticRepository(
       )
     }
 
+  override fun readProducerOutputExact(
+    workflowId: String,
+    phaseId: String,
+    attempt: Int,
+    agentId: String,
+    generation: Int,
+    repairTurn: Int,
+    expectedDigest: String,
+    expectedByteSize: Long,
+  ): ProducerOutputEvidence? =
+    persistence("read-exact-producer-output") {
+      val evidence = connection.queryProducerEvidence(
+        ProducerEvidenceLookup(
+          workflowId = workflowId,
+          phaseId = phaseId,
+          attempt = attempt,
+          agentId = agentId,
+          generation = generation,
+          exactGeneration = true,
+          repairTurn = repairTurn,
+        ),
+      ) ?: return@persistence null
+      if (evidence.sha256 != expectedDigest || evidence.byteSize != expectedByteSize) return@persistence null
+      val payload = evidence.payload ?: return@persistence null
+      if (payload.size.toLong() != expectedByteSize ||
+        payload.sha256Digest() != expectedDigest
+      ) return@persistence null
+      evidence
+    }
+
   override fun deleteProducerOutputsBefore(before: Instant): Int =
     persistence("delete-producer-outputs") {
       connection.prepareStatement("DELETE FROM producer_output_evidence WHERE recorded_at < ?").use {
@@ -354,6 +385,11 @@ private fun Connection.queryProducerEvidence(lookup: ProducerEvidenceLookup): Pr
     it.executeQuery().use { row -> if (row.next()) row.toProducerEvidence() else null }
   }
 }
+
+private fun ByteArray.sha256Digest(): String =
+  MessageDigest.getInstance("SHA-256").digest(this).joinToString("") { byte ->
+    "%02x".format(byte.toInt() and 0xff)
+  }
 
 private fun ResultSet.toProducerEvidence(): ProducerOutputEvidence {
   val workflowId = getString(SharedPayloadKeys.WORKFLOW_ID)

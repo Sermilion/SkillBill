@@ -37,6 +37,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -517,8 +518,27 @@ class AcceptanceCriterionRepairPersistence(
           clock.instant(),
         ),
       )
+      observeSerialBlock(work, next, request.phase)
     }
     return AcceptanceCriterionRepairWriteResult.Committed(detach(next), replay)
+  }
+
+  private fun observeSerialBlock(
+    work: UnitOfWork,
+    next: AcceptanceCriterionRepairState,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+  ) {
+    if (next.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+      val criterion = next.currentCriterionRef ?: next.reservation?.criterionRef ?: "unknown"
+      phases.observeAcceptedBlock(
+        work.blockIncidents,
+        phase,
+        reason = "Acceptance criterion $criterion exhausted its unsuccessful repair budget.",
+        failureCode = AcceptanceCriterionRepairStage.BUDGET_BLOCKED.wireValue,
+      )
+    } else if (phase.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
+      phases.observeAcceptedBlock(work.blockIncidents, phase)
+    }
   }
 
   private fun settlementPatch(

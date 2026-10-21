@@ -60,7 +60,7 @@ class PlanFanOutStrategy(
       PhaseStepPromptSections(
         taskDirective = PLAN_SPEC_DIRECTIVE,
         testValueDiscipline = true,
-        stepContext = AgentPlanStrategy.PHASE_FEASIBILITY_CONSTRAINT,
+        stepContext = "${AgentPlanStrategy.PHASE_FEASIBILITY_CONSTRAINT}\n\n$planningFeasibilityDirective",
       )
     } else {
       plan.promptSections(stepId, inputs)
@@ -216,10 +216,12 @@ class PlanFanOutStrategy(
         "sub-spec named in the planning session context: keep its title, scope, acceptance criteria, " +
         "dependencies, validation strategy, and next path unchanged, and add a non-blank " +
         "\"## Implementation Details\" section holding the ordered tasks, the acceptance criteria each one " +
-        "serves, the paths or symbols it touches, the tests to add or run, and constraints, all from the " +
-        "upstream preplan digest. Never modify the parent spec, a sibling sub-spec, or any other " +
+        "serves, the paths or symbols it touches, the tests to add or run, and constraints, using the " +
+        "upstream preplan digest and any targeted feasibility evidence. Never modify the parent spec, a sibling " +
+        "sub-spec, or any other " +
         "repository file; this directive supersedes any earlier instruction not to modify files. " +
         "Finish with a short prose summary of the plan. " + PREPLAN_DIGEST_AUTHORITY +
-        " " + PLANNING_INSTALL_PROHIBITION + " The assigned sub-spec is the only file this session reads."
+        " " + PLANNING_INSTALL_PROHIBITION + " Read the assigned sub-spec and only the targeted evidence " +
+        "permitted above. Other bundle content is supplied by the runtime."
   }
 }

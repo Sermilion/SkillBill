@@ -58,7 +58,7 @@ class AgentPlanStrategy : PhaseStrategy() {
       testValueDiscipline = true,
       stepContext =
         "$featureSpecDirective\n\n${specBundleRequirement(inputs.specRewritable)}\n\n$MANIFEST_TEMPLATE\n\n" +
-          PHASE_FEASIBILITY_CONSTRAINT,
+          "$PHASE_FEASIBILITY_CONSTRAINT\n\n$planningFeasibilityDirective",
     )
   }
 

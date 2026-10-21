@@ -29,6 +29,8 @@ import skillbill.learnings.model.LearningRecord
 import skillbill.learnings.model.LearningSourceValidation
 import skillbill.learnings.model.RejectedLearningSourceOutcome
 import skillbill.learnings.model.UpdateLearningRequest
+import skillbill.ports.blockincident.BlockIncidentContractValidator
+import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -79,6 +81,7 @@ internal class SQLiteUnitOfWork(
   private val diagnostics: RuntimeDiagnostics,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
+  private val blockIncidentContractValidator: BlockIncidentContractValidator,
   transactionActive: Boolean = false,
   override val databaseFileObservation: DatabaseFileObservation? = null,
 ) : UnitOfWork {
@@ -86,6 +89,8 @@ internal class SQLiteUnitOfWork(
     SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = SqliteFeatureTaskQaOutcomeStore(connection)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
+  override val blockIncidents: BlockIncidentRepository =
+    SqliteBlockIncidentRepository(connection, clock, blockIncidentContractValidator, diagnostics)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)
   override val lifecycleTelemetry: LifecycleTelemetryRepository =

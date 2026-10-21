@@ -370,13 +370,13 @@ private fun LoadedDetail(
           ),
         )
         val attempts = buildList {
-          detail.attempts.phaseAttempts.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Attempts" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
+          detail.attempts.phaseAttempts.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Phase runs" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           detail.attempts.fixIterations.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Fix iterations" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           detail.attempts.findingsInScope?.let { add("Findings in scope" to it.toString()) }
-          detail.attempts.reAttemptCauses.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Re-attempts" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
+          detail.attempts.reAttemptCauses.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Relaunch causes" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           if (detail.attempts.supervisorKills > 0) add("Supervisor kills" to detail.attempts.supervisorKills.toString())
         }
-        MetadataPanel("Attempts and fixes", attempts)
+        MetadataPanel("Runs and fixes", attempts)
         if (detail.validation.isNotEmpty()) {
           LazyColumn(state = validationScroll, modifier = Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             this.item(key = detail.key("validation-header", "")) { DesignLabel("Validation") }
@@ -432,7 +432,7 @@ private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null
 private fun PhaseChip(id: String, complete: Boolean, active: Boolean, attempts: Int) {
   val color = if (active) Color(0xFF14100A) else if (complete) green else dim
   Text(
-    id + if (active && attempts > 1) " · $attempts" else "",
+    id + if (active && attempts > 1) " · $attempts runs" else "",
     Modifier.background(if (active) green else Color.Transparent, RoundedCornerShape(5.dp))
       .border(1.dp, if (complete) green.copy(alpha = .35f) else dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(5.dp))
       .padding(horizontal = 7.dp, vertical = 4.dp),

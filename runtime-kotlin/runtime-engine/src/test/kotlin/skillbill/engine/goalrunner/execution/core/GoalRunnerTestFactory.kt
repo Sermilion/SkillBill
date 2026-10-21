@@ -9,6 +9,7 @@ import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitt
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
@@ -264,6 +265,8 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
         UnavailableDecompositionManifestStore,
       ),
+    blockIncidentReconciler =
+      BlockIncidentEntryReconciler(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
   )
 }
 

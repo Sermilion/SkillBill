@@ -88,7 +88,7 @@ private fun FindingRow(finding: ReviewFinding) {
 
 @Composable
 private fun ConclusionRow(phase: String, conclusion: PhaseConclusion) {
-  val attempts = if (conclusion.attemptCount > 1) "${conclusion.attemptCount} attempts" else null
+  val attempts = if (conclusion.attemptCount > 1) "${conclusion.attemptCount} runs" else null
   PhaseHeading(
     phase,
     listOfNotNull(conclusion.verdict?.let(::wireLabel), attempts).joinToString(" · ").ifEmpty { "completed" },

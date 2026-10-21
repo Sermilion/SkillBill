@@ -74,6 +74,7 @@ import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
@@ -164,8 +165,16 @@ abstract class RuntimeComponent(
     diagnostics: RuntimeDiagnostics,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
     runtimeVersion: RuntimeVersion,
+    blockIncidentContractValidator: BlockIncidentContractValidator,
   ): DatabaseSessionFactory =
-    SQLiteDatabaseSessionFactory(context, clock, diagnostics, workflowSnapshotValidator, runtimeVersion.value)
+    SQLiteDatabaseSessionFactory(
+      context,
+      clock,
+      diagnostics,
+      workflowSnapshotValidator,
+      runtimeVersion.value,
+      blockIncidentContractValidator,
+    )
 
   @Provides
   fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter

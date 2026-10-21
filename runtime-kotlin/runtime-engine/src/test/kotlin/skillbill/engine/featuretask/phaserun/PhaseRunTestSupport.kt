@@ -5,6 +5,7 @@ import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
@@ -128,6 +129,7 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         standaloneMonitorPreparer,
         qaStandalonePhaseRun(gitOperations, qaManifests),
       ),
+    blockIncidentReconciler = BlockIncidentEntryReconciler(database, clock, NoopRuntimeDiagnostics),
   )
 
 internal fun refusingMonitorPreparer(

@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.plan.planningFeasibilityDirective
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -48,7 +49,7 @@ class AgentPreplanStrategy : PhaseStrategy() {
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).preplanCeremony.promptLabel}. Keep the gate real: identify " +
           "concrete scope, affected boundaries, risks, and unknowns at the requested depth.",
-      stepContext = featureSpecIntake,
+      stepContext = "$featureSpecIntake\n\n$planningFeasibilityDirective",
     )
 
   override fun runStep(
@@ -66,8 +67,9 @@ class AgentPreplanStrategy : PhaseStrategy() {
 
     private const val DIRECTIVE: String =
       "Produce the scaled pre-planning digest for the resolved feature size, as prose. Do not modify repository " +
-        "files during this phase. This is the feature's only discovery: the plan phase plans every subtask " +
-        "from this digest and never reads the repository. Write what the plan phase needs: the boundaries the " +
+        "files during this phase. This is the feature's shared discovery: the plan phase plans every subtask " +
+        "from this digest and may verify missing implementability facts through targeted read-only lookups. " +
+        "Write what the plan phase needs: the boundaries the " +
         "change touches, the patterns and decisions that apply, concrete risks, and rollout and validation " +
         "considerations. The digest must carry every fact the plan needs to specify this task: exact paths, " +
         "symbols, and signatures of the code this task changes, the tests that exercise that code, and the " +
@@ -75,7 +77,8 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "scope only when the plan cannot write this task without that fact. Every lookup must answer one " +
         "question this task still has open. If you cannot name that question, do not search or read. A lookup " +
         "that cannot change what the digest says about this task is waste, including a lookup made just in " +
-        "case. Read only files this task directly touches. Do not inventory a type hierarchy, a sibling " +
+        "case. Read only files this task directly touches or needs as prerequisite contract evidence. " +
+        "Do not inventory a type hierarchy, a sibling " +
         "feature, a shared client, a platform wrapper, or a dependency coordinate unless the plan needs that " +
         "fact to specify this task. A wrapper that only forwards a call you have already read is not a new " +
         "question. When the intake names a tracker issue and does not already carry its comments, fetch the " +

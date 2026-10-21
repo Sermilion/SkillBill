@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
 import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
 import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
@@ -51,6 +52,7 @@ class GoalRunner(
   private val perRunLoopAssembler: GoalRunnerPerRunLoopAssembler,
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val intakePreparation: GoalIntakePreparation,
+  private val blockIncidentReconciler: BlockIncidentEntryReconciler,
 ) {
   fun admitIntake(
     intake: String,
@@ -88,6 +90,7 @@ class GoalRunner(
       intakePreparation.prepare(request) == null
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
+    blockIncidentReconciler.reconcileOnEntry()
     val durableState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
     val admittedState =

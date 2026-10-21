@@ -41,6 +41,7 @@ import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
 import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
+import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
@@ -124,6 +125,7 @@ internal class VerifyOperationHarness : AutoCloseable {
       NoopRuntimeDiagnostics,
       WorkflowStateSchemaValidator(),
       "test-runtime-version",
+      BlockIncidentSchemaValidator(),
     )
   private val executor: OperationExecutor
   private val workflows: WorkflowService
