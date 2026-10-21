@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.attempt
 
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
@@ -21,8 +20,6 @@ import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhase
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -232,10 +229,7 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
 
   private fun serialRepairOutput(attempt: AttemptResult): NormalizedFeatureTaskRuntimePhaseOutput? =
     when (attempt) {
-      is AttemptResult.IncompleteWork ->
-        attempt.normalizedOutput.takeIf {
-          it.envelopeWireMap()[SharedPayloadKeys.VERDICT] == FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue
-        }
+      is AttemptResult.IncompleteWork -> attempt.normalizedOutput
       is AttemptResult.RetryableTerminal -> attempt.normalizedOutput
       else -> null
     }

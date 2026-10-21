@@ -144,7 +144,7 @@ data class SubtaskValidation(
   val evidence: List<ValidationCommand>,
   val result: ValidationResult?,
 )
-/** Review passes, the review conclusion, and the audit conclusion of one completed subtask. */
+/** Retained review and audit results of the current subtask or a completed subtask. */
 data class SubtaskPhaseResults(
   val subtaskId: Int,
   val reviewPasses: List<ReviewPass>,

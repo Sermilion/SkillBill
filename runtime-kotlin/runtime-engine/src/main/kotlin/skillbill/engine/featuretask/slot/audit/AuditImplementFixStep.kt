@@ -28,8 +28,7 @@ internal object AuditImplementFixStep : PhaseStepHooks {
     }
     return AttemptResult.incompleteWork(
       "The repair report says production work remains.",
-      "Continue the saved repair plan in the same reservation. " +
-        "Finish all remaining production work before reporting satisfied.",
+      "Settle the unfinished repair against the selected criterion's failure budget before continuing.",
       capture.fileManifest,
       attested,
     )

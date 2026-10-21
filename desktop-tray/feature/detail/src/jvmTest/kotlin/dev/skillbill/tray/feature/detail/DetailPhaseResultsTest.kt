@@ -53,6 +53,20 @@ class DetailPhaseResultsTest {
   }
 
   @Test
+  fun `an active audit repair keeps its failed criterion visible in goal activity`() = runComposeUiTest {
+    showPhaseResults(
+      SubtaskPhaseResults(
+        subtaskId = 1,
+        reviewPasses = emptyList(),
+        audit = PhaseConclusion("advance", "AC-001 remains unresolved.", "AC-001: the caller is not authenticated.", 2),
+      ),
+    )
+
+    onNodeWithText("AC-001 remains unresolved.").assertExists()
+    onNodeWithText("AC-001: the caller is not authenticated.").assertExists()
+  }
+
+  @Test
   fun `review findings render as compact prose under the review heading`() = runComposeUiTest {
     showPhaseResults(
       SubtaskPhaseResults(

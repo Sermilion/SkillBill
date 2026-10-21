@@ -58,7 +58,7 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class FeatureTaskRuntimeSerialRepairTest {
   @Test
-  fun `partial reports and retryable source gap blocks continue one plan without consuming criterion failures`() {
+  fun `unfinished progress reports exhaust the criterion budget instead of continuing indefinitely`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val reservations = mutableListOf<String>()
     var repairs = 0
@@ -81,22 +81,12 @@ class FeatureTaskRuntimeSerialRepairTest {
             "audit_implement_fix" -> {
               repairs++
               reservations += assertNotNull(state?.reservation?.reservationId)
-              assertTrue(assertNotNull(state).unsuccessfulTotals.isEmpty())
-              when (repairs) {
-                1 ->
-                  defaultPhaseOutput(request).replace(
-                    "\"status\": \"completed\",",
-                    "\"status\": \"completed\", \"verdict\": \"progress\",",
-                  )
-                2, 3 ->
-                  """{
-              "contract_version":"0.7","phase_id":"audit_implement_fix","status":"blocked",
-              "failure_disposition":"retryable","summary":"Only one guard was added.",
-              "produced_outputs":{"value":"Source work remains and no external obstacle prevents it."}
-            }"""
-                4 -> defaultPhaseOutput(request)
-                else -> error("The repair should have completed after the fourth source session.")
-              }
+              check(repairs <= 3) { "Unfinished repair reports bypassed the criterion budget." }
+              assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
+              defaultPhaseOutput(request).replace(
+                "\"status\": \"completed\",",
+                "\"status\": \"completed\", \"verdict\": \"progress\",",
+              )
             }
             else -> defaultPhaseOutput(request)
           },
@@ -112,14 +102,15 @@ class FeatureTaskRuntimeSerialRepairTest {
           harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
           worker,
         )
-      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(4, repairs)
-      assertEquals(1, plans)
-      assertEquals(1, reservations.distinct().size)
-      assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
-      assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
-      assertEquals(1, scope.snapshot?.outcomes?.size)
-      assertContains(harness.launchOrder(), "review")
+      assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report")
+      assertContains(report.blockedReason, "three unsuccessful repair attempts")
+      assertEquals(3, repairs)
+      assertEquals(3, plans)
+      assertEquals(3, reservations.distinct().size)
+      assertEquals(3, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
+      assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
+      assertEquals(3, scope.snapshot?.outcomes?.size)
+      assertFalse("review" in harness.launchOrder())
     }
   }
 

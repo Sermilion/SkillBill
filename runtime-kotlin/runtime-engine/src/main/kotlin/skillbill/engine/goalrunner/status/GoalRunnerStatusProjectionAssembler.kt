@@ -150,7 +150,14 @@ class GoalRunnerStatusProjectionAssembler(
             request = request,
             planning = subject.planning,
             validation = subject.validationSubtasks.map(::completedSubtaskValidationFor),
-            phaseResults = subject.validationSubtasks.map { completedSubtaskPhaseResultsFor(it, durableRead) },
+            phaseResults =
+              if (request.includeCompletedSubtaskValidation) {
+                (subject.validationSubtasks + listOfNotNull(subject.current))
+                  .distinctBy { it.id }
+                  .map { subtaskPhaseResultsFor(it, durableRead) }
+              } else {
+                emptyList()
+              },
             goalQaResult = goalQaResult(parentWorkflowId, durableRead),
             currentSubtask = subject.current,
             acceptances = subject.acceptances,
@@ -291,7 +298,7 @@ class GoalRunnerStatusProjectionAssembler(
           },
         phaseResults =
           if (request.includeCompletedSubtaskValidation) {
-            completedSubtaskPhaseResults(manifest, request.completedSubtaskValidationIds, durableRead)
+            subtaskPhaseResults(manifest, currentSubtask, request.completedSubtaskValidationIds, durableRead)
           } else {
             emptyList()
           },
@@ -549,17 +556,21 @@ class GoalRunnerStatusProjectionAssembler(
     )
   }
 
-  private fun completedSubtaskPhaseResults(
+  private fun subtaskPhaseResults(
     manifest: DecompositionManifest,
+    currentSubtask: DecompositionSubtask?,
     selectedIds: Set<Int>?,
     durableRead: GoalRunnerStatusDurableReadTracker,
   ): List<GoalRunnerSubtaskPhaseResults> =
-    manifest.subtasks
-      .filter { selectedIds == null || it.id in selectedIds }
-      .filter { it.status.decompositionStatus() == DecompositionStatus.COMPLETE }
-      .map { subtask -> completedSubtaskPhaseResultsFor(subtask, durableRead) }
+    (
+      manifest.subtasks
+        .filter { selectedIds == null || it.id in selectedIds }
+        .filter { it.status.decompositionStatus() == DecompositionStatus.COMPLETE } + listOfNotNull(currentSubtask)
+    )
+      .distinctBy { it.id }
+      .map { subtask -> subtaskPhaseResultsFor(subtask, durableRead) }
 
-  private fun completedSubtaskPhaseResultsFor(
+  private fun subtaskPhaseResultsFor(
     subtask: DecompositionSubtask,
     durableRead: GoalRunnerStatusDurableReadTracker,
   ): GoalRunnerSubtaskPhaseResults {

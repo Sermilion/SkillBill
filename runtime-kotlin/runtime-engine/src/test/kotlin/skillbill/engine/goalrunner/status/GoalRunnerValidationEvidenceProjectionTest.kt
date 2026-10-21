@@ -185,6 +185,49 @@ class GoalRunnerValidationEvidenceProjectionTest {
     assertFalse(result.degradedDurableRead)
   }
 
+  @Test
+  fun `unfinished subtasks expose failed audit criteria before validation completes`() {
+    listOf("in_progress", "blocked").forEach { status ->
+      val workflowId = "wfl-active-audit-$status"
+      val recorder = goalRunnerDefaultPhaseRecorder()
+      recorder.openTestWorkflow(workflowId, "goal-active-audit-$status")
+      val audit =
+        GoalRunnerPhaseConclusion(
+          "advance",
+          "AC-001 remains unresolved.",
+          "AC-001: the phase still accepts an unauthenticated caller.",
+          2,
+        )
+      recorder.recordPhaseState(
+        phaseConclusionRequest(workflowId, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, audit),
+      )
+      val manifest =
+        completedManifest(workflowId).let { completed ->
+          completed.copy(
+            status = "in_progress",
+            subtasks = completed.subtasks.map { it.copy(status = status, commitSha = null) },
+          )
+        }
+      val service =
+        testGoalRunnerStatusService(
+          manifestStore = InMemoryGoalManifestStore(manifest),
+          outcomeStore = RecordingOutcomeStore(),
+          phaseRecorder = recorder,
+        )
+      val request = GoalRunnerStatusRequest(issueKey = manifest.issueKey, completedSubtaskValidationIds = emptySet())
+      listOf(service.status(request), service.statusForWorkflow("wfl-parent", request)).forEach { projected ->
+        val result = requireNotNull(projected)
+        assertEquals(audit, result.completedSubtaskPhaseResults.single().audit, status)
+        assertEquals(emptyList(), result.completedSubtaskValidation, status)
+        assertEquals(0, result.completeCount, status)
+        assertFalse(result.degradedDurableRead, status)
+      }
+      val board =
+        requireNotNull(service.statusForWorkflow("wfl-parent", request.copy(includeCompletedSubtaskValidation = false)))
+      assertEquals(emptyList(), board.completedSubtaskPhaseResults, status)
+    }
+  }
+
   private val storedQaFindings =
     listOf(
       FeatureTaskQaFinding("F-1", "Login fails.", listOf("AC-001"), listOf("/qa/1.png"), null, FIXED),
