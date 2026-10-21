@@ -77,6 +77,7 @@ data class FeatureTaskRuntimeRunInput(
   val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
   val planIntake: String? = null,
   val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  val inheritRecordedPlanningTimeout: Boolean = false,
 )
 
 data class FeatureTaskRuntimeGoalContinuationContext(

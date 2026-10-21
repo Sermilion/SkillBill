@@ -71,68 +71,73 @@ class FeatureTaskRuntimeRunEntry(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
   ): FeatureTaskRuntimeRunReport {
-    val goalContinuation = input.goalContinuation
+    val request = planningResumeInput(input)
+    val goalContinuation = request.goalContinuation
     val scope = routeScope(goalContinuation != null)
-    val workflowId = input.explicitWorkflowId ?: open(input, scope, onOpenFailure)
+    val workflowId = request.explicitWorkflowId ?: open(request, scope, onOpenFailure)
     statusPublisherFactory.registerWorkflow(
-      repoRoot = input.repoRoot,
-      issueKey = input.issueKey,
+      repoRoot = request.repoRoot,
+      issueKey = request.issueKey,
       workflowId = workflowId,
     )
-    val specPath = Path.of(input.specPath)
+    val specPath = Path.of(request.specPath)
     val effectiveInputs =
       executionPlans.resolveInputs(
-        input.repoRoot,
+        request.repoRoot,
         goalContinuation?.qualityGateSelection,
         goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
-        input.timeout,
+        request.timeout,
         workflowId,
       )
     val identity =
-      repositories.expectedFeatureTaskExecutionIdentity(workflowId, input.issueKey, input.repoRoot, specPath, scope)
+      repositories.expectedFeatureTaskExecutionIdentity(workflowId, request.issueKey, request.repoRoot, specPath, scope)
     return workerCoordinator.runOwned(
       workflowId,
       effectiveInputs,
       identity,
       requestedReviewSelection =
-        (goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode)
+        (goalContinuation?.codeReviewMode ?: request.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
     ) { admittedExecution, acquiredWorker ->
-      val requestedQaSelection = if (goalContinuation != null) goalContinuation.qaSelection else input.qaSelection
+      val requestedQaSelection = if (goalContinuation != null) goalContinuation.qaSelection else request.qaSelection
       if (requestedQaSelection != null && requestedQaSelection != admittedExecution.plan.qaSelection) {
-        return@runOwned changedQaSelectionRefusal(input, acquiredWorker, specPath, admittedExecution)
+        return@runOwned changedQaSelectionRefusal(request, acquiredWorker, specPath, admittedExecution)
       }
-      if (input.explicitWorkflowId != null) {
-        warnIfResumeAssignmentDiffers(input, admittedExecution)
+      if (request.explicitWorkflowId != null) {
+        warnIfResumeAssignmentDiffers(request, admittedExecution)
       }
-      val definition = resolveRunDefinition(input.definition, goalContinuation != null)
+      val definition = resolveRunDefinition(request.definition, goalContinuation != null)
       if (PhaseSlot.INTAKE in definition.slots && !intakeCompleted(workflowId)) {
+        val invariants = intakePassInvariants(request, specPath, admittedExecution)
         val intakeReport =
-          runner.run(
-            runRequest(input, workflowId, admittedExecution, intakePassInvariants(input, specPath, admittedExecution))
-              .copy(stopAfterIntake = true),
-          )
+          runner.run(runRequest(request, workflowId, admittedExecution, invariants).copy(stopAfterIntake = true))
         if (!intakeCompleted(workflowId)) return@runOwned intakeReport
       }
       val sourceRead = runInvariantsSource.read(specPath)
       val sourceInvariants = sourceRead.requireInvariants()
-      val repairState = inspectRepairState(input, acquiredWorker, sourceRead, admittedExecution)
+      val repairState = inspectRepairState(request, acquiredWorker, sourceRead, admittedExecution)
       if (repairState?.historicalAttributionUnavailable() == true) {
-        return@runOwned historicalRepairRefusal(input, acquiredWorker, sourceInvariants)
+        return@runOwned historicalRepairRefusal(request, acquiredWorker, sourceInvariants)
       }
       runner.run(
         runRequest(
-          input,
+          request,
           workflowId,
           admittedExecution,
           sourceInvariants.copy(
             codeReviewMode = admittedExecution.reviewMode ?: sourceInvariants.codeReviewMode,
-            agentAddonSelection = input.agentAddonSelection.persisted,
+            agentAddonSelection = request.agentAddonSelection.persisted,
           ),
         ).copy(acceptanceCriterionRepair = repairState),
         acquiredWorker,
       )
     }
+  }
+
+  private fun planningResumeInput(input: FeatureTaskRuntimeRunInput): FeatureTaskRuntimeRunInput {
+    val workflowId = input.explicitWorkflowId ?: return input
+    if (!input.inheritRecordedPlanningTimeout) return input
+    return input.copy(timeout = executionPlans.planningResumeTimeout(workflowId, input.timeout))
   }
 
   private fun changedQaSelectionRefusal(

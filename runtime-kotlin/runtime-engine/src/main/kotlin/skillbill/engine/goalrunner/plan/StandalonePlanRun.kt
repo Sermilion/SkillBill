@@ -115,7 +115,13 @@ class StandalonePlanRun(
           planWorkflowId,
         )
       }
-      resume(found.candidate, null, repoRoot, { specPath -> withPublisher(inputFor(specPath), publisher) }, publisher)
+      resume(
+        found.candidate,
+        null,
+        repoRoot,
+        { specPath -> withPublisher(inputFor(specPath).copy(inheritRecordedPlanningTimeout = true), publisher) },
+        publisher,
+      )
     }.onFailure(publisher::settleFailure).getOrThrow()
   }
 
@@ -141,7 +147,13 @@ class StandalonePlanRun(
       )
     return runCatching {
       runInternal(issueKey, suppliedIntake, repoRoot, publisher) { specPath ->
-        withPublisher(inputFor(specPath), publisher)
+        val input = inputFor(specPath)
+        withPublisher(
+          input.copy(
+            inheritRecordedPlanningTimeout = launch.scope == IdeStatusLaunchScope.GOAL || input.timeout == null,
+          ),
+          publisher,
+        )
       }
     }.onFailure(publisher::settleFailure).getOrThrow()
   }

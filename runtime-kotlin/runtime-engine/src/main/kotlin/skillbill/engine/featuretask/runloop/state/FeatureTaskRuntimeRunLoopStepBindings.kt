@@ -231,7 +231,7 @@ private open class FeatureTaskRuntimeRunLoopAgentStepBinding(
         edgeIteration = reentry?.edgeIteration,
       )
     val serial = environment.recorder as? AcceptanceCriterionRepairCycleRecords
-    if (serial?.requiresExplicitStart(stepId) == true) {
+    if (iteration > 1 || serial?.requiresExplicitStart(stepId) == true) {
       val start =
         phaseState.copy(
           status = STATUS_RUNNING,

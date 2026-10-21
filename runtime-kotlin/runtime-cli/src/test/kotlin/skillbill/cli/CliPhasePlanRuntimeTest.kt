@@ -28,6 +28,8 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 class CliPhasePlanRuntimeTest {
   private val tempDir: Path = Files.createTempDirectory("skillbill-cli-phase-plan")
@@ -172,6 +174,7 @@ class CliPhasePlanRuntimeTest {
 
     assertEquals(3, result.exitCode, result.stdout + result.stderr)
     assertEquals(PLAN_LAUNCHES, planner.phaseIds)
+    assertTrue(planner.timeouts.all { it == 30.minutes }, planner.timeouts.toString())
     assertEquals(1, goal.childLaunches.size)
     assertEquals(1, rowCount("goal_runner_controls"))
     assertTrue(workflowIdsMentioning(planWorkflowId()).isNotEmpty())
@@ -210,6 +213,100 @@ class CliPhasePlanRuntimeTest {
     assertEquals(3, resumed.exitCode, resumed.stdout + resumed.stderr)
     assertEquals(RESUMED_PLAN_LAUNCHES, planner.phaseIds)
     assertEquals(incompletePlan, planWorkflowId())
+  }
+
+  @Test
+  fun `full run resumes an unfinished standalone plan without replacing its unbounded timeout`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
+    val context = fixture.context(launcher = planner).copy(repositoryRoot = tempDir)
+    val first =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, PLAN_INTAKE, "--agent", "codex"),
+        context,
+      )
+    assertEquals(1, first.exitCode, first.stdout + first.stderr)
+    val workflowId = planWorkflowId()
+    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(planArtifacts())
+    val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+
+    val resumed = runFull(PlanThenGoalLauncher(planner, goal))
+
+    assertEquals(3, resumed.exitCode, resumed.stdout + resumed.stderr)
+    assertEquals(workflowId, planWorkflowId())
+    assertEquals(descriptor, DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(planArtifacts()))
+    assertEquals(RESUMED_PLAN_LAUNCHES, planner.phaseIds)
+    assertTrue(planner.timeouts.all { it == null }, planner.timeouts.toString())
+    assertEquals(PLANNED_UNITS, completedPlanUnitIds())
+    assertEquals(1, goal.childLaunches.size)
+  }
+
+  @Test
+  fun `key-only standalone retry retains the bounded timeout of an unfinished goal plan`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
+    val first = runFull(PlanThenGoalLauncher(planner, GoalFixtureAgentRunLauncher(fixture)))
+    assertEquals(1, first.exitCode, first.stdout + first.stderr)
+    val workflowId = planWorkflowId()
+    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(planArtifacts())
+
+    val resumed =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "--agent", "codex"),
+        fixture.context(launcher = planner).copy(repositoryRoot = tempDir),
+      )
+
+    assertEquals(0, resumed.exitCode, resumed.stdout + resumed.stderr)
+    assertEquals(workflowId, planWorkflowId())
+    assertEquals(descriptor, DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(planArtifacts()))
+    assertEquals(RESUMED_PLAN_LAUNCHES, planner.phaseIds)
+    assertTrue(planner.timeouts.all { it == 30.minutes }, planner.timeouts.toString())
+    assertEquals(PLANNED_UNITS, completedPlanUnitIds())
+  }
+
+  @Test
+  fun `goal spec drift reopens the standalone plan with its saved timeout and retains other planned units`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir)
+    val planned =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, PLAN_INTAKE, "--agent", "codex"),
+        fixture.context(launcher = planner).copy(repositoryRoot = tempDir),
+      )
+    assertEquals(0, planned.exitCode, planned.stdout + planned.stderr)
+    val before = planArtifacts()
+    val records =
+      requireNotNull(
+        JsonCodec.anyToStringAnyMap(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(before)),
+      )
+    val subtask =
+      Files.walk(tempDir.resolve(".feature-specs")).use { paths ->
+        paths.toList().single { it.fileName.toString() == SUBTASK_FILES.getValue(1) }
+      }
+    Files.writeString(
+      subtask,
+      Files.readString(
+        subtask,
+      ).replace("1. Subtask 1 works.", "1. Subtask 1 works with the changed acceptance boundary."),
+    )
+    val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+
+    val resumed = runFull(PlanThenGoalLauncher(planner, goal))
+
+    assertEquals(3, resumed.exitCode, resumed.stdout + resumed.stderr)
+    val after = planArtifacts()
+    assertEquals(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(before),
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(after),
+    )
+    val retained =
+      requireNotNull(
+        JsonCodec.anyToStringAnyMap(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(after)),
+      )
+    listOf("preplan", "plan", "plan_subtasks:2").forEach { assertEquals(records[it], retained[it], it) }
+    assertEquals(listOf("plan_subtasks"), planner.phaseIds.drop(PLAN_LAUNCHES.size))
+    assertTrue(planner.timeouts.all { it == null }, planner.timeouts.toString())
+    assertEquals(1, goal.childLaunches.size)
   }
 
   @Test
@@ -253,6 +350,18 @@ class CliPhasePlanRuntimeTest {
               }
             }
           }.single()
+        }
+      }
+    }
+
+  private fun planArtifacts(): DurableWorkflowArtifacts =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.prepareStatement("SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = ?").use {
+          query ->
+        query.setString(1, planWorkflowId())
+        query.executeQuery().use { rows ->
+          check(rows.next())
+          DurableWorkflowArtifacts.fromAny(JsonCodec.parseValue(rows.getString(1)))
         }
       }
     }
@@ -407,11 +516,13 @@ class CliPhasePlanRuntimeTest {
     private val authorNothingFirst: Boolean = false,
   ) : AgentRunLauncher {
     val phaseIds = CopyOnWriteArrayList<String>()
+    val timeouts = CopyOnWriteArrayList<Duration?>()
 
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
       passThroughResolvedLaunchModel(request)
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
+      timeouts += request.skillRunRequest.timeout
       val phaseId =
         requireNotNull(PHASE_LINE.find(request.skillRunRequest.promptOverride.orEmpty())?.groupValues?.get(1)) {
           "phase plan launched a prompt with no phase header"
@@ -458,6 +569,7 @@ class CliPhasePlanRuntimeTest {
 
   private companion object {
     const val ISSUE_KEY = "SKILL-904"
+    const val PLAN_INTAKE = "Split the work into two parts."
     val PHASE_LINE = Regex("""Phase: (\w+) \(""")
     val SUBTASK_FILES = mapOf(1 to "spec_subtask_1_first-part.md", 2 to "spec_subtask_2_second-part.md")
     val PLAN_LAUNCHES = listOf("preplan", "plan", "plan_subtasks", "plan_subtasks")

@@ -28,9 +28,12 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 @Inject
 class FeatureTaskRuntimeExecutionPlanResolver(
@@ -232,6 +235,23 @@ class FeatureTaskRuntimeExecutionPlanResolver(
   private fun recordedPlan(workflowId: String): ResolvedPhaseExecutionPlan =
     compatibility.requireSupportedComposition(recordedDescriptor(workflowId))
 
+  internal fun planningResumeTimeout(
+    workflowId: String,
+    requestedTimeout: Duration?,
+  ): Duration? {
+    val plan = recordedPlan(workflowId)
+    if (plan.definitionId != SkeletonDefinition.PLAN.id) incompatible("Planning resume requires a plan descriptor.")
+    val settings = plan.effectivePolicySettings ?: incompatible("Recorded execution settings are missing.")
+    val recordedTimeout = settings.phaseTimeoutMillis?.milliseconds
+    if (recordedTimeout != requestedTimeout) {
+      diagnostics.info(
+        "seam=goal_planning_resume_timeout value_used=${settings.phaseTimeoutMillis} " +
+          "value_expected=${requestedTimeout?.inWholeMilliseconds} reason=retain_recorded_policy",
+      )
+    }
+    return recordedTimeout
+  }
+
   private fun recordedDescriptor(workflowId: String): ByteArray? =
     database.read { unit ->
       val descriptor =
@@ -257,12 +277,28 @@ class FeatureTaskRuntimeExecutionPlanResolver(
             recordedInputs.packSlug == null &&
             recordedInputs.declaration == null
         )
-    if (!compatibleQualityGate ||
-      settings.validationDepth != validationDepth ||
-      settings.phaseTimeoutMillis != timeout?.inWholeMilliseconds
-    ) {
-      incompatible()
-    }
+    val mismatches =
+      buildList {
+        if (!compatibleQualityGate) {
+          add(
+            "${Keys.QUALITY_GATE_SELECTION} recorded=${plan.qualityGateSelection?.wireValue} " +
+              "requested=${qualityGate?.wireValue}",
+          )
+        }
+        if (settings.validationDepth != validationDepth) {
+          add(
+            "${Keys.VALIDATION_DEPTH} recorded=${settings.validationDepth.wireValue} " +
+              "requested=${validationDepth.wireValue}",
+          )
+        }
+        if (settings.phaseTimeoutMillis != timeout?.inWholeMilliseconds) {
+          add(
+            "${Keys.PHASE_TIMEOUT_MILLIS} recorded=${settings.phaseTimeoutMillis} " +
+              "requested=${timeout?.inWholeMilliseconds}",
+          )
+        }
+      }
+    if (mismatches.isNotEmpty()) incompatible("Execution settings differ: ${mismatches.joinToString("; ")}.")
   }
 
   private fun listedPaths(inventory: WorkflowGitNameListResult): List<String> =
@@ -271,5 +307,8 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       is WorkflowGitNameListResult.Failed -> incompatible()
     }
 
-  private fun incompatible(): Nothing = throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+  private fun incompatible(detail: String? = null): Nothing =
+    throw IncompatibleFeatureTaskRuntimeExecutionPlanError(
+      detail,
+    )
 }

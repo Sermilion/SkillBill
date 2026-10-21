@@ -28,6 +28,7 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -99,6 +100,30 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         ),
       )
     assertNotEquals(descriptor.artifactValue, validation.artifactValue)
+  }
+
+  @Test
+  fun `explicit resume settings changes identify the field and preserve the recorded descriptor`() {
+    val fixture = Fixture()
+    val resolver = fixture.resolver()
+    val descriptor = fixture.create()
+    fixture.execution.seed(fixture.states, "wftr-settings", descriptor = descriptor.artifactValue)
+    val before = fixture.states.getFeatureTaskWorkflow("wftr-settings")
+
+    val error =
+      assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+        resolver.resolveInputs(
+          root,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          30.minutes,
+          "wftr-settings",
+        )
+      }
+
+    assertContains(error.message.orEmpty(), "phase_timeout_millis recorded=420000 requested=1800000")
+    assertEquals(before, fixture.states.getFeatureTaskWorkflow("wftr-settings"))
+    assertEquals(0, fixture.execution.launches)
   }
 
   @Test

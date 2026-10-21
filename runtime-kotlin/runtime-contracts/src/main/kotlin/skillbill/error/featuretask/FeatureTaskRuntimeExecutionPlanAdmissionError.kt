@@ -4,8 +4,11 @@ import skillbill.error.core.ShellContentContractException
 
 sealed class FeatureTaskRuntimeExecutionPlanAdmissionError(
   val reasonCode: String,
+  detail: String? = null,
 ) : ShellContentContractException(
-    "Durable execution plan refused: $reasonCode. Retain the original workflow and its evidence. " +
+    "Durable execution plan refused: $reasonCode. " +
+      (detail?.let { "$it " } ?: "") +
+      "Retain the original workflow and its evidence. " +
       "Inspect status and use a compatible runtime or a separately reviewed semantic mapping.",
   )
 
@@ -17,6 +20,5 @@ class UnsupportedFeatureTaskRuntimeExecutionPlanError : FeatureTaskRuntimeExecut
   "unsupported_descriptor",
 )
 
-class IncompatibleFeatureTaskRuntimeExecutionPlanError : FeatureTaskRuntimeExecutionPlanAdmissionError(
-  "incompatible_descriptor",
-)
+class IncompatibleFeatureTaskRuntimeExecutionPlanError(detail: String? = null) :
+  FeatureTaskRuntimeExecutionPlanAdmissionError("incompatible_descriptor", detail)
