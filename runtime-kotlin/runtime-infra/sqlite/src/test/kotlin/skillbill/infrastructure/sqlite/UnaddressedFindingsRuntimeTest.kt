@@ -1,5 +1,7 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.ReviewFindingOutcome
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
@@ -9,6 +11,7 @@ import skillbill.review.model.ReviewFindingCitation
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -131,6 +134,14 @@ class UnaddressedFindingsRuntimeTest {
           citations = listOf(ReviewFindingCitation("src/First.kt", 7)),
         )
       val unkeyed = finding(2, "minor", "src/Second.kt:9")
+      connection.prepareStatement(
+        "INSERT INTO review_runs (review_run_id, review_session_id, raw_text) VALUES (?, ?, ?)",
+      ).use { statement ->
+        statement.setString(1, "rvw-1")
+        statement.setString(2, "session-1")
+        statement.setString(3, "review")
+        statement.executeUpdate()
+      }
 
       repository.replaceLedgerForPass("workflow-1", 1, listOf(keyed, unkeyed))
 
@@ -138,6 +149,25 @@ class UnaddressedFindingsRuntimeTest {
       assertEquals(listOf(keyed, unkeyed), ledger, "Both the keyed and the unkeyed row must survive verbatim.")
       assertEquals(null, ledger[1].reviewRunId, "An unimported pass must not be bucketed to a guessed run.")
       assertEquals(null, ledger[1].findingId)
+    }
+  }
+
+  @Test
+  fun `a ledger pass rejects review run ids without a parent before deleting existing rows`() {
+    val dbPath = Files.createTempDirectory("unaddressed-findings-parent").resolve("runtime.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val repository = SQLiteUnaddressedFindingsRepository(connection)
+      val existing = finding(1, "blocker", "src/First.kt:7")
+      repository.replaceLedgerForPass("workflow-1", 1, listOf(existing))
+      val dangling = existing.copy(reviewRunId = "missing-review-run")
+
+      val failure =
+        assertFailsWith<SkillBillRuntimeException> {
+          repository.replaceLedgerForPass("workflow-1", 2, listOf(dangling))
+        }
+      assertEquals(GovernedReviewFailureCode.REVIEW_RUN_PARENT_MISSING, failure.code)
+
+      assertEquals(listOf(existing), repository.fetchLedger("SKILL-135"))
     }
   }
 

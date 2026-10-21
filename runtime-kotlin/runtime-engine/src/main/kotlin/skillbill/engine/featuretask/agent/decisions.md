@@ -1,3 +1,18 @@
+## [2026-10-21] Settle runtime-owned reviews in the phase transaction
+Context: Durable review completion persisted phase records without the settlement trail used by other completed feature-task phases.
+Decision: Reuse FeatureTaskPhaseSettlementService with the active unit-of-work repository after durable phase persistence, for ordinary and goal reviews. Keep review runtime-owned and leave agentSettledPhaseIds unchanged.
+Reason: The existing settlement owner and table already support review. Sharing the transaction keeps phase persistence and settlement atomic without requiring an agent MCP call or introducing another settlement type or table.
+
+## [2026-10-21] Reuse the review telemetry store for durable passes
+Context: Durable feature-task review inherited a no-op recorder, so completed passes could create goal ledger references without review telemetry parents.
+Decision: Import non-empty merged findings through the existing ImportedReview persistence path, then persist pass claims. Empty passes use the existing zero-finding reservation. Keep recording before goal review completion.
+Reason: Review stats already read review_runs and findings. Reusing those owners makes durable passes count without a third findings store or a change to standalone review recording. Delegated pass claims remain safe to repeat through their existing idempotent path.
+
+## [2026-10-21] Reject new review orphans without a ledger foreign key
+Context: Existing operator databases may retain the 30 historical unaddressed_findings orphans identified in the SKILL-433 spec. Their repair belongs to subtask 2.
+Decision: Check every non-null review_run_id at ledger replacement before deleting prior pass rows. Stop with REVIEW_RUN_PARENT_MISSING if any review_runs parent is absent, and leave the database schema unchanged.
+Reason: The writer check covers in-workflow callers and prevents new orphans while preserving existing databases. Adding a foreign key would require resolving historical rows as part of this subtask.
+
 ## [2026-10-19] Reserve atomic-write suffix space in generated spec names
 Context: Long feature and subtask titles exceed filesystem component limits, and atomic writes append a temporary suffix to the generated filename.
 Decision: Use one 230-byte UTF-8 component budget, retaining the full issue prefix and fixed suffix. Hash oversized normalized slugs with 16 SHA-256 hex characters; use the final names for planned paths, writes, manifest references and links.

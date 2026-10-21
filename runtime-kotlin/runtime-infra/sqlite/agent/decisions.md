@@ -1,5 +1,11 @@
 # SQLite boundary decisions
 
+## [2026-10-21] Retain unrestorable historical review ledger orphans
+Context: SKILL-433 identifies 30 unaddressed_findings rows from 13-20 Oct 2026 whose 10 review_run_ids have no recoverable review_runs parents or mapped findings.
+Decision: Preserve those ledger rows without empty parent backfill or a foreign key on unaddressed_findings.review_run_id. Keep review stats reading findings and retain the write-path parent check for new rows.
+Reason: Empty parents would report zero findings for runs whose ledger holds 30 findings. Deletion would discard evidence, and a new foreign key would prevent migration of the motivating operator database.
+Revisit when: Retained artifacts identify the exact historical run ids and map to real ImportedFinding rows, permitting a genuine backfill.
+
 ## [2026-10-18] Close the maintenance audit with regressions, not a production repair
 Context: SKILL-422 subtask 3 audited reinstall, uninstall and maintenance against SQLite data, WAL, SHM, journals and backups.
 Decision: Keep install.sh preservation and destructive shell and application uninstall unchanged. Add integrity and exact-row regressions and record F13-F15 as verified no-finding rows.

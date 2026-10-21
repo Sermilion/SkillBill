@@ -63,6 +63,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredPro
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.nio.file.Path
@@ -188,6 +189,11 @@ internal class DurablePhaseRunRecords(
     recorder.loadPhaseRecords(workflowId)
 
   override fun loadQaRepairState(workflowId: String): QaRepairState? = recorder.loadQaRepairState(workflowId)
+
+  override fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry? =
+    recorder.loadOperatorBlockRetry(
+      workflowId,
+    )
 
   override fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
     admitted.ownedWrite({ recorder.completeOwnedGoalReviewPhase(completion, it) }) {

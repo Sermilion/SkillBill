@@ -940,12 +940,23 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
         attemptCount = iteration,
         resolvedAgentId = priorRecord?.resolvedAgentId ?: "user-directed",
         finished = true,
+        reviewPassNumber = reviewPassNumber,
         outputArtifact = normalizedOutput.canonicalJson,
         normalizedOutput = normalizedOutput,
         repairEvidence = null,
         loopId = reentry?.loopId,
         edgeIteration = reentry?.edgeIteration,
       )
+    val start =
+      phaseState.copy(
+        status = STATUS_RUNNING,
+        finished = false,
+        normalizedOutput = null,
+        outputArtifact = null,
+      )
+    check(environment.recorder.recordRequiredPhaseStart(start) is RequiredPhaseWrite.Acknowledged) {
+      "Carried-forward goal review could not acquire its accounting start."
+    }
     val persisted =
       environment.coupledRunTransitions.persistCarriedForwardPhaseCompletion(
         recorder = environment.recorder,

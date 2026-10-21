@@ -44,6 +44,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -80,6 +81,8 @@ internal class InMemoryPhaseRunRecords private constructor(
   private var qaState: QaRepairState? = null
 
   override fun loadQaRepairState(workflowId: String): QaRepairState? = qaState
+
+  override fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry? = null
 
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,

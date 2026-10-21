@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.runloop.durable
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.idestatus.AgentActivityStampWriter
+import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
@@ -32,14 +34,18 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
+import skillbill.review.model.ImportedFinding
+import skillbill.review.model.ImportedReview
+import skillbill.review.model.ReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.time.Clock
 
 internal class FeatureTaskRuntimeRunLoopDurableState(
   override val progress: FeatureTaskRuntimeRunState,
-  override val session: FeatureTaskRuntimeRunLoopSession,
   override val telemetry: FeatureTaskRuntimeRunObservability,
   override val specSource: SpecSource,
   private val executionPlan: ResolvedPhaseExecutionPlan,
@@ -48,8 +54,19 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override val settlements: PhaseRunSettlements,
   override val checkpoints: PhaseRunCheckpoints,
   private val launch: FeatureTaskRuntimeRunLoopDurableLaunch,
+  private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
   override val clock: Clock,
 ) : PhaseRunState {
+  override val session: FeatureTaskRuntimeRunLoopSession =
+    FeatureTaskRuntimeRunLoopSession(
+      operatorBlockRetry =
+        telemetry.recorder.loadOperatorBlockRetry(telemetry.request.workflowId)?.takeIf { retry ->
+          progress.phase(retry.phaseId).record?.status.let { status ->
+            status == null || status.workflowStepStatus() == WorkflowStepStatus.PENDING
+          }
+        },
+      initialPendingReentry = null,
+    )
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
   override var commitPushManifestCompletion: CommitPushManifestCompletion? = null
   private val facts get() = telemetry.request
@@ -70,6 +87,40 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
   override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
+
+  override fun recordReviewRun(
+    reviewRunId: String,
+    result: ParallelCodeReviewResult,
+    laneTelemetryRecorded: Boolean,
+  ) {
+    val findings = result.mergeResult.findings
+    if (findings.isNotEmpty()) {
+      reviewResultAssembly.saveImportedReview(
+        ImportedReview(
+          reviewRunId = reviewRunId,
+          reviewSessionId = result.reviewSessionId ?: reviewRunId,
+          rawText = result.mergeResult.formattedOutput,
+          routedSkill = result.routedSkill,
+          detectedScope = null,
+          detectedStack = null,
+          executionMode = ReviewExecutionMode.UNRESOLVED,
+          specialistReviews = findings.flatMap { it.specialistSkillNames }.distinct(),
+          findings =
+            findings.map { finding ->
+              ImportedFinding(
+                findingId = finding.fNumber,
+                severity = finding.severity.displayName,
+                confidence = finding.confidence,
+                location = finding.location,
+                description = finding.description,
+                findingText = "${finding.fNumber} ${finding.description}",
+              )
+            },
+        ),
+      )
+    }
+    reviewResultAssembly.persistReviewPassClaims(reviewRunId, findings, persistEmpty = true)
+  }
 
   override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, run)
 

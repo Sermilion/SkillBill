@@ -1,6 +1,8 @@
 package skillbill.infrastructure.sqlite.goal
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.review.model.ReviewFindingCitation
@@ -12,6 +14,19 @@ internal class UnaddressedFindingsLedgerRuntime(private val connection: Connecti
     reviewPassNumber: Int,
     findings: List<UnaddressedFinding>,
   ) {
+    findings.mapNotNull(UnaddressedFinding::reviewRunId).distinct().forEach { reviewRunId ->
+      connection.prepareStatement("SELECT 1 FROM review_runs WHERE review_run_id = ? LIMIT 1").use { statement ->
+        statement.bindAll(reviewRunId)
+        statement.executeQuery().use { rows ->
+          if (!rows.next()) {
+            throw SkillBillRuntimeException(
+              GovernedReviewFailureCode.REVIEW_RUN_PARENT_MISSING,
+              "Cannot replace an unaddressed-findings pass for missing review run '$reviewRunId'.",
+            )
+          }
+        }
+      }
+    }
     deletePassesUpTo(workflowId, reviewPassNumber)
     connection.prepareStatement(
       """
