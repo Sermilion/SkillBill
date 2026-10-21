@@ -3371,3 +3371,7 @@ Context: SKILL-429 could not restart from the desktop after cancellation. The la
 Decision: `WorkRunActions.restartCanceled` uses the existing accepted snapshot mutation for abandoned parent and current child workflows. The transaction retains cancellation telemetry, workflow reopening and pause clearing together. Ordinary writes still reject terminal outcome replacement.
 
 Evidence: `WorkRunActionsTest` cancels real SQLite parent and child snapshots, restarts them through the work action, and checks that both reopen with their saved phase, steps and artifacts intact. It also checks that the goal leaves the canceled state and clears its pause.
+
+## [2026-10-21] Clear prior goal failures after accepting a resumed run
+
+A resumed goal clears its retained blocked reason only after it owns execution and enters the prepared run. Refused admission preserves the previous reason. A live finalization step overrides a historically blocked work record in IDE status, board, and detail. Current operator decision pauses still apply. This prevents an earlier push timeout from describing a resumed CI monitor as blocked.

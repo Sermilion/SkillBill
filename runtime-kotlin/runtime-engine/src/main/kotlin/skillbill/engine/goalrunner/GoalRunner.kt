@@ -256,6 +256,9 @@ class GoalRunner(
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
     val telemetryEmitter = GoalRunnerTelemetryEmitter(telemetry, clock, state)
     return runCatching {
+      manifestStore.updateControlState(state.parentWorkflowId) { current ->
+        current.copy(goalBlockedReason = null)
+      }
       telemetryEmitter.goalStarted()
       pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
         val pausedReport = requireNotNull(paused.report)

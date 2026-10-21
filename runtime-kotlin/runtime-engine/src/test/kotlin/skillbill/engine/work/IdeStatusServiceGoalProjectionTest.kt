@@ -910,6 +910,57 @@ class IdeStatusServiceGoalProjectionTest {
     assertNull(detail.finishedAtSource)
   }
 
+  @Test
+  fun `live monitor keeps a historically blocked parent active in status board and detail`() {
+    val fixture = gitRepoFixture("ide-status-blocked-parent-monitor", branch = "feat/SKILL-148-status-fix")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val original = zeroAc46Database(identity, includeFeatureGoalWorkItem = true)
+    val database =
+      TrackingDatabase(
+        work = original.work.filter { it.workflowId == "goal-1" }.map { it.copy(currentState = "blocked") },
+        workflows = original.workflows,
+        controls =
+          object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+            override fun controlState(parentWorkflowId: String) =
+              GoalRunnerControlState(repositoryIdentity = identity, goalBlockedReason = "git push timed out after 600s")
+          },
+      )
+    val service =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            zeroAc46ManifestState(fixture, identity),
+            planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+            lease = liveLease(),
+          ),
+        outcomeStore =
+          object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+            override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
+              parkedParentFinalizationProgress()
+                .takeIf { workflowId == "goal-1" }
+          },
+      )
+    val status = service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+    val board = service.board(WorkBoardRequest(observedAt = ideStatusObservedAt))
+    val boardItem = board.items.single { it.snapshot.workflowId == "goal-1" }
+    val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+    listOf(status.snapshot, boardItem.snapshot, detail.snapshot).forEach { snapshot ->
+      assertEquals(IdeStatusLifecycleState.ACTIVE, snapshot.lifecycleState)
+      assertEquals("monitor", snapshot.currentStep.id)
+      assertEquals("Goal SKILL-148 is active on monitor.", snapshot.summary)
+      assertNull(snapshot.pauseReason)
+      assertEquals(2, snapshot.progress?.completed)
+      assertEquals(2, snapshot.progress?.total)
+    }
+    assertNull(boardItem.finishedAt)
+    assertNull(boardItem.finishedAtSource)
+    assertNull(detail.exactPauseReason)
+    assertNull(detail.finishedAt)
+    assertNull(detail.finishedAtSource)
+  }
+
   private fun assertZeroAc46MonitorProjection(includeFeatureGoalWorkItem: Boolean) {
     val featureBranch = "feat/SKILL-148-status-fix"
     val fixture = gitRepoFixture("ide-status-0ac-46-$includeFeatureGoalWorkItem", branch = featureBranch)

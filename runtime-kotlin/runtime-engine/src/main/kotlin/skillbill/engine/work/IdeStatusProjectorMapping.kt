@@ -163,6 +163,18 @@ internal fun goalShowsOpenCiMonitor(
     projection.currentStep in setOf(OPEN_CI_MONITOR_STEP, "monitor_fix") &&
     lifecycle == IdeStatusLifecycleState.ACTIVE
 
+internal fun goalProjectsLiveResume(
+  lifecycle: IdeStatusLifecycleState,
+  projection: GoalRunnerStatusProjection?,
+): Boolean {
+  if (projection == null || projection.executionLiveness != ExecutionLiveness.LIVE || projection.paused) return false
+  return when (lifecycle) {
+    IdeStatusLifecycleState.PAUSED -> true
+    IdeStatusLifecycleState.BLOCKED -> goalProjectsLiveFinalizationStep(projection)
+    else -> false
+  }
+}
+
 internal fun goalProjectsLiveFinalizationStep(projection: GoalRunnerStatusProjection?): Boolean {
   if (projection == null || projection.executionLiveness != ExecutionLiveness.LIVE) return false
   if (!goalStaysOnOpenCiMonitor(projection)) return false

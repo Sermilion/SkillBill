@@ -1836,6 +1836,7 @@ class GoalRunnerLinearScratchFinalizeTest {
                   "CI still fails after three repairs",
                 )
               } else {
+                assertNull(store.controlState.goalBlockedReason)
                 PhaseRunResult.Completed("goal-monitor", listOf("monitor"), null, "CI passed")
               }
             },
@@ -1848,6 +1849,7 @@ class GoalRunnerLinearScratchFinalizeTest {
     assertEquals("monitor", stopped.stop.lastResumableStep)
     assertEquals(requireNotNull(store.loadByIssueKey("SKILL-56", repoRoot)).parentWorkflowId, stopped.stop.workflowId)
     assertContains(stopped.stop.blockedReason, "CI still fails")
+    assertEquals(stopped.stop.blockedReason, store.controlState.goalBlockedReason)
     assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
     assertIs<GoalRunnerRunReport.Completed>(runner.run(request))
     assertEquals(2, monitorAttempts)
@@ -2246,7 +2248,12 @@ class GoalRunnerPauseLaunchBoundaryTest {
 
   @Test
   fun `an already-running execution lease reports a blocked stop without entering the goal body`() {
-    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val previousReason = "Prior push failure"
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1),
+        initialControlState = GoalRunnerControlState(goalBlockedReason = previousReason),
+      )
     val launcher = RecordingSubtaskLauncher { launchFacts() }
     val reason = "Goal parent 'parent' cannot start: another goal runner process is live"
     val alreadyRunning =
@@ -2286,6 +2293,7 @@ class GoalRunnerPauseLaunchBoundaryTest {
     assertEquals(reason, stop.blockedReason)
     assertEquals("plan", stop.lastResumableStep)
     assertTrue(launcher.requests.isEmpty())
+    assertEquals(previousReason, store.controlState.goalBlockedReason)
   }
 
   private fun runRequest(): GoalRunnerRunRequest =

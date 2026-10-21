@@ -377,9 +377,7 @@ class IdeStatusProjector(
     if (completionRecorded || candidateLifecycle == IdeStatusLifecycleState.TERMINAL) {
       return IdeStatusLifecycleState.TERMINAL
     }
-    if (candidateLifecycle == IdeStatusLifecycleState.PAUSED &&
-      projection?.executionLiveness == ExecutionLiveness.LIVE && !projection.paused
-    ) {
+    if (goalProjectsLiveResume(candidateLifecycle, projection)) {
       return IdeStatusLifecycleState.ACTIVE
     }
     return when {
