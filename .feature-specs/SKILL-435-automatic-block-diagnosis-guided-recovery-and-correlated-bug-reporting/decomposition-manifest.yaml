@@ -1,0 +1,72 @@
+---
+contract_version: '0.5'
+issue_key: SKILL-435
+feature_name: automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting
+parent_spec_path: .feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec.md
+status: pending
+execution_model: same_branch_commit_per_subtask
+base_branch: main
+feature_branch: feat/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: start
+subtasks:
+- id: 1
+  name: Durable block incidents and automatic investigation scheduling
+  spec_path: .feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec_subtask_1_durable_block_incidents.md
+  status: pending
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 2
+  name: Evidence-based diagnosis and fenced guided recovery
+  spec_path: .feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec_subtask_2_diagnosis_and_safe_recovery.md
+  status: pending
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+- id: 3
+  name: Sanitized correlated product-defect reporting
+  spec_path: .feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec_subtask_3_sanitized_correlated_reports.md
+  status: pending
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+  - subtask_id: 2
+    optional: false
+    skipped: false
+- id: 4
+  name: Shared terminal and accessible desktop incident activity
+  spec_path: .feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec_subtask_4_shared_incident_activity.md
+  status: pending
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+  - subtask_id: 2
+    optional: false
+    skipped: false
+  - subtask_id: 3
+    optional: false
+    skipped: false
