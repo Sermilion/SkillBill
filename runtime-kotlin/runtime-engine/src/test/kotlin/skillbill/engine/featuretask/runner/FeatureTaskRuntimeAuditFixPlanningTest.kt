@@ -1,8 +1,11 @@
 package skillbill.engine.featuretask.runner
 
+import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -11,6 +14,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class FeatureTaskRuntimeAuditFixPlanningTest {
+  @TempDir
+  lateinit var legacySpecRepo: Path
+
   @Test
   fun `a confirmed no-change claim completes audit then runs review and validation without approval`() {
     val launcher =
@@ -21,7 +27,10 @@ class FeatureTaskRuntimeAuditFixPlanningTest {
           else -> facts(defaultPhaseOutput(request))
         }
       }
-    val harness = runnerHarness(RuntimeHarnessConfig(launcher = launcher))
+    val spec = legacySpecRepo.resolve(SPEC_REFERENCE)
+    Files.createDirectories(spec.parent)
+    Files.writeString(spec, "# Legacy spec\n\n## Intended Outcome\nClaim the source already satisfies the spec.\n")
+    val harness = runnerHarness(RuntimeHarnessConfig(repoRoot = legacySpecRepo, launcher = launcher))
 
     val report = harness.runner.run(harness.request())
 

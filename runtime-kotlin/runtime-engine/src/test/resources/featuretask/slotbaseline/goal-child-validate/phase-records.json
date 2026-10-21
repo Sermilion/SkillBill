@@ -34,7 +34,7 @@
         "status": "completed"
     },
     "implement": {
-        "attempt_count": 1,
+        "attempt_count": 4,
         "contract_version": "0.2",
         "duration_millis": "__NORMALIZED_DURATION__",
         "execution_origin": "agent-executed",
@@ -46,7 +46,7 @@
         ],
         "finished_at": "__NORMALIZED_TIMESTAMP__",
         "first_started_at": "__NORMALIZED_TIMESTAMP__",
-        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"implement\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture implement prose for downstream audit.\"}}",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"implement\",\"status\":\"completed\",\"summary\":\"Implement closed 2 acceptance criteria one at a time.\",\"produced_outputs\":{\"value\":\"Implement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\\n\\nAC-001\\nWorker 1: Fixture implement prose for downstream audit.\\n\\nAC-002\\nWorker 1: Fixture implement prose for downstream audit.\"}}",
         "phase_id": "implement",
         "record_kind": "private_phase_record",
         "resolved_agent_id": "agent-implement",

@@ -8,13 +8,17 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeGoalContinuationArtifactFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeHandoffEnvelopeFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
+import skillbill.workflow.taskruntime.artifact.toImplementationProgress
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.nio.file.Path
 import kotlin.test.assertEquals
@@ -76,6 +80,13 @@ class FeatureTaskRuntimeWorkflowPersistenceSeamTest {
           gateRuns = emptyList(),
         ).asWorkflowArtifactEntry(),
       decode = { raw -> requireNotNull(decodeValidationGateProgressFromArtifact(raw)) },
+    )
+    val progress = FeatureTaskRuntimeImplementationProgress(listOf("AC-001", "AC-002"), 1, 2)
+    assertFamilyRoundTrip(
+      key = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS.label(),
+      expected = progress,
+      wire = progress.asImplementationProgressWireMap(),
+      decode = { raw -> FeatureTaskRuntimeWorkflowArtifactMap.from(raw).toImplementationProgress("seam") },
     )
     assertFamilyRoundTrip(
       key = "handoff_envelope",

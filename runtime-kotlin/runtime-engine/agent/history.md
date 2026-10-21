@@ -1,3 +1,16 @@
+## [2026-10-21] SKILL-436 subtask 1: implement one acceptance criterion at a time
+Areas: runtime-engine featuretask slot/implementation, slot/attempt, slot/state, phase/record, persist, runloop, phaserun; runtime-domain taskruntime persistence and wire; runtime-contracts featuretask keys and failure codes; runtime-infra/contracts; orchestration/contracts; runtime-application testFixtures
+- Implement now walks the spec's acceptance criteria in order. Each criterion gets a fresh worker, then a fresh read-only check. A satisfied check that edited nothing closes it; an unsatisfied check hands short gap prose to the next fresh worker.
+- New workflow artifact feature_task_runtime_implementation_progress 0.1 holds criterion_ids, current_index, worker_count, closed_ids and launch_count. The phase state recorder reserves a worker before launch and closes and advances in one owned transaction. Corrupt progress fails with INVALID_IMPLEMENTATION_PROGRESS_SCHEMA.
+- ImplementationCriterionHooks drives the loop through the new PhaseStepLaunchHooks.admitLaunch and settles at settleCompletedRound. ImplementationCriterionCatalog parses criteria with PlanBundleSpecText.acceptanceCriteriaOf and must match the run-invariant IDs exactly, or the step blocks with process_failure. reusable
+- The fourth worker on one criterion blocks with needs_user_action naming the criterion and latest gap. An ordinary restart keeps the spent budget; an explicit operator retry grants three more once.
+- A check with no verdict and no edits relaunches a read-only check, capped at 3 per worker by CHECK_VERDICT_REJECTION. Every criterion turn counts as a continuation segment.
+- Pattern: PhaseImplementationProgressRecords members sit in delegate classes on the in-memory and durable PhaseRunRecords, the same by-delegation the records already use.
+- Legacy path stays for specs with no parseable criteria, reentry, acceptance repair and blank-workflow runs. The empty-diff gate stays at commit.
+- Limits: checker edits stay in the working tree and only block closure. The 64-entry attempt history can trim early worker summaries from the final receipt. Default runner harness specs now carry criteria, so tests that assume a single implement launch need explicit legacy specs.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate ran full check green)
+
 ## [2026-10-18] SKILL-422 subtask 3: validate repairs to fencing, leases and status
 Areas: runtime-engine featuretask phase record and persist, goalrunner repair, status and execution; runtime-engine work; runtime-domain WorkflowEngine; runtime-ports WorkflowStateRepository; runtime-infra/sqlite workflow and worker stores
 - New WorkflowStateRepository.saveAcceptedSnapshotMutation persists engine-accepted operator or repair snapshots, including terminal replacement. Ordinary save and saveOrdinary still refuse. The repair wedge loop and artifact patches use it.

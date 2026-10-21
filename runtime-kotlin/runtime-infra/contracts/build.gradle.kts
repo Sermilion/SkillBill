@@ -218,6 +218,11 @@ governedResources {
     "SKILL-150: canonical implementation-attempt schema",
   )
   copy(
+    "copyFeatureTaskRuntimeImplementationProgressSchema",
+    "feature-task-runtime-implementation-progress-schema.yaml",
+    "SKILL-436: canonical implementation-progress schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeCheckpointIdentitySchema",
     "feature-task-runtime-checkpoint-identity-schema.yaml",
     "SKILL-150: canonical checkpoint-identity schema",

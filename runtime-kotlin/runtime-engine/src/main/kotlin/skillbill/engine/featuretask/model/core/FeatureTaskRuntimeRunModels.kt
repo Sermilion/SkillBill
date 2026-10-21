@@ -15,6 +15,7 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnRole
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -371,3 +372,18 @@ data class FeatureTaskRuntimeImplementationContinuation(
   val latestPrompt: String?,
   val failureDisposition: String?,
 )
+
+data class FeatureTaskRuntimeImplementationTurn(
+  val role: FeatureTaskRuntimeImplementationTurnRole,
+  val criterionId: String,
+  val criterion: String,
+  val worker: Int,
+  val specReference: String,
+  val latestGap: String?,
+) {
+  init {
+    require(role.launch) { "An implementation turn is a worker or a check launch, was ${role.wireValue}." }
+  }
+
+  val check: Boolean get() = role == FeatureTaskRuntimeImplementationTurnRole.CHECK_LAUNCH
+}

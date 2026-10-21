@@ -4,6 +4,7 @@ import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationTurn
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -15,6 +16,7 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -183,6 +185,42 @@ internal interface PhaseStepLaunchHooks {
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
   ) = Unit
+
+  /**
+   * Whether attempt [iteration] of [run] launches, once its required start is acknowledged and before launch
+   * preparation composes its prompt. A step that owns durable turn accounting reserves the turn here.
+   */
+  fun admitLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    state: PhaseAcceptedStepExecution,
+    iteration: Int,
+  ): PhaseLaunchAdmission = PhaseLaunchAdmission.Launch
+
+  /** The implementation turn admitted attempt [iteration] of [run] launches, or null when it launches no turn. */
+  fun implementationTurn(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    iteration: Int,
+  ): FeatureTaskRuntimeImplementationTurn? = null
+}
+
+/** What a step decides about one attempt before launch preparation. */
+internal sealed interface PhaseLaunchAdmission {
+  data object Launch : PhaseLaunchAdmission
+
+  data class Block(
+    val reason: String,
+    val disposition: FeatureTaskRuntimeFailureDisposition,
+  ) : PhaseLaunchAdmission
+
+  data class WriteRejected(
+    val rejection: RequiredPhaseWrite.Rejected,
+  ) : PhaseLaunchAdmission
+
+  data class Settled(
+    val outcome: PhaseOutcome,
+  ) : PhaseLaunchAdmission
 }
 
 internal data class PhaseLaunchReviewTier(
@@ -229,4 +267,12 @@ internal fun NormalizedFeatureTaskRuntimePhaseOutput.withMeasuredFacts(
   return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
 }
 
-internal enum class PhaseStepHookContextKind { COMMON, AUDIT, COMMIT, FINDING_VERIFICATION, PULL_REQUEST, PLANNING }
+internal enum class PhaseStepHookContextKind {
+  COMMON,
+  AUDIT,
+  COMMIT,
+  FINDING_VERIFICATION,
+  IMPLEMENTATION,
+  PULL_REQUEST,
+  PLANNING,
+}

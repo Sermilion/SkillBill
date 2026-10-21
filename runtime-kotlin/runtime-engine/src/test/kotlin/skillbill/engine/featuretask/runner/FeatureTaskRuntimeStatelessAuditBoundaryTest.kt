@@ -126,7 +126,7 @@ class FeatureTaskRuntimeStatelessAuditBoundaryTest {
       assertEquals(2, auditLaunches)
       assertEquals(repairAttemptsBeforeResume + 1, repairLaunches)
       assertEquals(CRITERIA, checked)
-      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement" })
+      assertEquals(HARNESS_CRITERION_IMPLEMENT_TURNS, harness.launchedPromptPhaseOrder().count { it == "implement" })
     } finally {
       root.toFile().deleteRecursively()
     }
@@ -151,7 +151,7 @@ class FeatureTaskRuntimeStatelessAuditBoundaryTest {
     val record = requireNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
     assertEquals(FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION, record.failureDisposition)
     assertTrue("audit" !in result.completedPhaseIds)
-    assertEquals(listOf("implement", "simplify", "audit"), harness.launchedPromptPhaseOrder())
+    assertEquals(HARNESS_CRITERION_IMPLEMENT_ORDER + listOf("simplify", "audit"), harness.launchedPromptPhaseOrder())
   }
 
   @Test

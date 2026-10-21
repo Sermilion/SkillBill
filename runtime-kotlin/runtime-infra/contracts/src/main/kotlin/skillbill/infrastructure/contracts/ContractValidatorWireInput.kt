@@ -13,6 +13,7 @@ import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeBuildReceiptSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationAttemptSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationProgressSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePersistenceSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeProjectionMeasurementSchema
@@ -116,5 +117,7 @@ private fun serialWireArtifactNonObjectError(
       invalidAcceptanceCriterionRepairAdoptionSchema(sourceLabel, reason)
     FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE ->
       invalidQaRepairStateSchema("$sourceLabel: $reason")
+    FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS ->
+      invalidFeatureTaskRuntimeImplementationProgressSchema(sourceLabel = sourceLabel, reason = reason)
     else -> error("Unexpected non-serial wire artifact $kind")
   }

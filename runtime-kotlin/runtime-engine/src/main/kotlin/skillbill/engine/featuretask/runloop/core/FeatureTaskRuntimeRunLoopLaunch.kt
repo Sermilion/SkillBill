@@ -68,6 +68,11 @@ internal sealed interface AttemptResult {
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   ) : AttemptResult
 
+  data class CriterionTurn(
+    val continuationReason: String,
+    override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
+  ) : AttemptResult
+
   val settledOutcome: PhaseOutcome? get() = (this as? Settled)?.outcome
   val schemaInvalidOperatorReason: String? get() = (this as? SchemaInvalid)?.operatorReason
   val schemaInvalidRetryReason: String? get() = (this as? SchemaInvalid)?.retryReason
@@ -80,6 +85,7 @@ internal sealed interface AttemptResult {
         is RetryableTerminal -> fileManifest
         is BoundaryBodyDelivery -> fileManifest
         is FindingsOwed -> fileManifest
+        is CriterionTurn -> fileManifest
       }
   val rejectedOutput: String? get() = (this as? SchemaInvalid)?.rejectedOutput
 
@@ -92,6 +98,7 @@ internal sealed interface AttemptResult {
         is RetryableTerminal -> operatorReason
         is BoundaryBodyDelivery -> null
         is FindingsOwed -> null
+        is CriterionTurn -> null
       }
 
   val semanticRetryReason: String?
@@ -103,6 +110,7 @@ internal sealed interface AttemptResult {
         is RetryableTerminal -> null
         is BoundaryBodyDelivery -> null
         is FindingsOwed -> null
+        is CriterionTurn -> null
       }
 
   val retryableTerminal: RetryableTerminal? get() = this as? RetryableTerminal
@@ -114,9 +122,15 @@ internal sealed interface AttemptResult {
     get() = (this as? IncompleteWork)?.normalizedOutput
   val boundaryBodyDeliveryContinuationReason: String?
     get() = (this as? BoundaryBodyDelivery)?.continuationReason
+  val criterionTurnContinuationReason: String? get() = (this as? CriterionTurn)?.continuationReason
 
   companion object {
     fun settled(outcome: PhaseOutcome): AttemptResult = Settled(outcome)
+
+    fun criterionTurn(
+      continuationReason: String,
+      fileManifest: FeatureTaskRuntimePhaseFileManifest,
+    ): AttemptResult = CriterionTurn(continuationReason, fileManifest)
 
     fun boundaryBodyDelivery(
       continuationReason: String,

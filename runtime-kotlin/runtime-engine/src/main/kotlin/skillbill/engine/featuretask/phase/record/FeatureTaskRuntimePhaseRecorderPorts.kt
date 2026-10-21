@@ -2,8 +2,10 @@ package skillbill.engine.featuretask.phase.record
 
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
 internal interface FeatureTaskRuntimePhaseStatePort {
@@ -50,4 +52,15 @@ internal interface FeatureTaskRuntimePhaseStateQueries {
   ): Boolean
 
   fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry?
+}
+
+internal interface FeatureTaskRuntimeImplementationProgressPort {
+  fun loadImplementationProgress(workflowId: String): FeatureTaskRuntimeImplementationProgress?
+
+  fun recordImplementationTurn(write: FeatureTaskRuntimeImplementationTurnWrite): RequiredPhaseWrite
+
+  fun recordOwnedImplementationTurn(
+    write: FeatureTaskRuntimeImplementationTurnWrite,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): RequiredPhaseWrite
 }

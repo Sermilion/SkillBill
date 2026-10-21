@@ -58,6 +58,7 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
   FeatureTaskRuntimePhaseOwnedEvidenceApi by phaseEvidenceDelegate,
   FeatureTaskRuntimePhaseStatePort by phaseState,
   FeatureTaskRuntimePhaseStateQueries by phaseState,
+  FeatureTaskRuntimeImplementationProgressPort by phaseState,
   FeatureTaskRuntimeReviewGenerationPort by reviewCheckpoint,
   FeatureTaskRuntimeFindingVerificationPort by reviewCheckpoint,
   FeatureTaskRuntimeReadinessEvidencePort by gateProgress,

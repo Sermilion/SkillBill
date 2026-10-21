@@ -32,6 +32,8 @@ data class FeatureTaskRuntimeVerdict(
 
     val SATISFIED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("satisfied")
 
+    val UNSATISFIED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("unsatisfied")
+
     val GAPS_FOUND: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("gaps_found")
 
     val RECORD_REJECTED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("record_rejected")

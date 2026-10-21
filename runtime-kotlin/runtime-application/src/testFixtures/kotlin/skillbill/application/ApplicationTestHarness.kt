@@ -35,24 +35,26 @@ val testDecompositionManifestWriter = DecompositionManifestWriter()
 fun seedHarnessSpecIntentProjection(
   repoRoot: Path,
   specReference: String,
+  acceptanceCriteria: List<String> = listOf("AC-1", "AC-2"),
 ) {
   val specPath = repoRoot.resolve(specReference)
-  if (Files.isRegularFile(specPath)) return
-  writeTextAtomically(
-    specPath,
-    """
-    # Harness spec intent
-
-    ## Intended Outcome
-    Exercise the feature-task runtime harness.
-
-    ## Acceptance Criteria
-
-    1. AC-1
-    2. AC-2
-    """.trimIndent(),
-  )
+  val existing = if (Files.isRegularFile(specPath)) Files.readString(specPath) else null
+  if (existing != null && !existing.startsWith(HARNESS_SPEC_HEADING)) return
+  val criteria = acceptanceCriteria.mapIndexed { index, criterion -> "${index + 1}. ${criterion.trim()}" }
+  val content =
+    listOf(
+      HARNESS_SPEC_HEADING,
+      "",
+      "## Intended Outcome",
+      "Exercise the feature-task runtime harness.",
+      "",
+      "## Acceptance Criteria",
+      "",
+    ).plus(criteria).joinToString("\n")
+  if (existing != content) writeTextAtomically(specPath, content)
 }
+
+private const val HARNESS_SPEC_HEADING = "# Harness spec intent"
 
 private fun writeTextAtomically(
   target: Path,

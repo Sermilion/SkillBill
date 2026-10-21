@@ -22,6 +22,7 @@ internal enum class FeatureTaskRuntimeContinuationKind(val wireValue: String) {
   VALIDATE_REPAIR("validate_repair"),
   AUDIT_MISSING_BASELINE("audit_missing_baseline"),
   AUDIT_NON_SHRINKING_ROUND("audit_non_shrinking_round"),
+  IMPLEMENTATION_CRITERION_TURN("implementation_criterion_turn"),
   ;
 
   companion object {

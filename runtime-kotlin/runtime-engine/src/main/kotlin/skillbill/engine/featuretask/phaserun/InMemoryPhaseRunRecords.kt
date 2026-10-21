@@ -15,9 +15,12 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFo
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunRecords
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
+import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
+import skillbill.engine.featuretask.slot.state.PhaseImplementationProgressRecords
 import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -33,6 +36,9 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeAppendImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -51,7 +57,8 @@ internal class InMemoryPhaseRunRecords private constructor(
 ) : PhaseRunRecords,
   StandaloneMonitorRunRecords,
   PhasePlanRecords by InMemoryPhasePlanRecords(phaseRecords),
-  FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses() {
+  FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses(),
+  PhaseImplementationProgressRecords by InMemoryImplementationProgressRecords(clock, phaseRecords) {
   constructor(
     clock: Clock,
     resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
@@ -129,9 +136,6 @@ internal class InMemoryPhaseRunRecords private constructor(
   }
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean = true
-
-  override fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt> =
-    emptyList()
 
   override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord> =
     phaseRecords.mapValues { (_, record) -> record.detached() }.toMap()
@@ -327,6 +331,54 @@ private class InMemoryPhasePlanRecords(
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
   ): Boolean = true
+}
+
+private class InMemoryImplementationProgressRecords(
+  private val clock: Clock,
+  private val phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
+) : PhaseImplementationProgressRecords {
+  private var implementationProgress: FeatureTaskRuntimeImplementationProgress? = null
+  private val implementationTurns = mutableListOf<FeatureTaskRuntimeImplementationAttempt>()
+
+  override fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt> =
+    implementationTurns.toList()
+
+  override fun loadImplementationProgress(workflowId: String): FeatureTaskRuntimeImplementationProgress? =
+    implementationProgress
+
+  override fun recordImplementationTurn(write: FeatureTaskRuntimeImplementationTurnWrite): RequiredPhaseWrite {
+    val phase = phaseRecords[write.phaseId]
+    if (
+      implementationProgress != write.expectedProgress ||
+      phase?.attemptCount != write.attemptNumber ||
+      phase.status == WorkflowStepStatus.COMPLETED
+    ) {
+      return RequiredPhaseWrite.Rejected(
+        RequiredPhaseWriteKind.IMPLEMENTATION_PROGRESS,
+        write.workflowId,
+        write.phaseId,
+        write.attemptNumber,
+      )
+    }
+    val appended =
+      featureTaskRuntimeAppendImplementationAttempt(
+        implementationTurns.toList(),
+        FeatureTaskRuntimeImplementationAttempt(
+          sequenceNumber = (implementationTurns.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
+          phaseId = write.phaseId,
+          attemptNumber = write.attemptNumber,
+          agentId = write.agentId,
+          status = FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED,
+          recordedAt = clock.instant().toString(),
+          value = write.value,
+          prompt = write.marker.encode(),
+        ),
+      )
+    implementationTurns.clear()
+    implementationTurns += appended
+    implementationProgress = write.progress
+    return RequiredPhaseWrite.Acknowledged
+  }
 }
 
 private fun ProducerOutputEvidence.detached(): ProducerOutputEvidence = copy(payload = payload?.copyOf())

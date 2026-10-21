@@ -92,7 +92,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
     assertContains(requireNotNull(failure.message), "verdict 'gaps_found' is removed")
     assertEquals(1, auditLaunches)
     assertTrue("review" !in harness.launchOrder())
-    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement" })
+    assertEquals(HARNESS_CRITERION_IMPLEMENT_TURNS, harness.launchedPromptPhaseOrder().count { it == "implement" })
     assertTrue(
       harness.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty()
         .none { it.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID },

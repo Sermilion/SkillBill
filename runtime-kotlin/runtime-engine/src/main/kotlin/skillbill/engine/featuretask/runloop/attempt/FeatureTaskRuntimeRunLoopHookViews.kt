@@ -23,6 +23,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAuditOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.attempt.PhaseCommitLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
+import skillbill.engine.featuretask.slot.attempt.PhaseImplementationLaunchContext
+import skillbill.engine.featuretask.slot.attempt.PhaseImplementationOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
@@ -31,6 +33,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import java.nio.file.Path
 
 internal object FeatureTaskRuntimeRunLoopHookViews {
   internal fun PhaseAttemptLaunchRuntimeContext.launchHookContext(
@@ -42,6 +46,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       PhaseStepHookContextKind.COMMIT -> CommitLaunchView(this, run)
       PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingLaunchView(this)
       PhaseStepHookContextKind.PULL_REQUEST -> PullRequestLaunchView(this)
+      PhaseStepHookContextKind.IMPLEMENTATION -> ImplementationLaunchView(this)
       else -> LaunchView(this)
     }
   }
@@ -78,6 +83,15 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     }
   }
 
+  private class ImplementationLaunchView(
+    private val context: PhaseAttemptLaunchRuntimeContext,
+  ) : LaunchView(context),
+    PhaseImplementationLaunchContext {
+    override val implementationRecords get() = context.recorder
+
+    override fun specText(path: Path): String = context.decompositionPlanner.specText(path)
+  }
+
   private class FindingLaunchView(
     private val context: PhaseAttemptLaunchRuntimeContext,
   ) : LaunchView(context),
@@ -96,6 +110,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
         AuditOutputView(this as PhaseCheckpointRemediationContext, this, run)
       PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingOutputView(this)
       PhaseStepHookContextKind.PLANNING -> PlanningOutputView(this)
+      PhaseStepHookContextKind.IMPLEMENTATION -> ImplementationOutputView(this)
       else -> OutputView(this)
     }
   }
@@ -125,6 +140,37 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
 
     override fun withAuthoredParentSpecPath(attested: NormalizedFeatureTaskRuntimePhaseOutput) =
       PlanDecompositionStop.withAuthoredParentSpecPath(context, attested)
+  }
+
+  private class ImplementationOutputView(
+    private val context: PhaseOutputSettlementContext,
+  ) : OutputView(context),
+    PhaseImplementationOutputContext {
+    override val implementationRecords get() = context.recorder
+
+    override fun specText(path: Path): String = context.decompositionPlanner.specText(path)
+
+    override fun blockImplementationTurn(
+      capture: ValidatedOutputCapture,
+      reason: String,
+    ): AttemptResult {
+      val coupling = context.settlementCoupling()
+      return AttemptResult.settled(
+        FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+          coupling.progress,
+          coupling.transitions,
+          context.recorder,
+          PhaseBlockRequest(
+            run = capture.run,
+            attemptCount = capture.iteration,
+            reason = reason,
+            observability = context.observability,
+            failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+            payload = BlockAndPersistPayload(fileManifest = capture.fileManifest),
+          ),
+        ),
+      )
+    }
   }
 
   private open class OutputView(

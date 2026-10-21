@@ -20,11 +20,13 @@ import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhase
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 /** Runs the attempts of one step call and settles the step, so a run state decides how its steps launch. */
 internal fun interface PhaseStepAttempts {
@@ -48,6 +50,18 @@ internal object PhaseAttemptLoop : PhaseStepAttempts {
 }
 
 internal object PhaseAttemptSteps {
+  private fun durableCriterionLaunchCount(
+    recorder: PhaseRunRecords,
+    run: PhaseRun,
+  ): Int {
+    if (run.reentry != null || run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) return 0
+    return try {
+      recorder.loadImplementationProgress(run.request.workflowId)?.launchCount ?: 0
+    } catch (_: SkillBillRuntimeException) {
+      0
+    }
+  }
+
   fun PhaseRunLoopAttemptScope.runPhaseAttempts(
     run: PhaseRun,
     call: PhaseStepCall,
@@ -59,7 +73,7 @@ internal object PhaseAttemptSteps {
     var iteration = progress.phase(run.phaseId).nextIteration
     val continuationSegmentCount =
       FeatureTaskRuntimeRunLoopPhaseBlocking
-        .durableContinuationSegmentCount(recorder, run)
+        .durableContinuationSegmentCount(recorder, run) + durableCriterionLaunchCount(recorder, run)
     val nonOutputAttempts = FeatureTaskRuntimeRunLoopPhaseBlocking.durableNonOutputAttempts(progressState, run)
     when (val start = PhaseAttemptOnce.persistRequiredStart(this, run, iteration)) {
       is RequiredPhaseWrite.Acknowledged -> Unit
@@ -164,6 +178,7 @@ internal object PhaseAttemptSteps {
         )
       attempt.boundaryBodyDeliveryContinuationReason != null ->
         phaseAttempts.settleBoundaryBodyDelivery(observability, context)
+      attempt.criterionTurnContinuationReason != null -> phaseAttempts.settleCriterionTurn(context)
       attempt.findingsOwed != null ->
         phaseAttempts.settleFindingsOwed(recorder, context, requireNotNull(attempt.findingsOwed))
       attempt.retryableTerminal != null ->

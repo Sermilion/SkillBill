@@ -6,6 +6,7 @@ enum class RequiredPhaseWriteKind(val wireValue: String) {
   START("start"),
   BRIEFING("briefing"),
   COMPLETION("completion"),
+  IMPLEMENTATION_PROGRESS("implementation-progress"),
 }
 
 sealed interface RequiredPhaseWrite {

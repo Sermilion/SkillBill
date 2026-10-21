@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.appendWhenOpus
 import skillbill.engine.featuretask.slot.opus55Directive
@@ -36,6 +37,8 @@ class ImplementThenSimplifyOpus55Strategy : PhaseStrategy() {
     run: PhaseRun,
     state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = canonical.runStep(run, state)
+
+  override fun stepHooks(stepId: String): PhaseStepHooks = canonical.stepHooks(stepId)
 
   override fun resumeRules(stepId: String): PhaseResumeRules = canonical.resumeRules(stepId)
 

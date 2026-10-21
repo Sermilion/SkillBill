@@ -7,12 +7,14 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObs
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.slot.state.PhaseImplementationProgressRecords
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import java.nio.file.Path
 
 internal interface PhaseAttemptLaunchHookContext : PhaseAttemptEnvironment {
   val progress: FeatureTaskRuntimeProgressSnapshotAccess
@@ -66,6 +68,28 @@ internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
     progressRejection: String?,
   ): AttemptResult?
+}
+
+/** The criterion progress records and selected spec text an implement step reads while it works one criterion. */
+internal interface PhaseImplementationTurnAccess {
+  val implementationRecords: PhaseImplementationProgressRecords
+
+  /** The text of the spec file at [path]. */
+  fun specText(path: Path): String
+}
+
+internal interface PhaseImplementationLaunchContext :
+  PhaseAttemptLaunchHookContext,
+  PhaseImplementationTurnAccess
+
+internal interface PhaseImplementationOutputContext :
+  PhaseStepOutputContext,
+  PhaseImplementationTurnAccess {
+  /** Blocks the implement step of [capture] with [reason] before its output is accepted. */
+  fun blockImplementationTurn(
+    capture: ValidatedOutputCapture,
+    reason: String,
+  ): AttemptResult
 }
 
 internal interface PhaseFindingEvidenceContext {

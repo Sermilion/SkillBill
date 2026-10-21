@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.phase.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnMarker
 
 internal data class FeatureTaskRuntimeImplementationObligations(
   val plannedTaskIds: List<String>,
@@ -17,7 +18,10 @@ internal fun featureTaskRuntimeImplementationContinuationFrom(
 ): FeatureTaskRuntimeImplementationContinuation? {
   val phaseAttempts =
     attempts.filter {
-      it.phaseId == phaseId && it.loopId == obligations.loopId && it.edgeIteration == obligations.edgeIteration
+      it.phaseId == phaseId &&
+        it.loopId == obligations.loopId &&
+        it.edgeIteration == obligations.edgeIteration &&
+        !FeatureTaskRuntimeImplementationTurnMarker.isMarker(it.prompt)
     }
   if (phaseAttempts.isEmpty()) return null
   val priorSegments = phaseAttempts.map { it.value }

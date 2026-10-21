@@ -37,6 +37,7 @@ import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.toImplementationProgress
 import skillbill.workflow.taskruntime.artifact.toQaRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -46,6 +47,7 @@ import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHA
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_STATUS_PENDING
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -245,6 +247,8 @@ class FeatureTaskRuntimeWorkflowPersistence
           FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION,
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QA_REPAIR_STATE to
           FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE,
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS to
+          FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS,
       ).forEach { (family, kind) ->
         if (family.contains(artifacts)) {
           val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
@@ -252,6 +256,18 @@ class FeatureTaskRuntimeWorkflowPersistence
           if (kind == FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE) payload.toQaRepairState()
         }
       }
+    }
+
+    internal fun implementationProgressFrom(artifacts: Map<String, Any?>): FeatureTaskRuntimeImplementationProgress? {
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS
+      if (!family.contains(artifacts)) return null
+      val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+      wireArtifactValidator.validate(
+        FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS,
+        payload,
+        "workflow-artifact:${family.label()}",
+      )
+      return payload.toImplementationProgress("workflow-artifact:${family.label()}")
     }
 
     internal fun persistArtifactsPatch(
