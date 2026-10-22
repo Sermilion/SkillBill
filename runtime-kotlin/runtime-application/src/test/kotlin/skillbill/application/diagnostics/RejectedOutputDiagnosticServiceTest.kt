@@ -12,6 +12,8 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidRejectedOutputDiagnosticSchemaError
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
+import skillbill.ports.diagnostics.model.ExactOutputRead
+import skillbill.ports.diagnostics.model.ExactOutputReadRequest
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
@@ -302,4 +304,7 @@ private class MemoryRepository : RejectedOutputDiagnosticRepository {
           it.attempt == attempt && it.agentId == agentId && it.generation <= generation
       }
       .maxWithOrNull(compareBy({ it.generation }, { it.repairTurn }))
+
+  override fun readProducerOutputExact(request: ExactOutputReadRequest): ExactOutputRead =
+    ExactOutputRead.Unavailable("Exact retained output is unavailable.")
 }

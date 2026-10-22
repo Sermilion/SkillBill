@@ -7,8 +7,27 @@ import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeValidationEvidenceTest {
+  @Test
+  fun `successful terminal verification clears attribution from an earlier project failure`() {
+    val failed =
+      FeatureTaskRuntimeValidationCommandResult(
+        "./gradlew check",
+        1,
+        FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE,
+      )
+    val repaired =
+      FeatureTaskRuntimeValidationEvidence(
+        listOf(failed, FeatureTaskRuntimeValidationCommandResult("./gradlew check", 0)),
+      )
+
+    assertTrue(FeatureTaskRuntimeValidationEvidence(listOf(failed)).hasProjectSourceFailure)
+    assertFalse(repaired.hasProjectSourceFailure)
+  }
+
   @Test
   fun successfulDiscoveryCannotMaskFailedTerminalVerificationWithDifferentArgv() {
     val evidence =

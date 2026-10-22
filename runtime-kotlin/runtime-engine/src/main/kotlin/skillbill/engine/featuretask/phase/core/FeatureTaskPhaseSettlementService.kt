@@ -72,6 +72,12 @@ class FeatureTaskPhaseSettlementService(
     require(request.failureDisposition.any { !it.isWhitespace() }) {
       "feature_task_phase_block requires a non-blank failure_disposition."
     }
+    val validationEvidence =
+      request.validationEvidence?.let { decodeValidationEvidenceFromArtifact(it, "${request.phaseId} block") }
+    val failureCode =
+      validationEvidence?.takeIf { it.hasProjectSourceFailure }
+        ?.let { FeatureTaskRuntimeFailureCode.PROJECT_QUALITY_GATE_FAILED }
+        ?.let { "${it::class.simpleName}.${it.name}" }
     val envelope =
       NormalizedFeatureTaskRuntimePhaseOutput(
         phaseId = request.phaseId,
@@ -104,7 +110,7 @@ class FeatureTaskPhaseSettlementService(
                 attempt = request.attempt,
                 blockedReason = request.reason,
                 failureDisposition = request.failureDisposition,
-                failureCode = null,
+                failureCode = failureCode,
               )
             phaseObservation.copy(
               alias =

@@ -9,6 +9,8 @@ import skillbill.error.core.rejectedOutputDiagnosticPersistenceMessage
 import skillbill.error.shellcontent.invalidProducerOutputEvidenceSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
+import skillbill.ports.diagnostics.model.ExactOutputRead
+import skillbill.ports.diagnostics.model.ExactOutputReadRequest
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
@@ -17,12 +19,14 @@ import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
 import skillbill.ports.diagnostics.model.evidenceKey
+import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import java.util.HexFormat
 
 internal class SqliteRejectedOutputDiagnosticRepository(
   private val connection: Connection,
@@ -189,6 +193,88 @@ internal class SqliteRejectedOutputDiagnosticRepository(
         ),
       )
     }
+
+  override fun readProducerOutputExact(request: ExactOutputReadRequest): ExactOutputRead =
+    try {
+      persistence("read-exact-output") {
+        when (request) {
+          is ExactOutputReadRequest.Producer -> readExactProducer(request)
+          is ExactOutputReadRequest.Rejected -> readExactRejected(request)
+        }
+      }
+    } catch (failure: DateTimeParseException) {
+      ExactOutputRead.Unavailable("retained output metadata is corrupt")
+    }
+
+  private fun readExactProducer(request: ExactOutputReadRequest.Producer): ExactOutputRead {
+    val lookup = producerLookup(request) ?: return unavailable("producer lookup coordinates are missing or invalid")
+    val evidence = connection.queryProducerEvidence(lookup) ?: return unavailable("producer row is absent")
+    return when {
+      request.retainedIdentity != null && request.retainedIdentity != evidence.evidenceKey() ->
+        unavailable("producer retained identity does not match")
+      else ->
+        checkedPayload(evidence.payload, evidence.sha256, evidence.byteSize, request)
+          ?.let { ExactOutputRead.Found(it, evidence.agentId) }
+          ?: unavailable("producer payload, digest or byte size does not match")
+    }
+  }
+
+  private fun producerLookup(request: ExactOutputReadRequest.Producer): ProducerEvidenceLookup? {
+    val workflowId = request.workflowId
+    val phaseId = request.phaseId
+    if (workflowId == null || phaseId == null) return null
+    val attempt = request.attempt
+    val agentId = request.agentId
+    if (attempt == null || agentId == null) return null
+    val generation = request.generation?.takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
+    val repairTurn = request.repairTurn?.takeIf { it >= 0 }
+    if (generation == null || repairTurn == null) return null
+    return ProducerEvidenceLookup(workflowId, phaseId, attempt, agentId, generation, true, repairTurn)
+  }
+
+  private fun readExactRejected(request: ExactOutputReadRequest.Rejected): ExactOutputRead {
+    val identity = request.diagnosticIdentity ?: return unavailable("rejected diagnostic identity is missing")
+    val record = find(identity) ?: return unavailable("rejected diagnostic row is absent")
+    val metadata = record.metadata
+    return when {
+      !matchesRejectedScope(metadata, request) -> unavailable("rejected diagnostic identity or scope does not match")
+      metadata.lifecycle != RejectedOutputLifecycle.STORED -> unavailable("rejected diagnostic payload expired")
+      else ->
+        checkedPayload(record.payload, metadata.sha256, metadata.byteSize, request)
+          ?.let { ExactOutputRead.Found(it, metadata.agentId) }
+          ?: unavailable("rejected diagnostic payload, digest or byte size does not match")
+    }
+  }
+
+  private fun matchesRejectedScope(
+    metadata: RejectedOutputDiagnostic,
+    request: ExactOutputReadRequest.Rejected,
+  ): Boolean =
+    when {
+      metadata.identity != request.diagnosticIdentity || metadata.workflowId != request.workflowId -> false
+      metadata.phaseId != request.phaseId || metadata.attempt != request.attempt -> false
+      metadata.agentId != request.sourceIdentity -> false
+      request.repairTurn != null && metadata.repairTurn != request.repairTurn -> false
+      else -> true
+    }
+
+  private fun checkedPayload(
+    payload: ByteArray?,
+    digest: String,
+    size: Long,
+    request: ExactOutputReadRequest,
+  ): ByteArray? =
+    when {
+      payload == null -> null
+      digest != request.expectedDigest || size != request.expectedByteSize -> null
+      payload.size.toLong() != size || sha256(payload) != digest -> null
+      else -> payload
+    }
+
+  private fun unavailable(reason: String): ExactOutputRead = ExactOutputRead.Unavailable(reason)
+
+  private fun sha256(payload: ByteArray): String =
+    HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload))
 
   override fun deleteProducerOutputsBefore(before: Instant): Int =
     persistence("delete-producer-outputs") {
@@ -365,6 +451,12 @@ private fun ResultSet.toProducerEvidence(): ProducerOutputEvidence {
       "Producer output evidence '$workflowId:$phaseId:$attempt' carries an unusable generation.",
     )
   }
+  val repairTurn = getInt("repair_turn")
+  if (getObject("repair_turn") == null || repairTurn < 0) {
+    throw invalidProducerOutputEvidenceSchemaError(
+      "Producer output evidence '$workflowId:$phaseId:$attempt' carries an unusable repair turn.",
+    )
+  }
   return ProducerOutputEvidence(
     workflowId = workflowId,
     phaseId = phaseId,
@@ -376,6 +468,6 @@ private fun ResultSet.toProducerEvidence(): ProducerOutputEvidence {
     sha256 = getString("sha256"),
     payload = getBytes("payload"),
     generation = generation,
-    repairTurn = getInt("repair_turn"),
+    repairTurn = repairTurn,
   )
 }

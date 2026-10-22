@@ -57,6 +57,7 @@ sealed interface ValidationGateAgentRepairResult {
   data class Blocked(
     val reason: String,
     val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+    val failureCode: String? = null,
   ) : ValidationGateAgentRepairResult
 }
 
@@ -74,6 +75,7 @@ sealed interface ValidationGateCycleTerminalOutcome {
     val remainingFindings: ValidationFindingSetProjection? = null,
     val measurements: List<FeatureTaskRuntimeValidationGateRunRecord> = emptyList(),
     val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+    val failureCode: String? = null,
   ) : ValidationGateCycleTerminalOutcome
 }
 

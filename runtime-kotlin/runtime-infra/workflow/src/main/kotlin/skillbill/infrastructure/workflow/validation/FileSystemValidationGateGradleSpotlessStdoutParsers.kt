@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.validation
 
 import skillbill.ports.validation.model.ValidationGateFinding
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationFailureSubject
 import java.nio.file.Path
 
 internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
@@ -56,11 +57,14 @@ internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
     val rawPath: String,
     val relative: String,
     val module: String,
+    val projectOwned: Boolean,
   )
 
   private data class Body(
     val location: String?,
     val messageParts: List<String>,
+    val hasRuleDiagnostic: Boolean,
+    val hasFormattingDiagnostic: Boolean,
     val nextIndex: Int,
   )
 
@@ -69,7 +73,7 @@ internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
 
     data object Skip : Action
 
-    data class SetLocation(val location: String) : Action
+    data class SetLocation(val location: String, val formattingDiagnostic: Boolean = false) : Action
 
     data class AppendMessage(val text: String) : Action
   }
@@ -87,6 +91,7 @@ internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
       rawPath = rawPath,
       relative = relative,
       module = moduleFromRelative(relative),
+      projectOwned = FileSystemValidationGateGradlePaths.isProjectOwnedPath(repo, rawPath),
     )
   }
 
@@ -99,6 +104,12 @@ internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
           "Step '$stepName' found problem in '$rawPath'"
         },
       location = body.location ?: relative,
+      failureSubject =
+        if (projectOwned && (body.hasRuleDiagnostic || body.hasFormattingDiagnostic)) {
+          FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE
+        } else {
+          FeatureTaskRuntimeValidationFailureSubject.UNKNOWN
+        },
     )
 
   private fun readBody(
@@ -108,6 +119,8 @@ internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
   ): Body {
     var location: String? = null
     val messageParts = mutableListOf<String>()
+    var hasRuleDiagnostic = false
+    var hasFormattingDiagnostic = false
     var index = startIndex
     var done = false
     while (index < lines.size && !done) {
@@ -116,16 +129,24 @@ internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
         Action.Skip -> index++
         is Action.SetLocation -> {
           location = action.location
+          if (action.formattingDiagnostic) hasFormattingDiagnostic = true
           index++
         }
         is Action.AppendMessage -> {
           messageParts += action.text
+          if (action.text.startsWith("rule:")) hasRuleDiagnostic = true
           index++
           done = messageParts.size >= MAX_MESSAGE_PARTS
         }
       }
     }
-    return Body(location = location, messageParts = messageParts, nextIndex = index)
+    return Body(
+      location = location,
+      messageParts = messageParts,
+      hasRuleDiagnostic = hasRuleDiagnostic,
+      hasFormattingDiagnostic = hasFormattingDiagnostic,
+      nextIndex = index,
+    )
   }
 
   private fun classifyLine(
@@ -144,7 +165,7 @@ internal object FileSystemValidationGateGradleSpotlessStdoutParsers {
     return when {
       line.isEmpty() -> Action.Skip
       STEP_PROBLEM.matches(line) || TASK_FAILURE_HEADER.matches(line) -> Action.Stop
-      errorLocation != null -> Action.SetLocation(errorLocation)
+      errorLocation != null -> Action.SetLocation(errorLocation, formattingDiagnostic = true)
       assertionLocation != null -> Action.SetLocation(location ?: assertionLocation)
       else -> classifyMessage(line)
     }

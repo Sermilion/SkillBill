@@ -18,6 +18,8 @@ import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -102,7 +104,7 @@ internal fun PhaseQualityGateCycleContext.blockGateStep(
   iteration: Int,
   reason: String,
   disposition: FeatureTaskRuntimeFailureDisposition,
-  observability: FeatureTaskRuntimeRunObservability,
+  failureCode: String? = null,
 ): PhaseOutcome {
   val coupling = gateSettlementCoupling()
   return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -115,6 +117,7 @@ internal fun PhaseQualityGateCycleContext.blockGateStep(
       reason = reason,
       observability = observability,
       failureDisposition = disposition,
+      failureCode = failureCode,
     ),
   )
 }
@@ -137,7 +140,7 @@ internal class RuntimeOwnedGateSettlement(
           iteration,
           "Runtime-owned $label settlement did not validate: ${error.message.orEmpty()}",
           FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
-          observability,
+          error.failureCodeLabel(),
         )
       }
     val payload = outputText.toByteArray(Charsets.UTF_8)
@@ -161,7 +164,7 @@ internal class RuntimeOwnedGateSettlement(
         iteration,
         "Runtime-owned $label settlement could not be persisted.",
         FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
-        observability,
+        FeatureTaskRuntimeFailureCode.PHASE_SETTLEMENT_CONFLICT.let { "${it::class.simpleName}.${it.name}" },
       )
     }
     observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)

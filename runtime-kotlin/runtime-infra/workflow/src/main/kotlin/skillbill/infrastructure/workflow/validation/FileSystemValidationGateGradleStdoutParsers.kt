@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.validation
 
 import skillbill.ports.validation.model.ValidationGateFinding
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationFailureSubject
 import java.nio.file.Path
 
 internal object FileSystemValidationGateGradleStdoutParsers {
@@ -62,6 +63,12 @@ internal object FileSystemValidationGateGradleStdoutParsers {
         ruleOrTestId = rule,
         message = message,
         location = "$relative:$lineNo:$column",
+        failureSubject =
+          if (FileSystemValidationGateGradlePaths.isProjectOwnedPath(repo, rawPath)) {
+            FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE
+          } else {
+            FeatureTaskRuntimeValidationFailureSubject.UNKNOWN
+          },
       )
     }.toList()
   }
@@ -146,6 +153,7 @@ internal object FileSystemValidationGateGradleStdoutParsers {
               FileSystemValidationGateGradlePaths.filePathFromAdviceBlock(line)?.let { path ->
                 FileSystemValidationGateGradlePaths.repoRelativeAdvicePath(path)
               },
+            failureSubject = FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE,
           ),
         )
       }
@@ -191,6 +199,7 @@ internal object FileSystemValidationGateGradleStdoutParsers {
               FileSystemValidationGateGradlePaths.filePathFromAdviceBlock(line)?.let { path ->
                 FileSystemValidationGateGradlePaths.repoRelativeAdvicePath(path)
               },
+            failureSubject = FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE,
           ),
         )
       }
@@ -214,6 +223,7 @@ internal object FileSystemValidationGateGradleStdoutParsers {
             ruleOrTestId = task,
             message = line,
             location = null,
+            failureSubject = FeatureTaskRuntimeValidationFailureSubject.UNKNOWN,
           ),
         )
       }
@@ -262,6 +272,12 @@ internal object FileSystemValidationGateGradleStdoutParsers {
         ruleOrTestId = "kotlin_compiler",
         message = message,
         location = "$relative:$lineNo:$column",
+        failureSubject =
+          if (FileSystemValidationGateGradlePaths.isProjectOwnedPath(repo, rawPath)) {
+            FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE
+          } else {
+            FeatureTaskRuntimeValidationFailureSubject.UNKNOWN
+          },
       )
     }.toList()
   }

@@ -21,3 +21,6 @@ properties:
           minLength: 1
         exit_code:
           type: integer
+        failure_subject:
+          type: string
+          enum: [project_source, user_environment, external_service, runtime, unknown]

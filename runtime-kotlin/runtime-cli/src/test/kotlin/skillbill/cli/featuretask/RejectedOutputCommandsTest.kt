@@ -6,6 +6,8 @@ import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
+import skillbill.ports.diagnostics.model.ExactOutputRead
+import skillbill.ports.diagnostics.model.ExactOutputReadRequest
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
@@ -93,6 +95,9 @@ private class CliDiagnosticRepository : RejectedOutputDiagnosticRepository {
     agentId: String,
     generation: Int,
   ): ProducerOutputEvidence? = null
+
+  override fun readProducerOutputExact(request: ExactOutputReadRequest): ExactOutputRead =
+    ExactOutputRead.Unavailable("Exact retained output is unavailable.")
 
   override fun deleteProducerOutputsBefore(before: Instant): Int = 0
 }

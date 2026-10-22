@@ -18,4 +18,5 @@ data class FeatureTaskPhaseSettlementBlockRequest(
   val reason: String,
   val failureDisposition: String = "needs_user_action",
   val verdict: String? = null,
+  val validationEvidence: Map<String, Any?>? = null,
 )

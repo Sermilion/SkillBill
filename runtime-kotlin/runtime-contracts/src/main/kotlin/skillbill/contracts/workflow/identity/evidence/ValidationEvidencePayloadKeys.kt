@@ -11,6 +11,7 @@ object ValidationEvidencePayloadKeys {
   const val RESULTS: String = "results"
   const val COMMAND: String = "command"
   const val EXIT_CODE: String = "exit_code"
+  const val FAILURE_SUBJECT: String = "failure_subject"
   const val INTEGRITY_PROBLEM: String = "integrity_problem"
   const val COMPLETED_SUBTASK_VALIDATION: String = "completed_subtask_validation"
   const val VALIDATION_STATUS: String = "validation_status"

@@ -5,9 +5,9 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.boundTo
-import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.CrashReconcileExpiredWorkerRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
+import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.goalrunner.commitShaFrom
 import skillbill.goalrunner.goalContinuationOutcome
 import skillbill.goalrunner.missingResultPrefixTerminalOutcomeArtifact

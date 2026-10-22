@@ -394,6 +394,7 @@ class GoalRunnerIterationOutcome(
               progress = progress,
               liveness = reconciled.liveness,
             ),
+          stopReason = reconciled.reason,
         ),
       )
     return acceptedBlock?.let { block ->

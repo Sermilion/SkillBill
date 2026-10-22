@@ -8,9 +8,24 @@ import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 
 private const val MAX_VALIDATION_RESULTS = 50
 
+enum class FeatureTaskRuntimeValidationFailureSubject(val wireValue: String) {
+  PROJECT_SOURCE("project_source"),
+  USER_ENVIRONMENT("user_environment"),
+  EXTERNAL_SERVICE("external_service"),
+  RUNTIME("runtime"),
+  UNKNOWN("unknown"),
+  ;
+
+  companion object {
+    fun fromWire(value: String): FeatureTaskRuntimeValidationFailureSubject? =
+      entries.firstOrNull { it.wireValue == value }
+  }
+}
+
 data class FeatureTaskRuntimeValidationCommandResult(
   val command: String,
   val exitCode: Int,
+  val failureSubject: FeatureTaskRuntimeValidationFailureSubject? = null,
 ) {
   init {
     require(command.isNotBlank()) { "Validation command must be non-blank." }
@@ -20,12 +35,18 @@ data class FeatureTaskRuntimeValidationCommandResult(
     linkedMapOf(
       ValidationEvidencePayloadKeys.COMMAND to command,
       ValidationEvidencePayloadKeys.EXIT_CODE to exitCode,
-    )
+      ValidationEvidencePayloadKeys.FAILURE_SUBJECT to failureSubject?.wireValue,
+    ).filterValues { it != null }
 }
 
 data class FeatureTaskRuntimeValidationEvidence(
   val results: List<FeatureTaskRuntimeValidationCommandResult>,
 ) {
+  val hasProjectSourceFailure: Boolean
+    get() =
+      results.lastOrNull()?.takeIf { it.exitCode != 0 }?.failureSubject ==
+        FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE
+
   init {
     val reason = violation(results)
     require(reason == null) { reason.orEmpty() }
@@ -123,7 +144,17 @@ data class FeatureTaskRuntimeValidationEvidence(
             result[ValidationEvidencePayloadKeys.EXIT_CODE].asExactIntOrNull()
               ?: invalid(onInvalid, "results[$index].exit_code must be an integer.")
           if (command.isBlank()) invalid(onInvalid, "results[$index].command must be non-blank.")
-          FeatureTaskRuntimeValidationCommandResult(command, exitCode)
+          val failureSubject =
+            if (!result.containsKey(ValidationEvidencePayloadKeys.FAILURE_SUBJECT)) {
+              null
+            } else {
+              val wire =
+                result[ValidationEvidencePayloadKeys.FAILURE_SUBJECT] as? String
+                  ?: invalid(onInvalid, "results[$index].failure_subject must be a string.")
+              FeatureTaskRuntimeValidationFailureSubject.fromWire(wire)
+                ?: invalid(onInvalid, "results[$index].failure_subject is unsupported.")
+            }
+          FeatureTaskRuntimeValidationCommandResult(command, exitCode, failureSubject)
         }
       violation(results)?.let { reason -> invalid(onInvalid, reason) }
       return FeatureTaskRuntimeValidationEvidence(results)

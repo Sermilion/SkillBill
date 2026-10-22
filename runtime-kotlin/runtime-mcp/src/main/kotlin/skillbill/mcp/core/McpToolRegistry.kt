@@ -67,7 +67,10 @@ internal object McpToolRegistry {
       ),
       McpTool(
         name = "feature_task_phase_block",
-        description = "Durable-block a prose feature-task phase.",
+        description =
+          "Durable-block a prose feature-task phase. When a failed validation command has structured findings, " +
+            "include validation_evidence with failure_subject from those findings. Do not infer it from the reason, " +
+            "command name, or exit code.",
         handler = ::featureTaskPhaseBlock,
       ),
       McpTool(

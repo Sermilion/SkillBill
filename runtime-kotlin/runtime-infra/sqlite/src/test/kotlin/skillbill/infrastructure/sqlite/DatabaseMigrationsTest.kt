@@ -41,6 +41,13 @@ private val GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_OUT_OF_BAND_ACCEPTANCE.label()
 private val GOAL_REVIEW_POLICY_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_REVIEW_POLICY.label()
+private val DIAGNOSIS_TABLES =
+  listOf(
+    "block_incident_diagnosis_evidence",
+    "block_incident_diagnosis_prerequisites",
+    "block_incident_diagnosis_quarantine",
+    "block_incident_diagnoses",
+  )
 
 class DatabaseMigrationsTest {
   @Test
@@ -99,6 +106,45 @@ class DatabaseMigrationsTest {
       assertEquals(1, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
       assertEquals(1, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'phases'"))
       assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents"))
+    }
+  }
+
+  @Test
+  fun `block incident diagnosis migration upgrades version 76 and keeps diagnosis history immutable`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-block-diagnosis-upgrade").resolve("upgrade.db")
+    val token = "bi_${"a".repeat(64)}"
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
+            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
+            "('$token', '0.1', 1, 'accepted_phase_block', 'original failure', " +
+            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
+            "'unknown_historical')",
+        )
+        DIAGNOSIS_TABLES.forEach { table -> statement.execute("DROP TABLE $table") }
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 77")
+        statement.execute("PRAGMA user_version = 76")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents WHERE occurrence_token = '$token'"))
+      DIAGNOSIS_TABLES.forEach { table ->
+        assertEquals(1, scalarInt(connection, "SELECT count(*) FROM sqlite_master WHERE name = '$table'"))
+      }
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO block_incident_diagnoses (occurrence_token, revision, summary, what_happened, certainty, " +
+            "responsible_category, proposed_recovery_action, no_workaround_known, degradations, " +
+            "investigator_kind, completed_at) VALUES ('$token', 2, 'summary', 'what happened', 'unknown', " +
+            "'unresolved', 'none', 1, '', 'deterministic', '2026-10-21T12:01:00Z')",
+        )
+        assertFailsWith<SQLException> {
+          statement.executeUpdate("UPDATE block_incident_diagnoses SET summary = 'rewritten'")
+        }
+        assertFailsWith<SQLException> { statement.executeUpdate("DELETE FROM block_incident_diagnoses") }
+      }
     }
   }
 
@@ -2220,4 +2266,5 @@ private val expectedMigrationDefinitions =
     74 to "track-block-incident-scan-progress",
     75 to "record-uncaptured-block-incident-generation",
     76 to "activate-block-incident-rollout",
+    77 to "add-block-incident-diagnoses",
   )

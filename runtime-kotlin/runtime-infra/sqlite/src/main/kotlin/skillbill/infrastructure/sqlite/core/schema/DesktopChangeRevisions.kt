@@ -83,6 +83,15 @@ internal fun addBlockIncidentRevisionTriggers(connection: Connection) {
   }
 }
 
+internal fun addBlockIncidentDiagnosisRevisionTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    REVISION_TRIGGER_OPERATIONS.forEach { operation ->
+      statement.execute("DROP TRIGGER IF EXISTS desktop_change_block_incident_diagnoses_${operation.lowercase()}")
+    }
+    createRevisionTriggers(statement, "block_incident_diagnoses", DesktopReadSchema.TOPICS)
+  }
+}
+
 private val REVISION_TRIGGER_OPERATIONS = listOf("INSERT", "UPDATE", "DELETE")
 
 private fun installDesktopReadIndexes(connection: Connection) {

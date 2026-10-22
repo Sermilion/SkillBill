@@ -5,10 +5,10 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentFailureFacts
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.diagnostics.block.OperatorBlockRetryArtifactKeys
-import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWriteResult
@@ -18,6 +18,7 @@ import skillbill.engine.goalrunner.persist.blockincident.availableWhen
 import skillbill.engine.goalrunner.persist.blockincident.blockExitBehavior
 import skillbill.engine.goalrunner.persist.blockincident.blockOrigin
 import skillbill.engine.goalrunner.persist.blockincident.goalParentWorkflowId
+import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
@@ -84,6 +85,9 @@ internal class WorkflowGoalRunnerBlockWrites(
         failureThrowableType = request.failureThrowableType,
         causingAcceptedBlockReference = request.causingAcceptedBlockReference,
         historicalBlockReference = request.historicalBlockReference,
+        stopReason = request.stopReason,
+        failureCode = request.failureCode,
+        failureDisposition = request.failureDisposition,
       ),
       workflowStates,
       blockIncidents,
@@ -100,7 +104,20 @@ internal class WorkflowGoalRunnerBlockWrites(
       ?.let { return markHistoricalBlocked(write, it, workflowStates) }
     val candidate = blockCandidate(write, workflowStates)
     val existingOwnerToken = blockIncidents.findByAlias(candidate.alias)?.occurrence?.occurrenceToken
-    val blockIdentity = candidate.identity(existingOwnerToken)
+    val blockIdentity =
+      candidate.identity(existingOwnerToken).let { identity ->
+        if (identity.incidentToken == candidate.retainedIdentity?.incidentToken) {
+          identity
+        } else {
+          identity.copy(
+            failureFacts =
+              BlockIncidentFailureFacts(
+                write.failureCode ?: write.stopReason?.name,
+                write.failureDisposition,
+              ),
+          )
+        }
+      }
     persistBlock(write, blockIdentity, blockIdentity.attempt ?: candidate.stepAttemptCount ?: 0, workflowStates)
     return GoalRunnerBlockWriteResult(
       blockIdentity.stepId,
@@ -185,10 +202,19 @@ internal class WorkflowGoalRunnerBlockWrites(
         ),
       generation = blockIdentity.generation,
       origin = write.blockOrigin(),
+      failureCode = blockIdentity.failureCode,
+      failureDisposition = blockIdentity.failureDisposition?.wireValue,
       exitCode = write.failureExitCode,
       throwableType = write.failureThrowableType,
       exitBehavior = write.blockExitBehavior(),
-      unavailableFields = acceptedUnavailableFields(write, phaseId, blockIdentity.attempt, parentWorkflowId),
+      unavailableFields =
+        acceptedUnavailableFields(
+          write,
+          phaseId,
+          blockIdentity.attempt,
+          parentWorkflowId,
+          blockIdentity.failureCode,
+        ),
     )
   }
 
@@ -197,12 +223,20 @@ internal class WorkflowGoalRunnerBlockWrites(
     phaseId: String?,
     attempt: Int?,
     parentWorkflowId: String?,
+    failureCode: String?,
   ): Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> =
     buildMap {
       put(BlockIncidentCorrelatedField.PHASE_RUN_ID, BlockIncidentFieldAvailability.NOT_APPLICABLE)
       put(BlockIncidentCorrelatedField.THROWABLE_TYPE, availableWhen(write.failureThrowableType != null))
       put(BlockIncidentCorrelatedField.EXIT_CODE, availableWhen(write.failureExitCode != null))
-      put(BlockIncidentCorrelatedField.FAILURE_CODE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
+      put(
+        BlockIncidentCorrelatedField.FAILURE_CODE,
+        if (failureCode != null) {
+          BlockIncidentFieldAvailability.AVAILABLE
+        } else {
+          BlockIncidentFieldAvailability.NOT_CAPTURED
+        },
+      )
       put(BlockIncidentCorrelatedField.GENERATION, BlockIncidentFieldAvailability.NOT_APPLICABLE)
       put(BlockIncidentCorrelatedField.ATTEMPT, availableWhen(phaseId != null && attempt != null))
       put(BlockIncidentCorrelatedField.PHASE_ID, availableWhen(phaseId != null))
@@ -234,16 +268,24 @@ internal class WorkflowGoalRunnerBlockWrites(
           ?.let { BlockIncidentAlias(it, value) }
       }
     val savedIdentity = BlockIncidentIdentity.fromArtifacts(write.record.artifacts)
+    val referencedIdentity =
+      savedIdentity?.takeIf {
+        it.incidentToken == reference.incidentToken &&
+          it.stepId == reference.blockedStepId &&
+          it.attempt == reference.attempt &&
+          it.generation == reference.executionGeneration
+      }
     val blockIdentity =
       BlockIncidentIdentity(
         stepId = reference.blockedStepId,
         attempt = reference.attempt,
         generation = reference.executionGeneration,
-        childWorkflowId = savedIdentity?.takeIf { it.incidentToken == reference.incidentToken }?.childWorkflowId,
+        childWorkflowId = referencedIdentity?.childWorkflowId,
         childIncidentToken = reference.childIncidentToken,
         incidentToken = reference.incidentToken,
         alias = canonical,
         sourceAlias = referenceSourceAlias ?: referenceAlias?.takeIf { it != canonical },
+        failureFacts = referencedIdentity?.failureFacts,
       )
     val currentAttemptCount = write.record.steps.firstOrNull { it.stepId == reference.blockedStepId }?.attemptCount
     persistBlock(
@@ -252,8 +294,31 @@ internal class WorkflowGoalRunnerBlockWrites(
       maxOf(currentAttemptCount ?: 0, reference.attempt ?: 0),
       workflowStates,
     )
-    return WorkflowGoalRunnerHistoricalBlockObservation.build(write, reference, blockIdentity.sourceAlias)
+    val sourceFacts = historicalSourceFacts(workflowStates, reference)
+    return WorkflowGoalRunnerHistoricalBlockObservation.build(
+      write.copy(
+        failureCode = sourceFacts?.failureCode,
+        failureDisposition = sourceFacts?.failureDisposition,
+        stopReason = null,
+      ),
+      reference,
+      blockIdentity.sourceAlias,
+    )
   }
+
+  private fun historicalSourceFacts(
+    workflowStates: WorkflowStateRepository,
+    reference: GoalRunnerAcceptedBlockReference,
+  ): BlockIncidentIdentity? =
+    workflowFamilyFor(workflowStates, reference.sourceWorkflowId)
+      ?.let { family -> workflowStates.get(family, reference.sourceWorkflowId) }
+      ?.let { source -> BlockIncidentIdentity.fromArtifacts(source.artifacts) }
+      ?.takeIf {
+        it.incidentToken == reference.incidentToken &&
+          it.stepId == reference.blockedStepId &&
+          it.attempt == reference.attempt &&
+          it.generation == reference.executionGeneration
+      }
 
   private fun persistBlock(
     write: GoalRunnerBlockWrite,

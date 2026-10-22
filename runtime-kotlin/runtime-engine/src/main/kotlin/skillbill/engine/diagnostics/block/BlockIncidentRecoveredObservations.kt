@@ -33,7 +33,18 @@ internal object BlockIncidentRecoveredObservations {
           put(BlockIncidentCorrelatedField.REASON, BlockIncidentFieldAvailability.NOT_CAPTURED)
         }
       }
-    val applicable = identity?.takeIf { it.stepId == record.currentStepId }
+    val currentAttempt = record.steps.firstOrNull { it.stepId == record.currentStepId }?.attemptCount
+    val applicable =
+      identity?.takeIf {
+        it.stepId == record.currentStepId &&
+          it.incidentToken == BlockIncidentAliases.token(it.alias) &&
+          BlockIncidentIdentity.matchesBlockedAttempt(
+            record.artifacts,
+            it.stepId,
+            it.attempt,
+            currentAttempt,
+          )
+      }
     val observation =
       when {
         applicable == null -> recoveredBlock(candidate, record, reason)
@@ -71,6 +82,8 @@ internal object BlockIncidentRecoveredObservations {
         ),
       generation = identity.generation,
       origin = BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK,
+      failureCode = identity.failureCode,
+      failureDisposition = identity.failureDisposition?.wireValue,
       exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
       unavailableFields =
         GOAL_NOT_APPLICABLE_FIELDS.associateWith { BlockIncidentFieldAvailability.NOT_APPLICABLE } +
@@ -85,6 +98,12 @@ internal object BlockIncidentRecoveredObservations {
             BlockIncidentCorrelatedField.PHASE_ID to
               if (phaseId == null) {
                 BlockIncidentFieldAvailability.NOT_APPLICABLE
+              } else {
+                BlockIncidentFieldAvailability.AVAILABLE
+              },
+            BlockIncidentCorrelatedField.FAILURE_CODE to
+              if (identity.failureCode == null) {
+                BlockIncidentFieldAvailability.NOT_CAPTURED
               } else {
                 BlockIncidentFieldAvailability.AVAILABLE
               },
@@ -107,12 +126,20 @@ internal object BlockIncidentRecoveredObservations {
       additionalAliases = listOfNotNull(identity.sourceAlias),
       generation = identity.generation,
       origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+      failureCode = identity.failureCode,
+      failureDisposition = identity.failureDisposition?.wireValue,
       exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
       unavailableFields =
         phaseFields(identity.stepId) +
           mapOf(
             BlockIncidentCorrelatedField.THROWABLE_TYPE to BlockIncidentFieldAvailability.NOT_APPLICABLE,
             BlockIncidentCorrelatedField.EXIT_CODE to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+            BlockIncidentCorrelatedField.FAILURE_CODE to
+              if (identity.failureCode == null) {
+                BlockIncidentFieldAvailability.NOT_CAPTURED
+              } else {
+                BlockIncidentFieldAvailability.AVAILABLE
+              },
           ),
     )
 
@@ -130,12 +157,14 @@ internal object BlockIncidentRecoveredObservations {
         alias = alias,
         generation = null,
         origin = BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK,
+        failureCode = null,
         exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
         unavailableFields =
           GOAL_NOT_APPLICABLE_FIELDS.associateWith { BlockIncidentFieldAvailability.NOT_APPLICABLE } +
             UNRECOVERABLE_FAILURE_FIELDS.associateWith { BlockIncidentFieldAvailability.NOT_CAPTURED } +
             (BlockIncidentCorrelatedField.ATTEMPT to BlockIncidentFieldAvailability.NOT_APPLICABLE) +
-            (BlockIncidentCorrelatedField.PHASE_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE),
+            (BlockIncidentCorrelatedField.PHASE_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE) +
+            (BlockIncidentCorrelatedField.FAILURE_CODE to BlockIncidentFieldAvailability.NOT_CAPTURED),
       )
     }
     return BlockIncidentObservation(
@@ -146,10 +175,12 @@ internal object BlockIncidentRecoveredObservations {
       alias = alias,
       generation = null,
       origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+      failureCode = null,
       exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
       unavailableFields =
         phaseFields(stepId) +
-          UNRECOVERABLE_FAILURE_FIELDS.associateWith { BlockIncidentFieldAvailability.NOT_CAPTURED },
+          UNRECOVERABLE_FAILURE_FIELDS.associateWith { BlockIncidentFieldAvailability.NOT_CAPTURED } +
+          (BlockIncidentCorrelatedField.FAILURE_CODE to BlockIncidentFieldAvailability.NOT_CAPTURED),
     )
   }
 
@@ -171,7 +202,7 @@ internal object BlockIncidentRecoveredObservations {
   private val GOAL_NOT_APPLICABLE_FIELDS =
     listOf(
       BlockIncidentCorrelatedField.PHASE_RUN_ID, BlockIncidentCorrelatedField.INVOCATION_ID,
-      BlockIncidentCorrelatedField.EXECUTION_ID, BlockIncidentCorrelatedField.FAILURE_CODE,
+      BlockIncidentCorrelatedField.EXECUTION_ID,
       BlockIncidentCorrelatedField.GENERATION, BlockIncidentCorrelatedField.REPAIR_TURN,
       BlockIncidentCorrelatedField.OUTPUT_GENERATION, BlockIncidentCorrelatedField.MONITOR_SELECTOR,
       BlockIncidentCorrelatedField.PULL_REQUEST_ID, BlockIncidentCorrelatedField.PULL_REQUEST_URL,

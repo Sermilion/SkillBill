@@ -248,7 +248,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
         attempt = request.attemptCount,
         blockedReason = blockedReason,
         failureDisposition = request.failureDisposition?.wireValue,
-        failureCode = failureCode,
+        failureCode = failureCode ?: request.failureCode,
         evidenceReferences = request.blockEvidenceReferences(),
       )
     val correlated =

@@ -4,6 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationGateFindingPayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 import skillbill.workflow.model.persistence.artifact.asExactLongOrNull
@@ -327,6 +328,24 @@ data class FeatureTaskRuntimeValidationGateProgress(
       }
     }
 
+    private fun decodeFailureSubject(
+      map: Map<*, *>,
+      field: String,
+    ): String {
+      if (!map.containsKey(ValidationEvidencePayloadKeys.FAILURE_SUBJECT)) {
+        return FeatureTaskRuntimeValidationFailureSubject.UNKNOWN.wireValue
+      }
+      val wire =
+        map[ValidationEvidencePayloadKeys.FAILURE_SUBJECT] as? String
+          ?: throw invalidWorkflowStateSchemaError(
+            "FeatureTaskRuntimeValidationGateProgress.$field.failure_subject must be a string.",
+          )
+      return FeatureTaskRuntimeValidationFailureSubject.fromWire(wire)?.wireValue
+        ?: throw invalidWorkflowStateSchemaError(
+          "FeatureTaskRuntimeValidationGateProgress.$field.failure_subject is unsupported.",
+        )
+    }
+
     private fun decodeFindings(
       raw: Any?,
       field: String,
@@ -343,11 +362,14 @@ data class FeatureTaskRuntimeValidationGateProgress(
             ?: throw invalidWorkflowStateSchemaError(
               "FeatureTaskRuntimeValidationGateProgress.$field[$index] must be a mapping.",
             )
+        val failureSubject = decodeFailureSubject(map, "$field[$index]")
         linkedMapOf(
-          "module" to (map["module"] as? String),
-          "rule_or_test_id" to (map["rule_or_test_id"] as? String),
-          "message" to (map["message"] as? String),
-          "location" to (map["location"] as? String),
+          ValidationGateFindingPayloadKeys.MODULE to (map[ValidationGateFindingPayloadKeys.MODULE] as? String),
+          ValidationGateFindingPayloadKeys.RULE_OR_TEST_ID to
+            (map[ValidationGateFindingPayloadKeys.RULE_OR_TEST_ID] as? String),
+          ValidationGateFindingPayloadKeys.MESSAGE to (map[ValidationGateFindingPayloadKeys.MESSAGE] as? String),
+          ValidationGateFindingPayloadKeys.LOCATION to (map[ValidationGateFindingPayloadKeys.LOCATION] as? String),
+          ValidationEvidencePayloadKeys.FAILURE_SUBJECT to failureSubject,
         )
       }
     }

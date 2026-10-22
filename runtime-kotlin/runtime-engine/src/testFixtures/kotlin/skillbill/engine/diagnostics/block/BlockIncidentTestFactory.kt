@@ -7,6 +7,8 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClassifier
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
 import java.time.Clock
 
 fun testBlockIncidentCapture(
@@ -29,7 +31,12 @@ fun testBlockIncidentEntryReconciler(
     BlockIncidentInvestigationWorker(
       database,
       clock,
-      DefaultBlockIncidentInvestigator,
+      BlockIncidentInvestigator { claimed, degradations ->
+        BlockIncidentInvestigationResult(
+          BlockIncidentDiagnosis.PARTIAL,
+          BlockIncidentClassifier.classify(claimed.occurrence, emptyList(), degradations, clock.instant()),
+        )
+      },
       diagnostics,
       IdentifierGeneratorPort { "test-investigator" },
       NoopFeatureTaskRuntimeWorkerSupervisor,

@@ -2,6 +2,7 @@ package skillbill.engine.diagnostics.block
 
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -14,6 +15,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehav
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal class BlockIncidentFeatureTaskCorrelation private constructor(
@@ -40,9 +42,14 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
       buildMap {
         put(BlockIncidentCorrelatedField.THROWABLE_TYPE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
         put(BlockIncidentCorrelatedField.EXIT_CODE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
-        if (failureCode == null) {
-          put(BlockIncidentCorrelatedField.FAILURE_CODE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
-        }
+        put(
+          BlockIncidentCorrelatedField.FAILURE_CODE,
+          if (failureCode == null) {
+            BlockIncidentFieldAvailability.NOT_CAPTURED
+          } else {
+            BlockIncidentFieldAvailability.AVAILABLE
+          },
+        )
         if (recordedReason == null) {
           put(BlockIncidentCorrelatedField.REASON, BlockIncidentFieldAvailability.NOT_CAPTURED)
         }
@@ -74,9 +81,9 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
       val attempt = observation.attempt
       if (workflowId == null || phaseId == null || attempt == null) return
       val record = states.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return
-      val canonical = BlockIncidentAliases.goal(workflowId, phaseId, observation.generation, attempt, null)
+      val acceptedAlias = BlockIncidentAliases.fallback(observation)
       val existing = BlockIncidentIdentity.fromArtifacts(record.artifacts)
-      if (existing?.matchesAcceptedPhase(phaseId, attempt, observation.generation, canonical) == true) return
+      if (existing?.matchesAcceptedPhase(phaseId, attempt, observation.generation, acceptedAlias) == true) return
       val alias = BlockIncidentAliases.fallback(observation)
       val identity =
         BlockIncidentIdentity(
@@ -87,6 +94,16 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
           childIncidentToken = null,
           incidentToken = BlockIncidentAliases.token(alias),
           alias = alias,
+          failureFacts =
+            BlockIncidentFailureFacts(
+              observation.failureCode,
+              observation.failureDisposition?.let { disposition ->
+                FeatureTaskRuntimeFailureDisposition.entries.firstOrNull { it.wireValue == disposition }
+                  ?: throw invalidWorkflowStateSchemaError(
+                    "Accepted block identity has an unsupported failure disposition.",
+                  )
+              },
+            ),
         )
       states.save(
         WorkflowFamily.TASK_RUNTIME,

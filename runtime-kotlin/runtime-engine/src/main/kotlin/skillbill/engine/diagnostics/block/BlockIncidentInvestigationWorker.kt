@@ -8,7 +8,10 @@ import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClaim
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDegradation
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosisRecord
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitions
 import java.time.Clock
 import java.time.Duration
@@ -17,13 +20,20 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Produces a diagnosis for one claimed block incident without changing its observation. */
 fun interface BlockIncidentInvestigator {
-  /** Returns the diagnosis to persist for [incident]. */
-  fun investigate(incident: BlockIncident): BlockIncidentDiagnosis
+  /**
+   * Returns the terminal diagnosis state and the diagnosis record to persist for [claimed]. [workerDegradations]
+   * carries what the worker observed before the investigation started, and the record must include them.
+   */
+  fun investigate(
+    claimed: BlockIncident,
+    workerDegradations: Set<BlockIncidentDegradation>,
+  ): BlockIncidentInvestigationResult
 }
 
-object DefaultBlockIncidentInvestigator : BlockIncidentInvestigator {
-  override fun investigate(incident: BlockIncident): BlockIncidentDiagnosis = BlockIncidentDiagnosis.PARTIAL
-}
+data class BlockIncidentInvestigationResult(
+  val diagnosis: BlockIncidentDiagnosis,
+  val record: BlockIncidentDiagnosisRecord,
+)
 
 @Inject
 class BlockIncidentInvestigationWorker(
@@ -49,11 +59,30 @@ class BlockIncidentInvestigationWorker(
       } ?: return
     candidates.filter { observedSince == null || it.occurrence.observedAt >= observedSince }.forEach { candidate ->
       if (!clock.instant().isBefore(deadline)) return
-      investigate(candidate)
+      investigate(candidate, workerDegradations(candidate, observedSince))
     }
   }
 
-  private fun investigate(candidate: BlockIncident) {
+  private fun workerDegradations(
+    candidate: BlockIncident,
+    observedSince: Instant?,
+  ): Set<BlockIncidentDegradation> =
+    buildSet {
+      if (candidate.state.diagnosis == BlockIncidentDiagnosis.INVESTIGATING) {
+        add(BlockIncidentDegradation.CLAIM_TAKEN_OVER)
+      }
+      if (candidate.occurrence.evidenceAvailability == BlockIncidentEvidenceAvailability.FALLBACK_SPOOL) {
+        add(BlockIncidentDegradation.SPOOL_IMPORTED)
+      }
+      if (observedSince == null && candidate.state.diagnosis == BlockIncidentDiagnosis.PENDING) {
+        add(BlockIncidentDegradation.NOT_PICKED_UP)
+      }
+    }
+
+  private fun investigate(
+    candidate: BlockIncident,
+    workerDegradations: Set<BlockIncidentDegradation>,
+  ) {
     val identity = processSupervisor.currentProcess()
     val ownerToken = identifiers.randomToken()
     val ownerGeneration = (candidate.state.claim?.ownerGeneration ?: 0L) + 1L
@@ -88,15 +117,35 @@ class BlockIncidentInvestigationWorker(
       },
       joinBudgetMillis = 1,
     )
-    val diagnosis =
+    val result =
       try {
-        diagnostics.bestEffort("Block incident investigator failed.", BlockIncidentDiagnosis.CRASHED) {
-          investigator.investigate(candidate)
+        diagnostics.bestEffort("Block incident investigator failed.", null) {
+          investigator.investigate(candidate, workerDegradations)
         }
       } finally {
         stopRenewals.set(true)
       }
-    settle(candidate, ownerToken, ownerGeneration, diagnosis)
+    if (result == null) {
+      settle(candidate, ownerToken, ownerGeneration, BlockIncidentDiagnosis.CRASHED)
+      return
+    }
+    val recorded =
+      diagnostics.bestEffort("Block incident diagnosis could not be saved.", null) {
+        database.transaction { unit ->
+          unit.blockIncidents.settleWithDiagnosis(
+            ownerToken,
+            ownerGeneration,
+            result.diagnosis,
+            result.record,
+            null,
+          )
+        }
+      }
+    when (recorded) {
+      null -> settle(candidate, ownerToken, ownerGeneration, BlockIncidentDiagnosis.PERSIST_FAILED)
+      false -> diagnostics.warning("Block incident diagnosis settlement was refused; its claim will expire.")
+      true -> Unit
+    }
   }
 
   private fun settle(

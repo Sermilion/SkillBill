@@ -3,12 +3,14 @@ package skillbill.engine.goalrunner.model
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
+import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 data class GoalSubtaskIdentity(
   val workflowId: String,
@@ -43,6 +45,9 @@ data class GoalRunnerBlockRequest(
   val failureThrowableType: String? = null,
   val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val stopReason: GoalRunnerStopReason? = null,
+  val failureCode: String? = null,
+  val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
 )
 
 data class GoalRunnerBlockWrite(
@@ -57,6 +62,9 @@ data class GoalRunnerBlockWrite(
   val failureThrowableType: String? = null,
   val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val stopReason: GoalRunnerStopReason? = null,
+  val failureCode: String? = null,
+  val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
 )
 
 internal data class GoalRunnerBlockWriteResult(

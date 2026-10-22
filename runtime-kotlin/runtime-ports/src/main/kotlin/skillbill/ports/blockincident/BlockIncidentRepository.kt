@@ -6,6 +6,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClaim
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosisRecord
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
 import java.time.Instant
 
@@ -26,7 +27,12 @@ interface BlockIncidentRolloutReads {
   ): List<BlockedWorkflowWithoutIncident>
 }
 
-interface BlockIncidentRepository : BlockIncidentRolloutReads {
+interface BlockIncidentDiagnosisReads {
+  /** Returns the valid diagnosis records stored for the incident, oldest revision first. Corrupt rows are skipped. */
+  fun diagnoses(occurrenceToken: String): List<BlockIncidentDiagnosisRecord>
+}
+
+interface BlockIncidentRepository : BlockIncidentRolloutReads, BlockIncidentDiagnosisReads {
   /** Returns the incident already associated with this alias, if one exists. */
   fun findByAlias(alias: BlockIncidentAlias): BlockIncident?
 
@@ -61,6 +67,20 @@ interface BlockIncidentRepository : BlockIncidentRolloutReads {
     ownerToken: String,
     ownerGeneration: Long,
     diagnosis: BlockIncidentDiagnosis,
+    nextEligibleAt: Instant?,
+  ): Boolean
+
+  /**
+   * Settles the claimed incident like [settle] and stores [record] in the same transaction. The stored record takes
+   * the incident revision current at settle time, because claim renewals advance the revision after the record was
+   * drafted. Returns false and stores nothing when the owner, generation, or claim deadline no longer allow the
+   * settle. Throws when the record fails validation.
+   */
+  fun settleWithDiagnosis(
+    ownerToken: String,
+    ownerGeneration: Long,
+    diagnosis: BlockIncidentDiagnosis,
+    record: BlockIncidentDiagnosisRecord,
     nextEligibleAt: Instant?,
   ): Boolean
 

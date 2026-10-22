@@ -124,6 +124,8 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.diagnostics.model.ExactOutputRead
+import skillbill.ports.diagnostics.model.ExactOutputReadRequest
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
@@ -2236,6 +2238,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
               .maxWithOrNull(compareBy({ it.key.generation }, { it.key.repairTurn }))
               ?.value
           }
+
+          override fun readProducerOutputExact(request: ExactOutputReadRequest): ExactOutputRead =
+            ExactOutputRead.Unavailable("Exact retained output is unavailable.")
         }
       override val unaddressedFindings =
         object : UnaddressedFindingsRepository {

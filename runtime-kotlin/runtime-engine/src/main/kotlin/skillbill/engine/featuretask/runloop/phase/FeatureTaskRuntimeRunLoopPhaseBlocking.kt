@@ -86,6 +86,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         loopId = inPhase.run.reentry?.loopId,
         edgeIteration = inPhase.run.reentry?.edgeIteration,
         failureDisposition = inPhase.failureDisposition,
+        failureCode = block.failureCode,
         payload = inPhase.payload,
       ),
       transitions,
@@ -163,6 +164,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         loopId = args.run.reentry?.loopId,
         edgeIteration = args.run.reentry?.edgeIteration,
         failureDisposition = args.failureDisposition,
+        failureCode = args.failureCode,
         payload = args.payload,
       ),
       transitions,
@@ -206,6 +208,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         repairEvidence = repairEvidence,
         blockedReason = reason,
         failureDisposition = failureDisposition,
+        failureCode = args.failureCode,
         fileManifestBefore = fileManifest?.before.orEmpty(),
         fileManifestAfter = fileManifest?.after.orEmpty(),
         fileManifestIntroduced = fileManifest?.introduced.orEmpty(),
@@ -220,7 +223,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       )
     transitions.persistBlockedPhaseState(recorder, phaseState)
     observability.blocked(run.phaseId, run.resolvedAgent.resolvedAgentId, attemptCount.coerceAtLeast(1), reason)
-    return PhaseOutcome.blocked(reason)
+    return PhaseOutcome.blocked(reason, args.failureCode)
   }
 
   internal fun PhaseRunLoopAttemptScope.pauseAndPersistInPhase(args: PauseAndPersistInPhaseArgs): PhaseOutcome {

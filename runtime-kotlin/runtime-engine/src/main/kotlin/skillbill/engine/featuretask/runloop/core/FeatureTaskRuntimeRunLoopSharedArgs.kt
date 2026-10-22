@@ -151,6 +151,7 @@ internal data class BlockAndPersistArgs(
   val loopId: String?,
   val edgeIteration: Int?,
   val failureDisposition: FeatureTaskRuntimeFailureDisposition,
+  val failureCode: String? = null,
   val payload: BlockAndPersistPayload,
 )
 
@@ -169,6 +170,7 @@ internal data class BlockAndPersistInPhaseArgs(
   val reason: String,
   val observability: FeatureTaskRuntimeRunObservability,
   val failureDisposition: FeatureTaskRuntimeFailureDisposition,
+  val failureCode: String? = null,
   val payload: BlockAndPersistPayload,
 )
 
@@ -313,6 +315,7 @@ internal data class PhaseBlockRequest(
   val payload: BlockAndPersistPayload = BlockAndPersistPayload(),
   val failureDisposition: FeatureTaskRuntimeFailureDisposition =
     FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+  val failureCode: String? = null,
 )
 
 internal data class CheckpointCommitMessageArgs(

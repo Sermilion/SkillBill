@@ -45,7 +45,7 @@ import skillbill.di.workflow.RuntimeWorkflowProvides
 import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
-import skillbill.engine.diagnostics.block.DefaultBlockIncidentInvestigator
+import skillbill.engine.diagnostics.block.investigation.EvidenceBlockIncidentInvestigator
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
@@ -156,7 +156,8 @@ abstract class RuntimeComponent(
   fun runtimeVersion(): RuntimeVersion = RuntimeVersion(SkillBillVersion.VALUE)
 
   @Provides
-  fun blockIncidentInvestigator(): BlockIncidentInvestigator = DefaultBlockIncidentInvestigator
+  fun blockIncidentInvestigator(investigator: EvidenceBlockIncidentInvestigator): BlockIncidentInvestigator =
+    investigator
 
   @Provides
   fun optionalCallbacks(ctx: RuntimeContext): OptionalCallbacks = ctx.callbacks

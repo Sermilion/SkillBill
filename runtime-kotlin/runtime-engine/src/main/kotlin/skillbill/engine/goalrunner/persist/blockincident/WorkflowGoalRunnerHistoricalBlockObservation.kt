@@ -42,6 +42,8 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
         additionalAliases = listOfNotNull(sourceAlias, childToken?.let(BlockIncidentAliases::childCause)),
         generation = reference.executionGeneration,
         origin = write.blockOrigin(),
+        failureCode = write.failureCode,
+        failureDisposition = write.failureDisposition?.wireValue,
         exitCode = write.failureExitCode,
         throwableType = write.failureThrowableType,
         exitBehavior = write.blockExitBehavior(),
@@ -70,7 +72,12 @@ internal object WorkflowGoalRunnerHistoricalBlockObservation {
       BlockIncidentCorrelatedField.ATTEMPT to availableWhen(taskRuntime && reference.attempt != null),
       BlockIncidentCorrelatedField.THROWABLE_TYPE to availableWhen(write.failureThrowableType != null),
       BlockIncidentCorrelatedField.EXIT_CODE to availableWhen(write.failureExitCode != null),
-      BlockIncidentCorrelatedField.FAILURE_CODE to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+      BlockIncidentCorrelatedField.FAILURE_CODE to
+        if (write.failureCode == null) {
+          BlockIncidentFieldAvailability.NOT_CAPTURED
+        } else {
+          BlockIncidentFieldAvailability.AVAILABLE
+        },
       BlockIncidentCorrelatedField.GENERATION to availableWhen(reference.executionGeneration != null),
     )
   }

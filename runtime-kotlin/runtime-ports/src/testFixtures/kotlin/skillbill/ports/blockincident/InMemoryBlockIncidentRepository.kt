@@ -5,6 +5,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClaim
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosisRecord
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOwner
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecovery
@@ -12,6 +13,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReport
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentState
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitionDecision
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitions
+import skillbill.workflow.taskruntime.model.blockincident.validation
 import java.time.Clock
 import java.time.Instant
 
@@ -19,6 +21,7 @@ class InMemoryBlockIncidentRepository(private val clock: Clock = Clock.systemUTC
   private val incidents = linkedMapOf<String, BlockIncident>()
 
   private val aliases = linkedMapOf<Pair<String, String>, String>()
+  private val diagnosisRecords = linkedMapOf<String, MutableList<BlockIncidentDiagnosisRecord>>()
   private val blockedWorkflows = linkedMapOf<String, Pair<BlockedWorkflowWithoutIncident, BlockIncidentAlias?>>()
 
   var activatedAt: Instant? = null
@@ -163,24 +166,56 @@ class InMemoryBlockIncidentRepository(private val clock: Clock = Clock.systemUTC
     nextEligibleAt: Instant?,
   ): Boolean =
     synchronized(this) {
-      val current = incidents[occurrenceToken] ?: return false
+      val candidate = settledCandidate(occurrenceToken, ownerToken, ownerGeneration, diagnosis, nextEligibleAt)
+      candidate?.let { incidents[occurrenceToken] = it }
+      candidate != null
+    }
+
+  override fun settleWithDiagnosis(
+    ownerToken: String,
+    ownerGeneration: Long,
+    diagnosis: BlockIncidentDiagnosis,
+    record: BlockIncidentDiagnosisRecord,
+    nextEligibleAt: Instant?,
+  ): Boolean =
+    synchronized(this) {
+      val occurrenceToken = record.occurrenceToken
       val candidate =
-        when (
-          val decision =
-            BlockIncidentTransitions.settle(
-              current,
-              clock.instant(),
-              BlockIncidentOwner(ownerToken, ownerGeneration),
-              diagnosis,
-              nextEligibleAt,
-            )
-        ) {
-          is BlockIncidentTransitionDecision.Accepted -> decision.candidate
-          is BlockIncidentTransitionDecision.Refused -> return false
-        }
+        settledCandidate(occurrenceToken, ownerToken, ownerGeneration, diagnosis, nextEligibleAt) ?: return false
+      val stamped = record.copy(revision = candidate.state.revision)
+      require(stamped.validation().isEmpty())
       incidents[occurrenceToken] = candidate
+      diagnosisRecords.getOrPut(occurrenceToken) { mutableListOf() } += stamped
       true
     }
+
+  override fun diagnoses(occurrenceToken: String): List<BlockIncidentDiagnosisRecord> =
+    synchronized(this) {
+      diagnosisRecords[occurrenceToken].orEmpty().sortedBy { it.revision }
+    }
+
+  private fun settledCandidate(
+    occurrenceToken: String,
+    ownerToken: String,
+    ownerGeneration: Long,
+    diagnosis: BlockIncidentDiagnosis,
+    nextEligibleAt: Instant?,
+  ): BlockIncident? {
+    val current = incidents[occurrenceToken] ?: return null
+    return when (
+      val decision =
+        BlockIncidentTransitions.settle(
+          current,
+          clock.instant(),
+          BlockIncidentOwner(ownerToken, ownerGeneration),
+          diagnosis,
+          nextEligibleAt,
+        )
+    ) {
+      is BlockIncidentTransitionDecision.Accepted -> decision.candidate
+      is BlockIncidentTransitionDecision.Refused -> null
+    }
+  }
 
   override fun expireDeadline(
     occurrenceToken: String,

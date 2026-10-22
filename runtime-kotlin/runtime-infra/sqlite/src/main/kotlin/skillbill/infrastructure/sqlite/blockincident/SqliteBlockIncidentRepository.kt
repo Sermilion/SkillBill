@@ -13,6 +13,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClaim
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosisRecord
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOwner
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecovery
@@ -20,6 +21,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReport
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentState
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitionDecision
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitions
+import skillbill.workflow.taskruntime.model.blockincident.validation
 import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.ResultSet
@@ -35,6 +37,7 @@ internal class SqliteBlockIncidentRepository(
   private val diagnostics: RuntimeDiagnostics? = null,
 ) : BlockIncidentRepository {
   private val rolloutQueries = SqliteBlockIncidentRolloutQueries(connection)
+  private val diagnosisStore = SqliteBlockIncidentDiagnosisStore(connection, clock, diagnostics)
 
   override fun rolloutActivatedAt(): Instant? = rolloutQueries.activatedAt()
 
@@ -427,14 +430,43 @@ internal class SqliteBlockIncidentRepository(
     ownerGeneration: Long,
     diagnosis: BlockIncidentDiagnosis,
     nextEligibleAt: Instant?,
+  ): Boolean =
+    settleRecording(
+      occurrenceToken,
+      BlockIncidentOwner(ownerToken, ownerGeneration),
+      diagnosis,
+      null,
+      nextEligibleAt,
+    )
+
+  override fun settleWithDiagnosis(
+    ownerToken: String,
+    ownerGeneration: Long,
+    diagnosis: BlockIncidentDiagnosis,
+    record: BlockIncidentDiagnosisRecord,
+    nextEligibleAt: Instant?,
+  ): Boolean =
+    settleRecording(
+      record.occurrenceToken,
+      BlockIncidentOwner(ownerToken, ownerGeneration),
+      diagnosis,
+      record,
+      nextEligibleAt,
+    )
+
+  override fun diagnoses(occurrenceToken: String): List<BlockIncidentDiagnosisRecord> {
+    if (!validOccurrenceToken(occurrenceToken)) throw incidentCorrupt("Invalid block incident selector.")
+    return diagnosisStore.read(occurrenceToken)
+  }
+
+  private fun settleRecording(
+    occurrenceToken: String,
+    owner: BlockIncidentOwner,
+    diagnosis: BlockIncidentDiagnosis,
+    record: BlockIncidentDiagnosisRecord?,
+    nextEligibleAt: Instant?,
   ): Boolean {
-    val validOwner = validIdentity(ownerToken) && ownerGeneration > 0
-    val validDiagnosis =
-      diagnosis != BlockIncidentDiagnosis.INVESTIGATING &&
-        (diagnosis == BlockIncidentDiagnosis.PENDING) == (nextEligibleAt != null)
-    if (!validOccurrenceToken(occurrenceToken) || !validOwner || !validDiagnosis) {
-      throw incidentCorrupt("Block incident settlement input violates its lifecycle contract.")
-    }
+    validateSettlement(occurrenceToken, owner, diagnosis, nextEligibleAt)
     val current = (lookup(occurrenceToken) as? BlockIncidentLookup.Found)?.incident ?: return false
     val now = clock.instant()
     val candidate =
@@ -443,7 +475,7 @@ internal class SqliteBlockIncidentRepository(
           BlockIncidentTransitions.settle(
             current,
             now,
-            BlockIncidentOwner(ownerToken, ownerGeneration),
+            owner,
             diagnosis,
             nextEligibleAt,
           )
@@ -452,6 +484,10 @@ internal class SqliteBlockIncidentRepository(
         is BlockIncidentTransitionDecision.Refused -> return false
       }
     candidate.requireContract()
+    val stamped = record?.copy(revision = candidate.state.revision)
+    if (stamped != null && (stamped.occurrenceToken != occurrenceToken || stamped.validation().isNotEmpty())) {
+      throw incidentCorrupt("Block incident diagnosis violates its record contract.")
+    }
     val settled =
       connection.prepareStatement(
         "UPDATE block_incidents SET diagnosis = ?, next_eligible_at = ?, retry_count = retry_count + 1, " +
@@ -465,15 +501,38 @@ internal class SqliteBlockIncidentRepository(
           occurrenceToken,
           current.state.revision,
           BlockIncidentDiagnosis.INVESTIGATING.wireValue,
-          ownerToken,
-          ownerGeneration,
+          owner.ownerToken,
+          owner.ownerGeneration,
         )
         statement.executeUpdate() == 1
       }
     if (!settled) return false
+    validateSettledReadback(occurrenceToken, candidate)
+    stamped?.let(diagnosisStore::insert)
+    return true
+  }
+
+  private fun validateSettlement(
+    occurrenceToken: String,
+    owner: BlockIncidentOwner,
+    diagnosis: BlockIncidentDiagnosis,
+    nextEligibleAt: Instant?,
+  ) {
+    val validOwner = validIdentity(owner.ownerToken) && owner.ownerGeneration > 0
+    val validDiagnosis =
+      diagnosis != BlockIncidentDiagnosis.INVESTIGATING &&
+        (diagnosis == BlockIncidentDiagnosis.PENDING) == (nextEligibleAt != null)
+    if (!validOccurrenceToken(occurrenceToken) || !validOwner || !validDiagnosis) {
+      throw incidentCorrupt("Block incident settlement input violates its lifecycle contract.")
+    }
+  }
+
+  private fun validateSettledReadback(
+    occurrenceToken: String,
+    candidate: BlockIncident,
+  ) {
     val persisted = load(occurrenceToken) ?: throw incidentCorrupt("Settled incident disappeared during readback.")
     if (persisted != candidate) throw incidentCorrupt("Settled incident differs from its validated candidate.")
-    return true
   }
 
   override fun expireDeadline(

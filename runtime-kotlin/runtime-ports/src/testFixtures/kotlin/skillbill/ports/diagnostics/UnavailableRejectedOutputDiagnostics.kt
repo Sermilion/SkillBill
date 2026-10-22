@@ -1,5 +1,7 @@
 package skillbill.ports.diagnostics
 
+import skillbill.ports.diagnostics.model.ExactOutputRead
+import skillbill.ports.diagnostics.model.ExactOutputReadRequest
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
@@ -33,6 +35,9 @@ object UnavailableRejectedOutputDiagnosticRepository : RejectedOutputDiagnosticR
     agentId: String,
     generation: Int,
   ): ProducerOutputEvidence? = error("Rejected-output diagnostic persistence is unavailable.")
+
+  override fun readProducerOutputExact(request: ExactOutputReadRequest): ExactOutputRead =
+    ExactOutputRead.Unavailable("Exact retained output is unavailable.")
 
   override fun deleteProducerOutputsBefore(before: Instant): Int =
     error("Rejected-output diagnostic persistence is unavailable.")

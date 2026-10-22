@@ -165,6 +165,7 @@ class GoalRunner(
         causingChildWorkflowId = childWorkflowId,
         causingAcceptedBlockReference = acceptedChildBlockReference,
         historicalBlockReference = stop.historicalBlockReference,
+        stopReason = stop.reason,
         executionGeneration = executionGeneration,
         executionOwnerToken = executionOwnerToken,
       ),

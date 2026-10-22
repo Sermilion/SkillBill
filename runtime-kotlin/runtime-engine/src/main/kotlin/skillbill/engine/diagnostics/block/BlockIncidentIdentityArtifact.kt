@@ -10,6 +10,12 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+
+internal data class BlockIncidentFailureFacts(
+  val failureCode: String?,
+  val failureDisposition: FeatureTaskRuntimeFailureDisposition?,
+)
 
 internal data class BlockIncidentIdentity(
   val stepId: String,
@@ -20,7 +26,11 @@ internal data class BlockIncidentIdentity(
   val incidentToken: String,
   val alias: BlockIncidentAlias,
   val sourceAlias: BlockIncidentAlias? = null,
+  val failureFacts: BlockIncidentFailureFacts? = null,
 ) {
+  val failureCode: String? get() = failureFacts?.failureCode
+  val failureDisposition: FeatureTaskRuntimeFailureDisposition? get() = failureFacts?.failureDisposition
+
   fun acceptedReference(workflowId: String): GoalRunnerAcceptedBlockReference =
     GoalRunnerAcceptedBlockReference(
       sourceWorkflowId = workflowId,
@@ -37,7 +47,7 @@ internal data class BlockIncidentIdentity(
 
   fun artifactEntry(): Pair<String, Any?> =
     DurableWorkflowArtifactFamily.GOAL_BLOCK_IDENTITY.entry(
-      linkedMapOf(
+      linkedMapOf<String, Any?>(
         SharedPayloadKeys.STEP_ID to stepId,
         SharedPayloadKeys.ATTEMPT to attempt,
         BlockIncidentOccurrenceKeys.GENERATION to generation,
@@ -48,7 +58,15 @@ internal data class BlockIncidentIdentity(
         BlockIncidentSpoolKeys.ALIAS_VALUE to alias.value,
         BlockIncidentIdentityKeys.SOURCE_ALIAS_KIND to sourceAlias?.kind?.wireValue,
         BlockIncidentIdentityKeys.SOURCE_ALIAS_VALUE to sourceAlias?.value,
-      ),
+      ).apply {
+        failureFacts?.let { put(BlockIncidentIdentityKeys.FAILURE_FACTS, it.toArtifactMap()) }
+      },
+    )
+
+  private fun BlockIncidentFailureFacts.toArtifactMap(): Map<String, Any?> =
+    linkedMapOf(
+      BlockIncidentIdentityKeys.FAILURE_CODE to failureCode,
+      BlockIncidentIdentityKeys.FAILURE_DISPOSITION to failureDisposition?.wireValue,
     )
 
   companion object {
@@ -116,7 +134,24 @@ internal data class BlockIncidentIdentity(
             value[BlockIncidentSpoolKeys.ALIAS_VALUE] as? String ?: invalidIdentity(),
           ),
         sourceAlias = sourceAlias(value),
+        failureFacts = failureFacts(value),
       )
+    }
+
+    private fun failureFacts(value: Map<*, *>): BlockIncidentFailureFacts? {
+      if (!value.containsKey(BlockIncidentIdentityKeys.FAILURE_FACTS)) return null
+      val raw = value[BlockIncidentIdentityKeys.FAILURE_FACTS] as? Map<*, *> ?: invalidIdentity()
+      val expectedKeys = setOf(BlockIncidentIdentityKeys.FAILURE_CODE, BlockIncidentIdentityKeys.FAILURE_DISPOSITION)
+      if (raw.keys.any { it !is String } || raw.keys != expectedKeys) {
+        invalidIdentity()
+      }
+      val failureCode = raw[BlockIncidentIdentityKeys.FAILURE_CODE]?.let { it as? String ?: invalidIdentity() }
+      val failureDisposition =
+        raw[BlockIncidentIdentityKeys.FAILURE_DISPOSITION]?.let { rawDisposition ->
+          FeatureTaskRuntimeFailureDisposition.entries.firstOrNull { it.wireValue == rawDisposition }
+            ?: invalidIdentity()
+        }
+      return BlockIncidentFailureFacts(failureCode, failureDisposition)
     }
 
     private fun sourceAlias(value: Map<*, *>): BlockIncidentAlias? {
@@ -152,6 +187,9 @@ private object BlockIncidentIdentityKeys {
   const val INCIDENT_TOKEN = "incident_token"
   const val SOURCE_ALIAS_KIND = "source_alias_kind"
   const val SOURCE_ALIAS_VALUE = "source_alias_value"
+  const val FAILURE_FACTS = "failure_facts"
+  const val FAILURE_CODE = "failure_code"
+  const val FAILURE_DISPOSITION = "failure_disposition"
 }
 
 internal object BlockIncidentDisplacementKeys {
