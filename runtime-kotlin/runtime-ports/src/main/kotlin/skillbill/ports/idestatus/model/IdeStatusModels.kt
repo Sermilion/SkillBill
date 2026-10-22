@@ -141,6 +141,7 @@ data class IdeStatusCurrentPhaseExecution(
   val kind: IdeStatusCurrentPhaseExecutionKind,
   val count: Int,
   val total: Int? = null,
+  val criterionRef: String? = null,
 ) {
   init {
     require(phaseId.isNotBlank()) { "currentPhaseExecution.phaseId must not be blank." }

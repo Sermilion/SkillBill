@@ -6,6 +6,7 @@ import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.IdeStatusPayloadKeys
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
@@ -201,6 +202,7 @@ private fun phaseExecutionWireMap(execution: IdeStatusCurrentPhaseExecution): Ma
     put("kind", execution.kind.wireValue)
     put("count", execution.count)
     execution.total?.let { put("total", it) }
+    execution.criterionRef?.let { put(AcceptanceCriterionRepairPayloadKeys.CRITERION_REF, it) }
   }
 
 private fun MutableMap<String, Any?>.putPauseFields(snapshot: IdeStatusSnapshot) {

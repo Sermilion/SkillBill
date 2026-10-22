@@ -36,6 +36,8 @@ fun PhaseExecution.label(): String = when (kind) {
   PhaseExecutionKind.ATTEMPT -> if (phaseId in acceptanceAuditPhases) "repair attempt $count" else "run $count"
 }
 
+fun PhaseExecution.phaseLabel(): String = criterionRef?.let { "$phaseId · AC-${it.removePrefix("AC-").toInt()}" } ?: phaseId
+
 private val acceptanceAuditPhases = setOf("audit", "audit_plan_fix", "audit_implement_fix")
 
 /** A running clock that ticks forward from its last fresh reading and never runs backwards; a stale clock is frozen. */

@@ -87,7 +87,7 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     currentSubtaskId = currentSubtask?.id,
     currentSubtaskStartedAt = currentSubtask?.startedAt?.toKotlinInstant(),
     currentPhaseId = currentModel?.phaseId,
-    phaseExecution = currentPhaseExecution?.let { PhaseExecution(it.phaseId, PhaseExecutionKind.valueOf(it.kind.name), it.count, it.total) },
+    phaseExecution = currentPhaseExecution?.let { PhaseExecution(it.phaseId, PhaseExecutionKind.valueOf(it.kind.name), it.count, it.total, it.criterionRef) },
     currentModel = currentModel?.model,
     currentEffort = currentModel?.effort,
     startedAt = startedAt?.toKotlinInstant(),

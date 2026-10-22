@@ -5,7 +5,14 @@ import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.contracts.locator.IdeStatusSchemaPaths
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.IdeStatusStep
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -328,6 +335,37 @@ class IdeStatusSchemaValidatorTest {
       )
     IdeStatusSchemaValidator.validate(snapshot, "test-current-phase-execution-valid")
     IdeStatusSchemaValidator.validate(validGoalSnapshot(), "test-current-phase-execution-absent")
+  }
+
+  @Test
+  fun `current criterion survives status serialization and rejects malformed wire references`() {
+    val snapshot =
+      IdeStatusSnapshot(
+        repositoryIdentity = "repo-root-realpath-v1:/repo",
+        lifecycleState = IdeStatusLifecycleState.ACTIVE,
+        currentStep = IdeStatusStep("audit_plan_fix", "Audit plan fix"),
+        updatedAt = Instant.parse("2026-10-22T12:00:00Z"),
+        freshness = IdeStatusFreshness.FRESH,
+        summary = "Repairing an acceptance criterion.",
+        currentPhaseExecution =
+          IdeStatusCurrentPhaseExecution(
+            phaseId = "audit_plan_fix",
+            kind = IdeStatusCurrentPhaseExecutionKind.ATTEMPT,
+            count = 1,
+            criterionRef = "AC-005",
+          ),
+      )
+    val wire = IdeStatusSchemaValidator.wireMap(snapshot)
+    val execution = wire["current_phase_execution"] as Map<*, *>
+    assertEquals("AC-005", execution["criterion_ref"])
+    IdeStatusSchemaValidator.validate(wire, "test-current-criterion")
+
+    listOf("", "AC-5", "unstructured criterion text").forEach { malformed ->
+      val badWire = wire + ("current_phase_execution" to execution + ("criterion_ref" to malformed))
+      assertFailsWith<SkillBillRuntimeException> {
+        IdeStatusSchemaValidator.validate(badWire, "test-malformed-criterion")
+      }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
+    }
   }
 
   @Test

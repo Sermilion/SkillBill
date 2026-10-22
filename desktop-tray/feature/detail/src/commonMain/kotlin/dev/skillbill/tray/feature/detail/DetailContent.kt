@@ -81,6 +81,7 @@ import dev.skillbill.tray.core.ui.formatInstant
 import dev.skillbill.tray.core.ui.label
 import dev.skillbill.tray.core.ui.livenessText
 import dev.skillbill.tray.core.ui.outcomeLabel
+import dev.skillbill.tray.core.ui.phaseLabel
 import dev.skillbill.tray.core.ui.phasePipeline
 import dev.skillbill.tray.core.ui.rememberCopyToClipboard
 import dev.skillbill.tray.core.ui.statusColor
@@ -225,7 +226,7 @@ private fun LoadedDetail(
       }
       DetailMetric(
         if (standalone || operation) "Step" else "Phase",
-        if (operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
+        if (operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.phaseExecution?.phaseLabel() ?: item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
         if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else item.phaseExecution?.label() ?: "",
         Modifier.weight(1f),
       )
@@ -262,7 +263,7 @@ private fun LoadedDetail(
                   Text(
                     listOfNotNull(
                       task.status, task.commitSha?.take(7),
-                      if (active) item.phaseExecution?.let { "${it.phaseId} ${it.label()}" } else null,
+                      if (active) item.phaseExecution?.phaseLabel() else null,
                       if (active) item.currentModel else null,
                       if (active) item.currentEffort else null,
                       validation?.passed?.let { if (it) "validation passed" else "validation failed" },
@@ -272,7 +273,7 @@ private fun LoadedDetail(
                   )
                   task.blockedReason?.let { SelectionContainer { Text(it, color = orange, fontSize = 12.sp, lineHeight = 18.sp) } }
                   if (active && pipeline.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), phase.attemptCount, item.phaseExecution?.takeIf { it.phaseId == phase.id }) }
+                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), item.phaseExecution?.takeIf { it.phaseId == phase.id }) }
                   }
                 }
                 if (active) Text(subtaskTime, color = blue, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
@@ -289,7 +290,7 @@ private fun LoadedDetail(
                 Column(Modifier.weight(1f)) {
                   Text("Goal finish", color = ink.copy(alpha = if (finishActive || finishDone) 1f else .55f), fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                   FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    finishSteps.forEach { PhaseChip(it.id, it.state == GoalFinishStepState.COMPLETE, it.state == GoalFinishStepState.ACTIVE, 0) }
+                    finishSteps.forEach { PhaseChip(it.id, it.state == GoalFinishStepState.COMPLETE, it.state == GoalFinishStepState.ACTIVE) }
                   }
                 }
               }
@@ -299,7 +300,7 @@ private fun LoadedDetail(
         } else if (!operation && detail.stepPipeline.isNotEmpty()) {
           DesignLabel("Phase pipeline")
           FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            detail.stepPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, 0) }
+            detail.stepPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, item.phaseExecution?.takeIf { execution -> execution.phaseId == it }) }
           }
         }
         if (detail.dependencies.isNotEmpty() || detail.cursors[DetailList.DEPENDENCIES] != null) {
@@ -431,11 +432,10 @@ private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null
 }
 
 @Composable
-private fun PhaseChip(id: String, complete: Boolean, active: Boolean, attempts: Int, execution: PhaseExecution? = null) {
+private fun PhaseChip(id: String, complete: Boolean, active: Boolean, execution: PhaseExecution? = null) {
   val color = if (active) Color(0xFF14100A) else if (complete) green else dim
-  val progress = if (active) execution?.label() ?: attempts.takeIf { it > 1 }?.let { "$it runs" } else null
   Text(
-    id + progress?.let { " · $it" }.orEmpty(),
+    if (active) execution?.phaseLabel() ?: id else id,
     Modifier.background(if (active) green else Color.Transparent, RoundedCornerShape(5.dp))
       .border(1.dp, if (complete) green.copy(alpha = .35f) else dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(5.dp))
       .padding(horizontal = 7.dp, vertical = 4.dp),

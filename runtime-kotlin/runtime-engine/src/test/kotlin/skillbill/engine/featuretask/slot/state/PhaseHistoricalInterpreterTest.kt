@@ -61,6 +61,7 @@ class PhaseHistoricalInterpreterTest {
           )
         assertEquals(IdeStatusCurrentPhaseExecutionKind.ATTEMPT, execution.kind)
         assertEquals(expected, execution.count)
+        assertEquals(state.currentCriterionRef, execution.criterionRef)
       }
     }
 

@@ -93,7 +93,7 @@ data class WorkItem(
   val qaVerdict: QaVerdict? = null,
 )
 
-data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?)
+data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?, val criterionRef: String? = null)
 enum class PhaseExecutionKind { PASS, SEMANTIC_LOOP, GATE_RUN, BOUNDED_EDGE, ATTEMPT }
 
 enum class DetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES }

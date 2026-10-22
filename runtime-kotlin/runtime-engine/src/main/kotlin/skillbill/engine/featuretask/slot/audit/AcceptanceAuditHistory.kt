@@ -17,6 +17,7 @@ internal fun auditCurrentExecution(
     return IdeStatusCurrentPhaseExecution(
       phaseId = stepId,
       kind = IdeStatusCurrentPhaseExecutionKind.ATTEMPT,
+      criterionRef = criterion,
       count =
         (repair.unsuccessfulTotals.getOrDefault(criterion, 0) + 1)
           .coerceAtMost(AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES),
