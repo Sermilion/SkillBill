@@ -3,13 +3,11 @@ package skillbill.engine.featuretask.slot.monitor.standalone
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
+import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -37,9 +35,6 @@ class StandaloneMonitorPublicationStrategy(
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
-  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
-    PhaseExecutionBindingKind.STANDALONE_PUBLICATION.also { policies.policyOf(stepId) }
-
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
     return StandaloneMonitorDirectives.PUBLICATION
@@ -55,15 +50,12 @@ class StandaloneMonitorPublicationStrategy(
     return FeatureTaskRuntimeRunInvariantPromptAllowlist.FINALIZATION
   }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome {
-    state.requireAcceptedStep(run, strategyId)
-    return (
-      state as? PhaseStandalonePublicationStepBinding
-        ?: error("Standalone publication requires its accepted execution binding.")
-    ).runStandalonePublication(run, service.operations)
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return PhaseStepDescriptor(PhaseBindingFamily.StandalonePublication, PhaseStepHooks.None) { run, state ->
+      state.requireAcceptedStep(run, strategyId)
+      state.runStandalonePublication(run, service.operations)
+    }
   }
 
   companion object {

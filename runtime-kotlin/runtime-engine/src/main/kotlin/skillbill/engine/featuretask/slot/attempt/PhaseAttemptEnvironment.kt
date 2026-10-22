@@ -255,7 +255,7 @@ internal interface PhaseAttemptLaunchPreparationContext :
   PhaseAttemptPlanAuthorization {
   val qualityGateCycles: RuntimeQualityGateCycles
 
-  fun stepHooks(run: PhaseRun): PhaseStepHooks
+  fun stepHooks(run: PhaseRun): PhaseStepHooks<*>
 
   fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField>
 
@@ -430,7 +430,7 @@ internal open class PhaseAttemptLaunchCollaborationScope(
   override val qualityGateCycles: RuntimeQualityGateCycles
     get() = super.qualityGateCycles
 
-  override fun stepHooks(run: PhaseRun): PhaseStepHooks {
+  override fun stepHooks(run: PhaseRun): PhaseStepHooks<*> {
     requireAcceptedBoundStep(run.phaseId)
     return resolveStrategyFor(run.phaseId).stepHooks(run.phaseId)
   }

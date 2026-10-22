@@ -1546,7 +1546,8 @@ merge-conflict repair routing, and the default advance after monitoring succeeds
 Composition:
 
 - A full run walks the skeleton. `runPreparedPhase` looks up the strategy for
-  the ready step and calls `runStep`. It has no phase-id branch. The shared
+  the ready step and captures its typed step descriptor, so the binding family,
+  hooks and execution share one binding type. It has no phase-id branch. The shared
   pre-launch block check lives in `FeatureTaskRuntimeRunLoopPreLaunch`.
 - `InlineReviewStrategy` (`slot.codereview`, id `inline`) owns the code_review
   slot. Its review step prepares the pass, launches one agent through the
@@ -1559,9 +1560,14 @@ Composition:
   package off the launcher, recorders, `FeatureTaskRuntimeRunState`,
   persistence writers, checkpoint git, and run-loop types other than
   `PhaseRun` and `PhaseOutcome`.
-- Run-loop decisions a slot owns sit behind `PhaseStrategy.loopRules`
-  (`PhaseLoopRules`). The loop asks the strategy selected for a step, or for a
-  backward edge's destination. It does not name the step or the loop.
+- Run-loop decisions a slot owns split by authority. State-free decisions sit
+  behind `PhaseStrategy.loopRules` (`PhaseLoopRules`). Decisions that read
+  durable state sit behind the step descriptor's `loopRules`
+  (`PhaseStepLoopRules<B>`), which take the descriptor family's own binding.
+  The loop opens the descriptor in a capture and binds the rules to that one
+  binding, so no rule downcasts and no star-projected binding escapes. The loop
+  asks the strategy selected for a step, or the entry step of a backward edge's
+  destination owner. It does not name the step or the loop.
   `InlineReviewLoopRules` owns these review rules:
   - reopening a stale capped review before the run starts;
   - invalidating review-generation evidence;
@@ -1615,9 +1621,10 @@ Composition:
   | `pr-description` | `slot.pullrequest` | PR directive, the pull request description rules (the `pr-description-directive.md` resource, with the template search result in `PrDescriptionPromptRules`; the prompt invokes no skill), the repo template search (`PullRequestTemplateSearch` over the `PullRequestTemplateFiles` port: a found template keeps its headings and drops its checklist, none falls back to the coded template, several with no default block the step), PR identity measured before and after the step through `PullRequestIdentityLookup`, and `pr_description_generated` emitted after a completed step through the lifecycle telemetry gate |
 
 - A strategy reaches shared code through hooks, never the other way round.
-  `PhaseStrategy.stepHooks` returns the step's `PhaseStepHooks` (launch,
-  pre-launch reconcile, completed-round settlement, accepted output, blocked
-  output disposition). `PhaseStrategy.verdictRule` returns a
+  `PhaseStrategy.stepDescriptor` returns the step's `PhaseStepDescriptor`: its
+  binding family, its `PhaseStepHooks` (launch, pre-launch reconcile,
+  completed-round settlement, accepted output, blocked output disposition) and
+  its typed execution. `PhaseStrategy.verdictRule` returns a
   `FeatureTaskRuntimeStepVerdictRule` that `FeatureTaskRuntimeRunState` settles
   the step's verdict by. `PhaseStrategy.briefingInvariantFields` picks the
   run-invariant field set the step's briefing renders.

@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -37,10 +36,8 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
-import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
-import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -66,7 +63,7 @@ object PhaseLaunchPreparation {
     iteration: Int?,
     priorCorrection: PriorAttemptCorrection?,
     prompt: PhaseStepPromptSource,
-    boundStep: PhaseStepBinding,
+    boundStep: PhaseAcceptedStepExecution,
   ): LaunchPreparation {
     val context = this
     with(context) {
@@ -337,7 +334,7 @@ object PhaseLaunchPreparation {
     run: PhaseRun,
     repositoryCheckpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
     resolvedBranchRecord: FeatureTaskRuntimeResolvedBranch?,
-    boundStep: PhaseStepBinding,
+    boundStep: PhaseAcceptedStepExecution,
   ) = with(context) {
     FeatureTaskRuntimeHandoffContract
       .assembleHandoff(
@@ -358,9 +355,7 @@ object PhaseLaunchPreparation {
           unselectedStepIds = unselectedStepIds(),
         ),
       ).copy(
-        recordedFindingVerdicts =
-          (boundStep as? PhaseImplementFixStepBinding)?.let { stepHooks(run).handoffFindingVerdicts(it) }
-            ?: emptyList(),
+        recordedFindingVerdicts = boundStep.boundHooks.handoffFindingVerdicts(),
       )
   }
 
@@ -369,12 +364,10 @@ object PhaseLaunchPreparation {
     run: PhaseRun,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     prompt: PhaseStepPromptSource,
-    boundStep: PhaseStepBinding,
+    boundStep: PhaseAcceptedStepExecution,
   ): String =
     FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
-      context.stepHooks(
-        run,
-      ).launchPromptSupplement(run, context.launchHookContext(run, context.stepHooks(run)), boundStep)
+      boundStep.boundHooks.launchPromptSupplement(run, context.launchHookContext(run, context.stepHooks(run)))
 
   private fun PhaseAttemptLaunchPreparationContext.composeLaunchPromptInputs(
     args: DeclaredLaunchArgs,
@@ -452,14 +445,8 @@ object PhaseLaunchPreparation {
 
   private fun PhaseAttemptLaunchPreparationContext.launchReviewTierFor(
     run: PhaseRun,
-    boundStep: PhaseStepBinding,
-  ): PhaseLaunchReviewTier =
-    (boundStep as? PhaseReviewPassState)?.let { stepHooks(run).launchReviewTier(run, it) }
-      ?: PhaseLaunchReviewTier(
-        passNumber = null,
-        resolution = null,
-        executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
-      )
+    boundStep: PhaseAcceptedStepExecution,
+  ): PhaseLaunchReviewTier = boundStep.boundHooks.launchReviewTier(run)
 
   private fun PhaseAttemptLaunchPreparationContext.auditNoChangeClaim(run: PhaseRun): String? =
     NoChangeClaimResolution.activeClaimMap(progress)

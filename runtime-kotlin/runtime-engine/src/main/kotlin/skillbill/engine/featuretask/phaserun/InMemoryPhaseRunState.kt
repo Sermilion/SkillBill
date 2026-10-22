@@ -19,13 +19,13 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepB
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
@@ -100,13 +100,13 @@ internal class InMemoryPhaseRunState(
 
   override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
 
-  override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
+  override fun bindings(run: PhaseRun): PhaseBindingFactory {
     require(run.request === facts)
     require(run.phaseId in executionPlan.selectedStepIds)
     require(strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
     stepBinding.beginStepBinding(run)
     val runLoopContext = runLoopEntry.context(facts, this)
-    return FeatureTaskRuntimeRunLoopStepBindings.create(
+    return FeatureTaskRuntimeRunLoopStepBindings.factory(
       phaseAttemptLaunchCollaborationScope(
         PhaseAttemptRunHost(
           run,

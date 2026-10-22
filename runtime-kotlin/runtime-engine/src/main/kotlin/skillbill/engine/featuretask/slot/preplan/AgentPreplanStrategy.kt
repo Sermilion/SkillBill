@@ -4,12 +4,12 @@ import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
+import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -51,10 +51,12 @@ class AgentPreplanStrategy : PhaseStrategy() {
       stepContext = featureSpecIntake,
     )
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = runAgentStep(run, state)
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return PhaseStepDescriptor(PhaseBindingFamily.Agent, PhaseStepHooks.None) { run, state ->
+      runAgentStep(run, state)
+    }
+  }
 
   companion object {
     const val ID = "agent-preplan"

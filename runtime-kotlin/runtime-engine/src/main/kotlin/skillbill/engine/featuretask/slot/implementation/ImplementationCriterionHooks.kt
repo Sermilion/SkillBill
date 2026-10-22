@@ -36,7 +36,7 @@ import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeLaunch
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object ImplementationCriterionHooks : PhaseStepHooks {
+internal object ImplementationCriterionHooks : PhaseStepHooks<PhaseAcceptedStepExecution> {
   override val contextKind: PhaseStepHookContextKind = PhaseStepHookContextKind.IMPLEMENTATION
 
   private const val CHECK_VERDICT_REJECTION: String =

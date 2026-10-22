@@ -1,3 +1,13 @@
+## [2026-10-22] SKILL-437 subtask 4: typed binding families for phase steps
+Areas: runtime-kotlin/runtime-engine (featuretask slot, slot/attempt, slot strategies, runloop state/core/durable, test fixtures); runtime-kotlin/ARCHITECTURE.md
+- MEDIUM feature. Each phase step now declares a `PhaseStepDescriptor` (family, hooks, execution) in place of `runStep`, `executionBindingKind` and untyped hooks; `PhaseExecutionBindingKind` is deleted and every accepted-binding downcast in strategies is gone.
+- Sealed `PhaseBindingFamily<B>` covers agent, planning agent, fan-out, planning unit, QA findings, quality gate (operation), commit, monitor, standalone monitor, standalone publication and pull request. Review, finding verification and repair receipt are separate top-level family objects so non-review strategies never reach review authority.
+- Runtime bindings are per-family leaf classes built by one private `PhaseBindingFactory` with no selection over slot, binding kind, gate operation or fan-out flag; pack build and agent validation stay distinct quality-gate operations.
+- Reusable: `Family.construct(factory, hooks, use)` correlates strategy, family, binding and hooks without casts; `PhaseRunStateStepFixtures` gives tests `step` and `runStep` helpers.
+- Limits: `PhaseStrategy` is not itself generic (capture opens one binding per step); `stepDescriptor` throws on unknown steps; context-role casts in loop rules and verify evidence remain. Declarations live in the excluded-root `PhaseStepHooks.kt` to keep the slot package at its file ceiling.
+Feature flag: N/A
+Acceptance criteria: implemented per spec_subtask_4_typed-binding-families.md (validate passed)
+
 ## [2026-10-22] SKILL-437 subtask 3: live strategy registry with one shared runner
 Areas: runtime-kotlin/runtime-engine (featuretask slot registry, lookup, code_review strategies, test fixtures); runtime-kotlin/runtime-core (di/featuretask registry provider); runtime-kotlin/ARCHITECTURE.md
 - MEDIUM feature. Production registry now holds exactly the 17 strategy registrations live selection reaches; verified by comparing registrations with the pairs selected over every skeleton definition and its review, gate and QA facts.

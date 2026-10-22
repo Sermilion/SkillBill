@@ -11,16 +11,13 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunner
-import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -49,8 +46,6 @@ class InlineReviewStrategy(
   override val steps: List<String> = codeReview.steps
   override val entryStep: String = codeReview.entryStep
 
-  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = codeReview.executionBindingKind(stepId)
-
   override fun policyFor(stepId: String): PhaseStepPolicy = codeReview.policyFor(stepId)
 
   override fun directiveFor(stepId: String): String = codeReview.directiveFor(stepId)
@@ -63,12 +58,7 @@ class InlineReviewStrategy(
   override fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
     codeReview.briefingInvariantFields(stepId, super.briefingInvariantFields(stepId))
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = codeReview.runStep(run, state)
-
-  override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> = codeReview.stepDescriptor(stepId)
 
   override fun verdictRule(
     stepId: String,

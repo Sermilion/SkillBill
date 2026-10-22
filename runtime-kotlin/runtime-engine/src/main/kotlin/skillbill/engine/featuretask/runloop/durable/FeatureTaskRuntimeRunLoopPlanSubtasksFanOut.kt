@@ -25,6 +25,8 @@ import skillbill.engine.featuretask.runloop.planning.PlanUnitRecords
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
@@ -81,10 +83,11 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
 
   override fun pauseBefore(unitId: Int): PhaseOutcome? = null
 
-  override fun unitState(
+  override fun <B : PhaseAcceptedStepExecution> unitState(
     unitId: Int,
     outputSink: AgentRunOutputSink,
-  ): PhaseAcceptedStepExecution {
+    descriptor: PhaseStepDescriptor<B>,
+  ): B {
     val run = parent.stepBinding.requireAuthorizedFanOutWave()
     val unit =
       FeatureTaskRuntimeRunLoopPlanUnitState(
@@ -95,7 +98,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
         runLoopEntry,
       )
     unitStates[unitId] = unit
-    return unit.step(run)
+    return descriptor.bind(unit.bindings(run))
   }
 
   override fun settleUnit(
@@ -244,8 +247,8 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
 
   override fun fanOut(stepId: String): PhaseRunFanOut = error("A plan subtask unit cannot start nested fan-out.")
 
-  override fun step(run: PhaseRun): PhaseAcceptedStepExecution =
-    runLoopEntry.context(facts, this).acceptedFanOutUnitStep(run, unit.subtaskId, parent.stepBinding)
+  override fun bindings(run: PhaseRun): PhaseBindingFactory =
+    runLoopEntry.context(facts, this).fanOutUnitBindings(run, unit.subtaskId, parent.stepBinding)
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     FeatureTaskRuntimeBranchSetupOutcome.unchanged()

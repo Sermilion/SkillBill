@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
@@ -93,8 +94,8 @@ internal interface PhaseRunState :
 
   fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? = null
 
-  /** The state [run] reads and writes for one call of its step. */
-  fun step(run: PhaseRun): PhaseAcceptedStepExecution
+  /** The factory that builds the state [run] reads and writes for one call of its step. */
+  fun bindings(run: PhaseRun): PhaseBindingFactory
 
   /** Resolves, checks out, and records the feature branch file-mutating steps run on, reported under [guardPhase]. */
   fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome

@@ -25,8 +25,8 @@ import skillbill.engine.featuretask.qa.report.qaVerdictOf
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
-import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -34,10 +34,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -83,9 +81,7 @@ class QaStrategy(
   override val optionalSteps: Set<String> = setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX)
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA
 
-  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = PhaseExecutionBindingKind.QA_FINDINGS
-
-  override val loopRules: PhaseLoopRules = QaLoopRules(outcomes)
+  private val qaLoopRules = QaLoopRules(outcomes)
 
   override fun resumeRules(stepId: String): PhaseResumeRules =
     if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) QaResumeRules else PhaseResumeRules.None
@@ -145,9 +141,18 @@ class QaStrategy(
     return result.value
   }
 
-  override fun runStep(
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    val stepHooks = if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) repairHooks else hooks
+    val stepLoopRules = qaLoopRules.takeIf { stepId == entryStep }
+    return PhaseStepDescriptor(PhaseBindingFamily.QaFindings, stepHooks, stepLoopRules) { run, state ->
+      runStep(run, state)
+    }
+  }
+
+  private fun runStep(
     run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseQaStepBinding,
   ): PhaseOutcome {
     val qa = run.qaExecution
     val target = qa?.target
@@ -165,7 +170,7 @@ class QaStrategy(
 
   private fun runtimeCompletion(
     run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseQaStepBinding,
     summary: String,
     report: QaReport,
   ): PhaseOutcome {
@@ -197,13 +202,8 @@ class QaStrategy(
   ): FeatureTaskRuntimeStepVerdictRule? =
     if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA) QaVerdictRule else null
 
-  override fun stepHooks(stepId: String): PhaseStepHooks {
-    policies.policyOf(stepId)
-    return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) repairHooks else hooks
-  }
-
-  private fun findingSupplement(state: PhaseStepBinding): String {
-    val findings = (state as PhaseQaStepBinding).qaRepairState()?.openFindings.orEmpty()
+  private fun findingSupplement(state: PhaseQaStepBinding): String {
+    val findings = state.qaRepairState()?.openFindings.orEmpty()
     if (findings.isEmpty()) return ""
     return "\n\nOpen QA findings. Re-exercise the flows in these reports and say in the new report " +
       "whether each finding is fixed.\n" +
@@ -213,23 +213,23 @@ class QaStrategy(
   private val repairHooks = QaRepairHooks(execution, outcomes, reports)
 
   private val hooks =
-    object : PhaseStepHooks {
+    object : PhaseStepHooks<PhaseQaStepBinding> {
       override fun launchPromptSupplement(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
-        state: PhaseStepBinding,
+        state: PhaseQaStepBinding,
       ): String = run.qaExecution?.let(QaPromptSections::supplement).orEmpty() + findingSupplement(state)
 
       override fun beforeAgentLaunch(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
-        state: PhaseStepBinding,
+        state: PhaseQaStepBinding,
       ): String? = MISSING_WORKSPACE.takeIf { run.qaExecution == null }
 
       override fun checkValidatedOutput(
         run: PhaseRun,
         context: PhaseStepOutputContext,
-        state: PhaseAcceptedStepExecution,
+        state: PhaseQaStepBinding,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck {
         val qa = run.qaExecution ?: return PhaseStepOutputCheck.Block(MISSING_WORKSPACE)
@@ -240,7 +240,7 @@ class QaStrategy(
       override fun interpretedOutput(
         run: PhaseRun,
         context: PhaseStepOutputContext,
-        state: PhaseAcceptedStepExecution,
+        state: PhaseQaStepBinding,
         output: NormalizedFeatureTaskRuntimePhaseOutput,
       ): NormalizedFeatureTaskRuntimePhaseOutput {
         if (output.status == "blocked" || output.status == "failed") return output
@@ -250,7 +250,7 @@ class QaStrategy(
 
       fun withReport(
         run: PhaseRun,
-        state: PhaseAcceptedStepExecution,
+        state: PhaseQaStepBinding,
         output: NormalizedFeatureTaskRuntimePhaseOutput,
         settledReport: QaReport,
       ): NormalizedFeatureTaskRuntimePhaseOutput {
@@ -266,7 +266,7 @@ class QaStrategy(
           JsonCodec.anyToStringAnyMap(record[SharedPayloadKeys.PRODUCED_OUTPUTS])
             ?: error("normalized QA output has no produced_outputs object.")
         val subtaskId = run.request.goalContinuation?.subtaskId ?: 1
-        val previous = (state as PhaseQaStepBinding).qaRepairState() ?: QaRepairState(subtaskId)
+        val previous = state.qaRepairState() ?: QaRepairState(subtaskId)
         check(previous.subtaskId == subtaskId) { "QA repair state belongs to another subtask." }
         val repairWarning = QaRepairHooks.noChangeWarning(state, previous, qa.expected.treeIdentity)
         val settled = reports.observe(previous, warned, qa)

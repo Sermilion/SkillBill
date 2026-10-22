@@ -60,12 +60,12 @@ subtasks:
 - id: 4
   name: "Declare typed binding families"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_4_typed-binding-families.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-180137-nkwk"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

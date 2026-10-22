@@ -18,6 +18,8 @@ import skillbill.engine.featuretask.runner.committedRepoBranchSetup
 import skillbill.engine.featuretask.runner.satisfiedAuditLauncher
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.runner.withRunState
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
+import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
@@ -25,7 +27,6 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.stepCall
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
 import skillbill.engine.featuretask.slot.state.PhasePlanningBriefingBinding
@@ -36,6 +37,8 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.engine.featuretask.slot.state.runStep
+import skillbill.engine.featuretask.slot.state.step
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
@@ -72,11 +75,12 @@ class RequiredPhasePersistenceTest {
         val intercepted = context.withRecords(records, selectedStrategy = strategy)
         val run = phaseRun(intercepted, phase)
 
-        val binding = intercepted.runState.step(run)
-        if (phase in setOf("build", "validate", "commit_push")) {
-          assertFalse(binding is PhaseAgentExecution, phase)
-        }
-        val outcome = strategy.runStep(run, binding)
+        val outcome =
+          strategy.runStep(run, intercepted.runState) { binding ->
+            if (phase in setOf("build", "validate", "commit_push")) {
+              assertFalse(binding is PhaseAgentExecution, phase)
+            }
+          }
 
         assertEquals(rejection.message, outcome.blockedReason, phase)
         assertEquals(0, launcherCount(), phase)
@@ -97,7 +101,7 @@ class RequiredPhasePersistenceTest {
       val intercepted = context.withRecords(rejectingRecords(context.recorder, rejection))
       val run = phaseRun(intercepted, "preplan")
 
-      val outcome = intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState.step(run))
+      val outcome = intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState)
 
       assertEquals(rejection.message, outcome.blockedReason)
       assertEquals(0, launcherCount())
@@ -125,7 +129,7 @@ class RequiredPhasePersistenceTest {
       val intercepted = context.withRecords(records)
       val run = phaseRun(intercepted, "review")
 
-      val outcome = intercepted.runState.strategyFor("review").runStep(run, intercepted.runState.step(run))
+      val outcome = intercepted.runState.strategyFor("review").runStep(run, intercepted.runState)
 
       assertEquals(rejection.message, outcome.blockedReason)
       val terminal = assertNotNull(context.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("review"))
@@ -162,7 +166,7 @@ class RequiredPhasePersistenceTest {
       val intercepted = context.withRecords(records, diagnostics)
       val run = phaseRun(intercepted, "preplan")
 
-      val outcome = intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState.step(run))
+      val outcome = intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState)
 
       assertEquals(rejection.message, outcome.blockedReason)
       assertTrue(warnedCauses.any { it === secondary })
@@ -185,7 +189,7 @@ class RequiredPhasePersistenceTest {
 
         val thrown =
           assertFailsWith<RuntimeException> {
-            intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState.step(run))
+            intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState)
           }
 
         assertSame(failure, thrown)
@@ -229,7 +233,7 @@ class RequiredPhasePersistenceTest {
 
       val thrown =
         assertFailsWith<CancellationException> {
-          intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState.step(run))
+          intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState)
         }
 
       assertSame(cancellation, thrown)
@@ -267,7 +271,7 @@ class RequiredPhasePersistenceTest {
       val intercepted = context.withRecords(records)
       val run = phaseRun(intercepted, "audit")
 
-      val outcome = intercepted.runState.strategyFor("audit").runStep(run, intercepted.runState.step(run))
+      val outcome = intercepted.runState.strategyFor("audit").runStep(run, intercepted.runState)
 
       assertNotNull(outcome.completedOutput, outcome.toString())
       assertEquals(1, launcherCount())
@@ -301,6 +305,29 @@ class RequiredPhasePersistenceTest {
         assertNoGitEffects()
       } finally {
         binding.finishStepExecution()
+        context.runState.stepBinding.releaseCoordinatorDispatch()
+      }
+    }
+  }
+
+  @Test
+  fun `binding factory refuses a family the step does not declare without launch or write and stays reusable`() {
+    withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
+      val run = phaseRun(context, "audit")
+      context.runState.stepBinding.authorizeCoordinatorDispatch(run)
+      try {
+        val refused =
+          assertFailsWith<IllegalStateException> {
+            context.bindingFactory(run).review(PhaseStepHooks.None) { error("Refused family must not bind") }
+          }
+        assertTrue(refused.message.orEmpty().contains("does not accept"), refused.message)
+        assertEquals(0, launcherCount())
+        assertEquals(0, gateCount())
+        assertNoGitEffects()
+
+        val binding = context.runState.step(run)
+        binding.finishStepExecution()
+      } finally {
         context.runState.stepBinding.releaseCoordinatorDispatch()
       }
     }
@@ -363,9 +390,9 @@ class RequiredPhasePersistenceTest {
         override fun selectedOwnerOf(stepId: String): PhaseStrategy? =
           selectedStrategy?.takeIf { stepId in it.steps } ?: delegate.selectedOwnerOf(stepId)
 
-        override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
+        override fun bindings(run: PhaseRun): PhaseBindingFactory {
           stepBinding.authorizeCoordinatorDispatch(run)
-          return this@withRecords.withRunState(this).acceptedStep(run)
+          return this@withRecords.withRunState(this).bindingFactory(run)
         }
       }
     return withRunState(wrapped)

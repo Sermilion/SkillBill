@@ -4,9 +4,9 @@ import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvarian
 import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -15,7 +15,6 @@ import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
 import skillbill.engine.featuretask.slot.state.ExpectedCiHead
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PhaseMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
@@ -91,21 +90,26 @@ class MonitorStrategy(
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
-  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
-    PhaseExecutionBindingKind.CI_MONITOR.also { policies.policyOf(stepId) }
-
-  override fun stepHooks(stepId: String): PhaseStepHooks =
-    if (stepId == entryStep) PhaseStepHooks.None else repairPublication
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return if (stepId == entryStep) {
+      PhaseStepDescriptor(PhaseBindingFamily.Monitor, PhaseStepHooks.None) { run, state ->
+        state.runMonitor(run, observation)
+      }
+    } else {
+      PhaseStepDescriptor(PhaseBindingFamily.Monitor, repairPublication) { run, state -> runAgentStep(run, state) }
+    }
+  }
 
   private val repairPublication =
-    object : PhaseStepHooks {
+    object : PhaseStepHooks<PhaseMonitorStepBinding> {
       override fun settleCompletedOutput(
         run: PhaseRun,
         context: PhaseStepOutputContext,
-        state: PhaseAcceptedStepExecution,
+        state: PhaseMonitorStepBinding,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck =
-        (state as PhaseMonitorStepBinding)
+        state
           .publishRepair(run, identityLookup, fixBrief.conflictBaseBranch(run.request.issueKey))
           ?.let { PhaseStepOutputCheck.Block(it) }
           ?: PhaseStepOutputCheck.Accept
@@ -144,19 +148,6 @@ class MonitorStrategy(
       super.briefingInvariantFields(stepId)
     }
   }
-
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome =
-    if (run.phaseId == entryStep) {
-      (
-        state as? PhaseMonitorStepBinding
-          ?: error("Monitor requires its accepted execution binding.")
-      ).runMonitor(run, observation)
-    } else {
-      runAgentStep(run, state)
-    }
 
   companion object {
     const val ID = "monitor-ci"

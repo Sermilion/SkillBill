@@ -17,11 +17,12 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
@@ -125,10 +126,10 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
     reviewResultAssembly.persistReviewPassClaims(reviewRunId, findings, persistEmpty = true)
   }
 
-  override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, run)
+  override fun bindings(run: PhaseRun): PhaseBindingFactory = launch.bindings(facts, this, run)
 
   override fun fanOut(stepId: String): PhaseRunFanOut =
-    if (selectedOwnerOf(stepId)?.plansInFanOut == true) {
+    if (selectedOwnerOf(stepId)?.stepDescriptor(stepId)?.family == PhaseBindingFamily.PlanningFanOut) {
       launch.planSubtasksFanOut(facts, this, stepId)
     } else {
       throw PhaseRunFanOutUnsupportedError(stepId)
@@ -180,11 +181,11 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
   ): PhaseRunFanOut =
     FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(state, facts, stepId, decompositionPlanner, runLoopEntry)
 
-  internal fun step(
+  internal fun bindings(
     facts: FeatureTaskRuntimeRunFacts,
     state: PhaseRunState,
     run: PhaseRun,
-  ): PhaseAcceptedStepExecution = runLoopEntry.context(facts, state).acceptedStep(run)
+  ): PhaseBindingFactory = runLoopEntry.context(facts, state).bindingFactory(run)
 
   internal fun ensureFeatureBranch(
     facts: FeatureTaskRuntimeRunFacts,

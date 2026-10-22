@@ -3,14 +3,12 @@ package skillbill.engine.featuretask.slot.implementation
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
@@ -49,7 +47,6 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
   override val strategyId: String = ID
   override val steps: List<String> = policies.keys.toList()
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
-  override val loopRules: PhaseLoopRules = ImplementThenSimplifyLoopRules
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
@@ -74,17 +71,16 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
       else -> throw UnknownPhaseStepError(stepId)
     }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = runAgentStep(run, state)
-
-  override fun stepHooks(stepId: String): PhaseStepHooks {
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
-    return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) {
-      ImplementationCriterionHooks
-    } else {
-      PhaseStepHooks.None
+    val hooks =
+      if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) {
+        ImplementationCriterionHooks
+      } else {
+        PhaseStepHooks.None
+      }
+    return PhaseStepDescriptor(PhaseBindingFamily.Agent, hooks, ImplementThenSimplifyLoopRules) { run, state ->
+      runAgentStep(run, state)
     }
   }
 

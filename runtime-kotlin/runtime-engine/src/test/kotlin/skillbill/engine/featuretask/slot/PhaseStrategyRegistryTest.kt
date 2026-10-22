@@ -1,8 +1,5 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.featuretask.DuplicatePhaseStrategyError
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
@@ -203,10 +200,7 @@ class PhaseStrategyRegistryTest {
 
     override fun directiveFor(stepId: String): String = error("unused")
 
-    override fun runStep(
-      run: PhaseRun,
-      state: PhaseAcceptedStepExecution,
-    ): PhaseOutcome = error("unused")
+    override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> = error("unused")
   }
 
   private companion object {

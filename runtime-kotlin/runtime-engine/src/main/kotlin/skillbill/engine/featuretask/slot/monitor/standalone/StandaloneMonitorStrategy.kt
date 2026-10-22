@@ -6,9 +6,9 @@ import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvarian
 import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -17,9 +17,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -64,32 +62,40 @@ class StandaloneMonitorStrategy(
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
-  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
-    PhaseExecutionBindingKind.STANDALONE_MONITOR.also { policies.policyOf(stepId) }
-
-  override fun stepHooks(stepId: String): PhaseStepHooks = if (stepId == entryStep) PhaseStepHooks.None else repairHooks
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return if (stepId == entryStep) {
+      PhaseStepDescriptor(PhaseBindingFamily.StandaloneMonitor, PhaseStepHooks.None) { run, state ->
+        state.runStandaloneMonitor(run, service.operations)
+      }
+    } else {
+      PhaseStepDescriptor(PhaseBindingFamily.StandaloneMonitor, repairHooks) { run, state ->
+        runAgentStep(run, state)
+      }
+    }
+  }
 
   private val repairHooks =
-    object : PhaseStepHooks {
+    object : PhaseStepHooks<PhaseStandaloneMonitorStepBinding> {
       override fun launchPromptSupplement(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
-        state: PhaseStepBinding,
-      ): String = (state as PhaseStandaloneMonitorStepBinding).standaloneRepairBrief().let { "\n\n$it" }
+        state: PhaseStandaloneMonitorStepBinding,
+      ): String = state.standaloneRepairBrief().let { "\n\n$it" }
 
       override fun beforeAgentLaunch(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
-        state: PhaseStepBinding,
-      ): String? = (state as PhaseStandaloneMonitorStepBinding).guardStandaloneRepairLaunch(run, service.operations)
+        state: PhaseStandaloneMonitorStepBinding,
+      ): String? = state.guardStandaloneRepairLaunch(run, service.operations)
 
       override fun settleCompletedOutput(
         run: PhaseRun,
         context: PhaseStepOutputContext,
-        state: PhaseAcceptedStepExecution,
+        state: PhaseStandaloneMonitorStepBinding,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck =
-        (state as PhaseStandaloneMonitorStepBinding)
+        state
           .publishStandaloneRepair(run, service.operations, reportsFixedRepair(outputMap))
           ?.let { PhaseStepOutputCheck.Block(it) }
           ?: PhaseStepOutputCheck.Accept
@@ -128,19 +134,6 @@ class StandaloneMonitorStrategy(
       super.briefingInvariantFields(stepId)
     }
   }
-
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome =
-    if (run.phaseId == entryStep) {
-      (
-        state as? PhaseStandaloneMonitorStepBinding
-          ?: error("Standalone monitor requires its accepted execution binding.")
-      ).runStandaloneMonitor(run, service.operations)
-    } else {
-      runAgentStep(run, state)
-    }
 
   private fun reportsFixedRepair(outputMap: FeatureTaskRuntimeWorkflowArtifactMap): Boolean {
     val value = JsonCodec.anyToStringAnyMap(outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS])?.get(SharedPayloadKeys.VALUE)

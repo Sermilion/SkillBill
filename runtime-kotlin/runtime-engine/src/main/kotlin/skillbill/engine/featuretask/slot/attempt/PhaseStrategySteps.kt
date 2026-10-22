@@ -36,10 +36,11 @@ internal fun stepCall(
   )
 }
 
-internal fun runAgentStep(
+internal fun <S> runAgentStep(
   run: PhaseRun,
-  state: PhaseAcceptedStepExecution,
-): PhaseOutcome = (state as PhaseAgentExecution).runAcceptedAgentStep(run, stepCall(run, state))
+  state: S,
+): PhaseOutcome where S : PhaseAcceptedStepExecution, S : PhaseAgentExecution =
+  state.runAcceptedAgentStep(run, stepCall(run, state))
 
 internal fun Map<String, PhaseStepPolicy>.policyOf(stepId: String): PhaseStepPolicy =
   this[stepId] ?: throw UnknownPhaseStepError(stepId)

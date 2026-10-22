@@ -41,14 +41,11 @@ internal interface PhaseAcceptedStepCallTarget {
 
 internal data class PhaseStepCall(
   val description: PhaseStepDescription,
-  private val acceptedStep: PhaseAcceptedStepCallTarget,
+  private val acceptedStep: PhaseAcceptedStepExecution,
   val request: FeatureTaskRuntimeRunFacts,
   val strategyId: String,
 ) : PhaseAcceptedStepCallTarget by acceptedStep {
-  internal val acceptedExecution: PhaseAcceptedStepExecution
-    get() =
-      acceptedStep as? PhaseAcceptedStepExecution
-        ?: error("Step call is not backed by an accepted execution binding.")
+  internal val acceptedExecution: PhaseAcceptedStepExecution get() = acceptedStep
 }
 
 internal data class RecordRejectionAttemptArgs(
@@ -82,7 +79,7 @@ internal class GateOutput(
   val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner,
   val settleAcceptedOutput:
     (NormalizedFeatureTaskRuntimePhaseOutput, FeatureTaskRuntimeRunObservability) -> AttemptResult,
-  val stepHooks: PhaseStepHooks,
+  val stepHooks: PhaseStepHooks<*>,
 ) {
   val captured get() = evidence.captured
   val fileManifest get() = evidence.fileManifest

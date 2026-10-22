@@ -11,11 +11,11 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptContinuations
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -275,8 +275,8 @@ internal data class SettleValidatedOutputAfterFingerprintArgs(
   val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
   val observability: FeatureTaskRuntimeRunObservability,
   val repositoryFingerprint: String?,
-  val boundStep: PhaseStepBinding,
-  val stepHooks: PhaseStepHooks,
+  val boundStep: PhaseAcceptedStepExecution,
+  val stepHooks: PhaseStepHooks<*>,
   val reject: (String, String) -> AttemptResult,
 )
 
@@ -330,7 +330,7 @@ internal data class DeclaredLaunchArgs(
   val priorCorrection: PriorAttemptCorrection?,
   val context: LaunchRejectionMeasurementContext,
   val prompt: PhaseStepPromptSource,
-  val boundStep: PhaseStepBinding,
+  val boundStep: PhaseAcceptedStepExecution,
 )
 
 internal data class PauseAndPersistInPhaseArgs(
@@ -374,8 +374,8 @@ internal data class FinalizeValidatedOutputAcceptanceArgs(
   val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
   val observability: FeatureTaskRuntimeRunObservability,
   val repositoryFingerprint: String?,
-  val boundStep: PhaseStepBinding,
-  val stepHooks: PhaseStepHooks,
+  val boundStep: PhaseAcceptedStepExecution,
+  val stepHooks: PhaseStepHooks<*>,
 )
 
 internal data class ShouldRetryPersistedBlockArgs(

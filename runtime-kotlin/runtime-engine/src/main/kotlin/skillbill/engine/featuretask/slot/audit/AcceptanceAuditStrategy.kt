@@ -5,18 +5,16 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExe
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseExecutionPlanMapping
 import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.audit.planning.AuditPlanFixPromptSections
 import skillbill.engine.featuretask.slot.audit.planning.AuditPlanningExecutionPlanMapping
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
@@ -76,9 +74,6 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
-  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
-    if (stepId == entryStep) PhaseExecutionBindingKind.QA_FINDINGS else super.executionBindingKind(stepId)
-
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
     return when (stepId) {
@@ -101,17 +96,19 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
     }
   }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = AcceptanceQaReaudit.settledWithoutScope(run, state) ?: runAgentStep(run, state)
-
-  override fun stepHooks(stepId: String): PhaseStepHooks {
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
     return when (stepId) {
-      entryStep -> AcceptanceAuditRound
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX -> PhaseStepHooks.None
-      else -> AuditImplementFixStep
+      entryStep ->
+        PhaseStepDescriptor(
+          PhaseBindingFamily.QaFindings,
+          AcceptanceAuditRound,
+          AcceptanceAuditLoopRules,
+        ) { run, state -> AcceptanceQaReaudit.settledWithoutScope(run, state) ?: runAgentStep(run, state) }
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX ->
+        PhaseStepDescriptor(PhaseBindingFamily.Agent, PhaseStepHooks.None) { run, state -> runAgentStep(run, state) }
+      else ->
+        PhaseStepDescriptor(PhaseBindingFamily.Agent, AuditImplementFixStep) { run, state -> runAgentStep(run, state) }
     }
   }
 

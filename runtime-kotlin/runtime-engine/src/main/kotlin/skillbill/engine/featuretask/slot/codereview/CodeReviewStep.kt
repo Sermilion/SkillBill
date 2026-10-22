@@ -13,7 +13,6 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
-import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
@@ -36,7 +35,7 @@ import kotlin.coroutines.cancellation.CancellationException
 internal class CodeReviewStep(
   private val runner: PhaseRunner,
   private val reviewPass: CodeReviewPass,
-) : PhaseStepHooks {
+) : PhaseStepHooks<PhaseReviewStepBinding> {
   fun run(
     requestedRun: PhaseRun,
     context: PhaseReviewExecutionContext,
@@ -118,13 +117,12 @@ internal class CodeReviewStep(
 
   override fun launchReviewTier(
     run: PhaseRun,
-    state: PhaseReviewPassState,
+    state: PhaseReviewStepBinding,
   ): PhaseLaunchReviewTier {
-    val reviewState = state as PhaseReviewStepBinding
-    val passNumber = reviewState.reviewPassNumber
+    val passNumber = state.reviewPassNumber
     val resolution =
       FeatureTaskRuntimeReviewPassSequence.resolveForPass(run.request.runInvariants.codeReviewMode, passNumber)
-    reviewState.persistResolvedReviewTier(resolution)
+    state.persistResolvedReviewTier(resolution)
     return PhaseLaunchReviewTier(passNumber, resolution, reviewPass.executedTier(resolution.resolvedTier))
   }
 

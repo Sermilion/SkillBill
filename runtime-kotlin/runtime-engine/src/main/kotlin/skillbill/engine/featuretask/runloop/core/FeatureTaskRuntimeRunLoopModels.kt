@@ -18,7 +18,7 @@ import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.workflow.decomposition.model.SpecSource
@@ -185,8 +185,8 @@ internal class SettleValidatedOutput(
   val iteration: Int,
   val output: SettledOutputContext,
   val settlementContext: PhaseOutputSettlementContext,
-  val boundStep: PhaseStepBinding,
-  val stepHooks: PhaseStepHooks,
+  val boundStep: PhaseAcceptedStepExecution,
+  val stepHooks: PhaseStepHooks<*>,
 ) {
   val request get() = settlementContext.request
   val progress get() = settlementContext.progress

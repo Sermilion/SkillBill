@@ -27,9 +27,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
   ): String? {
     val state = context.state
     val resumes =
-      FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, edge.destinationPhaseId) { rules, _ ->
-        rules.resumesInFlightReentry(edge.loopId)
-      } == true
+      context.runState.strategyFor(edge.destinationPhaseId).loopRules?.resumesInFlightReentry(edge.loopId) == true
     if (!resumes || state.loop(edge.loopId).liveClaimed || state.phase(edge.destinationPhaseId).completed) {
       return null
     }
@@ -63,7 +61,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
     FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(
       context,
       context.runState.strategyFor(edge.destinationPhaseId).entryStep,
-    ) { rules, stepState -> rules.reentryCheckpoint(edge.loopId, stepState) }
+    ) { rules -> rules.reentryCheckpoint(edge.loopId) }
 
   internal fun recordBackwardEdge(
     context: FeatureTaskRuntimeRunLoopContext,

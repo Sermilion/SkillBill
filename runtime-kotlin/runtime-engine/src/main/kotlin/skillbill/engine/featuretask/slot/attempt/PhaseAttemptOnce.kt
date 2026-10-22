@@ -108,10 +108,9 @@ object PhaseAttemptOnce {
     val hooks = context.stepHooks(run)
     return when (
       val admission =
-        hooks.admitLaunch(
+        args.call.acceptedExecution.boundHooks.admitLaunch(
           run,
           context.launchHookContext(run, hooks),
-          args.call.acceptedExecution,
           args.context.iteration,
         )
     ) {
@@ -197,14 +196,10 @@ object PhaseAttemptOnce {
           ) {
             is PreparedLaunchReady -> {
               val launchBlock =
-                context
-                  .stepHooks(
-                    run,
-                  ).beforeAgentLaunch(
-                    run,
-                    context.launchHookContext(run, context.stepHooks(run)),
-                    call.acceptedExecution,
-                  )
+                call.acceptedExecution.boundHooks.beforeAgentLaunch(
+                  run,
+                  context.launchHookContext(run, context.stepHooks(run)),
+                )
               if (launchBlock != null) {
                 rejected = LaunchResult.infraFailure(launchBlock, childNeverLaunched = true)
                 null

@@ -7,9 +7,12 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
+import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
 import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
 import skillbill.engine.goalrunner.plan.PlanIntakeSettlement
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -49,9 +52,16 @@ class RuntimeIntakeStrategy(private val planIntake: () -> FeatureTaskRuntimePlan
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections = PhaseStepPromptSections(taskDirective = directiveFor(stepId), settles = false)
 
-  override fun runStep(
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return PhaseStepDescriptor(PhaseBindingFamily.Agent, PhaseStepHooks.None) { run, state ->
+      settleIntake(run, state)
+    }
+  }
+
+  private fun settleIntake(
     run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseAgentStepBinding,
   ): PhaseOutcome {
     state.requireAcceptedStep(run, strategyId)
     val request = run.request

@@ -1,3 +1,10 @@
+## [2026-10-22] SKILL-437: correlate strategy, family, binding and hooks per step instead of downcasting
+Context: Strategies picked an untyped binding kind and downcast the accepted binding inside hooks, so a mismatched binding failed only at runtime, and the runtime factory selected over slot, kind, gate operation and fan-out flag.
+Decision: Each step declares a typed descriptor naming its binding family; the runtime builds bindings through one factory with one method per family, and the accepted writer is checked against the owner's step family. The strategy interface stays non-generic and exposes a per-step descriptor.
+Reason: A generic strategy would not type a strategy that runs steps with different families. Per-step descriptors correlate every pair at compile time, and capture opens one binding type at a time.
+Alternatives considered: one family per strategy (rejected: audit and code review mix agent, QA findings and review steps); review families under the sealed hierarchy (rejected: it would expose review authority to every strategy).
+Revisit when: a strategy needs a step whose binding is chosen at runtime, or the slot package file ceiling is lifted.
+
 ## [2026-10-22] Keep seventeen reachable strategy registrations and one shared phase runner
 
 Context: SKILL-437 subtask 3 found that the production registry still held strategies no skeleton definition and fact combination could select. `DelegatedReviewStrategy` (code_review `delegated`) was registered with its own runner and unselected since SKILL-380 subtask 6. `AgentPlanStrategy` was registered while every plan binding selects `PlanFanOutStrategy`. The intake asked for twelve registrations, but live selection reaches seventeen.

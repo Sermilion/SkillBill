@@ -13,8 +13,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseAuditOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
@@ -25,13 +24,13 @@ import skillbill.workflow.taskruntime.model.audit.awaitsAuditClarification
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
-internal object AcceptanceAuditRound : PhaseStepHooks {
+internal object AcceptanceAuditRound : PhaseStepHooks<PhaseQaStepBinding> {
   override val contextKind = PhaseStepHookContextKind.AUDIT
 
   override fun launchPromptSupplement(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseStepBinding,
+    state: PhaseQaStepBinding,
   ): String = AcceptanceQaReaudit.promptSupplement(state)
 
   private const val REPEATED_VERDICTLESS_AUDIT_REASON =
@@ -48,7 +47,7 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
   override fun completionRejection(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseQaStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
     val claimed = auditsClaim(context)

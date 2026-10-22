@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
@@ -41,21 +40,13 @@ abstract class PhaseStrategy {
     recordedStrategyId: String = strategyId,
   ): String = "$recordedStrategyId/$semanticRevision:$stepId"
 
-  internal open fun executionBindingKind(stepId: String): PhaseExecutionBindingKind {
-    policyFor(stepId)
-    return when (slot) {
-      PhaseSlot.PREPLAN, PhaseSlot.PLAN -> PhaseExecutionBindingKind.PLANNING
-      else -> PhaseExecutionBindingKind.AGENT
-    }
-  }
+  internal abstract fun stepDescriptor(stepId: String): PhaseStepDescriptor<*>
 
-  internal open val plansInFanOut: Boolean = false
+  internal fun stepHooks(stepId: String): PhaseStepHooks<*> = stepDescriptor(stepId).hooks
 
   internal open val acceptanceRepairSteps: AcceptanceCriterionRepairStepRoles? get() = null
 
   internal open val monitorRepairSteps: MonitorRepairStepRoles? get() = null
-
-  internal open val qualityGateOperation: PhaseQualityGateOperation? = null
 
   internal open fun acceptsAttemptStrategy(attemptStrategyId: String): Boolean = attemptStrategyId == strategyId
 
@@ -77,17 +68,10 @@ abstract class PhaseStrategy {
   open fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
     FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES
 
-  internal abstract fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome
-
   internal open fun withPreparedRun(
     run: PhaseRun,
     execute: (PhaseRun) -> PhaseOutcome,
   ): PhaseOutcome = execute(run)
-
-  internal open fun stepHooks(stepId: String): PhaseStepHooks = PhaseStepHooks.None
 
   internal open fun verdictRule(
     stepId: String,
@@ -117,18 +101,6 @@ internal sealed interface PhaseQualityGateOperation {
   ) : PhaseQualityGateOperation
 
   data object AgentValidation : PhaseQualityGateOperation
-}
-
-internal enum class PhaseExecutionBindingKind {
-  AGENT,
-  PLANNING,
-  REVIEW,
-  FINDING_VERIFICATION,
-  REPAIR_RECEIPT,
-  QA_FINDINGS,
-  CI_MONITOR,
-  STANDALONE_MONITOR,
-  STANDALONE_PUBLICATION,
 }
 
 internal data class PhaseExecutionPlanMapping(

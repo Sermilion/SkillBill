@@ -5,9 +5,10 @@ import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseCommitLaunchHookContext
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.writehistory.HistoryHeadReceipt
 
-internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
+internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks<PhaseAcceptedStepExecution> {
   override val contextKind = PhaseStepHookContextKind.COMMIT
 
   override fun reconcileBeforeLaunch(
