@@ -77,8 +77,7 @@ private fun GoalRunnerExecutionLease.heartbeatIsStale(
   current: GoalRunnerExecutionLease,
   proposedHeartbeat: Instant,
 ): Boolean =
-  !current.expiresAtInstant.isAfter(proposedHeartbeat) ||
-    !expiresAtInstant.isAfter(proposedHeartbeat) ||
+  !expiresAtInstant.isAfter(proposedHeartbeat) ||
     expiresAtInstant <= current.expiresAtInstant ||
     heartbeatAtInstant < current.heartbeatAtInstant
 

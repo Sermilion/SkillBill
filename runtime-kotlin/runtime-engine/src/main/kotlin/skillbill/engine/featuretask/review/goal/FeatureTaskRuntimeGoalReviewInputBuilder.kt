@@ -24,12 +24,10 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Path
-import java.time.Clock
 
 class FeatureTaskRuntimeGoalReviewInputBuilder(
   private val database: DatabaseSessionFactory,
   private val patcher: FeatureTaskRuntimeGoalContinuationArtifactPatcher,
-  private val clock: Clock,
   private val persistGoalReviewInput: (
     String,
     GoalSubtaskReviewInput,
@@ -168,7 +166,7 @@ class FeatureTaskRuntimeGoalReviewInputBuilder(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
           ?: return@transaction null
       if (request.admitted != null &&
-        !requireCurrentWorker(request.admitted, unitOfWork.workflowStates, request.workflowId, clock)
+        !requireCurrentWorker(request.admitted, unitOfWork.workflowStates, request.workflowId)
       ) {
         return@transaction null
       }

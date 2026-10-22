@@ -38,7 +38,7 @@ class IdeStatusProjectorTest {
           FeatureTaskRuntimeStatusService(
             goalRunnerDefaultPhaseRecorder(),
             persistence,
-            FeatureTaskRuntimeRunInvariantsStore(database, persistence, testHarnessClock),
+            FeatureTaskRuntimeRunInvariantsStore(database, persistence),
             FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
           ),
         manifestStore = EmptyManifestStore,

@@ -34,7 +34,7 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       recordDecomposeTerminalInTransaction(unitOfWork, workflowId, terminal, planStepId)

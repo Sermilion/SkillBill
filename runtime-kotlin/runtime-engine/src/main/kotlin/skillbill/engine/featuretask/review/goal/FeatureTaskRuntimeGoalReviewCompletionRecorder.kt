@@ -69,7 +69,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
       seam = "FeatureTaskRuntimeGoalReviewCompletionRecorder.completeGoalReviewPhase",
       expected = "runtime-owned goal review phase completion",
     ) { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
         return@requiredWrite false
       }
       val record =

@@ -11,12 +11,10 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import java.time.Clock
 
 class FeatureTaskRuntimeFindingVerificationRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-  private val clock: Clock,
 ) {
   fun loadFindingVerificationCheckpoint(workflowId: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
     database.transaction { unitOfWork ->
@@ -45,7 +43,7 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
   ): Boolean {
     if (selections.isEmpty()) return false
     return database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       persistFindingVerificationBoundarySelectionInTransaction(unitOfWork, workflowId, selections)
@@ -100,7 +98,7 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
   ): Boolean {
     if (dispositions.isEmpty()) return false
     return database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       persistFindingVerificationCheckpointInTransaction(unitOfWork, workflowId, dispositions)

@@ -25,13 +25,11 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewRevision
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import java.time.Clock
 
 class FeatureTaskRuntimeGoalReviewPassRecorder(
   private val database: DatabaseSessionFactory,
   private val patcher: FeatureTaskRuntimeGoalContinuationArtifactPatcher,
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
-  private val clock: Clock,
 ) {
   fun reserveGoalReviewPass(
     workflowId: String,
@@ -46,7 +44,7 @@ class FeatureTaskRuntimeGoalReviewPassRecorder(
         reviewStateFromArtifacts(artifacts)
           ?: return@transaction GoalSubtaskReviewPassReservation.MissingState
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
       ) {
         return@transaction if (stateForFence.reservedPassNumber != null) {
           GoalSubtaskReviewPassInFlight(stateForFence)
@@ -83,7 +81,7 @@ class FeatureTaskRuntimeGoalReviewPassRecorder(
     database.transaction { unitOfWork ->
       val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction null
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
       ) {
         return@transaction null
       }
@@ -123,7 +121,7 @@ class FeatureTaskRuntimeGoalReviewPassRecorder(
     database.transaction { unitOfWork ->
       val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction null
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
       ) {
         return@transaction null
       }
@@ -150,7 +148,7 @@ class FeatureTaskRuntimeGoalReviewPassRecorder(
       expected = "runtime-owned review completion persistence",
     ) { unitOfWork ->
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)
       ) {
         return@requiredWrite null
       }

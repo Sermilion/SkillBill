@@ -47,7 +47,6 @@ class FeatureTaskRuntimeDurableRunFactory(
       DurablePhaseRunSettlements(
         database,
         requireNotNull(runRequest.admittedExecution),
-        clock,
         phaseSettlementService,
       ),
       DurablePhaseRunCheckpoints(gitOperations),
