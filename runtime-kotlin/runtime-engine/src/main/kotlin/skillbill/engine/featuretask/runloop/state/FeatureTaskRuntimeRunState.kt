@@ -101,6 +101,7 @@ internal class FeatureTaskRuntimeRunState(
     priorRecords.replaceFrom(source.priorRecords)
     phasesLaunchedThisProcess.replaceFrom(source.phasesLaunchedThisProcess)
     persistedAttemptCounts.replaceFrom(source.persistedAttemptCounts)
+    acknowledgedAttemptCounts.replaceFrom(source.acknowledgedAttemptCounts)
     blockedRecords.replaceFrom(source.blockedRecords)
     branchSetupBlockedPhases.replaceFrom(source.branchSetupBlockedPhases)
     edgeIterationByLoop.replaceFrom(source.edgeIterationByLoop)
@@ -310,6 +311,8 @@ internal class FeatureTaskRuntimeRunState(
   private val persistedAttemptCounts: MutableMap<String, Int> =
     this.initialRecords.mapValues { (_, record) -> record.attemptCount }.toMutableMap()
 
+  private val acknowledgedAttemptCounts: MutableMap<String, Int> = mutableMapOf()
+
   private val blockedRecords: MutableMap<String, String> =
     this.initialRecords
       .filterValues { record ->
@@ -372,6 +375,7 @@ internal class FeatureTaskRuntimeRunState(
       record = detachedInitialRecords[phaseId]?.let(::detachedRecord),
       output = outputBuffer.filter { it.phaseId == phaseId }.maxByOrNull { it.iteration }?.let(::detachedOutput),
       nextIteration = nextIteration(phaseId),
+      acknowledgedAttemptCount = acknowledgedAttemptCounts[phaseId],
     )
 
   override fun outputs(requiredPhaseIds: Collection<String>): List<FeatureTaskRuntimePhaseOutput> {
@@ -414,6 +418,8 @@ internal class FeatureTaskRuntimeRunState(
     fixLoopBudgetBaseByPhase.remove(reviewStepId)
     fixStepId?.let(persistedAttemptCounts::remove)
     persistedAttemptCounts.remove(reviewStepId)
+    fixStepId?.let(acknowledgedAttemptCounts::remove)
+    acknowledgedAttemptCounts.remove(reviewStepId)
     priorRecords.remove(reviewStepId)
     blockedRecords.remove(reviewStepId)
     currentReviewPassNumber = null
@@ -541,6 +547,13 @@ internal class FeatureTaskRuntimeRunState(
     phasesLaunchedThisProcess += phaseId
   }
 
+  internal fun recordAcknowledgedPhaseStart(
+    phaseId: String,
+    attemptCount: Int,
+  ) {
+    acknowledgedAttemptCounts[phaseId] = maxOf(acknowledgedAttemptCounts[phaseId] ?: 0, attemptCount)
+  }
+
   internal fun clearPersistedBlock(phaseId: String) {
     blockedRecords.remove(phaseId)
   }
@@ -548,6 +561,7 @@ internal class FeatureTaskRuntimeRunState(
   internal fun clearBranchSetupBlock(phaseId: String) {
     branchSetupBlockedPhases.remove(phaseId)
     persistedAttemptCounts.remove(phaseId)
+    acknowledgedAttemptCounts.remove(phaseId)
   }
 
   override fun loop(loopId: String): LoopProgressObservation =

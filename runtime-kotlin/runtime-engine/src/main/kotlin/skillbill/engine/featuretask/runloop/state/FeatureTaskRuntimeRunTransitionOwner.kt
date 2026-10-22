@@ -188,6 +188,7 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
   ): RequiredPhaseWrite {
     val write = recorder.recordRequiredPhaseStart(phaseState)
     if (write is RequiredPhaseWrite.Acknowledged) {
+      progress.recordAcknowledgedPhaseStart(phaseState.phaseId, phaseState.attemptCount)
       reserveReviewPassAfterPhaseState(phaseState.reviewPassNumber)
     }
     return write

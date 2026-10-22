@@ -74,11 +74,13 @@ class StrategyCapabilityBoundaryArchitectureTest {
         internal fun leak(progress: FeatureTaskRuntimeRunState) {
           val alias = progress
           alias.restartAttemptBudget("audit")
+          alias.recordAcknowledgedPhaseStart("review", 2)
         }
         """.trimIndent(),
       )
     val findings = StrategyCapabilityTransitiveGraph.violations(listOf(helper), emptySet())
     assertTrue(findings.any { "restartAttemptBudget" in it && "outside its transition owner" in it })
+    assertTrue(findings.any { "recordAcknowledgedPhaseStart" in it && "outside its transition owner" in it })
   }
 
   @Test
