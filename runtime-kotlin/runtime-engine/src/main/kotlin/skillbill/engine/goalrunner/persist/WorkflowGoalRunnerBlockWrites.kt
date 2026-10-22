@@ -40,6 +40,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phaseartifacts.asPendingForOperatorResume
 import java.time.Clock
 import java.time.ZoneOffset
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as ExecutionPlanKeys
 
 internal class WorkflowGoalRunnerBlockWrites(
   private val engine: WorkflowEngine,
@@ -70,7 +71,7 @@ internal class WorkflowGoalRunnerBlockWrites(
     val steps = write.record.steps
     val definitionStepIds =
       if (write.family == WorkflowFamily.TASK_RUNTIME) {
-        write.family.definition.stepIds.filterNot {
+        (plannedForwardStepIds(write.record.artifacts) ?: write.family.definition.stepIds).filterNot {
           it in write.family.loopOnlyStepIds || it == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE
         }
       } else {
@@ -252,6 +253,13 @@ internal class WorkflowGoalRunnerBlockWrites(
         ),
       sessionId = "",
     )
+  }
+
+  private fun plannedForwardStepIds(artifacts: Map<String, Any?>): List<String>? {
+    val plan = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(artifacts) as? Map<*, *>
+    val traversal = plan?.get(ExecutionPlanKeys.TRAVERSAL) as? Map<*, *>
+    val forwardSteps = traversal?.get(ExecutionPlanKeys.FORWARD_STEPS) as? List<*> ?: return null
+    return forwardSteps.filterIsInstance<String>().takeIf { it.size == forwardSteps.size && it.isNotEmpty() }
   }
 
   private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
