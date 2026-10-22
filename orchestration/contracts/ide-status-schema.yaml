@@ -271,6 +271,10 @@ properties:
           - gate_run
           - bounded_edge
           - attempt
+      criterion_ref:
+        type: string
+        pattern: '^AC-[0-9]{3}$'
+        description: Current acceptance criterion under repair or targeted verification. Omitted during discovery and outside acceptance audit phases.
       count:
         type: integer
         minimum: 1

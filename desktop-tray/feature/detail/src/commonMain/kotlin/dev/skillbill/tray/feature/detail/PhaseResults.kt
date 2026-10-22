@@ -65,7 +65,7 @@ private fun ReviewPassRow(pass: ReviewPass, conclusion: PhaseConclusion?) {
   val unresolved = if (pass.unresolvedFindingCount > 0) "${pass.unresolvedFindingCount} unresolved" else null
   PhaseHeading(
     "Review",
-    listOfNotNull("pass ${pass.passNumber}", wireLabel(pass.verdict), unresolved).joinToString(" · "),
+    listOfNotNull(wireLabel(pass.verdict), unresolved).joinToString(" · "),
     verdictColor(pass.verdict),
   )
   if (pass.findings.isNotEmpty()) {
@@ -86,10 +86,9 @@ private fun FindingRow(finding: ReviewFinding) {
 
 @Composable
 private fun ConclusionRow(phase: String, conclusion: PhaseConclusion) {
-  val attempts = if (conclusion.attemptCount > 1) "${conclusion.attemptCount} attempts" else null
   PhaseHeading(
     phase,
-    listOfNotNull(conclusion.verdict?.let(::wireLabel), attempts).joinToString(" · ").ifEmpty { "completed" },
+    conclusion.verdict?.let(::wireLabel).orEmpty().ifEmpty { "completed" },
     verdictColor(conclusion.verdict),
   )
   PhaseBody(phase, conclusion.summary, conclusion.detail)
@@ -97,12 +96,11 @@ private fun ConclusionRow(phase: String, conclusion: PhaseConclusion) {
 
 @Composable
 private fun QaRow(qa: GoalQaResult) {
-  val fixes = when (qa.fixAttempts) { 0 -> null; 1 -> "1 fix attempt"; else -> "${qa.fixAttempts} fix attempts" }
   Column(Modifier.fillMaxWidth().padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Text("Goal QA", color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp)
     PhaseHeading(
       "QA",
-      listOfNotNull(wireLabel(qa.outcome), fixes, formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
+      listOf(wireLabel(qa.outcome), formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
       verdictColor(qa.outcome),
     )
     PhaseBody("Goal QA", qa.reason.takeUnless { qa.reportText != null && isBareQaReasonToken(it) }, null)

@@ -150,6 +150,7 @@ class FeatureTaskRuntimeStatusService(
     val request = parts.request
     val phases = parts.phases
     val terminalDecomposeRecorded = parts.terminalDecomposeRecorded
+    val acceptanceRepair = workflowPersistence.readAcceptanceCriterionRepairStatus(request.workflowId)
     return FeatureTaskRuntimeStatusProjection(
       workflowId = request.workflowId,
       featureSize = runInvariantsStore.resolve(request.workflowId)?.featureSize?.name,
@@ -191,12 +192,13 @@ class FeatureTaskRuntimeStatusService(
             phases = parts.phases,
             ledger = parts.ledger,
             gateRunCount = parts.gateRunCount,
+            acceptanceCriterionRepair = (acceptanceRepair as? AcceptanceCriterionRepairStatusRead.Current)?.state,
           ),
         ),
       degradedDiagnostic = degradedDiagnosticStatus(request.workflowId),
       operatorDecisionPause = operatorDecisionPause(parts.records),
       criterionExplanation =
-        when (val repair = workflowPersistence.readAcceptanceCriterionRepairStatus(request.workflowId)) {
+        when (val repair = acceptanceRepair) {
           null -> null
           is AcceptanceCriterionRepairStatusRead.Current -> acceptanceCriterionRepairExplanation(repair.state)
           AcceptanceCriterionRepairStatusRead.PreContract -> PRE_CONTRACT_REPAIR_EXPLANATION

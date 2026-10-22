@@ -105,7 +105,9 @@ class MonitorStrategy(
         state: PhaseAcceptedStepExecution,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck =
-        (state as PhaseMonitorStepBinding).publishRepair(run, identityLookup)?.let { PhaseStepOutputCheck.Block(it) }
+        (state as PhaseMonitorStepBinding)
+          .publishRepair(run, identityLookup, fixBrief.conflictBaseBranch(run.request.issueKey))
+          ?.let { PhaseStepOutputCheck.Block(it) }
           ?: PhaseStepOutputCheck.Accept
     }
 
@@ -181,8 +183,9 @@ class MonitorStrategy(
     private const val MONITOR_FIX_DIRECTIVE: String =
       "Monitor repair completion requires both a fix for the recorded failure and passing local project checks. " +
         "Passing local checks alone does not satisfy this phase, even when discovery finds no applicable checks. " +
-        "When the brief names a merge conflict, merge the named base branch into the current branch and resolve " +
-        "every conflict. When it names failing checks, open each recorded check URL and read that failing job's " +
+        "When the brief names a merge conflict, follow its merge steps: merge the fetched remote base without " +
+        "committing, resolve every conflict, and leave the merge in progress for the runtime to commit. " +
+        "When it names failing checks, open each recorded check URL and read that failing job's " +
         "logs or the check's report first, for example with `gh run view <run-id> --job <job-id> --log-failed` " +
         "or the pull request comment the check links to. Identify the failed command, assertion, rule or error, " +
         "and relevant CI environment. When the evidence shows the check rejects the pull request itself, such as " +

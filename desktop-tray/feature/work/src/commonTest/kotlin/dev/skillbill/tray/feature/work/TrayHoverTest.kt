@@ -1,6 +1,8 @@
 package dev.skillbill.tray.feature.work
 
 import dev.skillbill.tray.core.domain.model.BoardArrangement
+import dev.skillbill.tray.core.domain.model.PhaseExecution
+import dev.skillbill.tray.core.domain.model.PhaseExecutionKind
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.TrayStatus
@@ -52,6 +54,19 @@ class TrayHoverTest {
     assertContains(text, "&lt;repo&gt;")
     assertFalse("<repo>" in text)
     assertContains(text, "#3FB950")
+  }
+
+  @Test
+  fun `compact hover progress keeps the current criterion without execution counts`() {
+    val item = live("GOAL-1", goal = true).copy(
+      currentStepLabel = "audit",
+      phaseExecution = PhaseExecution("audit", PhaseExecutionKind.ATTEMPT, 7, null, "AC-005"),
+    )
+    val text = stateOf(listOf(item), emptyList()).trayHover()
+
+    assertContains(text, "audit · AC-5")
+    assertFalse("7/?" in text)
+    assertFalse("attempt" in text)
   }
 
   @Test
