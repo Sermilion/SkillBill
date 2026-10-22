@@ -48,6 +48,7 @@ internal data class StoppedIterationArgs(
   val reconciled: GoalRunnerReconciledOutcome.Stop,
   val session: GoalRunnerIterationSession,
   val launchDiagnostics: GoalRunnerLaunchDiagnostics? = null,
+  val failureExitCode: Int? = null,
 )
 
 internal data class CompletedIterationArgs(

@@ -3,8 +3,11 @@ package skillbill.engine.goalrunner.persist
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.diagnostics.block.BlockIncidentCaptureOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
+import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
@@ -69,6 +72,7 @@ class WorkflowGoalRunnerOutcomeStore
     workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
     crashReconciler: FeatureTaskRuntimeCrashReconciler,
     clock: Clock,
+    private val blockIncidentCapture: BlockIncidentCapture,
   ) : GoalRunnerWorkflowOutcomeStore,
     GoalRunnerAttemptLedgerStore {
     private val engine = WorkflowEngine()
@@ -98,8 +102,8 @@ class WorkflowGoalRunnerOutcomeStore
     private val terminal =
       WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations, crashReconciler)
     private val review = WorkflowGoalRunnerReviewBridge(database, engine)
-    private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile)
-    private val blocks = WorkflowGoalRunnerBlockBridge(database, blockWrites)
+    private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile, blockIncidentCapture)
+    private val blocks = WorkflowGoalRunnerBlockBridge(database, blockWrites, blockIncidentCapture, clock)
 
     override fun terminalOutcome(
       workflowId: String,
@@ -205,7 +209,71 @@ class WorkflowGoalRunnerOutcomeStore
       blockedReason: String,
       lastResumableStep: String,
       supervisionEvent: GoalRunnerSupervisionEvent?,
-    ): String? = blocks.markBlocked(workflowId, blockedReason, lastResumableStep, supervisionEvent)
+      executionGeneration: Long?,
+      failureExitCode: Int?,
+      executionOwnerToken: String?,
+      failureThrowableType: String?,
+      causingIncidentToken: String?,
+    ): GoalRunnerAcceptedBlock? = blocks.markBlocked(
+      workflowId,
+      blockedReason,
+      lastResumableStep,
+      supervisionEvent,
+      null,
+      executionGeneration,
+      failureExitCode,
+      executionOwnerToken,
+      failureThrowableType,
+      causingIncidentToken,
+    )
+
+    override fun markBlockedForChild(
+      workflowId: String,
+      blockedReason: String,
+      lastResumableStep: String,
+      causingChildWorkflowId: String,
+      supervisionEvent: GoalRunnerSupervisionEvent?,
+      executionGeneration: Long?,
+      failureExitCode: Int?,
+      executionOwnerToken: String?,
+      failureThrowableType: String?,
+      causingIncidentToken: String?,
+    ): GoalRunnerAcceptedBlock? = blocks.markBlocked(
+      workflowId,
+      blockedReason,
+      lastResumableStep,
+      supervisionEvent,
+      causingChildWorkflowId,
+      executionGeneration,
+      failureExitCode,
+      executionOwnerToken,
+      failureThrowableType,
+      causingIncidentToken,
+    )
+
+    override fun markBlockedWithReference(
+      workflowId: String,
+      blockedReason: String,
+      lastResumableStep: String,
+      causingChildWorkflowId: String?,
+      acceptedBlockReference: GoalRunnerAcceptedBlockReference?,
+      executionGeneration: Long?,
+      executionOwnerToken: String?,
+      historicalBlockReference: GoalRunnerAcceptedBlockReference?,
+    ): GoalRunnerAcceptedBlock? = blocks.markBlocked(
+      workflowId,
+      blockedReason,
+      lastResumableStep,
+      null,
+      causingChildWorkflowId,
+      executionGeneration,
+      null,
+      executionOwnerToken,
+      null,
+      acceptedBlockReference?.incidentToken,
+      acceptedBlockReference,
+      historicalBlockReference,
+    )
 
     override fun reopenBlockedPhaseForOperatorResume(
       workflowId: String,
@@ -450,6 +518,7 @@ internal class WorkflowGoalRunnerReviewBridge(
 internal class WorkflowGoalRunnerReconcileBridge(
   private val database: DatabaseSessionFactory,
   private val outcomeReconcile: WorkflowGoalRunnerOutcomeReconcile,
+  private val blockIncidentCapture: BlockIncidentCapture,
 ) {
   fun reconcileAuthoritativeOutcomes(
     issueKey: String,
@@ -457,13 +526,16 @@ internal class WorkflowGoalRunnerReconcileBridge(
     activeWorkflowIds: Set<String>,
     gate: GoalRunnerReconcileGate,
     repoRoot: Path?,
-  ): Map<Int, GoalRunnerStoredOutcome> =
-    database.transaction { unitOfWork ->
+  ): Map<Int, GoalRunnerStoredOutcome> {
+    val result = database.transaction { unitOfWork ->
       outcomeReconcile.reconcileAuthoritativeOutcomesInTransaction(
         unitOfWork,
         GoalOutcomeReconciliationRequest(issueKey, parentWorkflowId, activeWorkflowIds, gate, repoRoot),
       )
     }
+    result.blockObservations.forEach(blockIncidentCapture::capture)
+    return result.outcomes
+  }
 
   fun authoritativeOutcomesForSubtasks(
     issueKey: String,
@@ -492,22 +564,57 @@ internal class WorkflowGoalRunnerReconcileBridge(
 internal class WorkflowGoalRunnerBlockBridge(
   private val database: DatabaseSessionFactory,
   private val blockWrites: WorkflowGoalRunnerBlockWrites,
+  private val blockIncidentCapture: BlockIncidentCapture,
+  private val clock: Clock,
 ) {
   fun markBlocked(
     workflowId: String,
     blockedReason: String,
     lastResumableStep: String,
     supervisionEvent: GoalRunnerSupervisionEvent?,
-  ): String? =
-    database.transaction { unitOfWork ->
+    causingChildWorkflowId: String?,
+    executionGeneration: Long? = null,
+    failureExitCode: Int? = null,
+    executionOwnerToken: String? = null,
+    failureThrowableType: String? = null,
+    causingIncidentToken: String? = null,
+    causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+    historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  ): GoalRunnerAcceptedBlock? {
+    val result = database.transaction { unitOfWork ->
+      if (executionOwnerToken != null) {
+        val currentLease = unitOfWork.goalRunnerControls.controlState(workflowId).executionLease
+        if (currentLease == null || currentLease.ownerToken != executionOwnerToken ||
+          currentLease.generation != executionGeneration || !currentLease.expiresAtInstant.isAfter(clock.instant())
+        ) {
+          return@transaction null
+        }
+      }
       blockWrites.markBlocked(
         workflowId,
         blockedReason,
         lastResumableStep,
         supervisionEvent,
         unitOfWork.workflowStates,
+        unitOfWork.blockIncidents,
+        causingChildWorkflowId,
+        executionGeneration,
+        failureExitCode,
+        failureThrowableType,
+        causingIncidentToken,
+        causingAcceptedBlockReference,
+        historicalBlockReference,
       )
     }
+    val capture = result?.let { blockIncidentCapture.capture(it.observation) }
+    val incidentToken =
+      when (capture) {
+        is BlockIncidentCaptureOutcome.Captured -> capture.occurrenceToken
+        is BlockIncidentCaptureOutcome.Spooled -> capture.occurrenceToken
+        BlockIncidentCaptureOutcome.Unsaved, null -> null
+      }
+    return result?.let { GoalRunnerAcceptedBlock(it.stepId, incidentToken, it.acceptedBlockReference) }
+  }
 
   fun reopenBlockedPhaseForOperatorResume(
     workflowId: String,

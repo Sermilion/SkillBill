@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.persist
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
+import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.goalrunner.model.CrashReconcileExpiredWorkerRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.goalrunner.commitShaFrom
@@ -51,7 +52,10 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
       val artifacts = snapshot.artifacts
       DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()
         ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
-        ?.let { continuation -> terminalOutcomeFor(snapshot, artifacts, continuation, measuredCommitSha) }
+        ?.let { continuation ->
+          terminalOutcomeFor(snapshot, artifacts, continuation, measuredCommitSha)
+            ?.withAcceptedBlockReference(snapshot)
+        }
     }
   }
 
@@ -210,6 +214,14 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
     return recovered ?: resolveTerminalOutcome(workflowStates, workflowId, issueKey, subtaskId) { null }
   }
 }
+
+internal fun GoalRunnerStoredOutcome.withAcceptedBlockReference(
+  snapshot: WorkflowStateSnapshot,
+): GoalRunnerStoredOutcome =
+  copy(
+    acceptedBlockReference =
+      BlockIncidentIdentity.fromArtifacts(snapshot.artifacts)?.acceptedReference(snapshot.workflowId),
+  )
 
 internal fun WorkflowGitOperationResult.measuredCommitSha(): String? =
   when (this) {

@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.model.blockincident
 
 import java.time.Instant
+import java.time.Duration
 
 sealed interface BlockIncidentTransitionDecision {
   data class Accepted(val candidate: BlockIncident) : BlockIncidentTransitionDecision
@@ -36,9 +37,11 @@ object BlockIncidentTransitions {
     if (current.state.revision != expectedRevision) return BlockIncidentTransitionDecision.Refused(
       BlockIncidentTransitionRefusal.STALE_REVISION,
     )
-    if (current.state.diagnosis != BlockIncidentDiagnosis.PENDING) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.NOT_PENDING,
-    )
+    val takeover = current.state.diagnosis == BlockIncidentDiagnosis.INVESTIGATING &&
+      current.state.claim?.expiresAt?.let { it <= now } == true
+    if (current.state.diagnosis != BlockIncidentDiagnosis.PENDING && !takeover) {
+      return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.NOT_PENDING)
+    }
     if (current.state.retryCount >= MAX_RETRIES) return BlockIncidentTransitionDecision.Refused(
       BlockIncidentTransitionRefusal.RETRIES_EXHAUSTED,
     )
@@ -48,7 +51,8 @@ object BlockIncidentTransitions {
     if (current.state.nextEligibleAt?.isAfter(now) == true) return BlockIncidentTransitionDecision.Refused(
       BlockIncidentTransitionRefusal.NOT_ELIGIBLE,
     )
-    if (!claim.expiresAt.isAfter(now) || claim.expiresAt.isAfter(current.state.deadline) ||
+    val deadline = now.plus(INVESTIGATION_DEADLINE)
+    if (!claim.expiresAt.isAfter(now) || claim.expiresAt.isAfter(deadline) ||
       claim.ownerToken.isBlank() || claim.ownerGeneration <= 0 || claim.hostIdentity.isBlank() || claim.processId <= 0
     ) return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.INVALID_LEASE)
     val candidate = current.copy(
@@ -57,6 +61,8 @@ object BlockIncidentTransitions {
         nextEligibleAt = null,
         revision = current.state.revision + 1,
         claim = claim,
+        deadline = deadline,
+        retryCount = current.state.retryCount + if (takeover) 1 else 0,
       ),
     )
     return candidate.acceptedOrRefused()
@@ -165,4 +171,6 @@ object BlockIncidentTransitions {
   private fun BlockIncident.acceptedOrRefused(): BlockIncidentTransitionDecision =
     if (isValid()) BlockIncidentTransitionDecision.Accepted(this)
     else BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.INVALID_SETTLEMENT)
+
+  private val INVESTIGATION_DEADLINE: Duration = Duration.ofMinutes(5)
 }

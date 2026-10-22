@@ -44,6 +44,9 @@ import skillbill.di.telemetry.RuntimeTelemetryProvides
 import skillbill.di.workflow.RuntimeWorkflowProvides
 import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
+import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
+import skillbill.engine.diagnostics.block.DefaultBlockIncidentInvestigator
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
@@ -153,6 +156,9 @@ abstract class RuntimeComponent(
   fun runtimeVersion(): RuntimeVersion = RuntimeVersion(SkillBillVersion.VALUE)
 
   @Provides
+  fun blockIncidentInvestigator(): BlockIncidentInvestigator = DefaultBlockIncidentInvestigator
+
+  @Provides
   fun optionalCallbacks(ctx: RuntimeContext): OptionalCallbacks = ctx.callbacks
 
   @Provides
@@ -185,8 +191,9 @@ abstract class RuntimeComponent(
     registrations: StandalonePhaseRegistrationFactory,
     clock: Clock,
     diagnostics: RuntimeDiagnostics,
+    blockIncidentCapture: BlockIncidentCapture,
   ): StandalonePhaseStatusPublisherFactory =
-    StandalonePhaseStatusPublisherFactory(database, registrations, clock, diagnostics)
+    StandalonePhaseStatusPublisherFactory(database, registrations, clock, diagnostics, blockIncidentCapture)
 
   @Provides
   fun interruptSignal(): InterruptSignalPort = JvmInterruptSignalPort

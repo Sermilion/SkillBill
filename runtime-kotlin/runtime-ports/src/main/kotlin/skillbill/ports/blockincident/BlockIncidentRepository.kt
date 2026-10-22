@@ -7,6 +7,16 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrenc
 import java.time.Instant
 
 interface BlockIncidentRepository {
+  /** Returns the incident already associated with this alias, if one exists. */
+  fun findByAlias(alias: BlockIncidentAlias): BlockIncident?
+
+  fun rolloutActivatedAt(): Instant? = null
+
+  fun latestForWorkflow(workflowId: String): BlockIncident?
+
+
+  fun blockedWithoutIncident(since: Instant, limit: Int): List<BlockedWorkflowWithoutIncident> = emptyList()
+
   fun createOrLink(
     occurrence: BlockIncidentOccurrence,
     alias: BlockIncidentAlias,
@@ -51,4 +61,16 @@ interface BlockIncidentRepository {
     observedOwnerToken: String?,
     observedOwnerGeneration: Long?,
   ): Boolean
+}
+
+data class BlockedWorkflowWithoutIncident(
+  val workflowId: String,
+  val parentWorkflowId: String?,
+  val kind: Kind,
+  val blockedReason: String,
+  val phaseId: String?,
+  val attempt: Int?,
+  val updatedAt: Instant,
+) {
+  enum class Kind { GOAL, PHASE }
 }

@@ -363,5 +363,7 @@ object GoalRunnerOutcomeReconciler {
       lastResumableStep = storedOutcome?.lastResumableStep.orEmpty().ifBlank { "preplan" },
       liveness = liveness,
       noChangeReason = noChangeReason,
+      incidentToken = storedOutcome?.acceptedBlockReference?.incidentToken,
+      acceptedBlockReference = storedOutcome?.acceptedBlockReference,
     )
 }

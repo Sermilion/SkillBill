@@ -32,6 +32,7 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.supervisionEvent
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
@@ -117,6 +118,8 @@ class GoalRunnerSubtaskLaunchPrepare(
     subtaskId: Int,
     reason: String,
     request: GoalRunnerRunRequest,
+    incidentToken: String? = null,
+    acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   ): GoalRunnerIterationResult {
     val blockedReason = reviewBaselineBlockedReason(state.manifest, subtaskId, reason)
     val blocked = state.manifest.withBranchSetupBlockedSubtask(subtaskId, blockedReason)
@@ -142,6 +145,8 @@ class GoalRunnerSubtaskLaunchPrepare(
             blockedReason = blockedReason,
             workflowId = state.manifest.workflowIdFor(subtaskId),
             lastResumableStep = "preplan",
+            incidentToken = incidentToken,
+            acceptedBlockReference = acceptedBlockReference,
           ),
         ),
     )
@@ -154,17 +159,25 @@ class GoalRunnerSubtaskLaunchPrepare(
   ): GoalRunnerIterationResult {
     val targetSubtaskId = conflict.subtaskId
     val reason = goalPlanningChildImportConflictBlockedReason(state.manifest.issueKey, targetSubtaskId, conflict)
-    state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
-      runCatching {
-        outcomeStore.markBlocked(
-          workflowId = workflowId,
-          blockedReason = reason,
-          lastResumableStep = "preplan",
-          supervisionEvent = null,
-        )
+    val acceptedBlock =
+      state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
+        runCatching {
+          outcomeStore.markBlocked(
+            workflowId = workflowId,
+            blockedReason = reason,
+            lastResumableStep = "preplan",
+            supervisionEvent = null,
+          )
+        }.getOrNull()
       }
-    }
-    return blockedReviewBaselineIteration(state, targetSubtaskId, reason, request)
+    return blockedReviewBaselineIteration(
+      state,
+      targetSubtaskId,
+      reason,
+      request,
+      acceptedBlock?.incidentToken,
+      acceptedBlock?.acceptedBlockReference,
+    )
   }
 
   fun emitGoalReviewSummaries(

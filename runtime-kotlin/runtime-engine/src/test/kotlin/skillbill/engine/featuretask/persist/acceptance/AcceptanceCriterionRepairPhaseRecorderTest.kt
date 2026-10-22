@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairHydration
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
@@ -180,6 +181,64 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
             DurableWorkflowArtifacts.fromMap(record.artifacts + mapOf(family.entry(state.asQaRepairStateWireMap()))),
         ),
       )
+    }
+  }
+
+  @Test
+  fun `three rejected completed repair claims block even when verification reports progress`() =
+    assertRejectedRepairBudget("completed")
+
+  @Test
+  fun `three rejected repair claims without a verdict block even when verification reports progress`() =
+    assertRejectedRepairBudget(null)
+
+  @Test
+  fun `three rejected satisfied repair claims block even when verification reports progress`() =
+    assertRejectedRepairBudget("satisfied")
+
+  private fun assertRejectedRepairBudget(verdict: String?) {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val scope =
+          AcceptanceCriterionRepairRunState(
+            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+            f.binding,
+          )
+        val recorder =
+          requireNotNull(
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows)
+              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+          )
+        audit(f, recorder, 1, false, "The first requirement needs a caller.")
+
+        repeat(3) { index ->
+          val repair = phase(f, "audit_implement_fix", index + 1)
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
+          assertEquals(
+            RequiredPhaseWrite.Acknowledged,
+            recorder.complete(output(repair, verdict, "The production repair is complete.")),
+          )
+          assertEquals(
+            AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+            scope.snapshot?.stage,
+          )
+          assertNull(scope.snapshot?.pendingClarificationQuestion)
+          val verification = phase(f, "audit", index + 2)
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(verification))
+          val rejected = output(verification, "progress", "The claimed repair still loses the causal incident.")
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(rejected))
+          assertEquals(index + 1, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
+          val saved = scope.snapshot
+          if (index < 2) assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(rejected))
+          assertEquals(saved, scope.snapshot)
+        }
+
+        assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
+        assertEquals(WorkflowStatus.BLOCKED, f.snapshot().workflowStatus)
+        assertFalse(recorder.start(phase(f, "audit_implement_fix", 4)) == RequiredPhaseWrite.Acknowledged)
+        val restored = f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest)
+        assertEquals(scope.snapshot, assertIs<AcceptanceCriterionRepairHydration.Present>(restored).state)
+      }
     }
   }
 
@@ -563,7 +622,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
 
   private fun output(
     phase: FeatureTaskRuntimePhaseStateRequest,
-    verdict: String,
+    verdict: String?,
     prose: String,
     auditResult: Map<String, Any?>? = null,
   ): FeatureTaskRuntimePhaseStateRequest {

@@ -28,6 +28,7 @@ data class GoalRunnerRunRequest(
   val stopAfterSubtaskId: Int? = null,
   val intake: String? = null,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  internal val executionGeneration: Long? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

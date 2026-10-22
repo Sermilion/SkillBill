@@ -27,6 +27,7 @@ import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.SQLException
+import java.sql.Types
 import java.time.Clock
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -37,6 +38,15 @@ internal class SqliteBlockIncidentRepository(
   private val contractValidator: BlockIncidentContractValidator,
   private val diagnostics: RuntimeDiagnostics? = null,
 ) : BlockIncidentRepository {
+  private val rolloutQueries = SqliteBlockIncidentRolloutQueries(connection, ::find)
+
+  override fun rolloutActivatedAt(): Instant? = rolloutQueries.activatedAt()
+
+  override fun latestForWorkflow(workflowId: String): BlockIncident? = rolloutQueries.latestForWorkflow(workflowId)
+
+
+  override fun blockedWithoutIncident(since: Instant, limit: Int) = rolloutQueries.blockedWithoutIncident(since, limit)
+
   override fun createOrLink(
     occurrence: BlockIncidentOccurrence,
     alias: BlockIncidentAlias,
@@ -69,6 +79,16 @@ internal class SqliteBlockIncidentRepository(
       }
       return existing
     }
+    load(occurrence.occurrenceToken)?.let { existing ->
+      if (!existing.occurrence.hasSamePersistedOriginalFailure(occurrence, compareObservedAt = false)) {
+        throw SkillBillRuntimeException(
+          BlockIncidentFailureCode.IMMUTABLE_CONFLICT,
+          "Block incident token already belongs to a different original failure.",
+        )
+      }
+      persistAlias(alias, occurrence.occurrenceToken)
+      return existing.copy(aliases = existing.aliases + alias)
+    }
     connection.prepareStatement(
       """
       INSERT INTO block_incidents (
@@ -88,14 +108,14 @@ internal class SqliteBlockIncidentRepository(
       statement.setString(7, occurrence.invocationId)
       statement.setString(8, occurrence.executionId)
       if (occurrence.attempt == null) {
-        statement.setNull(9, java.sql.Types.INTEGER)
+        statement.setNull(9, Types.INTEGER)
       } else {
-        statement.setInt(9, occurrence.attempt)
+        statement.setInt(9, requireNotNull(occurrence.attempt))
       }
       if (occurrence.generation == null) {
-        statement.setNull(10, java.sql.Types.BIGINT)
+        statement.setNull(10, Types.BIGINT)
       } else {
-        statement.setLong(10, occurrence.generation)
+        statement.setLong(10, requireNotNull(occurrence.generation))
       }
       statement.setString(11, occurrence.origin.wireValue)
       statement.setString(12, occurrence.reason)
@@ -103,9 +123,9 @@ internal class SqliteBlockIncidentRepository(
       statement.setString(14, occurrence.failureDisposition)
       statement.setString(15, occurrence.throwableType)
       if (occurrence.exitCode == null) {
-        statement.setNull(16, java.sql.Types.INTEGER)
+        statement.setNull(16, Types.INTEGER)
       } else {
-        statement.setInt(16, occurrence.exitCode)
+        statement.setInt(16, requireNotNull(occurrence.exitCode))
       }
       statement.setString(17, occurrence.observedAt.toString())
       statement.setString(18, occurrence.evidenceAvailability.wireValue)
@@ -115,14 +135,7 @@ internal class SqliteBlockIncidentRepository(
       statement.setString(22, SqliteBlockIncidentOccurrenceCodec.encode(occurrence))
       statement.executeUpdate()
     }
-    connection.prepareStatement(
-      "INSERT INTO block_incident_aliases(alias_kind, alias_value, occurrence_token) VALUES (?, ?, ?)",
-    ).use { statement ->
-      statement.setString(1, alias.kind.wireValue)
-      statement.setString(2, alias.value)
-      statement.setString(3, occurrence.occurrenceToken)
-      statement.executeUpdate()
-    }
+    persistAlias(alias, occurrence.occurrenceToken)
     val persisted = load(occurrence.occurrenceToken)
       ?: throw incidentCorrupt("Inserted incident disappeared during validated readback.")
     if (persisted.occurrence != occurrence ||
@@ -217,8 +230,9 @@ internal class SqliteBlockIncidentRepository(
   override fun pending(limit: Int): List<BlockIncident> {
     if (limit !in 1..MAX_PENDING_BATCH) throw incidentCorrupt("Block incident pending limit is outside its contract.")
     val now = clock.instant()
+    val activatedAt = rolloutQueries.activatedAt() ?: return emptyList()
     val candidates = listOf(BlockIncidentDiagnosis.PENDING, BlockIncidentDiagnosis.INVESTIGATING)
-      .flatMap { diagnosis -> scanCandidates(diagnosis, now) }
+      .flatMap { diagnosis -> scanCandidates(diagnosis, now, activatedAt) }
       .sortedWith(compareBy({ it.occurrence.observedAt }, { it.occurrence.occurrenceToken }))
     return candidates.take(limit)
   }
@@ -227,7 +241,7 @@ internal class SqliteBlockIncidentRepository(
    * Scans one bounded keyset page per call and persists where it stopped, so rows that stay ineligible or corrupt
    * cannot starve later rows. A page shorter than the window ends the cycle and the next call rewinds.
    */
-  private fun scanCandidates(diagnosis: BlockIncidentDiagnosis, now: Instant): List<BlockIncident> {
+  private fun scanCandidates(diagnosis: BlockIncidentDiagnosis, now: Instant, activatedAt: Instant): List<BlockIncident> {
     val cursor = scanCursor(diagnosis)
     val scanned = connection.prepareStatement(
       "SELECT occurrence_token, observed_at FROM block_incidents " +
@@ -253,8 +267,11 @@ internal class SqliteBlockIncidentRepository(
         ?: return@mapNotNull null
       val state = incident.state
       incident.takeIf {
-        state.deadline <= now ||
-          diagnosis == BlockIncidentDiagnosis.PENDING && state.nextEligibleAt?.isAfter(now) != true
+        incident.occurrence.observedAt >= activatedAt && (
+          state.deadline <= now ||
+            diagnosis == BlockIncidentDiagnosis.PENDING && state.nextEligibleAt?.isAfter(now) != true ||
+            diagnosis == BlockIncidentDiagnosis.INVESTIGATING && state.claim?.expiresAt?.let { it <= now } == true
+          )
       }
     }
   }
@@ -319,8 +336,11 @@ internal class SqliteBlockIncidentRepository(
     val claimed = connection.prepareStatement(
       """
       UPDATE block_incidents SET diagnosis = ?, revision = revision + 1, next_eligible_at = NULL, owner_token = ?,
-        owner_generation = ?, host_identity = ?, process_id = ?, lease_expires_at = ?
-      WHERE occurrence_token = ? AND revision = ? AND diagnosis = ? AND owner_token IS NULL
+        owner_generation = ?, host_identity = ?, process_id = ?, lease_expires_at = ?, deadline = ?, retry_count = ?
+      WHERE occurrence_token = ? AND revision = ? AND (
+        (diagnosis = ? AND owner_token IS NULL) OR
+        (diagnosis = ? AND lease_expires_at <= ? AND owner_token = ? AND owner_generation = ?)
+      )
       """.trimIndent(),
     ).use { statement ->
       statement.setString(1, BlockIncidentDiagnosis.INVESTIGATING.wireValue)
@@ -329,9 +349,15 @@ internal class SqliteBlockIncidentRepository(
       statement.setString(4, hostIdentity)
       statement.setLong(5, processId)
       statement.setString(6, expiresAt.toString())
-      statement.setString(7, occurrenceToken)
-      statement.setLong(8, expectedRevision)
-      statement.setString(9, BlockIncidentDiagnosis.PENDING.wireValue)
+      statement.setString(7, candidate.state.deadline.toString())
+      statement.setInt(8, candidate.state.retryCount)
+      statement.setString(9, occurrenceToken)
+      statement.setLong(10, expectedRevision)
+      statement.setString(11, BlockIncidentDiagnosis.PENDING.wireValue)
+      statement.setString(12, BlockIncidentDiagnosis.INVESTIGATING.wireValue)
+      statement.setString(13, nowInstant.toString())
+      statement.setString(14, current.state.claim?.ownerToken)
+      statement.setLong(15, current.state.claim?.ownerGeneration ?: 0L)
       statement.executeUpdate() == 1
     }
     if (!claimed) return false
@@ -456,7 +482,7 @@ internal class SqliteBlockIncidentRepository(
       statement.setLong(4, expectedRevision)
       statement.setString(5, current.state.diagnosis.wireValue)
       statement.setString(6, observedOwnerToken)
-      if (observedOwnerGeneration == null) statement.setNull(7, java.sql.Types.BIGINT)
+      if (observedOwnerGeneration == null) statement.setNull(7, Types.BIGINT)
       else statement.setLong(7, observedOwnerGeneration)
       statement.executeUpdate() == 1
     }
@@ -484,7 +510,7 @@ internal class SqliteBlockIncidentRepository(
       exitBehavior == proposed.exitBehavior &&
       (!compareObservedAt || observedAt == proposed.observedAt)
 
-  private fun findByAlias(alias: BlockIncidentAlias): BlockIncident? {
+  override fun findByAlias(alias: BlockIncidentAlias): BlockIncident? {
     if (alias.value.isBlank() || alias.value.length > MAX_ALIAS_CHARS) {
       throw incidentCorrupt("Invalid block incident alias selector.")
     }
@@ -500,6 +526,17 @@ internal class SqliteBlockIncidentRepository(
         BlockIncidentLookup.Absent -> null
         is BlockIncidentLookup.Quarantined -> throw quarantined(lookup)
       }
+    }
+  }
+
+  private fun persistAlias(alias: BlockIncidentAlias, occurrenceToken: String) {
+    connection.prepareStatement(
+      "INSERT INTO block_incident_aliases(alias_kind, alias_value, occurrence_token) VALUES (?, ?, ?)",
+    ).use { statement ->
+      statement.setString(1, alias.kind.wireValue)
+      statement.setString(2, alias.value)
+      statement.setString(3, occurrenceToken)
+      statement.executeUpdate()
     }
   }
 

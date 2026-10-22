@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runner
 
+import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.RecordingSpecScratchStore
 import skillbill.application.RecordingSpecStatusWriter
@@ -928,7 +929,7 @@ private fun harnessCrashReconciler(
 }
 
 internal fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
-  FeatureTaskPhaseSettlementService(
+  testPhaseSettlementService(
     InMemoryFeatureTaskPhaseSettlementRepository(),
     testHarnessClock,
   )

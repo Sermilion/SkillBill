@@ -199,7 +199,7 @@ internal class GoalRunnerGoalLoop(
             subtaskId = selection.subtask.id,
             reason = GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
             blockedReason = selection.reason,
-            workflowId = selection.subtask.workflowId,
+            workflowId = null,
             lastResumableStep = selection.subtask.lastResumableStep.orEmpty().ifBlank { "preplan" },
           ),
         ),

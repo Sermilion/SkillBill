@@ -6,8 +6,8 @@ import skillbill.ports.blockincident.BlockIncidentLookup
 import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReference
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReferenceAvailability
@@ -27,69 +27,73 @@ internal object BlockIncidentService {
     clock: Clock,
     observation: BlockIncidentObservation,
   ): BlockIncident {
-    val alias = observation.alias ?: run {
-      val identity =
-        listOfNotNull(observation.workflowId, observation.phaseId, observation.invocationId, observation.executionId)
-          .joinToString(":")
-      require(identity.isNotBlank()) { "A block incident requires an actual correlation identity or explicit alias." }
-      BlockIncidentAlias(
-        if (observation.workflowId != null && observation.phaseId != null) {
-          BlockIncidentAliasKind.PHASE_TRANSITION
-        } else {
-          BlockIncidentAliasKind.ENTRY_BOUNDARY
-        },
-        "$identity:${observation.attempt ?: 0}",
-      )
-    }
+    val alias = BlockIncidentAliases.fallback(observation)
     val observedAt = clock.instant()
     val retainedReason = observation.reason.retainedPrefix()
     val reasonTruncated = retainedReason.length < observation.reason.length
     val fieldAvailability = observation.resolvedFieldAvailability()
-    val incident = repository.createOrLink(
-      occurrence =
-        BlockIncidentOccurrence(
-          occurrenceToken = occurrenceToken(alias),
-          workflowId = observation.workflowId,
-          parentWorkflowId = observation.parentWorkflowId,
-          phaseId = observation.phaseId,
-          phaseRunId = observation.phaseRunId,
-          invocationId = observation.invocationId,
-          executionId = observation.executionId,
-          attempt = observation.attempt,
-          generation = observation.generation,
-          origin = observation.origin,
-          reason = retainedReason,
-          reasonTruncated = reasonTruncated,
-          originalReasonLength = observation.reason.length,
-          originalReasonDigest = observation.reason.takeIf { reasonTruncated }?.digestSha256(),
-          failureCode = observation.failureCode,
-          failureDisposition = observation.failureDisposition,
-          throwableType = observation.throwableType,
-          exitCode = observation.exitCode,
-          observedAt = observedAt,
-          evidenceAvailability = BlockIncidentEvidenceAvailability.DATABASE,
-          identityAvailability = identityAvailability(fieldAvailability),
-          repairTurn = observation.repairTurn,
-          outputGeneration = observation.outputGeneration,
-          monitorSelector = observation.monitorSelector,
-          pullRequestId = observation.pullRequestId,
-          pullRequestUrl = observation.pullRequestUrl,
-          headRepository = observation.headRepository,
-          headBranch = observation.headBranch,
-          worktreePath = observation.worktreePath,
-          exitBehavior = observation.exitBehavior,
-          fieldAvailability = fieldAvailability,
-          reasonRetention =
-            if (reasonTruncated) {
-              BlockIncidentReasonRetention.PREFIX_WITH_SHA256
-            } else {
-              BlockIncidentReasonRetention.COMPLETE
-            },
-          retainedEvidenceReferences = observation.evidenceReferences,
-        ),
-      alias = alias,
-      deadline = observedAt.plus(INVESTIGATION_DEADLINE),
+    val proposedOccurrence = BlockIncidentOccurrence(
+      occurrenceToken = BlockIncidentAliases.token(alias),
+      workflowId = observation.workflowId,
+      parentWorkflowId = observation.parentWorkflowId,
+      phaseId = observation.phaseId,
+      phaseRunId = observation.phaseRunId,
+      invocationId = observation.invocationId,
+      executionId = observation.executionId,
+      attempt = observation.attempt,
+      generation = observation.generation,
+      origin = observation.origin,
+      reason = retainedReason,
+      reasonTruncated = reasonTruncated,
+      originalReasonLength = observation.reason.length,
+      originalReasonDigest = observation.reason.takeIf { reasonTruncated }?.digestSha256(),
+      failureCode = observation.failureCode,
+      failureDisposition = observation.failureDisposition,
+      throwableType = observation.throwableType,
+      exitCode = observation.exitCode,
+      observedAt = observedAt,
+      evidenceAvailability = BlockIncidentEvidenceAvailability.DATABASE,
+      identityAvailability = identityAvailability(fieldAvailability),
+      repairTurn = observation.repairTurn,
+      outputGeneration = observation.outputGeneration,
+      monitorSelector = observation.monitorSelector,
+      pullRequestId = observation.pullRequestId,
+      pullRequestUrl = observation.pullRequestUrl,
+      headRepository = observation.headRepository,
+      headBranch = observation.headBranch,
+      worktreePath = observation.worktreePath,
+      exitBehavior = observation.exitBehavior,
+      fieldAvailability = fieldAvailability,
+      reasonRetention =
+        if (reasonTruncated) {
+          BlockIncidentReasonRetention.PREFIX_WITH_SHA256
+        } else {
+          BlockIncidentReasonRetention.COMPLETE
+        },
+      retainedEvidenceReferences = observation.evidenceReferences,
     )
+    val linkedOccurrence = observation.linkOccurrenceToken?.let(repository::find)
+    val aliasOccurrence = repository.findByAlias(alias)
+    if (observation.linkOccurrenceToken != null && aliasOccurrence != null &&
+      (linkedOccurrence == null ||
+        aliasOccurrence.occurrence.occurrenceToken != linkedOccurrence.occurrence.occurrenceToken)
+    ) {
+      throw SkillBillRuntimeException(
+        BlockIncidentFailureCode.IMMUTABLE_CONFLICT,
+        "Block incident alias is already owned by a different linked occurrence.",
+      )
+    }
+    val existing = linkedOccurrence ?: aliasOccurrence
+    val additionalAliases = observation.additionalAliases
+    val incident = additionalAliases.fold(
+      repository.createOrLink(
+        occurrence = existing?.occurrence ?: proposedOccurrence,
+        alias = alias,
+        deadline = existing?.state?.deadline ?: observedAt.plus(INVESTIGATION_PICKUP_WINDOW),
+      ),
+    ) { linked, additionalAlias ->
+      repository.createOrLink(linked.occurrence, additionalAlias, linked.state.deadline)
+    }
     if (!incident.state.deadline.isAfter(observedAt)) {
       repository.expireDeadline(
         incident.occurrence.occurrenceToken,
@@ -128,12 +132,6 @@ internal object BlockIncidentService {
     return (repository.lookup(occurrence.occurrenceToken) as? BlockIncidentLookup.Found)?.incident
   }
 
-  private fun occurrenceToken(alias: BlockIncidentAlias): String {
-    val bytes = MessageDigest.getInstance("SHA-256").digest("${alias.kind.wireValue}:${alias.value}".toByteArray())
-    return "bi_" + bytes.joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-  }
-
-  // A split surrogate pair would leave an unpaired high surrogate at the end of the retained prefix.
   private fun String.retainedPrefix(): String {
     if (length <= MAX_REASON_CHARS) return this
     val end = if (this[MAX_REASON_CHARS - 1].isHighSurrogate()) MAX_REASON_CHARS - 1 else MAX_REASON_CHARS
@@ -158,10 +156,11 @@ internal object BlockIncidentService {
       "%02x".format(byte.toInt() and 0xff)
     }
 
-  private val INVESTIGATION_DEADLINE: Duration = Duration.ofMinutes(5)
+  val INVESTIGATION_DEADLINE: Duration = Duration.ofMinutes(5)
+  val INVESTIGATION_PICKUP_WINDOW: Duration = Duration.ofHours(24)
   private val EXPIRABLE_DIAGNOSES = setOf(
-    skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis.PENDING,
-    skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis.INVESTIGATING,
+    BlockIncidentDiagnosis.PENDING,
+    BlockIncidentDiagnosis.INVESTIGATING,
   )
   private const val MAX_REASON_CHARS = 8192
   private val IDENTITY_FIELDS = listOf(
@@ -184,6 +183,8 @@ internal data class BlockIncidentObservation(
   val attempt: Int? = null,
   val reason: String,
   val alias: BlockIncidentAlias? = null,
+  val linkOccurrenceToken: String? = null,
+  val additionalAliases: List<BlockIncidentAlias> = emptyList(),
   val generation: Long?,
   val origin: BlockIncidentOrigin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
   val failureCode: String? = null,
@@ -202,7 +203,6 @@ internal data class BlockIncidentObservation(
   val evidenceReferences: List<BlockIncidentEvidenceReference> = emptyList(),
   val unavailableFields: Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> = emptyMap(),
 ) {
-  /** Present values are available; absent values carry the producer's reason, which defaults to not captured. */
   fun resolvedFieldAvailability(): Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> =
     BlockIncidentCorrelatedField.entries.associateWith { field ->
       if (value(field) != null) {
@@ -211,7 +211,6 @@ internal data class BlockIncidentObservation(
         unavailableFields[field] ?: BlockIncidentFieldAvailability.NOT_CAPTURED
       }
     }.let { resolved ->
-      // A runtime-authored reason statement records that the producer did not capture one.
       if (unavailableFields[BlockIncidentCorrelatedField.REASON] == BlockIncidentFieldAvailability.NOT_CAPTURED) {
         resolved + (BlockIncidentCorrelatedField.REASON to BlockIncidentFieldAvailability.NOT_CAPTURED)
       } else {

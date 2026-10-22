@@ -11,6 +11,7 @@ import skillbill.infrastructure.sqlite.core.migration.addReviewFindingOutcomeKey
 import skillbill.infrastructure.sqlite.core.migration.addReviewRunLaneAttribution
 import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentContractV02Migration
 import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentNullableGenerationMigration
+import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentRolloutMigration
 import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentScanProgressMigration
 import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentOccurrenceJsonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseSettlementsMigration
@@ -1186,5 +1187,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 75,
       name = "record-uncaptured-block-incident-generation",
       operation = BlockIncidentNullableGenerationMigration::apply,
+    ),
+    DatabaseMigration(
+      version = 76,
+      name = "activate-block-incident-rollout",
+      operation = BlockIncidentRolloutMigration::apply,
     ),
   )

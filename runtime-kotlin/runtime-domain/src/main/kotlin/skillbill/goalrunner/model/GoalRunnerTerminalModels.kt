@@ -60,6 +60,21 @@ data class GoalRunnerStoredOutcome(
   val lastResumableStep: String? = null,
   val suppressPr: Boolean,
   val noChangePause: FeatureTaskRuntimeNoChangePause? = null,
+  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+)
+
+data class GoalRunnerAcceptedBlockReference(
+  val sourceWorkflowId: String,
+  val blockedStepId: String,
+  val attempt: Int,
+  val executionGeneration: Long?,
+  val aliasKind: String,
+  val aliasValue: String,
+  val aliasSequence: Long,
+  val incidentToken: String,
+  val childIncidentToken: String?,
+  val sourceAliasKind: String? = null,
+  val sourceAliasValue: String? = null,
 )
 
 sealed interface GoalRunnerReconciledOutcome {
@@ -77,6 +92,8 @@ sealed interface GoalRunnerReconciledOutcome {
     val lastResumableStep: String,
     val liveness: GoalRunnerLivenessSnapshot? = null,
     val noChangeReason: String? = null,
+    val incidentToken: String? = null,
+    val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   ) : GoalRunnerReconciledOutcome
 }
 
@@ -106,6 +123,9 @@ data class GoalRunnerStopReport(
   val workflowId: String?,
   val lastResumableStep: String,
   val noChangeReason: String? = null,
+  val incidentToken: String? = null,
+  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )
 
 enum class GoalPullRequestStatus(val wireValue: String) {

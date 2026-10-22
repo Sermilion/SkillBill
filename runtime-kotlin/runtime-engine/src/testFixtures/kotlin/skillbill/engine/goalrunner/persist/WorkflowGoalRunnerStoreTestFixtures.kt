@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.testHarnessClock
@@ -169,6 +170,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     gitOperations = gitOperations,
     workerSupervisor = workerSupervisor,
     crashReconciler = crashReconciler,
+    blockIncidentCapture = testBlockIncidentCapture(database, clock),
     clock = clock,
   )
 

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runner
 
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
@@ -1015,6 +1016,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         validator,
         harnessPhaseSettlement(),
         testHarnessClock,
+        testBlockIncidentCapture(database, testHarnessClock),
       ),
       validator,
       object : AcceptanceCriterionRepairProjection {

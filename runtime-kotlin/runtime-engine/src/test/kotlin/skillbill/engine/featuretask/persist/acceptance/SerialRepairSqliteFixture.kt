@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.persist.acceptance
 
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
+import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
@@ -209,8 +211,9 @@ internal class SerialRepairSqliteFixture(
         workflowPersistence,
         RuntimeOwnedPersistenceBoundary(db, diagnostics),
         validator,
-        FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), clock),
+        testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), clock),
         clock,
+        testBlockIncidentCapture(db, clock, diagnostics),
       ),
       validator,
       projection,

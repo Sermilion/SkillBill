@@ -334,6 +334,10 @@ independent source verification, or `advance` for a concrete external obstacle.
 An agent stopping after one partial edit is not an external obstacle. Explicit
 `no_progress` reports, failed independent verification, and admitted failures
 retain the per-criterion cap.
+A completed repair claim, with verdict `completed`, `satisfied`, or no verdict,
+goes directly to independent source verification. A verifier's `progress` verdict
+rejects that completion claim and consumes one unsuccessful outcome. It cannot
+turn the completed claim into an uncharged partial repair.
 The third unsuccessful
 outcome blocks that criterion. Explicit operator resume of the blocked goal resets
 the active failure counts to zero and grants three new outcomes per criterion,

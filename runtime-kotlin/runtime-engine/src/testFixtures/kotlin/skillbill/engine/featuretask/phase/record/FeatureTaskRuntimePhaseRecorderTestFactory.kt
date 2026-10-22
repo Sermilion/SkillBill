@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phase.record
 
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
+import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.ports.db.DatabaseSessionFactory
@@ -23,6 +25,7 @@ fun featureTaskRuntimePhaseRecorder(
     rejectedOutputDiagnosticMetadataValidator = { },
     producerOutputEvidenceValidator = { },
     diagnostics = diagnostics,
-    phaseSettlementService = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), clock),
+    phaseSettlementService = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), clock),
     clock = clock,
+    blockIncidentCapture = testBlockIncidentCapture(database, clock, diagnostics),
   )

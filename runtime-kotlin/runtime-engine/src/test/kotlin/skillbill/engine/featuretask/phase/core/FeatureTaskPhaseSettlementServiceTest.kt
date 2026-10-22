@@ -11,6 +11,8 @@ import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.sqlite.SqliteFeatureTaskPhaseSettlementRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
@@ -29,8 +31,14 @@ class FeatureTaskPhaseSettlementServiceTest {
   fun `accepted and replayed block settlement share one immutable incident`() {
     val home = Files.createTempDirectory("phase-settlement-block-incident")
     val database = sqliteSessionFactoryForTests(home, environment = emptyMap(), clock = testHarnessClock)
+    database.transaction {
+      it.workflowStates.save(
+        WorkflowFamily.TASK_RUNTIME,
+        WorkflowEngine().openRecord(WorkflowFamily.TASK_RUNTIME.definition, "wftr-test", "session", "preplan"),
+      )
+    }
     val repository = SqliteFeatureTaskPhaseSettlementRepository(database)
-    val service = FeatureTaskPhaseSettlementService(repository, testHarnessClock, database)
+    val service = testPhaseSettlementService(repository, testHarnessClock, database)
     val request =
       FeatureTaskPhaseSettlementBlockRequest(
         workflowId = "wftr-test",
@@ -45,7 +53,7 @@ class FeatureTaskPhaseSettlementServiceTest {
       FeatureTaskPhaseSettlementAckStatus.ERROR,
       service.block(request.copy(reason = "a different failure")).status,
     )
-    val incidents = database.read { it.blockIncidents.pending(8) }
+    val incidents = database.transaction { it.blockIncidents.pending(8) }
 
     assertEquals(1, incidents.size)
     assertEquals("planning input is missing", incidents.single().occurrence.reason)
@@ -53,7 +61,7 @@ class FeatureTaskPhaseSettlementServiceTest {
 
   @Test
   fun `complete then findEnvelope returns stuffed value`() {
-    val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
     val acknowledgment =
       service.complete(
         FeatureTaskPhaseSettlementCompleteRequest(
@@ -75,7 +83,7 @@ class FeatureTaskPhaseSettlementServiceTest {
 
   @Test
   fun `contradictory complete for the same attempt keeps the first accepted value`() {
-    val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
     service.complete(
       FeatureTaskPhaseSettlementCompleteRequest(
         workflowId = "wftr-test",
@@ -102,7 +110,7 @@ class FeatureTaskPhaseSettlementServiceTest {
 
   @Test
   fun `block stores blocked status`() {
-    val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
     service.block(
       FeatureTaskPhaseSettlementBlockRequest(
         workflowId = "wftr-test",
@@ -117,7 +125,7 @@ class FeatureTaskPhaseSettlementServiceTest {
 
   @Test
   fun `blocked audit settlement omits verdict and stores failure disposition`() {
-    val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
     service.block(
       FeatureTaskPhaseSettlementBlockRequest(
         workflowId = "wftr-test",
@@ -135,7 +143,7 @@ class FeatureTaskPhaseSettlementServiceTest {
 
   @Test
   fun `write_history settles with the uniform output and keeps the supplied verdict`() {
-    val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
 
     service.complete(
       FeatureTaskPhaseSettlementCompleteRequest(
@@ -157,7 +165,7 @@ class FeatureTaskPhaseSettlementServiceTest {
 
   @Test
   fun `blocking rejects a blank failure disposition`() {
-    val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
 
     assertFailsWith<IllegalArgumentException> {
       service.block(
@@ -175,7 +183,7 @@ class FeatureTaskPhaseSettlementServiceTest {
   @Test
   fun `clear removes a stored settlement so findEnvelope returns null`() {
     val repo = InMemoryFeatureTaskPhaseSettlementRepository()
-    val service = FeatureTaskPhaseSettlementService(repo, testHarnessClock)
+    val service = testPhaseSettlementService(repo, testHarnessClock)
     repo.upsert(
       FeatureTaskPhaseSettlement(
         workflowId = "wftr-test",
@@ -194,7 +202,7 @@ class FeatureTaskPhaseSettlementServiceTest {
   @Test
   fun `historical settled envelope reloads value and prompt with its stored bytes`() {
     val repo = InMemoryFeatureTaskPhaseSettlementRepository()
-    val service = FeatureTaskPhaseSettlementService(repo, testHarnessClock)
+    val service = testPhaseSettlementService(repo, testHarnessClock)
     val stored =
       """{"phase_id":"write_history","contract_version":"1.0","status":"completed","summary":"done",""" +
         """"produced_outputs":{"value":"history written","prompt":"next","legacy_key":1}}"""
@@ -217,7 +225,7 @@ class FeatureTaskPhaseSettlementServiceTest {
 
   @Test
   fun `settlement round trip preserves multiple validation command results`() {
-    val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+    val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
     val evidence =
       FeatureTaskRuntimeValidationEvidence(
         listOf(

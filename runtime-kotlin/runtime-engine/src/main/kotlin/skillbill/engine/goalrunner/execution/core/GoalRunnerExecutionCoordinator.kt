@@ -31,6 +31,17 @@ interface GoalRunnerExecutionCoordinator {
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
     block: () -> T,
   ): GoalRunnerOwnedRun<T>
+
+  fun <T> runOwnedWithLease(
+    parentWorkflowId: String,
+    block: (Long, String?) -> T,
+  ): GoalRunnerOwnedRun<T>
+
+  fun <T> runOwnedWithChildAdmissionLease(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+    block: (Long, String?) -> T,
+  ): GoalRunnerOwnedRun<T>
 }
 
 sealed interface GoalRunnerOwnedRun<out T> {
@@ -68,18 +79,29 @@ class DefaultGoalRunnerExecutionCoordinator(
   override fun <T> runOwned(
     parentWorkflowId: String,
     block: () -> T,
-  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, null, block)
+  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, null) { _, _ -> block() }
 
   override fun <T> runOwnedWithChildAdmission(
     parentWorkflowId: String,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
     block: () -> T,
+  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, childAdmission) { _, _ -> block() }
+
+  override fun <T> runOwnedWithLease(
+    parentWorkflowId: String,
+    block: (Long, String?) -> T,
+  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, null, block)
+
+  override fun <T> runOwnedWithChildAdmissionLease(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+    block: (Long, String?) -> T,
   ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, childAdmission, block)
 
   private fun <T> runOwned(
     parentWorkflowId: String,
     childAdmission: GoalRunnerChildExecutionPlanAdmission?,
-    block: () -> T,
+    block: (Long, String?) -> T,
   ): GoalRunnerOwnedRun<T> =
     when (val acquisition = acquireLease(parentWorkflowId, childAdmission)) {
       is LeaseAcquisition.AlreadyRunning -> GoalRunnerOwnedRun.AlreadyRunning(acquisition.reason)
@@ -127,7 +149,7 @@ class DefaultGoalRunnerExecutionCoordinator(
   private fun <T> runWithLease(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
-    block: () -> T,
+    block: (Long, String?) -> T,
   ): GoalRunnerOwnedRun<T> {
     val plan =
       FeatureTaskRuntimeHeartbeatPlan(
@@ -137,7 +159,7 @@ class DefaultGoalRunnerExecutionCoordinator(
       )
     val heartbeat = startHeartbeat(parentWorkflowId, lease, plan)
     val shutdownHookRegistration = registerShutdownHook(parentWorkflowId, lease, heartbeat)
-    val bodyResult = executeBody(block)
+    val bodyResult = executeBody { block(lease.generation, lease.ownerToken) }
     val teardownFailure = teardown(parentWorkflowId, lease, heartbeat, shutdownHookRegistration)
     return completeRun(parentWorkflowId, bodyResult, teardownFailure, heartbeat)
   }

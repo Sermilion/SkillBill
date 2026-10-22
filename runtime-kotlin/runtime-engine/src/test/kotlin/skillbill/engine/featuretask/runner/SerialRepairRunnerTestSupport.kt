@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runner
 
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.application.testHarnessClock
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -58,6 +59,7 @@ internal fun harnessAcceptanceRecorder(
         validator,
         harnessPhaseSettlement(),
         testHarnessClock,
+        testBlockIncidentCapture(database, testHarnessClock),
       ),
       validator,
       object : AcceptanceCriterionRepairProjection {

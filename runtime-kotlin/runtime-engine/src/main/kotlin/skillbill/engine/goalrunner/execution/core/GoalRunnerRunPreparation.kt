@@ -14,6 +14,7 @@ import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
+import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -78,6 +79,11 @@ class GoalRunnerRunPreparation(
     }
     if (repair.status == GoalRunnerRepairStatus.OPERATOR_REQUIRED) {
       val subtaskId = state.manifest.currentSubtaskIntent.subtaskId
+      val acceptedBlockReference = repair.diagnoses
+        .firstOrNull { diagnosis -> diagnosis.subtaskId == subtaskId }
+        ?.wedges
+        ?.firstOrNull { finding -> finding.wedgeClass == GoalRunnerWedgeClass.STALE_BLOCKED_CONTINUATION_OUTCOME }
+        ?.acceptedBlockReference
       return GoalRunPreparation.PreparationBlocked(
         stopped(
           StoppedReportArgs(
@@ -89,7 +95,9 @@ class GoalRunnerRunPreparation(
               "Goal '$issueKey' has a resume wedge the runtime will not clear on its own: " +
                 (repair.refusalReason ?: "operator action required.") +
                 " Inspect it with: skill-bill goal repair $issueKey",
-            workflowId = state.manifest.workflowIdFor(subtaskId),
+            workflowId = acceptedBlockReference?.sourceWorkflowId ?: state.manifest.workflowIdFor(subtaskId),
+            acceptedBlockReference = acceptedBlockReference,
+            historicalBlockReference = acceptedBlockReference,
             lastResumableStep =
               state.manifest.subtasks
                 .firstOrNull { it.id == subtaskId }

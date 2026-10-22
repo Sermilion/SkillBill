@@ -43,6 +43,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import java.time.Clock
 
 class FeatureTaskRuntimePhaseRecorder private constructor(
@@ -74,6 +75,7 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
     diagnostics: RuntimeDiagnostics,
     phaseSettlementService: FeatureTaskPhaseSettlementService,
     clock: Clock,
+    blockIncidentCapture: BlockIncidentCapture,
   ) : this(
     phaseRecorderParts(
       FeatureTaskRuntimePhaseRecorderInjected(
@@ -86,6 +88,7 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
         phaseSettlementService,
         clock,
       ),
+      blockIncidentCapture,
     ),
   )
 
@@ -277,6 +280,7 @@ private data class FeatureTaskRuntimePhaseRecorderParts(
 
 private fun phaseRecorderParts(
   injected: FeatureTaskRuntimePhaseRecorderInjected,
+  blockIncidentCapture: BlockIncidentCapture,
 ): FeatureTaskRuntimePhaseRecorderParts {
   val workflowPersistence =
     FeatureTaskRuntimeWorkflowPersistence(
@@ -311,6 +315,7 @@ private fun phaseRecorderParts(
         injected.wireArtifactValidator,
         injected.phaseSettlementService,
         injected.clock,
+        blockIncidentCapture,
       ),
     reviewCheckpoint =
       FeatureTaskRuntimeReviewCheckpointRecorder(

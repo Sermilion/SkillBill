@@ -1,5 +1,6 @@
 package skillbill.engine.diagnostics.block
 
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -31,5 +32,7 @@ class BlockIncidentServiceTest {
       attempt = attempt,
       reason = reason,
       failureDisposition = "needs_user_action",
+      generation = null,
+      exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
     )
 }

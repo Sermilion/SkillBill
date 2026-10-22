@@ -1,5 +1,13 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.BlockIncidentFailureCode
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReasonRetention
+import kotlin.test.assertFailsWith
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
@@ -20,13 +28,17 @@ class SqliteBlockIncidentRepositoryTest {
   @Test
   fun `alias replay keeps original failure and worker claim is revision fenced`() {
     val connection =
-      DatabaseRuntime.ensureDatabase(Files.createTempDirectory("sqlite-block-incident").resolve("incidents.db"))
+      ensureTestDatabase(Files.createTempDirectory("sqlite-block-incident").resolve("incidents.db"))
     connection.use {
       val now = Instant.parse("2026-10-21T12:00:00Z")
-      val repository = SqliteBlockIncidentRepository(it, Clock.fixed(now, ZoneOffset.UTC))
+      val repository = SqliteBlockIncidentRepository(it, Clock.fixed(now, ZoneOffset.UTC), { })
       val alias = BlockIncidentAlias(BlockIncidentAliasKind.PHASE_TRANSITION, "workflow:implement:1")
       val stored = repository.createOrLink(occurrence("bi_${"b".repeat(64)}", "original failure"), alias, now.plusSeconds(300))
-      val replay = repository.createOrLink(occurrence("bi_${"c".repeat(64)}", "rewritten failure"), alias, now.plusSeconds(300))
+      val conflict = assertFailsWith<SkillBillRuntimeException> {
+        repository.createOrLink(occurrence("bi_${"c".repeat(64)}", "rewritten failure"), alias, now.plusSeconds(300))
+      }
+      assertEquals(BlockIncidentFailureCode.IMMUTABLE_CONFLICT, conflict.code)
+      val replay = repository.createOrLink(stored.occurrence, alias, now.plusSeconds(300))
 
       assertEquals("original failure", replay.occurrence.reason)
       assertEquals(stored.occurrence.occurrenceToken, replay.occurrence.occurrenceToken)
@@ -65,5 +77,16 @@ class SqliteBlockIncidentRepositoryTest {
       exitCode = null,
       observedAt = Instant.parse("2026-10-21T12:00:00Z"),
       evidenceAvailability = BlockIncidentEvidenceAvailability.DATABASE,
+      identityAvailability = BlockIncidentIdentityAvailability.PARTIAL,
+      exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
+      fieldAvailability = BlockIncidentCorrelatedField.entries.associateWith {
+        when (it) {
+          BlockIncidentCorrelatedField.WORKFLOW_ID, BlockIncidentCorrelatedField.PHASE_ID,
+          BlockIncidentCorrelatedField.ATTEMPT, BlockIncidentCorrelatedField.GENERATION,
+          BlockIncidentCorrelatedField.REASON -> BlockIncidentFieldAvailability.AVAILABLE
+          else -> BlockIncidentFieldAvailability.NOT_CAPTURED
+        }
+      },
+      reasonRetention = BlockIncidentReasonRetention.COMPLETE,
     )
 }

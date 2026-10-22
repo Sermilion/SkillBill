@@ -43,6 +43,7 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
+import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
@@ -2249,6 +2250,17 @@ class GoalRunnerPauseLaunchBoundaryTest {
     val reason = "Goal parent 'parent' cannot start: another goal runner process is live"
     val alreadyRunning =
       object : GoalRunnerExecutionCoordinator {
+        override fun <T> runOwnedWithLease(
+          parentWorkflowId: String,
+          block: (Long, String?) -> T,
+        ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId) { block(1, null) }
+
+        override fun <T> runOwnedWithChildAdmissionLease(
+          parentWorkflowId: String,
+          childAdmission: GoalRunnerChildExecutionPlanAdmission,
+          block: (Long, String?) -> T,
+        ): GoalRunnerOwnedRun<T> = runOwnedWithChildAdmission(parentWorkflowId, childAdmission) { block(1, null) }
+
         override fun <T> runOwned(
           parentWorkflowId: String,
           block: () -> T,
@@ -5241,9 +5253,14 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     blockedReason: String,
     lastResumableStep: String,
     supervisionEvent: GoalRunnerSupervisionEvent?,
-  ): String {
+    executionGeneration: Long?,
+    failureExitCode: Int?,
+    executionOwnerToken: String?,
+    failureThrowableType: String?,
+    causingIncidentToken: String?,
+  ): GoalRunnerAcceptedBlock {
     blockedWorkflows += BlockedWorkflow(workflowId, blockedReason, lastResumableStep, supervisionEvent)
-    return "implement"
+    return GoalRunnerAcceptedBlock("implement", "bi_test")
   }
 
   override fun reopenBlockedPhaseForOperatorResume(

@@ -1,10 +1,17 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -23,6 +30,7 @@ class StandalonePhaseStatusEventSink(
   private val registrationForWorkflow: (String?) -> StandalonePhaseStatusRegistration,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
+  private val blockIncidentCapture: BlockIncidentCapture,
 ) : FeatureTaskRuntimeRunEventSink {
   private var registered: StandalonePhaseStatusRecord? = null
   private var revision: String? = null
@@ -88,12 +96,42 @@ class StandalonePhaseStatusEventSink(
             acceptedResult = result.acceptedOutput ?: result.value,
           )
         }
-        is PhaseRunResult.Blocked ->
+        is PhaseRunResult.Blocked -> {
           persist(
             state = "blocked",
             finishedAt = null,
             terminalResult = result.reason,
           )
+          val target = registered?.monitorTarget
+          blockIncidentCapture.capture(
+            BlockIncidentObservation(
+              workflowId = registered?.workflowId?.takeIf(String::isNotBlank),
+              phaseId = result.stepId,
+              phaseRunId = null,
+              invocationId = result.invocationId,
+              executionId = registered?.executionId,
+              reason = result.reason,
+              alias = BlockIncidentAliases.standalonePhase(result.invocationId, result.stepId),
+              generation = null,
+              origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+              exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
+              pullRequestId = target?.pullRequestKey,
+              pullRequestUrl = target?.pullRequestUrl,
+              headRepository = target?.headRepository,
+              headBranch = target?.headRef,
+              worktreePath = target?.worktreePath,
+              unavailableFields = mapOf(
+                BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+                BlockIncidentCorrelatedField.ATTEMPT to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+                BlockIncidentCorrelatedField.MONITOR_SELECTOR to if (target == null) {
+                  BlockIncidentFieldAvailability.NOT_CAPTURED
+                } else {
+                  BlockIncidentFieldAvailability.AVAILABLE
+                },
+              ),
+            ),
+          )
+        }
       }
     }.onFailure { error ->
       if (error is CancellationException) throw error

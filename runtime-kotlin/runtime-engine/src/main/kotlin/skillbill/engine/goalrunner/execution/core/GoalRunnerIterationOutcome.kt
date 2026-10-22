@@ -76,7 +76,12 @@ class GoalRunnerIterationOutcome(
     val launchDiagnostics = args.launchDiagnostics
     val attemptStartMillis = session.attemptStartMillis
     val knownWorkflowId = state.manifest.knownWorkflowId(subtaskId, reconciled)
-    val stoppedOutcome = markChildWorkflowBlockedIfNeeded(reconciled, knownWorkflowId)
+    val stoppedOutcome =
+      markChildWorkflowBlockedIfNeeded(
+        reconciled,
+        knownWorkflowId,
+        args.failureExitCode,
+      )
     val attemptDurationMillis = attemptStartMillis?.let { clock.millis() - it }
     knownWorkflowId?.let { workflowId ->
       recordStoppedLedgerEntries(
@@ -187,6 +192,8 @@ class GoalRunnerIterationOutcome(
             workflowId = knownWorkflowId,
             lastResumableStep = stoppedOutcome.lastResumableStep,
             noChangeReason = stoppedOutcome.noChangeReason,
+            incidentToken = stoppedOutcome.incidentToken,
+            acceptedBlockReference = stoppedOutcome.acceptedBlockReference,
           ),
         ),
     )
@@ -362,16 +369,18 @@ class GoalRunnerIterationOutcome(
   private fun markChildWorkflowBlockedIfNeeded(
     reconciled: GoalRunnerReconciledOutcome.Stop,
     knownWorkflowId: String?,
+    failureExitCode: Int?,
   ): GoalRunnerReconciledOutcome.Stop {
     if (knownWorkflowId == null || reconciled.reason !in CHILD_WORKFLOW_BLOCK_REASONS) {
       return reconciled
     }
     val progress = progressReader.safeProgress(knownWorkflowId)
-    val blockedStepId =
+    val acceptedBlock =
       outcomeStore.markBlocked(
         workflowId = knownWorkflowId,
         blockedReason = reconciled.blockedReason.withStopDiagnostics(knownWorkflowId, progress, reconciled.liveness),
         lastResumableStep = reconciled.lastResumableStep,
+        failureExitCode = failureExitCode,
         supervisionEvent =
           supervisionEvent(
             reason = reconciled.reason,
@@ -380,8 +389,12 @@ class GoalRunnerIterationOutcome(
             liveness = reconciled.liveness,
           ),
       )
-    return blockedStepId?.takeIf(String::isNotBlank)?.let { stepId ->
-      reconciled.copy(lastResumableStep = stepId)
+    return acceptedBlock?.let { block ->
+      reconciled.copy(
+        lastResumableStep = block.stepId,
+        incidentToken = block.incidentToken,
+        acceptedBlockReference = block.acceptedBlockReference,
+      )
     } ?: reconciled
   }
 

@@ -102,27 +102,66 @@ class GoalRunner(
       when (
         val start = runPreparation.prepareStart(admittedState, request, resumesExistingGoal = durableState != null)
       ) {
-        is GoalRunPreparation.PreparationBlocked -> return start.report
+        is GoalRunPreparation.PreparationBlocked ->
+          return when (
+            val ownedStart =
+              executionCoordinator.runOwnedWithLease(admittedState.parentWorkflowId) { generation, ownerToken ->
+                settleAcceptedGoalBlock(admittedState, start.report, generation, ownerToken)
+              }
+          ) {
+            is GoalRunnerOwnedRun.Completed -> ownedStart.value
+            is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(admittedState, ownedStart.reason)
+          }
         is GoalRunPreparation.Prepared -> start.state
       }
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
-    val execute = {
+    val execute: (Long, String?) -> GoalRunnerRunReport = { generation, ownerToken ->
+      val ownedRequest = request.copy(executionGeneration = generation)
       val state = reconcileStateBeforeRun(loadedState)
-      when (val preparation = runPreparation.prepareRun(state, request)) {
+      val report = when (val preparation = runPreparation.prepareRun(state, ownedRequest)) {
         is GoalRunPreparation.PreparationBlocked -> preparation.report
         is GoalRunPreparation.Prepared -> runPrepared(preparation)
       }
+      settleAcceptedGoalBlock(loadedState, report, generation, ownerToken)
     }
     val owned =
       if (childAdmission == null) {
-        executionCoordinator.runOwned(loadedState.parentWorkflowId, execute)
+        executionCoordinator.runOwnedWithLease(loadedState.parentWorkflowId, execute)
       } else {
-        executionCoordinator.runOwnedWithChildAdmission(loadedState.parentWorkflowId, childAdmission, execute)
+        executionCoordinator.runOwnedWithChildAdmissionLease(loadedState.parentWorkflowId, childAdmission, execute)
       }
     return when (owned) {
       is GoalRunnerOwnedRun.Completed -> owned.value
       is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(loadedState, owned.reason)
     }
+  }
+
+  private fun settleAcceptedGoalBlock(
+    state: GoalRunnerManifestState,
+    report: GoalRunnerRunReport,
+    executionGeneration: Long,
+    executionOwnerToken: String?,
+  ): GoalRunnerRunReport {
+    val stop = (report as? GoalRunnerRunReport.Stopped)?.stop ?: return report
+    if (stop.reason !in ACCEPTED_GOAL_BLOCK_REASONS) return report
+    val acceptedChildReference = (stop.acceptedBlockReference ?: stop.historicalBlockReference)?.takeIf {
+      it.sourceWorkflowId == stop.workflowId && it.sourceWorkflowId != state.parentWorkflowId
+    }
+    val childWorkflowId = acceptedChildReference?.sourceWorkflowId
+    val acceptedChildBlockReference = stop.acceptedBlockReference?.takeIf {
+      it.sourceWorkflowId == childWorkflowId
+    }
+    outcomeStore.markBlockedWithReference(
+      workflowId = state.parentWorkflowId,
+      blockedReason = stop.blockedReason,
+      lastResumableStep = stop.lastResumableStep,
+      causingChildWorkflowId = childWorkflowId,
+      acceptedBlockReference = acceptedChildBlockReference,
+      historicalBlockReference = stop.historicalBlockReference,
+      executionGeneration = executionGeneration,
+      executionOwnerToken = executionOwnerToken,
+    )
+    return report
   }
 
   private fun alreadyCompleteReport(state: GoalRunnerManifestState): GoalRunnerRunReport.AlreadyComplete? {
@@ -133,6 +172,14 @@ class GoalRunner(
       completedAt = completedAt,
       pullRequestUrl = state.controlState.goalPullRequestUrl,
       parentWorkflowId = state.parentWorkflowId,
+    )
+  }
+
+  private companion object {
+    val ACCEPTED_GOAL_BLOCK_REASONS = setOf(
+      GoalRunnerStopReason.BLOCKED,
+      GoalRunnerStopReason.POLICY_BLOCKED,
+      GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
     )
   }
 

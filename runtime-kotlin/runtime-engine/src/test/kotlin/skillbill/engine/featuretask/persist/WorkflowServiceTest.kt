@@ -2630,7 +2630,7 @@ class WorkflowGoalRunnerReconciliationTest {
 
     val blockedStep = store.markBlocked("wfl-child", "timeout", "preplan")
 
-    assertEquals("implement", blockedStep)
+    assertEquals("implement", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-child")).toSnapshot()
     assertEquals("blocked", saved.workflowStatus.wireValue)
     assertEquals("implement", saved.currentStepId)
@@ -2685,7 +2685,7 @@ class WorkflowGoalRunnerReconciliationTest {
 
     val blockedStep = store.markBlocked("wftr-child", "no terminal outcome", "preplan")
 
-    assertEquals("implement", blockedStep)
+    assertEquals("implement", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-child", RUNTIME)).toSnapshot()
     assertEquals("implement", saved.currentStepId)
     val steps = decodeWorkflowStepsForTest(saved.steps)
@@ -2742,7 +2742,7 @@ class WorkflowGoalRunnerReconciliationTest {
 
     val blockedStep = store.markBlocked("wftr-clean-review", "no terminal outcome", "preplan")
 
-    assertEquals("audit", blockedStep)
+    assertEquals("audit", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-clean-review", RUNTIME)).toSnapshot()
     assertEquals("audit", saved.currentStepId)
     val steps = decodeWorkflowStepsForTest(saved.steps)
@@ -2798,7 +2798,7 @@ class WorkflowGoalRunnerReconciliationTest {
 
     val blockedStep = store.markBlocked("wftr-mid-fix", "no terminal outcome", "preplan")
 
-    assertEquals("implement_fix", blockedStep)
+    assertEquals("implement_fix", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-mid-fix", RUNTIME)).toSnapshot()
     assertEquals("implement_fix", saved.currentStepId)
     val steps = decodeWorkflowStepsForTest(saved.steps)

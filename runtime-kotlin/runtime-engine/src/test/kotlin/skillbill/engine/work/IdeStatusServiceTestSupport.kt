@@ -22,6 +22,7 @@ import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -855,7 +856,12 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     blockedReason: String,
     lastResumableStep: String,
     supervisionEvent: GoalRunnerSupervisionEvent?,
-  ): String? = null
+    executionGeneration: Long?,
+    failureExitCode: Int?,
+    executionOwnerToken: String?,
+    failureThrowableType: String?,
+    causingIncidentToken: String?,
+  ): GoalRunnerAcceptedBlock? = null
 
   override fun progress(workflowId: String): GoalRunnerWorkflowProgress? = null
 
