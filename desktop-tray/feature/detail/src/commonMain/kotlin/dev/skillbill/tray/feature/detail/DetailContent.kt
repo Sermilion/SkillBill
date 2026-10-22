@@ -174,8 +174,8 @@ private fun LoadedDetail(
   var expandedReason by remember(item.identity, item.invocationId, blockReason) { mutableStateOf(false) }
   val subtaskTime = durationText(item.subtaskActiveDurationMs, item.subtaskActiveDurationAsOf, item, now, frozen)
   Column(modifier.background(canvas)) {
-    Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+    Column(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+      Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           StatusChip(item.outcomeLabel(), item.statusColor(), item.lifecycle, stalled = item.stalled())
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
@@ -213,9 +213,7 @@ private fun LoadedDetail(
           }
         }
       }
-      if (state.controllable && load.readError == null) {
-        RunActionButtons(detail, state.control is ControlState.InProgress, onAction)
-      }
+      RunActionButtons(detail, state.control is ControlState.InProgress, state.controllable && load.readError == null, onAction)
     }
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
