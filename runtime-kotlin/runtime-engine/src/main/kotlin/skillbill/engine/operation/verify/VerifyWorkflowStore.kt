@@ -11,10 +11,14 @@ import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.model.WorkflowStatus
+import java.nio.file.Path
 
 internal class VerifyWorkflowStore(
   private val workflows: WorkflowService,
+  private val checkpointRoot: Path? = null,
 ) {
+  fun at(checkout: Path): VerifyWorkflowStore = VerifyWorkflowStore(workflows, checkout)
+
   fun write(
     workflowId: String,
     status: WorkflowStatus,
@@ -29,6 +33,7 @@ internal class VerifyWorkflowStore(
         currentStepId = currentStepId,
         stepUpdates = WorkflowStepUpdates.from(steps),
         artifactsPatch = WorkflowArtifactPatch.from(artifacts),
+        checkpointRoot = checkpointRoot,
       ),
     )
 
@@ -47,6 +52,7 @@ internal class VerifyWorkflowStore(
         stepUpdates = WorkflowStepUpdates.from(steps),
         artifactsPatch = WorkflowArtifactPatch.from(artifacts),
         sessionId = sessionId,
+        checkpointRoot = checkpointRoot,
       ),
     )
 

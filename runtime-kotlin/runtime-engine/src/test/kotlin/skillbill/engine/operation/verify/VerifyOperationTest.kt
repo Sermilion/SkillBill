@@ -5,11 +5,14 @@ import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import java.nio.file.Files
+import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -123,6 +126,43 @@ class VerifyOperationTest {
         assertEquals(head, harness.headCommit(), mode)
         assertEquals(delegatedCalls, harness.delegatedReviews.size, mode)
       }
+    }
+  }
+
+  @Test
+  fun `the confirmed steps review a checkout pinned at the target head and remove it afterwards`() {
+    VerifyOperationHarness().use { harness ->
+      harness.dirtyGreeter()
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+      var reviewedGreeter: String? = null
+      harness.runner.sideEffects[VerifyPromptSections.CODE_REVIEW_STEP] = { input ->
+        reviewedGreeter = input.facts.repoRoot.resolve("src/main/kotlin/Greeter.kt").readText()
+      }
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      val checkout = harness.runner.input(VerifyPromptSections.CODE_REVIEW_STEP).facts.repoRoot
+      assertEquals(harness.pinnedCheckout(token), checkout)
+      assertEquals("fun greet(name: String) = \"hi \$name\"\n", reviewedGreeter)
+      assertFalse(Files.exists(checkout))
+      assertEquals(1, harness.worktrees().size)
+    }
+  }
+
+  @Test
+  fun `operator commits and edits during the confirmed run neither block it nor reach the review`() {
+    VerifyOperationHarness().use { harness ->
+      val head = harness.headCommit()
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+      harness.operatorCommitsDuring(VerifyPromptSections.FEATURE_FLAG_AUDIT_STEP)
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      assertEquals("completed", harness.workflowStatus(token))
+      assertNotEquals(head, harness.headCommit())
+      val projection = harness.snapshot(token).artifacts.getValue("diff_projection") as Map<*, *>
+      assertTrue(projection["comparison_scope"].toString().endsWith("..$head"), projection.toString())
+      assertFalse("src/main/kotlin/Farewell.kt" in projection["changed_files"] as List<*>, projection.toString())
     }
   }
 

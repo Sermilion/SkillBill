@@ -61,7 +61,7 @@ internal class VerifyStepSequence(
     var stepId = start
     var attempt = (attempts[start] ?: 0) + 1
     val begun =
-      store.begin(
+      store.at(run.context.repoRoot).begin(
         run.workflowId,
         start,
         settledBefore + stepEntry(start, WorkflowStepStatus.RUNNING, attempt),
@@ -84,7 +84,7 @@ internal class VerifyStepSequence(
       val next = run.steps[run.steps.indexOf(stepId) + 1]
       val nextAttempt = (attempts[next] ?: 0) + 1
       val written =
-        store.write(
+        store.at(run.context.repoRoot).write(
           run.workflowId,
           WorkflowStatus.RUNNING,
           next,
@@ -272,7 +272,7 @@ internal class VerifyStepSequence(
   ): OperationOutcome {
     val qa = VerifyQaReport.at(run, VerifyWorkflow.FINISH, store.artifacts(run.workflowId))
     val closed =
-      store.write(
+      store.at(run.context.repoRoot).write(
         run.workflowId,
         WorkflowStatus.COMPLETED,
         VerifyWorkflow.FINISH,
@@ -294,10 +294,11 @@ internal class VerifyStepSequence(
   ): OperationOutcome {
     val qa = VerifyQaReport.at(run, stepId, store.artifacts(run.workflowId))
     val steps = listOf(stepEntry(stepId, WorkflowStepStatus.FAILED, attempt))
-    val failed = store.write(run.workflowId, WorkflowStatus.FAILED, stepId, steps, qa.patch)
+    val checkoutStore = store.at(run.context.repoRoot)
+    val failed = checkoutStore.write(run.workflowId, WorkflowStatus.FAILED, stepId, steps, qa.patch)
     if (failed is VerifyWrite.Rejected) {
       (diffProjection(run.context, run.target) as? VerifyDiffProjection.Ready)?.let { refreshed ->
-        store.write(
+        checkoutStore.write(
           run.workflowId,
           WorkflowStatus.FAILED,
           stepId,

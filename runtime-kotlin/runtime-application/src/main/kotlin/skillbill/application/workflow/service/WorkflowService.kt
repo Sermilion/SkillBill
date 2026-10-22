@@ -65,6 +65,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
+import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
 
@@ -100,8 +101,10 @@ class WorkflowService(
   private val featureTaskIdentityRepair =
     WorkflowServiceFeatureTaskIdentityRepair(engine, clock, ::repositoryCheckpointIdentity)
 
-  private fun repositoryCheckpointIdentity(): String {
-    val resolved = gitOperations.repositoryFingerprint(repositoryRoot.path)
+  private fun repositoryCheckpointIdentity(): String = repositoryCheckpointIdentity(repositoryRoot.path)
+
+  private fun repositoryCheckpointIdentity(checkoutRoot: Path): String {
+    val resolved = gitOperations.repositoryFingerprint(checkoutRoot)
     check(resolved is WorkflowGitOperationResult.Ok) { resolved.error }
     return resolved.value.orEmpty()
   }
@@ -265,7 +268,9 @@ class WorkflowService(
           effectiveInput,
           WorkflowPersistenceContext(
             dbPath = unitOfWork.dbPath.toString(),
-            repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,
+            repositoryCheckpointIdentity = {
+              repositoryCheckpointIdentity(request.checkpointRoot ?: repositoryRoot.path)
+            },
           ),
         ),
       pendingProjection = pendingDecompositionProjection(runtimeInput, updated, request, unitOfWork),
@@ -456,6 +461,7 @@ class WorkflowService(
     kind: WorkflowFamilyKind,
     workflowId: String,
     subtaskId: Int? = null,
+    checkpointRoot: Path? = null,
   ): WorkflowContinueResult {
     var pendingProjection: PendingDecompositionProjection? = null
     val result =
@@ -493,7 +499,9 @@ class WorkflowService(
               fileStore = decompositionManifestStore,
               repoRoot = repositoryRoot.path,
               manifestWriter = decompositionManifestWriter,
-              repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,
+              repositoryCheckpointIdentity = {
+                repositoryCheckpointIdentity(checkpointRoot ?: repositoryRoot.path)
+              },
             ),
           )
         pendingProjection = mergePendingProjection(pendingProjection, continuation)

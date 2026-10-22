@@ -17,7 +17,6 @@ import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.engine.operation.core.SelfConfirmingOperation
-import skillbill.engine.operation.core.WorktreeBaseline
 import skillbill.engine.operation.core.anchorUnreadable
 import skillbill.engine.operation.core.closedVerifyWorkflow
 import skillbill.engine.operation.core.gitValueOr
@@ -26,7 +25,6 @@ import skillbill.engine.operation.core.missingIntake
 import skillbill.engine.operation.core.pullRequestNotFound
 import skillbill.engine.operation.core.unknownVerifyWorkflow
 import skillbill.engine.operation.core.unresolvableVerifyTarget
-import skillbill.engine.operation.core.worktreeBaseline
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
@@ -79,13 +77,8 @@ class VerifyOperation(
   }
 
   override fun run(context: OperationContext): OperationRunResult {
-    val baseline = worktreeBaseline(context) { return OperationRunResult.Finished(it) }
     val outcome = context.arguments.confirm?.let { token -> confirm(context, token.trim()) } ?: propose(context)
-    if (outcome is OperationRefusal) return OperationRunResult.Finished(outcome)
-    val changed = worktreeBaseline(context) { return OperationRunResult.Finished(it) } != baseline
-    return OperationRunResult.Finished(
-      if (changed) OperationOutcome.Failed(WORKTREE_CHANGED) else outcome,
-    )
+    return OperationRunResult.Finished(outcome)
   }
 
   private fun propose(context: OperationContext): OperationOutcome {
@@ -233,12 +226,46 @@ class VerifyOperation(
         )
       } else {
         registerWorkflowStatus(context, workflowId, storedIssueKey)
-        confirmParked(run, attempts)
+        pinned(run) { pinnedRun -> confirmParked(pinnedRun, attempts) }
       }
     }
-    val start = resumeStep(run, snapshot) { failure -> return failure }
-    registerWorkflowStatus(context, workflowId, storedIssueKey)
-    return sequence.run(run, start, attempts)
+    return pinned(run) { pinnedRun ->
+      val start = resumeStep(pinnedRun, snapshot) { failure -> return failure }
+      registerWorkflowStatus(context, workflowId, storedIssueKey)
+      sequence.run(pinnedRun, start, attempts)
+    }
+  }
+
+  private inline fun pinned(
+    run: VerifyRun,
+    review: (VerifyRun) -> OperationOutcome,
+  ): OperationOutcome {
+    val repoRoot = run.context.repoRoot
+    val head = run.target.headRevision
+    val checkout =
+      when (val added = gitOperations.addDetachedWorktree(repoRoot, "$PINNED_ROOT/${run.workflowId}", head)) {
+        is WorkflowGitOperationResult.Ok -> Path.of(added.value.trim())
+        else -> return OperationOutcome.Failed("Verify could not check out $head for review: ${added.error}")
+      }
+    return try {
+      review(run.copy(context = run.context.copy(repoRoot = checkout)))
+    } finally {
+      release(repoRoot, checkout)
+    }
+  }
+
+  private fun release(
+    repoRoot: Path,
+    checkout: Path,
+  ) {
+    val removed = gitOperations.removeWorktree(repoRoot, checkout)
+    if (removed !is WorkflowGitOperationResult.Ok) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=verify_pinned_checkout value_expected=removed value_used=retained checkout=$checkout " +
+          "error=${removed.error}",
+      )
+    }
   }
 
   private fun registerWorkflowStatus(
@@ -330,7 +357,7 @@ class VerifyOperation(
         is VerifyDiffProjection.Unavailable -> return OperationOutcome.Failed(refreshed.reason)
       }
     val written =
-      store.write(
+      store.at(run.context.repoRoot).write(
         run.workflowId,
         snapshot.workflowStatus,
         snapshot.currentStepId,
@@ -348,7 +375,10 @@ class VerifyOperation(
     refreshStaleCheckpoint(run, snapshot)?.let(onFailure)
     val workflowId = run.workflowId
     val view =
-      when (val continued = workflows.continueWorkflow(WorkflowFamilyKind.VERIFY, workflowId)) {
+      when (
+        val continued =
+          workflows.continueWorkflow(WorkflowFamilyKind.VERIFY, workflowId, checkpointRoot = run.context.repoRoot)
+      ) {
         is WorkflowContinueResult.Standard -> continued.view
         is WorkflowContinueResult.UnknownWorkflow -> onFailure(unknownVerifyWorkflow(workflowId))
         else -> onFailure(OperationOutcome.Failed("Verify workflow '$workflowId' cannot be continued."))
@@ -521,12 +551,6 @@ class VerifyOperation(
     return VerifyTarget(VerifyWorkflow.string(inputContext, VerifyWorkflow.TARGET) ?: "$base..$head", base, head)
   }
 
-  private inline fun worktreeBaseline(
-    context: OperationContext,
-    refuse: (OperationOutcome.Blocked) -> Nothing,
-  ): WorktreeBaseline =
-    gitOperations.worktreeBaseline(context.repoRoot) { anchor, error -> refuse(anchorUnreadable(anchor, error)) }
-
   private fun repoRootOf(context: OperationContext): String = context.repoRoot.toAbsolutePath().normalize().toString()
 
   private companion object {
@@ -538,7 +562,7 @@ class VerifyOperation(
     const val SPEC_ANCHOR = "spec"
     const val HEAD_ANCHOR = "HEAD"
     const val SUPERSEDE_SCAN_LIMIT = 100
-    const val WORKTREE_CHANGED = "operation verify is read-only, but the worktree or HEAD changed during the run."
+    const val PINNED_ROOT = "skill-bill/verify"
 
     val PARKED_STEPS = setOf(VerifyWorkflow.COLLECT_INPUTS, VerifyWorkflow.EXTRACT_CRITERIA)
     val CLOSED_STATUSES = setOf(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.ABANDONED)

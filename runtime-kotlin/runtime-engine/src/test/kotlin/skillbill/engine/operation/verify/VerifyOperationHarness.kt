@@ -211,6 +211,8 @@ internal class VerifyOperationHarness : AutoCloseable {
 
   fun qaWorktree(workflowId: String): Path = repo.toRealPath().resolve(".git/skill-bill/verify-qa/$workflowId")
 
+  fun pinnedCheckout(workflowId: String): Path = repo.toRealPath().resolve(".git/skill-bill/verify/$workflowId")
+
   fun treeIdentity(path: Path): String =
     (git.repositoryTreeIdentity(path) as WorkflowGitOperationResult.Ok).value.trim()
 
@@ -246,8 +248,23 @@ internal class VerifyOperationHarness : AutoCloseable {
     (workflows.get(WorkflowFamilyKind.VERIFY, workflowId) as WorkflowGetResult.Ok).snapshot
 
   fun editDuring(stepName: String) {
-    runner.sideEffects[stepName] = { write("src/main/kotlin/Greeter.kt", "fun greet() = \"edited\"\n") }
+    runner.sideEffects[stepName] = { input ->
+      input.facts.repoRoot.resolve("src/main/kotlin/Greeter.kt").writeText("fun greet() = \"edited\"\n")
+    }
   }
+
+  fun operatorCommitsDuring(stepName: String) {
+    runner.sideEffects[stepName] = {
+      write("src/main/kotlin/Farewell.kt", "fun farewell() = \"bye\"\n")
+      commitAll("Operator work")
+      dirtyGreeter()
+    }
+  }
+
+  fun worktrees(): List<String> =
+    git("worktree", "list", "--porcelain").lines().filter {
+      it.startsWith("worktree ")
+    }.map { it.removePrefix("worktree ") }
 
   fun seedSkillWorkflowAtCodeReview(): String {
     val opened = workflows.open(WorkflowServiceOpenArgs(WorkflowFamilyKind.VERIFY, sessionId = SKILL_SESSION_ID))
@@ -419,7 +436,7 @@ internal class VerifyOperationHarness : AutoCloseable {
 
 internal class VerifyScriptedRunner : PhaseRunner {
   val inputs = mutableListOf<PhaseStepInput>()
-  val sideEffects = mutableMapOf<String, () -> Unit>()
+  val sideEffects = mutableMapOf<String, (PhaseStepInput) -> Unit>()
   val replies = REPLIES.toMutableMap()
   var failAt: String? = null
 
@@ -428,7 +445,7 @@ internal class VerifyScriptedRunner : PhaseRunner {
     state: PhaseLaunchState,
   ): PhaseStepOutput {
     inputs += input
-    sideEffects.remove(input.stepName)?.invoke()
+    sideEffects.remove(input.stepName)?.invoke(input)
     if (input.stepName == failAt) {
       failAt = null
       error("interrupted at ${input.stepName}")
