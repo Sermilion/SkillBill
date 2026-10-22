@@ -181,7 +181,7 @@ internal class PhaseAttemptRunHost(
     check(run.phaseId == boundPhaseId && run.request === request)
     check(input.stepName == boundPhaseId && input.facts.issueKey == request.issueKey)
     val owner = requireNotNull(backingRunState.selectedOwnerOf(boundPhaseId))
-    check(owner.acceptsAttemptStrategy(call.strategyId) && call.request === request)
+    check(owner.strategyId == call.strategyId && call.request === request)
     return backingRunState.runnerFor(boundPhaseId).run(input, launchState)
   }
 
@@ -192,7 +192,7 @@ internal class PhaseAttemptRunHost(
     call.requireAcceptedAttempt(run, call)
     check(run.phaseId == boundPhaseId && run.request === request)
     val owner = requireNotNull(backingRunState.selectedOwnerOf(boundPhaseId))
-    check(owner.acceptsAttemptStrategy(call.strategyId) && call.request === request)
+    check(owner.strategyId == call.strategyId && call.request === request)
     return backingRunState.runnerFor(boundPhaseId)
   }
 

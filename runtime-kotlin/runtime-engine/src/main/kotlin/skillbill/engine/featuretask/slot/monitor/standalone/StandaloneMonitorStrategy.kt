@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -26,7 +27,8 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 class StandaloneMonitorStrategy(
   private val service: StandaloneMonitorService,
-) : PhaseStrategy() {
+) : PhaseStrategy(),
+  MonitorRepairCapability by MonitorRepairRoles {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR to
@@ -46,13 +48,6 @@ class StandaloneMonitorStrategy(
           generationScoped = false,
           extendsOwnedInventory = true,
         ),
-    )
-
-  internal override val monitorRepairSteps =
-    MonitorRepairStepRoles(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
     )
 
   override val slot: PhaseSlot = PhaseSlot.MONITOR
@@ -144,4 +139,13 @@ class StandaloneMonitorStrategy(
   companion object {
     const val ID = "standalone-monitor-ci"
   }
+}
+
+private object MonitorRepairRoles : MonitorRepairCapability {
+  override val monitorRepairSteps =
+    MonitorRepairStepRoles(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+    )
 }

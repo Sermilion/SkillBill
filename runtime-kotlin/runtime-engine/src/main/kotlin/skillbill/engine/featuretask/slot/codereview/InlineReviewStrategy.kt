@@ -6,23 +6,21 @@ import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
-import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.PhaseStatusCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepOutput
-import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
-import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.PhaseVerdictCapability
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.ports.agentrun.model.AgentRunTermination
-import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewLaneResult
@@ -35,11 +33,18 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 
-class InlineReviewStrategy(
+class InlineReviewStrategy private constructor(
   internal val runner: PhaseRunner,
-  qualityRubricResolver: InlineCodeQualityRubricResolver? = null,
-) : PhaseStrategyStatusProjection() {
-  private val codeReview = CodeReviewSlot(runner, InlineReviewPass(qualityRubricResolver))
+  private val codeReview: CodeReviewSlot,
+) : PhaseStrategy(),
+  PhaseLoopCapability by codeReview,
+  PhaseResumeCapability by codeReview,
+  PhaseStatusCapability by codeReview,
+  PhaseVerdictCapability by codeReview {
+  constructor(
+    runner: PhaseRunner,
+    qualityRubricResolver: InlineCodeQualityRubricResolver? = null,
+  ) : this(runner, CodeReviewSlot(runner, InlineReviewPass(qualityRubricResolver)))
 
   override val slot: PhaseSlot = PhaseSlot.CODE_REVIEW
   override val strategyId: String = ID
@@ -59,20 +64,6 @@ class InlineReviewStrategy(
     codeReview.briefingInvariantFields(stepId, super.briefingInvariantFields(stepId))
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> = codeReview.stepDescriptor(stepId)
-
-  override fun verdictRule(
-    stepId: String,
-    diagnostics: RuntimeDiagnostics,
-  ): FeatureTaskRuntimeStepVerdictRule? = codeReview.verdictRule(stepId)
-
-  override fun resumeRules(stepId: String): PhaseResumeRules = codeReview.resumeRules(stepId)
-
-  override val loopRules: PhaseLoopRules = codeReview.loopRules
-
-  override fun currentExecution(
-    stepId: String,
-    context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-  ): IdeStatusCurrentPhaseExecution? = codeReview.currentExecution(stepId, context)
 
   companion object {
     const val ID = "inline"

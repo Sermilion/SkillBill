@@ -26,10 +26,13 @@ import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRul
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhasePreparedRunCapability
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.PhaseVerdictCapability
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
@@ -53,7 +56,10 @@ class QaStrategy(
   private val reports: QaReportSettlement,
   private val execution: QaExecutionLifecycle,
   private val outcomes: FeatureTaskQaOutcomeRecorder,
-) : PhaseStrategy() {
+) : PhaseStrategy(),
+  PhasePreparedRunCapability by QaPreparedRun(reports, execution, outcomes),
+  PhaseResumeCapability by QaResume,
+  PhaseVerdictCapability {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to
@@ -83,9 +89,6 @@ class QaStrategy(
 
   private val qaLoopRules = QaLoopRules(outcomes)
 
-  override fun resumeRules(stepId: String): PhaseResumeRules =
-    if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) QaResumeRules else PhaseResumeRules.None
-
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
   override fun directiveFor(stepId: String): String {
@@ -108,37 +111,6 @@ class QaStrategy(
       runsBuildGate = qaStep,
       valueContent = if (qaStep) QaPromptSections.VALUE_CONTENT else QaPromptSections.FIX_VALUE_CONTENT,
     )
-  }
-
-  override fun withPreparedRun(
-    run: PhaseRun,
-    execute: (PhaseRun) -> PhaseOutcome,
-  ): PhaseOutcome {
-    if (run.phaseId != entryStep || run.qaExecution != null) return execute(run)
-    val recordsGoalOutcome = run.request.admittedExecution == null && run.request.qaSelection != null
-    val policy =
-      when (
-        requireNotNull(run.request.admittedExecution?.plan?.qaSelection ?: run.request.qaSelection) {
-          "QA selection is required for an in-memory QA run."
-        }
-      ) {
-        FeatureTaskRuntimeQaSelection.AUTO -> QaPolicy.AUTO
-        FeatureTaskRuntimeQaSelection.OFF -> QaPolicy.OFF
-      }
-    if (recordsGoalOutcome) outcomes.recordAttempted(run.request.workflowId)
-    val result =
-      execution.withExecution(run.request.repoRoot, policy) { qa -> execute(run.copy(qaExecution = qa)) }
-    if (recordsGoalOutcome) {
-      val completed = result.value as? PhaseOutcome.Completed
-      if (completed != null) {
-        val output = completed.output.normalizedOutput ?: error("completed QA step has no normalized output.")
-        check(output.phaseId == entryStep && output.status == "completed") {
-          "completed QA step has no accepted completed QA output."
-        }
-        recordGoalOutcome(run.request.workflowId, output, result.expected.treeIdentity)
-      }
-    }
-    return result.value
   }
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
@@ -314,6 +286,57 @@ class QaStrategy(
       }
     }
 
+  companion object {
+    const val ID = "agent-qa"
+    private const val MISSING_WORKSPACE = "QA execution was not prepared before step admission."
+  }
+}
+
+private object QaResume : PhaseResumeCapability {
+  override fun resumeRules(stepId: String): PhaseResumeRules =
+    if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) QaResumeRules else PhaseResumeRules.None
+}
+
+private class QaPreparedRun(
+  private val reports: QaReportSettlement,
+  private val execution: QaExecutionLifecycle,
+  private val outcomes: FeatureTaskQaOutcomeRecorder,
+) : PhasePreparedRunCapability {
+  override fun withPreparedRun(
+    run: PhaseRun,
+    execute: (PhaseRun) -> PhaseOutcome,
+  ): PhaseOutcome {
+    if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA || run.qaExecution != null) {
+      return execute(
+        run,
+      )
+    }
+    val recordsGoalOutcome = run.request.admittedExecution == null && run.request.qaSelection != null
+    val policy =
+      when (
+        requireNotNull(run.request.admittedExecution?.plan?.qaSelection ?: run.request.qaSelection) {
+          "QA selection is required for an in-memory QA run."
+        }
+      ) {
+        FeatureTaskRuntimeQaSelection.AUTO -> QaPolicy.AUTO
+        FeatureTaskRuntimeQaSelection.OFF -> QaPolicy.OFF
+      }
+    if (recordsGoalOutcome) outcomes.recordAttempted(run.request.workflowId)
+    val result =
+      execution.withExecution(run.request.repoRoot, policy) { qa -> execute(run.copy(qaExecution = qa)) }
+    if (recordsGoalOutcome) {
+      val completed = result.value as? PhaseOutcome.Completed
+      if (completed != null) {
+        val output = completed.output.normalizedOutput ?: error("completed QA step has no normalized output.")
+        check(output.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA && output.status == "completed") {
+          "completed QA step has no accepted completed QA output."
+        }
+        recordGoalOutcome(run.request.workflowId, output, result.expected.treeIdentity)
+      }
+    }
+    return result.value
+  }
+
   private fun recordGoalOutcome(
     workflowId: String,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
@@ -357,10 +380,5 @@ class QaStrategy(
         legacyFindings,
       ),
     )
-  }
-
-  companion object {
-    const val ID = "agent-qa"
-    private const val MISSING_WORKSPACE = "QA execution was not prepared before step admission."
   }
 }

@@ -1602,7 +1602,7 @@ Composition:
   name their steps with operation-local names outside the domain graph.
 - IDE status goes through the same lookup.
   `FeatureTaskRuntimeCurrentPhaseExecutionDeriver` asks the step's strategy for
-  its execution counter through `PhaseStrategyStatusProjection`.
+  its execution counter through the optional `PhaseStatusCapability`.
 - Every strategy owns its step code in its slot package:
 
   | Strategy | Package | Owns |

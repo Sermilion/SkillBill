@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHoo
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -27,7 +28,8 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
   ): String? {
     val state = context.state
     val resumes =
-      context.runState.strategyFor(edge.destinationPhaseId).loopRules?.resumesInFlightReentry(edge.loopId) == true
+      (context.runState.strategyFor(edge.destinationPhaseId) as? PhaseLoopCapability)
+        ?.loopRules?.resumesInFlightReentry(edge.loopId) == true
     if (!resumes || state.loop(edge.loopId).liveClaimed || state.phase(edge.destinationPhaseId).completed) {
       return null
     }

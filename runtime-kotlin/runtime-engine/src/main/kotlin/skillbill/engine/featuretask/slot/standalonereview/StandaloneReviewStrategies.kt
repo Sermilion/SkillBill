@@ -11,11 +11,9 @@ import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
@@ -27,7 +25,7 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStepSession
-import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.ReviewBindingFamily
 import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
@@ -36,7 +34,6 @@ import skillbill.engine.featuretask.slot.codereview.ReviewTargetResolver
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
 import skillbill.engine.featuretask.slot.codereview.resolveInlineRubric
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
-import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
@@ -46,8 +43,6 @@ import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
-import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ParallelReviewLaneResult
@@ -91,7 +86,7 @@ abstract class StandaloneReviewStrategy(
   private val reviewRunner: ParallelCodeReviewRunner?,
   private val qualityRubricResolver: InlineCodeQualityRubricResolver? =
     reviewRunner?.let { InlineCodeQualityRubricResolver(it::resolveInlineCodeQualityRubric) },
-) : PhaseStrategyStatusProjection() {
+) : PhaseStrategy() {
   override val slot: PhaseSlot = PhaseSlot.STANDALONE_REVIEW
   override val steps: List<String> = listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS)
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
@@ -514,18 +509,6 @@ abstract class StandaloneReviewStrategy(
     )
     return PhaseOutcome.blocked(reason)
   }
-
-  override fun resumeRules(stepId: String): PhaseResumeRules = PhaseResumeRules.None
-
-  override fun currentExecution(
-    stepId: String,
-    context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-  ): IdeStatusCurrentPhaseExecution? = null
-
-  override fun verdictRule(
-    stepId: String,
-    diagnostics: RuntimeDiagnostics,
-  ): FeatureTaskRuntimeStepVerdictRule? = null
 }
 
 private data class StandaloneLaunch(

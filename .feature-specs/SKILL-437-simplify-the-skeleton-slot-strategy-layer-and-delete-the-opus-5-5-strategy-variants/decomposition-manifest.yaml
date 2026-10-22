@@ -76,12 +76,12 @@ subtasks:
 - id: 5
   name: "Extract optional strategy capabilities"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_5_strategy-capabilities.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-194145-x2nl"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

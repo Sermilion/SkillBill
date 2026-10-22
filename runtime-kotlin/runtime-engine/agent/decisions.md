@@ -1,3 +1,9 @@
+## [2026-10-22] Optional strategy behavior is a capability interface, not a base-class default
+Context: PhaseStrategy carried many open members with no-op defaults (loop, resume, verdict, status, repair, prepared run, mapping), so every strategy inherited surface it did not use.
+Decision: Each behavior is an internal capability interface. A strategy implements only what it needs, and consumers use as? checks. Policy and resume identity are final members.
+Reason: A missing capability then reads as absent behavior, and a strategy cannot override identity. A guard caps open members at 12.
+Alternatives considered: Keeping defaults on the base class, rejected because it hides which strategies really own a behavior.
+
 ## [2026-10-22] Historical opus-5-5 ids are slot-scoped aliases, not registered strategies
 Context: SKILL-437 deleted the opus-5-5 strategy classes, but in-flight and archived plans still record ids like inline-opus-5-5, and inline-opus-5-5 exists in both CODE_REVIEW and STANDALONE_REVIEW.
 Decision: A private slot-scoped alias table in the registry maps each recorded id to its canonical strategy. Selection matching, dispatch and the compatibility check accept it; policy and resume identities use the recorded id, and descriptors are not rewritten.
@@ -175,7 +181,7 @@ Revisit when: a purge needs to be atomic across the filesystem and database.
 
 ## [2026-10-08] Build step calls from the selected owner, not the caller
 Context: SKILL-403 wrappers (`*Opus55Strategy`) delegate `runStep` to a canonical strategy. `stepCall` used its receiver, so the call carried the canonical strategy id and prompt while the accepted binding's owner was the wrapper. Attempt authorization rejected every wrapper-owned step, and the wrapper's Opus directive never reached the prompt.
-Decision: The step binding exposes its accepted owner, and step calls take prompt, policy and strategy id from that owner. `acceptsAttemptStrategy` keeps exact-id matching.
+Decision: The step binding exposes its accepted owner, and step calls take prompt, policy and strategy id from that owner. `acceptsAttemptStrategy` keeps exact-id matching. (Superseded by SKILL-437: `acceptsAttemptStrategy` was removed and the `owner.strategyId == call.strategyId` check replaces it.)
 Reason: Accepting the canonical id in each wrapper would have stopped the crash but still sent the canonical prompt, and every new delegating wrapper would need the same override. Reading the owner from the binding makes the selected strategy the only source of call identity, so a wrapper can delegate execution without losing its id or prompt.
 
 ## [2026-10-08] Standalone review admits prose reports

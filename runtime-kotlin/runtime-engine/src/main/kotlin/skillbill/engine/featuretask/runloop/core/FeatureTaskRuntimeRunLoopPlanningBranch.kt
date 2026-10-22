@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseBoundLoopRules
+import skillbill.engine.featuretask.slot.PhasePreparedRunCapability
 import skillbill.engine.featuretask.slot.PhaseStepCapture
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
@@ -148,10 +149,11 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun runPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
-  ): PhaseOutcome =
-    context.runState.strategyFor(run.phaseId).withPreparedRun(run) { prepared ->
-      dispatchPreparedPhase(context, prepared)
-    }
+  ): PhaseOutcome {
+    val strategy = context.runState.strategyFor(run.phaseId)
+    val dispatch = { prepared: PhaseRun -> dispatchPreparedPhase(context, prepared) }
+    return (strategy as? PhasePreparedRunCapability)?.withPreparedRun(run, dispatch) ?: dispatch(run)
+  }
 
   private fun dispatchPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,

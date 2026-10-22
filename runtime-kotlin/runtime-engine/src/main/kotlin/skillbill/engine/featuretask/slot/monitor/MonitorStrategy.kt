@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -31,7 +32,8 @@ import java.nio.file.Path
 class MonitorStrategy(
   private val identityLookup: PullRequestIdentityLookup,
   checksLookup: PullRequestChecksLookup,
-) : PhaseStrategy() {
+) : PhaseStrategy(),
+  MonitorRepairCapability by MonitorRepairRoles {
   private val watcher = PullRequestCiWatcher(identityLookup, checksLookup)
   private val fixBrief = MonitorFixBrief()
   private val observation =
@@ -74,13 +76,6 @@ class MonitorStrategy(
           generationScoped = false,
           extendsOwnedInventory = true,
         ),
-    )
-
-  internal override val monitorRepairSteps =
-    MonitorRepairStepRoles(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
     )
 
   override val slot: PhaseSlot = PhaseSlot.MONITOR
@@ -198,4 +193,13 @@ class MonitorStrategy(
         "Local validation is not a claim that CI passed. Never weaken assertions, suppress findings, disable " +
         "rules, or skip tests to silence the failure."
   }
+}
+
+private object MonitorRepairRoles : MonitorRepairCapability {
+  override val monitorRepairSteps =
+    MonitorRepairStepRoles(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+    )
 }

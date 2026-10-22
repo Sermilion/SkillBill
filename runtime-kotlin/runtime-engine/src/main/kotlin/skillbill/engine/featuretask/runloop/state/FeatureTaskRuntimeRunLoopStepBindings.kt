@@ -40,9 +40,11 @@ import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.FindingVerificationBindingFamily
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseBoundStepHooks
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -134,7 +136,7 @@ private abstract class FeatureTaskRuntimeRunLoopAgentStepBinding(
         call.request === run.request &&
         call.description.step == run.phaseId &&
         owner != null &&
-        owner.acceptsAttemptStrategy(call.strategyId) &&
+        owner.strategyId == call.strategyId &&
         owner.policyFor(run.phaseId) == run.policy &&
         owner.policyFor(run.phaseId) == call.description.policy,
     ) {
@@ -154,7 +156,7 @@ private abstract class FeatureTaskRuntimeRunLoopAgentStepBinding(
         run.phaseId == this.run.phaseId &&
         run.request === environment.request &&
         owner != null &&
-        owner.acceptsAttemptStrategy(strategyId) &&
+        owner.strategyId == strategyId &&
         owner.policyFor(run.phaseId) == run.policy,
     ) {
       "Step operation does not match the accepted phase, request, strategy, and policy binding."
@@ -410,6 +412,9 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   override val boundHooks: PhaseBoundStepHooks<PhaseMonitorStepBinding> =
     PhaseBoundStepHooks<PhaseMonitorStepBinding>(hooks, this)
 
+  private val repairRoles
+    get() = requireNotNull((acceptedOwner as? MonitorRepairCapability)?.monitorRepairSteps)
+
   override fun publishRepair(
     run: PhaseRun,
     pullRequests: PullRequestIdentityLookup,
@@ -417,12 +422,7 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   ): String? {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopCommitCycle) {
-      environment.publishMonitorRepair(
-        run,
-        requireNotNull(acceptedOwner.monitorRepairSteps).publication,
-        pullRequests,
-        conflictBaseBranch,
-      )
+      environment.publishMonitorRepair(run, repairRoles.publication, pullRequests, conflictBaseBranch)
     }
   }
 
@@ -432,7 +432,7 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   ): PhaseOutcome {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopMonitorCycle) {
-      environment.runDeclaredMonitorCycle(run, observation, requireNotNull(acceptedOwner.monitorRepairSteps))
+      environment.runDeclaredMonitorCycle(run, observation, repairRoles)
     }
   }
 }
@@ -913,7 +913,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     reentryLoopId: String,
   ): Int? {
     requireActiveReviewBinding()
-    val loopRules = environment.selectedOwnerOf(acceptedPhaseId)?.loopRules
+    val loopRules = (environment.selectedOwnerOf(acceptedPhaseId) as? PhaseLoopCapability)?.loopRules
     check(reviewStepId == acceptedPhaseId && loopRules?.resumesInFlightReentry(reentryLoopId) == true)
     return environment.coupledRunTransitions.persistReviewGenerationInvalidation(
       recorder = environment.recorder,

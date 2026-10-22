@@ -1,3 +1,15 @@
+## [2026-10-22] SKILL-437 subtask 5: optional strategy behavior moves to capability interfaces
+Areas: runtime-engine featuretask slot, slot/attempt, slot/audit, slot/codereview, slot/implementation, slot/monitor, slot/plan, slot/qa, slot/qualitygate, slot/standalonereview, runloop/core, runloop/state, runner, lifecycle/execution; runtime-core architecture repoTest
+- PhaseStrategy is down to 11 open or abstract members. Loop, resume, verdict, status, acceptance repair, monitor repair, prepared run and recorded-plan mapping are internal capability interfaces declared in PhaseStrategy.kt. Consumers discover them with safe as? checks. reusable
+- Strategies implement only the capabilities they use, each through a private delegate object, because public strategies cannot implement internal interfaces directly. InlineReviewStrategy delegates to CodeReviewSlot.
+- PhaseStrategyStatusProjection and acceptsAttemptStrategy are gone. Attempt admission compares owner.strategyId with the call strategy id, since owners already resolve through registry alias canonicalization.
+- Policy and resume identity are final internal PhaseStrategy members, so a strategy cannot override them. A selected owner without the resume capability yields no resume rules; the historical interpreter applies only when no owner is selected.
+- Recorded-plan mapping takes the owner strategy as a parameter, because audit mapping needs the registered instance.
+- New guard in StrategyCapabilityBoundaryArchitectureTest caps open PhaseStrategy members at 12. The capability file was merged into PhaseStrategy.kt to keep the slot package under its sibling-file ceiling.
+- Limits: the status capability has no main-code consumer yet. No fan-out capability exists; fan-out stays on the planning binding family descriptor.
+Feature flag: N/A
+Acceptance criteria: implemented per spec_subtask_5 (validate ran full Gradle check and agnix green)
+
 ## [2026-10-22] SKILL-437 subtask 2: model supplements replace opus-5-5 strategy variants
 Areas: runtime-engine featuretask slot, slot/skeleton, slot/state, slot/attempt, slot/codereview, slot/standalonereview, runloop, phaserun, lifecycle/execution; runtime-core di/featuretask; runtime-domain skeleton model; runtime-contracts failure codes; runtime-infra/contracts plan coherence
 - The 15 *Opus55Strategy classes, ByProfile, withOpus and the opus suffix helper are deleted. Skeleton bindings register canonical strategies only; launch assignments and the profile-sensitive plan cache key stay.

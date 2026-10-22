@@ -97,14 +97,16 @@ class PhaseStrategyLookup(
 
   internal fun resumeRules(plan: ResolvedPhaseExecutionPlan): (String) -> PhaseResumeRules =
     { stepId ->
-      selectedOwnerOf(stepId, plan)?.resumeRules(stepId) ?: history.resumeRules(stepId)
+      selectedOwnerOf(stepId, plan)?.let { owner ->
+        (owner as? PhaseResumeCapability)?.resumeRules(stepId) ?: PhaseResumeRules.None
+      } ?: history.resumeRules(stepId)
     }
 
   internal fun verdictRule(
     stepId: String,
     plan: ResolvedPhaseExecutionPlan,
     diagnostics: RuntimeDiagnostics,
-  ) = selectedOwnerOf(stepId, plan)?.verdictRule(stepId, diagnostics)
+  ) = (selectedOwnerOf(stepId, plan) as? PhaseVerdictCapability)?.verdictRule(stepId, diagnostics)
 
   fun executionPlan(facts: PhaseStrategySelectionFacts): ResolvedPhaseExecutionPlan = resolve(facts)
 
@@ -149,7 +151,8 @@ class PhaseStrategyLookup(
     val current = executionPlan(facts).recordedAs(recorded)
     return recorded.selectedStrategies.mapNotNull { identity ->
       if (!registry.contains(identity.slot, identity.strategyId)) return@mapNotNull null
-      registry.strategy(identity.slot, identity.strategyId).mapRecordedExecutionPlan(recorded, current)
+      val owner = registry.strategy(identity.slot, identity.strategyId)
+      (owner as? PhaseRecordedPlanMappingCapability)?.mapRecordedExecutionPlan(owner, recorded, current)
     }.singleOrNull()
   }
 

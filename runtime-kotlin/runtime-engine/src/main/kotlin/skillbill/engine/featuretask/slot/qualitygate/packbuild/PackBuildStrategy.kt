@@ -8,8 +8,10 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseReportedGate
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
+import skillbill.engine.featuretask.slot.PhaseStatusCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
-import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.stepCall
 import skillbill.engine.featuretask.slot.qualitygate.BUILD_VALUE_CONTENT
@@ -25,17 +27,16 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class PackBuildStrategy : PhaseStrategyStatusProjection() {
-  private val policies: Map<String, PhaseStepPolicy> =
-    mapOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD to QUALITY_GATE_STEP_POLICY)
+class PackBuildStrategy :
+  PhaseStrategy(),
+  PhaseResumeCapability by PackBuildCapabilities,
+  PhaseStatusCapability by PackBuildCapabilities {
+  private val policies: Map<String, PhaseStepPolicy> = PACK_BUILD_POLICIES
 
   override val slot: PhaseSlot = PhaseSlot.QUALITY_GATE
   override val strategyId: String = ID
   override val steps: List<String> = policies.keys.toList()
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-
-  override fun resumeRules(stepId: String): PhaseResumeRules =
-    if (stepId in policies) BuildReceiptResumeRules else super.resumeRules(stepId)
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
@@ -79,16 +80,25 @@ class PackBuildStrategy : PhaseStrategyStatusProjection() {
     }
   }
 
+  companion object {
+    const val ID = "pack-build"
+  }
+}
+
+private val PACK_BUILD_POLICIES: Map<String, PhaseStepPolicy> =
+  mapOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD to QUALITY_GATE_STEP_POLICY)
+
+private object PackBuildCapabilities : PhaseResumeCapability, PhaseStatusCapability {
+  override fun resumeRules(stepId: String): PhaseResumeRules =
+    if (stepId in PACK_BUILD_POLICIES) BuildReceiptResumeRules else PhaseResumeRules.None
+
   override fun currentExecution(
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? = gateCurrentExecution(stepId, context)
 
-  override fun reportedGate(stepId: String): PhaseReportedGate? = PhaseReportedGate.BUILD.takeIf { stepId in policies }
-
-  companion object {
-    const val ID = "pack-build"
-  }
+  override fun reportedGate(stepId: String): PhaseReportedGate? =
+    PhaseReportedGate.BUILD.takeIf { stepId in PACK_BUILD_POLICIES }
 }
 
 private val PACK_BUILD_FAMILY =

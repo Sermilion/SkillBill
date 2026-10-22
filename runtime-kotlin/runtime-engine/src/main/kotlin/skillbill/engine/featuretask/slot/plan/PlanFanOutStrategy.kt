@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -28,11 +29,17 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class PlanFanOutStrategy(
+class PlanFanOutStrategy private constructor(
   private val fanOutPort: BoundedWorkFanOutPort,
   private val planFanOutCap: Int,
-) : PhaseStrategy() {
-  private val plan = AgentPlanStrategy()
+  private val plan: AgentPlanStrategy,
+) : PhaseStrategy(),
+  PhaseResumeCapability by PlanFanOutResume(plan) {
+  constructor(
+    fanOutPort: BoundedWorkFanOutPort,
+    planFanOutCap: Int,
+  ) : this(fanOutPort, planFanOutCap, AgentPlanStrategy())
+
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
@@ -86,13 +93,7 @@ class PlanFanOutStrategy(
       }
     }
 
-  override fun resumeRules(stepId: String): PhaseResumeRules =
-    if (isSubtaskStep(stepId)) AgentPlanStrategy.PlanSubtasksResumeRules else plan.resumeRules(stepId)
-
-  private fun isSubtaskStep(stepId: String): Boolean {
-    if (stepId !in policies) throw UnknownPhaseStepError(stepId)
-    return stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
-  }
+  private fun isSubtaskStep(stepId: String): Boolean = isPlanSubtasksStep(stepId, steps)
 
   private fun runSubtasks(
     run: PhaseRun,
@@ -223,4 +224,29 @@ class PlanFanOutStrategy(
         "Finish with a short prose summary of the plan. " + PREPLAN_DIGEST_AUTHORITY +
         " " + PLANNING_INSTALL_PROHIBITION + " The assigned sub-spec is the only file this session reads."
   }
+}
+
+private class PlanFanOutResume(
+  private val plan: AgentPlanStrategy,
+) : PhaseResumeCapability {
+  override fun resumeRules(stepId: String): PhaseResumeRules =
+    if (isPlanSubtasksStep(stepId, PLAN_FAN_OUT_STEPS)) {
+      AgentPlanStrategy.PlanSubtasksResumeRules
+    } else {
+      plan.resumeRules(stepId)
+    }
+}
+
+private val PLAN_FAN_OUT_STEPS =
+  listOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+  )
+
+private fun isPlanSubtasksStep(
+  stepId: String,
+  steps: List<String>,
+): Boolean {
+  if (stepId !in steps) throw UnknownPhaseStepError(stepId)
+  return stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
 }

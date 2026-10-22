@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -25,18 +26,10 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AgentPlanStrategy : PhaseStrategy() {
-  private val policies =
-    mapOf(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
-        PhaseStepPolicy(
-          mutating = false,
-          singleAgentSession = false,
-          readOnlyIdle = false,
-          fileMutating = false,
-          generationScoped = false,
-        ),
-    )
+class AgentPlanStrategy :
+  PhaseStrategy(),
+  PhaseResumeCapability by AgentPlanResume {
+  private val policies: Map<String, PhaseStepPolicy> = AGENT_PLAN_POLICIES
 
   override val slot: PhaseSlot = PhaseSlot.PLAN
   override val strategyId: String = ID
@@ -72,11 +65,6 @@ class AgentPlanStrategy : PhaseStrategy() {
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
     return PhaseStepDescriptor(PhaseBindingFamily.PlanningAgent, PlanStepHooks) { run, state -> runPlan(run, state) }
-  }
-
-  override fun resumeRules(stepId: String): PhaseResumeRules {
-    policies.policyOf(stepId)
-    return PlanResumeRules
   }
 
   internal object PlanStepHooks : PhaseStepHooks<PhasePlanningAgentStepBinding> {
@@ -229,5 +217,24 @@ class AgentPlanStrategy : PhaseStrategy() {
           skipped: false
       ```
       """.trimIndent()
+  }
+}
+
+private val AGENT_PLAN_POLICIES: Map<String, PhaseStepPolicy> =
+  mapOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
+      PhaseStepPolicy(
+        mutating = false,
+        singleAgentSession = false,
+        readOnlyIdle = false,
+        fileMutating = false,
+        generationScoped = false,
+      ),
+  )
+
+private object AgentPlanResume : PhaseResumeCapability {
+  override fun resumeRules(stepId: String): PhaseResumeRules {
+    AGENT_PLAN_POLICIES.policyOf(stepId)
+    return AgentPlanStrategy.PlanResumeRules
   }
 }
