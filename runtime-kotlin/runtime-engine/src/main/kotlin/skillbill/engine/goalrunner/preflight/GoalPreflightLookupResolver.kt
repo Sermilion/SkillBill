@@ -26,7 +26,6 @@ class GoalPreflightLookupResolver(
         resumableResult(input.lookup, input.normalizedIssueKey, input.manifestState, input.request, input.root)
       is FeatureTaskContinuationLookupResult.AlreadyRunning ->
         alreadyRunningResult(input.lookup, input.normalizedIssueKey)
-      is FeatureTaskContinuationLookupResult.Ambiguous -> ambiguousResult(input.lookup, input.normalizedIssueKey)
       is FeatureTaskContinuationLookupResult.TerminalOnly -> terminalOnlyResult(input.lookup, input.normalizedIssueKey)
       is FeatureTaskContinuationLookupResult.GoalContinuation ->
         goalContinuationResult(
@@ -89,16 +88,6 @@ class GoalPreflightLookupResolver(
       verdict = "already_running",
       issueKey = issueKey,
       candidate = lookup.candidate,
-    )
-
-  private fun ambiguousResult(
-    lookup: FeatureTaskContinuationLookupResult.Ambiguous,
-    issueKey: String,
-  ): GoalPreflightResult =
-    GoalPreflightResult(
-      verdict = "ambiguous",
-      issueKey = issueKey,
-      candidates = lookup.candidates,
     )
 
   private fun terminalOnlyResult(

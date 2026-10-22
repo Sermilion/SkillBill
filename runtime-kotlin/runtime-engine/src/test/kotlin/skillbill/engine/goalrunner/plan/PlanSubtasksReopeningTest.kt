@@ -77,8 +77,11 @@ class PlanSubtasksReopeningTest {
       assertTrue(reopening.reopenAtPlanSubtasks(selectedId))
 
       val identity = execution.identity(selectedId)
-      assertIs<FeatureTaskContinuationLookupResult.Ambiguous>(
-        lookup.lookup(identity.normalizedIssueKey, identity.repositoryIdentity, null),
+      assertEquals(
+        selectedId,
+        assertIs<FeatureTaskContinuationLookupResult.Resumable>(
+          lookup.lookup(identity.normalizedIssueKey, identity.repositoryIdentity, null),
+        ).candidate.workflowId,
       )
       val candidate =
         assertIs<FeatureTaskContinuationLookupResult.Resumable>(

@@ -167,7 +167,7 @@ class StandalonePlanRun(
   ): StandalonePlanResult {
     val intake = suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) }
     val identity = repositories.repositoryIdentity(repoRoot)
-    val found = planLookup.lookupAfterCrashRecovery(issueKey, identity)
+    val found = planLookup.lookupAfterCrashRecovery(issueKey, identity).forLaunchedSpec(issueKey, intake, repoRoot)
     if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
       if (found is FeatureTaskContinuationLookupResult.Resumable) {
         return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
@@ -182,11 +182,6 @@ class StandalonePlanRun(
           statusPublisher,
           "Plan workflow '${found.candidate.workflowId}' for $issueKey is already running.",
           found.candidate.workflowId,
-        )
-      is FeatureTaskContinuationLookupResult.Ambiguous ->
-        refused(
-          statusPublisher,
-          "Several plan workflows exist for $issueKey: ${found.candidates.joinToString { it.workflowId }}.",
         )
       is FeatureTaskContinuationLookupResult.NeedsIdentityRepair ->
         refused(statusPublisher, found.summary, found.workflowId)
@@ -212,6 +207,8 @@ class StandalonePlanRun(
               ?.takeIf { it.hasPlanSubtasksStep() }
               ?.let { id to it.artifacts.decomposeTerminal() }
           }
+      }?.takeIf { (_, terminal) ->
+        terminal == null || isLaunchedSpec(terminal.parentSpecPath, issueKey, intake, repoRoot)
       }
     if (completed == null) return open(issueKey, intake, repoRoot, inputFor, statusPublisher)
     val (id, terminal) = completed
@@ -354,6 +351,35 @@ class StandalonePlanRun(
       is StandalonePlanResult.Refused -> statusSink?.settleBlocked(result.reason, result.workflowId)
     }
     return result
+  }
+
+  private fun FeatureTaskContinuationLookupResult.forLaunchedSpec(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): FeatureTaskContinuationLookupResult {
+    val candidate =
+      when (this) {
+        is FeatureTaskContinuationLookupResult.Resumable -> candidate
+        is FeatureTaskContinuationLookupResult.AlreadyRunning -> candidate
+        else -> return this
+      }
+    return if (isLaunchedSpec(candidate.governedSpecPath, issueKey, intake, repoRoot)) {
+      this
+    } else {
+      FeatureTaskContinuationLookupResult.NoMatch
+    }
+  }
+
+  private fun isLaunchedSpec(
+    governedSpecPath: String,
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): Boolean {
+    val root = repoRoot.toAbsolutePath().normalize()
+    val launched = root.resolve(intakePreparation.resolvePlanSpec(issueKey, intake, repoRoot).specPath).normalize()
+    return launched == root.resolve(governedSpecPath).normalize()
   }
 
   private fun isKeyResolvedSpec(

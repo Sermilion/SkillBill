@@ -151,3 +151,11 @@ Context: Scoped replan discarded selected planning details through an ordinary u
 Decision: Mark the selected bundle update as an accepted snapshot mutation and persist it through the existing named save. Keep the plan workflow's terminal status, finished time, steps and sibling planning details unchanged. The existing scoped-replan coordinator continues to enforce target selection and idle ownership before this transaction.
 
 Reason: Operator replan is an explicit mutation of retained planning, not an ordinary terminal replay. Reuse the existing operator mutation contract without changing terminal replay guards or giving ordinary saves permission to overwrite accepted history. A SQLite regression verifies both the authorized update and rejection of an ordinary terminal rewrite.
+
+## [2026-10-22] The latest run for an issue key is the actual run
+
+Context: SKILL-437 was first used for an inline-review plan whose bundle was later renamed to SKILL-439. Its unfinished plan workflow kept the key. A new, unrelated SKILL-437 bundle then launched, the lookup resumed the old plan, and the run failed at once because that plan's spec path no longer existed. The lookup also refused any key with more than one unfinished workflow as ambiguous.
+
+Decision: Continuation lookup classifies only the latest workflow for a key and repository: terminal gives `TerminalOnly`, running gives `AlreadyRunning`, anything else gives `Resumable`. The `Ambiguous` result, the `ambiguous` preflight verdict and the `ambiguous` CLI lookup result are removed. A plan run resumes a found plan, or settles from a completed one, only when that plan governs the spec this launch resolves. Otherwise it opens a new plan workflow for the launched spec, which then becomes the latest run. Goal planning progress reads the plan workflow that started last, not the one updated last, so touching an old run cannot shadow the new one.
+
+Reason: Keys are reused for unrelated specs. A run belongs to the spec it governs, and the newest run for a key is the one the operator means.

@@ -298,18 +298,12 @@ class FeatureTaskContinuationLookupService(
   ): Nothing = throw invalidFeatureTaskExecutionIdentitySchema(candidate.workflow.workflowId, reason)
 
   private fun classify(candidates: List<FeatureTaskContinuationCandidate>): FeatureTaskContinuationLookupResult {
-    if (candidates.isEmpty()) return FeatureTaskContinuationLookupResult.NoMatch
-    val eligible = candidates.filterNot { it.status.workflowStatus() in TERMINAL_STATUSES }
-    if (eligible.size > 1) return FeatureTaskContinuationLookupResult.Ambiguous(candidates)
-    if (eligible.size == 1) {
-      val candidate = eligible.single()
-      return if (candidate.status.workflowStatus() == WorkflowStatus.RUNNING) {
-        FeatureTaskContinuationLookupResult.AlreadyRunning(candidate)
-      } else {
-        FeatureTaskContinuationLookupResult.Resumable(candidate)
-      }
+    val latest = candidates.lastOrNull() ?: return FeatureTaskContinuationLookupResult.NoMatch
+    return when (latest.status.workflowStatus()) {
+      in TERMINAL_STATUSES -> FeatureTaskContinuationLookupResult.TerminalOnly(candidates)
+      WorkflowStatus.RUNNING -> FeatureTaskContinuationLookupResult.AlreadyRunning(latest)
+      else -> FeatureTaskContinuationLookupResult.Resumable(latest)
     }
-    return FeatureTaskContinuationLookupResult.TerminalOnly(candidates)
   }
 
   private companion object {
