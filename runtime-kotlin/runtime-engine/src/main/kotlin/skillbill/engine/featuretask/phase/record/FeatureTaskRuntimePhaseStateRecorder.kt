@@ -48,7 +48,6 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceR
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
-import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
@@ -58,6 +57,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import java.security.MessageDigest
 import java.time.Clock

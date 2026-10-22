@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.review.goal
 
-import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
@@ -36,12 +35,12 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
-import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import java.time.Clock
 
 class FeatureTaskRuntimeGoalReviewCompletionRecorder(

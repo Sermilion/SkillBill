@@ -44,12 +44,12 @@ subtasks:
 - id: 3
   name: "Typed incident recovery"
   spec_path: ".feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec_subtask_3_typed-incident-recovery.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-160635-ey2m"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

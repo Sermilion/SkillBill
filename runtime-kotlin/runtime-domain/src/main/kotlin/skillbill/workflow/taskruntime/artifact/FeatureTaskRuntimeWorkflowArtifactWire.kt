@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeRepairReceipt
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
@@ -28,9 +29,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_REASON_KEY
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY
-import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY
-import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
@@ -84,9 +83,15 @@ fun FeatureTaskRuntimeOperatorBlockRetry.asWorkflowArtifactEntry(
       FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY to retriedAt,
       FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_REASON_KEY to previousBlockedReason,
       FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY to reopenedPhaseIds,
-      FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY to recoveryAttemptId,
-      FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY to preserveBudget,
-    ),
+    ) +
+      if (preserveBudget) {
+        mapOf(
+          FeatureTaskRuntimePhasePayloadKeys.RECOVERY_ATTEMPT_ID to recoveryAttemptId,
+          FeatureTaskRuntimePhasePayloadKeys.PRESERVE_BUDGET to preserveBudget,
+        )
+      } else {
+        emptyMap()
+      },
   )
 
 fun goalContinuationFieldAdoptionFromWorkflowArtifacts(

@@ -1,8 +1,8 @@
 package skillbill.ports.blockincident
 
+import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryFailure
 import java.time.Instant
 
 class InMemoryBlockIncidentRecoveryRepository : BlockIncidentRecoveryRepository {
@@ -18,34 +18,29 @@ class InMemoryBlockIncidentRecoveryRepository : BlockIncidentRecoveryRepository 
   }
 
   @Synchronized
-  override fun transition(
-    attemptId: String,
-    expectedStatus: BlockIncidentRecoveryAttemptStatus,
-    newStatus: BlockIncidentRecoveryAttemptStatus,
-    failure: BlockIncidentRecoveryFailure?,
-    ownerToken: String?,
-    ownerGeneration: Long?,
-    ownerExpiresAt: Instant?,
-    now: Instant,
-  ): Boolean {
-    val current = attempts[attemptId] ?: return false
-    if (current.status != expectedStatus || !expectedStatus.canMoveTo(newStatus)) return false
-    if (current.status in BlockIncidentRecoveryAttemptStatus.OWNED && current.ownerToken != ownerToken) return false
-    attempts[attemptId] =
+  override fun transition(change: BlockIncidentRecoveryTransition): Boolean {
+    val current = attempts[change.attemptId] ?: return false
+    if (current.status != change.expectedStatus || !change.expectedStatus.canMoveTo(change.newStatus)) return false
+    if (current.status in BlockIncidentRecoveryAttemptStatus.OWNED && current.ownerToken != change.ownerToken) {
+      return false
+    }
+    attempts[change.attemptId] =
       current.copy(
-        status = newStatus,
-        failure = failure,
-        ownerToken = ownerToken.takeIf { ownerExpiresAt != null },
-        ownerGeneration = ownerGeneration.takeIf { ownerExpiresAt != null },
-        ownerExpiresAt = ownerExpiresAt,
-        updatedAt = now,
+        status = change.newStatus,
+        failure = change.failure,
+        ownerToken = change.ownerToken.takeIf { change.ownerExpiresAt != null },
+        ownerGeneration = change.ownerGeneration.takeIf { change.ownerExpiresAt != null },
+        ownerExpiresAt = change.ownerExpiresAt,
+        updatedAt = change.now,
       )
     return true
   }
 
   @Synchronized
   override fun inProgress(token: String): BlockIncidentRecoveryAttempt? =
-    attempts.values.filter { it.occurrenceToken == token && it.status in BlockIncidentRecoveryAttemptStatus.IN_PROGRESS }
+    attempts.values.filter {
+      it.occurrenceToken == token && it.status in BlockIncidentRecoveryAttemptStatus.IN_PROGRESS
+    }
       .maxByOrNull { it.requestedAt }
 
   @Synchronized
@@ -61,7 +56,10 @@ class InMemoryBlockIncidentRecoveryRepository : BlockIncidentRecoveryRepository 
     attempts.values.filter { it.occurrenceToken == token }.sortedByDescending { it.requestedAt }.take(HISTORY_LIMIT)
 
   @Synchronized
-  override fun interrupted(now: Instant, limit: Int): List<BlockIncidentRecoveryAttempt> {
+  override fun interrupted(
+    now: Instant,
+    limit: Int,
+  ): List<BlockIncidentRecoveryAttempt> {
     require(limit in 1..MAX_INTERRUPTED)
     return attempts.values.filter {
       it.status in BlockIncidentRecoveryAttemptStatus.OWNED && it.ownerExpiresAt?.isBefore(now) == true

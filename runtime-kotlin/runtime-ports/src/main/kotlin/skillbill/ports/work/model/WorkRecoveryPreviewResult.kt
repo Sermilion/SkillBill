@@ -1,4 +1,4 @@
-package skillbill.engine.work.control.model
+package skillbill.ports.work.model
 
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryFailure
@@ -25,5 +25,5 @@ sealed interface WorkRecoveryPreviewResult {
     val failure: BlockIncidentRecoveryFailure?,
   ) : WorkRecoveryPreviewResult
 
-  data class Rejected(val reason: WorkControlRejection, val detail: String? = null) : WorkRecoveryPreviewResult
+  data class Rejected(val reason: String, val detail: String? = null) : WorkRecoveryPreviewResult
 }

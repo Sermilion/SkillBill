@@ -1,3 +1,16 @@
+## [2026-10-23] SKILL-435 subtask 3: typed, fenced, user-initiated incident recovery
+Areas: runtime-engine diagnostics/block, featuretask, goalrunner and work/control; runtime-domain blockincident and phase ledger; runtime-ports; runtime-infra/sqlite; runtime-contracts; runtime-core; runtime-cli; desktop-tray runtime adapter; docs
+- MEDIUM feature. Added a pure eligibility policy and read-only preview with prerequisite instructions. Recovery rejects stale revisions, changed generations, live or unverifiable owners, exhausted budgets, operator decisions and gate failures.
+- Added durable recovery attempts with SHA-256 idempotency keys, owner-fenced transitions and saved launch targets. Migration 78 adds the attempt table and desktop revision triggers; DesktopReadSchema is 78.
+- Recovery applies only typed catalog actions through goal and standalone reopen primitives, verifies the blocked phase cleared and records failures without replacing occurrence or diagnosis evidence.
+- Resume claims APPLIED to RESUMING before launching the saved goal or standalone invocation through WorkRunActions. Repeated requests reuse the attempt; interrupted reconciliation never reapplies actions or launches work.
+- Added work recover preview/apply commands, typed work-control ports and results, JSON status and rejection output, command documentation and desktop result mapping.
+- Phase-ledger retention preserves retry and settlement anchors. Recovery retry metadata preserves attempt budgets, completed phases, mandates and checkpoints across resume. reusable
+- The durable attempt repository and pure eligibility policy support later reporting and presentation work. reusable
+- Limits: recovery requires user activation; unsupported prerequisite probes remain unmet. Resume failure leaves normal launch available. Reporting, telemetry and recovery presentation remain later-subtask work; block-incident-schema.yaml stays at 0.2.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-22] SKILL-435 subtask 2: structured diagnosis and evidence-based investigation
 Areas: runtime-engine diagnostics/block, featuretask and goalrunner; runtime-domain blockincident and validation; runtime-contracts; runtime-ports; runtime-infra/sqlite and workflow validation; runtime-core; runtime-mcp; orchestration/contracts; docs
 - MEDIUM feature. Replaced the default investigator with bounded saved-record evidence collection, deterministic classification and optional agent enrichment. Diagnosis records include uncertainty, prerequisites, proposed recovery effects and explicit degradations.

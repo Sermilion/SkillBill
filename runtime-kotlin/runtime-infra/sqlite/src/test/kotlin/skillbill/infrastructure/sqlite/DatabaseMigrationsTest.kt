@@ -65,6 +65,7 @@ class DatabaseMigrationsTest {
               "ORDER BY name = 'block_incidents'",
           ).use { rows -> generateSequence { if (rows.next()) rows.getString(1) else null }.toList() }
         blockIncidentTables.forEach { table -> statement.execute("DROP TABLE $table") }
+        statement.execute("DROP TABLE feature_task_runtime_worker_generations")
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 66")
         statement.execute("PRAGMA user_version = 65")
       }
@@ -178,11 +179,35 @@ class DatabaseMigrationsTest {
       assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents WHERE occurrence_token = '$token'"))
       assertEquals(
         1,
-        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-recovery-existing'"),
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-recovery-existing'",
+        ),
       )
-      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM sqlite_master WHERE name = 'block_incident_recovery_attempts'"))
-      assertEquals(2, scalarInt(connection, "SELECT count(*) FROM pragma_index_list('block_incident_recovery_attempts') WHERE \"unique\" = 1"))
-      assertEquals(6, scalarInt(connection, "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'block_incident_recovery_attempts'"))
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master " +
+            "WHERE name = 'block_incident_recovery_attempts'",
+        ),
+      )
+      assertEquals(
+        2,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM pragma_index_list('block_incident_recovery_attempts') " +
+            "WHERE \"unique\" = 1",
+        ),
+      )
+      assertEquals(
+        3,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' " +
+            "AND tbl_name = 'block_incident_recovery_attempts'",
+        ),
+      )
     }
   }
 

@@ -145,18 +145,13 @@ class FeatureTaskRuntimeWorkerCoordinator(
             ?: throw invalidWorkflowStateSchemaError(
               "Feature-task runtime worker workflow '$workflowId' disappeared during admission.",
             )
+        val admittedSnapshot = admittedRow.toSnapshot()
         val priorGeneration =
           maxOf(
             unitOfWork.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.generation ?: 0L,
-            BlockIncidentIdentity.fromArtifacts(admittedRow.artifacts)?.generation ?: 0L,
+            BlockIncidentIdentity.fromArtifacts(admittedSnapshot.artifacts)?.generation ?: 0L,
           )
-        val currentPhaseAttempt =
-          admittedRow.steps.firstOrNull { it.stepId == admittedRow.currentStepId }
-            ?.attemptCount
-            ?.coerceAtLeast(1)
-            ?: throw invalidWorkflowStateSchemaError(
-              "Feature-task runtime worker workflow '$workflowId' has no current phase attempt.",
-            )
+        val currentPhaseAttempt = currentPhaseAttempt(admittedSnapshot)
         val ownership =
           newOwnership(
             workflowId,
@@ -165,7 +160,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
             phaseAttempt = currentPhaseAttempt,
           )
         if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, admittedRow.updatedAt)) {
-          UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedRow.toSnapshot()))
+          UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedSnapshot))
         } else {
           UnownedClaim.Lost(execution)
         }
@@ -176,6 +171,12 @@ class FeatureTaskRuntimeWorkerCoordinator(
       receipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
     }
   }
+
+  private fun currentPhaseAttempt(snapshot: WorkflowStateSnapshot): Int =
+    snapshot.step(snapshot.currentStepId)?.attemptCount?.coerceAtLeast(1)
+      ?: throw invalidWorkflowStateSchemaError(
+        "Feature-task runtime worker workflow '${snapshot.workflowId}' has no current phase attempt.",
+      )
 
   private fun recoverOwned(
     existing: FeatureTaskRuntimeWorkerOwnership,
@@ -295,7 +296,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
         transferReceipt = execution.migrationReceipt
         val admittedSnapshot = requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, existing.workflowId))
         val currentPhaseAttempt =
-          admittedSnapshot.steps.firstOrNull { step -> step.stepId == admittedSnapshot.currentStepId }
+          admittedSnapshot.step(admittedSnapshot.currentStepId)
             ?.attemptCount
             ?.coerceAtLeast(1)
             ?: throw invalidWorkflowStateSchemaError(

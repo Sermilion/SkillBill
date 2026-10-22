@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.bestEffort
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
@@ -20,10 +21,6 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryF
 import java.time.Clock
 import java.time.Instant
 
-/**
- * Settles recovery attempts whose APPLYING or RESUMING owner lease expired before the attempt reached a terminal
- * status. It only reads workflow, worker, and lease state; it never reruns an action or launches a worker.
- */
 @Inject
 class BlockIncidentRecoveryInterruptedReconciliation(
   private val database: DatabaseSessionFactory,
@@ -31,11 +28,6 @@ class BlockIncidentRecoveryInterruptedReconciliation(
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  /**
-   * Settles up to [limit] expired attempts, each in its own transaction, and returns how many it settled. An
-   * attempt whose block is cleared and whose run is active or completed moves forward (APPLYING to APPLIED,
-   * RESUMING to RESUMED); any other attempt fails as INTERRUPTED. A row another owner changed meanwhile is skipped.
-   */
   fun reconcile(limit: Int = RECONCILE_BATCH): Int {
     val batch = limit.coerceIn(1, MAX_BATCH)
     val interrupted =
@@ -52,33 +44,37 @@ class BlockIncidentRecoveryInterruptedReconciliation(
     }
   }
 
-  private fun settle(unit: UnitOfWork, observed: BlockIncidentRecoveryAttempt, now: Instant): Boolean {
-    val stored = unit.blockIncidentRecoveries.byIdempotencyKey(observed.idempotencyKey)
-      ?.takeIf { it.isStillInterrupted(observed, now) }
-      ?: return false
+  private fun settle(
+    unit: UnitOfWork,
+    observed: BlockIncidentRecoveryAttempt,
+    now: Instant,
+  ): Boolean {
+    val stored =
+      unit.blockIncidentRecoveries.byIdempotencyKey(observed.idempotencyKey)
+        ?.takeIf { it.isStillInterrupted(observed, now) }
+        ?: return false
     val incident = unit.blockIncidents.find(stored.occurrenceToken)
-    val progressed = incident != null && blockCleared(unit, incident) && runActiveOrCompleted(unit, incident, stored, now)
-    val next = when {
-      !progressed -> BlockIncidentRecoveryAttemptStatus.FAILED
-      stored.status == BlockIncidentRecoveryAttemptStatus.APPLYING -> BlockIncidentRecoveryAttemptStatus.APPLIED
-      else -> BlockIncidentRecoveryAttemptStatus.RESUMED
-    }
-    val moved = unit.blockIncidentRecoveries.transition(
-      stored.attemptId,
-      stored.status,
-      next,
-      if (progressed) null else BlockIncidentRecoveryFailure.INTERRUPTED,
-      stored.ownerToken,
-      stored.ownerGeneration,
-      if (next == BlockIncidentRecoveryAttemptStatus.APPLIED) stored.ownerExpiresAt else null,
-      now,
-    )
+    val next = interruptedStatus(unit, incident, stored, now)
+    val moved =
+      unit.blockIncidentRecoveries.transition(
+        BlockIncidentRecoveryTransition(
+          stored.attemptId,
+          stored.status,
+          next,
+          if (next == BlockIncidentRecoveryAttemptStatus.FAILED) BlockIncidentRecoveryFailure.INTERRUPTED else null,
+          stored.ownerToken,
+          stored.ownerGeneration,
+          if (next == BlockIncidentRecoveryAttemptStatus.APPLIED) stored.ownerExpiresAt else null,
+          now,
+        ),
+      )
     if (!moved) return false
-    val outcome = when (next) {
-      BlockIncidentRecoveryAttemptStatus.FAILED -> BlockIncidentRecovery.FAILED
-      BlockIncidentRecoveryAttemptStatus.RESUMED -> BlockIncidentRecovery.COMPLETE
-      else -> null
-    }
+    val outcome =
+      when (next) {
+        BlockIncidentRecoveryAttemptStatus.FAILED -> BlockIncidentRecovery.FAILED
+        BlockIncidentRecoveryAttemptStatus.RESUMED -> BlockIncidentRecovery.COMPLETE
+        else -> null
+      }
     if (incident != null && outcome != null) recordBlockIncidentRecoveryOutcome(unit, incident, outcome)
     RuntimeDiagnosticsBestEffortWarning.record(
       diagnostics,
@@ -89,6 +85,19 @@ class BlockIncidentRecoveryInterruptedReconciliation(
     return true
   }
 
+  private fun interruptedStatus(
+    unit: UnitOfWork,
+    incident: BlockIncident?,
+    attempt: BlockIncidentRecoveryAttempt,
+    now: Instant,
+  ): BlockIncidentRecoveryAttemptStatus =
+    when {
+      incident == null || !blockCleared(unit, incident) || !runActiveOrCompleted(unit, incident, attempt, now) ->
+        BlockIncidentRecoveryAttemptStatus.FAILED
+      attempt.status == BlockIncidentRecoveryAttemptStatus.APPLYING -> BlockIncidentRecoveryAttemptStatus.APPLIED
+      else -> BlockIncidentRecoveryAttemptStatus.RESUMED
+    }
+
   private fun BlockIncidentRecoveryAttempt.isStillInterrupted(
     observed: BlockIncidentRecoveryAttempt,
     now: Instant,
@@ -98,22 +107,25 @@ class BlockIncidentRecoveryInterruptedReconciliation(
       ownerToken == observed.ownerToken &&
       ownerExpiresAt?.isBefore(now) == true
 
-  /** The incident workflow, its blocked phase step, and the phase record all left BLOCKED. */
-  private fun blockCleared(unit: UnitOfWork, incident: BlockIncident): Boolean {
+  private fun blockCleared(
+    unit: UnitOfWork,
+    incident: BlockIncident,
+  ): Boolean {
     val workflowId = incident.occurrence.workflowId ?: return false
     val phaseId = incident.occurrence.phaseId ?: return false
-    val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
-    if (workflow.workflowStatus == WorkflowStatus.BLOCKED) return false
-    val step = workflow.steps.firstOrNull { it.stepId == phaseId } ?: return false
-    val phase = decodePhaseRecords(workflow.artifacts)[phaseId] ?: return false
-    return step.status != WorkflowStepStatus.BLOCKED && phase.status != WorkflowStepStatus.BLOCKED
+    val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+    val step = workflow?.steps?.firstOrNull { it.stepId == phaseId }
+    val phase = workflow?.let { decodePhaseRecords(it.artifacts)[phaseId] }
+    return workflow != null && workflow.workflowStatus != WorkflowStatus.BLOCKED &&
+      phaseCleared(step?.status, phase?.status)
   }
 
-  /**
-   * The recovered run either finished or still has a live owner: a completed workflow, a worker generation newer
-   * than the one the attempt verified, a running unexpired worker, an unexpired goal execution lease, or an
-   * unexpired standalone invocation lease.
-   */
+  private fun phaseCleared(
+    step: WorkflowStepStatus?,
+    phase: WorkflowStepStatus?,
+  ): Boolean =
+    step != null && phase != null && step != WorkflowStepStatus.BLOCKED && phase != WorkflowStepStatus.BLOCKED
+
   private fun runActiveOrCompleted(
     unit: UnitOfWork,
     incident: BlockIncident,
@@ -121,24 +133,35 @@ class BlockIncidentRecoveryInterruptedReconciliation(
     now: Instant,
   ): Boolean {
     val workflowIds = listOfNotNull(incident.occurrence.workflowId, attempt.targetWorkflowId).distinct()
-    val completed = workflowIds.any {
-      unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it)?.workflowStatus == WorkflowStatus.COMPLETED
-    }
-    val newerGeneration = attempt.ownerGeneration?.let { verified ->
-      workflowIds.any { (unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(it)?.generation ?: 0L) > verified }
-    } == true
-    val liveWorker = workflowIds.any { workflowId ->
-      unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)?.let { ownership ->
-        ownership.expiresAtInstant.isAfter(now) &&
-          workerSupervisor.inspect(ownership) != FeatureTaskRuntimeProcessInspection.NotRunning
+    val completed =
+      workflowIds.any {
+        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it)?.workflowStatus == WorkflowStatus.COMPLETED
+      }
+    val newerGeneration =
+      attempt.ownerGeneration?.let { verified ->
+        workflowIds.any {
+          (
+            unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(
+              it,
+            )?.generation ?: 0L
+          ) > verified
+        }
       } == true
-    }
-    val liveGoalLease = workflowIds.any {
-      unit.goalRunnerControls.controlState(it).executionLease?.expiresAtInstant?.isAfter(now) == true
-    }
-    val liveInvocation = attempt.targetInvocationId?.let {
-      unit.standalonePhaseStatuses.readByInvocation(it)?.leaseExpiresAt?.isAfter(now)
-    } == true
+    val liveWorker =
+      workflowIds.any { workflowId ->
+        unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)?.let { ownership ->
+          ownership.expiresAtInstant.isAfter(now) &&
+            workerSupervisor.inspect(ownership) != FeatureTaskRuntimeProcessInspection.NotRunning
+        } == true
+      }
+    val liveGoalLease =
+      workflowIds.any {
+        unit.goalRunnerControls.controlState(it).executionLease?.expiresAtInstant?.isAfter(now) == true
+      }
+    val liveInvocation =
+      attempt.targetInvocationId?.let {
+        unit.standalonePhaseStatuses.readByInvocation(it)?.leaseExpiresAt?.isAfter(now)
+      } == true
     return completed || newerGeneration || liveWorker || liveGoalLease || liveInvocation
   }
 

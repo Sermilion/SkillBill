@@ -137,6 +137,7 @@ import skillbill.ports.diff.DiffResolverPortDefaults
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -176,7 +177,6 @@ import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.ports.work.EmptyWorkListRepository
-import skillbill.ports.workflow.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults

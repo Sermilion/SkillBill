@@ -46,7 +46,7 @@ class WorkflowGoalRunnerBlockWritesTest {
   private val engine = WorkflowEngine()
   private val workflows = InMemoryWorkflowStates()
   private val incidents = InMemoryBlockIncidentRepository(clock)
-  private val writes = WorkflowGoalRunnerBlockWrites(engine, clock)
+  private val writes = WorkflowGoalRunnerBlockWrites(clock)
 
   @Test
   fun `parent retains the causal phase incident after worker release and child advancement`() {

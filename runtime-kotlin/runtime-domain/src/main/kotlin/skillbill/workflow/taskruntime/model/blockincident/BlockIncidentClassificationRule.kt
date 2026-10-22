@@ -144,7 +144,6 @@ private val RUNTIME_DEFECT_FAILURE_CODES =
     FeatureTaskRuntimeFailureCode.UNSUPPORTED_EXECUTION_PLAN_VERSION.label(),
   )
 
-// Attempt-budget and loop-cap blocks name the exhausted limit, not a fault in the user's environment.
 private val ATTEMPT_LIMIT_FAILURE_CODES =
   setOf(
     FeatureTaskRuntimeFailureCode.PHASE_ATTEMPT_BUDGET_EXHAUSTED.label(),

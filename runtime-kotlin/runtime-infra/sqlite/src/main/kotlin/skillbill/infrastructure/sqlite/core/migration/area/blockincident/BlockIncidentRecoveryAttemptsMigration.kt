@@ -29,10 +29,12 @@ internal object BlockIncidentRecoveryAttemptsMigration {
         """.trimIndent(),
       )
       statement.execute(
-        "CREATE INDEX idx_block_incident_recovery_occurrence ON block_incident_recovery_attempts(occurrence_token, status)",
+        "CREATE INDEX idx_block_incident_recovery_occurrence " +
+          "ON block_incident_recovery_attempts(occurrence_token, status)",
       )
       statement.execute(
-        "CREATE INDEX idx_block_incident_recovery_interrupted ON block_incident_recovery_attempts(status, owner_expires_at)",
+        "CREATE INDEX idx_block_incident_recovery_interrupted " +
+          "ON block_incident_recovery_attempts(status, owner_expires_at)",
       )
     }
     addBlockIncidentRecoveryRevisionTriggers(connection)

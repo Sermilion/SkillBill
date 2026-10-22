@@ -9,13 +9,15 @@ import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
-import skillbill.engine.work.control.model.WorkRecoveryPreviewResult
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.work.WorkIncidentRecoveryCommands
+import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
+import skillbill.ports.work.model.WorkRecoveryPreviewResult
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
 import java.nio.file.Path
 
@@ -27,7 +29,22 @@ class WorkControlService(
   private val cancellation: WorkCancellation,
   private val runs: WorkRunActions,
   private val recovery: WorkControlRecovery,
-) {
+) : WorkIncidentRecoveryCommands {
+  override fun preview(
+    workId: String,
+    incidentToken: String,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+  ): WorkRecoveryPreviewResult = recovery.preview(workId, incidentToken, confirmedPrerequisites)
+
+  override fun recover(
+    workId: String,
+    incidentToken: String,
+    incidentRevision: Long,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+    agentId: String?,
+  ): WorkIncidentRecoveryOutcome =
+    recovery.recover(workId, incidentToken, incidentRevision, confirmedPrerequisites, agentId)
+
   fun options(target: WorkRunTarget): WorkRunOptions? =
     database.read { unit ->
       matchingRun(status, target)?.let { runs.options(it, unit) }

@@ -1,12 +1,11 @@
 package skillbill.ports.workflow
 
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 
-interface FeatureTaskRuntimeWorkerRepository {
+interface FeatureTaskRuntimeWorkerRepository : FeatureTaskRuntimeWorkerGenerationReads {
   fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership?
-
-  fun getLatestFeatureTaskRuntimeWorkerGeneration(workflowId: String): FeatureTaskRuntimeWorkerGenerationObservation?
 
   fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -74,10 +73,7 @@ interface FeatureTaskRuntimeWorkerRepository {
   ): Boolean
 }
 
-data class FeatureTaskRuntimeWorkerGenerationObservation(
-  val workflowId: String,
-  val generation: Long,
-  val phaseId: String,
-  val phaseAttempt: Int,
-  val admittedAt: String,
-)
+/** Reads the latest admitted generation even after its worker releases ownership. */
+interface FeatureTaskRuntimeWorkerGenerationReads {
+  fun getLatestFeatureTaskRuntimeWorkerGeneration(workflowId: String): FeatureTaskRuntimeWorkerGenerationObservation?
+}

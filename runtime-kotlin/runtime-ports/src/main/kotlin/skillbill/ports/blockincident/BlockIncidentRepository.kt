@@ -33,7 +33,10 @@ interface BlockIncidentDiagnosisReads {
   fun diagnoses(occurrenceToken: String): List<BlockIncidentDiagnosisRecord>
 }
 
-interface BlockIncidentRepository : BlockIncidentRolloutReads, BlockIncidentDiagnosisReads {
+interface BlockIncidentRepository :
+  BlockIncidentRolloutReads,
+  BlockIncidentDiagnosisReads,
+  BlockIncidentRecoveryWrites {
   /** Returns the incident already associated with this alias, if one exists. */
   fun findByAlias(alias: BlockIncidentAlias): BlockIncident?
 
@@ -91,7 +94,10 @@ interface BlockIncidentRepository : BlockIncidentRolloutReads, BlockIncidentDiag
     observedOwnerToken: String?,
     observedOwnerGeneration: Long?,
   ): Boolean
+}
 
+/** Records the recovery summary without changing occurrence or diagnosis. */
+interface BlockIncidentRecoveryWrites {
   fun recordRecoveryOutcome(
     occurrenceToken: String,
     expectedRevision: Long,

@@ -5,10 +5,10 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.featuretask.model.parseFeatureTaskRuntimeWorkerLeaseInstant
-import skillbill.ports.workflow.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.workflow.FeatureTaskRuntimeWorkerRepository
 import java.sql.Connection
 import java.time.Instant
@@ -33,7 +33,9 @@ internal class FeatureTaskRuntimeWorkerStore(
     ).use { statement ->
       statement.bindAll(workflowId)
       statement.executeQuery().use { rows ->
-        if (!rows.next()) null else {
+        if (!rows.next()) {
+          null
+        } else {
           FeatureTaskRuntimeWorkerGenerationObservation(
             workflowId = workflowId,
             generation = rows.getLong("generation"),
@@ -150,7 +152,18 @@ internal class FeatureTaskRuntimeWorkerStore(
         expectedGeneration,
       )
       val transferred = statement.executeUpdate() == 1
-      if (transferred) connection.recordWorkerGeneration(ownership)
+      if (transferred) {
+        if (ownership.generation == expectedGeneration) {
+          connection.updateWorkerGenerationCoordinates(
+            ownership.workflowId,
+            ownership.generation,
+            ownership.phaseId,
+            ownership.phaseAttempt,
+          )
+        } else {
+          connection.recordWorkerGeneration(ownership)
+        }
+      }
       transferred
     }
 

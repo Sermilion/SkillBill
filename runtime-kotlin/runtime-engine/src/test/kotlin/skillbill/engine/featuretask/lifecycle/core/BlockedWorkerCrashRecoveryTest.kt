@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeS
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.OperatorBlockedPhaseReopenRequest
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.db.DatabaseSessionFactory
@@ -27,7 +28,6 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -101,13 +101,12 @@ class BlockedWorkerCrashRecoveryTest {
       }
 
       assertOtherWorkflowRemainsBlocked(reconciler, database)
-      val writes = WorkflowGoalRunnerBlockWrites(WorkflowEngine(), testHarnessClock)
+      val writes = WorkflowGoalRunnerBlockWrites(testHarnessClock)
       assertTrue(
         database.transaction { unit ->
           writes.reopenBlockedPhaseForOperatorResume(
             unit,
-            PHASE_ID,
-            "operator resume after wall-clock timeout",
+            OperatorBlockedPhaseReopenRequest(PHASE_ID, "operator resume after wall-clock timeout"),
             execution.identity(WORKFLOW_ID),
             ValidatedFeatureTaskRuntimeExecutionPlan.read(execution.encoded, execution.validator),
           )

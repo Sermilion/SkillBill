@@ -20,7 +20,10 @@ data class BlockIncidentRecoveryAttempt(
   val targetInvocationId: String?,
 ) {
   companion object {
-    fun idempotencyKey(token: String, action: BlockIncidentRecoveryAction, revision: Long): String =
-      sha256HexUtf8("$token:${action.wireValue}:$revision")
+    fun idempotencyKey(
+      token: String,
+      action: BlockIncidentRecoveryAction,
+      revision: Long,
+    ): String = sha256HexUtf8("$token:${action.wireValue}:$revision")
   }
 }

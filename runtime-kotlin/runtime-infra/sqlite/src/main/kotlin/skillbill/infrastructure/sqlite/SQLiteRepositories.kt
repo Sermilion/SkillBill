@@ -2,8 +2,8 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
-import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
+import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.goal.UnaddressedFindingsRuntime
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalStore
@@ -32,8 +32,8 @@ import skillbill.learnings.model.LearningSourceValidation
 import skillbill.learnings.model.RejectedLearningSourceOutcome
 import skillbill.learnings.model.UpdateLearningRequest
 import skillbill.ports.blockincident.BlockIncidentContractValidator
-import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
+import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics

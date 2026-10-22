@@ -8,20 +8,7 @@ object BlockIncidentRecoveryEligibility {
     diagnosis: BlockIncidentDiagnosisRecord?,
     facts: BlockIncidentRecoveryFacts,
   ): BlockIncidentRecoveryEligibilityResult {
-    val reason =
-      when {
-        diagnosis == null || diagnosisStatusUnsettled(incident.state.diagnosis) ->
-          BlockIncidentRecoveryUnavailableReason.INVESTIGATION_NOT_SETTLED
-        diagnosis.proposedRecoveryAction == BlockIncidentRecoveryAction.NONE ->
-          BlockIncidentRecoveryUnavailableReason.NO_SUPPORTED_ACTION
-        facts.workflowStatus != WorkflowStatus.BLOCKED -> BlockIncidentRecoveryUnavailableReason.NOT_BLOCKED
-        facts.currentAttempt != incident.occurrence.attempt || facts.currentGeneration != incident.occurrence.generation ->
-          BlockIncidentRecoveryUnavailableReason.GENERATION_CHANGED
-        !facts.attemptLimitRemaining -> BlockIncidentRecoveryUnavailableReason.ATTEMPT_LIMIT_REACHED
-        facts.operatorDecisionForbidsRetry -> BlockIncidentRecoveryUnavailableReason.OPERATOR_DECISION
-        facts.gateFailureCausedBlock -> BlockIncidentRecoveryUnavailableReason.QUALITY_GATE
-        else -> null
-      }
+    val reason = unavailableReason(incident, diagnosis, facts)
     if (reason != null) return BlockIncidentRecoveryEligibilityResult.Unavailable(reason)
     val unmet =
       diagnosis!!.prerequisites.filter { prerequisite ->
@@ -33,7 +20,11 @@ object BlockIncidentRecoveryEligibility {
     return BlockIncidentRecoveryEligibilityResult.Available(
       BlockIncidentRecoveryPreview(
         action.wireValue,
-        if (action == BlockIncidentRecoveryAction.REOPEN_BLOCKED_PHASE) "Reopen blocked phase" else "Retry after prerequisite",
+        if (action == BlockIncidentRecoveryAction.REOPEN_BLOCKED_PHASE) {
+          "Reopen blocked phase"
+        } else {
+          "Retry after prerequisite"
+        },
         diagnosis.recoveryEffects,
         facts.targetWorkflowId,
         facts.targetInvocationId,
@@ -42,6 +33,27 @@ object BlockIncidentRecoveryEligibility {
         incident.state.revision,
       ),
     )
+  }
+
+  private fun unavailableReason(
+    incident: BlockIncident,
+    diagnosis: BlockIncidentDiagnosisRecord?,
+    facts: BlockIncidentRecoveryFacts,
+  ): BlockIncidentRecoveryUnavailableReason? {
+    return when {
+      diagnosis == null || diagnosisStatusUnsettled(incident.state.diagnosis) ->
+        BlockIncidentRecoveryUnavailableReason.INVESTIGATION_NOT_SETTLED
+      diagnosis.proposedRecoveryAction == BlockIncidentRecoveryAction.NONE ->
+        BlockIncidentRecoveryUnavailableReason.NO_SUPPORTED_ACTION
+      facts.workflowStatus != WorkflowStatus.BLOCKED -> BlockIncidentRecoveryUnavailableReason.NOT_BLOCKED
+      facts.currentAttempt != incident.occurrence.attempt ||
+        facts.currentGeneration != incident.occurrence.generation ->
+        BlockIncidentRecoveryUnavailableReason.GENERATION_CHANGED
+      !facts.attemptLimitRemaining -> BlockIncidentRecoveryUnavailableReason.ATTEMPT_LIMIT_REACHED
+      facts.operatorDecisionForbidsRetry -> BlockIncidentRecoveryUnavailableReason.OPERATOR_DECISION
+      facts.gateFailureCausedBlock -> BlockIncidentRecoveryUnavailableReason.QUALITY_GATE
+      else -> null
+    }
   }
 
   private fun diagnosisStatusUnsettled(status: BlockIncidentDiagnosis): Boolean =
@@ -58,7 +70,11 @@ object BlockIncidentRecoveryEligibility {
 
 sealed interface BlockIncidentRecoveryEligibilityResult {
   data class Available(val preview: BlockIncidentRecoveryPreview) : BlockIncidentRecoveryEligibilityResult
-  data class NeedsPrerequisites(val instructions: List<BlockIncidentRecoveryPrerequisiteInstruction>) : BlockIncidentRecoveryEligibilityResult
+
+  data class NeedsPrerequisites(
+    val instructions: List<BlockIncidentRecoveryPrerequisiteInstruction>,
+  ) : BlockIncidentRecoveryEligibilityResult
+
   data class Unavailable(val reason: BlockIncidentRecoveryUnavailableReason) : BlockIncidentRecoveryEligibilityResult
 }
 

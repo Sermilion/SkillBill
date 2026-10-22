@@ -8,7 +8,6 @@ import skillbill.engine.featuretask.persist.acceptance.SerialRepairSqliteFixture
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
@@ -52,14 +51,13 @@ class WorkflowGoalRunnerAcceptanceRepairResumeTest {
             ),
           )
         }
-        val writes = WorkflowGoalRunnerBlockWrites(WorkflowEngine(), f.clock)
+        val writes = WorkflowGoalRunnerBlockWrites(f.clock)
 
         fun resume() =
           f.database.transaction { unit ->
             writes.reopenBlockedPhaseForOperatorResume(
               unit,
-              "audit",
-              "Operator resumed the blocked goal.",
+              OperatorBlockedPhaseReopenRequest("audit", "Operator resumed the blocked goal."),
               f.execution.identity(f.workflowId),
               ValidatedFeatureTaskRuntimeExecutionPlan.read(f.execution.encoded, f.execution.validator),
             )

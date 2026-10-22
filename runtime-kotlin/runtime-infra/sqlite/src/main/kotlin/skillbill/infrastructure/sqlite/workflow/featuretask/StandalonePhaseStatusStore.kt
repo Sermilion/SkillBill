@@ -65,7 +65,13 @@ internal class StandalonePhaseStatusStore(
     }
 
   override fun latestWorkflowExecution(workflowId: String): IdeStatusWorkflowExecution? =
-    readWorkflowExecution(workflowId)
+    connection.prepareStatement(
+      "SELECT * FROM ide_status_workflow_execution WHERE workflow_id = ? " +
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC, started_at DESC, execution_id DESC LIMIT 1",
+    ).use { statement ->
+      statement.bindAll(workflowId)
+      statement.executeQuery().use { rows -> if (rows.next()) rows.toWorkflowExecution() else null }
+    }
 
   private fun registerInTransaction(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord {
     readByInvocation(request.invocationId)?.let { return it }
@@ -306,13 +312,16 @@ internal class StandalonePhaseStatusStore(
     at: Instant,
   ): StandalonePhaseStatusUpdateResult {
     val current = readByExecution(record.executionId) ?: return StandalonePhaseStatusUpdateResult.MISSING
-    when {
-      current.statusRevision != record.statusRevision -> return StandalonePhaseStatusUpdateResult.STALE_REVISION
-      current.leaseOwner != record.leaseOwner ||
-        current.leaseGeneration != record.leaseGeneration ||
-        current.leaseExpiresAt.isAfter(at) -> return StandalonePhaseStatusUpdateResult.STALE_LEASE
-      current.lifecycleState in TERMINAL_STATES -> return StandalonePhaseStatusUpdateResult.IDEMPOTENT
-    }
+    val rejection =
+      when {
+        current.statusRevision != record.statusRevision -> StandalonePhaseStatusUpdateResult.STALE_REVISION
+        current.leaseOwner != record.leaseOwner ||
+          current.leaseGeneration != record.leaseGeneration ||
+          current.leaseExpiresAt.isAfter(at) -> StandalonePhaseStatusUpdateResult.STALE_LEASE
+        current.lifecycleState in TERMINAL_STATES -> StandalonePhaseStatusUpdateResult.IDEMPOTENT
+        else -> null
+      }
+    if (rejection != null) return rejection
     val updated =
       connection.prepareStatement(
         """
@@ -507,15 +516,6 @@ internal class StandalonePhaseStatusStore(
     return readWorkflowByExecution(request.executionId)
       ?: error("Workflow status registration was not persisted.")
   }
-
-  private fun readWorkflowExecution(workflowId: String): IdeStatusWorkflowExecution? =
-    connection.prepareStatement(
-      "SELECT * FROM ide_status_workflow_execution WHERE workflow_id = ? " +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC, started_at DESC, execution_id DESC LIMIT 1",
-    ).use { statement ->
-      statement.bindAll(workflowId)
-      statement.executeQuery().use { rows -> if (rows.next()) rows.toWorkflowExecution() else null }
-    }
 
   private fun readWorkflowByInvocation(invocationId: String): IdeStatusWorkflowExecution? =
     readWorkflowOne("invocation_id", invocationId)

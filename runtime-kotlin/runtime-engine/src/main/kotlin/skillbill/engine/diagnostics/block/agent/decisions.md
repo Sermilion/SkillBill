@@ -1,3 +1,18 @@
+## [2026-10-23] Preserve retry budgets through recovery ledger evidence
+Context: Recovery reopens a blocked goal or standalone phase without permission to bypass attempt limits or erase completed work.
+Decision: Record the admitted recovery attempt on retry metadata, preserve its budget, and retain retry and subsequent settlement anchors when bounding the phase ledger.
+Reason: Resume must reconstruct the same retry accounting after persistence and ledger trimming. Reopening a phase must not grant a fresh attempt budget or discard the evidence that controls it.
+
+## [2026-10-23] Claim resume separately from applying recovery
+Context: Repeated requests, concurrent callers and interrupted processes can observe recovery after the block clears but before launch settles.
+Decision: Apply catalog actions under database fencing, then claim APPLIED to RESUMING before launching the attempt's saved target outside the transaction. Reconciliation observes and settles interrupted work without applying or launching it.
+Reason: The idempotency key prevents duplicate actions, while a separate resume claim prevents duplicate launches. The saved target preserves the intended goal or standalone invocation even when the request names a parent work item.
+
+## [2026-10-23] Keep recovery progress in relational attempts
+Context: Recovery needs durable progress, ownership and failure detail while the incident already exposes a stable recovery summary.
+Decision: Store detailed attempts in an append-only SQLite migration with a unique incident/action/revision key. Keep the existing incident recovery enum and block-incident-schema.yaml at 0.2.
+Reason: An attempt is a relational record rather than a new contract document. Separate progress records preserve the incident summary contract and original occurrence and diagnosis while supporting retries and outcome history.
+
 ## [2026-10-22] Keep agent enrichment subordinate to typed diagnosis
 Context: Investigation consumes untrusted evidence and may use the saved run's agent, but the launcher reports no read-only enforcement fact.
 Decision: Parse exactly suspected_cause and evidence_refs, require collected references, and preserve category, prerequisites and recovery action. Every started pass records READ_ONLY_NOT_ENFORCED and yields a partial diagnosis.

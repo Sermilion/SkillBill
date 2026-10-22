@@ -77,7 +77,7 @@ class WorkflowGoalRunnerOutcomeStore
   ) : GoalRunnerWorkflowOutcomeStore,
     GoalRunnerAttemptLedgerStore {
     private val engine = WorkflowEngine()
-    private val blockWrites = WorkflowGoalRunnerBlockWrites(engine, clock)
+    private val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
     private val terminalPersistence =
       WorkflowGoalRunnerOutcomeTerminalPersistence(
         engine,
@@ -534,8 +534,7 @@ internal class WorkflowGoalRunnerBlockBridge(
     return database.transaction { unitOfWork ->
       blockWrites.reopenBlockedPhaseForOperatorResume(
         unitOfWork,
-        preferredPhaseId,
-        reason,
+        OperatorBlockedPhaseReopenRequest(preferredPhaseId, reason),
         expectedIdentity,
         expectedExecutionPlan,
       )

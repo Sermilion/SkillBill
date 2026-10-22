@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAction
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
@@ -63,32 +64,80 @@ class SqliteBlockIncidentRecoveryRepositoryTest {
     val expiresAt = requestedAt.plusSeconds(300)
     assertTrue(
       repository.transition(
-        first.attemptId, BlockIncidentRecoveryAttemptStatus.REQUESTED,
-        BlockIncidentRecoveryAttemptStatus.APPLYING, null, "owner", 1, expiresAt, requestedAt,
+        BlockIncidentRecoveryTransition(
+          first.attemptId,
+          BlockIncidentRecoveryAttemptStatus.REQUESTED,
+          BlockIncidentRecoveryAttemptStatus.APPLYING,
+          null,
+          "owner",
+          1,
+          expiresAt,
+          requestedAt,
+        ),
       ),
     )
     assertTrue(
       repository.transition(
-        first.attemptId, BlockIncidentRecoveryAttemptStatus.APPLYING,
-        BlockIncidentRecoveryAttemptStatus.APPLIED, null, "owner", 1, expiresAt, requestedAt,
+        BlockIncidentRecoveryTransition(
+          first.attemptId,
+          BlockIncidentRecoveryAttemptStatus.APPLYING,
+          BlockIncidentRecoveryAttemptStatus.APPLIED,
+          null,
+          "owner",
+          1,
+          expiresAt,
+          requestedAt,
+        ),
       ),
     )
     assertTrue(
       repository.transition(
-        first.attemptId, BlockIncidentRecoveryAttemptStatus.APPLIED,
-        BlockIncidentRecoveryAttemptStatus.RESUMING, null, "resume-owner", 1, expiresAt, requestedAt,
+        BlockIncidentRecoveryTransition(
+          first.attemptId,
+          BlockIncidentRecoveryAttemptStatus.APPLIED,
+          BlockIncidentRecoveryAttemptStatus.RESUMING,
+          null,
+          "resume-owner",
+          1,
+          expiresAt,
+          requestedAt,
+        ),
       ),
     )
+    assertResumeOwnerSettlement(repository, first, requestedAt)
+  }
+
+  private fun assertResumeOwnerSettlement(
+    repository: SqliteBlockIncidentRecoveryRepository,
+    first: BlockIncidentRecoveryAttempt,
+    requestedAt: Instant,
+  ) {
     assertFalse(
       repository.transition(
-        first.attemptId, BlockIncidentRecoveryAttemptStatus.RESUMING,
-        BlockIncidentRecoveryAttemptStatus.RESUMED, null, "other-owner", 1, null, requestedAt,
+        BlockIncidentRecoveryTransition(
+          first.attemptId,
+          BlockIncidentRecoveryAttemptStatus.RESUMING,
+          BlockIncidentRecoveryAttemptStatus.RESUMED,
+          null,
+          "other-owner",
+          1,
+          null,
+          requestedAt,
+        ),
       ),
     )
     assertTrue(
       repository.transition(
-        first.attemptId, BlockIncidentRecoveryAttemptStatus.RESUMING,
-        BlockIncidentRecoveryAttemptStatus.RESUMED, null, "resume-owner", 1, null, requestedAt,
+        BlockIncidentRecoveryTransition(
+          first.attemptId,
+          BlockIncidentRecoveryAttemptStatus.RESUMING,
+          BlockIncidentRecoveryAttemptStatus.RESUMED,
+          null,
+          "resume-owner",
+          1,
+          null,
+          requestedAt,
+        ),
       ),
     )
     val resumed = requireNotNull(repository.byIdempotencyKey(first.idempotencyKey))
@@ -104,24 +153,40 @@ class SqliteBlockIncidentRecoveryRepositoryTest {
     requestedAt: Instant,
   ) {
     val expiresAt = requestedAt.plusSeconds(300)
-    val failedAttempt = repository.insertIfAbsent(
-      attempt.copy(
-        attemptId = "bra_failed",
-        incidentRevision = 2,
-        idempotencyKey = BlockIncidentRecoveryAttempt.idempotencyKey(attempt.occurrenceToken, attempt.action, 2),
+    val failedAttempt =
+      repository.insertIfAbsent(
+        attempt.copy(
+          attemptId = "bra_failed",
+          incidentRevision = 2,
+          idempotencyKey = BlockIncidentRecoveryAttempt.idempotencyKey(attempt.occurrenceToken, attempt.action, 2),
+        ),
+      )
+    assertTrue(
+      repository.transition(
+        BlockIncidentRecoveryTransition(
+          failedAttempt.attemptId,
+          BlockIncidentRecoveryAttemptStatus.REQUESTED,
+          BlockIncidentRecoveryAttemptStatus.APPLYING,
+          null,
+          "owner",
+          1,
+          expiresAt,
+          requestedAt,
+        ),
       ),
     )
     assertTrue(
       repository.transition(
-        failedAttempt.attemptId, BlockIncidentRecoveryAttemptStatus.REQUESTED,
-        BlockIncidentRecoveryAttemptStatus.APPLYING, null, "owner", 1, expiresAt, requestedAt,
-      ),
-    )
-    assertTrue(
-      repository.transition(
-        failedAttempt.attemptId, BlockIncidentRecoveryAttemptStatus.APPLYING,
-        BlockIncidentRecoveryAttemptStatus.FAILED, BlockIncidentRecoveryFailure.ACTION_FAILED,
-        "owner", 1, null, requestedAt,
+        BlockIncidentRecoveryTransition(
+          failedAttempt.attemptId,
+          BlockIncidentRecoveryAttemptStatus.APPLYING,
+          BlockIncidentRecoveryAttemptStatus.FAILED,
+          BlockIncidentRecoveryFailure.ACTION_FAILED,
+          "owner",
+          1,
+          null,
+          requestedAt,
+        ),
       ),
     )
     val failed = requireNotNull(repository.byIdempotencyKey(failedAttempt.idempotencyKey))

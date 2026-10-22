@@ -1,8 +1,13 @@
 package skillbill.engine.work.control
 
+import skillbill.application.testDecompositionManifestValidator
+import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryActions
+import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
+import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.StubGoalManifestStore
 import skillbill.engine.work.control.model.WorkControlAction
@@ -18,12 +23,15 @@ import skillbill.engine.work.testGoalRepositoryIdentity
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -34,6 +42,7 @@ import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
 import java.nio.file.Path
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -191,21 +200,38 @@ private class GoalControlsFixture : AutoCloseable {
 
       override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
     }
+  private val runs =
+    WorkRunActions(
+      database,
+      status,
+      goals,
+      CheckedOutBranchSource(::fixtureCheckedOutBranch),
+      supervisor,
+      launcher,
+      ideStatusClock,
+    )
+  private val recovery =
+    BlockIncidentRecoveryService(
+      database,
+      ideStatusClock,
+      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+      supervisor,
+      NoopRuntimeDiagnostics,
+      IdentifierGeneratorPort { UUID.randomUUID().toString() },
+      testDecompositionManifestValidator,
+      BlockIncidentRecoveryActions(
+        WorkflowGoalRunnerBlockWrites(ideStatusClock),
+        FeatureTaskRuntimeStandaloneIncidentRecovery(ideStatusClock),
+      ),
+    )
   val service =
     WorkControlService(
       database,
       status,
       goals,
       WorkCancellation(database, status, goals, supervisor, ideStatusClock, launcher),
-      WorkRunActions(
-        database,
-        status,
-        goals,
-        CheckedOutBranchSource(::fixtureCheckedOutBranch),
-        supervisor,
-        launcher,
-        ideStatusClock,
-      ),
+      runs,
+      WorkControlRecovery(status, recovery, runs),
     )
 
   init {

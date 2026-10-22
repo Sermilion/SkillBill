@@ -14,22 +14,16 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.model.CliFormat
 import skillbill.contracts.workflow.identity.blockincident.WorkRecoverPayloadKeys
-import skillbill.engine.work.IdeStatusService
-import skillbill.engine.work.control.WorkControlService
-import skillbill.engine.work.control.model.WorkControlRejection
-import skillbill.engine.work.control.model.WorkControlResult
-import skillbill.engine.work.control.model.WorkRecoveryPreviewResult
-import skillbill.engine.work.control.model.WorkRunTarget
-import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.work.WorkIncidentRecoveryCommands
+import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
+import skillbill.ports.work.model.WorkRecoveryPreviewResult
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
-import java.nio.file.Path
 
 @Inject
 class WorkRecoverCommand(
-  private val controls: WorkControlService,
-  private val status: IdeStatusService,
+  private val controls: WorkIncidentRecoveryCommands,
   private val state: CliRunState,
 ) : DocumentedCliCommand("recover", "Preview or apply the typed recovery for a blocked work item's incident.") {
   private val id by argument("id", help = "Workflow id or standalone phase invocation id.")
@@ -42,45 +36,28 @@ class WorkRecoverCommand(
   private val agent by option("--agent", help = "Agent that runs the resumed work.")
   private val preview by option("--preview", help = "Show the recovery preview without applying it.").flag()
   private val format by option("--format", help = "Output format.")
-    .choice("json")
-    .default("json")
+    .choice("json" to CliFormat.JSON)
+    .default(CliFormat.JSON)
 
   override fun run() {
-    val target = runTarget()
-    val payload = linkedMapOf<String, Any?>(
-      WorkRecoverPayloadKeys.WORK_ID to id,
-      WorkRecoverPayloadKeys.INCIDENT_TOKEN to incident,
-    )
+    val payload =
+      linkedMapOf<String, Any?>(
+        WorkRecoverPayloadKeys.WORK_ID to id,
+        WorkRecoverPayloadKeys.INCIDENT_TOKEN to incident,
+      )
     val failed =
-      if (target == null) {
-        payload += rejectedPayload(WorkControlRejection.UNKNOWN_TARGET, null)
-        true
-      } else if (preview) {
-        previewPayload(controls.recoveryPreview(target, incident, confirmedPrerequisites.toSet()), payload)
+      if (preview) {
+        previewPayload(controls.preview(id, incident, confirmedPrerequisites.toSet()), payload)
       } else {
         val incidentRevision = revision ?: throw UsageError("--revision is required unless --preview is set.")
         payload[WorkRecoverPayloadKeys.INCIDENT_REVISION] = incidentRevision
         val result =
-          controls.recover(target, incident, incidentRevision, confirmedPrerequisites.toSet(), agent)
+          controls.recover(id, incident, incidentRevision, confirmedPrerequisites.toSet(), agent)
         payload += resultPayload(result)
-        result is WorkControlResult.Rejected ||
-          result is WorkControlResult.Recovered && result.status == BlockIncidentRecoveryAttemptStatus.FAILED
+        result is WorkIncidentRecoveryOutcome.Rejected ||
+          result is WorkIncidentRecoveryOutcome.Recovered && result.status == BlockIncidentRecoveryAttemptStatus.FAILED
       }
-    state.complete(payload, CliFormat.JSON, exitCode = if (failed) 1 else 0)
-  }
-
-  private fun runTarget(): WorkRunTarget? {
-    val item = status.detail(WorkDetailRequest(id)).item ?: return null
-    val observation = item.databaseFileObservation ?: return null
-    return WorkRunTarget(
-      id,
-      item.snapshot.repositoryIdentity,
-      Path.of(item.repositoryRoot),
-      item.snapshot.execution?.executionId,
-      item.snapshot.execution?.statusRevision,
-      item.snapshot.updatedAt,
-      observation,
-    )
+    state.complete(payload, format, exitCode = if (failed) 1 else 0)
   }
 
   private fun previewPayload(
@@ -130,9 +107,9 @@ class WorkRecoverCommand(
       WorkRecoverPayloadKeys.INCIDENT_REVISION to preview.incidentRevision,
     )
 
-  private fun resultPayload(result: WorkControlResult): Map<String, Any?> =
+  private fun resultPayload(result: WorkIncidentRecoveryOutcome): Map<String, Any?> =
     when (result) {
-      is WorkControlResult.Recovered ->
+      is WorkIncidentRecoveryOutcome.Recovered ->
         linkedMapOf(
           WorkRecoverPayloadKeys.RESULT to WorkRecoverPayloadKeys.RESULT_RECOVERED,
           WorkRecoverPayloadKeys.ATTEMPT_ID to result.attemptId,
@@ -140,8 +117,8 @@ class WorkRecoverCommand(
           WorkRecoverPayloadKeys.FAILURE to result.failure?.wireValue,
           WorkRecoverPayloadKeys.LAUNCH to result.launch?.let(::resultPayload),
         )
-      is WorkControlResult.Rejected -> rejectedPayload(result.reason, result.detail)
-      is WorkControlResult.LaunchFailed ->
+      is WorkIncidentRecoveryOutcome.Rejected -> rejectedPayload(result.reason, result.detail)
+      is WorkIncidentRecoveryOutcome.LaunchFailed ->
         linkedMapOf(
           WorkRecoverPayloadKeys.RESULT to WorkRecoverPayloadKeys.RESULT_LAUNCH_FAILED,
           WorkRecoverPayloadKeys.REASON to result.reason,
@@ -150,12 +127,12 @@ class WorkRecoverCommand(
     }
 
   private fun rejectedPayload(
-    reason: WorkControlRejection,
+    reason: String,
     detail: String?,
   ): Map<String, Any?> =
     linkedMapOf(
       WorkRecoverPayloadKeys.RESULT to WorkRecoverPayloadKeys.RESULT_REJECTED,
-      WorkRecoverPayloadKeys.REASON to reason.name.lowercase(),
+      WorkRecoverPayloadKeys.REASON to reason,
       WorkRecoverPayloadKeys.DETAIL to detail,
     )
 }

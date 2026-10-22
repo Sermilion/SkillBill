@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -150,6 +151,20 @@ class StandalonePhaseStatusEventSink(
     }
   }
 
+  private fun workerCoordinates(
+    workflowId: String,
+    blockedStepId: String,
+  ): FeatureTaskRuntimeWorkerGenerationObservation? =
+    database.read { unit ->
+      val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+      val step = workflow.step(blockedStepId) ?: return@read null
+      unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.takeIf {
+        workflow.currentStepId == blockedStepId && workflow.workflowStatus == WorkflowStatus.BLOCKED &&
+          step.status == WorkflowStepStatus.BLOCKED &&
+          step.attemptCount == it.phaseAttempt && it.phaseId == blockedStepId
+      }
+    }
+
   private fun observeBlocked(
     reason: String,
     workflowId: String?,
@@ -162,19 +177,7 @@ class StandalonePhaseStatusEventSink(
         val blockedWorkflowId = (registered?.workflowId ?: registration.workflowId)?.takeIf(String::isNotBlank)
         val blockedStepId = stepId ?: registered?.phaseId ?: registration.phaseId
         val invocationId = registered?.invocationId ?: registration.invocationId
-        val workerCoordinates =
-          blockedWorkflowId?.let { id ->
-            database.read { unit ->
-              val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id) ?: return@read null
-              val step = workflow.steps.firstOrNull { it.stepId == blockedStepId } ?: return@read null
-              val observation = unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(id) ?: return@read null
-              observation.takeIf {
-                workflow.currentStepId == blockedStepId && workflow.workflowStatus == WorkflowStatus.BLOCKED &&
-                  step.status == WorkflowStepStatus.BLOCKED && step.attemptCount == observation.phaseAttempt &&
-                  observation.phaseId == blockedStepId
-              }
-            }
-          }
+        val workerCoordinates = blockedWorkflowId?.let { workerCoordinates(it, blockedStepId) }
         BlockIncidentObservation(
           workflowId = blockedWorkflowId,
           phaseId = blockedStepId,

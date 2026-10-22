@@ -1,7 +1,7 @@
 package skillbill.ports.persistence
 
-import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
+import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.blockincident.InMemoryBlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.InMemoryBlockIncidentRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions

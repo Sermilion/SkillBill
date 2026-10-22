@@ -8,16 +8,18 @@ fun retainPhaseLedgerEvidence(
   val ordered = entries.sortedBy { it.sequenceNumber }
   if (ordered.size <= limit) return ordered
 
-  val retriesByPhase = ordered
-    .filter { it.action == FeatureTaskRuntimePhaseLedgerAction.RETRY }
-    .groupBy { it.phaseId }
-    .values
-  val retryAnchors = retriesByPhase.flatMap { retries ->
-    listOfNotNull(
-      retries.lastOrNull { it.recoveryAttemptId == null },
-      retries.lastOrNull { it.recoveryAttemptId != null && it.preserveBudget },
-    )
-  }
+  val retriesByPhase =
+    ordered
+      .filter { it.action == FeatureTaskRuntimePhaseLedgerAction.RETRY }
+      .groupBy { it.phaseId }
+      .values
+  val retryAnchors =
+    retriesByPhase.flatMap { retries ->
+      listOfNotNull(
+        retries.lastOrNull { it.recoveryAttemptId == null },
+        retries.lastOrNull { it.recoveryAttemptId != null && it.preserveBudget },
+      )
+    }
   val settlementAnchors =
     retryAnchors.mapNotNull { retry ->
       ordered.lastOrNull { entry ->
@@ -31,7 +33,8 @@ fun retainPhaseLedgerEvidence(
     "Phase ledger limit $limit cannot retain ${anchors.size} retry and settlement anchors."
   }
   val retainedSequences = anchors.mapTo(mutableSetOf()) { it.sequenceNumber }
-  val recent = ordered.asReversed().filter { it.sequenceNumber !in retainedSequences }
-    .take(limit - retainedSequences.size)
+  val recent =
+    ordered.asReversed().filter { it.sequenceNumber !in retainedSequences }
+      .take(limit - retainedSequences.size)
   return (anchors + recent).sortedBy { it.sequenceNumber }
 }

@@ -9,9 +9,10 @@ import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
-import skillbill.engine.work.control.model.WorkRecoveryPreviewResult
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.ports.idestatus.model.WorkDetailRequest
+import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
+import skillbill.ports.work.model.WorkRecoveryPreviewResult
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAction
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
@@ -26,13 +27,69 @@ class WorkControlRecovery(
   private val runs: WorkRunActions,
 ) {
   fun preview(
+    workId: String,
+    incidentToken: String,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+  ): WorkRecoveryPreviewResult {
+    val target =
+      runTarget(workId)
+        ?: return WorkRecoveryPreviewResult.Rejected(WorkControlRejection.UNKNOWN_TARGET.name.lowercase())
+    return preview(target, incidentToken, confirmedPrerequisites)
+  }
+
+  fun recover(
+    workId: String,
+    incidentToken: String,
+    incidentRevision: Long,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+    agentId: String?,
+  ): WorkIncidentRecoveryOutcome {
+    val target =
+      runTarget(workId)
+        ?: return WorkIncidentRecoveryOutcome.Rejected(WorkControlRejection.UNKNOWN_TARGET.name.lowercase(), null)
+    return commandOutcome(recover(target, incidentToken, incidentRevision, confirmedPrerequisites, agentId))
+  }
+
+  private fun runTarget(id: String): WorkRunTarget? {
+    val item = status.detail(WorkDetailRequest(id)).item ?: return null
+    val observation = item.databaseFileObservation ?: return null
+    return WorkRunTarget(
+      id,
+      item.snapshot.repositoryIdentity,
+      Path.of(item.repositoryRoot),
+      item.snapshot.execution?.executionId,
+      item.snapshot.execution?.statusRevision,
+      item.snapshot.updatedAt,
+      observation,
+    )
+  }
+
+  private fun commandOutcome(result: WorkControlResult): WorkIncidentRecoveryOutcome =
+    when (result) {
+      is WorkControlResult.Recovered ->
+        WorkIncidentRecoveryOutcome.Recovered(
+          result.attemptId,
+          result.status,
+          result.failure,
+          result.launch?.let(::commandOutcome),
+        )
+      is WorkControlResult.Rejected ->
+        WorkIncidentRecoveryOutcome.Rejected(
+          result.reason.name.lowercase(),
+          result.detail,
+        )
+      is WorkControlResult.LaunchFailed -> WorkIncidentRecoveryOutcome.LaunchFailed(result.reason)
+      else -> WorkIncidentRecoveryOutcome.Accepted
+    }
+
+  fun preview(
     target: WorkRunTarget,
     incidentToken: String,
     confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
   ): WorkRecoveryPreviewResult {
     val basis =
       recovery.requestBasis(incidentToken)
-        ?: return WorkRecoveryPreviewResult.Rejected(WorkControlRejection.NOT_FOUND)
+        ?: return WorkRecoveryPreviewResult.Rejected(WorkControlRejection.NOT_FOUND.name.lowercase())
     val result =
       recovery.preview(request(target, incidentToken, basis.incidentRevision, basis.action, confirmedPrerequisites))
     return when (result) {
@@ -41,7 +98,7 @@ class WorkControlRecovery(
         WorkRecoveryPreviewResult.NeedsPrerequisites(result.instructions, result.preview)
       is BlockIncidentRecoveryResult.Existing ->
         result.attempt.let { WorkRecoveryPreviewResult.ExistingAttempt(it.attemptId, it.status, it.failure) }
-      else -> rejection(result).let { WorkRecoveryPreviewResult.Rejected(it.reason, it.detail) }
+      else -> rejection(result).let { WorkRecoveryPreviewResult.Rejected(it.reason.name.lowercase(), it.detail) }
     }
   }
 
@@ -138,9 +195,7 @@ class WorkControlRecovery(
         item.snapshot.updatedAt,
         requested.databaseFileObservation,
       )
-    return try {
-      runs.launch(resumed, agentId)
-    } catch (failure: RuntimeException) {
+    return runCatching { runs.launch(resumed, agentId) }.getOrElse { failure ->
       if (failure is CancellationException) throw failure
       WorkControlResult.LaunchFailed(failure.message ?: failure::class.simpleName.orEmpty())
     }

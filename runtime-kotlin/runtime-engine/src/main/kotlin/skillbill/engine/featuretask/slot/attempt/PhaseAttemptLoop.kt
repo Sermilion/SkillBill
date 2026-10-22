@@ -80,37 +80,36 @@ internal object PhaseAttemptSteps {
       is RequiredPhaseWrite.Rejected -> return PhaseAttemptOnce.blockRequiredWriteRejection(this, run, start)
     }
     val operatorReopened = FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, run.phaseId)
-    val crashResumed = progress.phase(run.phaseId).resumedFromPriorProcess
     coupling.transitions.beginPhaseAttemptLaunchAfterRequiredStart(
       run.phaseId,
       operatorReopened = operatorReopened,
-      preserveAttemptBudget = session.operatorBlockRetry?.let { it.phaseId == run.phaseId && it.preserveBudget } == true,
+      preserveAttemptBudget =
+        session.operatorBlockRetry?.let {
+          it.phaseId == run.phaseId && it.preserveBudget
+        } == true,
     )
     val semanticIteration =
-      (
-        progress.fixLoopIterationFor(run.phaseId, iteration) - continuationSegmentCount - nonOutputAttempts.size
-      ).coerceAtLeast(1)
+      semanticIteration(
+        progress.fixLoopIterationFor(run.phaseId, iteration),
+        continuationSegmentCount,
+        nonOutputAttempts.size,
+      )
     stepHooks(run).onLaunch(run, launchHookContext(run, stepHooks(run)))
     observability.started(
       run.phaseId,
       agentId,
       iteration,
       run.modelDirective,
-      FeatureTaskRuntimePhaseStartReentry(
-        resumed = iteration > 1 || progress.phase(run.phaseId).hasPriorRecord,
-        startKind =
-          featureTaskRuntimeStartContinuationKind(
-            crashResumed = crashResumed,
-            verifierReentry =
-              run.reentry?.let {
-                transitions.backwardEdges
-                  .firstOrNull { edge -> edge.loopId == it.loopId }
-                  ?.destinationPhaseId == it.phaseId
-              } == true,
-            attemptCount = iteration,
-          ),
+      attemptStartReentry(
+        iteration,
+        progress.phase(run.phaseId).hasPriorRecord,
+        progress.phase(run.phaseId).resumedFromPriorProcess,
+        run.reentry?.let {
+          transitions.backwardEdges.firstOrNull { edge -> edge.loopId == it.loopId }?.destinationPhaseId == it.phaseId
+        } == true,
       ),
     )
+
     var outcome: PhaseOutcome? = null
     val loop =
       PhaseAttemptLoopState(
@@ -134,6 +133,28 @@ internal object PhaseAttemptSteps {
     }
     return outcome
   }
+
+  private fun attemptStartReentry(
+    iteration: Int,
+    hasPriorRecord: Boolean,
+    crashResumed: Boolean,
+    verifierReentry: Boolean,
+  ): FeatureTaskRuntimePhaseStartReentry =
+    FeatureTaskRuntimePhaseStartReentry(
+      resumed = iteration > 1 || hasPriorRecord,
+      startKind =
+        featureTaskRuntimeStartContinuationKind(
+          crashResumed = crashResumed,
+          verifierReentry = verifierReentry,
+          attemptCount = iteration,
+        ),
+    )
+
+  private fun semanticIteration(
+    iteration: Int,
+    continuations: Int,
+    nonOutputAttempts: Int,
+  ): Int = (iteration - continuations - nonOutputAttempts).coerceAtLeast(1)
 
   fun PhaseRunLoopAttemptScope.resolveFixLoopOutcome(args: FixLoopOutcomeArgs): PhaseOutcome? {
     val run = args.context.attempt.run

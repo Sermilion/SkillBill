@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentFailureFacts
@@ -52,27 +53,26 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
-import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY
-import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phaseartifacts.asPendingForOperatorResume
 import java.time.Clock
 import java.time.ZoneOffset
 
 @Inject
-internal class WorkflowGoalRunnerBlockWrites(
-  private val engine: WorkflowEngine,
+class WorkflowGoalRunnerBlockWrites(
   private val clock: Clock,
 ) {
-  fun markBlocked(
+  private val engine = WorkflowEngine()
+
+  internal fun markBlocked(
     request: GoalRunnerBlockRequest,
     workflowStates: WorkflowStateRepository,
     blockIncidents: BlockIncidentRepository,
@@ -101,7 +101,7 @@ internal class WorkflowGoalRunnerBlockWrites(
     )
   }
 
-  fun markBlocked(
+  internal fun markBlocked(
     write: GoalRunnerBlockWrite,
     workflowStates: WorkflowStateRepository,
     blockIncidents: BlockIncidentRepository,
@@ -366,125 +366,117 @@ internal class WorkflowGoalRunnerBlockWrites(
     workflowStates.save(write.family, updated)
   }
 
-  fun reopenBlockedPhaseForOperatorResume(
+  internal fun reopenBlockedPhaseForOperatorResume(
     unitOfWork: UnitOfWork,
-    preferredPhaseId: String,
-    reason: String,
+    request: OperatorBlockedPhaseReopenRequest,
     expectedIdentity: FeatureTaskExecutionIdentity,
     expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
-    recoveryAttemptId: String? = null,
-    admittedRecoveryAttempt: BlockIncidentRecoveryAttempt? = null,
-    admittedTargetWorkflowId: String? = null,
   ): Boolean {
-    if (recoveryAttemptId != null && (reason.isBlank() || reason.length > MAX_RECOVERY_REASON_CHARS ||
-        recoveryAttemptId.isBlank() || admittedRecoveryAttempt?.attemptId != recoveryAttemptId ||
-        admittedTargetWorkflowId.isNullOrBlank())
-    ) {
-      return false
+    val existing =
+      unitOfWork.workflowStates.get(
+        WorkflowFamily.TASK_RUNTIME,
+        expectedIdentity.workflowId,
+      ) ?: return false
+    validateReopenPlan(unitOfWork, existing, expectedIdentity, expectedExecutionPlan)
+    if (!canReopen(unitOfWork, existing, request)) return false
+    val repairBudgetPatch =
+      if (request.recoveryAttempt != null) {
+        emptyMap()
+      } else {
+        repairBudgetResetPatch(
+          existing.artifacts,
+        )
+      }
+    val blockedRecord =
+      reopenableRecord(existing, request, repairBudgetPatch.isNotEmpty())
+        ?: return request.recoveryAttempt == null
+    return if (request.recoveryAttempt != null && !blockedStepMatches(existing, blockedRecord)) {
+      false
+    } else {
+      unitOfWork.workflowStates.save(
+        WorkflowFamily.TASK_RUNTIME,
+        engine.updateRecord(
+          WorkflowFamily.TASK_RUNTIME.definition,
+          existing,
+          operatorBlockedPhaseReopenUpdate(existing, blockedRecord, request, repairBudgetPatch),
+        ),
+      )
+      true
     }
-    return reopenBlockedPhase(
-      unitOfWork,
-      preferredPhaseId,
-      reason,
-      expectedIdentity,
-      expectedExecutionPlan,
-      preserveAttempts = recoveryAttemptId != null,
-      recoveryAttemptId = recoveryAttemptId,
-      admittedRecoveryAttempt = admittedRecoveryAttempt,
-      admittedTargetWorkflowId = admittedTargetWorkflowId,
-    )
   }
 
-  private fun reopenBlockedPhase(
-    unitOfWork: UnitOfWork,
-    preferredPhaseId: String,
-    reason: String,
+  private fun validateReopenPlan(
+    unit: UnitOfWork,
+    existing: WorkflowStateSnapshot,
     expectedIdentity: FeatureTaskExecutionIdentity,
-    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
-    preserveAttempts: Boolean,
-    recoveryAttemptId: String?,
-    admittedRecoveryAttempt: BlockIncidentRecoveryAttempt?,
-    admittedTargetWorkflowId: String?,
-  ): Boolean {
-    val workflowId = expectedIdentity.workflowId
-    val family = WorkflowFamily.TASK_RUNTIME
-    val existing = unitOfWork.workflowStates.get(family, workflowId) ?: return false
-    val identity =
-      unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(workflowId)
-        ?: missingPlan()
+    expectedPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+  ) {
+    val identity = unit.workflowStates.getFeatureTaskExecutionIdentity(existing.workflowId) ?: missingPlan()
     FeatureTaskExecutionIdentityPolicy.validate(identity)
     if (identity != expectedIdentity || identity.mode != FeatureTaskWorkflowMode.RUNTIME ||
       identity.routeScope != FeatureTaskRouteScope.GOAL_CHILD
     ) {
       incompatiblePlan()
     }
-    if (preserveAttempts) {
-      val admitted = admittedRecoveryAttempt ?: return false
-      if (unitOfWork.blockIncidentRecoveries.byIdempotencyKey(admitted.idempotencyKey) != admitted ||
-        admitted.status != BlockIncidentRecoveryAttemptStatus.APPLYING ||
-        admitted.ownerToken.isNullOrBlank() || admitted.ownerGeneration == null ||
-        admitted.ownerExpiresAt?.isAfter(clock.instant()) != true ||
-        admitted.targetWorkflowId != admittedTargetWorkflowId || admitted.targetInvocationId != null ||
-        admitted.attemptId != recoveryAttemptId ||
-        admitted.occurrenceToken != BlockIncidentIdentity.fromArtifacts(existing.artifacts)?.incidentToken
-      ) {
-        return false
-      }
-    }
     val storedPlan =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(existing.artifacts)
         ?: missingPlan()
-    if (storedPlan != JsonCodec.parseValue(expectedExecutionPlan.encoded().toString(Charsets.UTF_8))) {
-      incompatiblePlan()
-    }
-    if (unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) != null) {
-      incompatiblePlan()
-    }
-    if (family.definition.isTerminalStatus(existing.workflowStatus)) {
-      return false
-    }
-    val artifacts = existing.artifacts
-    val phaseRecords = phaseRecordsFromWorkflowArtifacts(artifacts)
-    val repairBudgetPatch = if (preserveAttempts) emptyMap() else repairBudgetResetPatch(artifacts)
-    if (preserveAttempts &&
-      (existing.workflowStatus != WorkflowStatus.BLOCKED || existing.currentStepId != preferredPhaseId)
-    ) {
-      return false
-    }
-    val blockedRecord = if (preserveAttempts) {
-      phaseRecords[preferredPhaseId]?.takeIf { it.status == WorkflowStepStatus.BLOCKED } ?: return false
-    } else {
-      // Operator resume stays idempotent: nothing left to reopen is success, as before incident recovery.
-      operatorReopenablePhaseRecord(phaseRecords, preferredPhaseId, existing.workflowStatus)
-        ?: phaseRecords[preferredPhaseId]?.takeIf { repairBudgetPatch.isNotEmpty() }
-        ?: return true
-    }
-    if (preserveAttempts) {
-      val blockedStep = existing.steps.firstOrNull { it.stepId == preferredPhaseId } ?: return false
-      if (blockedStep.status != WorkflowStepStatus.BLOCKED ||
-        blockedStep.attemptCount != blockedRecord.attemptCount
-      ) {
-        return false
-      }
-    }
-    unitOfWork.workflowStates.save(
-      family,
-      engine.updateRecord(
-        family.definition,
-        existing,
-        operatorBlockedPhaseReopenUpdate(
-          existing,
-          blockedRecord,
-          phaseRecords,
-          reason,
-          repairBudgetPatch,
-          preserveAttempts,
-          recoveryAttemptId,
-        ),
-      ),
-    )
-    return true
+    if (storedPlan != JsonCodec.parseValue(expectedPlan.encoded().toString(Charsets.UTF_8))) incompatiblePlan()
+    if (unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId) != null) incompatiblePlan()
   }
+
+  private fun canReopen(
+    unit: UnitOfWork,
+    existing: WorkflowStateSnapshot,
+    request: OperatorBlockedPhaseReopenRequest,
+  ): Boolean {
+    if (WorkflowFamily.TASK_RUNTIME.definition.isTerminalStatus(existing.workflowStatus)) return false
+    if (request.recoveryAttempt == null) return true
+    val reasonValid = request.reason.isNotBlank() && request.reason.length <= MAX_RECOVERY_REASON_CHARS
+    val targetValid =
+      existing.workflowStatus == WorkflowStatus.BLOCKED && existing.currentStepId == request.phaseId &&
+        !request.targetWorkflowId.isNullOrBlank()
+    return reasonValid && targetValid && recoveryAdmissionMatches(unit, existing, request)
+  }
+
+  private fun recoveryAdmissionMatches(
+    unit: UnitOfWork,
+    existing: WorkflowStateSnapshot,
+    request: OperatorBlockedPhaseReopenRequest,
+  ): Boolean {
+    val admitted = requireNotNull(request.recoveryAttempt)
+    val owned =
+      admitted.status == BlockIncidentRecoveryAttemptStatus.APPLYING &&
+        !admitted.ownerToken.isNullOrBlank() && admitted.ownerGeneration != null &&
+        admitted.ownerExpiresAt?.isAfter(clock.instant()) == true
+    val targetMatches =
+      admitted.targetWorkflowId == request.targetWorkflowId && admitted.targetInvocationId == null &&
+        admitted.occurrenceToken == BlockIncidentIdentity.fromArtifacts(existing.artifacts)?.incidentToken
+    return owned && targetMatches && admitted.attemptId.isNotBlank() &&
+      unit.blockIncidentRecoveries.byIdempotencyKey(admitted.idempotencyKey) == admitted
+  }
+
+  private fun reopenableRecord(
+    existing: WorkflowStateSnapshot,
+    request: OperatorBlockedPhaseReopenRequest,
+    budgetReset: Boolean,
+  ): FeatureTaskRuntimePhaseRecord? {
+    val records = phaseRecordsFromWorkflowArtifacts(existing.artifacts)
+    return if (request.recoveryAttempt != null) {
+      records[request.phaseId]?.takeIf { it.status == WorkflowStepStatus.BLOCKED }
+    } else {
+      operatorReopenablePhaseRecord(records, request.phaseId, existing.workflowStatus)
+        ?: records[request.phaseId]?.takeIf { budgetReset }
+    }
+  }
+
+  private fun blockedStepMatches(
+    existing: WorkflowStateSnapshot,
+    blocked: FeatureTaskRuntimePhaseRecord,
+  ): Boolean =
+    existing.steps.firstOrNull { it.stepId == blocked.phaseId }?.let {
+      it.status == WorkflowStepStatus.BLOCKED && it.attemptCount == blocked.attemptCount
+    } == true
 
   private fun repairBudgetResetPatch(artifacts: Map<String, Any?>): Map<String, Any?> {
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
@@ -512,29 +504,20 @@ internal class WorkflowGoalRunnerBlockWrites(
   private fun operatorBlockedPhaseReopenUpdate(
     record: WorkflowStateSnapshot,
     blockedRecord: FeatureTaskRuntimePhaseRecord,
-    phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
-    reason: String,
+    request: OperatorBlockedPhaseReopenRequest,
     repairBudgetPatch: Map<String, Any?>,
-    preserveAttempts: Boolean,
-    recoveryAttemptId: String?,
   ): WorkflowUpdateInput {
+    val phaseRecords = phaseRecordsFromWorkflowArtifacts(record.artifacts)
+    val preserveAttempts = request.recoveryAttempt != null
+    val recoveryAttemptId = request.recoveryAttempt?.attemptId
+    val reason = request.reason
     val artifacts = record.artifacts
     val ledger = phaseLedgerFromWorkflowArtifacts(artifacts)
     val reopened =
       LinkedHashMap(phaseRecords).apply {
         this[blockedRecord.phaseId] = blockedRecord.asPendingForOperatorResume()
       }
-    val retryEntry =
-      FeatureTaskRuntimePhaseLedgerEntry(
-        action = FeatureTaskRuntimePhaseLedgerAction.RETRY,
-        sequenceNumber = Math.addExact(ledger.maxOfOrNull { it.sequenceNumber } ?: -1, 1),
-        timestamp = clock.instant().atOffset(ZoneOffset.UTC).toString(),
-        phaseId = blockedRecord.phaseId,
-        attemptCount = blockedRecord.attemptCount,
-        resolvedAgentId = blockedRecord.resolvedAgentId,
-        recoveryAttemptId = recoveryAttemptId,
-        preserveBudget = preserveAttempts && recoveryAttemptId != null,
-      )
+    val retryEntry = retryLedgerEntry(blockedRecord, ledger, request)
     return WorkflowUpdateInput(
       workflowStatus = WorkflowStatus.RUNNING,
       currentStepId = blockedRecord.phaseId,
@@ -544,11 +527,13 @@ internal class WorkflowGoalRunnerBlockWrites(
             mapOf(
               SharedPayloadKeys.STEP_ID to blockedRecord.phaseId,
               SharedPayloadKeys.STATUS to WorkflowStepStatus.PENDING.wireValue,
-              FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT to if (preserveAttempts) {
-                record.steps.firstOrNull { it.stepId == blockedRecord.phaseId }?.attemptCount ?: blockedRecord.attemptCount
-              } else {
-                0
-              },
+              FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT to
+                if (preserveAttempts) {
+                  record.steps.firstOrNull { it.stepId == blockedRecord.phaseId }?.attemptCount
+                    ?: blockedRecord.attemptCount
+                } else {
+                  0
+                },
             ),
           ),
         ),
@@ -574,8 +559,8 @@ internal class WorkflowGoalRunnerBlockWrites(
                 )
                 put(OperatorBlockRetryArtifactKeys.PREVIOUS_BLOCKED_RECORD, blockedRecord.asWorkflowArtifactEntry())
                 recoveryAttemptId?.let {
-                  put(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY, it)
-                  put(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY, true)
+                  put(FeatureTaskRuntimePhasePayloadKeys.RECOVERY_ATTEMPT_ID, it)
+                  put(FeatureTaskRuntimePhasePayloadKeys.PRESERVE_BUDGET, true)
                 }
               },
             ),
@@ -583,6 +568,25 @@ internal class WorkflowGoalRunnerBlockWrites(
             WorkflowGoalRunnerAcceptedBlockOutcomeBinding.patch(record, BlockIncidentIdentity.fromArtifacts(artifacts)),
         ),
       sessionId = "",
+    )
+  }
+
+  private fun retryLedgerEntry(
+    blockedRecord: FeatureTaskRuntimePhaseRecord,
+    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    request: OperatorBlockedPhaseReopenRequest,
+  ): FeatureTaskRuntimePhaseLedgerEntry {
+    val recoveryAttemptId = request.recoveryAttempt?.attemptId
+    val preserveAttempts = request.recoveryAttempt != null
+    return FeatureTaskRuntimePhaseLedgerEntry(
+      action = FeatureTaskRuntimePhaseLedgerAction.RETRY,
+      sequenceNumber = Math.addExact(ledger.maxOfOrNull { it.sequenceNumber } ?: -1, 1),
+      timestamp = clock.instant().atOffset(ZoneOffset.UTC).toString(),
+      phaseId = blockedRecord.phaseId,
+      attemptCount = blockedRecord.attemptCount,
+      resolvedAgentId = blockedRecord.resolvedAgentId,
+      recoveryAttemptId = recoveryAttemptId,
+      preserveBudget = preserveAttempts && recoveryAttemptId != null,
     )
   }
 
@@ -618,7 +622,7 @@ private data class GoalBlockCandidate(
   val retainedIdentity: BlockIncidentIdentity?,
   val alias: BlockIncidentAlias,
 ) {
-  fun identity(existingOwnerToken: String?): BlockIncidentIdentity {
+  internal fun identity(existingOwnerToken: String?): BlockIncidentIdentity {
     val ownerIdentity =
       when {
         existingOwnerToken != null && existingOwnerToken == retainedIdentity?.incidentToken -> retainedIdentity
@@ -643,3 +647,10 @@ private data class GoalBlockCandidate(
       )
   }
 }
+
+internal data class OperatorBlockedPhaseReopenRequest(
+  val phaseId: String,
+  val reason: String,
+  val recoveryAttempt: BlockIncidentRecoveryAttempt? = null,
+  val targetWorkflowId: String? = null,
+)

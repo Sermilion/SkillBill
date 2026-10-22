@@ -5,16 +5,20 @@ import skillbill.engine.diagnostics.block.BlockIncidentAcceptedReferenceResolver
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.goalrunner.goalContinuationOutcomeArtifact
+import skillbill.goalrunner.model.FeatureTaskRuntimeGoalContinuationOutcome
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
-import skillbill.goalrunner.model.goalContinuationOutcomeArtifact
 import skillbill.idestatus.model.IdeStatusLaunchScope
-import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
@@ -25,7 +29,9 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
 internal object BlockIncidentRecoveryTargetResolver {
   fun resolve(
@@ -33,124 +39,243 @@ internal object BlockIncidentRecoveryTargetResolver {
     incident: BlockIncident,
     executionPlanValidator: FeatureTaskRuntimeExecutionPlanValidator,
   ): BlockIncidentRecoveryTargetResolution {
-    val occurrence = incident.occurrence
-    val workflowId = occurrence.workflowId ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_WORKFLOW)
-    val phaseId = occurrence.phaseId ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_PHASE)
-    val generation = occurrence.generation
-      ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_GENERATION_OBSERVATION)
-    if (occurrence.origin != BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK &&
-      occurrence.origin != BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK
-    ) {
-      return unavailable(BlockIncidentRecoveryTargetFailure.UNVERIFIED_PARENT_LINK)
+    val missing = coordinateFailure(incident)
+    if (missing != null) return unavailable(missing)
+    val workflowId = requireNotNull(incident.occurrence.workflowId)
+    val workflow =
+      unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_WORKFLOW)
+    return if (workflow.workflowStatus != WorkflowStatus.BLOCKED) {
+      unavailable(BlockIncidentRecoveryTargetFailure.WORKFLOW_NOT_BLOCKED)
+    } else {
+      resolveWorkflow(unit, incident, workflow, executionPlanValidator)
     }
-    val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-      ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_WORKFLOW)
-    if (workflow.workflowStatus != WorkflowStatus.BLOCKED) {
-      return unavailable(BlockIncidentRecoveryTargetFailure.WORKFLOW_NOT_BLOCKED)
+  }
+
+  private fun coordinateFailure(incident: BlockIncident): BlockIncidentRecoveryTargetFailure? =
+    when {
+      incident.occurrence.workflowId == null -> BlockIncidentRecoveryTargetFailure.MISSING_WORKFLOW
+      incident.occurrence.phaseId == null -> BlockIncidentRecoveryTargetFailure.MISSING_PHASE
+      incident.occurrence.generation == null -> BlockIncidentRecoveryTargetFailure.MISSING_GENERATION_OBSERVATION
+      incident.occurrence.origin != BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK &&
+        incident.occurrence.origin != BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK ->
+        BlockIncidentRecoveryTargetFailure.UNVERIFIED_PARENT_LINK
+      else -> null
     }
-    val identity = unit.workflowStates.getFeatureTaskExecutionIdentity(workflowId)
-      ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_IDENTITY)
+
+  private fun resolveWorkflow(
+    unit: UnitOfWork,
+    incident: BlockIncident,
+    workflow: WorkflowStateSnapshot,
+    validator: FeatureTaskRuntimeExecutionPlanValidator,
+  ): BlockIncidentRecoveryTargetResolution {
+    val identity =
+      unit.workflowStates.getFeatureTaskExecutionIdentity(workflow.workflowId)
+        ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_IDENTITY)
     FeatureTaskExecutionIdentityPolicy.validate(identity)
-    if (identity.workflowId != workflowId || identity.mode != FeatureTaskWorkflowMode.RUNTIME) {
+    if (identity.workflowId != workflow.workflowId || identity.mode != FeatureTaskWorkflowMode.RUNTIME) {
       throw invalidWorkflowStateSchemaError("Recovery target has an incompatible feature-task identity.")
     }
-    val route = identity.routeScope
-    val blockIdentity = BlockIncidentIdentity.fromArtifacts(workflow.artifacts)
-      ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_BLOCK_IDENTITY)
-    if (blockIdentity.incidentToken != occurrence.occurrenceToken || blockIdentity.alias !in incident.aliases ||
-      blockIdentity.childWorkflowId != null || blockIdentity.childIncidentToken != null ||
-      blockIdentity.sourceAlias?.let { it !in incident.aliases } == true ||
-      blockIdentity.failureCode != occurrence.failureCode ||
-      blockIdentity.failureDisposition?.wireValue != occurrence.failureDisposition
-    ) {
-      return unavailable(BlockIncidentRecoveryTargetFailure.INCIDENT_IDENTITY_MISMATCH)
+    val blockIdentity =
+      BlockIncidentIdentity.fromArtifacts(workflow.artifacts)
+        ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_BLOCK_IDENTITY)
+    val evidence = WorkflowEvidence(incident, workflow, identity, blockIdentity)
+    val failure = acceptedPhaseFailure(unit, evidence)
+    return if (failure != null) unavailable(failure) else resolvePlanAndTarget(unit, evidence, validator)
+  }
+
+  private fun acceptedPhaseFailure(
+    unit: UnitOfWork,
+    evidence: WorkflowEvidence,
+  ): BlockIncidentRecoveryTargetFailure? {
+    val workflow = evidence.workflow
+    val occurrence = evidence.incident.occurrence
+    val phase =
+      decodePhaseRecords(workflow.artifacts)[occurrence.phaseId]
+        ?: return BlockIncidentRecoveryTargetFailure.MISSING_PHASE_RECORD
+    val step =
+      workflow.steps.firstOrNull { it.stepId == occurrence.phaseId }
+        ?: return BlockIncidentRecoveryTargetFailure.MISSING_WORKFLOW_STEP
+    return when {
+      !matchesIncident(evidence) || !aliasesOwned(unit, evidence) ->
+        BlockIncidentRecoveryTargetFailure.INCIDENT_IDENTITY_MISMATCH
+      !matchesPhase(evidence, phase, step) -> BlockIncidentRecoveryTargetFailure.OCCURRENCE_CHANGED
+      else -> null
     }
-    val identityAliasOwner = unit.blockIncidents.findByAlias(blockIdentity.alias)
-    val sourceAliasOwner = blockIdentity.sourceAlias?.let(unit.blockIncidents::findByAlias)
-    if (identityAliasOwner?.occurrence?.occurrenceToken != occurrence.occurrenceToken ||
-      blockIdentity.sourceAlias != null && sourceAliasOwner?.occurrence?.occurrenceToken != occurrence.occurrenceToken
-    ) {
-      return unavailable(BlockIncidentRecoveryTargetFailure.INCIDENT_IDENTITY_MISMATCH)
-    }
-    val phase = decodePhaseRecords(workflow.artifacts)[phaseId]
-      ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_PHASE_RECORD)
-    val step = workflow.steps.firstOrNull { it.stepId == phaseId }
-      ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_WORKFLOW_STEP)
-    if (workflow.currentStepId != phaseId || phase.status != WorkflowStepStatus.BLOCKED ||
-      step.status != WorkflowStepStatus.BLOCKED ||
-      phase.attemptCount != step.attemptCount || blockIdentity.stepId != phaseId ||
-      blockIdentity.attempt != occurrence.attempt || blockIdentity.generation != generation ||
-      phase.attemptCount != occurrence.attempt
-    ) {
-      return unavailable(BlockIncidentRecoveryTargetFailure.OCCURRENCE_CHANGED)
-    }
-    val parentWorkflowId = occurrence.parentWorkflowId
-    if (route == FeatureTaskRouteScope.GOAL_CHILD) {
-      if (parentWorkflowId.isNullOrBlank() ||
-        !hasCurrentAcceptedParentBinding(unit, incident, parentWorkflowId, workflowId, blockIdentity)
-      ) {
-        return unavailable(BlockIncidentRecoveryTargetFailure.UNVERIFIED_PARENT_LINK)
-      }
-    } else if (route != FeatureTaskRouteScope.STANDALONE ||
-      occurrence.origin != BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK || parentWorkflowId != null
+  }
+
+  private fun matchesIncident(evidence: WorkflowEvidence): Boolean {
+    val block = evidence.blockIdentity
+    val incident = evidence.incident
+    val linked =
+      block.childWorkflowId == null && block.childIncidentToken == null &&
+        block.sourceAlias?.let { it !in incident.aliases } != true
+    return linked &&
+      block.incidentToken == incident.occurrence.occurrenceToken &&
+      block.alias in incident.aliases &&
+      block.failureCode == incident.occurrence.failureCode &&
+      block.failureDisposition?.wireValue == incident.occurrence.failureDisposition
+  }
+
+  private fun aliasesOwned(
+    unit: UnitOfWork,
+    evidence: WorkflowEvidence,
+  ): Boolean {
+    val block = evidence.blockIdentity
+    val token = evidence.incident.occurrence.occurrenceToken
+    val primary = unit.blockIncidents.findByAlias(block.alias)?.occurrence?.occurrenceToken == token
+    val source = block.sourceAlias?.let { unit.blockIncidents.findByAlias(it)?.occurrence?.occurrenceToken == token }
+    return primary && source != false
+  }
+
+  private fun matchesPhase(
+    evidence: WorkflowEvidence,
+    phase: FeatureTaskRuntimePhaseRecord,
+    step: WorkflowStepState,
+  ): Boolean {
+    val occurrence = evidence.incident.occurrence
+    val block = evidence.blockIdentity
+    val statusMatches =
+      evidence.workflow.currentStepId == occurrence.phaseId &&
+        phase.status == WorkflowStepStatus.BLOCKED && step.status == WorkflowStepStatus.BLOCKED
+    val attemptMatches =
+      phase.attemptCount == step.attemptCount &&
+        phase.attemptCount == occurrence.attempt &&
+        block.attempt == occurrence.attempt
+    return statusMatches && attemptMatches &&
+      block.stepId == occurrence.phaseId && block.generation == occurrence.generation
+  }
+
+  private fun resolvePlanAndTarget(
+    unit: UnitOfWork,
+    evidence: WorkflowEvidence,
+    validator: FeatureTaskRuntimeExecutionPlanValidator,
+  ): BlockIncidentRecoveryTargetResolution {
+    if (!parentBindingMatches(
+        unit,
+        evidence,
+      )
     ) {
       return unavailable(BlockIncidentRecoveryTargetFailure.UNVERIFIED_PARENT_LINK)
     }
-    val workerOwnership = unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
-    val generationObservation = unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)
-      ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_GENERATION_OBSERVATION)
-    if (generationObservation.generation != generation || generationObservation.phaseId != phaseId ||
-      generationObservation.phaseAttempt != occurrence.attempt
+    if (!workerCoordinatesMatch(
+        unit,
+        evidence,
+      )
     ) {
       return unavailable(BlockIncidentRecoveryTargetFailure.OCCURRENCE_CHANGED)
     }
-    if (workerOwnership != null) {
-      if (workerOwnership.generation != generation || workerOwnership.phaseId != phaseId ||
-        workerOwnership.phaseAttempt != occurrence.attempt
-      ) {
-        return unavailable(BlockIncidentRecoveryTargetFailure.OCCURRENCE_CHANGED)
-      }
-    }
-    val storedExecutionPlan =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(workflow.artifacts)
+    val stored =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(evidence.workflow.artifacts)
         ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_EXECUTION_PLAN)
-    val expectedExecutionPlan =
+    val plan =
       ValidatedFeatureTaskRuntimeExecutionPlan.read(
-        JsonCodec.valueToJsonString(storedExecutionPlan).toByteArray(Charsets.UTF_8),
-        executionPlanValidator,
+        JsonCodec.valueToJsonString(stored).toByteArray(Charsets.UTF_8),
+        validator,
       )
-    return when (route) {
-      FeatureTaskRouteScope.STANDALONE -> {
-        val invocationBinding = standaloneInvocationBinding(unit, incident, workflowId, phaseId)
-          ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_INVOCATION)
-        val invocationId = invocationBinding.invocationId
-        val invocation = invocationBinding.record
-        if (invocation.workflowId != workflowId || invocation.phaseId != phaseId ||
-          invocation.launchScope != IdeStatusLaunchScope.STANDALONE ||
-          invocation.repositoryIdentity != identity.repositoryIdentity ||
-          invocation.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) != identity.normalizedIssueKey ||
-          (occurrence.executionId != null && invocation.executionId != occurrence.executionId) ||
-          (occurrence.executionId == null && !invocationBinding.linkedFromAlias)
-        ) {
-          return unavailable(BlockIncidentRecoveryTargetFailure.INVOCATION_MISMATCH)
-        }
+    return when (evidence.identity.routeScope) {
+      FeatureTaskRouteScope.STANDALONE -> resolveStandalone(unit, evidence, plan)
+      FeatureTaskRouteScope.GOAL_CHILD ->
         BlockIncidentRecoveryTargetResolution.Resolved(
-          BlockIncidentRecoveryTarget(workflowId, invocationId, phaseId, identity, expectedExecutionPlan, workflowId),
+          BlockIncidentRecoveryTarget(
+            evidence.workflow.workflowId,
+            null,
+            requireNotNull(evidence.incident.occurrence.phaseId),
+            evidence.identity,
+            plan,
+            evidence.workflow.workflowId,
+            requireNotNull(evidence.incident.occurrence.parentWorkflowId),
+          ),
         )
-      }
-      FeatureTaskRouteScope.GOAL_CHILD -> BlockIncidentRecoveryTargetResolution.Resolved(
+    }
+  }
+
+  private fun parentBindingMatches(
+    unit: UnitOfWork,
+    evidence: WorkflowEvidence,
+  ): Boolean =
+    when (evidence.identity.routeScope) {
+      FeatureTaskRouteScope.GOAL_CHILD ->
+        !evidence.incident.occurrence.parentWorkflowId.isNullOrBlank() &&
+          hasCurrentAcceptedParentBinding(unit, evidence)
+      FeatureTaskRouteScope.STANDALONE ->
+        evidence.incident.occurrence.origin == BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK &&
+          evidence.incident.occurrence.parentWorkflowId == null
+    }
+
+  private fun workerCoordinatesMatch(
+    unit: UnitOfWork,
+    evidence: WorkflowEvidence,
+  ): Boolean {
+    val id = evidence.workflow.workflowId
+    val occurrence = evidence.incident.occurrence
+    val observed = unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(id) ?: return false
+    val worker = unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(id)
+    val observedMatches =
+      observed.generation == occurrence.generation &&
+        observed.phaseId == occurrence.phaseId &&
+        observed.phaseAttempt == occurrence.attempt
+    val workerMatches =
+      worker == null || worker.generation == occurrence.generation &&
+        worker.phaseId == occurrence.phaseId && worker.phaseAttempt == occurrence.attempt
+    return observedMatches && workerMatches
+  }
+
+  private fun resolveStandalone(
+    unit: UnitOfWork,
+    evidence: WorkflowEvidence,
+    plan: ValidatedFeatureTaskRuntimeExecutionPlan,
+  ): BlockIncidentRecoveryTargetResolution {
+    val phaseId = requireNotNull(evidence.incident.occurrence.phaseId)
+    val binding =
+      standaloneInvocationBinding(unit, evidence.incident, evidence.workflow.workflowId, phaseId)
+        ?: return unavailable(BlockIncidentRecoveryTargetFailure.MISSING_INVOCATION)
+    return if (!invocationMatches(binding, evidence)) {
+      unavailable(BlockIncidentRecoveryTargetFailure.INVOCATION_MISMATCH)
+    } else {
+      BlockIncidentRecoveryTargetResolution.Resolved(
         BlockIncidentRecoveryTarget(
-          workflowId = workflowId,
-          invocationId = null,
-          phaseId = phaseId,
-          executionIdentity = identity,
-          expectedExecutionPlan = expectedExecutionPlan,
-          mutationWorkflowId = workflowId,
-          launchWorkflowId = parentWorkflowId.orEmpty(),
+          evidence.workflow.workflowId,
+          binding.invocationId,
+          phaseId,
+          evidence.identity,
+          plan,
+          evidence.workflow.workflowId,
         ),
       )
     }
   }
+
+  private fun invocationMatches(
+    binding: StandaloneInvocationBinding,
+    evidence: WorkflowEvidence,
+  ): Boolean {
+    val invocation = binding.record
+    val occurrence = evidence.incident.occurrence
+    val targetMatches =
+      invocation.workflowId == evidence.workflow.workflowId &&
+        invocation.phaseId == occurrence.phaseId &&
+        invocation.launchScope == IdeStatusLaunchScope.STANDALONE
+    val identityMatches =
+      invocation.repositoryIdentity == evidence.identity.repositoryIdentity &&
+        invocation.issueKey?.let(
+          FeatureTaskExecutionIdentityPolicy::canonicalIssueKey,
+        ) == evidence.identity.normalizedIssueKey
+    val executionMatches =
+      if (occurrence.executionId != null) {
+        invocation.executionId == occurrence.executionId
+      } else {
+        binding.linkedFromAlias
+      }
+    return targetMatches && identityMatches && executionMatches
+  }
+
+  private data class WorkflowEvidence(
+    val incident: BlockIncident,
+    val workflow: WorkflowStateSnapshot,
+    val identity: FeatureTaskExecutionIdentity,
+    val blockIdentity: BlockIncidentIdentity,
+  )
 
   private fun standaloneInvocationBinding(
     unit: UnitOfWork,
@@ -164,7 +289,7 @@ internal object BlockIncidentRecoveryTargetResolver {
       return StandaloneInvocationBinding(recordedId, record, linkedFromAlias = false)
     }
     val suffix = ":$phaseId"
-    val linked = incident.aliases.asSequence()
+    return incident.aliases.asSequence()
       .filter { it.kind == BlockIncidentAliasKind.PHASE_TRANSITION }
       .filter { alias ->
         unit.blockIncidents.findByAlias(alias)?.occurrence?.occurrenceToken == incident.occurrence.occurrenceToken
@@ -193,49 +318,88 @@ internal object BlockIncidentRecoveryTargetResolver {
 
   private fun hasCurrentAcceptedParentBinding(
     unit: UnitOfWork,
-    incident: BlockIncident,
-    parentWorkflowId: String,
-    childWorkflowId: String,
-    childIdentity: BlockIncidentIdentity,
+    evidence: WorkflowEvidence,
   ): Boolean {
-    val parent = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId) ?: return false
-    if (parent.workflowStatus != WorkflowStatus.BLOCKED) return false
-    val child = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, childWorkflowId) ?: return false
-    val continuation = child.artifacts.goalContinuationArtifact() ?: return false
-    val outcome = child.artifacts.goalContinuationOutcomeArtifact() ?: return false
+    val parent =
+      unit.workflowStates.get(
+        WorkflowFamily.TASK_RUNTIME,
+        requireNotNull(evidence.incident.occurrence.parentWorkflowId),
+      )
+        ?.takeIf { it.workflowStatus == WorkflowStatus.BLOCKED } ?: return false
+    val continuation = evidence.workflow.artifacts.goalContinuationArtifact() ?: return false
+    val outcome = evidence.workflow.artifacts.goalContinuationOutcomeArtifact() ?: return false
+    return parentManifestMatches(parent, evidence, continuation, outcome) &&
+      referenceMatches(unit, evidence, outcome)
+  }
+
+  private fun parentManifestMatches(
+    parent: WorkflowStateSnapshot,
+    evidence: WorkflowEvidence,
+    continuation: FeatureTaskRuntimeGoalContinuationArtifact,
+    outcome: FeatureTaskRuntimeGoalContinuationOutcome,
+  ): Boolean {
     val manifest = parent.artifacts.decompositionRuntime() ?: return false
     val subtask = manifest.subtasks.singleOrNull { it.id == continuation.subtaskId } ?: return false
-    if (continuation.parentWorkflowId != parentWorkflowId || continuation.issueKey != manifest.issueKey ||
-      FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(continuation.issueKey) != childIdentity.normalizedIssueKey ||
-      outcome.status != GoalRunnerTerminalStatus.BLOCKED || outcome.workflowId != childWorkflowId ||
-      outcome.issueKey != continuation.issueKey || outcome.subtaskId != continuation.subtaskId ||
-      manifest.currentSubtaskIntent.subtaskId != continuation.subtaskId || subtask.workflowId != childWorkflowId ||
-      subtask.branch != continuation.goalBranch || subtask.status != DecompositionStatus.BLOCKED.wireValue
-    ) {
-      return false
-    }
+    val continuationMatches =
+      continuation.parentWorkflowId == parent.workflowId &&
+        continuation.issueKey == manifest.issueKey &&
+        FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(
+          continuation.issueKey,
+        ) == evidence.identity.normalizedIssueKey
+    val outcomeMatches =
+      outcome.status == GoalRunnerTerminalStatus.BLOCKED &&
+        outcome.workflowId == evidence.workflow.workflowId && outcome.issueKey == continuation.issueKey &&
+        outcome.subtaskId == continuation.subtaskId
+    val subtaskMatches =
+      manifest.currentSubtaskIntent.subtaskId == continuation.subtaskId &&
+        subtask.workflowId == evidence.workflow.workflowId && subtask.branch == continuation.goalBranch &&
+        subtask.status == DecompositionStatus.BLOCKED.wireValue
+    return continuationMatches && outcomeMatches && subtaskMatches
+  }
+
+  private fun referenceMatches(
+    unit: UnitOfWork,
+    evidence: WorkflowEvidence,
+    outcome: FeatureTaskRuntimeGoalContinuationOutcome,
+  ): Boolean {
     val reference = outcome.acceptedBlockReference ?: return false
-    if (reference.sourceWorkflowId != childWorkflowId || reference.incidentToken != childIdentity.incidentToken ||
-      reference.blockedStepId != childIdentity.stepId || reference.attempt != childIdentity.attempt ||
-      reference.executionGeneration != childIdentity.generation || reference.aliasKind != childIdentity.alias.kind.wireValue ||
-      reference.aliasValue != childIdentity.alias.value || reference.childIncidentToken != childIdentity.childIncidentToken
-    ) {
-      return false
-    }
-    val referenceAliasMatches = incident.aliases.any {
-      it.kind.wireValue == reference.aliasKind && it.value == reference.aliasValue
-    }
-    val referenceSourceAliasMatches =
-      reference.sourceAliasKind == null && reference.sourceAliasValue == null || incident.aliases.any {
-        it.kind.wireValue == reference.sourceAliasKind && it.value == reference.sourceAliasValue
-      }
-    if (reference.incidentToken != incident.occurrence.occurrenceToken ||
-      !referenceAliasMatches || !referenceSourceAliasMatches
+    if (!referenceIdentityMatches(reference, evidence) ||
+      !referenceAliasesMatch(reference, evidence.incident)
     ) {
       return false
     }
     BlockIncidentAcceptedReferenceResolver.validate(reference, unit.blockIncidents)
     return true
+  }
+
+  private fun referenceIdentityMatches(
+    reference: GoalRunnerAcceptedBlockReference,
+    evidence: WorkflowEvidence,
+  ): Boolean {
+    val identity = evidence.blockIdentity
+    return reference.sourceWorkflowId == evidence.workflow.workflowId &&
+      reference.incidentToken == identity.incidentToken &&
+      reference.blockedStepId == identity.stepId && reference.attempt == identity.attempt &&
+      reference.executionGeneration == identity.generation &&
+      reference.aliasKind == identity.alias.kind.wireValue &&
+      reference.aliasValue == identity.alias.value &&
+      reference.childIncidentToken == identity.childIncidentToken
+  }
+
+  private fun referenceAliasesMatch(
+    reference: GoalRunnerAcceptedBlockReference,
+    incident: BlockIncident,
+  ): Boolean {
+    val aliasMatches =
+      incident.aliases.any {
+        it.kind.wireValue == reference.aliasKind && it.value == reference.aliasValue
+      }
+    val sourceMatches =
+      reference.sourceAliasKind == null && reference.sourceAliasValue == null ||
+        incident.aliases.any {
+          it.kind.wireValue == reference.sourceAliasKind && it.value == reference.sourceAliasValue
+        }
+    return reference.incidentToken == incident.occurrence.occurrenceToken && aliasMatches && sourceMatches
   }
 
   private fun unavailable(failure: BlockIncidentRecoveryTargetFailure) =
@@ -254,6 +418,7 @@ internal data class BlockIncidentRecoveryTarget(
 
 internal sealed interface BlockIncidentRecoveryTargetResolution {
   data class Resolved(val target: BlockIncidentRecoveryTarget) : BlockIncidentRecoveryTargetResolution
+
   data class Unavailable(val failure: BlockIncidentRecoveryTargetFailure) : BlockIncidentRecoveryTargetResolution
 }
 

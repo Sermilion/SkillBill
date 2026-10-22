@@ -7,8 +7,6 @@ internal const val FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_RE
   "previous_blocked_reason"
 internal const val FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY: String =
   "reopened_phase_ids"
-internal const val FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY: String = "recovery_attempt_id"
-internal const val FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY: String = "preserve_budget"
 
 data class FeatureTaskRuntimeOperatorBlockRetry(
   val phaseId: String,
