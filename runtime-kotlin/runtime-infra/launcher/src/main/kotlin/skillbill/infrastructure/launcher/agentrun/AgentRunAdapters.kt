@@ -82,7 +82,12 @@ internal class ProcessAgentRunAdapter(
       agent = agent,
       termination = result.termination(),
       stdout = normalizedStdout,
-      stderr = result.stderr,
+      stderr =
+        if (result.exitStatus != null && result.exitStatus != 0 && decoded.failureDiagnostic != null) {
+          listOf(result.stderr.trimEnd(), decoded.failureDiagnostic).filter(String::isNotBlank).joinToString("\n")
+        } else {
+          result.stderr
+        },
       liveness = result.liveness,
       processStarted = result.processStarted,
       mcpStartupObserved = result.mcpStartupObserved,
@@ -243,6 +248,7 @@ data class DecodedAgentRunOutput(
   val rawOutputPreview: String? = null,
   val reportedIdentity: ReportedLaunchIdentity =
     ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED),
+  val failureDiagnostic: String? = null,
 )
 
 interface AgentRunOutputDecoder {
@@ -336,16 +342,27 @@ private fun reportedClaudeIdentity(modelUsage: JsonNode): ReportedLaunchIdentity
 private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
   var text: String? = null
   var decodedEnvelope = false
+  var failureDiagnostic: String? = null
   stdout.lineSequence().filter(String::isNotBlank).forEach { line ->
 
     runCatching { structuredOutputMapper.readTree(line) }.getOrNull()?.let { event ->
       decodedEnvelope = true
       event.path("item").path("text").takeIf { it.isTextual }?.asText()?.let { text = it }
+      val failure =
+        when (event.path("type").asText()) {
+          "error" -> event.path("message")
+          "turn.failed" -> event.path("error").path("message")
+          else -> null
+        }
+      failure?.takeIf { it.isTextual }?.asText()?.takeIf(String::isNotBlank)?.let {
+        failureDiagnostic = it.take(RAW_OUTPUT_PREVIEW_MAX_CHARS)
+      }
     }
   }
   return DecodedAgentRunOutput(
     text = text ?: if (decodedEnvelope) "" else stdout,
     reportedIdentity = ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.UNSUPPORTED_AGENT),
+    failureDiagnostic = failureDiagnostic,
   )
 }
 
