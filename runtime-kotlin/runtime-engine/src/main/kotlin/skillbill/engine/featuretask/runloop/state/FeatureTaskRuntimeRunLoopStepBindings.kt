@@ -40,6 +40,7 @@ import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhase
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
@@ -105,6 +106,8 @@ private open class FeatureTaskRuntimeRunLoopAgentStepBinding(
       checkNotNull(environment.selectedOwnerOf(run.phaseId)) {
         "Step '${run.phaseId}' has no selected owner in the accepted execution plan."
       }
+
+  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = environment.modelDirectiveSupplements
 
   override val launchState: PhaseLaunchState get() = stepLaunchState
 

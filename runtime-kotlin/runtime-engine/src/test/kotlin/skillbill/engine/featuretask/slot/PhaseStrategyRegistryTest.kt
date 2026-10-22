@@ -19,7 +19,9 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class PhaseStrategyRegistryTest {
   @Test
@@ -90,7 +92,8 @@ class PhaseStrategyRegistryTest {
   @Test
   fun `a missing definition binding cannot resolve an execution plan`() {
     val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, emptyMap()))
+    val lookup =
+      PhaseStrategyLookup(registry, PhaseStrategySelection(registry, emptyMap()), ModelDirectiveSupplements(true))
 
     assertFailsWith<UnknownPhaseStrategyError> { lookup.executionPlan(facts(CodeReviewExecutionMode.INLINE)) }
     assertFailsWith<PhaseStrategySelectionSlotMismatchError> {
@@ -149,7 +152,7 @@ class PhaseStrategyRegistryTest {
             ),
         ),
       )
-    val lookup = PhaseStrategyLookup(registry, selection)
+    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(true))
 
     assertSame(
       inline,
@@ -158,6 +161,17 @@ class PhaseStrategyRegistryTest {
     assertFailsWith<InvalidPhaseStrategyCompositionError> {
       lookup.strategyFor(PHASE_REVIEW, facts(CodeReviewExecutionMode.DELEGATED))
     }
+  }
+
+  @Test
+  fun `a historical alias resolves only inside its own slot to the canonical strategy`() {
+    val inline = reviewStrategy("inline")
+    val registry = PhaseStrategyRegistry(listOf(inline))
+
+    assertSame(inline, registry.strategy(PhaseSlot.CODE_REVIEW, "inline-opus-5-5"))
+    assertTrue(registry.contains(PhaseSlot.CODE_REVIEW, "inline-opus-5-5"))
+    assertFalse(registry.contains(PhaseSlot.STANDALONE_REVIEW, "inline-opus-5-5"))
+    assertFailsWith<UnknownPhaseStrategyError> { registry.strategy(PhaseSlot.CODE_REVIEW, "inline-opus-5-6") }
   }
 
   private fun facts(mode: CodeReviewExecutionMode) = PhaseStrategySelectionFacts(REVIEW_ONLY, setOf(mode))

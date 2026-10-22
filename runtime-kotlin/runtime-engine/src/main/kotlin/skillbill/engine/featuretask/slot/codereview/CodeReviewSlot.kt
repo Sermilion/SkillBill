@@ -132,7 +132,7 @@ internal class CodeReviewSlot(
           run,
           reviewBinding.reviewExecutionContext(),
           reviewBinding,
-          state.acceptedOwner.promptSource(run.phaseId),
+          state.acceptedOwner.promptSource(run.phaseId, state.modelDirectiveSupplements),
         )
       }
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> {

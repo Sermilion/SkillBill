@@ -37,7 +37,17 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   QA_WORKTREE_CHANGED,
   QA_REPOSITORY_UNREADABLE,
   UNKNOWN_QA_SELECTION,
+  INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING,
 }
+
+fun invalidModelDirectiveSupplementsSetting(
+  key: String,
+  value: String,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING,
+    "Setting $key must be 'true' or 'false', got '$value'.",
+  )
 
 fun invalidFeatureTaskRuntimeRepairReceipt(
   fieldPath: String,

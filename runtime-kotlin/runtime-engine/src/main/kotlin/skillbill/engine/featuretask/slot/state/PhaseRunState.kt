@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
@@ -84,6 +85,8 @@ internal interface PhaseRunState :
 
   /** The selected strategy that declares [stepId] among its steps, or null when no selected strategy does. */
   fun selectedOwnerOf(stepId: String): PhaseStrategy?
+
+  val modelDirectiveSupplements: ModelDirectiveSupplements
 
   /** The steps of the definition no strategy selected for this run owns. */
   fun unselectedStepIds(): Set<String>

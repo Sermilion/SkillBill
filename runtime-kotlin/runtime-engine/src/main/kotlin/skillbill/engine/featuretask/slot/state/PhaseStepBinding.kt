@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
@@ -31,6 +32,8 @@ internal interface PhaseStepBinding {
    * policy, and strategy id from it, so a wrapper that delegates execution keeps its own identity.
    */
   val acceptedOwner: PhaseStrategy
+
+  val modelDirectiveSupplements: ModelDirectiveSupplements
 
   val launchState: PhaseLaunchState
 

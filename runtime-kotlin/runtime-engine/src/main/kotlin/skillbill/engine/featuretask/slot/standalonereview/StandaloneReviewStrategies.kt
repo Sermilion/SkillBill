@@ -60,7 +60,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -168,7 +167,7 @@ abstract class StandaloneReviewStrategy(
           is ParallelCodeReviewPlanned.Ready -> resolved.value?.let(::delegatedQualityRubricSection)
         }
       }
-    val directive = standaloneDirective(run, target, headSha, qualitySection)
+    val directive = standaloneDirective(run, binding, target, headSha, qualitySection)
     return runPreparedReview(
       run,
       binding,
@@ -317,6 +316,7 @@ abstract class StandaloneReviewStrategy(
 
   private fun standaloneDirective(
     run: PhaseRun,
+    binding: PhaseReviewStepBinding,
     target: ReviewTarget,
     head: String,
     qualitySection: String?,
@@ -336,16 +336,16 @@ abstract class StandaloneReviewStrategy(
         appendLine()
         append(it)
       }
-      if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
-        val extra =
-          when (strategyId) {
-            DelegatedStandaloneReviewOpus55Strategy.ID -> DelegatedStandaloneReviewOpus55Strategy.DIRECTIVE
-            else -> InlineStandaloneReviewOpus55Strategy.DIRECTIVE
-          }
+      supplement(run, binding)?.let {
         appendLine()
-        append(extra)
+        append(it)
       }
     }
+
+  private fun supplement(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+  ): String? = binding.modelDirectiveSupplements.directiveFor(run, binding.acceptedOwner)
 
   private fun delegatedQualityRubricSection(rubric: String): String =
     buildString {
@@ -451,12 +451,7 @@ abstract class StandaloneReviewStrategy(
               launch.skillRunRequest.progressIdleTimeout
                 ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
             modelOverride = run.launchAssignment?.launch?.effectiveModel,
-            directiveSuffix =
-              if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
-                DelegatedStandaloneReviewOpus55Strategy.DIRECTIVE
-              } else {
-                ""
-              },
+            directiveSuffix = supplement(run, binding).orEmpty(),
           )
         when (val outcome = delegatedRunner.run(request)) {
           is ParallelCodeReviewRunOutcome.PlanningFailed -> {

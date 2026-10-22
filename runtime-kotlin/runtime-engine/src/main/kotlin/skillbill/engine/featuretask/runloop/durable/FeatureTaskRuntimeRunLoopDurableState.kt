@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
@@ -83,6 +84,8 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun runnerFor(stepId: String) = strategies.runnerFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
+
+  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = strategies.modelDirectiveSupplements
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 

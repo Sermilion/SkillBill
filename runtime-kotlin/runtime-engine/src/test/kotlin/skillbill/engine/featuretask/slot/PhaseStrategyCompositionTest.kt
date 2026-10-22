@@ -10,54 +10,37 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PROMPT_COMPOSER_ISSUE_KEY
-import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.FILE_MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.GENERATION_SCOPED
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.READ_ONLY_IDLE
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.SINGLE
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.LaneScript
-import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
-import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
-import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
-import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
-import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qa.QaStrategy
-import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
-import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
-import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
-import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.goalrunner.intake.testPlanIntake
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
@@ -68,16 +51,12 @@ import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanErr
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.skeleton.OPUS_55_STRATEGY_ID_SUFFIX
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -101,9 +80,6 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY
-import java.lang.reflect.InvocationTargetException
-import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -120,6 +96,13 @@ class PhaseStrategyCompositionTest {
   private fun productionRegistry(): PhaseStrategyRegistry =
     PhaseStrategyRegistry(productionStrategies().map { PhaseStrategyRegistration(it, runner) })
 
+  private fun testLookup(registry: PhaseStrategyRegistry): PhaseStrategyLookup =
+    PhaseStrategyLookup(
+      registry,
+      PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings),
+      ModelDirectiveSupplements(enabled = true),
+    )
+
   private fun productionStrategies(): List<PhaseStrategy> {
     val database =
       sqliteSessionFactoryForTests(
@@ -132,14 +115,10 @@ class PhaseStrategyCompositionTest {
     return strategies +
       listOf(
         standaloneMonitor,
-        StandaloneMonitorOpus55Strategy(standaloneMonitor),
         StandaloneMonitorPublicationStrategy(UnavailableStandaloneMonitorService.service),
         DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-        DelegatedReviewOpus55Strategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
         DelegatedStandaloneReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-        DelegatedStandaloneReviewOpus55Strategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
         fanOut,
-        PlanFanOutOpus55Strategy(fanOut),
         QaStrategy(
           unavailableQaReportSettlement(),
           testQaExecutionLifecycle(NoopWorkflowGitOperations),
@@ -172,28 +151,17 @@ class PhaseStrategyCompositionTest {
     listOf(
       RuntimeIntakeStrategy { testPlanIntake() },
       AgentPreplanStrategy(),
-      AgentPreplanOpus55Strategy(),
       AgentPlanStrategy(),
-      AgentPlanOpus55Strategy(),
       ImplementThenSimplifyStrategy(),
-      ImplementThenSimplifyOpus55Strategy(),
       AcceptanceAuditStrategy(),
-      AcceptanceAuditOpus55Strategy(),
       InlineReviewStrategy(runner),
-      InlineReviewOpus55Strategy(runner),
       InlineStandaloneReviewStrategy(runner),
-      InlineStandaloneReviewOpus55Strategy(runner),
       PackBuildStrategy(),
-      PackBuildOpus55Strategy(),
       AgentValidateStrategy(),
-      AgentValidateOpus55Strategy(),
       BoundaryHistoryStrategy(),
-      BoundaryHistoryOpus55Strategy(),
       RuntimeCommitStrategy(),
       prDescriptionStrategy,
-      PrDescriptionOpus55Strategy(prDescriptionStrategy),
       monitorStrategy,
-      MonitorOpus55Strategy(monitorStrategy),
     )
 
   @Test
@@ -205,7 +173,7 @@ class PhaseStrategyCompositionTest {
 
   @Test
   fun `every implement strategy tells implement how to return a no-change claim`() {
-    listOf(ImplementThenSimplifyStrategy(), ImplementThenSimplifyOpus55Strategy()).forEach { strategy ->
+    listOf(ImplementThenSimplifyStrategy()).forEach { strategy ->
       val implement =
         strategy.promptSections(
           "implement",
@@ -274,7 +242,7 @@ class PhaseStrategyCompositionTest {
               ),
           ),
         )
-      val lookup = PhaseStrategyLookup(registry, selection)
+      val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
       val orders =
         listOf(
           linkedSetOf(FeatureTaskRuntimeQualityGateSelection.BUILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
@@ -300,7 +268,7 @@ class PhaseStrategyCompositionTest {
         registry,
         mapOf(definition to mapOf(PhaseSlot.CODE_REVIEW to PhaseStrategyBinding.Fixed("review-only"))),
       )
-    val lookup = PhaseStrategyLookup(registry, selection)
+    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(definition, emptySet()))
 
     assertFailsWith<InvalidPhaseStrategyCompositionError> {
@@ -312,7 +280,7 @@ class PhaseStrategyCompositionTest {
   fun `production resolver accepts every shipped definition and supported typed selection`() {
     val registry = productionRegistry()
     val selection = PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings)
-    val lookup = PhaseStrategyLookup(registry, selection)
+    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
 
     SkeletonDefinition.entries.forEach { definition ->
       val reviewModes: List<CodeReviewExecutionMode?> =
@@ -350,7 +318,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `the internal standalone monitor binds its own strategies and leaves the legacy monitor bindings alone`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val standalone =
       lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE_MONITOR, emptySet()))
     val legacy = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.MONITOR, emptySet()))
@@ -361,14 +329,14 @@ class PhaseStrategyCompositionTest {
     assertEquals(MonitorStrategy.ID, lookup.strategyFor(PHASE_MONITOR, legacy).strategyId)
     assertEquals(RuntimeCommitStrategy.ID, lookup.strategyFor(PHASE_COMMIT_PUSH, legacy).strategyId)
     assertEquals(
-      setOf(StandaloneMonitorStrategy.ID, StandaloneMonitorOpus55Strategy.ID),
+      setOf(StandaloneMonitorStrategy.ID),
       SkeletonStrategyBindings.bindings
         .getValue(SkeletonDefinition.STANDALONE_MONITOR)
         .getValue(PhaseSlot.MONITOR)
         .strategyIds,
     )
     assertEquals(
-      setOf(MonitorStrategy.ID, MonitorOpus55Strategy.ID),
+      setOf(MonitorStrategy.ID),
       SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR).getValue(PhaseSlot.MONITOR).strategyIds,
     )
   }
@@ -376,7 +344,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `resolved compositions round trip through the production codec without losing traversal or policy semantics`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val codec = FeatureTaskRuntimeExecutionPlanCodec(FeatureTaskRuntimeExecutionPlanSchemaValidator())
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     SkeletonDefinition.entries.forEach { definition ->
@@ -439,7 +407,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `reader distinguishes descriptor failures before attaching runners`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
@@ -497,7 +465,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `supported composition refuses recorded selection and traversal changes without replacing the stored plan`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
@@ -531,7 +499,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `composition compatibility retains semantics across object order and fresh executable instances`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val original = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
@@ -555,6 +523,7 @@ class PhaseStrategyCompositionTest {
               ),
           ),
         ),
+        ModelDirectiveSupplements(enabled = true),
       )
     val restored =
       FeatureTaskRuntimeExecutionPlanCompatibility(codec, freshLookup).requireSupportedComposition(
@@ -568,8 +537,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `a validated traversal override becomes part of the resolved plan`() {
     val registry = productionRegistry()
-    val selection = PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings)
-    val lookup = PhaseStrategyLookup(registry, selection)
+    val lookup = testLookup(registry)
     val facts =
       PhaseStrategySelectionFacts(
         SkeletonDefinition.GOAL_CHILD,
@@ -592,280 +560,7 @@ class PhaseStrategyCompositionTest {
     assertEquals(resolved.selectedStepIds, accepted.selectedStepIds)
   }
 
-  @Test
-  fun `every opus wrapper forwards each open strategy member to its canonical instance`() {
-    val wrappers = productionStrategies().filter { it.strategyId.endsWith(OPUS_55_STRATEGY_ID_SUFFIX) }
-    val members = openStrategyMembers()
-    assertTrue(wrappers.isNotEmpty())
-    assertEquals(
-      FORWARDING_RULES.keys,
-      members.map { it.memberName() }.toSet(),
-      "Every open PhaseStrategy member needs exactly one forwarding classification.",
-    )
-    wrappers.forEach { wrapper ->
-      val canonical = composedCanonical(wrapper) ?: return@forEach
-      members
-        .filter { it.declaringClass.isInstance(wrapper) && it.declaringClass.isInstance(canonical) }
-        .forEach { assertForwarded(wrapper, canonical, it) }
-    }
-  }
-
-  private fun openStrategyMembers(): List<Method> =
-    listOf(PhaseStrategy::class.java, PhaseStrategyStatusProjection::class.java)
-      .flatMap { it.declaredMethods.asList() }
-      .filter {
-        !it.isSynthetic && !Modifier.isStatic(it.modifiers) && !Modifier.isPrivate(it.modifiers) &&
-          !Modifier.isFinal(it.modifiers)
-      }
-
-  private fun composedCanonical(wrapper: PhaseStrategy): PhaseStrategy? {
-    val fields = wrapper.javaClass.declaredFields.filter { PhaseStrategy::class.java.isAssignableFrom(it.type) }
-    if (fields.isEmpty()) {
-      val parent = wrapper.javaClass.superclass
-      assertTrue(
-        parent != PhaseStrategy::class.java && parent != PhaseStrategyStatusProjection::class.java &&
-          !Modifier.isAbstract(parent.modifiers),
-        "${wrapper.strategyId} has neither a composed canonical instance nor a concrete canonical parent.",
-      )
-      return null
-    }
-    val field = fields.single()
-    field.isAccessible = true
-    return field.get(wrapper) as PhaseStrategy
-  }
-
-  private fun assertForwarded(
-    wrapper: PhaseStrategy,
-    canonical: PhaseStrategy,
-    member: Method,
-  ) {
-    member.isAccessible = true
-    val steps = (canonical.steps + wrapper.steps).distinct()
-    val label = "${wrapper.strategyId}.${member.memberName()}"
-    when (FORWARDING_RULES.getValue(member.memberName())) {
-      Forwarding.EQUAL -> assertEquals(member.call(canonical), member.call(wrapper), label)
-      Forwarding.SAME -> assertSameOutcome(member.call(canonical), member.call(wrapper), label)
-      Forwarding.STEP_EQUAL ->
-        steps.forEach { assertEquals(member.call(canonical, it), member.call(wrapper, it), "$label($it)") }
-      Forwarding.STEP_SAME ->
-        steps.forEach { assertSameOutcome(member.call(canonical, it), member.call(wrapper, it), "$label($it)") }
-      Forwarding.RECORDED_IDENTITY -> assertRecordedIdentity(wrapper, canonical, member, steps)
-      Forwarding.PROMPT -> steps.forEach { assertPromptSupplement(wrapper, canonical, it) }
-      Forwarding.VERDICT -> steps.forEach { assertVerdictEquivalent(wrapper, canonical, member, it) }
-      Forwarding.OVERRIDDEN ->
-        if (declaresMember(canonical, member)) {
-          assertTrue(declaresMember(wrapper, member), "$label must forward to its canonical instance.")
-        }
-    }
-  }
-
-  private fun assertRecordedIdentity(
-    wrapper: PhaseStrategy,
-    canonical: PhaseStrategy,
-    member: Method,
-    steps: List<String>,
-  ) {
-    val recorded = canonical.strategyId + OPUS_55_STRATEGY_ID_SUFFIX
-    when (member.memberName()) {
-      "getStrategyId" -> assertEquals(recorded, wrapper.strategyId)
-      "stepPolicyIdentity" ->
-        steps.forEach {
-          assertEquals(
-            canonical.policyFor(it).semanticIdentity(recorded, canonical.semanticRevision, it),
-            wrapper.stepPolicyIdentity(it),
-          )
-        }
-      "resumeInterpretationIdentity" ->
-        steps.forEach {
-          assertEquals(
-            canonical.resumeInterpretationIdentity(it).replace(canonical.strategyId, recorded),
-            wrapper.resumeInterpretationIdentity(it),
-          )
-        }
-      else ->
-        assertEquals(
-          canonical.acceptsAttemptStrategy(canonical.strategyId),
-          wrapper.acceptsAttemptStrategy(recorded),
-        )
-    }
-  }
-
-  private fun assertPromptSupplement(
-    wrapper: PhaseStrategy,
-    canonical: PhaseStrategy,
-    step: String,
-  ) {
-    val canonicalInputs =
-      FeatureTaskRuntimePhasePromptComposeInputs(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(step))
-    val opusInputs = canonicalInputs.copy(stepProfile = PhaseModelProfile.OPUS_5_5)
-    val base = attempt { canonical.promptSections(step, opusInputs) }
-    if (base !is PhaseStepPromptSections) {
-      assertEquals(base, attempt { wrapper.promptSections(step, opusInputs) })
-      return
-    }
-    assertEquals(
-      canonical.promptSections(step, canonicalInputs).withoutRewrite(),
-      wrapper.promptSections(step, canonicalInputs).withoutRewrite(),
-    )
-    val opus = wrapper.promptSections(step, opusInputs)
-    if (wrapper.strategyId in UNSUPPLEMENTED_PROMPT_WRAPPERS) {
-      assertEquals(base.withoutRewrite(), opus.withoutRewrite(), "${wrapper.strategyId}($step) adds no supplement")
-      return
-    }
-    assertTrue(opus.taskDirective.startsWith(base.taskDirective), "${wrapper.strategyId}($step) keeps canonical text")
-    assertTrue(opus.taskDirective.length > base.taskDirective.length, "${wrapper.strategyId}($step) adds a supplement")
-    val withoutSupplement =
-      opus.copy(
-        taskDirective = base.taskDirective,
-        retryFocus = base.retryFocus,
-        outputContract = base.outputContract,
-      )
-    assertEquals(base.withoutRewrite(), withoutSupplement.withoutRewrite())
-  }
-
-  private fun assertVerdictEquivalent(
-    wrapper: PhaseStrategy,
-    canonical: PhaseStrategy,
-    member: Method,
-    step: String,
-  ) {
-    val canonicalDiagnostics = RecordingDiagnostics()
-    val wrapperDiagnostics = RecordingDiagnostics()
-    val expected = member.call(canonical, step, canonicalDiagnostics)
-    val actual = member.call(wrapper, step, wrapperDiagnostics)
-    if (expected !is FeatureTaskRuntimeStepVerdictRule || actual !is FeatureTaskRuntimeStepVerdictRule) {
-      assertEquals(expected, actual)
-      return
-    }
-    if (member.call(canonical, step, canonicalDiagnostics) === expected) {
-      assertSame(expected, actual)
-      return
-    }
-    VERDICT_INPUTS.forEach { (verdict, output) ->
-      assertEquals(attempt { expected.verdictFor(verdict, output) }, attempt { actual.verdictFor(verdict, output) })
-    }
-    assertEquals(canonicalDiagnostics.events, wrapperDiagnostics.events)
-  }
-
-  private fun declaresMember(
-    strategy: PhaseStrategy,
-    member: Method,
-  ): Boolean = strategy.javaClass.getMethod(member.name, *member.parameterTypes).declaringClass != member.declaringClass
-
-  private fun assertSameOutcome(
-    expected: Any?,
-    actual: Any?,
-    label: String,
-  ) {
-    if (expected is Thrown) assertEquals(expected, actual, label) else assertSame(expected, actual, label)
-  }
-
-  private fun Method.memberName(): String = name.substringBefore('$')
-
-  private fun Method.call(
-    target: Any,
-    vararg args: Any?,
-  ): Any? =
-    try {
-      invoke(target, *args)
-    } catch (failure: InvocationTargetException) {
-      Thrown(failure.targetException.javaClass, failure.targetException.message)
-    }
-
-  private fun attempt(block: () -> Any?): Any? =
-    try {
-      block()
-    } catch (failure: RuntimeException) {
-      Thrown(failure.javaClass, failure.message)
-    }
-
-  private fun PhaseStepPromptSections.withoutRewrite(): PhaseStepPromptSections = copy(briefingRewrite = null)
-
-  private data class Thrown(
-    val type: Class<*>,
-    val message: String?,
-  )
-
-  private class RecordingDiagnostics : RuntimeDiagnostics {
-    val events = mutableListOf<String>()
-
-    override fun warning(
-      message: String,
-      error: Throwable?,
-    ) {
-      events += "warning:$message:${error?.javaClass}"
-    }
-
-    override fun error(
-      message: String,
-      error: Throwable?,
-    ) {
-      events += "error:$message:${error?.javaClass}"
-    }
-
-    override fun info(message: String) {
-      events += "info:$message"
-    }
-  }
-
-  private enum class Forwarding {
-    EQUAL,
-    SAME,
-    STEP_EQUAL,
-    STEP_SAME,
-    RECORDED_IDENTITY,
-    PROMPT,
-    VERDICT,
-    OVERRIDDEN,
-  }
-
   private companion object {
-    val UNSUPPLEMENTED_PROMPT_WRAPPERS = setOf(MonitorOpus55Strategy.ID, StandaloneMonitorOpus55Strategy.ID)
-
-    val FORWARDING_RULES =
-      mapOf(
-        "getSlot" to Forwarding.EQUAL,
-        "getSemanticRevision" to Forwarding.EQUAL,
-        "getPlansInFanOut" to Forwarding.EQUAL,
-        "getAcceptanceRepairSteps" to Forwarding.EQUAL,
-        "getMonitorRepairSteps" to Forwarding.EQUAL,
-        "getQualityGateOperation" to Forwarding.EQUAL,
-        "getSteps" to Forwarding.EQUAL,
-        "getOptionalSteps" to Forwarding.EQUAL,
-        "getEntryStep" to Forwarding.EQUAL,
-        "getLoopRules" to Forwarding.SAME,
-        "policyFor" to Forwarding.STEP_EQUAL,
-        "directiveFor" to Forwarding.STEP_EQUAL,
-        "executionBindingKind" to Forwarding.STEP_EQUAL,
-        "briefingInvariantFields" to Forwarding.STEP_EQUAL,
-        "reportedGate" to Forwarding.STEP_EQUAL,
-        "stepHooks" to Forwarding.STEP_SAME,
-        "resumeRules" to Forwarding.STEP_SAME,
-        "getStrategyId" to Forwarding.RECORDED_IDENTITY,
-        "stepPolicyIdentity" to Forwarding.RECORDED_IDENTITY,
-        "resumeInterpretationIdentity" to Forwarding.RECORDED_IDENTITY,
-        "acceptsAttemptStrategy" to Forwarding.RECORDED_IDENTITY,
-        "promptSections" to Forwarding.PROMPT,
-        "verdictRule" to Forwarding.VERDICT,
-        "runStep" to Forwarding.OVERRIDDEN,
-        "withPreparedRun" to Forwarding.OVERRIDDEN,
-        "mapRecordedExecutionPlan" to Forwarding.OVERRIDDEN,
-        "currentExecution" to Forwarding.OVERRIDDEN,
-      )
-
-    val VERDICT_INPUTS: List<Pair<FeatureTaskRuntimeVerdict?, FeatureTaskRuntimeWorkflowArtifactMap?>> =
-      listOf(
-        null,
-        FeatureTaskRuntimeVerdict.SATISFIED,
-        FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED,
-        FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED,
-        FeatureTaskRuntimeVerdict.UNSATISFIED,
-        FeatureTaskRuntimeVerdict.APPROVED,
-        FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
-      ).flatMap { verdict ->
-        listOf(null, FeatureTaskRuntimeWorkflowArtifactMap.from(emptyMap<String, Any?>())).map { verdict to it }
-      }
-
     val EXPECTED_POLICIES =
       mapOf(
         PHASE_INTAKE to policy(),

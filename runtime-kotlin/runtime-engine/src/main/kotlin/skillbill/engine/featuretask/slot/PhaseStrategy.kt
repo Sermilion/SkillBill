@@ -31,10 +31,15 @@ abstract class PhaseStrategy {
     current: ResolvedPhaseExecutionPlan,
   ): PhaseExecutionPlanMapping? = null
 
-  open fun stepPolicyIdentity(stepId: String): String =
-    policyFor(stepId).semanticIdentity(strategyId, semanticRevision, stepId)
+  open fun stepPolicyIdentity(
+    stepId: String,
+    recordedStrategyId: String = strategyId,
+  ): String = policyFor(stepId).semanticIdentity(recordedStrategyId, semanticRevision, stepId)
 
-  open fun resumeInterpretationIdentity(stepId: String): String = "$strategyId/$semanticRevision:$stepId"
+  open fun resumeInterpretationIdentity(
+    stepId: String,
+    recordedStrategyId: String = strategyId,
+  ): String = "$recordedStrategyId/$semanticRevision:$stepId"
 
   internal open fun executionBindingKind(stepId: String): PhaseExecutionBindingKind {
     policyFor(stepId)

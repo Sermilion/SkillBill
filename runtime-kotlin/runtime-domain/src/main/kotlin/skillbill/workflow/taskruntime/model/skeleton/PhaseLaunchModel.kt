@@ -131,8 +131,6 @@ fun passThroughLaunchModel(
 fun boundedSafeModelIdentity(value: String): String =
   if (LAUNCH_MODEL_TOKEN_PATTERN.matches(value)) value else "<redacted:${value.length}>"
 
-const val OPUS_55_STRATEGY_ID_SUFFIX: String = "-opus-5-5"
-
 fun immutableStepLaunchAssignments(assignments: Map<String, StepLaunchAssignment>): Map<String, StepLaunchAssignment> =
   Collections.unmodifiableMap(
     LinkedHashMap(

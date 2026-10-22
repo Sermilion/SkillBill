@@ -1,3 +1,15 @@
+## [2026-10-22] Historical opus-5-5 ids are slot-scoped aliases, not registered strategies
+Context: SKILL-437 deleted the opus-5-5 strategy classes, but in-flight and archived plans still record ids like inline-opus-5-5, and inline-opus-5-5 exists in both CODE_REVIEW and STANDALONE_REVIEW.
+Decision: A private slot-scoped alias table in the registry maps each recorded id to its canonical strategy. Selection matching, dispatch and the compatibility check accept it; policy and resume identities use the recorded id, and descriptors are not rewritten.
+Reason: Recorded plans must resume without a migration, and keying by slot keeps the two inline-opus-5-5 entries apart. The table also keeps the slot package under its sibling-file ceiling.
+Revisit when: No recorded plan can carry an opus-5-5 strategy id any more.
+
+## [2026-10-22] Model directive supplements are text-only and recorded-profile-gated
+Context: Model-specific prompt text used to live in strategy wrappers that also changed strategy identity.
+Decision: One ModelDirectiveSupplements owner appends the text for a recorded OPUS_5_5 profile only, never for monitor phases. The env setting is strict true/false, and false removes only the text.
+Reason: Identity, profile classification and launch evidence must not change with a prompt switch, and a typo in the setting should refuse loudly rather than silently pick a default.
+Alternatives considered: Keeping per-model strategy classes, rejected because they duplicated every canonical strategy to change one prompt block.
+
 ## [2026-10-22] Rubric failure degrades inline review instead of blocking it
 Context: SKILL-421 made inline review block when the code-quality rubric could not be resolved, but the inline agent reviews every area itself, so the lane is only an addition.
 Decision: On a Failed rubric resolution the inline paths warn through runtime diagnostics, omit the lane section and run the review. Only the delegated standalone path still blocks.

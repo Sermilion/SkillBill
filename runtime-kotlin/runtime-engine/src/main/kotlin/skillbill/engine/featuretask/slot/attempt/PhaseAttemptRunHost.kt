@@ -29,6 +29,7 @@ import skillbill.engine.featuretask.runloop.state.runLoopCoupledProgress
 import skillbill.engine.featuretask.runloop.state.runLoopCoupledSession
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -144,6 +145,9 @@ internal class PhaseAttemptRunHost(
 
   val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = backingRunState.implementationChecklistStore
+
+  val modelDirectiveSupplements: ModelDirectiveSupplements
+    get() = backingRunState.modelDirectiveSupplements
 
   fun selectedOwnerOf(stepId: String): PhaseStrategy? = backingRunState.selectedOwnerOf(stepId)
 

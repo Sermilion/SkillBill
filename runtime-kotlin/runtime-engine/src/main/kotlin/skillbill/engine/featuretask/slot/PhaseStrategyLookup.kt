@@ -1,14 +1,31 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.directive.directiveResource
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
+import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
+import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
+import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
@@ -23,6 +40,7 @@ import java.util.concurrent.ConcurrentHashMap
 class PhaseStrategyLookup(
   val registry: PhaseStrategyRegistry,
   private val selection: PhaseStrategySelection,
+  val modelDirectiveSupplements: ModelDirectiveSupplements,
 ) {
   private val plans = ConcurrentHashMap<PlanKey, ResolvedPhaseExecutionPlan>()
   private val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
@@ -67,8 +85,8 @@ class PhaseStrategyLookup(
       )
     }
     if (
-      strategy.stepPolicyIdentity(stepId) != plan.stepPolicyIdentities[stepId] ||
-      strategy.resumeInterpretationIdentity(stepId) != plan.resumeInterpretationIdentities[stepId]
+      strategy.stepPolicyIdentity(stepId, identity.strategyId) != plan.stepPolicyIdentities[stepId] ||
+      strategy.resumeInterpretationIdentity(stepId, identity.strategyId) != plan.resumeInterpretationIdentities[stepId]
     ) {
       invalidComposition(
         "strategy ${identity.strategyId} policies do not match the resolved plan",
@@ -110,7 +128,8 @@ class PhaseStrategyLookup(
       )
     return plan.selectedStrategies.all { identity ->
       selection.binds(identity.slot, recordedFacts) &&
-        selection.specializedStrategyIdFor(identity.slot, recordedFacts, identity.steps) == identity.strategyId
+        selection.strategyIdFor(identity.slot, recordedFacts) ==
+        registry.canonicalStrategyId(identity.slot, identity.strategyId)
     }
   }
 
@@ -129,11 +148,52 @@ class PhaseStrategyLookup(
         },
         recorded.stepLaunchAssignments,
       )
-    val current = executionPlan(facts)
+    val current = executionPlan(facts).recordedAs(recorded)
     return recorded.selectedStrategies.mapNotNull { identity ->
       if (!registry.contains(identity.slot, identity.strategyId)) return@mapNotNull null
       registry.strategy(identity.slot, identity.strategyId).mapRecordedExecutionPlan(recorded, current)
     }.singleOrNull()
+  }
+
+  private fun ResolvedPhaseExecutionPlan.recordedAs(recorded: ResolvedPhaseExecutionPlan): ResolvedPhaseExecutionPlan {
+    val recordedIds = recorded.selectedStrategies.associate { it.slot to it.strategyId }
+    val aliasedSteps = linkedMapOf<String, Pair<PhaseStrategy, String>>()
+    val identities =
+      selectedStrategies.map { identity ->
+        val recordedId = recordedIds[identity.slot]
+        if (
+          recordedId == null || recordedId == identity.strategyId ||
+          registry.canonicalStrategyId(identity.slot, recordedId) != identity.strategyId
+        ) {
+          return@map identity
+        }
+        val strategy = registry.strategy(identity.slot, identity.strategyId)
+        identity.steps.forEach { step -> aliasedSteps[step] = strategy to recordedId }
+        identity.copy(strategyId = recordedId)
+      }
+    if (aliasedSteps.isEmpty()) return this
+    return ResolvedPhaseExecutionPlan(
+      definitionId = definitionId,
+      definitionSemanticRevision = definitionSemanticRevision,
+      selectedStrategies = identities,
+      reviewSelection = reviewSelection,
+      qualityGateSelection = qualityGateSelection,
+      traversal = traversal,
+      stepRecords =
+        ResolvedPhaseStepRecords(
+          stepPolicyIdentities.mapValues { (step, identity) ->
+            aliasedSteps[step]?.let { (strategy, id) -> strategy.stepPolicyIdentity(step, id) } ?: identity
+          },
+          resumeInterpretationIdentities.mapValues { (step, identity) ->
+            aliasedSteps[step]?.let { (strategy, id) -> strategy.resumeInterpretationIdentity(step, id) } ?: identity
+          },
+          stepLaunchAssignments,
+        ),
+      effectivePolicies = effectivePolicies,
+      effectivePolicySettings = effectivePolicySettings,
+      contractVersion = contractVersion,
+      qaSelection = qaSelection,
+    )
   }
 
   fun validateTraversalOverride(
@@ -173,16 +233,8 @@ class PhaseStrategyLookup(
   }
 
   private fun resolveUncached(facts: PhaseStrategySelectionFacts): ResolvedPhaseExecutionPlan {
-    val canonical = facts.definition.slots.map { slot -> registry.strategy(slot, selection.strategyIdFor(slot, facts)) }
+    val selected = facts.definition.slots.map { slot -> registry.strategy(slot, selection.strategyIdFor(slot, facts)) }
     val selectedSteps = linkedMapOf<String, PhaseStrategy>()
-    populateSelectedSteps(facts, canonical, selectedSteps)
-    val selected =
-      canonical.map { strategy ->
-        val participating = strategy.steps.filter { it in selectedSteps }
-        val specializedId = selection.specializedStrategyIdFor(strategy.slot, facts, participating)
-        registry.strategy(strategy.slot, specializedId)
-      }
-    selectedSteps.clear()
     populateSelectedSteps(facts, selected, selectedSteps)
     val entrySteps = selected.map { it.entryStep }.toSet()
     validateSelectedTraversalReferences(facts, selectedSteps.keys)
@@ -347,4 +399,71 @@ class PhaseStrategyLookup(
   )
 
   private fun invalidComposition(reason: String): Nothing = throw InvalidPhaseStrategyCompositionError(reason)
+}
+
+class ModelDirectiveSupplements(val enabled: Boolean) {
+  private val loaded = ConcurrentHashMap<String, String>()
+
+  internal fun directiveFor(
+    owner: PhaseStrategy,
+    stepId: String,
+    profile: PhaseModelProfile,
+  ): String? {
+    if (!enabled || profile != PhaseModelProfile.OPUS_5_5) return null
+    val path =
+      if (owner.slot == PhaseSlot.PLAN &&
+        owner.strategyId == PlanFanOutStrategy.ID &&
+        stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
+      ) {
+        PLAN_FAN_OUT_SUBTASKS_RESOURCE
+      } else {
+        RESOURCES[owner.slot to owner.strategyId]
+      }
+    return path?.let { resource -> loaded.computeIfAbsent(resource) { directiveResource(it).trimEnd() } }
+      ?.takeIf(String::isNotBlank)
+  }
+
+  internal fun directiveFor(
+    run: PhaseRun,
+    owner: PhaseStrategy,
+  ): String? = directiveFor(owner, run.phaseId, run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL)
+
+  internal fun supplement(
+    sections: PhaseStepPromptSections,
+    owner: PhaseStrategy,
+    stepId: String,
+    profile: PhaseModelProfile,
+  ): PhaseStepPromptSections {
+    val block = directiveFor(owner, stepId, profile) ?: return sections
+    return sections.copy(
+      taskDirective = "${sections.taskDirective}\n\n$block",
+      retryFocus = if (sections.retryFocus.isBlank()) sections.retryFocus else "${sections.retryFocus}\n\n$block",
+      outputContract = sections.outputContract?.let { "$it\n\n$block" },
+    )
+  }
+
+  private companion object {
+    const val BASE = "/skillbill/engine/featuretask/slot"
+    const val PLAN_FAN_OUT_SUBTASKS_RESOURCE = "$BASE/plan/opus-5-5-goal-plan-fan-out.md"
+
+    val RESOURCES: Map<Pair<PhaseSlot, String>, String> =
+      mapOf(
+        (PhaseSlot.PREPLAN to AgentPreplanStrategy.ID) to "$BASE/preplan/opus-5-5-agent-preplan.md",
+        (PhaseSlot.PLAN to AgentPlanStrategy.ID) to "$BASE/plan/opus-5-5-agent-plan.md",
+        (PhaseSlot.PLAN to PlanFanOutStrategy.ID) to "$BASE/plan/opus-5-5-agent-plan.md",
+        (PhaseSlot.IMPLEMENTATION to ImplementThenSimplifyStrategy.ID) to
+          "$BASE/implementation/opus-5-5-implement-then-simplify.md",
+        (PhaseSlot.AUDIT to AcceptanceAuditStrategy.ID) to "$BASE/audit/opus-5-5-acceptance-audit.md",
+        (PhaseSlot.CODE_REVIEW to InlineReviewStrategy.ID) to "$BASE/codereview/opus-5-5-inline.md",
+        (PhaseSlot.CODE_REVIEW to DelegatedReviewStrategy.ID) to "$BASE/codereview/opus-5-5-delegated.md",
+        (PhaseSlot.STANDALONE_REVIEW to InlineStandaloneReviewStrategy.ID) to
+          "$BASE/standalonereview/opus-5-5-inline.md",
+        (PhaseSlot.STANDALONE_REVIEW to DelegatedStandaloneReviewStrategy.ID) to
+          "$BASE/standalonereview/opus-5-5-delegated.md",
+        (PhaseSlot.QUALITY_GATE to PackBuildStrategy.ID) to "$BASE/qualitygate/opus-5-5-pack-build.md",
+        (PhaseSlot.QUALITY_GATE to AgentValidateStrategy.ID) to "$BASE/qualitygate/opus-5-5-agent-validate.md",
+        (PhaseSlot.WRITE_HISTORY to BoundaryHistoryStrategy.ID) to "$BASE/writehistory/opus-5-5-boundary-history.md",
+        (PhaseSlot.PULL_REQUEST to PrDescriptionStrategy.ID) to "$BASE/pullrequest/opus-5-5-pr-description.md",
+      )
+  }
 }

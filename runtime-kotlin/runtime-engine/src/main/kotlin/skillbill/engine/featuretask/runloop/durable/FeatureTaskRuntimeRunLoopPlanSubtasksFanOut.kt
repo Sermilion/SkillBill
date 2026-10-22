@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.runloop.planning.PlanUnitAttempt
 import skillbill.engine.featuretask.runloop.planning.PlanUnitRecords
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
@@ -234,6 +235,8 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override fun runnerFor(stepId: String) = parent.runnerFor(stepId)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = parent.selectedOwnerOf(stepId)
+
+  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = parent.modelDirectiveSupplements
 
   override fun unselectedStepIds(): Set<String> = parent.unselectedStepIds()
 

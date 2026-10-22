@@ -20,7 +20,6 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
-import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
@@ -35,7 +34,6 @@ import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
@@ -130,12 +128,8 @@ internal class InlineReviewPass(
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
         qualityRubric = qualityRubric,
       )
-    val directive =
-      if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
-        "$composed\n\n${InlineReviewOpus55Strategy.DIRECTIVE}"
-      } else {
-        composed
-      }
+    val supplement = state.modelDirectiveSupplements.directiveFor(run, state.acceptedOwner)
+    val directive = if (supplement == null) composed else "$composed\n\n$supplement"
     val output = runner.run(reviewStepInput(run, directive), state.launchState)
     return ParallelCodeReviewRunOutcome.Reviewed(
       InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)

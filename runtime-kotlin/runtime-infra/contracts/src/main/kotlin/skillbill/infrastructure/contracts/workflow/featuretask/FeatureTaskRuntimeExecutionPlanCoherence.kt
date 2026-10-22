@@ -6,7 +6,6 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaE
 import skillbill.error.shellcontent.incoherentStepLaunchAssignments
 import skillbill.error.shellcontent.malformedStepLaunchAssignment
 import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
-import skillbill.workflow.taskruntime.model.skeleton.OPUS_55_STRATEGY_ID_SUFFIX
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
@@ -104,8 +103,8 @@ private fun validateSelectedStrategyProfiles(
   instance.path(Keys.SELECTED_STRATEGIES).forEach { strategy ->
     val steps = strategy.path(Keys.SELECTED_STEPS).map(JsonNode::asText)
     val hasOpus = steps.any { profileByStep[it] == PhaseModelProfile.OPUS_5_5.wireValue }
-    val isOpusStrategy = strategy.path(Keys.STRATEGY_ID).asText().endsWith(OPUS_55_STRATEGY_ID_SUFFIX)
-    if (hasOpus != isOpusStrategy) {
+    val isHistoricalOpusStrategy = strategy.path(Keys.STRATEGY_ID).asText().endsWith(HISTORICAL_OPUS_STRATEGY_ID_SUFFIX)
+    if (isHistoricalOpusStrategy && !hasOpus) {
       throw incoherentStepLaunchAssignments("slot strategy profile does not match participating steps")
     }
   }
@@ -238,3 +237,4 @@ private fun canonicalPlanValue(
   }
 
 private const val MAX_POLICY_IDENTITIES = 256
+private const val HISTORICAL_OPUS_STRATEGY_ID_SUFFIX = "-opus-5-5"

@@ -1,3 +1,14 @@
+## [2026-10-22] SKILL-437 subtask 2: model supplements replace opus-5-5 strategy variants
+Areas: runtime-engine featuretask slot, slot/skeleton, slot/state, slot/attempt, slot/codereview, slot/standalonereview, runloop, phaserun, lifecycle/execution; runtime-core di/featuretask; runtime-domain skeleton model; runtime-contracts failure codes; runtime-infra/contracts plan coherence
+- The 15 *Opus55Strategy classes, ByProfile, withOpus and the opus suffix helper are deleted. Skeleton bindings register canonical strategies only; launch assignments and the profile-sensitive plan cache key stay.
+- ModelDirectiveSupplements (in PhaseStrategyLookup.kt) appends the old opus-5-5 resource after taskDirective, a non-blank retryFocus and a non-null outputContract, only for a recorded OPUS_5_5 profile. Monitor phases never get one. It travels through PhaseRunState, the attempt host, settlement scope and step binding, and the direct review launches. reusable
+- Core DI reads SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS (default on, strict true/false). Anything else refuses with INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING. Off drops only the text; identities and launch evidence stay.
+- A slot-scoped table of 15 historical opus-5-5 aliases lives in PhaseStrategyRegistry.kt. Registry lookup, selection matching and the compatibility check accept recorded alias ids; policy and resume identities are computed under the recorded id; descriptors are not rewritten.
+- The plan coherence check is one-directional: historical suffix ids still require an opus step, canonical ids with opus steps pass.
+- Limits: a canonical-id plan with an OPUS profile now matches and gets supplements. Alias tests build recorded plans in code, not from archived 0.2 bytes. The slot package sits at its 12-file ceiling, so new files there need another home. docs/model-specific-phase-strategies.md is left to subtask 6.
+Feature flag: SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS (env, default on)
+Acceptance criteria: implemented per spec_subtask_2 (validate ran full check green)
+
 ## [2026-10-22] SKILL-437 subtask 1: opus-5-5 monitor wrapper forwards step hooks
 Areas: runtime-engine featuretask slot/monitor; runtime-engine test phaserun and slot
 - MonitorOpus55Strategy now overrides stepHooks and forwards to the composed canonical MonitorStrategy. Before, the wrapper inherited default hooks, so a recorded opus-5-5 monitor_fix never reached PhaseMonitorStepBinding.publishRepair and the repair was never committed or pushed.

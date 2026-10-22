@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -373,6 +374,9 @@ internal open class PhaseAttemptSettlementScope(
     boundHost.ensureFeatureBranch(guardPhase)
 
   internal fun selectedOwnerOf(stepId: String): PhaseStrategy? = boundHost.selectedOwnerOf(stepId)
+
+  internal val modelDirectiveSupplements: ModelDirectiveSupplements
+    get() = boundHost.modelDirectiveSupplements
 
   internal fun resolveStrategyFor(stepId: String): PhaseStrategy = boundHost.strategyFor(stepId)
 

@@ -10,24 +10,20 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
-import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.model.EnvironmentContext
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -42,6 +38,9 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class RuntimeFeatureTaskSlotProvidesTest {
   private val strategies =
@@ -58,17 +57,47 @@ class RuntimeFeatureTaskSlotProvidesTest {
       ),
     ).strategies
 
+  private fun strategiesWith(environment: Map<String, String>): PhaseStrategyLookup =
+    RuntimeFeatureTaskSlotTestComponent::class.create(
+      RuntimeContext(
+        environment =
+          EnvironmentContext(
+            environment = environment,
+            userHome = Files.createTempDirectory("skillbill-slot-provides"),
+          ),
+        transport = TransportContext(),
+        workflowOps = WorkflowOpsContext(),
+        callbacks = OptionalCallbacks(),
+      ),
+    ).strategies
+
+  @Test
+  fun `model directive supplements default on and follow the setting`() {
+    val unrelated = mapOf("SKILL_BILL_UNRELATED" to "x")
+
+    assertTrue(strategiesWith(unrelated).modelDirectiveSupplements.enabled)
+    assertTrue(strategiesWith(mapOf(ModelDirectiveSupplementsSetting.KEY to "true")).modelDirectiveSupplements.enabled)
+    assertFalse(
+      strategiesWith(mapOf(ModelDirectiveSupplementsSetting.KEY to "false")).modelDirectiveSupplements.enabled,
+    )
+  }
+
+  @Test
+  fun `an unrecognized supplements setting is refused with its typed code`() {
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        strategiesWith(mapOf(ModelDirectiveSupplementsSetting.KEY to "off"))
+      }
+
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING, failure.code)
+  }
+
   @Test
   fun `production registry lists all quality_gate strategies`() {
     val registered = strategies.registry.strategies
 
     assertEquals(
-      listOf(
-        PackBuildStrategy.ID,
-        PackBuildOpus55Strategy.ID,
-        AgentValidateStrategy.ID,
-        AgentValidateOpus55Strategy.ID,
-      ),
+      listOf(PackBuildStrategy.ID, AgentValidateStrategy.ID),
       registered.filter { it.slot == PhaseSlot.QUALITY_GATE }.map { it.strategyId },
     )
     assertEquals(PhaseSlot.entries.toSet(), registered.map { it.slot }.toSet())
@@ -141,12 +170,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
       }
     }
     assertEquals(
-      listOf(
-        AgentPlanStrategy.ID,
-        AgentPlanOpus55Strategy.ID,
-        PlanFanOutStrategy.ID,
-        PlanFanOutOpus55Strategy.ID,
-      ),
+      listOf(AgentPlanStrategy.ID, PlanFanOutStrategy.ID),
       strategies.registry.strategies.filter { it.slot == PhaseSlot.PLAN }.map { it.strategyId },
     )
   }
@@ -154,12 +178,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
   @Test
   fun `delegated review is registered yet every accepted mode still selects inline`() {
     assertEquals(
-      listOf(
-        InlineReviewStrategy.ID,
-        InlineReviewOpus55Strategy.ID,
-        DelegatedReviewStrategy.ID,
-        DelegatedReviewOpus55Strategy.ID,
-      ),
+      listOf(InlineReviewStrategy.ID, DelegatedReviewStrategy.ID),
       strategies.registry.strategies.filter { it.slot == PhaseSlot.CODE_REVIEW }.map { it.strategyId },
     )
     CodeReviewExecutionMode.entries.forEach { mode ->
