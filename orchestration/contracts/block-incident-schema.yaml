@@ -27,6 +27,8 @@ properties:
       - reason_truncated
       - original_reason_length
       - evidence_references
+      - field_availability
+      - reason_retention
     properties:
       occurrence_token:
         type: string
@@ -100,8 +102,34 @@ properties:
               then:
                 properties:
                   source_line: { type: "null" }
+      field_availability:
+        type: object
+        additionalProperties: false
+        required: [workflow_id, parent_workflow_id, phase_id, phase_run_id, invocation_id, execution_id, attempt, generation, failure_code, throwable_type, exit_code, reason, repair_turn, output_generation, monitor_selector, pull_request_id, pull_request_url, head_repository, head_branch, worktree_path]
+        properties:
+          workflow_id: { $ref: "#/$defs/field_availability" }
+          parent_workflow_id: { $ref: "#/$defs/field_availability" }
+          phase_id: { $ref: "#/$defs/field_availability" }
+          phase_run_id: { $ref: "#/$defs/field_availability" }
+          invocation_id: { $ref: "#/$defs/field_availability" }
+          execution_id: { $ref: "#/$defs/field_availability" }
+          attempt: { $ref: "#/$defs/field_availability" }
+          generation: { $ref: "#/$defs/field_availability" }
+          failure_code: { $ref: "#/$defs/field_availability" }
+          throwable_type: { $ref: "#/$defs/field_availability" }
+          exit_code: { $ref: "#/$defs/field_availability" }
+          reason: { $ref: "#/$defs/field_availability" }
+          repair_turn: { $ref: "#/$defs/field_availability" }
+          output_generation: { $ref: "#/$defs/field_availability" }
+          monitor_selector: { $ref: "#/$defs/field_availability" }
+          pull_request_id: { $ref: "#/$defs/field_availability" }
+          pull_request_url: { $ref: "#/$defs/field_availability" }
+          head_repository: { $ref: "#/$defs/field_availability" }
+          head_branch: { $ref: "#/$defs/field_availability" }
+          worktree_path: { $ref: "#/$defs/field_availability" }
+      reason_retention: { enum: [complete, prefix_8192_chars_utf8_sha256, unknown_historical] }
       attempt: { type: [integer, "null"], minimum: 1 }
-      generation: { type: integer, minimum: 1 }
+      generation: { type: [integer, "null"], minimum: 1 }
       origin: { enum: [accepted_phase_block, accepted_goal_block, entry_failure, admission_refusal] }
       reason: { type: string, minLength: 1, maxLength: 8192 }
       reason_truncated: { type: boolean }
@@ -122,6 +150,7 @@ properties:
           required: [original_reason_digest]
           properties:
             original_reason_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+            reason_retention: { enum: [prefix_8192_chars_utf8_sha256, unknown_historical] }
       - if:
           properties:
             reason_truncated: { const: false }
@@ -129,6 +158,7 @@ properties:
         then:
           properties:
             original_reason_digest: { type: "null" }
+            reason_retention: { enum: [complete, unknown_historical] }
       - if:
           properties:
             exit_behavior: { const: exited_with_code }
@@ -196,3 +226,6 @@ properties:
         then:
           properties:
             claim: { type: "null" }
+$defs:
+  field_availability:
+    enum: [available, not_applicable, not_captured, unknown_historical]

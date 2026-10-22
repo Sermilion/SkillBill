@@ -15,15 +15,18 @@ import skillbill.contracts.workflow.identity.blockincident.BlockIncidentOccurren
 import skillbill.error.core.BlockIncidentFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceProvenance
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReference
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReferenceAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReasonRetention
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentState
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -47,7 +50,7 @@ internal object SqliteBlockIncidentOccurrenceCodec {
   private const val CLAIM_HOST_IDENTITY = "host_identity"
   private const val CLAIM_PROCESS_ID = "process_id"
   private const val CLAIM_EXPIRES_AT = "expires_at"
-  private val OCCURRENCE_KEYS = setOf(
+  private val LEGACY_OCCURRENCE_KEYS = setOf(
     Keys.OCCURRENCE_TOKEN, Keys.WORKFLOW_ID, Keys.PARENT_WORKFLOW_ID, Keys.PHASE_ID, Keys.PHASE_RUN_ID,
     Keys.INVOCATION_ID, Keys.EXECUTION_ID, Keys.ATTEMPT, Keys.GENERATION, Keys.ORIGIN, Keys.REASON,
     Keys.REASON_TRUNCATED, Keys.ORIGINAL_REASON_LENGTH, Keys.ORIGINAL_REASON_DIGEST, Keys.FAILURE_CODE,
@@ -56,6 +59,12 @@ internal object SqliteBlockIncidentOccurrenceCodec {
     Keys.PULL_REQUEST_ID, Keys.PULL_REQUEST_URL, Keys.HEAD_REPOSITORY, Keys.HEAD_BRANCH, Keys.WORKTREE_PATH,
     Keys.EXIT_BEHAVIOR, Keys.EVIDENCE_REFERENCES,
   )
+  private val OCCURRENCE_KEYS = LEGACY_OCCURRENCE_KEYS + setOf(Keys.FIELD_AVAILABILITY, Keys.REASON_RETENTION)
+  private val CORRELATED_FIELD_KEYS = BlockIncidentCorrelatedField.entries.map { it.wireValue }.toSet()
+
+  /** Per-field availability for occurrences recorded before the runtime captured it. */
+  val HISTORICAL_FIELD_AVAILABILITY: Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> =
+    BlockIncidentCorrelatedField.entries.associateWith { BlockIncidentFieldAvailability.UNKNOWN_HISTORICAL }
   private val EVIDENCE_KEYS = setOf(
     EvidenceKeys.SOURCE, EvidenceKeys.REFERENCE, EvidenceKeys.DIGEST, EvidenceKeys.AVAILABILITY,
     EvidenceKeys.REPAIR_TURN, EvidenceKeys.OUTPUT_GENERATION, EvidenceKeys.KIND, EvidenceKeys.PROVENANCE,
@@ -129,6 +138,10 @@ internal object SqliteBlockIncidentOccurrenceCodec {
       Keys.WORKTREE_PATH to occurrence.worktreePath,
       Keys.EXIT_BEHAVIOR to occurrence.exitBehavior.wireValue,
       Keys.EVIDENCE_REFERENCES to occurrence.evidenceReferences.map(::encodeEvidence),
+      Keys.FIELD_AVAILABILITY to BlockIncidentCorrelatedField.entries.associate { field ->
+        field.wireValue to occurrence.fieldAvailability[field]?.wireValue
+      },
+      Keys.REASON_RETENTION to occurrence.reasonRetention.wireValue,
     )
 
   private fun encodeEvidence(reference: BlockIncidentEvidenceReference): Map<String, Any?> = linkedMapOf(
@@ -149,8 +162,11 @@ internal object SqliteBlockIncidentOccurrenceCodec {
   )
 
   fun decode(raw: String): BlockIncidentOccurrence {
-    val fields = JsonCodec.parseObjectOrNull(raw)?.exactly(OCCURRENCE_KEYS, "occurrence")
+    val parsed = JsonCodec.parseObjectOrNull(raw)
       ?: throw corrupt("Stored block incident occurrence is not an object.")
+    // Documents written before field availability existed decode with unknown historical availability.
+    val legacy = parsed.keys == LEGACY_OCCURRENCE_KEYS
+    val fields = if (legacy) parsed else parsed.exactly(OCCURRENCE_KEYS, "occurrence")
     return BlockIncidentOccurrence(
       occurrenceToken = fields.text(Keys.OCCURRENCE_TOKEN),
       workflowId = fields.optionalText(Keys.WORKFLOW_ID),
@@ -160,7 +176,7 @@ internal object SqliteBlockIncidentOccurrenceCodec {
       invocationId = fields.optionalText(Keys.INVOCATION_ID),
       executionId = fields.optionalText(Keys.EXECUTION_ID),
       attempt = fields.optionalInt(Keys.ATTEMPT),
-      generation = fields.long(Keys.GENERATION),
+      generation = fields.optionalLong(Keys.GENERATION),
       origin = fields.enumValue(Keys.ORIGIN, BlockIncidentOrigin.entries) { it.wireValue },
       reason = fields.text(Keys.REASON),
       reasonTruncated = fields.boolean(Keys.REASON_TRUNCATED),
@@ -184,10 +200,25 @@ internal object SqliteBlockIncidentOccurrenceCodec {
       headBranch = fields.optionalText(Keys.HEAD_BRANCH),
       worktreePath = fields.optionalText(Keys.WORKTREE_PATH),
       exitBehavior = fields.enumValue(Keys.EXIT_BEHAVIOR, BlockIncidentExitBehavior.entries) { it.wireValue },
+      fieldAvailability = if (legacy) HISTORICAL_FIELD_AVAILABILITY else fields.fieldAvailability(),
+      reasonRetention =
+        if (legacy) {
+          BlockIncidentReasonRetention.UNKNOWN_HISTORICAL
+        } else {
+          fields.enumValue(Keys.REASON_RETENTION, BlockIncidentReasonRetention.entries) { it.wireValue }
+        },
       retainedEvidenceReferences =
         (fields[Keys.EVIDENCE_REFERENCES] as? JsonArray ?: throw corrupt("Stored evidence references are absent."))
           .map(::decodeEvidence),
     )
+  }
+
+  private fun JsonObject.fieldAvailability(): Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> {
+    val entries = (get(Keys.FIELD_AVAILABILITY) as? JsonObject)?.exactly(CORRELATED_FIELD_KEYS, "field availability")
+      ?: throw corrupt("Stored block incident field availability is not an object.")
+    return BlockIncidentCorrelatedField.entries.associateWith { field ->
+      entries.enumValue(field.wireValue, BlockIncidentFieldAvailability.entries) { it.wireValue }
+    }
   }
 
   private fun decodeEvidence(element: JsonElement): BlockIncidentEvidenceReference {

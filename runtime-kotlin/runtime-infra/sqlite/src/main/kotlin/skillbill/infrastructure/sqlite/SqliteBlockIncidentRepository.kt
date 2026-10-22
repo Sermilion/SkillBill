@@ -17,6 +17,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehav
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReasonRetention
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecovery
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReport
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentState
@@ -91,7 +92,11 @@ internal class SqliteBlockIncidentRepository(
       } else {
         statement.setInt(9, occurrence.attempt)
       }
-      statement.setLong(10, occurrence.generation)
+      if (occurrence.generation == null) {
+        statement.setNull(10, java.sql.Types.BIGINT)
+      } else {
+        statement.setLong(10, occurrence.generation)
+      }
       statement.setString(11, occurrence.origin.wireValue)
       statement.setString(12, occurrence.reason)
       statement.setString(13, occurrence.failureCode)
@@ -559,7 +564,7 @@ internal class SqliteBlockIncidentRepository(
         invocationId = getString("invocation_id"),
         executionId = getString("execution_id"),
         attempt = getInt("attempt").takeUnless { wasNull() },
-        generation = requiredLong("generation"),
+        generation = getLong("generation").takeUnless { wasNull() },
         origin = requiredText("origin").decodeEnum(BlockIncidentOrigin.entries) { it.wireValue },
         reason = requiredText("reason"),
         failureCode = getString("failure_code"),
@@ -576,6 +581,8 @@ internal class SqliteBlockIncidentRepository(
         },
         identityAvailability = requiredText("identity_availability")
           .decodeEnum(BlockIncidentIdentityAvailability.entries) { it.wireValue },
+        fieldAvailability = SqliteBlockIncidentOccurrenceCodec.HISTORICAL_FIELD_AVAILABILITY,
+        reasonRetention = BlockIncidentReasonRetention.UNKNOWN_HISTORICAL,
       )
     val occurrence = getString("occurrence_json")?.let { raw ->
       SqliteBlockIncidentOccurrenceCodec.decode(raw).also { stored ->

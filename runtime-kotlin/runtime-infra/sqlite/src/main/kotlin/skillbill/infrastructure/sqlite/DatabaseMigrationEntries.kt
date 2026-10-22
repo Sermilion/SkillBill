@@ -10,6 +10,7 @@ import skillbill.infrastructure.sqlite.core.migration.addGoalRunnerControls
 import skillbill.infrastructure.sqlite.core.migration.addReviewFindingOutcomeKey
 import skillbill.infrastructure.sqlite.core.migration.addReviewRunLaneAttribution
 import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentContractV02Migration
+import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentNullableGenerationMigration
 import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentScanProgressMigration
 import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentOccurrenceJsonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseSettlementsMigration
@@ -1180,5 +1181,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 74,
       name = "track-block-incident-scan-progress",
       operation = BlockIncidentScanProgressMigration::apply,
+    ),
+    DatabaseMigration(
+      version = 75,
+      name = "record-uncaptured-block-incident-generation",
+      operation = BlockIncidentNullableGenerationMigration::apply,
     ),
   )

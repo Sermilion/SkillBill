@@ -518,26 +518,28 @@ class AcceptanceCriterionRepairPersistence(
           clock.instant(),
         ),
       )
-      observeSerialBlock(work, next, request.phase)
+      observeSerialBlock(work, worker, next, request.phase)
     }
     return AcceptanceCriterionRepairWriteResult.Committed(detach(next), replay)
   }
 
   private fun observeSerialBlock(
     work: UnitOfWork,
+    worker: AcquiredFeatureTaskRuntimeWorker,
     next: AcceptanceCriterionRepairState,
     phase: FeatureTaskRuntimePhaseStateRequest,
   ) {
     if (next.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
       val criterion = next.currentCriterionRef ?: next.reservation?.criterionRef ?: "unknown"
       phases.observeAcceptedBlock(
-        work.blockIncidents,
+        work,
         phase,
-        reason = "Acceptance criterion $criterion exhausted its unsuccessful repair budget.",
+        worker.admittedExecution,
+        blockedReason = "Acceptance criterion $criterion exhausted its unsuccessful repair budget.",
         failureCode = AcceptanceCriterionRepairStage.BUDGET_BLOCKED.wireValue,
       )
     } else if (phase.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
-      phases.observeAcceptedBlock(work.blockIncidents, phase)
+      phases.observeAcceptedBlock(work, phase, worker.admittedExecution)
     }
   }
 

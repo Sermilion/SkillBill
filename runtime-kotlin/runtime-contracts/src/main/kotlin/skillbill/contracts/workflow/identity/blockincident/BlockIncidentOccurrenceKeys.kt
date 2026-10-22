@@ -32,6 +32,8 @@ object BlockIncidentOccurrenceKeys {
   const val WORKTREE_PATH: String = "worktree_path"
   const val EXIT_BEHAVIOR: String = "exit_behavior"
   const val EVIDENCE_REFERENCES: String = "evidence_references"
+  const val FIELD_AVAILABILITY: String = "field_availability"
+  const val REASON_RETENTION: String = "reason_retention"
 }
 
 object BlockIncidentEvidenceReferenceKeys {

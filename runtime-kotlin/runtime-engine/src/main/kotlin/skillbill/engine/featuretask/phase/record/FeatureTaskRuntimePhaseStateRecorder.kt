@@ -14,15 +14,12 @@ import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.persist.workflowStatusFor
-import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
 import skillbill.engine.diagnostics.block.BlockIncidentService
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReference
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReferenceAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceProvenance
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -32,7 +29,6 @@ import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerifica
 import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.ports.blockincident.BlockIncidentRepository
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -209,7 +205,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
         ),
       )
       if (request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
-        observeAcceptedBlock(unitOfWork.blockIncidents, request)
+        observeAcceptedBlock(unitOfWork, request, admitted)
       }
       true
     }
@@ -224,25 +220,27 @@ class FeatureTaskRuntimePhaseStateRecorder(
     }
 
   internal fun observeAcceptedBlock(
-    repository: BlockIncidentRepository,
+    unitOfWork: UnitOfWork,
     request: FeatureTaskRuntimePhaseStateRequest,
-    reason: String = request.blockedReason ?: request.failureDisposition?.wireValue.orEmpty(),
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
+    blockedReason: String? = request.blockedReason,
     failureCode: String? = null,
   ) {
     BlockIncidentService.observeBlock(
-      repository,
+      unitOfWork.blockIncidents,
       clock,
-      BlockIncidentObservation(
-        workflowId = request.workflowId,
-        phaseId = request.phaseId,
+      BlockIncidentFeatureTaskCorrelation.resolve(
+        unitOfWork.workflowStates,
+        request.workflowId,
+        request.phaseId,
+        admitted,
+        hasRepairEvidence = request.repairEvidence != null,
+      ).acceptedPhaseBlock(
         attempt = request.attemptCount,
-        reason = reason,
-        origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
-        identityAvailability = BlockIncidentIdentityAvailability.PARTIAL,
-        exitBehavior = BlockIncidentExitBehavior.EXIT_CODE_UNAVAILABLE,
-        evidenceReferences = request.blockEvidenceReferences(),
-        failureCode = failureCode,
+        blockedReason = blockedReason,
         failureDisposition = request.failureDisposition?.wireValue,
+        failureCode = failureCode,
+        evidenceReferences = request.blockEvidenceReferences(),
       ),
     )
   }
