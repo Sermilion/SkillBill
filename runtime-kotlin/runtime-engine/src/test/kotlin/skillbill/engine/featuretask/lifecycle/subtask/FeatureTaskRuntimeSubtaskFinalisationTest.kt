@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinal
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -99,6 +100,45 @@ class FeatureTaskRuntimeSubtaskFinalisationTest {
       "prior-run sequence refs must be gone after the sweep",
     )
     assertEquals(finalised.commitSha, remoteBranchTip(repo.remote))
+  }
+
+  @Test
+  fun `a remediation amend whose restarted sequence finds slot 0 taken preserves into the next free slot`() {
+    val repo = repoWithRemote()
+    Files.writeString(repo.root.resolve("owned.txt"), "implemented\n")
+    git(repo.root, "add", "owned.txt")
+    git(repo.root, "commit", "-m", "$issueKey: subtask $subtaskId\n\nprovisional\n\n${identity.trailer}")
+    val implementedSha = git(repo.root, "rev-parse", "HEAD")
+    git(repo.root, "update-ref", identity.checkpointRefName(0), implementedSha)
+    Files.writeString(repo.root.resolve("owned.txt"), "audited\n")
+    git(repo.root, "add", "owned.txt")
+    git(repo.root, "commit", "--amend", "--no-edit")
+    val auditedSha = git(repo.root, "rev-parse", "HEAD")
+    Files.writeString(repo.root.resolve("owned.txt"), "reviewed\n")
+    git(repo.root, "add", "owned.txt")
+
+    val amended =
+      realGitOps().writeSubtaskCommitPreservingHistory(
+        SubtaskCommitPreservationRequest(
+          repoRoot = repo.root,
+          decision =
+            FeatureTaskRuntimeSubtaskCommitAmend(
+              ownedHeadSha = auditedSha,
+              sequenceNumber = 0,
+              recoveredFromTrailer = true,
+              rewritesPublishedHistory = false,
+            ),
+          identity = identity,
+          message = "$issueKey: subtask $subtaskId\n\nremediation\n\n${identity.trailer}",
+          allowUnchangedIndex = false,
+          record = { records += it },
+        ),
+      )
+
+    assertIs<WorkflowGitOperationResult.Ok>(amended)
+    assertEquals(implementedSha, git(repo.root, "rev-parse", identity.checkpointRefName(0)))
+    assertEquals(auditedSha, git(repo.root, "rev-parse", identity.checkpointRefName(1)))
+    assertEquals("reviewed", git(repo.root, "show", "HEAD:owned.txt"))
   }
 
   @Test

@@ -89,8 +89,8 @@ internal interface PhaseReviewSettlementState {
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): String?
 
-  /** Amends the review's worktree edits into the remediation checkpoint. Returns whether it was established. */
-  fun amendReviewRemediationCheckpoint(): Boolean
+  /** Amends the review's worktree edits into the remediation checkpoint. Returns why it failed, or null. */
+  fun amendReviewRemediationCheckpoint(): String?
 
   /** Retains the assembled review output as producer-output evidence for [iteration]. */
   fun retainReviewOutput(
