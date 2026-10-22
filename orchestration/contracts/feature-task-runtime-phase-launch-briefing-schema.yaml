@@ -47,3 +47,16 @@ properties:
   durably_closed_criterion_refs:
     type: array
     items: { type: string }
+  project_instructions:
+    type: object
+    additionalProperties: false
+    required:
+      - path
+      - sha256
+    properties:
+      path:
+        type: string
+        minLength: 1
+      sha256:
+        type: string
+        minLength: 1

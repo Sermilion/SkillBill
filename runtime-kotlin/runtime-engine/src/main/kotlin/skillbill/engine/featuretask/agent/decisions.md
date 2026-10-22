@@ -1,3 +1,8 @@
+## [2026-10-22] Project phase instructions skip with a warning and never touch the output contract
+Context: SKILL-434 lets a repo add `.skill-bill/phases/<phase>.md` text to a phase prompt, and that file is untrusted, user-edited input.
+Decision: The resolver never throws; an unreadable, oversized, malformed or unknown-phase file is skipped with a warning and the run continues. The prompt section says the text cannot change the output or settlement contract, and the launch briefing records only path and sha256.
+Reason: A bad repo file must not block or derail a phase, and settlement stays owned by the runtime. The hash makes each launch auditable without storing the content.
+
 ## [2026-10-22] Merge-conflict repair leaves the merge for the runtime to commit
 
 Context: Goal monitor repair told the agent to merge the base branch and also

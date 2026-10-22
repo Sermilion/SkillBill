@@ -56,20 +56,17 @@ private fun appendGitignoreEntryIfAbsent(repoRoot: Path): Path {
   val gitignorePath = repoRoot.resolve(".gitignore")
   val existing = if (Files.exists(gitignorePath)) Files.readString(gitignorePath) else ""
   val trimmedLines = existing.lineSequence().map { line -> line.trim() }.toSet()
-  val hasModernIgnore = GITIGNORE_RUNTIME_STATE in trimmedLines
   val hasLegacyIgnore = GITIGNORE_LEGACY_ENTRY in trimmedLines
-  val hasConfigException = GITIGNORE_CONFIG_EXCEPTION in trimmedLines
   if (hasLegacyIgnore) {
     return gitignorePath
   }
-  if (hasModernIgnore && hasConfigException) {
-    return gitignorePath
-  }
   val linesToAppend =
-    buildList {
-      if (!hasModernIgnore) add(GITIGNORE_RUNTIME_STATE)
-      if (!hasConfigException) add(GITIGNORE_CONFIG_EXCEPTION)
-    }
+    listOf(
+      GITIGNORE_RUNTIME_STATE,
+      GITIGNORE_CONFIG_EXCEPTION,
+      GITIGNORE_PHASES_DIR_EXCEPTION,
+      GITIGNORE_PHASES_FILES_EXCEPTION,
+    ).filter { line -> line !in trimmedLines }
   if (linesToAppend.isEmpty()) {
     return gitignorePath
   }
@@ -94,4 +91,6 @@ private fun appendLines(
 
 private const val GITIGNORE_RUNTIME_STATE = ".skill-bill/**"
 private const val GITIGNORE_CONFIG_EXCEPTION = "!.skill-bill/config.yaml"
+private const val GITIGNORE_PHASES_DIR_EXCEPTION = "!.skill-bill/phases/"
+private const val GITIGNORE_PHASES_FILES_EXCEPTION = "!.skill-bill/phases/**"
 private const val GITIGNORE_LEGACY_ENTRY = "/.skill-bill/"

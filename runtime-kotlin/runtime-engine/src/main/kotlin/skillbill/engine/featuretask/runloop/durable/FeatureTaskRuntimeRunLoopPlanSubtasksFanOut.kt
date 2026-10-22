@@ -44,6 +44,7 @@ import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
@@ -240,6 +241,8 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = parent.selectedOwnerOf(stepId)
 
   override val modelDirectiveSupplements: ModelDirectiveSupplements get() = parent.modelDirectiveSupplements
+
+  override val phaseInstructionSource: PhaseInstructionFileSource get() = parent.phaseInstructionSource
 
   override fun unselectedStepIds(): Set<String> = parent.unselectedStepIds()
 

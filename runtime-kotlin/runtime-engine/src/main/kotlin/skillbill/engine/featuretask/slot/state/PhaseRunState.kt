@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -88,6 +89,9 @@ internal interface PhaseRunState :
   fun selectedOwnerOf(stepId: String): PhaseStrategy?
 
   val modelDirectiveSupplements: ModelDirectiveSupplements
+
+  /** Reads the repository's committed `.skill-bill/phases` instruction files at launch. */
+  val phaseInstructionSource: PhaseInstructionFileSource
 
   /** The steps of the definition no strategy selected for this run owns. */
   fun unselectedStepIds(): Set<String>

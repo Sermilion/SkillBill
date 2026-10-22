@@ -5,9 +5,11 @@
 .env.*
 docs/cloudflare-telemetry-proxy/.wrangler/
 _migration_backup/
-# Runtime state under .skill-bill/; keep shared project config trackable.
+# Runtime state under .skill-bill/; keep shared project config and phase instructions trackable.
 .skill-bill/**
 !.skill-bill/config.yaml
+!.skill-bill/phases/
+!.skill-bill/phases/**
 
 # Kotlin 2.x compiler-daemon session markers.
 .kotlin/

@@ -34,6 +34,8 @@ enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
   ;
 
   companion object {
+    val stepAliases: Map<String, String> = mapOf(CODE_REVIEW.wireValue to FeatureTaskRuntimePhaseIds.REVIEW)
+
     fun slotForStep(stepId: String): PhaseSlot =
       entries.firstOrNull { stepId in it.steps } ?: throw UnknownPhaseStepError(stepId)
   }

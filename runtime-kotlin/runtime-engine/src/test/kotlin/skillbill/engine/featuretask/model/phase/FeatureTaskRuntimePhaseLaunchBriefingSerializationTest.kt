@@ -40,6 +40,23 @@ class FeatureTaskRuntimePhaseLaunchBriefingSerializationTest {
   }
 
   @Test
+  fun `project instructions round trip and a row without them still decodes`() {
+    val withInstructions =
+      briefing().copy(
+        projectInstructions =
+          FeatureTaskRuntimePhaseProjectInstructionsRecord(".skill-bill/phases/implement.md", "ab12"),
+      )
+    val wire = withInstructions.briefingArtifactWireMap()
+
+    assertEquals(withInstructions, FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(wire))
+    assertEquals(false, briefing().briefingArtifactWireMap().containsKey("project_instructions"))
+    assertEquals(
+      briefing(),
+      FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(wire - "project_instructions"),
+    )
+  }
+
+  @Test
   fun `a legacy row carrying the removed upstream payload map loud-fails instead of migrating silently`() {
     val legacyRow =
       briefing().briefingArtifactWireMap() +

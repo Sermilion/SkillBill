@@ -1,5 +1,16 @@
 # featuretask runtime boundary history
 
+## [2026-10-22] SKILL-434 subtask 1 - Inject per-project phase instructions
+Areas: runtime-engine featuretask phase prompt compose, launch briefing and slot attempt launch preparation; runtime-ports featuretask; runtime-infra/workflow featuretask; runtime-domain PhaseSlot; runtime-core featuretask slot DI; runtime-infra/skills installer gitignore; orchestration/contracts launch-briefing schema
+- MEDIUM feature. A repo may carry `.skill-bill/phases/<phase>.md`; at launch the runtime resolves it once and the composer adds a "Project instructions for this phase" section after the briefing text and before the required final output. The section states it cannot change the output or settlement contract.
+- PhaseProjectInstructions.resolve never throws. Missing, blank, oversized (over 16 KiB), non-regular, malformed UTF-8 and unknown-phase files are skipped with a reason, surfaced as a best-effort warning; the run continues. review.md wins over the code_review.md alias, declared once as PhaseSlot.stepAliases in the domain.
+- The launch briefing records an optional project_instructions path and sha256 (contract version unchanged, wire key only when present, checkout schema updated), so a launch is auditable. A null field leaves composed prompts byte-identical.
+- Installer and repo gitignore now allow `.skill-bill/phases/` next to config.yaml, and checkpoint scope treats that directory as trackable rather than runtime-private.
+- Reusable: PhaseInstructionFileSource port (ports/featuretask) with FileSystemPhaseInstructionFileSource adapter keeps resolver IO behind a port; PhaseProjectInstructionsResolution is a reusable sealed result for sibling phase-scoped file inputs.
+- Limits: existing repos must re-run install or hand-add the two gitignore lines. Only subtask 1 is covered; install smoke scripts were left to PR CI.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for this subtask.
+
 ## [2026-10-21] SKILL-433 subtask 2 - Settle durable reviews and retain historical orphans
 Areas: runtime-engine featuretask phase settlement, phase records, goal review completion and carried-forward review; runtime-infra/sqlite migration coverage
 - MEDIUM feature. Ordinary durable and goal review completion write the existing feature_task_phase_settlements row after phase persistence in the same unit-of-work transaction, using the iteration and normalized review output.

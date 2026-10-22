@@ -20,6 +20,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
   val derivedContextKeys: List<String>,
   val briefingText: String,
   val drivingVerdict: String? = null,
+  val projectInstructions: FeatureTaskRuntimePhaseProjectInstructionsRecord? = null,
 ) {
   init {
     require(phaseId.isNotBlank()) { "FeatureTaskRuntimePhaseLaunchBriefing.phaseId must be non-blank." }
@@ -51,6 +52,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
     ).let { base ->
       LinkedHashMap(base).apply {
         drivingVerdict?.let { put("driving_verdict", it) }
+        projectInstructions?.let { put("project_instructions", mapOf("path" to it.path, "sha256" to it.sha256)) }
       }
     }
 
@@ -88,6 +90,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
         derivedContextKeys = raw.requireStringListField("derived_context_keys"),
         briefingText = raw.requireStringField("briefing_text"),
         drivingVerdict = raw.optionalStringField("driving_verdict"),
+        projectInstructions = raw.optionalProjectInstructionsField("project_instructions"),
       )
     }
 
@@ -115,6 +118,21 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
         ?: schemaError(
           "Feature-task-runtime briefing artifact field '$key' must decode to a non-blank string when present.",
         )
+    }
+
+    private fun Map<String, Any?>.optionalProjectInstructionsField(
+      key: String,
+    ): FeatureTaskRuntimePhaseProjectInstructionsRecord? {
+      if (!containsKey(key) || this[key] == null) {
+        return null
+      }
+      val record =
+        JsonCodec.anyToStringAnyMap(this[key])
+          ?: schemaError("Feature-task-runtime briefing artifact field '$key' must decode to an object when present.")
+      return FeatureTaskRuntimePhaseProjectInstructionsRecord(
+        path = record.requireStringField("path"),
+        sha256 = record.requireStringField("sha256"),
+      )
     }
 
     private fun Map<String, Any?>.requireStringListField(key: String): List<String> {
@@ -146,6 +164,12 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
         "briefing_text",
         "driving_verdict",
         "durably_closed_criterion_refs",
+        "project_instructions",
       )
   }
 }
+
+data class FeatureTaskRuntimePhaseProjectInstructionsRecord(
+  val path: String,
+  val sha256: String,
+)

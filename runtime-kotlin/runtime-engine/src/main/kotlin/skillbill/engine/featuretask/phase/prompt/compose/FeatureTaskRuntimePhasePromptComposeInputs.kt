@@ -47,4 +47,5 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val repoRoot: Path? = null,
   val stepProfile: PhaseModelProfile = PhaseModelProfile.CANONICAL,
   val implementationChecklistAddress: String? = null,
+  val projectInstructions: PhaseProjectInstructionsResolution.Injected? = null,
 )

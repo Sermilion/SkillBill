@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.engine.directive.directiveResource
+import skillbill.engine.featuretask.phase.prompt.compose.AbsentPhaseInstructionFileSource
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
@@ -19,6 +20,7 @@ import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
@@ -39,6 +41,7 @@ class PhaseStrategyLookup(
   val registry: PhaseStrategyRegistry,
   private val selection: PhaseStrategySelection,
   val modelDirectiveSupplements: ModelDirectiveSupplements,
+  val phaseInstructionSource: PhaseInstructionFileSource = AbsentPhaseInstructionFileSource,
 ) {
   private val plans = ConcurrentHashMap<PlanKey, ResolvedPhaseExecutionPlan>()
   private val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)

@@ -39,6 +39,7 @@ import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ParallelReviewLaneRunResult
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
@@ -95,6 +96,8 @@ internal class InMemoryPhaseRunState(
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
   override val modelDirectiveSupplements: ModelDirectiveSupplements get() = strategies.modelDirectiveSupplements
+
+  override val phaseInstructionSource: PhaseInstructionFileSource get() = strategies.phaseInstructionSource
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
