@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.engine.directive.directiveResource
+import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -16,6 +17,7 @@ internal fun PhaseRun.stepFacts(
   return PhaseStepFacts(
     issueKey = issueKey,
     repoRoot = request.repoRoot,
+    agentWorkingDirectory = (qaExecution?.target as? QaExecutionTarget.Supported)?.checkout,
     additionalWritableDirectories = listOfNotNull(qaExecution?.workspace?.directory),
     timeout = request.timeout,
     invokedAgentId = resolvedAgent.invokedAgentId,

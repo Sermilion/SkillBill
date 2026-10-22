@@ -13,8 +13,9 @@ internal object QaPromptSections {
   )
 
   const val DIRECTIVE: String =
-    "Run report-only mobile QA for the current repository state. Follow the pack QA guidance named below, drive " +
-      "the device or simulator yourself, and settle by writing the QA report to the path the runtime names."
+    "Run mobile QA for the current repository state from the QA checkout named below. Follow the pack QA " +
+      "guidance named below, drive the device or simulator yourself, report what you find without repairing it, " +
+      "and settle by writing the QA report to the path the runtime names."
 
   const val VALUE_CONTENT: String =
     "The verdict, the flows you exercised and left untested, any findings, and any reason QA was skipped or " +
@@ -66,8 +67,12 @@ internal object QaPromptSections {
     |## QA run
     |
     |- Guidance: `${target.guidancePath.value}`. Read it first and follow it.
+    |- QA checkout: `${target.checkout}`. This temporary worktree holds exactly the tree under test plus the
+    |  repository's ignored local configuration files. Build, install, and test from it. The runtime deletes it
+    |  when QA ends.
     |- Platforms the pack supports: ${target.platforms.joinToString(", ") { it.wireValue }}.
-    |- Invocation directory: `${qa.workspace.directory}`. Write every generated script and evidence file there.
+    |- Invocation directory: `${qa.workspace.directory}`. Write every generated script and evidence file there,
+    |  outside the QA checkout, which is deleted.
     |- Evidence paths in the report must start with `${qa.expected.evidencePrefix}`.
     |- Report path: `${qa.workspace.reportPath}`. Write exactly one markdown report there.
     |- Before installing on a device, take its lease with
@@ -88,12 +93,17 @@ internal object QaPromptSections {
     |  Under it give the steps, the expected result, the observed result, and evidence paths. Use `#` or `##` for
     |  every other heading so a finding section ends where the next heading starts.
     |- Describe the flows you exercised and the flows you left untested, with the reason, in your own words.
+    |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
+    |  the flows the change made possible. Write `None.` when you changed nothing.
     |
     |Rules:
     |
     |- QA may build and install the app artifact the pack guidance names, and may run device or instrumentation
-    |  tests for the changed flows. QA stays report-only: never edit tracked files, commit, push, or open a pull
-    |  request.
+    |  tests for the changed flows.
+    |- QA may edit any file in the QA checkout to reach a state the criteria need but the environment cannot
+    |  produce: inject a fault, force an error response, add a debug hook, or shorten a timeout. Rebuild after such
+    |  an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit, push, or open
+    |  a pull request. QA reports findings; it does not repair them.
     |- QA runs on a test account with test data. Every in-app action is allowed: create, edit, and delete
     |  records, add profiles, remove cards, log out. Never leave a flow untested to protect device or account state.
     |- When the app or build offers an environment, flavor, or server choice, use Local when a local backend or

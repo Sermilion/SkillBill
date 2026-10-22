@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.QaReport
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.report.QaReports
-import skillbill.engine.featuretask.qa.report.QaRetainedResource
 import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.slot.qa.QaPromptSections
 import skillbill.engine.operation.core.OperationStepResult
@@ -19,8 +18,6 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.verify.model.VerifyQaSelection
 import java.nio.file.Path
@@ -106,7 +103,6 @@ internal data class VerifyQaReport(
 class VerifyQaStep(
   private val execution: QaExecutionLifecycle,
   private val settlement: QaReportSettlement,
-  private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
 ) {
   internal fun run(
@@ -134,67 +130,35 @@ class VerifyQaStep(
     return settled(QaReports.incomplete(warning))
   }
 
-  private fun notStarted(detail: String): VerifyStepDone {
-    RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "verify qa warning: ${detail.take(MAX_RECORD_REASON)}")
-    val report = QaReports.skipped(QaSkipReason.ISOLATION_UNAVAILABLE, detail)
-    return settled(report.copy(warnings = listOf(detail)))
-  }
-
   private fun opted(
     run: VerifyRun,
     prior: Map<String, String>,
   ): VerifyStepDone {
-    val repoRoot = run.context.repoRoot
-    val head = run.target.headRevision
-    val relativePath = "$WORKTREE_ROOT/${run.workflowId}"
-    val worktree =
-      when (val resolved = gitOperations.linkedWorktreePath(repoRoot, relativePath)) {
-        is WorkflowGitOperationResult.Ok -> Path.of(resolved.value.trim())
-        else -> return notStarted("QA was skipped: could not resolve the QA worktree path: ${resolved.error}")
+    val settled =
+      execution.withExecution(run.context.repoRoot, QaPolicy.ON, revision = run.target.headRevision) { qa ->
+        when (val target = qa.target) {
+          is QaExecutionTarget.Skipped -> QaReports.skipped(target.reason, target.detail)
+          is QaExecutionTarget.Supported -> launch(run, target.checkout, qa, prior)
+        }
       }
-    val added = gitOperations.addDetachedWorktree(repoRoot, relativePath, head)
-    if (added !is WorkflowGitOperationResult.Ok) {
-      val failure = "QA was skipped: could not create the QA worktree at $head: ${added.error}"
-      val stale = removeWorktree(repoRoot, worktree)
-      return notStarted(if (stale.isEmpty()) failure else "$failure ${guidance(worktree)}")
-    }
-    var retained = emptyList<QaRetainedResource>()
-    val attempt =
-      try {
-        attempt(run, worktree, prior)
-      } finally {
-        retained = removeWorktree(repoRoot, worktree)
-      }
-    val report = QaReports.withRetainedResources(attempt, retained, guidance(worktree))
+    val retained = QaReports.withRetainedResources(settled.value, settled.retainedResources, RETAINED_GUIDANCE)
+    val report = retained.copy(warnings = retained.warnings + settled.warnings)
     settlement.recordDiagnostics(report)
     return settled(report)
   }
 
-  private fun attempt(
-    run: VerifyRun,
-    worktree: Path,
-    prior: Map<String, String>,
-  ): QaReport {
-    val settled =
-      execution.withExecution(worktree, QaPolicy.ON) { qa ->
-        when (val target = qa.target) {
-          is QaExecutionTarget.Skipped -> QaReports.skipped(target.reason, target.detail)
-          is QaExecutionTarget.Supported -> launch(run, worktree, qa, prior)
-        }
-      }
-    val report = QaReports.withRetainedResources(settled.value, settled.retainedResources, LEASE_GUIDANCE)
-    return report.copy(warnings = report.warnings + settled.warnings)
-  }
-
   private fun launch(
     run: VerifyRun,
-    worktree: Path,
+    checkout: Path,
     qa: QaExecutionContext,
     prior: Map<String, String>,
   ): QaReport {
     val directive =
-      VerifyPromptSections.qaDirective(worktree, run.target.headRevision) + QaPromptSections.supplement(qa)
-    val context = run.context.copy(repoRoot = worktree, additionalWritableDirectories = listOf(qa.workspace.directory))
+      VerifyPromptSections.qaDirective(
+        checkout,
+        run.target.headRevision,
+      ) + QaPromptSections.supplement(qa)
+    val context = run.context.copy(repoRoot = checkout, additionalWritableDirectories = listOf(qa.workspace.directory))
     return when (val step = run.context.steps.runReportOnly(context, VerifyPromptSections.QA_STEP, directive, prior)) {
       is OperationStepResult.Failed -> stopped(step.reason)
       is OperationStepResult.Refused -> stopped(step.refusal.reason)
@@ -204,23 +168,6 @@ class VerifyQaStep(
 
   private fun stopped(reason: String): QaReport =
     QaReports.missing("QA recorded incomplete because the QA agent step stopped: $reason")
-
-  private fun removeWorktree(
-    repoRoot: Path,
-    worktree: Path,
-  ): List<QaRetainedResource> {
-    val removed = gitOperations.removeWorktree(repoRoot, worktree)
-    if (removed is WorkflowGitOperationResult.Ok) return emptyList()
-    RuntimeDiagnosticsBestEffortWarning.record(
-      diagnostics,
-      "verify qa worktree retained: seam=verify_qa_cleanup value_expected=removed value_used=retained " +
-        "worktree=$worktree reason=${removed.error.take(MAX_RECORD_REASON)}",
-    )
-    return listOf(QaRetainedResource(WORKTREE_KIND, worktree.toString()))
-  }
-
-  private fun guidance(worktree: Path): String =
-    "Run `git worktree remove --force $worktree` and `git worktree prune` once no QA run uses it."
 
   private fun settled(report: QaReport): VerifyStepDone.Settled =
     VerifyStepDone.Settled(
@@ -243,13 +190,11 @@ class VerifyQaStep(
   private fun reason(report: QaReport): String? = report.reason.takeIf { report.verdict == QaVerdict.SKIPPED }
 
   private companion object {
-    const val WORKTREE_ROOT = "skill-bill/verify-qa"
-    const val WORKTREE_KIND = "worktree"
     const val DISABLED_DETAIL = "QA is off for this verify run."
     const val MAX_RECORD_REASON = 200
-    const val LEASE_GUIDANCE =
+    const val RETAINED_GUIDANCE =
       "Run `skill-bill qa lease release --invocation <id> --device <serial>` or delete the lease file under " +
         "<state dir>/qa/<repo-key>/leases/ (state dir: SKILL_BILL_STATE_DIR, else ~/.skill-bill) once no QA run " +
-        "uses the device."
+        "uses the device. Remove a retained QA checkout with `git worktree remove --force <path>`."
   }
 }

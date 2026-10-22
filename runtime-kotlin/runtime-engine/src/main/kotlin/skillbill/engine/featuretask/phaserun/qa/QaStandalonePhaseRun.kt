@@ -93,6 +93,6 @@ class QaStandalonePhaseRun(
     const val RETAINED_GUIDANCE =
       "Run `skill-bill qa lease release --invocation <id> --device <serial>` or delete the lease file under " +
         "<state dir>/qa/<repo-key>/leases/ (state dir: SKILL_BILL_STATE_DIR, else ~/.skill-bill) once no QA run " +
-        "uses the device."
+        "uses the device. Remove a retained QA checkout with `git worktree remove --force <path>`."
   }
 }

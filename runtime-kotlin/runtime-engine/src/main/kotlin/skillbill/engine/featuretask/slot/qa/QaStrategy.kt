@@ -233,7 +233,7 @@ class QaStrategy(
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): PhaseStepOutputCheck {
         val qa = run.qaExecution ?: return PhaseStepOutputCheck.Block(MISSING_WORKSPACE)
-        execution.warnIfChanged(run.request.repoRoot, qa.expected)
+        qa.callerBaseline?.let { caller -> execution.callerChanges(run.request.repoRoot, caller) }
         return PhaseStepOutputCheck.Accept
       }
 

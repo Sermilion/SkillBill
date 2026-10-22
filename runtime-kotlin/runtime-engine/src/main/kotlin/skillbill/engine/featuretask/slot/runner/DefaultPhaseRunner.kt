@@ -118,7 +118,7 @@ class DefaultPhaseRunner(
       skillRunRequest =
         SkillRunRequest(
           issueKey = facts.issueKey,
-          repoRoot = facts.repoRoot,
+          repoRoot = facts.agentWorkingDirectory ?: facts.repoRoot,
           additionalWritableDirectories = facts.additionalWritableDirectories,
           subtaskId = facts.subtaskId,
           timeout = facts.timeout,

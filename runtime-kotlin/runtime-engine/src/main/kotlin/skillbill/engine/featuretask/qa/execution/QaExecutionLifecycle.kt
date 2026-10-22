@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.qa.execution
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.model.execution.QaCallerBaseline
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
@@ -32,6 +33,7 @@ class QaExecutionLifecycle(
   private val workspaces: QaWorkspacePort,
   private val leases: QaDeviceLeasePort,
   private val capabilities: QaCapabilityResolver,
+  private val checkouts: QaCheckouts,
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
   private val identifiers: IdentifierGeneratorPort,
@@ -40,24 +42,33 @@ class QaExecutionLifecycle(
     repoRoot: Path,
     policy: QaPolicy,
     invocationId: String = "qa-${identifiers.randomToken()}",
+    revision: String? = null,
     execute: (QaExecutionContext) -> T,
   ): QaExecutionResult<T> {
     val baseline = gitOperations.worktreeBaseline(repoRoot, ::cannotStart)
-    val tree = treeIdentity(repoRoot)
+    val caller = QaCallerBaseline(baseline.head, treeIdentity(repoRoot), baseline.status)
+    val testedTree = if (revision == null) caller.treeIdentity else revisionTreeIdentity(repoRoot, revision)
     val workspace = workspaces.open(repoRoot, invocationId)
-    val expected = QaExpectedIdentity(baseline.head, tree, workspace.evidencePrefix)
+    val expected = QaExpectedIdentity(revision ?: baseline.head, testedTree, workspace.evidencePrefix)
     var retained = emptyList<QaRetainedResource>()
+    var checkout: Path? = null
     val warnings = mutableListOf<String>()
     val workspaceOwner = AutoCloseable { retained = retained + closeWorkspace(workspace) }
-    val leaseOwner = AutoCloseable { retained = releaseLeases(repoRoot, invocationId) }
+    val leaseOwner = AutoCloseable { retained = retained + releaseLeases(repoRoot, invocationId) }
+    val checkoutOwner = AutoCloseable { checkout?.let { retained = retained + checkouts.close(repoRoot, it) } }
     val value =
       workspaceOwner.use {
         leaseOwner.use {
-          val target = target(repoRoot, policy, warnings)
-          val result =
-            execute(QaExecutionContext(workspace, expected, target, policy, warnings.toList(), baseline.status))
-          warnings += listOfNotNull(warnIfChanged(repoRoot, expected), statusChange(repoRoot, baseline.status))
-          result
+          checkoutOwner.use {
+            val target =
+              target(repoRoot, policy, warnings) {
+                checkouts.open(repoRoot, workspace, expected.headRevision, copyWorkingState = revision == null)
+              }
+            checkout = (target as? QaExecutionTarget.Supported)?.checkout
+            val result = execute(QaExecutionContext(workspace, expected, target, policy, warnings.toList(), caller))
+            warnings += callerChanges(repoRoot, caller)
+            result
+          }
         }
       }
     return QaExecutionResult(value, retained, expected, warnings)
@@ -66,20 +77,26 @@ class QaExecutionLifecycle(
   internal fun outputWarnings(
     repoRoot: Path,
     qa: QaExecutionContext,
-  ): List<String> =
-    qa.preparationWarnings +
-      listOfNotNull(
-        warnIfChanged(repoRoot, qa.expected),
-        qa.baselineStatus?.let { status -> statusChange(repoRoot, status) },
-      )
+  ): List<String> = qa.preparationWarnings + qa.callerBaseline?.let { callerChanges(repoRoot, it) }.orEmpty()
 
-  internal fun warnIfChanged(
+  internal fun callerChanges(
     repoRoot: Path,
-    expected: QaExpectedIdentity,
+    caller: QaCallerBaseline,
+  ): List<String> = listOfNotNull(identityChange(repoRoot, caller), statusChange(repoRoot, caller.status))
+
+  internal fun currentTreeIdentity(repoRoot: Path): String? =
+    (gitOperations.repositoryTreeIdentity(repoRoot) as? WorkflowGitOperationResult.Ok)
+      ?.value
+      ?.trim()
+      ?.takeIf(String::isNotBlank)
+
+  private fun identityChange(
+    repoRoot: Path,
+    caller: QaCallerBaseline,
   ): String? =
     try {
       val baseline = gitOperations.worktreeBaseline(repoRoot, ::cannotStart)
-      if (baseline.head != expected.headRevision || treeIdentity(repoRoot) != expected.treeIdentity) {
+      if (baseline.head != caller.head || treeIdentity(repoRoot) != caller.treeIdentity) {
         warnChanged("HEAD or the tested tree changed during QA.")
       } else {
         null
@@ -88,12 +105,6 @@ class QaExecutionLifecycle(
       failure.rethrowUnless(failure.isQaFailure)
       warnChanged("the runtime could not reread the repository: ${failure.message.orEmpty()}")
     }
-
-  internal fun currentTreeIdentity(repoRoot: Path): String? =
-    (gitOperations.repositoryTreeIdentity(repoRoot) as? WorkflowGitOperationResult.Ok)
-      ?.value
-      ?.trim()
-      ?.takeIf(String::isNotBlank)
 
   private fun statusChange(
     repoRoot: Path,
@@ -127,6 +138,7 @@ class QaExecutionLifecycle(
     repoRoot: Path,
     policy: QaPolicy,
     warnings: MutableList<String>,
+    openCheckout: () -> QaCheckoutOpening,
   ): QaExecutionTarget {
     if (policy == QaPolicy.OFF) {
       return QaExecutionTarget.Skipped(
@@ -135,13 +147,28 @@ class QaExecutionLifecycle(
       )
     }
     return when (val resolution = capabilities.resolve(repoRoot)) {
-      is QaCapabilityResolution.Declared ->
-        QaExecutionTarget.Supported(resolution.guidancePath, resolution.declaration.platforms)
+      is QaCapabilityResolution.Declared -> checkoutTarget(resolution, openCheckout(), warnings)
       is QaCapabilityResolution.Absent -> QaExecutionTarget.Skipped(QaSkipReason.UNSUPPORTED_TARGET, resolution.detail)
       is QaCapabilityResolution.Incompatible ->
         capabilityUnavailable("The installed QA capability cannot run: ${resolution.reason}", warnings)
     }
   }
+
+  private fun checkoutTarget(
+    resolution: QaCapabilityResolution.Declared,
+    opening: QaCheckoutOpening,
+    warnings: MutableList<String>,
+  ): QaExecutionTarget =
+    when (opening) {
+      is QaCheckoutOpening.Opened -> {
+        warnings += opening.warnings
+        QaExecutionTarget.Supported(resolution.guidancePath, resolution.declaration.platforms, opening.checkout)
+      }
+      is QaCheckoutOpening.Unavailable -> {
+        warnings += opening.detail
+        QaExecutionTarget.Skipped(QaSkipReason.ISOLATION_UNAVAILABLE, opening.detail)
+      }
+    }
 
   private fun capabilityUnavailable(
     warning: String,
@@ -160,6 +187,15 @@ class QaExecutionLifecycle(
     when (val result = gitOperations.repositoryTreeIdentity(repoRoot)) {
       is WorkflowGitOperationResult.Ok -> result.value.trim()
       else -> cannotStart("tree identity", result.error)
+    }
+
+  private fun revisionTreeIdentity(
+    repoRoot: Path,
+    revision: String,
+  ): String =
+    when (val result = gitOperations.revisionTreeIdentity(repoRoot, revision)) {
+      is WorkflowGitOperationResult.Ok -> result.value.trim()
+      else -> cannotStart("tree identity of $revision", result.error)
     }
 
   private fun releaseLeases(

@@ -37,6 +37,7 @@ data class PhaseStepFacts(
   val streamOutputForLiveness: Boolean = false,
   val spawnAuthorization: AgentRunSpawnAuthorization? = null,
   val additionalWritableDirectories: List<Path> = emptyList(),
+  val agentWorkingDirectory: Path? = null,
 )
 
 data class PhaseStepOutput(
