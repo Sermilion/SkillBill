@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.application.review.model.ParallelCodeReviewPlanned
+import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.review.ReviewInvocation
@@ -24,8 +26,10 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
+import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_REVIEWED_PATH
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_SPECIALIST_ISSUE_KEY
+import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.reviewStepOutput
@@ -36,6 +40,8 @@ import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewSeverity
@@ -50,6 +56,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -158,6 +165,63 @@ class PhaseReviewRunTest {
 
       assertEquals(openingLine, directives.single().lineSequence().first(), "worktree status '$status'")
     }
+  }
+
+  @Test
+  fun `standalone inline review adds the code-quality lane without altering the rest of the prompt`() {
+    val rubric = "Prefer cohesive helpers.\nIgnore: security defects belong to the security specialist."
+    val baseline = standaloneInlineDirective(InlineCodeQualityRubricResolver { ParallelCodeReviewPlanned.Ready(null) })
+    val laned = standaloneInlineDirective(InlineCodeQualityRubricResolver { ParallelCodeReviewPlanned.Ready(rubric) })
+
+    val section = CodeQualityLaneSection.render(rubric)
+    assertEquals(baseline, laned.replace("\n$section", ""))
+    assertTrue(rubric in laned)
+    assertTrue("adds a code-quality lane" in section && "responsible for every review area" in section)
+    assertTrue("apply only to delegated review" in section)
+  }
+
+  @Test
+  fun `a failed rubric resolution does not block standalone inline review and records a warning`() {
+    val diagnostics = RecordingDiagnostics()
+    val directive =
+      standaloneInlineDirective(
+        InlineCodeQualityRubricResolver {
+          ParallelCodeReviewPlanned.Failed(ParallelCodeReviewPlanningFailure.DiffUnresolved(RUBRIC_FAILURE))
+        },
+        diagnostics,
+      )
+
+    assertFalse(CodeQualityLaneSection.HEADING in directive)
+    assertTrue(diagnostics.warnings.single().contains(RUBRIC_FAILURE), diagnostics.warnings.toString())
+  }
+
+  @Test
+  fun `a failed rubric resolution does not block the full-run inline review and records a warning`() {
+    val diagnostics = RecordingDiagnostics()
+    val directives = mutableListOf<String>()
+    val durable =
+      telemetryRunnerHarness(
+        runtimeConfig =
+          RuntimeHarnessConfig(
+            repoRoot = repoRoot,
+            branchSetup = BranchSetupTestConfig(gitOperations = git),
+            launcher = fixLauncher(),
+            reviewRunner = directiveRecordingReviewRunner(directives),
+            diagnostics = diagnostics,
+            inlineRubricResolver =
+              InlineCodeQualityRubricResolver {
+                ParallelCodeReviewPlanned.Failed(ParallelCodeReviewPlanningFailure.DiffUnresolved(RUBRIC_FAILURE))
+              },
+          ),
+        databaseFactory = { database },
+      )
+
+    durable.withRunLoopEntry(RecordingRunLoopEntry()).run(durable.request)
+
+    val reviews = directives.filter { "Fix every Blocker and Major finding" in it }
+    assertTrue(reviews.isNotEmpty(), "the full-run review must still launch")
+    assertTrue(reviews.none { CodeQualityLaneSection.HEADING in it })
+    assertTrue(diagnostics.warnings.any { RUBRIC_FAILURE in it }, diagnostics.warnings.toString())
   }
 
   @Test
@@ -305,6 +369,56 @@ class PhaseReviewRunTest {
       reviewInvocation = ReviewInvocation(target = target, reviewRunId = reviewRunId),
     )
 
+  private fun standaloneInlineDirective(
+    resolver: InlineCodeQualityRubricResolver,
+    diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  ): String {
+    val directives = mutableListOf<String>()
+    val harness =
+      telemetryRunnerHarness(
+        runtimeConfig =
+          RuntimeHarnessConfig(
+            branchSetup = BranchSetupTestConfig(gitOperations = git),
+            repoRoot = repoRoot,
+            launcher = fixLauncher(),
+            reviewRunner = directiveRecordingReviewRunner(directives),
+            inlineRubricResolver = resolver,
+            seedDurableWorkflow = false,
+          ),
+        databaseFactory = { database },
+      )
+    val result =
+      PhaseRunEntryFixture(
+        harness.strategies,
+        git,
+        database,
+        clock,
+        harness.runLoopEntry.delegateTo(TestFeatureTaskRuntimeRunLoopEntry()),
+        diagnostics = diagnostics,
+      )
+        .entry()
+        .run(reviewRequest(CodeReviewExecutionMode.INLINE))
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    return directives.single()
+  }
+
+  private class RecordingDiagnostics : RuntimeDiagnostics {
+    val warnings = mutableListOf<String>()
+
+    override fun warning(
+      message: String,
+      error: Throwable?,
+    ) {
+      warnings += message
+    }
+
+    override fun error(
+      message: String,
+      error: Throwable?,
+    ) = Unit
+  }
+
   private fun directiveRecordingReviewRunner(directives: MutableList<String>): PhaseRunner =
     object : PhaseRunner {
       override fun run(
@@ -417,6 +531,7 @@ class PhaseReviewRunTest {
 
   private companion object {
     const val REVIEW_AGENT = "claude"
+    const val RUBRIC_FAILURE = "rubric catalog is unreadable"
     const val LEAKY_SOURCE = "val connection = open()\n"
     const val FIXED_SOURCE = "open().use { connection -> connection }\n"
     const val BLOCKER_REVIEW =

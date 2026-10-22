@@ -1,16 +1,16 @@
 package skillbill.engine.featuretask.slot.standalonereview
 
-import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.appendWhenOpus
+import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.opus55Directive
 import skillbill.workflow.taskruntime.model.skeleton.OPUS_55_STRATEGY_ID_SUFFIX
 
 class InlineStandaloneReviewOpus55Strategy(
   runner: PhaseRunner,
-  qualityRubricResolver: ParallelCodeReviewRunner? = null,
+  qualityRubricResolver: InlineCodeQualityRubricResolver? = null,
 ) : InlineStandaloneReviewStrategy(runner, qualityRubricResolver) {
   override val strategyId: String = ID
 

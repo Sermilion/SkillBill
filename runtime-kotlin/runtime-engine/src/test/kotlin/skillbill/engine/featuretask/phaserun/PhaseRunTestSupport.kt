@@ -25,6 +25,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorAcquireRequest
@@ -88,6 +89,7 @@ internal data class PhaseRunEntryFixture(
   val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer = refusingMonitorPreparer(),
   val qaManifests: List<PlatformManifest> = emptyList(),
+  val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
 )
 
 internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
@@ -111,7 +113,7 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         NoopRuntimeDiagnostics,
         workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
       ),
-    diagnostics = NoopRuntimeDiagnostics,
+    diagnostics = diagnostics,
     clock = clock,
     intakeResolver =
       PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), FileSystemFeatureTaskRuntimeRunInvariantsSource()),

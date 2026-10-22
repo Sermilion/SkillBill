@@ -80,6 +80,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
+import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.harnessPendingVerifyFindingIds
 import skillbill.engine.featuretask.slot.harnessReviewRunnerSyncingPendingVerifyFindings
 import skillbill.engine.featuretask.slot.implementationCheckOutput
@@ -716,6 +717,7 @@ internal data class RuntimeHarnessConfig(
   val diagnostics: RuntimeDiagnostics? = null,
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
+  val inlineRubricResolver: InlineCodeQualityRubricResolver? = null,
   val gitOperationsOverride: WorkflowGitOperations? = null,
   val monitoredPullRequestLookup: PullRequestIdentityLookup =
     OpenPullRequestIdentityLookup(gitOperationsOverride ?: branchSetup.gitOperations),
@@ -1059,20 +1061,7 @@ private fun harnessRunner(
   val lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database)
   val gateDeps = harnessGateDependencies(deps, lifecycleTelemetry)
   val entry = testRunLoopEntry(gateDeps).delegateTo(runLoopEntry)
-  val strategies =
-    testPhaseStrategies(
-      deps.launcher,
-      gitOperations,
-      harnessReviewRunner(deps.runtimeConfig, deps.launcher),
-      deps.runtimeConfig.pullRequestIdentityLookup,
-      delegatedReviewRunner = deps.runtimeConfig.delegatedReviewRunner,
-      monitoredPullRequestLookup = deps.runtimeConfig.monitoredPullRequestLookup,
-      pullRequestChecksLookup = deps.runtimeConfig.pullRequestChecksLookup,
-      standaloneMonitorService = deps.runtimeConfig.standaloneMonitorService,
-      qaExecution = deps.runtimeConfig.qaExecution,
-      qaReports = deps.runtimeConfig.qaReports,
-      qaOutcomes = FeatureTaskQaOutcomeRecorder(deps.database, testHarnessClock),
-    )
+  val strategies = harnessPhaseStrategies(deps.launcher, deps.runtimeConfig, deps.database)
   val launchOutcomes =
     FeatureTaskRuntimeLaunchOutcomes(
       deps.recorder,
@@ -1347,6 +1336,26 @@ private fun enabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory): 
     NoopRuntimeDiagnostics,
   )
 
+private fun harnessPhaseStrategies(
+  launcher: RuntimeRecordingLauncher,
+  runtimeConfig: RuntimeHarnessConfig,
+  database: DatabaseSessionFactory,
+): PhaseStrategyLookup =
+  testPhaseStrategies(
+    launcher,
+    runtimeConfig.harnessGitOperations,
+    harnessReviewRunner(runtimeConfig, launcher),
+    runtimeConfig.pullRequestIdentityLookup,
+    delegatedReviewRunner = runtimeConfig.delegatedReviewRunner,
+    inlineRubricResolver = runtimeConfig.inlineRubricResolver,
+    monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
+    pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
+    standaloneMonitorService = runtimeConfig.standaloneMonitorService,
+    qaExecution = runtimeConfig.qaExecution,
+    qaReports = runtimeConfig.qaReports,
+    qaOutcomes = FeatureTaskQaOutcomeRecorder(database, testHarnessClock),
+  )
+
 private fun telemetryHarnessRunner(
   launcher: RuntimeRecordingLauncher,
   runtimeConfig: RuntimeHarnessConfig,
@@ -1359,20 +1368,7 @@ private fun telemetryHarnessRunner(
       workflow.recorder,
       runtimeConfig.harnessGitOperations,
     )
-  val strategies =
-    testPhaseStrategies(
-      launcher,
-      runtimeConfig.harnessGitOperations,
-      harnessReviewRunner(runtimeConfig, launcher),
-      runtimeConfig.pullRequestIdentityLookup,
-      delegatedReviewRunner = runtimeConfig.delegatedReviewRunner,
-      monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
-      pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
-      standaloneMonitorService = runtimeConfig.standaloneMonitorService,
-      qaExecution = runtimeConfig.qaExecution,
-      qaReports = runtimeConfig.qaReports,
-      qaOutcomes = FeatureTaskQaOutcomeRecorder(database, testHarnessClock),
-    )
+  val strategies = harnessPhaseStrategies(launcher, runtimeConfig, database)
   val specGate = testSpecGate()
   val lifecycleTelemetry = enabledRuntimeLifecycleTelemetry(database)
   val runLoopEntry = telemetryRunLoopEntry(runtimeConfig, workflow, lifecycleTelemetry, branchSetupRunner)
@@ -1407,7 +1403,7 @@ private fun telemetryHarnessRunner(
         execute =
           FeatureTaskRuntimeRunnerExecute(
             runtimeSpecSourceResolver(),
-            NoopRuntimeDiagnostics,
+            runtimeConfig.diagnostics ?: NoopRuntimeDiagnostics,
             lifecycleTelemetry,
             workflow.recorder,
             workflow.decomposeTerminalRecorder,

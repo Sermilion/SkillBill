@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
+import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
@@ -115,6 +116,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
     val opusDelegatedReviewRunner = runner()
     val opusStandaloneInlineRunner = runner()
     val opusStandaloneDelegatedRunner = runner()
+    val inlineRubricResolver = InlineCodeQualityRubricResolver(reviewRunner::resolveInlineCodeQualityRubric)
     return PhaseStrategyRegistry(
       listOf(
         PhaseStrategyRegistration(RuntimeIntakeStrategy(planIntake), runner()),
@@ -128,9 +130,9 @@ internal interface RuntimeFeatureTaskSlotProvides {
         PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(InlineReviewStrategy(inlineReviewRunner, reviewRunner), inlineReviewRunner),
+        PhaseStrategyRegistration(InlineReviewStrategy(inlineReviewRunner, inlineRubricResolver), inlineReviewRunner),
         PhaseStrategyRegistration(
-          InlineReviewOpus55Strategy(opusInlineReviewRunner, reviewRunner),
+          InlineReviewOpus55Strategy(opusInlineReviewRunner, inlineRubricResolver),
           opusInlineReviewRunner,
         ),
         PhaseStrategyRegistration(
@@ -142,11 +144,11 @@ internal interface RuntimeFeatureTaskSlotProvides {
           opusDelegatedReviewRunner,
         ),
         PhaseStrategyRegistration(
-          InlineStandaloneReviewStrategy(standaloneInlineRunner, reviewRunner),
+          InlineStandaloneReviewStrategy(standaloneInlineRunner, inlineRubricResolver),
           standaloneInlineRunner,
         ),
         PhaseStrategyRegistration(
-          InlineStandaloneReviewOpus55Strategy(opusStandaloneInlineRunner, reviewRunner),
+          InlineStandaloneReviewOpus55Strategy(opusStandaloneInlineRunner, inlineRubricResolver),
           opusStandaloneInlineRunner,
         ),
         PhaseStrategyRegistration(

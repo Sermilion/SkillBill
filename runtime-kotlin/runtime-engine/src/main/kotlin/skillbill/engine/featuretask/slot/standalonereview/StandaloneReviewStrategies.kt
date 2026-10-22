@@ -29,9 +29,12 @@ import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
+import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.engine.featuretask.slot.codereview.ReviewTargetResolver
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
+import skillbill.engine.featuretask.slot.codereview.resolveInlineRubric
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
@@ -65,7 +68,7 @@ import kotlin.time.Duration.Companion.minutes
 
 open class InlineStandaloneReviewStrategy(
   runner: PhaseRunner,
-  qualityRubricResolver: ParallelCodeReviewRunner? = null,
+  qualityRubricResolver: InlineCodeQualityRubricResolver? = null,
 ) : StandaloneReviewStrategy(runner, null, qualityRubricResolver) {
   override val strategyId: String = ID
 
@@ -88,7 +91,8 @@ open class DelegatedStandaloneReviewStrategy(
 abstract class StandaloneReviewStrategy(
   private val runner: PhaseRunner,
   private val reviewRunner: ParallelCodeReviewRunner?,
-  private val qualityRubricResolver: ParallelCodeReviewRunner? = reviewRunner,
+  private val qualityRubricResolver: InlineCodeQualityRubricResolver? =
+    reviewRunner?.let { InlineCodeQualityRubricResolver(it::resolveInlineCodeQualityRubric) },
 ) : PhaseStrategyStatusProjection() {
   override val slot: PhaseSlot = PhaseSlot.STANDALONE_REVIEW
   override val steps: List<String> = listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS)
@@ -151,20 +155,20 @@ abstract class StandaloneReviewStrategy(
     val reviewInput = GoalSubtaskReviewInput(headSha, headSha, "", "")
     val invocation = run.request.reviewInvocation
     val reviewRunId = invocation?.reviewRunId ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
-    val qualityRubric =
-      qualityRubricResolver?.let { resolver ->
-        when (
-          val resolved =
-            resolver.resolveInlineCodeQualityRubric(
-              delegatedReviewRequest(run.resolvedAgent.resolvedAgentId, run.request.repoRoot, target, reviewInput),
-            )
-        ) {
-          is ParallelCodeReviewPlanned.Failed ->
-            return block(binding, iteration, resolved.failure.message)
-          is ParallelCodeReviewPlanned.Ready -> resolved.value
+    val rubricRequest =
+      delegatedReviewRequest(run.resolvedAgent.resolvedAgentId, run.request.repoRoot, target, reviewInput)
+    val qualitySection =
+      if (reviewRunner == null) {
+        qualityRubricResolver.resolveInlineRubric(rubricRequest, context.diagnostics)
+          ?.let(CodeQualityLaneSection::render)
+      } else {
+        when (val resolved = qualityRubricResolver?.resolve(rubricRequest)) {
+          null -> null
+          is ParallelCodeReviewPlanned.Failed -> return block(binding, iteration, resolved.failure.message)
+          is ParallelCodeReviewPlanned.Ready -> resolved.value?.let(::delegatedQualityRubricSection)
         }
       }
-    val directive = standaloneDirective(run, target, headSha, qualityRubric)
+    val directive = standaloneDirective(run, target, headSha, qualitySection)
     return runPreparedReview(
       run,
       binding,
@@ -315,7 +319,7 @@ abstract class StandaloneReviewStrategy(
     run: PhaseRun,
     target: ReviewTarget,
     head: String,
-    qualityRubric: String?,
+    qualitySection: String?,
   ): String =
     buildString {
       target.openingLines("$head^", head).forEach(::appendLine)
@@ -328,11 +332,9 @@ abstract class StandaloneReviewStrategy(
           "or launch another review command.",
       )
       appendLine("A changes_requested verdict is a valid completed report. The runtime will not repair findings.")
-      qualityRubric?.let {
+      qualitySection?.let {
         appendLine()
-        appendLine("## Selected local code-quality rubric")
-        appendLine("Use this complete owner rubric and attribute its findings with the exact specialist identity.")
-        appendLine(it)
+        append(it)
       }
       if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
         val extra =
@@ -343,6 +345,13 @@ abstract class StandaloneReviewStrategy(
         appendLine()
         append(extra)
       }
+    }
+
+  private fun delegatedQualityRubricSection(rubric: String): String =
+    buildString {
+      appendLine(CodeQualityLaneSection.HEADING)
+      appendLine("Use this complete owner rubric and attribute its findings with the exact specialist identity.")
+      appendLine(rubric)
     }
 
   private fun launch(

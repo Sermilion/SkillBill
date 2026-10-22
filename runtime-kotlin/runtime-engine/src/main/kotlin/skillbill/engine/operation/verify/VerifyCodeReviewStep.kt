@@ -9,6 +9,7 @@ import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.slot.PhaseStepSession
+import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.engine.featuretask.slot.codereview.InlineReviewResultDecoder
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
@@ -88,9 +89,7 @@ internal class VerifyCodeReviewStep(
         qualityRubric?.let {
           appendLine()
           appendLine()
-          appendLine("## Selected local code-quality rubric")
-          appendLine("Use this complete owner rubric and attribute its findings with the exact specialist identity.")
-          append(it)
+          append(CodeQualityLaneSection.render(it))
         }
       }
     var delegated: ParallelCodeReviewRunOutcome? = null
