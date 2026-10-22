@@ -21,7 +21,6 @@ internal object AuditImplementFixStep : PhaseStepHooks {
   ): AttemptResult? {
     if (capture.run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) return null
     val verdict = outputMap[SharedPayloadKeys.VERDICT]
-    // Progress keeps the reservation without spending budget only when the round edited source.
     val idleProgress =
       verdict == FeatureTaskRuntimeVerdict.PROGRESS.wireValue && capture.fileManifest.introduced.isEmpty()
     if (verdict != FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue && !idleProgress) {

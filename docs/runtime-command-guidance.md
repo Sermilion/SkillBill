@@ -122,6 +122,12 @@ supplied briefing without starting standalone phase or operation commands.
 
 ### Phases
 
+`verify_findings` checks whether review findings are real and worth addressing before
+repair. It never blocks the run. Invalid output, failed execution, unavailable evidence,
+and persisted verification blocks emit an error and continue with the original review
+findings retained for repair. A failed verification never dismisses a finding. A valid
+verification still removes findings it refutes.
+
 Workflow phases advance in order. Once execution leaves a phase, later edits,
 validation repairs, checkpoint commits, and resume do not reopen it. Repair loops
 stay inside their owning phase, including audit planning and implementation

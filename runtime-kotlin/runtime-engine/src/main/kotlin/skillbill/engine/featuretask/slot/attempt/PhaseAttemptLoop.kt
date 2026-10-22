@@ -16,7 +16,9 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStartContinuationKind
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeNonBlockingFailure
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.phase.PhaseFailureContinuationRequest
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -157,6 +159,14 @@ internal object PhaseAttemptSteps {
         requiredStartAlreadyAcknowledged = loop.requiredStartAcknowledged,
       )
     loop.requiredStartAcknowledged = false
+    attempt.retryableOperatorReason?.let { reason ->
+      FeatureTaskRuntimeNonBlockingFailure.settle(
+        recorder,
+        coupling.transitions,
+        observability,
+        PhaseFailureContinuationRequest(run, loop.iteration, reason, attempt.fileManifest),
+      )?.let { return it }
+    }
     val context =
       FixLoopBranchContext(
         run,

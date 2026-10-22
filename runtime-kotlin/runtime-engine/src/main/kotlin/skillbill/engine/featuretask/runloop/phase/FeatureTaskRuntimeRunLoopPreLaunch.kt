@@ -30,6 +30,14 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
   ): PhaseOutcome? {
     val hooks = context.strategyFor(run.phaseId).stepHooks(run.phaseId)
     hooks.reconcileBeforeLaunch(run, context.launchHookContext(run, hooks))
+    state.phase(run.phaseId).blockedReason?.let { reason ->
+      FeatureTaskRuntimeNonBlockingFailure.settle(
+        context.recorder,
+        context.coupledRunTransitions,
+        observability,
+        PhaseFailureContinuationRequest(run, state.phase(run.phaseId).nextIteration, reason),
+      )?.let { return it }
+    }
     val persisted =
       state.phase(run.phaseId).blockedReason?.let { persistedReason ->
         val nextIteration = state.phase(run.phaseId).nextIteration

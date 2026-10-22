@@ -4,14 +4,18 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolv
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeNonBlockingFailure
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
+import skillbill.engine.featuretask.runloop.phase.PhaseFailureContinuationRequest
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -134,6 +138,8 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       policy = context.acceptedStepPolicy(phaseId),
       launchAssignment = FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
       reentry = reentry,
+      failureContinuationOutput =
+        context.runState.strategyFor(phaseId).stepHooks(phaseId).failureContinuationOutput(context.state.outputs()),
     )
   }
 
@@ -152,7 +158,20 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     context.runState.stepBinding.authorizeCoordinatorDispatch(run)
     val state = context.acceptedStep(run)
     return try {
-      context.runState.strategyFor(run.phaseId).runStep(run, state)
+      try {
+        context.runState.strategyFor(run.phaseId).runStep(run, state)
+      } catch (error: SkillBillRuntimeException) {
+        FeatureTaskRuntimeNonBlockingFailure.settle(
+          context.recorder,
+          context.runState.coupledRunTransitions,
+          context.observability,
+          PhaseFailureContinuationRequest(
+            run,
+            context.state.phase(run.phaseId).nextIteration,
+            "Phase execution could not finish: ${error.code}",
+          ),
+        ) ?: throw error
+      }
     } finally {
       state.finishStepExecution()
       context.runState.stepBinding.releaseCoordinatorDispatch()

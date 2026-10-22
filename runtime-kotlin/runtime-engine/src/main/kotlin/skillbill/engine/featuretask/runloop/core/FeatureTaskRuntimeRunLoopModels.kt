@@ -302,6 +302,7 @@ internal data class PhaseRun(
   val agentRunValidateFallback: Boolean = false,
   val validationGateRepairTurn: Int = 0,
   val qaExecution: QaExecutionContext? = request.qaExecution,
+  val failureContinuationOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
 )
 
 internal data class PreLaunchBlock(
