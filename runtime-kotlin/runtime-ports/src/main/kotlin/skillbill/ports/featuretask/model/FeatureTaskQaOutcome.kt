@@ -1,7 +1,6 @@
 package skillbill.ports.featuretask.model
 
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 
 data class FeatureTaskQaOutcome(
   val workflowId: String,
@@ -11,7 +10,7 @@ data class FeatureTaskQaOutcome(
   val testedTreeIdentity: String?,
   val recordedAt: String,
   val findings: List<FeatureTaskQaFinding> = emptyList(),
-  val report: StandaloneQaReport? = null,
+  val reportText: String? = null,
 ) {
   init {
     require(workflowId.isNotBlank()) { "FeatureTaskQaOutcome.workflowId must not be blank." }
@@ -33,16 +32,15 @@ data class FeatureTaskQaOutcome(
 data class FeatureTaskQaFinding(
   val id: String,
   val title: String,
-  val affectedCriteria: List<String>,
   val evidencePaths: List<String>,
-  val receiptPath: String?,
+  val reportPath: String?,
   val status: FeatureTaskQaFindingStatus,
 ) {
   init {
     require(id.isNotBlank()) { "FeatureTaskQaFinding.id must not be blank." }
   }
 
-  val evidencePath: String? get() = evidencePaths.firstOrNull() ?: receiptPath
+  val evidencePath: String? get() = evidencePaths.firstOrNull() ?: reportPath
 }
 
 enum class FeatureTaskQaFindingStatus(val wireValue: String) {

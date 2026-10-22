@@ -1,7 +1,5 @@
 package skillbill.cli.goal.status
 
-import skillbill.goalrunner.model.GoalRunnerQaCheck
-import skillbill.goalrunner.model.GoalRunnerQaCriterion
 import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
@@ -35,25 +33,20 @@ class GoalCliStatusQaFindingsTest {
   }
 
   @Test
-  fun `goal status counts passed and failed QA criteria and names the ones that failed`() {
+  fun `goal status prints no QA lines for an incomplete run that carries only report text`() {
     val qa =
       GoalRunnerQaResult(
         outcome = "incomplete",
-        reason = "other",
+        reason = "The login flow crashed on launch.",
         qaFixAttempts = 0,
         recordedAt = Instant.parse("2026-10-20T16:14:00Z"),
-        criteria =
-          listOf(
-            GoalRunnerQaCriterion("AC-001", false, listOf(GoalRunnerQaCheck("Login works.", false)), emptyList()),
-            GoalRunnerQaCriterion("AC-002", true, listOf(GoalRunnerQaCheck("Settings open.", true)), emptyList()),
-          ),
+        reportText = "Verdict: incomplete\n\nThe login flow crashed on launch.",
       )
 
     val text = goalStatusText("SKILL-500", projection(qa))
-    val clean = goalStatusText("SKILL-500", projection(qa.copy(criteria = emptyList())))
 
-    assertTrue(text.contains("qa_criteria: passed=1 failed=1 failed_ids=AC-001\n"), text)
-    assertFalse(clean.contains("qa_criteria"))
+    assertFalse(text.contains("qa_findings"), text)
+    assertFalse(text.contains("qa_criteria"), text)
   }
 
   private fun projection(qa: GoalRunnerQaResult): GoalRunnerStatusProjection =

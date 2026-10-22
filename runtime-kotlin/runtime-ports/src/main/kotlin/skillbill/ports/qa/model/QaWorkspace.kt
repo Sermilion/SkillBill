@@ -5,12 +5,11 @@ import java.nio.file.Path
 data class QaWorkspace(
   val invocationId: String,
   val directory: Path,
-  val receiptPath: Path,
+  val reportPath: Path,
   val evidencePrefix: String,
 )
 
-data class QaReceiptSource(
+data class QaReportSource(
   val content: String,
   val evidencePrefix: String,
-  val receiptReference: String? = null,
 )

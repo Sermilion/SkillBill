@@ -1,7 +1,8 @@
-package skillbill.engine.featuretask.qa.receipt
+package skillbill.engine.featuretask.qa.report
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import java.time.Clock
 
@@ -10,6 +11,9 @@ class FeatureTaskQaOutcomeRecorder(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
 ) {
+  fun find(workflowId: String): FeatureTaskQaOutcome? =
+    database.read { unitOfWork -> unitOfWork.featureTaskQaOutcomes.find(workflowId) }
+
   fun recordAttempted(workflowId: String) {
     database.transaction { unitOfWork ->
       val outcomes = unitOfWork.featureTaskQaOutcomes
@@ -27,6 +31,9 @@ class FeatureTaskQaOutcomeRecorder(
     database.transaction { unitOfWork ->
       val outcomes = unitOfWork.featureTaskQaOutcomes
       val previous = outcomes.find(workflowId)
+      val reported =
+        tested.report?.let { FeatureTaskQaOutcomeRecords.reportedFindings(tested.verdict, it, tested.reportPath) }
+          ?: tested.legacyFindings
       outcomes.upsert(
         FeatureTaskQaOutcome(
           workflowId,
@@ -35,13 +42,8 @@ class FeatureTaskQaOutcomeRecorder(
           qaFixAttempts,
           tested.treeIdentity,
           "${clock.instant()}",
-          FeatureTaskQaOutcomeRecords.mergedFindings(
-            previous?.findings.orEmpty(),
-            tested.receiptVerdict,
-            tested.receipt,
-            tested.receiptPath,
-          ),
-          FeatureTaskQaOutcomeRecords.criteriaReport(tested.receipt) ?: previous?.report,
+          FeatureTaskQaOutcomeRecords.mergedFindings(previous?.findings.orEmpty(), tested.verdict, reported),
+          tested.report?.text,
         ),
       )
     }
@@ -74,7 +76,8 @@ class FeatureTaskQaOutcomeRecorder(
 
 data class QaSettledRun(
   val treeIdentity: String?,
-  val receiptVerdict: QaVerdict = QaVerdict.INCOMPLETE,
-  val receipt: Map<String, Any?> = emptyMap(),
-  val receiptPath: String? = null,
+  val verdict: QaVerdict = QaVerdict.INCOMPLETE,
+  val report: QaReport? = null,
+  val reportPath: String? = null,
+  val legacyFindings: List<FeatureTaskQaFinding> = emptyList(),
 )

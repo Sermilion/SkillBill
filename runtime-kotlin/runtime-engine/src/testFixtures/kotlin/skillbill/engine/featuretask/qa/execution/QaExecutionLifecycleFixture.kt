@@ -9,7 +9,7 @@ import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaDeviceLease
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaLeaseResult
-import skillbill.ports.qa.model.QaReceiptSource
+import skillbill.ports.qa.model.QaReportSource
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Path
@@ -40,15 +40,15 @@ private class TestQaWorkspaces : QaWorkspacePort {
     invocationId: String,
   ): QaWorkspace {
     val directory = Path.of("/home/qa/.skill-bill/qa/app-0123456789abcdef", invocationId)
-    return QaWorkspace(invocationId, directory, directory.resolve("receipt.json"), "$directory/")
+    return QaWorkspace(invocationId, directory, directory.resolve("report.md"), "$directory/")
   }
 
-  override fun readReceipt(receiptPath: Path): QaReceiptSource? = null
+  override fun readReport(reportPath: Path): QaReportSource? = null
 
-  override fun readRetainedReceipt(
-    qaRoot: Path,
-    receiptReference: String,
-  ): QaReceiptSource? = null
+  override fun readRetainedReport(
+    repoRoot: Path,
+    reference: String,
+  ): QaReportSource? = null
 
   override fun close(workspace: QaWorkspace) = Unit
 }

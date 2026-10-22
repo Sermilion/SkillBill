@@ -20,7 +20,6 @@ import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -77,7 +76,7 @@ sealed interface PhaseRunResult {
     val acceptedOutput: String? = null,
     override val targetReport: List<String> = emptyList(),
     val qaOutcome: StandaloneQaOutcome? = null,
-    val qaReport: StandaloneQaReport? = null,
+    val qaReportText: String? = null,
   ) : PhaseRunResult
 
   data class Blocked(

@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
-import skillbill.engine.featuretask.qa.receipt.QaRetainedResource
+import skillbill.engine.featuretask.qa.report.QaRetainedResource
 import skillbill.engine.operation.core.worktreeBaseline
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -40,13 +40,12 @@ class QaExecutionLifecycle(
     repoRoot: Path,
     policy: QaPolicy,
     invocationId: String = "qa-${identifiers.randomToken()}",
-    acceptanceCriteria: Set<String> = emptySet(),
     execute: (QaExecutionContext) -> T,
   ): QaExecutionResult<T> {
     val baseline = gitOperations.worktreeBaseline(repoRoot, ::cannotStart)
     val tree = treeIdentity(repoRoot)
     val workspace = workspaces.open(repoRoot, invocationId)
-    val expected = QaExpectedIdentity(baseline.head, tree, workspace.evidencePrefix, acceptanceCriteria)
+    val expected = QaExpectedIdentity(baseline.head, tree, workspace.evidencePrefix)
     var retained = emptyList<QaRetainedResource>()
     val warnings = mutableListOf<String>()
     val workspaceOwner = AutoCloseable { retained = retained + closeWorkspace(workspace) }

@@ -1,18 +1,15 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.qa.QaReceiptPayloadKeys
+import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_CRITERIA_SUMMARY_COLUMN
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.decodeStandaloneQaReport
-import skillbill.infrastructure.sqlite.core.migration.area.idestatus.encodeStandaloneQaReport
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_REPORT_TEXT_COLUMN
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import java.sql.Connection
 
 internal class SqliteFeatureTaskQaOutcomeStore(
@@ -23,7 +20,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
       """
       INSERT INTO feature_task_qa_outcomes (
         workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
-        criteria_summary
+        $QA_REPORT_TEXT_COLUMN
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(workflow_id) DO UPDATE SET
         outcome = excluded.outcome,
@@ -32,7 +29,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         tested_tree_identity = excluded.tested_tree_identity,
         recorded_at = excluded.recorded_at,
         findings_summary = excluded.findings_summary,
-        criteria_summary = excluded.criteria_summary
+        $QA_REPORT_TEXT_COLUMN = excluded.$QA_REPORT_TEXT_COLUMN
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -43,7 +40,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         outcome.testedTreeIdentity,
         outcome.recordedAt,
         outcome.findings.takeIf(List<FeatureTaskQaFinding>::isNotEmpty)?.let(::encodeFindings),
-        outcome.report?.let(::encodeStandaloneQaReport),
+        outcome.reportText,
       )
       statement.executeUpdate()
     }
@@ -53,7 +50,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
     connection.prepareStatement(
       """
       SELECT workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
-             criteria_summary
+             $QA_REPORT_TEXT_COLUMN
       FROM feature_task_qa_outcomes
       WHERE workflow_id = ?
       """.trimIndent(),
@@ -62,17 +59,20 @@ internal class SqliteFeatureTaskQaOutcomeStore(
       statement.executeQuery().use { rows ->
         if (!rows.next()) return@use null
         val raw = rows.getString("outcome")
+        val outcome =
+          StandaloneQaOutcome.fromWire(raw)
+            ?: throw invalidWorkflowStateSchemaError("Stored QA outcome '$raw' is not a known outcome.")
+        val decodedFindings = rows.getString("findings_summary")?.let(::decodeFindings).orEmpty()
+        val storedReportText = rows.getString(QA_REPORT_TEXT_COLUMN)
         FeatureTaskQaOutcome(
           workflowId = rows.getString("workflow_id"),
-          outcome =
-            StandaloneQaOutcome.fromWire(raw)
-              ?: throw invalidWorkflowStateSchemaError("Stored QA outcome '$raw' is not a known outcome."),
+          outcome = outcome,
           reason = rows.getString("reason"),
           qaFixAttempts = rows.getInt("qa_fix_attempts"),
           testedTreeIdentity = rows.getString("tested_tree_identity"),
           recordedAt = rows.getString("recorded_at"),
-          findings = rows.getString("findings_summary")?.let(::decodeFindings).orEmpty(),
-          report = rows.getString(QA_CRITERIA_SUMMARY_COLUMN)?.let(::decodeCriteria),
+          findings = decodedFindings,
+          reportText = storedReportText,
         )
       }
     }
@@ -81,12 +81,11 @@ internal class SqliteFeatureTaskQaOutcomeStore(
     JsonCodec.valueToJsonString(
       findings.map { finding ->
         mapOf(
-          QaReceiptPayloadKeys.ID to finding.id,
-          QaReceiptPayloadKeys.OBSERVED to finding.title,
-          QaReceiptPayloadKeys.AFFECTED_CRITERIA to finding.affectedCriteria,
+          QaOutcomePayloadKeys.ID to finding.id,
+          QaOutcomePayloadKeys.OBSERVED to finding.title,
           SqliteFeatureTaskQaFindingKeys.EVIDENCE_PATHS to finding.evidencePaths,
-          SqliteFeatureTaskQaFindingKeys.RECEIPT_PATH to finding.receiptPath,
-          QaReceiptPayloadKeys.STATUS to finding.status.wireValue,
+          SqliteFeatureTaskQaFindingKeys.RECEIPT_PATH to finding.reportPath,
+          QaOutcomePayloadKeys.STATUS to finding.status.wireValue,
         )
       },
     )
@@ -96,24 +95,21 @@ internal class SqliteFeatureTaskQaOutcomeStore(
       JsonCodec.anyToStringAnyMapList(JsonCodec.parseValue(json))
         ?: invalidStoredFindings("Stored QA findings summary is not a list of objects.")
     return entries.map { entry ->
-      val status = entry[QaReceiptPayloadKeys.STATUS] as? String
+      val status = entry[QaOutcomePayloadKeys.STATUS] as? String
+      val observed = (entry[QaOutcomePayloadKeys.OBSERVED] as? String).orEmpty()
       FeatureTaskQaFinding(
         id =
-          entry[QaReceiptPayloadKeys.ID] as? String
+          entry[QaOutcomePayloadKeys.ID] as? String
             ?: invalidStoredFindings("Stored QA finding has no id."),
-        title = (entry[QaReceiptPayloadKeys.OBSERVED] as? String).orEmpty(),
-        affectedCriteria = JsonCodec.anyToStringList(entry[QaReceiptPayloadKeys.AFFECTED_CRITERIA]).orEmpty(),
+        title = observed,
         evidencePaths = JsonCodec.anyToStringList(entry[SqliteFeatureTaskQaFindingKeys.EVIDENCE_PATHS]).orEmpty(),
-        receiptPath = entry[SqliteFeatureTaskQaFindingKeys.RECEIPT_PATH] as? String,
+        reportPath = entry[SqliteFeatureTaskQaFindingKeys.RECEIPT_PATH] as? String,
         status =
           FeatureTaskQaFindingStatus.fromWire(status)
             ?: invalidStoredFindings("Stored QA finding status '$status' is not known."),
       )
     }
   }
-
-  private fun decodeCriteria(json: String): StandaloneQaReport =
-    decodeStandaloneQaReport(json) { reason -> invalidStoredFindings(reason) }
 
   private fun invalidStoredFindings(reason: String): Nothing = throw invalidWorkflowStateSchemaError(reason)
 }

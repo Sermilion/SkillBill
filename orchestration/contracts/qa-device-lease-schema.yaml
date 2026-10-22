@@ -7,7 +7,7 @@
 # Versioning rule:
 #
 # - contract_version is pinned by QA_DEVICE_LEASE_CONTRACT_VERSION in
-#   runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/qa/QaReceiptContract.kt.
+#   runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/qa/QaPayloadContract.kt.
 # - Records carry a sha256 device fingerprint only, never a raw device serial.
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://skill-bill.dev/contracts/qa-device-lease-schema.yaml"

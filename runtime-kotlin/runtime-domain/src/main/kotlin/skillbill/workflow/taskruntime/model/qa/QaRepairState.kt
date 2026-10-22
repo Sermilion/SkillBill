@@ -21,20 +21,6 @@ data class QaOpenFinding(
   val receiptRefs: List<String>,
 )
 
-data class QaFindingVerification(
-  val findingId: String,
-  val receiptRef: String,
-  val observedTreeIdentity: String,
-  val testedTreeIdentity: String,
-  val requiredFlowIds: Set<String>,
-  val passingFlowIds: Set<String>,
-  val passingCriteria: Set<String>,
-)
-
-data class QaFindingClosureDecision(
-  val closedFindingIds: Set<String>,
-)
-
 data class QaRepairState(
   val subtaskId: Int,
   val attempts: List<QaRepairAttempt> = emptyList(),
@@ -45,37 +31,20 @@ data class QaRepairState(
 
   val openFindingCriteria: Set<String> get() = openFindings.flatMap(QaOpenFinding::affectedCriteria).toSet()
 
-  fun verifiedClosure(evidence: List<QaFindingVerification>): QaFindingClosureDecision =
-    QaFindingClosureDecision(
-      openFindings.filter { finding ->
-        finding.receiptRefs.isNotEmpty() &&
-          finding.receiptRefs.all { reference ->
-            val verification = evidence.singleOrNull { it.findingId == finding.id && it.receiptRef == reference }
-            verification != null && verification.observedTreeIdentity != verification.testedTreeIdentity &&
-              (verification.requiredFlowIds.isNotEmpty() || finding.affectedCriteria.isNotEmpty()) &&
-              verification.passingFlowIds.containsAll(verification.requiredFlowIds) &&
-              verification.passingCriteria.containsAll(finding.affectedCriteria)
-          }
-      }.map(QaOpenFinding::id).toSet(),
-    )
-
   fun observe(
     observations: List<QaOpenFinding>,
-    closure: QaFindingClosureDecision,
+    conclusive: Boolean,
     treeIdentity: String,
   ): QaRepairState {
     val retained = openFindings.associateBy(QaOpenFinding::id).toMutableMap()
-    closure.closedFindingIds.forEach(retained::remove)
+    if (conclusive) retained.keys.retainAll(observations.map(QaOpenFinding::id).toSet())
     observations.forEach { finding ->
       val existing = retained[finding.id]
       retained[finding.id] =
         if (existing == null) {
           finding
         } else {
-          existing.copy(
-            affectedCriteria = (existing.affectedCriteria + finding.affectedCriteria).distinct().sorted(),
-            receiptRefs = (existing.receiptRefs + finding.receiptRefs).distinct().sorted(),
-          )
+          existing.copy(receiptRefs = (existing.receiptRefs + finding.receiptRefs).distinct())
         }
     }
     return copy(
@@ -103,8 +72,9 @@ data class QaRepairState(
       workflowId: String,
       consumedAttempts: Int,
       testedTreeIdentity: String?,
+      openFindings: List<QaOpenFinding>,
     ): QaRepairState? {
-      if (consumedAttempts <= 0) return null
+      if (consumedAttempts <= 0 && openFindings.isEmpty()) return null
       val attempts =
         (1..consumedAttempts.coerceAtMost(MAX_ATTEMPTS)).map { number ->
           QaRepairAttempt(
@@ -115,7 +85,12 @@ data class QaRepairState(
             outcome = QaRepairAttemptOutcome.COMPLETED,
           )
         }
-      return QaRepairState(subtaskId = 1, attempts = attempts, lastReceiptTreeIdentity = testedTreeIdentity)
+      return QaRepairState(
+        subtaskId = 1,
+        attempts = attempts,
+        openFindings = openFindings,
+        lastReceiptTreeIdentity = testedTreeIdentity,
+      )
     }
   }
 }

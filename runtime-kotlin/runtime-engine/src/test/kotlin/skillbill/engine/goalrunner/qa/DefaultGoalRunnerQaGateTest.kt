@@ -5,7 +5,7 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter

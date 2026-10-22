@@ -1,20 +1,29 @@
+## [2026-10-22] SKILL-438: keep agent QA as prose
+Context: A real device run was discarded because a JSON receipt exceeded a length cap and used an unsupported fallback enum; the schema path was also not available in the target repository.
+Decision: Agent QA writes `report.md` prose. The runtime extracts only the verdict, finding ids, sections, and evidence paths, stores and prints the full text, and authors text only for missing or stopped runs. `qa_receipt` is read-only compatibility.
+Reason: Device output varies beyond a strict schema, and rejecting it loses the evidence operators need. Lenient extraction preserves that evidence while keeping the runtime control surface small.
+Alternatives considered: Downgrading rejected reports to incomplete or expanding the JSON schema were rejected because format failures could still erase findings.
+Revisit when: QA needs a stable machine-readable contract beyond the small extracted fields.
+
+## [2026-10-22] SKILL-438: close findings by conclusive report ids
+Context: Prose reports may contain extra sections or a passed verdict alongside finding headings, but the repair loop still needs deterministic finding state.
+Decision: A passed or findings report closes previously open ids absent from its finding headings. Incomplete and skipped reports carry open findings forward; findings under passed remain display-only with a warning.
+Reason: Only a conclusive QA run can show that a finding disappeared, while incomplete or skipped output cannot prove repair. The report's stated verdict must remain authoritative.
+Alternatives considered: Evidence-based closure and rewriting contradictory verdicts were rejected because evidence can be missing and the runtime must not alter the agent's verdict.
+Revisit when: QA supplies a stronger independently verifiable closure signal.
+
+## [2026-10-22] SKILL-438: add report text without dropping legacy state
+Context: New runtime ports and desktop consumers need the full report, while existing workflow rows, SQLite records, and verify artifacts use receipt-era names.
+Decision: Add migration 66 with `qa_report_text` and report-named outputs; retain legacy columns, persisted keys, and `qa_receipt` readers without writing new receipt data.
+Reason: New runs expose the complete report without destructive migration, and in-flight workflows and old rows remain readable through the rollout.
+Alternatives considered: Replacing old columns and keys or rewriting existing state was rejected because rollout must preserve stored runs.
+Revisit when: All supported stores and in-flight workflows no longer need legacy reads.
+
 ## [2026-10-20] Standalone plan records the subtasks it planned
 Context: `phase plan` settled its status with the bare result `completed`. The desktop phase activity panel showed that word under the run and nothing about what the plan decided, although the plan had just written a decomposition manifest naming the feature and every subtask.
 Decision: When a standalone plan settles as completed, StandalonePlanRun reads the manifest back with `readByIssueKeyIfPresent` and passes a StandalonePlanReport (feature name, parent spec path, and each subtask's id, name, spec path, and dependency ids) to `settlePlan`. StandalonePhaseStatusEventSink persists it in the new nullable `standalone_phase_status.plan_report` JSON column (migration 65, DesktopReadSchema.VERSION 65), and WorkExecutionInstance exposes it to the desktop, which renders it under the run in phase activity. Second consumers of the ports model: runtime-infra/sqlite and the desktop data mapper. Plan runs settled before migration 65 keep a null report. The work-detail JSON contract is unchanged.
 Reason: The owner wants plan runs to show what the plan is, the same way review, audit, and QA show their results.
 Revisit when: the plan should also surface per-subtask acceptance criteria, which live only in the subtask spec files.
-
-## [2026-10-20] Standalone QA records a pass or fail result for each acceptance criterion
-Context: `phase qa` stored only `QA verdict: <verdict>.` as its result, and the CLI report named finding ids only. The receipt already maps every assertion and finding to acceptance criteria and carries assertion descriptions and finding steps, expected, and observed text, but the runtime dropped all of it. The desktop phase activity panel could not say which criteria passed, which failed, or how.
-Decision: The receipt decoder keeps assertion `description` and finding `steps`, `expected`, and `observed`. `QaReceipt.qaReport()` builds a StandaloneQaReport with one entry per criterion id named by an assertion or finding, in natural order (AC-2 before AC-10), plus one entry with a null id when a check or finding names no criterion. A criterion fails when one of its checks failed or a finding names it. The standalone phase result carries the report, StandalonePhaseStatusEventSink persists it in the new nullable `standalone_phase_status.qa_report` JSON column (migration 63, DesktopReadSchema.VERSION 63), and WorkExecutionInstance exposes it to the desktop, which renders it under the run in phase activity. The CLI report gains a `Criteria:` block. The work-detail JSON contract is unchanged.
-Reason: The owner wants every QA run to show all criteria, which failed and how, and which passed. Receipts hold criterion ids, not criterion text, so the report shows ids with the check descriptions that explain them.
-Revisit when: QA receipts carry criterion text.
-
-## [2026-10-20] Goal QA lists which acceptance criteria passed and which failed
-Context: Goal Activity showed Goal QA as `incomplete · other` with no per-criterion rows, while Audit showed a compact summary and truncated detail. Standalone QA already stored a `StandaloneQaReport`; goal QA discarded it at settlement, so the operator could not see which steps passed or failed.
-Decision: `feature_task_qa_outcomes` gains a nullable `criteria_summary` JSON column (migration 64; DesktopReadSchema.VERSION 64). Settlement stores `QaReceipt.qaReport()` and keeps the previous report when the receipt has no assertions or findings. The goal status projection maps it to `GoalRunnerQaResult.criteria`. The desktop Goal QA block lists `qaCriteriaSummary` and one compact `id · passed|failed` row per criterion, hiding a bare incomplete-reason token when those rows exist. Incomplete reasons join `reason_detail` when present. `goal status` adds a `qa_criteria:` line. The work-detail JSON is unchanged.
-Reason: The operator needs to see which QA steps passed and which failed, the same way Audit shows its conclusion.
-Revisit when: existing incomplete rows need a receipt-path backfill, or receipts carry criterion text.
 
 ## [2026-10-20] Goal QA records which findings it fixed and which it left open
 Context: When goal QA gave up after three qa_fix attempts, only the outcome reason named the open finding ids. The desktop goal activity panel, `skill-bill goal status`, and the PR body could not show what QA caught, what qa_fix repaired, or what the operator still has to look at.
@@ -61,6 +70,7 @@ Reason: Only revision-3 goal children and the retired standalone definition comp
 Context: QA is optional and runs on a test account, but receipt validation, the incomplete verdict, the qa_fix cap, the goal QA gate, and verify all stopped runs on QA problems.
 Decision: The validator downgrades a self-contradicting receipt to its honest verdict with a warning instead of rejecting it. Settlement turns a missing or unusable receipt into a runtime-written incomplete receipt, and the receipt schema lets incomplete omit artifact and target for that. A stopped QA agent step settles incomplete through a runtime-authored completion. Repair exhaustion is a produced-output flag that makes QaVerdictRule advance, not a traversal change. The goal gate returns Warned and finalization continues to commit_push.
 Reason: Changing the qa_fix edge's cap behavior would change the recorded traversal and make every in-flight plan incompatible, so exhaustion is decided by the verdict rule. A runtime-written incomplete receipt keeps the QA outcome, telemetry, and repair state paths unchanged.
+Superseded by: SKILL-438: keep agent QA as prose (2026-10-22)
 
 ## [2026-10-20] Goal finalization commits an unfinished merge
 Context: An interrupted monitor repair can leave a merge in progress when goal finalization reaches commit-all.
@@ -81,6 +91,7 @@ Reason: The monitor's owned-worktree helper is fenced and branch-based, so two s
 Context: The workflow definition supports only static required artifacts, but the verdict needs qa_receipt only when a QA selection is stored.
 Decision: The verdict's static requirements and projection stay unchanged. The runtime passes the receipt and Mobile QA rules into the directive only for qa:on. An unqualified APPROVE against open findings is recorded as APPROVE WITH FIXES with a warning, because no malformed-verdict retry path exists and QA must not fail verify.
 Reason: Pre-QA workflows keep resolving, and qa:off reaches its verdict with unchanged rules.
+Superseded by: SKILL-438: add report text without dropping legacy state (2026-10-22)
 
 ## [2026-10-19] SKILL-419: the verify QA selection enum lives in runtime-domain
 Context: runtime-mcp needed the on/off selection, but RuntimeEngineInboundApiTest forbids MCP from referencing engine-internal types, including QaPolicy.

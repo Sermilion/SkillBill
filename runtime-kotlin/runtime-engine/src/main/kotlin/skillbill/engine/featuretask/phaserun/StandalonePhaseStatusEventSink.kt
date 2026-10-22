@@ -13,7 +13,6 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CancellationException
@@ -31,7 +30,7 @@ class StandalonePhaseStatusEventSink(
   private var lastCiObservedPendingSampleNames: Set<String>? = null
   private var monitorCleanup: StandaloneMonitorCleanup? = null
   private var qaOutcome: StandaloneQaOutcome? = null
-  private var qaReport: StandaloneQaReport? = null
+  private var qaReportText: String? = null
   private var planReport: StandalonePlanReport? = null
 
   fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
@@ -80,7 +79,7 @@ class StandalonePhaseStatusEventSink(
       when (result) {
         is PhaseRunResult.Completed -> {
           result.qaOutcome?.let(::recordQaOutcome)
-          qaReport = result.qaReport
+          qaReportText = result.qaReportText
           persist(
             state = "terminal",
             finishedAt = clock.instant(),
@@ -174,7 +173,7 @@ class StandalonePhaseStatusEventSink(
             acceptedResult = acceptedResult?.takeIf(String::isNotBlank),
             monitorCleanup = monitorCleanup,
             qaOutcome = qaOutcome,
-            qaReport = qaReport,
+            qaReportText = qaReportText,
             planReport = planReport,
           ),
         )

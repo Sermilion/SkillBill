@@ -111,7 +111,7 @@ data class WorkExecutionInstance(
   val restoration: ExecutionReasonRestoration? = null,
   val runSequence: String = "",
   val qaOutcome: StandaloneQaOutcome? = null,
-  val qaReport: StandaloneQaReport? = null,
+  val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
 )
 

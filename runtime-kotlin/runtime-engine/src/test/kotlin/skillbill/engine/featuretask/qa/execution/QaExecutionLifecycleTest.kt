@@ -4,12 +4,10 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
-import skillbill.engine.featuretask.qa.receipt.QaVerdict
-import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
+import skillbill.engine.featuretask.qa.report.QA_TEST_HEAD
+import skillbill.engine.featuretask.qa.report.QA_TEST_TREE
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
+import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
@@ -17,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class QaExecutionLifecycleTest {
@@ -45,15 +44,14 @@ class QaExecutionLifecycleTest {
   }
 
   @Test
-  fun `a malformed receipt settles incomplete with a warning and still releases the invocation`() {
-    workspaces.receipt = "{}"
-    val settlement =
-      QaReceiptSettlement(QaReceiptValidator(QaReceiptSchemaValidator()), workspaces, NoopRuntimeDiagnostics)
+  fun `a missing report settles incomplete with a warning and still releases the invocation`() {
+    val settlement = QaReportSettlement(workspaces, NoopRuntimeDiagnostics)
 
-    val receipt = execution.withExecution(repo, QaPolicy.AUTO) { settlement.settle(it) }.value
+    val report = execution.withExecution(repo, QaPolicy.AUTO) { settlement.settle(it) }.value
 
-    assertEquals(QaVerdict.INCOMPLETE, receipt.verdict)
-    assertContains(receipt.warnings.single(), "schema validation")
+    assertEquals(QaVerdict.INCOMPLETE, report.verdict)
+    assertNull(report.text)
+    assertContains(report.warnings.single(), "no report.md")
     assertEquals(listOf("qa-test-invocation"), leases.releasedInvocations)
     assertEquals(listOf("qa-test-invocation"), workspaces.closedInvocations)
   }
