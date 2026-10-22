@@ -368,18 +368,30 @@ private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
 
 internal const val RAW_OUTPUT_PREVIEW_MAX_CHARS = 2_000
 
+internal data class AgentRunWorkerBinding(
+  val databasePath: Path? = null,
+  val runtimeMcpBin: Path? = null,
+)
+
 internal fun headlessAgentRunAdapters(
   processRunner: AgentRunProcessRunner,
   executableLookup: ExecutableLookup = PathExecutableLookup(),
-  databasePath: Path? = null,
+  workerBinding: AgentRunWorkerBinding = AgentRunWorkerBinding(),
   providerEnvironment: Map<String, String> = emptyMap(),
   diagnostics: RuntimeDiagnostics,
 ): Map<SupportedAgent, ProcessAgentRunAdapter> =
   listOf(
-    ClaudeAgentRunCommandBuilder(providerEnvironment = providerEnvironment, databasePath = databasePath),
-    CodexAgentRunCommandBuilder(databasePath = databasePath),
-    JunieAgentRunCommandBuilder(databasePath = databasePath),
-    CursorAgentRunCommandBuilder(databasePath = databasePath),
+    ClaudeAgentRunCommandBuilder(
+      providerEnvironment = providerEnvironment,
+      databasePath = workerBinding.databasePath,
+      runtimeMcpBin = workerBinding.runtimeMcpBin,
+    ),
+    CodexAgentRunCommandBuilder(
+      databasePath = workerBinding.databasePath,
+      runtimeMcpBin = workerBinding.runtimeMcpBin,
+    ),
+    JunieAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
+    CursorAgentRunCommandBuilder(databasePath = workerBinding.databasePath),
   ).associate { builder ->
     builder.agent to
       ProcessAgentRunAdapter(
