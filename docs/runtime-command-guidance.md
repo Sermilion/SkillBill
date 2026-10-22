@@ -294,7 +294,9 @@ the same forbidden pattern. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
 repair cycle records at most one unsuccessful outcome. A partial source-work report with
 verdict `progress` stays in the same reserved repair cycle, retains its saved plan
-and edits, and does not consume a criterion failure. A retryable block first goes
+and edits, and does not consume a criterion failure when that round changed source
+files. A `progress` report from a round that changed no source files is charged like
+`no_progress`, so three idle rounds block the criterion. A retryable block first goes
 to read-only report admission. That admission returns `progress` for unfinished
 implementation that can continue, `satisfied` for a completed repair awaiting
 independent source verification, or `advance` for a concrete external obstacle.

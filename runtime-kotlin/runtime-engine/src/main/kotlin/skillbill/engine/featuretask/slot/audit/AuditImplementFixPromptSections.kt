@@ -46,7 +46,9 @@ internal object AuditImplementFixPromptSections {
       "One guard or one safe edit is not completion when the saved plan still has missing behavior. " +
       "If the session ends with unfinished source work, call feature_task_phase_complete with verdict progress " +
       "and explain the remaining work in prose. The runtime retains the same reservation and continues repair, " +
-      "without replanning or charging a failed criterion outcome. Never use feature_task_phase_block or a " +
+      "without replanning or charging a failed criterion outcome when this session changed source files. " +
+      "A progress report from a session that changed no source files counts as a failed repair attempt. " +
+      "Never use feature_task_phase_block or a " +
       "retryable failure to hand off unfinished implementation. " +
       "The runtime preserves applied edits and saved repair reports across continuation sessions. " +
       "Known unfinished production work is not a needs_user_action blocker. Use that disposition only " +
@@ -97,7 +99,8 @@ internal object AuditImplementFixPromptSections {
       the runtime-selected criterion. Prior completion claims and test-only classifications remain claims
       to verify. Continue every remaining production item in the saved plan in this repair reservation.
       Report verdict progress only if the session ends before that work is finished. This retains the
-      reservation and does not spend a criterion failure. Do not replace the plan with another partial guard.
+      reservation and does not spend a criterion failure only when this session changed source files; a
+      progress report with no source edits spends one. Do not replace the plan with another partial guard.
 
       $reports
 

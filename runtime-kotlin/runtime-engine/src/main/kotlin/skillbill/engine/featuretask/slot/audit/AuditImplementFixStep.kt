@@ -21,11 +21,18 @@ internal object AuditImplementFixStep : PhaseStepHooks {
   ): AttemptResult? {
     if (capture.run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) return null
     val verdict = outputMap[SharedPayloadKeys.VERDICT]
-    if (verdict != FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue) {
+    // Progress keeps the reservation without spending budget only when the round edited source.
+    val idleProgress =
+      verdict == FeatureTaskRuntimeVerdict.PROGRESS.wireValue && capture.fileManifest.introduced.isEmpty()
+    if (verdict != FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue && !idleProgress) {
       return null
     }
     return AttemptResult.incompleteWork(
-      "The repair report says production work remains.",
+      if (idleProgress) {
+        "The repair report says progress, but the round changed no source files."
+      } else {
+        "The repair report says production work remains."
+      },
       "Settle the unfinished repair against the selected criterion's failure budget before continuing.",
       capture.fileManifest,
       attested,

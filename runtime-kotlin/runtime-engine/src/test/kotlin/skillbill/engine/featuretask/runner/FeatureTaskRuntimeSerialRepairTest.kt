@@ -60,6 +60,7 @@ class FeatureTaskRuntimeSerialRepairTest {
   @Test
   fun `partial progress keeps one reservation and plan until independent verification accepts the repair`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val git = AtomicReference<RecordingWorkflowGitOperations>()
     val reservations = mutableListOf<String>()
     var repairs = 0
     var plans = 0
@@ -82,6 +83,7 @@ class FeatureTaskRuntimeSerialRepairTest {
               repairs++
               reservations += assertNotNull(state?.reservation?.reservationId)
               check(repairs <= 5) { "The completed repair did not reach independent verification." }
+              git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
               assertEquals(0, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
               assertTrue(state.outcomes.isEmpty())
               assertEquals(
@@ -99,6 +101,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       }
     val harness =
       runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    git.set(harness.gitOperations)
     harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
     runOwnedSerial(harness) { admitted, worker, scope ->
       accounting.set(scope)
@@ -116,6 +119,62 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertEquals(1, scope.snapshot?.outcomes?.size)
       assertContains(harness.launchOrder(), "review")
       assertContains(harness.launchOrder(), "validate")
+    }
+  }
+
+  @Test
+  fun `progress reports that change no source spend the criterion budget instead of continuing indefinitely`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val reservations = mutableListOf<String>()
+    var repairs = 0
+    var plans = 0
+    var audits = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phase = phaseIdFromPrompt(assertNotNull(request.skillRunRequest.promptOverride))
+        val state = accounting.get()?.snapshot
+        facts(
+          when (phase) {
+            "audit" -> {
+              audits++
+              continuingAuditOutput(state, audits)
+            }
+            "audit_plan_fix" -> {
+              plans++
+              defaultPhaseOutput(request)
+            }
+            "audit_implement_fix" -> {
+              repairs++
+              reservations += assertNotNull(state?.reservation?.reservationId)
+              check(repairs <= 3) { "Idle progress reports bypassed the criterion budget." }
+              assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
+              defaultPhaseOutput(request).replace(
+                "\"status\": \"completed\",",
+                "\"status\": \"completed\", \"verdict\": \"progress\",",
+              )
+            }
+            else -> defaultPhaseOutput(request)
+          },
+        )
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report")
+      assertContains(report.blockedReason, "three unsuccessful repair attempts")
+      assertEquals(3, repairs)
+      assertEquals(3, plans)
+      assertEquals(3, reservations.distinct().size)
+      assertEquals(3, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
+      assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
+      assertFalse("review" in harness.launchOrder())
     }
   }
 
