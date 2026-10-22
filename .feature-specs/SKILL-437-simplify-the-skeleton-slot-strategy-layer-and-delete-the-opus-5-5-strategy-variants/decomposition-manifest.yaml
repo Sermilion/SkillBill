@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-437"
 feature_name: "simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants"
 parent_spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants"
@@ -92,12 +92,12 @@ subtasks:
 - id: 6
   name: "Document the simplified strategy architecture"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_6_strategy-documentation.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-201630-vvfi"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

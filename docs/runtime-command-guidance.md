@@ -84,7 +84,9 @@ Resume uses the recorded per-step assignment. A later alias, remap, or default
 does not reselect an accepted attempt. Alias `opus` qualifies only when the
 inherited process environment pins `ANTHROPIC_DEFAULT_OPUS_MODEL` to
 `claude-opus-5-5` or `anthropic.claude-opus-5-5`. `commit_push` stays the
-runtime commit strategy and launches no agent. Details:
+runtime commit strategy and launches no agent. A qualifying model adds prompt
+text only, through a directive supplement on the canonical strategy; setting
+`SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS=false` turns it off. Details:
 [Authoring model-specific phase strategies](model-specific-phase-strategies.md).
 
 

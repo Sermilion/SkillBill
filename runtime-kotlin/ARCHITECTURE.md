@@ -1201,8 +1201,15 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 
 - `PhaseSlot` partitions every phase id into exactly one slot.
 - `PhaseStrategy` declares a strategy's slot, id, steps, entry step, and the
-  policy and task directive of each step. It runs a step through its own
-  `PhaseRunner`.
+  policy and task directive of each step. It stays non-generic: each step names
+  its typed `PhaseStepDescriptor<B>` (see Composition), and the strategy runs
+  its steps through the one shared `PhaseRunner`. Its open core is limited to
+  twelve members, a ceiling rather than the registration total; the landed core is
+  `slot`, `strategyId`, `semanticRevision`, `steps`, `optionalSteps`,
+  `entryStep`, `policyFor`, `directiveFor`, `promptSections`,
+  `briefingInvariantFields` and `stepDescriptor`. Everything else
+  is an optional capability interface (below). Policy and resume identity
+  computations are final semantic helpers, not open members.
 - `PhaseRunner` is the one AI-facing seam. It takes a `PhaseStepInput`
   (step name, directive, prior step values, operator instructions, launch
   facts, policy) and returns a `PhaseStepOutput` (status, value, summary,
@@ -1233,8 +1240,15 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   interpretation identity before returning a strategy. Durable run state reads
   traversal from that same plan. `PhaseStrategyLookup.resumeRules(plan)` uses
   selected strategy rules for execution and the explicit revision-one history
-  policy for unselected records. Model-specific variants, including Opus 5.5,
-  register through the same composition root and selection bindings. See
+  policy for unselected records. A model never selects a strategy: selection
+  through `SkeletonStrategyBindings` is canonical and depends only on the
+  definition and selection facts. Model behaviour is a prompt supplement that
+  `ModelDirectiveSupplements` appends when a step is composed, keyed by the step's
+  recorded `PhaseModelProfile` and the canonical `(slot, strategy id)`. Alias
+  identity alone never enables one. `SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS`
+  (on when omitted, `false` disables) enters through `RuntimeFeatureTaskSlotProvides`
+  as injected immutable settings, reaches durable, in-memory and direct-review
+  launches through the step binding, and is not persisted. See
   [Authoring model-specific phase strategies](../docs/model-specific-phase-strategies.md).
 - `FeatureTaskRuntimeExecutionPlanCodec` maps resolved plans to the bounded
   artifact through `FeatureTaskRuntimeExecutionPlanValidator`. Decoding restores
@@ -1500,6 +1514,14 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   the traversal for those facts. A duplicate registration, a step outside its
   slot, an unknown strategy, a selection naming an unregistered strategy, and
   a definition whose slots do not match its bindings each raise a typed error.
+  The registry holds the seventeen canonical registrations that live selection
+  reaches. It also keeps explicit historical aliases for the retired
+  `<canonical-id>-opus-5-5` strategy, policy and resume identities. An alias
+  resolves to its canonical strategy for lookup and runner dispatch while the
+  recorded identity keeps its revision and policy checks, so tampering is still
+  refused. Current configuration does not reselect a recorded plan, and no
+  workflow row is rewritten. Aliases are lookup entries outside the registration
+  count.
 
 | Slot | Steps | Strategy |
 | --- | --- | --- |
@@ -1561,7 +1583,7 @@ Composition:
   persistence writers, checkpoint git, and run-loop types other than
   `PhaseRun` and `PhaseOutcome`.
 - Run-loop decisions a slot owns split by authority. State-free decisions sit
-  behind `PhaseStrategy.loopRules` (`PhaseLoopRules`). Decisions that read
+  behind `PhaseLoopCapability.loopRules` (`PhaseLoopRules`). Decisions that read
   durable state sit behind the step descriptor's `loopRules`
   (`PhaseStepLoopRules<B>`), which take the descriptor family's own binding.
   The loop opens the descriptor in a capture and binds the rules to that one
@@ -1621,13 +1643,34 @@ Composition:
   | `pr-description` | `slot.pullrequest` | PR directive, the pull request description rules (the `pr-description-directive.md` resource, with the template search result in `PrDescriptionPromptRules`; the prompt invokes no skill), the repo template search (`PullRequestTemplateSearch` over the `PullRequestTemplateFiles` port: a found template keeps its headings and drops its checklist, none falls back to the coded template, several with no default block the step), PR identity measured before and after the step through `PullRequestIdentityLookup`, and `pr_description_generated` emitted after a completed step through the lifecycle telemetry gate |
 
 - A strategy reaches shared code through hooks, never the other way round.
-  `PhaseStrategy.stepDescriptor` returns the step's `PhaseStepDescriptor`: its
-  binding family, its `PhaseStepHooks` (launch, pre-launch reconcile,
-  completed-round settlement, accepted output, blocked output disposition) and
-  its typed execution. `PhaseStrategy.verdictRule` returns a
+  `PhaseStrategy.stepDescriptor` returns the step's `PhaseStepDescriptor<B>`: its
+  declared `PhaseBindingFamily<B>`, its typed `PhaseStepHooks<B>` (launch,
+  pre-launch reconcile, completed-round settlement, accepted output, blocked
+  output disposition, with unchanged timing) and its typed execution. The
+  runtime owns binding construction through one factory method per family and
+  dispatches generically, so a strategy cannot choose a binding its family does
+  not declare. Review, finding-verification and repair-receipt bindings keep
+  their own families, which keeps review, verification and repair authority
+  separate; the quality-gate family carries its `PhaseQualityGateOperation`
+  (pack gate or agent validation) as its payload.
+  `briefingInvariantFields` picks the run-invariant field set the step's briefing
+  renders.
+- Optional behaviour sits on capability interfaces that a strategy implements
+  only when it needs them: `PhaseLoopCapability` (loop rules),
+  `PhaseResumeCapability`, `PhaseVerdictCapability` (the
   `FeatureTaskRuntimeStepVerdictRule` that `FeatureTaskRuntimeRunState` settles
-  the step's verdict by. `PhaseStrategy.briefingInvariantFields` picks the
-  run-invariant field set the step's briefing renders.
+  the step's verdict by), `PhaseStatusCapability`, `AcceptanceRepairCapability`
+  and `MonitorRepairCapability` (repair roles), `PhasePreparedRunCapability`,
+  and `PhaseRecordedPlanMappingCapability`. Fan-out belongs to the
+  `PlanningFanOut` and `PlanningUnit` families and `PhaseRunFanOut`. Shared code
+  discovers a capability on the selected owner with a type check and applies a
+  default when it is absent.
+- Immutable execution and admission ownership is unchanged by this layering:
+  `FeatureTaskRuntimeExecutionPlanCodec`, its digests, recorded launch
+  assignments, `FeatureTaskRuntimeExecutionAdmission` and the accepted-step
+  authority of the attempt host still own those facts, and strategies only
+  declare. Contract `0.2` stays unchanged because supplements and aliases add no
+  durable field.
 
 - Each strategy supplies its steps' prompt sections through
   `PhaseStrategy.promptSections` (`PhaseStepPromptSections`: task directive,
@@ -1651,9 +1694,10 @@ Composition:
 
 Dispatch and policy:
 
-- Selection is a code binding in `RuntimeFeatureTaskSlotProvides`, not
-  operator config. The provider lists every strategy explicitly and gives each
-  one its own `PhaseRunner` from an unscoped provider.
+- Selection is a code binding in `SkeletonStrategyBindings`, not operator
+  config, and is canonical for every model. `RuntimeFeatureTaskSlotProvides`
+  lists every registered strategy explicitly and shares one injected
+  `DefaultPhaseRunner` across all of them.
 - Step policy (mutating, relaunch on invalid output, single agent session,
   read-only idle, file mutating, generation scoped) is declared by the
   strategy that owns the step. No phase-id set outside the strategies decides
@@ -1696,12 +1740,16 @@ Adding a phase strategy:
 
 1. Write the strategy class in its slot package under
    `skillbill.engine.featuretask.slot`: declare the slot, strategy id, steps,
-   entry step, per-step policy, and prompt sections, and run each step
-   through the strategy's `PhaseRunner`.
-2. Add it to the registry provider in `RuntimeFeatureTaskSlotProvides` with
-   its own `PhaseRunner`.
-3. Name it in `PhaseStrategySelection` for the definitions and selection facts
+   entry step, per-step policy, prompt sections and a typed descriptor naming
+   each step's binding family. Add a capability interface only for optional
+   behaviour the strategy needs.
+2. Add it to the registry provider in `RuntimeFeatureTaskSlotProvides`; it uses
+   the shared `PhaseRunner`.
+3. Name it in `SkeletonStrategyBindings` for the definitions and selection facts
    that pick it.
+
+A model is not a strategy: add model-specific prompt text through a classifier
+case and a `ModelDirectiveSupplements` mapping instead.
 
 ## Runtime Contract And Schema Seams
 

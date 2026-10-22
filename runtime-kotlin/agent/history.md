@@ -1,3 +1,14 @@
+## [2026-10-22] SKILL-437 subtask 6: strategy documentation for the simplified layer
+Areas: docs (model-specific-phase-strategies, runtime-command-guidance); runtime-kotlin/ARCHITECTURE.md; runtime-kotlin/agent/decisions.md
+- MEDIUM feature, documentation only. `docs/model-specific-phase-strategies.md` is rewritten around the landed design: a model is not a strategy, and adding one is a single `PhaseModelProfileClassifier` case plus directive resources registered with `ModelDirectiveSupplements`.
+- Composition appends supplements for the recorded step profile to the task directive, retry focus and output contract; canonical-profile and unmapped steps stay unsupplemented. The doc records the plan versus plan_subtasks resource mapping and the direct standalone review launches.
+- `SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS` is documented: on when omitted, `false` disables, any other value is a typed error; it enters through injected settings and is not persisted. Immutable historical aliases keep recorded runs executable without reselection or row rewrite.
+- `ARCHITECTURE.md` strategy section now covers the non-generic `PhaseStrategy` (twelve-member ceiling, eleven landed), seventeen canonical registrations, typed binding families, optional capability interfaces and one shared `DefaultPhaseRunner`; stale `PhaseStrategy.loopRules` and per-strategy runner text repaired.
+- Decision entry added for canonical strategies plus supplements; the 2026-10-05 SKILL-403 decision is marked superseded in part.
+- Limits: docs name no wrapper class and cite no resource count; twelve opus-5-5 resources remain after subtask 3 removed the delegated full-run one.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented (validate passed)
+
 ## [2026-10-22] SKILL-437 subtask 4: typed binding families for phase steps
 Areas: runtime-kotlin/runtime-engine (featuretask slot, slot/attempt, slot strategies, runloop state/core/durable, test fixtures); runtime-kotlin/ARCHITECTURE.md
 - MEDIUM feature. Each phase step now declares a `PhaseStepDescriptor` (family, hooks, execution) in place of `runStep`, `executionBindingKind` and untyped hooks; `PhaseExecutionBindingKind` is deleted and every accepted-binding downcast in strategies is gone.
