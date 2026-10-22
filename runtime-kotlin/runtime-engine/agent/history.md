@@ -1,3 +1,17 @@
+## [2026-10-22] SKILL-435 subtask 1: block capture and investigation lifecycle
+Areas: runtime-engine diagnostics/block, goalrunner persist and execution, featuretask phase core/record, acceptance repair, phaserun, runner; runtime-domain blockincident; runtime-ports blockincident; runtime-infra sqlite and host; runtime-contracts blockincident keys; runtime-core DI; desktop-tray detail
+- Every goal block (WorkflowGoalRunnerBlockWrites.markBlocked) and standalone phase block (StandalonePhaseStatusEventSink.settleBlocked) creates or links one incident after the BLOCKED write commits. Feature-task settlement, phase-state recorder and serial repair producers do the same.
+- BlockIncidentAliases is the only alias derivation; producers for one attempt get one token. Goal aliases carry accepted generation, attempt and causal child token as separate parts (unavailable/none when not recoverable). Child-propagated blocks link through CHILD_CAUSE. reusable
+- The accepted block reference persists and rides through replay, terminal reads and stale displacement. Legacy aliases stay attached when a historical identity is normalized.
+- BlockIncidentCapture.capture is the one entry point. It runs in its own transaction and swallows failures. When the DB is unwritable it writes to the BlockIncidentSpool port (file adapter, 64 records x 16 KiB); the next entry imports with FALLBACK_SPOOL. reusable
+- BlockIncidentInvestigationWorker claims with a 90s lease, renews every 30s and settles through the BlockIncidentInvestigator seam (default PARTIAL; subtask 2 replaces it). It runs at entry in GoalRunner, FeatureTaskRuntimeRunEntry and PhaseRunEntry, after orphan recovery, under one shared deadline. reusable
+- Pickup window is observedAt + 24h; claim sets a 5-minute run deadline. Expired takeovers bump retryCount, and past MAX_RETRIES the incident settles CRASHED.
+- Migration 76 adds block_incident_rollout (activated_at). Older incidents and BLOCKED workflows are never investigated. blockedWithoutIncident recovers up to 16 post-activation orphans per entry.
+- FeatureTaskPhaseSettlementService now requires DatabaseSessionFactory; the ERROR downgrade for unavailable capture is gone.
+- Limits: no diagnosis content, recovery, reports or presentation yet (subtasks 2-5). Port models live in ports.blockincident.model to respect package ceilings.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate ran full check green)
+
 ## [2026-10-21] SKILL-436 subtask 1: implement one acceptance criterion at a time
 Areas: runtime-engine featuretask slot/implementation, slot/attempt, slot/state, phase/record, persist, runloop, phaserun; runtime-domain taskruntime persistence and wire; runtime-contracts featuretask keys and failure codes; runtime-infra/contracts; orchestration/contracts; runtime-application testFixtures
 - Implement now walks the spec's acceptance criteria in order. Each criterion gets a fresh worker, then a fresh read-only check. A satisfied check that edited nothing closes it; an unsatisfied check hands short gap prose to the next fresh worker.

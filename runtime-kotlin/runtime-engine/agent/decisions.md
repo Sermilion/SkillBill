@@ -1,3 +1,18 @@
+## [2026-10-22] Goal block aliases carry generation, attempt and child cause separately
+Context: SKILL-435 goal incidents first used a scalar generation-first alias, which made generation 2 / attempt 1 collide with generation 2 / attempt 2.
+Decision: The goal PHASE_TRANSITION alias holds accepted generation, attempt and causal child token as separate components, with the literal unavailable or none instead of invented defaults. Historical tokens and aliases stay immutable; normalization adds a nonconflicting canonical alias.
+Reason: The operator approved the composite identity on 2026-10-22, superseding the repair plan's scalar rule. Independent counters cannot share one slot, and rewriting history or adding a collision counter would break existing links.
+
+## [2026-10-22] Block incident capture runs after the block commits
+Context: Incident capture failing inside the settlement transaction could roll back or downgrade the primary block.
+Decision: Producers commit BLOCKED first, then BlockIncidentCapture observes in its own transaction, catching every failure and falling back to a file spool.
+Reason: Post-commit capture guarantees the block is durable, which a savepoint does not. The crash window between commit and capture is closed by orphan reconciliation through blockedWithoutIncident.
+
+## [2026-10-22] Investigation deadline counts from claim, not observation
+Context: An incident can be observed while no runtime process stays alive to investigate it.
+Decision: Observation sets a 24-hour pickup window; a claim resets the deadline to 5 minutes. Pickup relies on claim takeover plus next-entry runs, with no detached subprocess.
+Reason: Counting from observation would time out incidents before any process could pick them up. A host-detached worker was rejected as a generic scheduler the spec excludes.
+
 ## [2026-10-21] Criterion progress is one workflow artifact reserved before launch
 Context: SKILL-436 implement must cap workers per criterion across crashes and restarts without a new storage authority.
 Decision: One versioned workflow artifact records the ordered criterion IDs, cursor, worker count and closed IDs. A worker slot is reserved before launch, and closure and advance happen in one owned recorder transaction. Settled work is reconciled from existing attempt and settlement identities.
