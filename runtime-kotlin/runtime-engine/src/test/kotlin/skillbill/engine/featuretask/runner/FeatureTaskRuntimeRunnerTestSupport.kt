@@ -57,8 +57,8 @@ import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewFixBudget
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
@@ -88,7 +88,7 @@ import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorSer
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.testPhaseStrategies
-import skillbill.engine.featuretask.slot.unavailableQaReceiptSettlement
+import skillbill.engine.featuretask.slot.unavailableQaReportSettlement
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
@@ -722,7 +722,7 @@ internal data class RuntimeHarnessConfig(
   val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
   val standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
   val qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
-  val qaReceipts: QaReceiptSettlement = unavailableQaReceiptSettlement(),
+  val qaReports: QaReportSettlement = unavailableQaReportSettlement(),
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -1070,7 +1070,7 @@ private fun harnessRunner(
       pullRequestChecksLookup = deps.runtimeConfig.pullRequestChecksLookup,
       standaloneMonitorService = deps.runtimeConfig.standaloneMonitorService,
       qaExecution = deps.runtimeConfig.qaExecution,
-      qaReceipts = deps.runtimeConfig.qaReceipts,
+      qaReports = deps.runtimeConfig.qaReports,
       qaOutcomes = FeatureTaskQaOutcomeRecorder(deps.database, testHarnessClock),
     )
   val launchOutcomes =
@@ -1370,7 +1370,7 @@ private fun telemetryHarnessRunner(
       pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
       standaloneMonitorService = runtimeConfig.standaloneMonitorService,
       qaExecution = runtimeConfig.qaExecution,
-      qaReceipts = runtimeConfig.qaReceipts,
+      qaReports = runtimeConfig.qaReports,
       qaOutcomes = FeatureTaskQaOutcomeRecorder(database, testHarnessClock),
     )
   val specGate = testSpecGate()

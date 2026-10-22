@@ -9,16 +9,14 @@ import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
-import skillbill.engine.featuretask.qa.receipt.QaSettledRun
-import skillbill.engine.featuretask.qa.receipt.QaVerdict
-import skillbill.engine.featuretask.qa.receipt.qaTestEvidencePrefix
-import skillbill.engine.featuretask.qa.receipt.qaTestJson
-import skillbill.engine.featuretask.qa.receipt.qaTestReceipt
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.QA_TEST_HEAD
+import skillbill.engine.featuretask.qa.report.QA_TEST_TREE
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
+import skillbill.engine.featuretask.qa.report.QaSettledRun
+import skillbill.engine.featuretask.qa.report.QaVerdict
+import skillbill.engine.featuretask.qa.report.qaTestEvidencePrefix
+import skillbill.engine.featuretask.qa.report.qaTestReport
 import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
 import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
@@ -36,7 +34,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.work.EmptyOutcomeStore
-import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
@@ -82,15 +79,20 @@ class GoalQaRepairLoopTest {
 
     assertEquals(listOf("qa", "qa_fix", "build", "qa", "validate"), fixture.startedPhases())
     val repairPrompt = fixture.prompts("qa_fix").single()
-    assertContains(repairPrompt, "### F-1")
-    assertContains(repairPrompt, "- Steps: Open the app; Log in")
-    assertContains(repairPrompt, "- Expected: The home screen shows the user name.")
-    assertContains(repairPrompt, "- Observed: The home screen stays blank.")
+    val evidence = "${qaTestEvidencePrefix("qa-1")}home-F-1.png"
+    assertContains(
+      repairPrompt,
+      "### F-1 Home screen stays blank\n" +
+        "Steps: open the app, log in.\n" +
+        "Expected: the home screen shows the user name.\n" +
+        "Observed: the home screen stays blank.\n" +
+        "Evidence: $evidence\n\n\nEvidence: $evidence",
+    )
     val outcome = assertNotNull(fixture.storedOutcome())
     assertEquals(StandaloneQaOutcome.PASSED, outcome.outcome)
     assertEquals(1, outcome.qaFixAttempts)
     assertEquals(REPAIRED_TREE, outcome.testedTreeIdentity)
-    assertEquals(listOf("AC-001"), outcome.report?.criteria?.map { it.id })
+    assertContains(assertNotNull(outcome.reportText), "Verdict: passed")
     assertContains(assertIs<GoalQaGateResult.Warned>(result).reason, "validate changed code after QA settled")
   }
 
@@ -186,11 +188,11 @@ class GoalQaRepairLoopTest {
       outcome.findings.map { it.id to it.status },
     )
     val open = outcome.notFixedFindings.single()
-    assertEquals("The F-2 screen stays blank.", open.title)
-    assertContains(assertNotNull(open.evidencePath), "home.png")
+    assertEquals("Home screen stays blank", open.title)
+    assertContains(assertNotNull(open.evidencePath), "home-F-2.png")
     val body = fixture.state.manifest.toPullRequestRequest(home, GoalQaSummary.Recorded(outcome)).body
     assertContains(body, "fixed: F-1")
-    assertContains(body, "not fixed, review them yourself: F-2 \"The F-2 screen stays blank.\"")
+    assertContains(body, "not fixed, review them yourself: F-2 \"Home screen stays blank\"")
   }
 
   @Test
@@ -214,14 +216,42 @@ class GoalQaRepairLoopTest {
     )
   }
 
+  @Test
+  fun `a QA agent that writes no report settles QA incomplete with a warning and never blocks the goal`() {
+    val fixture = Fixture(verdicts = listOf(null), qaFixOutput = { error("qa_fix must not run without findings.") })
+
+    val result = fixture.gate.run(fixture.state, fixture.request)
+
+    assertEquals(listOf("qa"), fixture.launchedPhases())
+    assertIs<GoalQaGateResult.Passed>(result)
+    val outcome = assertNotNull(fixture.storedOutcome())
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
+    assertContains(assertNotNull(outcome.reason), "QA agent wrote no report.md")
+    assertEquals(emptyList(), outcome.findings)
+  }
+
+  @Test
+  fun `a free-form report with no verdict word settles incomplete and keeps its full text`() {
+    val prose = "I tapped around the login flow and it looked fine to me, but the device dropped twice."
+    val fixture =
+      Fixture(verdicts = listOf(null), qaFixOutput = { error("qa_fix must not run.") }, freeFormReport = prose)
+
+    fixture.gate.run(fixture.state, fixture.request)
+
+    val outcome = assertNotNull(fixture.storedOutcome())
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
+    assertEquals(prose, outcome.reportText)
+  }
+
   private inner class Fixture(
-    verdicts: List<QaVerdict>,
+    verdicts: List<QaVerdict?>,
     findingIds: List<List<String>>? = null,
     qaFixOutput: () -> String,
     onQaFix: (RecordingWorkflowGitOperations) -> Unit = {},
     onValidate: (RecordingWorkflowGitOperations) -> Unit = {},
     recordedAttempts: Int = 0,
     buildGateRunner: ValidationGateRunner? = null,
+    freeFormReport: String? = null,
   ) {
     private val clock = Clock.systemUTC()
     private val database: DatabaseSessionFactory = phaseRunDatabase(home, clock)
@@ -248,11 +278,15 @@ class GoalQaRepairLoopTest {
                   checkNotNull(git.repositoryFingerprintValue),
                   qaTestEvidencePrefix("qa-$qaVisits"),
                 )
-              val receipt = qaTestReceipt(verdicts[qaVisits - 1], identity)
-              workspaces.receipt =
-                qaTestJson(findingIds?.let { receipt.withFindings(it[qaVisits - 1]) } ?: receipt)
-                  .replace("AC-1", "AC-001")
-                  .replace("\"standalone\"", "\"auto\"")
+              val verdict = verdicts[qaVisits - 1]
+              val ids = findingIds?.get(qaVisits - 1)
+              workspaces.report =
+                when {
+                  freeFormReport != null -> freeFormReport
+                  verdict == null -> null
+                  ids == null -> qaTestReport(verdict, identity)
+                  else -> qaTestReport(verdict, identity, ids)
+                }
               "QA settled."
             }
             "qa_fix" -> qaFixOutput().also { onQaFix(git) }
@@ -305,8 +339,7 @@ class GoalQaRepairLoopTest {
               QaCapabilityResolver(git) { listOf(pack) },
               IdentifierGeneratorPort { "${++invocations}" },
             ),
-          qaReceipts =
-            QaReceiptSettlement(QaReceiptValidator(QaReceiptSchemaValidator()), workspaces, NoopRuntimeDiagnostics),
+          qaReports = QaReportSettlement(workspaces, NoopRuntimeDiagnostics),
           validationGateRunner = buildGateRunner,
           validationGatePlatformManifests = listOf(kotlinPackWithBuildGate()),
         )
@@ -350,19 +383,6 @@ class GoalQaRepairLoopTest {
       launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }.filter { phaseIdFromPrompt(it) == phase }
 
     fun storedOutcome(): FeatureTaskQaOutcome? = database.read { it.featureTaskQaOutcomes.find(PARENT) }
-  }
-
-  private fun Map<String, Any?>.withFindings(ids: List<String>): Map<String, Any?> {
-    if (ids.isEmpty()) return this
-    val template = (this["findings"] as List<*>).single() as Map<*, *>
-    return this +
-      (
-        "findings" to
-          ids.map { id ->
-            template.entries.associate { (key, value) -> key.toString() to value } +
-              mapOf("id" to id, "observed" to "The $id screen stays blank.")
-          }
-      )
   }
 
   private class DatabaseGoalQaOutcomes(

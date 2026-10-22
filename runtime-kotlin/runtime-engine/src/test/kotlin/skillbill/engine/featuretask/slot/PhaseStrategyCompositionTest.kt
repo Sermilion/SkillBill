@@ -12,7 +12,6 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PROMPT_COMPOSER_ISSUE_KEY
 import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
 import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.FILE_MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.GENERATION_SCOPED
@@ -135,10 +134,7 @@ class PhaseStrategyCompositionTest {
             fanOut,
             PlanFanOutOpus55Strategy(fanOut),
             QaStrategy(
-              unavailableQaReceiptSettlement(),
-              QaReceiptValidator {
-                null
-              },
+              unavailableQaReportSettlement(),
               testQaExecutionLifecycle(NoopWorkflowGitOperations),
               unusedQaOutcomeRecorder(),
             ),

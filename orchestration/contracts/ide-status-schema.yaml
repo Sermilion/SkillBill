@@ -82,8 +82,8 @@ properties:
       - skipped
       - incomplete
     description: >
-      Present only on a standalone QA phase. `attempted` until the run settles a
-      valid receipt, then the receipt verdict.
+      Present only on a standalone QA phase. `attempted` until the run settles the
+      QA report, then the report verdict.
   current_activity:
     type: string
     minLength: 1

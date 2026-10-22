@@ -105,7 +105,6 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
     const val VALIDATION_REQUEST: String = "feature_task_runtime.validation_request"
     const val VALIDATION_RECEIPT: String = "feature_task_runtime.validation_receipt"
     const val BUILD_RECEIPT: String = "feature_task_runtime.build_receipt"
-    const val QA_RECEIPT: String = "feature_task_runtime.qa_receipt"
     const val BOUNDARY_CANDIDATES: String = "feature_task_runtime.boundary_candidates"
     const val HISTORY_RECEIPT: String = "feature_task_runtime.history_receipt"
     const val HISTORY_RECEIPT_VERSION: String = "0.2"

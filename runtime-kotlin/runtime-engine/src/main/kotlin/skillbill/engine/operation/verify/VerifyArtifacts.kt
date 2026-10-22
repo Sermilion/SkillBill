@@ -26,6 +26,7 @@ internal object VerifyWorkflow {
   const val CODE_REVIEW_RECEIPT = "code_review_receipt"
   const val UNIT_TEST_VALUE_RECEIPT = "unit_test_value_receipt"
   const val COMPLETENESS_AUDIT_RECEIPT = "completeness_audit_receipt"
+  const val QA_REPORT = "qa_report"
   const val QA_RECEIPT = "qa_receipt"
   const val QA_OUTCOME = "qa_outcome"
   const val VERDICT_RESULT = "verdict_result"
@@ -62,6 +63,8 @@ internal object VerifyWorkflow {
     findings: List<String>,
   ): Map<String, Any?> =
     mapOf(CONTRACT_VERSION to ARTIFACT_CONTRACT_VERSION, VERDICT_FIELD to verdict, FINDINGS to findings)
+
+  fun qaArtifact(artifacts: Map<String, Any?>): Any? = artifacts[QA_REPORT] ?: artifacts[QA_RECEIPT]
 
   fun string(
     artifact: Any?,

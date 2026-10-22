@@ -13,21 +13,13 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
-import skillbill.goalrunner.model.GoalRunnerQaCheck
-import skillbill.goalrunner.model.GoalRunnerQaCriterion
-import skillbill.goalrunner.model.GoalRunnerQaCriterionFinding
 import skillbill.goalrunner.model.GoalRunnerQaFinding
 import skillbill.goalrunner.model.GoalRunnerQaResult
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.FIXED
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus.NOT_FIXED
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaCheck
-import skillbill.ports.idestatus.model.StandaloneQaCriterion
-import skillbill.ports.idestatus.model.StandaloneQaCriterionFinding
-import skillbill.ports.idestatus.model.StandaloneQaCriterionStatus
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -155,7 +147,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
             testedTreeIdentity = null,
             recordedAt = "2026-10-20T10:15:30Z",
             findings = storedQaFindings,
-            report = storedQaReport,
+            reportText = storedQaReportText,
           )
       }
     val result =
@@ -178,7 +170,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
         1,
         Instant.parse("2026-10-20T10:15:30Z"),
         projectedQaFindings,
-        projectedQaCriteria,
+        storedQaReportText,
       ),
       result.goalQaResult,
     )
@@ -230,8 +222,8 @@ class GoalRunnerValidationEvidenceProjectionTest {
 
   private val storedQaFindings =
     listOf(
-      FeatureTaskQaFinding("F-1", "Login fails.", listOf("AC-001"), listOf("/qa/1.png"), null, FIXED),
-      FeatureTaskQaFinding("F-2", "Home is blank.", listOf("AC-002"), emptyList(), "/qa/r.json", NOT_FIXED),
+      FeatureTaskQaFinding("F-1", "Login fails.", listOf("/qa/1.png"), null, FIXED),
+      FeatureTaskQaFinding("F-2", "Home is blank.", emptyList(), "/qa/r.json", NOT_FIXED),
     )
 
   private val projectedQaFindings =
@@ -240,39 +232,14 @@ class GoalRunnerValidationEvidenceProjectionTest {
       GoalRunnerQaFinding("F-2", "Home is blank.", "/qa/r.json", fixed = false),
     )
 
-  private val storedQaReport =
-    StandaloneQaReport(
-      listOf(
-        StandaloneQaCriterion(
-          "AC-001",
-          StandaloneQaCriterionStatus.FAILED,
-          listOf(StandaloneQaCheck("Login works.", false)),
-          listOf(StandaloneQaCriterionFinding("F-2", emptyList(), "Home shows user.", "Home is blank.")),
-        ),
-        StandaloneQaCriterion(
-          "AC-002",
-          StandaloneQaCriterionStatus.PASSED,
-          listOf(StandaloneQaCheck("Settings open.", true)),
-          emptyList(),
-        ),
-      ),
-    )
+  private val storedQaReportText =
+    """
+    Verdict: findings_open
 
-  private val projectedQaCriteria =
-    listOf(
-      GoalRunnerQaCriterion(
-        "AC-001",
-        false,
-        listOf(GoalRunnerQaCheck("Login works.", false)),
-        listOf(GoalRunnerQaCriterionFinding("F-2", emptyList(), "Home shows user.", "Home is blank.")),
-      ),
-      GoalRunnerQaCriterion(
-        "AC-002",
-        true,
-        listOf(GoalRunnerQaCheck("Settings open.", true)),
-        emptyList(),
-      ),
-    )
+    ### F-2 Home is blank
+    Steps: open the app, log in.
+    Observed: the home screen stays blank.
+    """.trimIndent()
 
   private fun completedManifest(workflowId: String): DecompositionManifest =
     manifest(1).copy(

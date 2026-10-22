@@ -8,7 +8,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusR
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
-import skillbill.engine.featuretask.qa.receipt.QaPhaseOutputKeys
+import skillbill.engine.featuretask.qa.report.hasQaOutput
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.qa.invalidQaRepairStateSchema
@@ -166,15 +166,14 @@ class FeatureTaskRuntimeWorkflowPersistence
           ?: throw invalidWorkflowStateSchemaError("Workflow '$workflowId' is missing its QA state.")
       val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QA_REPAIR_STATE
       if (!family.contains(artifacts)) {
-        val hasQaReceipt =
+        val hasQaState =
           decodePhaseRecords(artifacts).values.any { phase ->
             val envelope =
               phase.outputArtifact?.let(JsonCodec::parseObjectOrNull)?.let(JsonCodec::jsonElementToValue)
                 ?.let(JsonCodec::anyToStringAnyMap)
-            val produced = JsonCodec.anyToStringAnyMap(envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS))
-            produced?.containsKey(QaPhaseOutputKeys.RECEIPT) == true
+            hasQaOutput(JsonCodec.anyToStringAnyMap(envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)))
           }
-        if (hasQaReceipt) {
+        if (hasQaState) {
           throw invalidQaRepairStateSchema("Workflow '$workflowId' has QA output but no authoritative findings state.")
         }
         return null

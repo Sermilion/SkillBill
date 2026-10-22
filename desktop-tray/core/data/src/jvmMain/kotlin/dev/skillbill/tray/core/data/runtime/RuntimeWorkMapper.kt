@@ -4,10 +4,8 @@ import dev.skillbill.tray.core.domain.model.*
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
-import skillbill.ports.idestatus.model.StandaloneQaCriterionStatus
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandalonePlanReport
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.WorkBoardItem
@@ -33,16 +31,6 @@ internal fun StandaloneQaOutcome.toDomain(): QaVerdict = when (this) {
   StandaloneQaOutcome.SKIPPED -> QaVerdict.SKIPPED
   StandaloneQaOutcome.INCOMPLETE -> QaVerdict.INCOMPLETE
 }
-
-internal fun StandaloneQaReport.toDomain(): QaRunReport = QaRunReport(
-  criteria.map { criterion ->
-    QaCriterionResult(
-      criterion.id, criterion.status == StandaloneQaCriterionStatus.PASSED,
-      criterion.checks.map { QaCheckResult(it.description, it.passed) },
-      criterion.findings.map { QaCriterionFinding(it.id, it.steps, it.expected, it.observed) },
-    )
-  },
-)
 
 internal fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) })
@@ -171,13 +159,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
       GoalQaResult(
         qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
         qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePath, it.fixed) },
-        qa.criteria.map { criterion ->
-          QaCriterionResult(
-            criterion.id, criterion.passed,
-            criterion.checks.map { QaCheckResult(it.description, it.passed) },
-            criterion.findings.map { QaCriterionFinding(it.id, it.steps, it.expected, it.observed) },
-          )
-        },
+        qa.reportText,
       )
     },
     latestActivity = LatestActivity(
@@ -186,7 +168,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     ),
     executionHistory = executionHistory.map { ExecutionInstance(it.invocationId, it.executionId, it.lifecycleState,
       it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(), it.finishedAt?.toKotlinInstant(), it.result,
-      it.restoration?.toDomain(), it.qaOutcome?.toDomain(), it.qaReport?.toDomain(), it.planReport?.toDomain()) },
+      it.restoration?.toDomain(), it.qaOutcome?.toDomain(), it.qaReportText, it.planReport?.toDomain()) },
     observedAt = observedAt,
     nextCursor = cursor,
     pageOffset = pageOffset,

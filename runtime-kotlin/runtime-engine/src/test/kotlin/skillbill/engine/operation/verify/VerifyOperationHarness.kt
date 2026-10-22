@@ -23,8 +23,7 @@ import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -40,7 +39,6 @@ import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
-import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
@@ -216,16 +214,13 @@ internal class VerifyOperationHarness : AutoCloseable {
 
   fun dirtyGreeter() = write("src/main/kotlin/Greeter.kt", DIRTY_GREETER)
 
-  private fun qaStep(): VerifyQaStep {
-    val validator = QaReceiptValidator(QaReceiptSchemaValidator())
-    return VerifyQaStep(
+  private fun qaStep(): VerifyQaStep =
+    VerifyQaStep(
       testQaExecutionLifecycle(git, qaWorkspaces, qaLeases, QaCapabilityResolver(git) { qaManifests }),
-      QaReceiptSettlement(validator, qaWorkspaces, NoopRuntimeDiagnostics),
-      validator,
+      QaReportSettlement(qaWorkspaces, NoopRuntimeDiagnostics),
       qaGit,
       recordingDiagnostics,
     )
-  }
 
   fun invoke(
     arguments: OperationArguments,

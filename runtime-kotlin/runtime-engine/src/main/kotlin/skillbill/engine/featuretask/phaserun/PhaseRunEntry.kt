@@ -26,6 +26,7 @@ import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseRunHarness
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -312,7 +313,18 @@ class PhaseRunEntry(
       branch,
       standalone?.let { StandaloneMonitorLedger(it.context, it.cleanup) },
       request.recordedGoalQaOutcome?.let { recorded ->
-        QaRepairState.resumedAfter(workflowId, recorded.qaFixAttempts, recorded.testedTreeIdentity)
+        QaRepairState.resumedAfter(
+          workflowId,
+          recorded.qaFixAttempts,
+          recorded.testedTreeIdentity,
+          recorded.notFixedFindings.map { finding ->
+            QaOpenFinding(
+              id = finding.id,
+              affectedCriteria = emptyList(),
+              receiptRefs = listOfNotNull(finding.reportPath),
+            )
+          },
+        )
       },
     )
 

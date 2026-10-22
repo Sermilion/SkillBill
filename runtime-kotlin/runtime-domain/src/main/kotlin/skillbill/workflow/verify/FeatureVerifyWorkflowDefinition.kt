@@ -222,8 +222,8 @@ object FeatureVerifyWorkflowDefinition {
             "Run independently from sibling evaluators using criteria_summary, completeness_rubric, and the " +
             "checkpoint-scoped diff_projection. Refresh the projection if the target changed materially.",
           "qa" to
-            "Honor the stored qa_selection. With off, persist a disabled_policy qa_receipt. With on, check the " +
-            "target head out into a fresh temporary detached worktree, run report-only QA there, persist qa_receipt, " +
+            "Honor the stored qa_selection. With off, persist a skipped qa_report. With on, check the " +
+            "target head out into a fresh temporary detached worktree, run report-only QA there, persist qa_report, " +
             "and remove the worktree.",
           SharedPayloadKeys.VERDICT to
             "Reuse only compact typed evaluator receipts to produce the final verdict " +
@@ -241,6 +241,7 @@ object FeatureVerifyWorkflowDefinition {
           "code_review_receipt",
           "unit_test_value_receipt",
           "completeness_audit_receipt",
+          "qa_report",
           "qa_receipt",
           "qa_outcome",
           "verdict_result",

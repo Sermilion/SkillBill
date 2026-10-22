@@ -3,9 +3,8 @@ package skillbill.engine.featuretask.slot
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
@@ -68,7 +67,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.qa.QaWorkspacePort
-import skillbill.ports.qa.model.QaReceiptSource
+import skillbill.ports.qa.model.QaReportSource
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
@@ -100,7 +99,7 @@ fun testPhaseStrategies(
   planFanOutPort: BoundedWorkFanOutPort = SequentialBoundedWorkFanOutPort,
   planFanOutCap: Int = 1,
   standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
-  qaReceipts: QaReceiptSettlement = unavailableQaReceiptSettlement(),
+  qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
 ): PhaseStrategyLookup {
@@ -168,7 +167,7 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(StandaloneMonitorOpus55Strategy(standaloneMonitor), runner()),
         PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner()),
         PhaseStrategyRegistration(
-          QaStrategy(qaReceipts, QaReceiptValidator { null }, qaExecution, qaOutcomes),
+          QaStrategy(qaReports, qaExecution, qaOutcomes),
           runner(),
         ),
       ),
@@ -178,21 +177,20 @@ fun testPhaseStrategies(
   return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
 }
 
-fun unavailableQaReceiptSettlement(): QaReceiptSettlement =
-  QaReceiptSettlement(
-    QaReceiptValidator { null },
+fun unavailableQaReportSettlement(): QaReportSettlement =
+  QaReportSettlement(
     object : QaWorkspacePort {
       override fun open(
         repoRoot: Path,
         invocationId: String,
       ): QaWorkspace = error("Test phase strategies do not open a QA workspace.")
 
-      override fun readReceipt(receiptPath: Path): QaReceiptSource? = null
+      override fun readReport(reportPath: Path): QaReportSource? = null
 
-      override fun readRetainedReceipt(
-        qaRoot: Path,
-        receiptReference: String,
-      ): QaReceiptSource? = null
+      override fun readRetainedReport(
+        repoRoot: Path,
+        reference: String,
+      ): QaReportSource? = null
 
       override fun close(workspace: QaWorkspace) = Unit
     },

@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.slot.qa
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.qa.QaReceiptPayloadKeys
+import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.contracts.qa.QaRepairStatePayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
@@ -11,16 +11,17 @@ import skillbill.engine.featuretask.model.execution.QaPolicy
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
-import skillbill.engine.featuretask.qa.receipt.QaIncompleteReason
-import skillbill.engine.featuretask.qa.receipt.QaPhaseOutputKeys
-import skillbill.engine.featuretask.qa.receipt.QaReceipt
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
-import skillbill.engine.featuretask.qa.receipt.QaSettledRun
-import skillbill.engine.featuretask.qa.receipt.QaVerdict
-import skillbill.engine.featuretask.qa.receipt.qaOutcomeReason
-import skillbill.engine.featuretask.qa.receipt.restrictedToCriteria
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecords
+import skillbill.engine.featuretask.qa.report.QaPhaseOutputKeys
+import skillbill.engine.featuretask.qa.report.QaReport
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
+import skillbill.engine.featuretask.qa.report.QaReports
+import skillbill.engine.featuretask.qa.report.QaSettledRun
+import skillbill.engine.featuretask.qa.report.QaVerdict
+import skillbill.engine.featuretask.qa.report.qaOutcomeReason
+import skillbill.engine.featuretask.qa.report.qaReportRef
+import skillbill.engine.featuretask.qa.report.qaVerdictOf
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -37,11 +38,9 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
-import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.audit.canonicalAcceptanceCriterionRef
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -53,8 +52,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 @Inject
 class QaStrategy(
-  private val receipts: QaReceiptSettlement,
-  private val receiptValidator: QaReceiptValidator,
+  private val reports: QaReportSettlement,
   private val execution: QaExecutionLifecycle,
   private val outcomes: FeatureTaskQaOutcomeRecorder,
 ) : PhaseStrategy() {
@@ -133,15 +131,13 @@ class QaStrategy(
       }
     if (recordsGoalOutcome) outcomes.recordAttempted(run.request.workflowId)
     val result =
-      execution.withExecution(run.request.repoRoot, policy, acceptanceCriteria = criterionIds(run).toSet()) { qa ->
-        execute(run.copy(qaExecution = qa))
-      }
+      execution.withExecution(run.request.repoRoot, policy) { qa -> execute(run.copy(qaExecution = qa)) }
     if (recordsGoalOutcome) {
       val completed = result.value as? PhaseOutcome.Completed
       if (completed != null) {
-        val output = completed.output.normalizedOutput ?: invalid("completed QA step has no normalized output.")
-        if (output.phaseId != entryStep || output.status != "completed") {
-          invalid("completed QA step has no accepted completed QA output.")
+        val output = completed.output.normalizedOutput ?: error("completed QA step has no normalized output.")
+        check(output.phaseId == entryStep && output.status == "completed") {
+          "completed QA step has no accepted completed QA output."
         }
         recordGoalOutcome(run.request.workflowId, output, result.expected.treeIdentity)
       }
@@ -162,26 +158,16 @@ class QaStrategy(
       val stopped = outcome as? PhaseOutcome.Blocked
       if (stopped == null || qa == null || qa.policy == QaPolicy.STANDALONE) return outcome
       val warning = "QA recorded incomplete because the QA agent step stopped: ${stopped.reason}"
-      return runtimeCompletion(
-        run,
-        state,
-        warning,
-        receiptValidator.incomplete(warning, qa.expected, qa.policy, QaIncompleteReason.INTERRUPTED),
-      )
+      return runtimeCompletion(run, state, warning, QaReports.missing(warning))
     }
-    return runtimeCompletion(
-      run,
-      state,
-      target.detail,
-      receiptValidator.skipped(target.reason, target.detail, qa.expected, qa.policy),
-    )
+    return runtimeCompletion(run, state, target.detail, QaReports.skipped(target.reason, target.detail))
   }
 
   private fun runtimeCompletion(
     run: PhaseRun,
     state: PhaseAcceptedStepExecution,
     summary: String,
-    receipt: QaReceipt,
+    report: QaReport,
   ): PhaseOutcome {
     val base =
       NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(
@@ -195,8 +181,8 @@ class QaStrategy(
           ),
         ),
       )
-    val enriched = hooks.withReceipt(run, state, base, receipt)
-    val verdict = QaVerdictRule(receiptValidator).verdictFor(null, enriched.envelopeWireMap())
+    val enriched = hooks.withReport(run, state, base, report)
+    val verdict = QaVerdictRule.verdictFor(null, enriched.envelopeWireMap())
     val output = enriched.copy(verdict = verdict.wireValue)
     val iteration = state.nextStepIteration()
     state.settleRuntimeAuthoredCompletion(run.phaseId, output)
@@ -209,28 +195,22 @@ class QaStrategy(
     stepId: String,
     diagnostics: RuntimeDiagnostics,
   ): FeatureTaskRuntimeStepVerdictRule? =
-    if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA) QaVerdictRule(receiptValidator) else null
+    if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA) QaVerdictRule else null
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)
     return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX) repairHooks else hooks
   }
 
-  private fun criterionIds(run: PhaseRun): List<String> =
-    run.request.runInvariants.acceptanceCriteria.indices.map { canonicalAcceptanceCriterionRef(it + 1) }
-
   private fun findingSupplement(state: PhaseStepBinding): String {
     val findings = (state as PhaseQaStepBinding).qaRepairState()?.openFindings.orEmpty()
     if (findings.isEmpty()) return ""
-    return "\n\nOpen QA findings. Re-exercise the flows in these receipts " +
-      "and report assertions for every affected criterion.\n" +
-      findings.joinToString("\n") { finding ->
-        "- ${finding.id}: criteria=${finding.affectedCriteria.joinToString()}; " +
-          "receipts=${finding.receiptRefs.joinToString()}"
-      }
+    return "\n\nOpen QA findings. Re-exercise the flows in these reports and say in the new report " +
+      "whether each finding is fixed.\n" +
+      findings.joinToString("\n") { finding -> "- ${finding.id}: reports=${finding.receiptRefs.joinToString()}" }
   }
 
-  private val repairHooks = QaRepairHooks(execution, outcomes)
+  private val repairHooks = QaRepairHooks(execution, outcomes, reports)
 
   private val hooks =
     object : PhaseStepHooks {
@@ -265,34 +245,31 @@ class QaStrategy(
       ): NormalizedFeatureTaskRuntimePhaseOutput {
         if (output.status == "blocked" || output.status == "failed") return output
         val qa = run.qaExecution ?: return output
-        return withReceipt(run, state, output, receipts.settle(qa))
+        return withReport(run, state, output, reports.settle(qa))
       }
 
-      fun withReceipt(
+      fun withReport(
         run: PhaseRun,
         state: PhaseAcceptedStepExecution,
         output: NormalizedFeatureTaskRuntimePhaseOutput,
-        settledReceipt: QaReceipt,
+        settledReport: QaReport,
       ): NormalizedFeatureTaskRuntimePhaseOutput {
         val qa = checkNotNull(run.qaExecution)
-        val criterionIds = criterionIds(run)
         val executionWarnings = execution.outputWarnings(run.request.repoRoot, qa)
-        val restricted =
-          settledReceipt.copy(warnings = (settledReceipt.warnings + executionWarnings).distinct())
-            .restrictedToCriteria(criterionIds.toSet())
+        val warned = settledReport.copy(warnings = (settledReport.warnings + executionWarnings).distinct())
         val record =
           JsonCodec.parseObjectOrNull(output.canonicalJson)
             ?.let(JsonCodec::jsonElementToValue)
             ?.let(JsonCodec::anyToStringAnyMap)
-            ?: invalid("normalized QA output does not encode as an object.")
+            ?: error("normalized QA output does not encode as an object.")
         val produced =
           JsonCodec.anyToStringAnyMap(record[SharedPayloadKeys.PRODUCED_OUTPUTS])
-            ?: invalid("normalized QA output has no produced_outputs object.")
+            ?: error("normalized QA output has no produced_outputs object.")
         val subtaskId = run.request.goalContinuation?.subtaskId ?: 1
         val previous = (state as PhaseQaStepBinding).qaRepairState() ?: QaRepairState(subtaskId)
-        if (previous.subtaskId != subtaskId) invalid("QA repair state belongs to another subtask.")
+        check(previous.subtaskId == subtaskId) { "QA repair state belongs to another subtask." }
         val repairWarning = QaRepairHooks.noChangeWarning(state, previous, qa.expected.treeIdentity)
-        val settled = receipts.observe(previous, restricted, qa)
+        val settled = reports.observe(previous, warned, qa)
         val exhausted =
           settled.openFindings.isNotEmpty() &&
             settled.consumedAttempts >= FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_FIX_ATTEMPTS
@@ -301,32 +278,33 @@ class QaStrategy(
             "QA findings ${settled.openFindings.joinToString { it.id }} remain after " +
               "${settled.consumedAttempts} qa_fix attempts; the run continues and reports them."
           ).takeIf { exhausted }
-        val receipt = restricted.copy(warnings = restricted.warnings + listOfNotNull(repairWarning, exhaustedWarning))
-        receipts.recordDiagnostics(receipt)
+        val report = warned.copy(warnings = warned.warnings + listOfNotNull(repairWarning, exhaustedWarning))
+        reports.recordDiagnostics(report)
         val enriched =
           record +
             (
               SharedPayloadKeys.PRODUCED_OUTPUTS to
                 (
                   produced +
-                    mapOf(
-                      QaPhaseOutputKeys.RECEIPT to receipt.wire,
+                    listOfNotNull(
+                      QaPhaseOutputKeys.VERDICT to report.verdict.wireValue,
+                      report.reason?.let { QaPhaseOutputKeys.REASON to it },
+                      report.text?.let { QaPhaseOutputKeys.REPORT_TEXT to it },
+                      QaPhaseOutputKeys.REPORT_REF to qa.workspace.reportPath.toString(),
                       QaPhaseOutputKeys.HEAD_REVISION to qa.expected.headRevision,
                       QaPhaseOutputKeys.TREE_IDENTITY to qa.expected.treeIdentity,
                       QaPhaseOutputKeys.EVIDENCE_PREFIX to qa.expected.evidencePrefix,
-                      QaPhaseOutputKeys.RECEIPT_REF to qa.workspace.receiptPath.toString(),
-                      QaPhaseOutputKeys.CRITERION_IDS to criterionIds,
-                      QaPhaseOutputKeys.WARNINGS to receipt.warnings,
+                      QaPhaseOutputKeys.WARNINGS to report.warnings,
                       QaPhaseOutputKeys.REPAIRS_EXHAUSTED to exhausted,
                       QaPhaseOutputKeys.OPEN_FINDINGS to
                         settled.openFindings.map { finding ->
                           mapOf(
-                            QaReceiptPayloadKeys.ID to finding.id,
-                            QaReceiptPayloadKeys.AFFECTED_CRITERIA to finding.affectedCriteria,
+                            QaOutcomePayloadKeys.ID to finding.id,
+                            QaRepairStatePayloadKeys.AFFECTED_CRITERIA to finding.affectedCriteria,
                             QaRepairStatePayloadKeys.RECEIPT_REFS to finding.receiptRefs,
                           )
                         },
-                    )
+                    ).toMap()
                 )
             )
         return NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(
@@ -336,36 +314,48 @@ class QaStrategy(
       }
     }
 
-  private fun invalid(reason: String): Nothing = throw invalidQaReceipt(reason)
-
   private fun recordGoalOutcome(
     workflowId: String,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
     testedTreeIdentity: String,
   ) {
     val wire = output.envelopeWireMap()
-    val verdict = QaVerdictRule(receiptValidator).verdictFor(null, wire)
+    val verdict = QaVerdictRule.verdictFor(null, wire)
     val produced =
       JsonCodec.anyToStringAnyMap(wire[SharedPayloadKeys.PRODUCED_OUTPUTS])
-        ?: invalid("accepted QA output has no produced_outputs object.")
-    val receipt =
-      JsonCodec.anyToStringAnyMap(produced[QaPhaseOutputKeys.RECEIPT])
-        ?: invalid("accepted QA output has no runtime-validated receipt.")
-    val receiptVerdict =
-      QaVerdict.fromWire(receipt[QaReceiptPayloadKeys.VERDICT] as? String)
-        ?: invalid("accepted QA receipt has no known verdict.")
+        ?: error("accepted QA output has no produced_outputs object.")
+    val reportVerdict = qaVerdictOf(produced) ?: error("accepted QA output has no known QA verdict.")
+    val report = FeatureTaskQaOutcomeRecords.reportFrom(produced)
+    val legacyFindings = FeatureTaskQaOutcomeRecords.legacyFindingsFrom(produced, reportVerdict)
+    val legacyDiagnostics = FeatureTaskQaOutcomeRecords.legacyDiagnosticsFrom(produced, reportVerdict)
+    if (report?.warnings?.isNotEmpty() == true) reports.recordDiagnostics(report)
+    if (legacyDiagnostics.isNotEmpty()) {
+      reports.recordDiagnostics(
+        QaReport(
+          text = null,
+          verdict = reportVerdict,
+          reason = null,
+          findings = emptyList(),
+          reference = qaReportRef(produced),
+          warnings = legacyDiagnostics,
+        ),
+      )
+    }
     val effectiveVerdict =
-      if (verdict == FeatureTaskRuntimeVerdict.QA_FINDINGS) QaVerdict.FINDINGS_OPEN else receiptVerdict
-    val reason = qaOutcomeReason(effectiveVerdict, receipt, produced)
-    val attempts =
-      output.qaRepairState?.consumedAttempts
-        ?: invalid("accepted QA output has no repair-attempt state.")
+      if (verdict == FeatureTaskRuntimeVerdict.QA_FINDINGS) QaVerdict.FINDINGS_OPEN else reportVerdict
+    val attempts = output.qaRepairState?.consumedAttempts ?: error("accepted QA output has no repair-attempt state.")
     outcomes.recordSettled(
       workflowId,
       effectiveVerdict,
-      reason,
+      qaOutcomeReason(effectiveVerdict, produced),
       attempts,
-      QaSettledRun(testedTreeIdentity, receiptVerdict, receipt, produced[QaPhaseOutputKeys.RECEIPT_REF] as? String),
+      QaSettledRun(
+        testedTreeIdentity,
+        reportVerdict,
+        report,
+        qaReportRef(produced),
+        legacyFindings,
+      ),
     )
   }
 

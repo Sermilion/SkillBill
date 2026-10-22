@@ -1,3 +1,23 @@
+## [2026-10-22] SKILL-438 subtask 2: free device selection without ambiguous_target
+Areas: runtime-kotlin/runtime-engine QA execution and briefing; platform-packs/kmp and ios QA guidance
+- MEDIUM feature. Removed `QaSkipReason.AMBIGUOUS_TARGET` and replaced multi-target skip guidance with free-target leasing and retry rules.
+- Unnamed runs lease an authorized target, release and retry after contention or unusable storage, lock, or install conditions, and report the selected target plus rationale; named serials, AVDs, and UDIDs remain honored.
+- Device-contended remains reserved for the case where every authorized target is leased. The QA briefing carries the same release-and-switch behavior.
+- Reusable: agent-owned target selection with pack-specific guidance and explicit lease cleanup.
+- Limitation: unrelated `MonitorTargetRefusal.AMBIGUOUS_TARGET` pull-request target resolution remains outside this QA change.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented
+
+## [2026-10-22] SKILL-438 subtask 1: prose QA reports across runtime and desktop
+Areas: runtime-kotlin QA settlement, goal/verify/standalone flows, ports and SQLite persistence; desktop-tray QA detail; platform QA guidance; docs, contracts, and skill content
+- MEDIUM feature. Replaced strict agent-authored JSON receipts with lenient `report.md` prose; the runtime extracts verdicts, finding ids, sections, and evidence while preserving full text.
+- Reworked goal repair, fixed/not-fixed tracking, standalone printing, and verify verdict input around reports; legacy `qa_receipt` envelopes and artifacts remain read-compatible.
+- Added migration 66 for `qa_report_text`; legacy columns and persisted finding keys remain readable, while schema validation, claim downgrades, and criteria-matrix rendering were removed.
+- Desktop QA panels now show report text and extracted finding state. Reusable patterns: report parsing/settlement, id-based closure, and report-text persistence.
+- Limits: agent output must be `report.md`; device selection and `ambiguous_target` remain subtask 2, and existing receipts on disk are untouched.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-19] SKILL-431 subtask 3: goal finish pipeline status and docs
 Areas: runtime-kotlin engine work (IdeStatusService, IdeStatusProjectorMapping, IdeStatusServiceGoalProjectionTest); runtime-kotlin/ARCHITECTURE.md; docs/runtime-command-guidance.md; skills/skill-bill
 - MEDIUM feature. GOAL_FINISH_PIPELINE is now qa, qa_fix, validate, pr, monitor, monitor_fix, built from the FeatureTaskRuntimePhaseWorkflowDefinition PHASE_* constants and made internal. commit_push stays out.

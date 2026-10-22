@@ -18,7 +18,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.operatorBlockRetryFromWorkflowArtifacts
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecords
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecords
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite

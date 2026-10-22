@@ -66,11 +66,11 @@ these seams:
   list is a successful empty result. Shared review evidence derivation records
   `seam=shared_review_evidence_derive` when an unavailable diff yields no evidence, and
   `seam=shared_review_evidence_parse` when a diff fails to parse
-- QA: `phase qa` records `seam=qa_receipt` once per receipt `fallbacks` entry
-  (simulator substitution, target substitution, retry) with the kind and a bounded reason,
+- QA: `phase qa` records `seam=qa_report` once per settlement warning (for example a `passed`
+  report that still lists findings) with a bounded reason,
   `seam=qa_device_lease kind=stale_reclaim` when a lease whose owner process is confirmed dead
   is reclaimed, and `seam=qa_cleanup` for each device lease the run could not release, which the
-  receipt also reports as `cleanup.outcome: retained`. Records carry the device fingerprint, kind,
+  runtime's cleanup note also reports as retained. Records carry the device fingerprint, kind,
   and bounded reason only, never a raw serial or log body
 
 Each record names the seam, the value actually used, the value that was expected,

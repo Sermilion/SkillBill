@@ -2,7 +2,7 @@ package skillbill.engine.operation.verify
 
 import skillbill.application.telemetry.model.FeatureVerifyFinishedRequest
 import skillbill.contracts.JsonCodec
-import skillbill.engine.featuretask.qa.receipt.QaVerdict
+import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
@@ -247,13 +247,13 @@ internal class VerifyStepSequence(
     run: VerifyRun,
     prior: Map<String, String>,
   ): VerifyStepDone {
-    val qaReceipt =
-      run.qa?.let { JsonCodec.anyToStringAnyMap(store.artifacts(run.workflowId)[VerifyWorkflow.QA_RECEIPT]) }
-    val directive = VerifyPromptSections.verdictDirective(qaReceipt.takeIf { run.qa == VerifyQaSelection.ON })
+    val qaReport =
+      run.qa?.let { JsonCodec.anyToStringAnyMap(VerifyWorkflow.qaArtifact(store.artifacts(run.workflowId))) }
+    val directive = VerifyPromptSections.verdictDirective(qaReport.takeIf { run.qa == VerifyQaSelection.ON })
     val report = readOnly(run, VerifyPromptSections.VERDICT_STEP, directive, prior) { return it }
     val section = report.substringAfter(VERDICT_HEADING, missingDelimiterValue = report)
     val stated = VERDICTS.firstOrNull { candidate -> section.contains(candidate) } ?: UNKNOWN_VERDICT
-    val qaVerdict = VerifyWorkflow.string(qaReceipt, VerifyWorkflow.VERDICT_FIELD)
+    val qaVerdict = VerifyWorkflow.string(qaReport, VerifyWorkflow.VERDICT_FIELD)
     val qaOverride = stated == APPROVE && qaVerdict == QaVerdict.FINDINGS_OPEN.wireValue
     val verdict = if (qaOverride) APPROVE_WITH_FIXES else stated
     val warning = QA_APPROVE_WARNING.takeIf { qaOverride }
@@ -283,7 +283,9 @@ internal class VerifyStepSequence(
     val artifacts = store.artifacts(run.workflowId)
     finished(run, COMPLETED_STATUS, artifacts, qa)
     val text = report ?: storedVerdict(artifacts)
-    return OperationOutcome.Completed("${text.trimEnd()}\n\n${qa.line}\nVerify workflow: ${run.workflowId}\n")
+    return OperationOutcome.Completed(
+      "${text.trimEnd()}\n\n${qa.presentation.joinToString("\n")}\nVerify workflow: ${run.workflowId}\n",
+    )
   }
 
   private fun fail(
@@ -315,7 +317,8 @@ internal class VerifyStepSequence(
     val artifacts = store.artifacts(run.workflowId)
     finished(run, status, artifacts, qa)
     return OperationOutcome.Failed(
-      "Verify step '$stepId' failed: $reason\n${qa.line}\nVerify workflow: ${run.workflowId}",
+      "Verify step '$stepId' failed: $reason\n${qa.presentation.joinToString("\n")}\n" +
+        "Verify workflow: ${run.workflowId}",
     )
   }
 
@@ -417,7 +420,7 @@ internal class VerifyStepSequence(
     const val APPROVE = "APPROVE"
     const val APPROVE_WITH_FIXES = "APPROVE WITH FIXES"
     const val QA_APPROVE_WARNING =
-      "Warning: the verdict said APPROVE while the QA receipt has open findings; recorded APPROVE WITH FIXES so " +
+      "Warning: the verdict said APPROVE while the QA report has open findings; recorded APPROVE WITH FIXES so " +
         "the QA findings stay in the consolidated findings."
     const val VERDICT_HEADING = "--- VERDICT ---"
     const val NO_HISTORY = "none"

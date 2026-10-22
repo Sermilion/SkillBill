@@ -1,16 +1,12 @@
-package skillbill.engine.featuretask.qa.receipt
+package skillbill.engine.featuretask.qa.report
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.qa.QaReceiptPayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
-import skillbill.engine.featuretask.phaserun.qa.qaReport
-import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -30,7 +26,7 @@ internal object FeatureTaskQaOutcomeRecords {
       null,
       "$recordedAt",
       previous?.findings.orEmpty(),
-      previous?.report,
+      previous?.reportText,
     )
 
   fun settled(
@@ -42,76 +38,87 @@ internal object FeatureTaskQaOutcomeRecords {
     val output = request.normalizedOutput.takeIf { completed } ?: return null
     val attempts = output.qaRepairState?.consumedAttempts ?: return null
     val produced = JsonCodec.anyToStringAnyMap(output.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty()
-    val receipt = JsonCodec.anyToStringAnyMap(produced[QaPhaseOutputKeys.RECEIPT]) ?: return null
-    val verdict =
-      QaVerdict.fromWire(receipt[QaReceiptPayloadKeys.VERDICT] as? String)
-        ?: throw invalidQaReceipt("the settled QA receipt has no known verdict.")
-    val reason = qaOutcomeReason(verdict, receipt, produced)
+    if (!hasQaOutput(produced)) return null
+    val verdict = qaVerdictOf(produced) ?: QaVerdict.INCOMPLETE
+    val report = reportFrom(produced)
+    val reference = qaReportRef(produced)
+    val reported =
+      report?.let { reportedFindings(verdict, it, reference) }
+        ?: legacyFindingsFrom(produced, verdict)
     return FeatureTaskQaOutcome(
       request.workflowId,
       outcome(verdict),
-      reason,
+      qaOutcomeReason(verdict, produced),
       attempts,
       produced[QaPhaseOutputKeys.TREE_IDENTITY] as? String,
       "$recordedAt",
-      mergedFindings(
-        previous?.findings.orEmpty(),
-        verdict,
-        receipt,
-        produced[QaPhaseOutputKeys.RECEIPT_REF] as? String,
-      ),
-      criteriaReport(receipt) ?: previous?.report,
+      mergedFindings(previous?.findings.orEmpty(), verdict, reported),
+      report?.text,
     )
+  }
+
+  fun reportFrom(produced: Map<String, Any?>): QaReport? {
+    val text = produced[QaPhaseOutputKeys.REPORT_TEXT] as? String
+    return text?.let { report ->
+      QaReportParser.parse(report, produced[QaPhaseOutputKeys.EVIDENCE_PREFIX] as? String ?: "")
+    }
+  }
+
+  fun legacyFindingsFrom(
+    produced: Map<String, Any?>,
+    verdict: QaVerdict,
+  ): List<FeatureTaskQaFinding> {
+    val receipt = JsonCodec.anyToStringAnyMap(produced[QaPhaseOutputKeys.LEGACY_RECEIPT]) ?: return emptyList()
+    val reference = qaReportRef(produced)
+    return QaLegacyReportAdapter.fromReceipt(receipt, verdict)?.findings.orEmpty().map { finding ->
+      FeatureTaskQaFinding(
+        finding.id,
+        finding.title,
+        finding.evidencePaths,
+        reference,
+        FeatureTaskQaFindingStatus.NOT_FIXED,
+      )
+    }
+  }
+
+  fun legacyDiagnosticsFrom(
+    produced: Map<String, Any?>,
+    verdict: QaVerdict,
+  ): List<String> {
+    val receipt = JsonCodec.anyToStringAnyMap(produced[QaPhaseOutputKeys.LEGACY_RECEIPT]) ?: return emptyList()
+    return QaLegacyReportAdapter.fromReceipt(receipt, verdict)?.diagnostics.orEmpty()
   }
 
   fun mergedFindings(
     previous: List<FeatureTaskQaFinding>,
     verdict: QaVerdict,
-    receipt: Map<String, Any?>,
-    receiptPath: String?,
+    reported: List<FeatureTaskQaFinding>,
   ): List<FeatureTaskQaFinding> {
-    val reported = reportedFindings(receipt, receiptPath).associateBy(FeatureTaskQaFinding::id)
+    val byId = reported.associateBy(FeatureTaskQaFinding::id)
     val retested = verdict == QaVerdict.PASSED || verdict == QaVerdict.FINDINGS_OPEN
     val carried =
       previous.map { finding ->
-        reported[finding.id]
+        byId[finding.id]
           ?: finding.copy(status = if (retested) FeatureTaskQaFindingStatus.FIXED else finding.status)
       }
     val previousIds = previous.map(FeatureTaskQaFinding::id).toSet()
-    return carried + reported.values.filterNot { it.id in previousIds }
+    return carried + byId.values.filterNot { it.id in previousIds }
   }
 
-  private fun reportedFindings(
-    receipt: Map<String, Any?>,
-    receiptPath: String?,
+  fun reportedFindings(
+    verdict: QaVerdict,
+    report: QaReport,
+    reportPath: String?,
   ): List<FeatureTaskQaFinding> =
-    JsonCodec.anyToStringAnyMapList(receipt[QaReceiptPayloadKeys.FINDINGS]).orEmpty().mapNotNull { finding ->
-      val id = (finding[QaReceiptPayloadKeys.ID] as? String)?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+    report.findings.takeIf { verdict != QaVerdict.PASSED }.orEmpty().map { finding ->
       FeatureTaskQaFinding(
-        id = id,
-        title = findingTitle(finding[QaReceiptPayloadKeys.OBSERVED] as? String),
-        affectedCriteria = JsonCodec.anyToStringList(finding[QaReceiptPayloadKeys.AFFECTED_CRITERIA]).orEmpty(),
-        evidencePaths =
-          JsonCodec.anyToStringAnyMapList(finding[QaReceiptPayloadKeys.EVIDENCE_REFS]).orEmpty()
-            .mapNotNull { it[QaReceiptPayloadKeys.PATH] as? String },
-        receiptPath = receiptPath,
-        status = FeatureTaskQaFindingStatus.NOT_FIXED,
+        finding.id,
+        finding.title,
+        finding.evidencePaths,
+        reportPath,
+        FeatureTaskQaFindingStatus.NOT_FIXED,
       )
     }
-
-  private fun findingTitle(observed: String?): String {
-    val line = observed.orEmpty().lineSequence().map(String::trim).firstOrNull(String::isNotEmpty).orEmpty()
-    return if (line.length <= MAX_TITLE_LENGTH) {
-      line
-    } else {
-      line.take(
-        MAX_TITLE_LENGTH - ELLIPSIS.length,
-      ).trimEnd() + ELLIPSIS
-    }
-  }
-
-  private const val MAX_TITLE_LENGTH = 160
-  private const val ELLIPSIS = "..."
 
   fun outcome(verdict: QaVerdict): StandaloneQaOutcome =
     when (verdict) {
@@ -120,9 +127,4 @@ internal object FeatureTaskQaOutcomeRecords {
       QaVerdict.SKIPPED -> StandaloneQaOutcome.SKIPPED
       QaVerdict.INCOMPLETE -> StandaloneQaOutcome.INCOMPLETE
     }
-
-  fun criteriaReport(receipt: Map<String, Any?>): StandaloneQaReport? {
-    if (receipt.isEmpty()) return null
-    return decodeQaReceipt(receipt).qaReport()
-  }
 }

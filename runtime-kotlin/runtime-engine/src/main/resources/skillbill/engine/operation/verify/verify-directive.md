@@ -127,16 +127,17 @@ Run completeness independently against acceptance criteria, its declared rubric,
 
 Step id: `qa`
 
-Primary artifact: `qa_receipt`
+Primary artifact: `qa_report`
 
 The proposal names the QA selection, `qa:on` or `qa:off` (default `off`), and confirm keeps it. With `off`, the
-runtime writes a `disabled_policy` skip receipt without probing devices or launching an agent. With `on`, the runtime
-checks out the confirmed head into a temporary detached worktree and runs report-only QA there with the pack QA
-guidance; the operator's checkout, HEAD, and target never change. The runtime rejects a receipt bound to another tree
-and removes the worktree on every exit, recording any retained worktree with manual cleanup guidance. Workflows
-proposed before QA existed skip this step and report `not_selected`.
+runtime records a skipped report without probing devices or launching an agent. With `on`, the runtime checks out the
+confirmed head into a temporary detached worktree and runs report-only QA there with the pack QA guidance; the
+operator's checkout, HEAD, and target never change. QA writes its report in prose; the runtime reads the verdict from
+its first line and stores the report text unchanged. The runtime removes the worktree on every exit, recording any
+retained worktree with manual cleanup guidance. Workflows proposed before QA existed skip this step and report
+`not_selected`.
 
-Persist `qa_receipt` after QA settles. Update workflow state so `qa` is completed or skipped and `verdict` is running.
+Persist `qa_report` after QA settles. Update workflow state so `qa` is completed or skipped and `verdict` is running.
 
 ## Step 9: Consolidated Verdict
 
@@ -252,13 +253,12 @@ If the user wants a PR comment:
 Apply these rules only when the run selected `qa:on`:
 
 - Add a `--- MOBILE QA ---` section after `--- UNIT TEST VALUE ---` with the QA verdict and every QA finding id,
-  its affected criteria, and its evidence paths.
+  its title, and its evidence paths, taken from the QA report below.
 - QA findings join the consolidated findings. An open QA finding rules out an unqualified `APPROVE`; use
   `APPROVE WITH FIXES` or `REQUEST CHANGES`.
-- A skipped or incomplete QA receipt is untested coverage, never a product defect. List it under
+- A skipped or incomplete QA report is untested coverage, never a product defect. List it under
   `Untested coverage:` with its reason, and do not treat it as a pass.
-- List every entry in the QA receipt's `warnings` under `Untested coverage:` as well. A QA warning never fails
-  the verdict on its own.
+- List every QA warning under `Untested coverage:` as well. A QA warning never fails the verdict on its own.
 
 ## Verification Input Boundary
 

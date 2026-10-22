@@ -107,7 +107,7 @@ internal fun workExecutionHistory(
           reason.restoration,
           it.runSequence,
           it.qaOutcome,
-          it.qaReport,
+          it.qaReportText,
           it.planReport,
         )
       }

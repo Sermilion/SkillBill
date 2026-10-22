@@ -160,7 +160,7 @@ data class GoalQaResult(
   val fixAttempts: Int,
   val recordedAt: Instant,
   val findings: List<GoalQaFinding> = emptyList(),
-  val criteria: List<QaCriterionResult> = emptyList(),
+  val reportText: String? = null,
 )
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
 data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
@@ -376,7 +376,7 @@ data class ExecutionInstance(
   val result: String?,
   val restoration: ReasonRestoration? = null,
   val qaVerdict: QaVerdict? = null,
-  val qaReport: QaRunReport? = null,
+  val qaReportText: String? = null,
   val planReport: PlanRunReport? = null,
 )
 
