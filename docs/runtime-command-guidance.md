@@ -95,6 +95,11 @@ five criteria splits into the fewest dependency-ordered subtask specs needed to 
 limit. Distribute criteria evenly, with counts differing by at most one. Six criteria become two
 specs with three each; eleven become three specs with four, four, and three.
 Every requirement remains covered, and each criterion describes one focused production outcome.
+Planning sizes each criterion by estimated production lines, files, and areas (modules or owning
+packages). A criterion above about 300 lines, 8 files, or 3 areas becomes its own subtask with its
+own criteria, and each subtask spec records the estimates in a `## Criterion Sizing` section.
+A criterion is never one sentence: it names the files and symbols it changes, the exact values and
+edge cases, what it leaves to other criteria, and how audit confirms it.
 The parent summarizes feature-level outcomes within the same limit. An existing operator-authored
 parent remains unchanged, even when it has more than five criteria; its executable subtasks still
 obey the limit. This is a planning instruction and sizing rule. It adds no runtime rejection or
