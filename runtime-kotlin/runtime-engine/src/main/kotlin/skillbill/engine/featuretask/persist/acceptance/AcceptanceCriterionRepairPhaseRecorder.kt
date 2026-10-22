@@ -196,7 +196,8 @@ class AcceptanceCriterionRepairPhaseRecorder(
         setOf(
           FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
           FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
-        )
+        ) || phase.phaseId == session.steps.repair &&
+        (conclusion == null || conclusion == FeatureTaskRuntimeVerdict.COMPLETED.wireValue)
     val clarification = auditNeedsClarification(conclusion)
     val evidence =
       CompletionEvidence(
@@ -256,7 +257,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
         phaseId == steps.repair -> repairCompletionMutation(state, evidence)
         state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED && phaseId == steps.audit &&
           pendingClarificationQuestion != null -> repairAdmissionMutation(state, evidence, pendingClarificationQuestion)
-        clarification -> AcceptanceCriterionRepairMutation.Clarification(prose)
         state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION -> {
           val live = state.reservation ?: return@with null
           val accepted = satisfied && state.admittedTreeDigest == tree
@@ -275,6 +275,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
             ),
           )
         }
+        clarification -> AcceptanceCriterionRepairMutation.Clarification(prose)
         else ->
           AcceptanceCriterionRepairMutation.ProseAudit(
             AcceptanceCriterionProseAudit(

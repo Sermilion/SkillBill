@@ -274,7 +274,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         )
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(listOf("AC-001", "AC-002", "AC-002", "AC-002"), focused)
+      assertEquals(listOf("AC-001", "AC-002", "AC-002"), focused)
       assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
     }
@@ -412,7 +412,6 @@ class FeatureTaskRuntimeSerialRepairTest {
           "audit",
           "audit_plan_fix",
           "audit_implement_fix",
-          "audit",
           "audit",
           "audit",
         ),
@@ -692,7 +691,7 @@ class FeatureTaskRuntimeSerialRepairTest {
               prompt.contains("Read-only repair-report admission") ->
                 budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
               state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
-                serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
+                budgetVerificationOutput(audit, state, repairsByCriterion, secondCriterionSucceeds)
               else -> {
                 val refs = state.pendingAuditRefs.ifEmpty { state.unresolvedQueue }.joinToString()
                 val prose =
@@ -815,6 +814,23 @@ class FeatureTaskRuntimeSerialRepairTest {
           "\"status\": \"completed\",",
           "\"status\": \"completed\", \"verdict\": \"advance\",",
         )
+    }
+
+  private fun budgetVerificationOutput(
+    audit: Int,
+    state: AcceptanceCriterionRepairState,
+    repairsByCriterion: Map<String, Int>,
+    secondCriterionSucceeds: Boolean,
+  ): String =
+    if (repairAcceptedOnThirdAttempt(
+        state.currentCriterionRef,
+        repairsByCriterion.getOrDefault(state.currentCriterionRef, 0),
+        secondCriterionSucceeds,
+      )
+    ) {
+      serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
+    } else {
+      budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
     }
 
   private fun budgetAdmissionOutput(
