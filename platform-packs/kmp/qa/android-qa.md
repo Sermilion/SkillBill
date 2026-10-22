@@ -1,11 +1,13 @@
 # Android QA
 
-Drive the app on one Android device or emulator, check the changed behavior, and write one prose report. QA is report-only.
+Drive the app on one Android device or emulator, check the changed behavior, and write one prose report. QA reports what it finds and repairs nothing.
 
 ## Rules
 
-- Write generated scripts, screenshots, UI dumps, and log excerpts only under the invocation directory the briefing names. Nothing goes in the working tree.
-- Never edit tracked files, commit, push, or open a pull request.
+- Write generated scripts, screenshots, UI dumps, and log excerpts only under the invocation directory the briefing names, outside the QA checkout. Nothing goes in the working tree.
+- Build, install, and test from the QA checkout the briefing names. It is a temporary worktree of the tree under test, and the runtime deletes it when QA ends.
+- You may edit any file in the QA checkout to reach a state the criteria need but the environment cannot produce, such as an injected fault, a forced error response, a debug hook, or a shorter timeout. Rebuild after the edit, and list every such edit, with the flows it made possible, under `## Temporary edits` in the report.
+- Edit nothing outside the QA checkout and the invocation directory. Never commit, push, or open a pull request.
 - Never paste log bodies, raw device serials, credentials, or tokens into the report. Evidence is a path under the invocation directory.
 - Write the report to the exact `report.md` path the briefing names. An app launch alone is never a pass.
 
