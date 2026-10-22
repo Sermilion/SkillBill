@@ -1,3 +1,22 @@
+## [2026-10-22] Merge-conflict repair leaves the merge for the runtime to commit
+
+Context: Goal monitor repair told the agent to merge the base branch and also
+not to commit. SKILL-438's agent merged, then ran `git reset --mixed` to undo
+the merge commit. The runtime committed the merged tree with one parent, so the
+pull request still conflicted, and merge-conflict repairs are uncharged, so the
+loop had no bound.
+
+Decision: The conflict brief has the agent fetch the base, run
+`git merge --no-commit --no-ff origin/<base>`, resolve and stage conflicts, and
+leave the merge in progress. The runtime's ordinary commit then records both
+parents. Before publishing a conflict repair, the runtime blocks unless HEAD or
+`MERGE_HEAD` contains `origin/<base>`.
+
+Reason: The runtime owns commits, so the agent cannot finish a merge itself.
+An unfinished merge lets the runtime's commit keep the base as a parent. The
+ancestry check turns a flattened merge into a block instead of an uncharged
+repair loop.
+
 ## [2026-10-22] Reject fabricated evidence in acceptance repair plans
 
 Context: SKILL-438 repeatedly synthesized legacy QA finding text after source

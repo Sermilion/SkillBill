@@ -118,6 +118,7 @@ internal interface PhaseMonitorStepBinding : PhaseAcceptedStepExecution {
   fun publishRepair(
     run: PhaseRun,
     pullRequests: PullRequestIdentityLookup,
+    conflictBaseBranch: String?,
   ): String?
 
   fun runMonitor(

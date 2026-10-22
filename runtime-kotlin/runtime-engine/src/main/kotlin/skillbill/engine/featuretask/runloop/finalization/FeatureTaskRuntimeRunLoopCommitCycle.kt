@@ -77,6 +77,15 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     run: PhaseRun,
     publicationPhaseId: String,
     pullRequests: PullRequestIdentityLookup,
+    conflictBaseBranch: String?,
+  ): String? =
+    conflictBaseBranch?.let { gitOperations.unmergedConflictBaseReason(request.repoRoot, it) }
+      ?: publishMonitorRepairCommit(run, publicationPhaseId, pullRequests)
+
+  private fun PhaseRuntimeFinalizationContext.publishMonitorRepairCommit(
+    run: PhaseRun,
+    publicationPhaseId: String,
+    pullRequests: PullRequestIdentityLookup,
   ): String? {
     val ledger =
       recorder.loadPhaseLedger(request.workflowId)

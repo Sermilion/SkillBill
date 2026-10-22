@@ -369,10 +369,16 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   override fun publishRepair(
     run: PhaseRun,
     pullRequests: PullRequestIdentityLookup,
+    conflictBaseBranch: String?,
   ): String? {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopCommitCycle) {
-      environment.publishMonitorRepair(run, requireNotNull(acceptedOwner.monitorRepairSteps).publication, pullRequests)
+      environment.publishMonitorRepair(
+        run,
+        requireNotNull(acceptedOwner.monitorRepairSteps).publication,
+        pullRequests,
+        conflictBaseBranch,
+      )
     }
   }
 
