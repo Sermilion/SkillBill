@@ -1,3 +1,13 @@
+## [2026-10-22] Block repeated verdict-less audits
+
+Context: An audit completion without a verdict is a clarification request, which
+re-runs audit. Nothing counted those requests, so an audit agent that could not
+reach the settlement tools relaunched 100 times on one subtask.
+
+Decision: `AcceptanceAuditRound` blocks the step with a `runtime:` reason when a
+verdict-less audit follows a pending audit clarification. Repair-admission
+clarifications do not count. The check needs no new repair-state field.
+
 ## [2026-10-21] Continue partial acceptance repairs without spending failure budget
 
 Context: Direct `progress` repair reports took the same incomplete-work path as

@@ -336,6 +336,11 @@ per-criterion accounting for such a workflow requires a separate explicit
 operator decision. Audit, repair planning, and source repair do not run builds or
 tests.
 
+An audit that completes without a verdict is read as a clarification request and
+runs again once. A second verdict-less audit in a row blocks the step with a
+`runtime:` reason instead of relaunching, because the usual cause is an audit agent
+that cannot reach the skill-bill settlement tools.
+
 When a completed phase cannot be admitted, the block report retains the rejected
 completion's reason and attempt. A changed or unreadable bound spec names its
 path and preserves the producer output for recovery. It does not accept the

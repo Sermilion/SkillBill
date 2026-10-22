@@ -179,6 +179,43 @@ class FeatureTaskRuntimeSerialRepairTest {
   }
 
   @Test
+  fun `audits that keep completing without a verdict block instead of relaunching indefinitely`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    var audits = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phase = phaseIdFromPrompt(assertNotNull(request.skillRunRequest.promptOverride))
+        facts(
+          when (phase) {
+            "audit" -> {
+              audits++
+              check(audits <= 3) { "Verdict-less audits relaunched without blocking." }
+              if (accounting.get()?.snapshot == null) {
+                serialDiscoveryOutput()
+              } else {
+                "Every criterion is met. The settlement tools are unavailable, so this prose is the phase value."
+              }
+            }
+            else -> defaultPhaseOutput(request)
+          },
+        )
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report")
+      assertTrue(report.blockedReason.startsWith("runtime: audit completed two rounds in a row without a verdict"))
+      assertFalse("review" in harness.launchOrder())
+    }
+  }
+
+  @Test
   fun `a rejected full no-change claim cannot charge another criterion's gap to the focused audit`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     var repaired = false
