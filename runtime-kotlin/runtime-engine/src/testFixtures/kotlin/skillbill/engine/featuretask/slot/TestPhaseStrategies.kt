@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
+import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
@@ -102,6 +103,7 @@ fun testPhaseStrategies(
   qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
+  inlineRubricResolver: InlineCodeQualityRubricResolver? = null,
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
   val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
@@ -132,10 +134,16 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner), codeReviewRunner),
-        PhaseStrategyRegistration(InlineReviewOpus55Strategy(codeReviewRunner), codeReviewRunner),
-        PhaseStrategyRegistration(InlineStandaloneReviewStrategy(codeReviewRunner), codeReviewRunner),
-        PhaseStrategyRegistration(InlineStandaloneReviewOpus55Strategy(codeReviewRunner), codeReviewRunner),
+        PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner, inlineRubricResolver), codeReviewRunner),
+        PhaseStrategyRegistration(InlineReviewOpus55Strategy(codeReviewRunner, inlineRubricResolver), codeReviewRunner),
+        PhaseStrategyRegistration(
+          InlineStandaloneReviewStrategy(codeReviewRunner, inlineRubricResolver),
+          codeReviewRunner,
+        ),
+        PhaseStrategyRegistration(
+          InlineStandaloneReviewOpus55Strategy(codeReviewRunner, inlineRubricResolver),
+          codeReviewRunner,
+        ),
         delegatedReviewRunner?.let {
           val delegatedRunner = runner()
           PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(delegatedRunner, it), delegatedRunner)

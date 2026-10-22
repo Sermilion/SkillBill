@@ -120,14 +120,31 @@ class InlineReviewDirectiveTest {
     assertEquals(compose(ReviewTarget.LastCommit).trimEnd() + "\n\n" + section, prompt)
   }
 
+  @Test
+  fun `a code-quality rubric is added before the evidence record without altering the rest of the prompt`() {
+    val rubric = "Prefer cohesive helpers.\nIgnore: security defects belong to the security specialist."
+    val without = compose(ReviewTarget.LastCommit)
+    val with = compose(ReviewTarget.LastCommit, qualityRubric = rubric)
+
+    val section = CodeQualityLaneSection.render(rubric)
+    val evidenceStart = without.indexOf("Emit the bounded authoring evidence record")
+    assertEquals(without.substring(0, evidenceStart) + section + "\n" + without.substring(evidenceStart), with)
+    assertTrue(rubric in section)
+    assertTrue("adds a code-quality lane" in section)
+    assertTrue("responsible for every review area" in section)
+    assertTrue("apply only to delegated review" in section)
+  }
+
   private fun compose(
     target: ReviewTarget,
     agentAddonsSection: String = "",
+    qualityRubric: String? = null,
   ): String =
     InlineReviewDirective.compose(
       target = target,
       revisions = NORMALIZED_SHA to NORMALIZED_SHA,
       specPath = Path.of(SlotBaselineFullRunCapture.SPEC_REFERENCE),
       agentAddonsSection = agentAddonsSection,
+      qualityRubric = qualityRubric,
     )
 }

@@ -36,22 +36,21 @@ class InlineReviewResultDecoderTest {
   }
 
   @Test
-  fun `inline output keeps merged local quality attribution and verdict visible`() {
+  fun `inline output is the agent stdout verbatim and keeps the code quality identity`() {
     val specialist = "bill-kotlin-code-review-code-quality"
-    val result =
-      InlineReviewResultDecoder.decode(
-        "codex",
-        reviewStepOutput(
-          "#### Code Quality (non-blocking)\n" +
-            "- [F-001] Minor | High | specialist=$specialist | src/main/App.kt:4 | repeated helper obscures parsing\n" +
-            "verdict: approved",
-        ),
-      )
+    val stdout =
+      "Actionable\n" +
+        "- [F-001] Minor | High | specialist=$specialist | src/main/App.kt:4 | repeated helper obscures parsing\n" +
+        "Refuted\n" +
+        "Unresolved\n" +
+        "verdict: approved\n" +
+        "Trailing agent note after the verdict."
+    val result = InlineReviewResultDecoder.decode("codex", reviewStepOutput(stdout))
 
-    assertEquals(ParallelReviewSeverity.MINOR, result.mergeResult.findings.single().severity)
-    assertTrue("#### Code Quality (non-blocking)" in result.output)
-    assertTrue("specialist=$specialist" in result.output)
-    assertTrue(result.output.endsWith("verdict: approved"))
+    assertEquals(stdout, result.output)
+    val finding = result.mergeResult.findings.single()
+    assertEquals(ParallelReviewSeverity.MINOR, finding.severity)
+    assertEquals(listOf(specialist), finding.specialistSkillNames)
   }
 
   @Test

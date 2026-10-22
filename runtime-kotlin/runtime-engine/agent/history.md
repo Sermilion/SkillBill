@@ -1,3 +1,15 @@
+## [2026-10-22] SKILL-439: inline review keeps pre-#471 behavior with an additive code-quality lane
+Areas: runtime-engine featuretask slot/codereview, slot/codereview/opus, slot/standalonereview, slot/state, runloop/state, operation/verify; runtime-core di/featuretask
+- Inline review prompts are the pre-#471 text plus one appended code-quality lane section. The section says the agent still owns every review area, Routing/Ignore lines apply only to delegated review, and findings use the exact specialist identity. The rubric follows verbatim.
+- New narrow InlineCodeQualityRubricResolver (fun interface) replaces the ParallelCodeReviewRunner dependency on inline strategies. CodeQualityLaneSection renders the lane for the full-run, standalone and verify inline paths. Both live in InlineReviewPromptSections.kt. reusable
+- A Failed rubric resolution no longer blocks inline review: it logs a runtime diagnostics warning, omits the lane and the review proceeds. The delegated standalone path keeps its blocking behavior and its old text unchanged.
+- InlineReviewResultDecoder returns the agent stdout as-is (blank becomes "Review completed."). The register-normalizing helpers are gone, so finding attribution comes from the specialist identity in the stdout.
+- PhaseReviewExecutionContext now carries RuntimeDiagnostics, passed from the run-loop environment, so the review binding can warn without touching the prompt.
+- Pattern: StandaloneReviewStrategy derives its resolver from reviewRunner by default, so delegated strategies and their DI stayed untouched.
+- Limits: no test pins that delegated standalone review still blocks on a planning failure. The slot/codereview package sits at its sibling-file ceiling (12), so new files there need another home.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate ran full check green)
+
 ## [2026-10-21] SKILL-436 subtask 1: implement one acceptance criterion at a time
 Areas: runtime-engine featuretask slot/implementation, slot/attempt, slot/state, phase/record, persist, runloop, phaserun; runtime-domain taskruntime persistence and wire; runtime-contracts featuretask keys and failure codes; runtime-infra/contracts; orchestration/contracts; runtime-application testFixtures
 - Implement now walks the spec's acceptance criteria in order. Each criterion gets a fresh worker, then a fresh read-only check. A satisfied check that edited nothing closes it; an unsatisfied check hands short gap prose to the next fresh worker.

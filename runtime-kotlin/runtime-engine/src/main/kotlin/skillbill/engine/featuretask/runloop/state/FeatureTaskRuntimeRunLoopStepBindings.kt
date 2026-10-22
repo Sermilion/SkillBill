@@ -566,6 +566,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     return PhaseReviewExecutionContext(
       environment.gitOperations.repositoryObservations(),
       environment.clock,
+      environment.diagnostics,
     )
   }
 

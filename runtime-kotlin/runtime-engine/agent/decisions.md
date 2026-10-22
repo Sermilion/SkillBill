@@ -1,3 +1,14 @@
+## [2026-10-22] Rubric failure degrades inline review instead of blocking it
+Context: SKILL-421 made inline review block when the code-quality rubric could not be resolved, but the inline agent reviews every area itself, so the lane is only an addition.
+Decision: On a Failed rubric resolution the inline paths warn through runtime diagnostics, omit the lane section and run the review. Only the delegated standalone path still blocks.
+Reason: A missing rubric loses one extra lane, not the review. The delegated path needs the rubric to plan specialists, so blocking stays right there.
+Alternatives considered: One shared blocking rule for inline and delegated, rejected because it denies inline users a review they can still get.
+
+## [2026-10-22] Inline strategies take a rubric resolver, not the parallel review runner
+Context: Inline strategies only needed the code-quality rubric but depended on ParallelCodeReviewRunner.
+Decision: A narrow InlineCodeQualityRubricResolver fun interface is the inline seam, and the runner stays on the delegated launch path.
+Reason: It keeps delegated machinery out of the inline path and lets tests fake the rubric without a real planner.
+
 ## [2026-10-21] Criterion progress is one workflow artifact reserved before launch
 Context: SKILL-436 implement must cap workers per criterion across crashes and restarts without a new storage authority.
 Decision: One versioned workflow artifact records the ordered criterion IDs, cursor, worker count and closed IDs. A worker slot is reserved before launch, and closure and advance happen in one owned recorder transaction. Settled work is reconciled from existing attempt and settlement identities.

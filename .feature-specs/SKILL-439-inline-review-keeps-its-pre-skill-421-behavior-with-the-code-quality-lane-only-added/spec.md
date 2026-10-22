@@ -1,4 +1,4 @@
-# SKILL-437 - inline-review-keeps-its-pre-skill-421-behavior-with-the-code-quality-lane-only-added
+# SKILL-439 - inline-review-keeps-its-pre-skill-421-behavior-with-the-code-quality-lane-only-added
 
 ## Mode
 
@@ -56,5 +56,5 @@ The validate phase runs `./gradlew spotlessApply`, then `./gradlew check`, in `r
 ## Next Path
 
 ```bash
-skill-bill goal SKILL-437
+skill-bill goal SKILL-439
 ```

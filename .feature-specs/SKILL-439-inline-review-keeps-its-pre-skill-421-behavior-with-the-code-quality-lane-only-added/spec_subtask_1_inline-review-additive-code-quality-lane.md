@@ -1,6 +1,6 @@
-# SKILL-437 Subtask 1 - Inline review keeps pre-#471 behavior with an additive code-quality lane
+# SKILL-439 Subtask 1 - Inline review keeps pre-#471 behavior with an additive code-quality lane
 
-Parent spec: `.feature-specs/SKILL-437-inline-review-keeps-its-pre-skill-421-behavior-with-the-code-quality-lane-only-added/spec.md`
+Parent spec: `.feature-specs/SKILL-439-inline-review-keeps-its-pre-skill-421-behavior-with-the-code-quality-lane-only-added/spec.md`
 
 ## Scope
 
@@ -218,5 +218,5 @@ Same file, `internal object InlineReviewResultDecoder`:
 ## Next Path
 
 ```bash
-skill-bill goal SKILL-437
+skill-bill goal SKILL-439
 ```
