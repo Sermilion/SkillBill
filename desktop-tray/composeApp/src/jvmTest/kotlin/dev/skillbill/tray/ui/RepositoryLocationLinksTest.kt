@@ -41,7 +41,6 @@ class RepositoryLocationLinksTest {
       }
     }
     val item = workItem("links").copy(repositoryName = "ZeroAccount", repositoryRoot = "/tmp/a repo", branch = "fix/links")
-    val text = "ZeroAccount · fix/links · /tmp/a repo"
     setContent {
       CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
         DesignSystemTheme {
@@ -49,11 +48,11 @@ class RepositoryLocationLinksTest {
         }
       }
     }
-    val node = onNodeWithText(text)
-    val layouts = mutableListOf<TextLayoutResult>()
-    node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
     for (label in listOf("ZeroAccount", "fix/links", "/tmp/a repo")) {
-      node.performTouchInput { click(layouts.single().getBoundingBox(text.indexOf(label)).center) }
+      val node = onNodeWithText(label)
+      val layouts = mutableListOf<TextLayoutResult>()
+      node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+      node.performTouchInput { click(layouts.single().getBoundingBox(0).center) }
       waitForIdle()
     }
     assertEquals(listOf("web:/tmp/a repo:null", "web:/tmp/a repo:fix/links", "directory:/tmp/a repo"), calls)

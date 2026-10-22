@@ -1,6 +1,8 @@
 package dev.skillbill.tray.feature.detail
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -8,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -40,29 +44,43 @@ internal fun RepositoryLocationLinks(item: WorkItem) {
     }
   }
   Column {
-    Text(
-      buildAnnotatedString {
-        withLink(LinkAnnotation.Clickable("repository", styles) { open { navigation.openRepository(item.repositoryRoot) } }) {
-          append(item.repositoryTitle())
-        }
-        append(" · ")
-        val branch = item.branch
-        if (!branch.isNullOrBlank()) {
-          withLink(LinkAnnotation.Clickable("branch", styles) { open { navigation.openRepository(item.repositoryRoot, branch) } }) {
-            append(branch)
-          }
-        } else append("no branch")
-        append(" · ")
-        withLink(LinkAnnotation.Clickable("directory", styles) { open { navigation.openDirectory(item.repositoryRoot) } }) {
-          append(abbreviateHomeDirectory(item.repositoryRoot))
-        }
-      },
-      color = muted,
-      fontFamily = mono,
-      fontSize = 12.sp,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+      LocationLabel(
+        item.repositoryTitle(),
+        Modifier.weight(1f, fill = false),
+        LinkAnnotation.Clickable("repository", styles) { open { navigation.openRepository(item.repositoryRoot) } },
+      )
+      LocationLabel(" · ")
+      val branch = item.branch
+      LocationLabel(
+        branch?.takeIf { it.isNotBlank() } ?: "no branch",
+        Modifier.weight(1f, fill = false),
+        branch?.takeIf { it.isNotBlank() }?.let {
+          LinkAnnotation.Clickable("branch", styles) { open { navigation.openRepository(item.repositoryRoot, branch) } }
+        },
+      )
+      LocationLabel(" · ")
+      LocationLabel(
+        abbreviateHomeDirectory(item.repositoryRoot),
+        Modifier.weight(1f, fill = false),
+        LinkAnnotation.Clickable("directory", styles) { open { navigation.openDirectory(item.repositoryRoot) } },
+      )
+    }
     error?.let { Text(it, color = orange, fontSize = 12.sp) }
   }
+}
+
+@Composable
+private fun LocationLabel(label: String, modifier: Modifier = Modifier, link: LinkAnnotation.Clickable? = null) {
+  Text(
+    buildAnnotatedString {
+      if (link == null) append(label) else withLink(link) { append(label) }
+    },
+    modifier = modifier,
+    color = muted,
+    fontFamily = mono,
+    fontSize = 12.sp,
+    maxLines = 1,
+    overflow = TextOverflow.Ellipsis,
+  )
 }

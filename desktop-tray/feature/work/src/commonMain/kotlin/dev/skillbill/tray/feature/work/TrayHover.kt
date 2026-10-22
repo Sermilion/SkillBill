@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.outcomeLabel
+import dev.skillbill.tray.core.ui.progressLabel
 
 private const val HOVER_ITEMS_PER_CATEGORY = 4
 
@@ -35,7 +36,7 @@ private fun StringBuilder.appendHoverCategory(label: String, items: List<WorkIte
     }
     val identifier = item.issueKey ?: item.phaseId ?: item.currentStepId
     val step = if (item.lifecycle == Lifecycle.ACTIVE && !item.stalled()) item.currentStepLabel.lowercase() else item.outcomeLabel().lowercase()
-    val progress = item.progressTotal?.let { " ${item.progressCompleted ?: 0}/$it" }.orEmpty()
+    val progress = item.progressLabel()?.let { " $it" }.orEmpty()
     val execution = item.phaseExecution?.let { " ${it.count}/${it.total ?: "?"}" }.orEmpty()
     val repository = item.repositoryRoot.replace('\\', '/').trimEnd('/').substringAfterLast('/').boundedHoverText(22)
     append("<br/><font color=\"$color\">●</font> ")

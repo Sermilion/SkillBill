@@ -103,27 +103,72 @@ class DetailViewModelTest {
     assertEquals(DetailLoad.Failed(problem), vm.state.value.load)
 
     show(detail(controllable()))
-    assertEquals(null, vm.loaded().readError)
+    assertEquals(null, vm.state.value.readHealth.reportedProblem)
   }
 
   @Test
   fun `a failed refresh keeps the detail with a read error that blocks controls until the next good read`() = runTest(dispatcher) {
     val vm = viewModel()
     val problem = Problem(ProblemCode.BUSY, "Store is busy")
+    details.onDetail = { Outcome.Failure(problem) }
 
     details.emit(Outcome.Failure(problem))
     runCurrent()
-    assertEquals(problem, vm.loaded().readError)
+    assertNull(vm.state.value.readHealth.reportedProblem)
+    assertIs<DetailReadHealth.GracePeriod>(vm.state.value.readHealth)
 
     vm.onAction(DetailAction.Pause)
     runCurrent()
     assertTrue(controls.calls.isEmpty())
+    advanceTimeBy(250)
+    details.emit(Outcome.Failure(problem))
+    runCurrent()
+    advanceTimeBy(249)
+    runCurrent()
+    assertNull(vm.state.value.readHealth.reportedProblem)
+    advanceTimeBy(1)
+    runCurrent()
+    assertEquals(problem, vm.state.value.readHealth.reportedProblem)
+    assertIs<DetailReadHealth.Failed>(vm.state.value.readHealth)
 
     show(detail(controllable()))
-    assertNull(vm.loaded().readError)
+    assertEquals(DetailReadHealth.Healthy, vm.state.value.readHealth)
     vm.onAction(DetailAction.Pause)
     runCurrent()
     assertEquals(listOf("pause:a"), controls.calls)
+  }
+
+  @Test
+  fun `a successful observation during the grace period cancels the warning and retry`() = runTest(dispatcher) {
+    val vm = viewModel()
+    val before = vm.loaded().detail
+    details.emit(Outcome.Failure(Problem(ProblemCode.BUSY, "Detail changed during this read. Retry.")))
+    runCurrent()
+    advanceTimeBy(499)
+    runCurrent()
+    assertEquals(before, vm.loaded().detail)
+    assertNull(vm.state.value.readHealth.reportedProblem)
+
+    show(before.copy(item = before.item.copy(summary = "Updated")))
+    advanceTimeBy(1000)
+    runCurrent()
+    assertNull(vm.state.value.readHealth.reportedProblem)
+    assertTrue(details.readCalls.isEmpty())
+    assertEquals("Updated", vm.loaded().detail.item.summary)
+  }
+
+  @Test
+  fun `a failed refresh retries after the grace period even without another observation`() = runTest(dispatcher) {
+    val vm = viewModel()
+    details.onDetail = { Outcome.Value(detail(controllable()).copy(featureTitle = "Recovered")) }
+    details.emit(Outcome.Failure(Problem(ProblemCode.BUSY, "Store is busy")))
+    runCurrent()
+    advanceTimeBy(500)
+    runCurrent()
+
+    assertEquals("Recovered", vm.loaded().detail.featureTitle)
+    assertNull(vm.state.value.readHealth.reportedProblem)
+    assertEquals(1, details.readCalls.size)
   }
 
   @Test
@@ -398,9 +443,11 @@ class DetailViewModelTest {
     details.onDetail = { Outcome.Failure(problem) }
 
     show(detail(controllable()).copy(subtasks = listOf(subtask(1)), cursors = mapOf(DetailList.SUBTASKS to "s1")))
+    advanceTimeBy(500)
+    runCurrent()
 
     val loaded = vm.loaded()
-    assertEquals(problem, loaded.readError)
+    assertEquals(problem, vm.state.value.readHealth.reportedProblem)
     assertTrue(!loaded.refreshing)
     assertEquals(listOf(1, 2), vm.subtaskIds())
   }

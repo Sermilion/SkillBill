@@ -91,7 +91,13 @@ class DefaultGoalRunnerCiMonitor(
         is FeatureTaskRuntimeRunEvent.PhasePaused -> GoalProgressOutcome.CANCELLED
         else -> GoalProgressOutcome.NONE
       }
-    recordProgress(state, request, event.phaseId, MonitorProgress(kind, outcome = outcome))
+    val started = event as? FeatureTaskRuntimeRunEvent.PhaseStarted
+    recordProgress(
+      state,
+      request,
+      event.phaseId,
+      MonitorProgress(kind, outcome = outcome, model = started?.model, effort = started?.effort),
+    )
     request.outputSink.write(AgentRunOutputStream.STDERR, "${event.phaseId}: ${kind.wireValue}\n")
   }
 
@@ -115,6 +121,8 @@ class DefaultGoalRunnerCiMonitor(
     val operationName: String? = null,
     val expectedLong: Boolean = false,
     val outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
+    val model: String? = null,
+    val effort: String? = null,
   )
 
   private fun recordProgress(
@@ -141,6 +149,8 @@ class DefaultGoalRunnerCiMonitor(
               expectedLong = progress.expectedLong,
               outcome = progress.outcome,
               agentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+              launchedModel = progress.model,
+              effort = progress.effort,
             ),
         ),
       )

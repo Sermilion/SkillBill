@@ -62,6 +62,10 @@ fun fileName(path: String): String = path.trimEnd('/', '\\').substringAfterLast(
 
 fun WorkItem.repositoryTitle(): String = repositoryName ?: fileName(repositoryRoot)
 
+fun WorkItem.progressLabel(): String? = progressTotal?.let { total ->
+  "${currentSubtaskId ?: progressCompleted ?: 0}/$total"
+}
+
 /** Stale if the surrounding read is stale, the detail's extras failed to refresh, or the runtime itself judged it stale. */
 fun effectiveFreshness(item: WorkItem, readStale: Boolean, detailExtrasStale: Boolean = false): Freshness =
   if (readStale || detailExtrasStale || item.freshness == Freshness.STALE) Freshness.STALE else item.freshness

@@ -2,6 +2,7 @@ package skillbill.infrastructure.contracts.workflow.goal
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -12,6 +13,26 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class GoalProgressEventSchemaValidatorTest {
+  @Test
+  fun `blank model and effort fail with a typed contract error`() {
+    val event =
+      GoalProgressEvent(
+        GoalProgressEventKind.PHASE_STARTED,
+        "goal-1",
+        "pr",
+        true,
+        1,
+        "2026-06-02T10:00:00Z",
+      )
+    for (field in listOf(WorkDetailPayloadKeys.LAUNCHED_MODEL, WorkDetailPayloadKeys.EFFORT)) {
+      val wire = JsonCodec.anyToStringAnyMap(event.toPersistenceWire())!!.toMutableMap()
+      wire[field] = ""
+      assertFailsWith<SkillBillRuntimeException> {
+        GoalProgressEventSchemaValidator.validate(wire, "test-blank-model")
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
+    }
+  }
+
   @Test
   fun `valid phase event artifact map passes`() {
     val event =
@@ -63,6 +84,8 @@ class GoalProgressEventSchemaValidatorTest {
         operationName = "monitor_fix",
         operationKind = "goal_finalization",
         agentId = "claude",
+        launchedModel = "claude-opus-4-8",
+        effort = "high",
       )
     GoalProgressEventSchemaValidator.validate(
       JsonCodec.anyToStringAnyMap(event.toPersistenceWire())!!,

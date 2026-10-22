@@ -116,6 +116,8 @@ data class GoalProgressEventDraft(
   val expectedLong: Boolean = false,
   val outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
   val agentId: String? = null,
+  val launchedModel: String? = null,
+  val effort: String? = null,
 ) {
   fun toEvent(sequenceNumber: Int): GoalProgressEvent =
     GoalProgressEvent(
@@ -131,6 +133,8 @@ data class GoalProgressEventDraft(
       expectedLong = expectedLong,
       outcome = outcome,
       agentId = agentId,
+      launchedModel = launchedModel,
+      effort = effort,
     )
 }
 

@@ -3,6 +3,7 @@ package skillbill.workflow.model.goalobservability
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.goal.GOAL_OBSERVABILITY_EVENT_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.time.parsePersistedInstant
@@ -72,6 +73,8 @@ data class GoalProgressEvent(
   val outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
   val contractVersion: String = GOAL_PROGRESS_EVENT_CONTRACT_VERSION,
   val agentId: String? = null,
+  val launchedModel: String? = null,
+  val effort: String? = null,
 ) {
   constructor(
     eventKind: GoalProgressEventKind,
@@ -87,6 +90,8 @@ data class GoalProgressEvent(
     outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
     contractVersion: String = GOAL_PROGRESS_EVENT_CONTRACT_VERSION,
     agentId: String? = null,
+    launchedModel: String? = null,
+    effort: String? = null,
   ) : this(
     eventKind = eventKind,
     workflowId = workflowId,
@@ -101,6 +106,8 @@ data class GoalProgressEvent(
     outcome = outcome,
     contractVersion = contractVersion,
     agentId = agentId,
+    launchedModel = launchedModel,
+    effort = effort,
   )
 
   init {
@@ -110,6 +117,18 @@ data class GoalProgressEvent(
 
   fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
     FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
+
+  fun withContinuingLaunch(previous: GoalProgressEvent?): GoalProgressEvent {
+    if (previous == null || eventKind == GoalProgressEventKind.PHASE_STARTED || launchedModel != null) return this
+    val sameStep =
+      workflowId == previous.workflowId && workflowPhase == previous.workflowPhase &&
+        stepId == previous.stepId && operationKind == previous.operationKind
+    return if (sameStep && previous.outcome == GoalProgressOutcome.NONE) {
+      copy(launchedModel = previous.launchedModel, effort = previous.effort)
+    } else {
+      this
+    }
+  }
 
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(
@@ -125,6 +144,8 @@ data class GoalProgressEvent(
       operationName?.takeIf(String::isNotBlank)?.let { put("operation_name", it) }
       operationKind?.takeIf(String::isNotBlank)?.let { put("operation_kind", it) }
       agentId?.takeIf(String::isNotBlank)?.let { put("agent_id", it) }
+      launchedModel?.takeIf(String::isNotBlank)?.let { put(WorkDetailPayloadKeys.LAUNCHED_MODEL, it) }
+      effort?.takeIf(String::isNotBlank)?.let { put(WorkDetailPayloadKeys.EFFORT, it) }
       if (eventKind.isOperationEvent) {
         put("expected_long", expectedLong)
       }

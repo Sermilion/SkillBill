@@ -68,6 +68,14 @@ properties:
       Optional runtime agent that owns the step this event reports, for example
       the agent running goal finalization. Readers treat an absent value as
       unknown.
+  launched_model:
+    type: string
+    minLength: 1
+    description: "Model recorded when the current goal step launched. Absent when not reported."
+  effort:
+    type: string
+    minLength: 1
+    description: "Effort recorded with launched_model, when available."
   expected_long:
     type: boolean
     description: >

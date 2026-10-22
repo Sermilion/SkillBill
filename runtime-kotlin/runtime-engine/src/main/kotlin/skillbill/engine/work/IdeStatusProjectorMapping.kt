@@ -3,6 +3,8 @@ package skillbill.engine.work
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeOperatorDecisionPause
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.runner.operatorDecisionPause
+import skillbill.engine.goalrunner.telemetry.GOAL_PLANNING_OPERATION_KIND
+import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
@@ -15,8 +17,11 @@ import skillbill.ports.idestatus.model.IdeStatusPlanning
 import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.model.workflowStepStatus
 import java.time.Instant
 import java.time.LocalDateTime
@@ -70,6 +75,31 @@ internal fun goalStep(
     IdeStatusStep(id = "done", label = "Complete")
   } else {
     IdeStatusStep(id = "goal", label = "Goal")
+  }
+}
+
+internal fun goalStepModel(
+  unitOfWork: UnitOfWork,
+  workflowId: String,
+  stepId: String,
+  planning: Boolean,
+  lifecycle: IdeStatusLifecycleState,
+): IdeStatusCurrentModel? {
+  if (lifecycle in setOf(IdeStatusLifecycleState.TERMINAL, IdeStatusLifecycleState.CANCELED)) return null
+  val event =
+    unitOfWork.workflowStates.readGoalStatusSnapshot(workflowId)
+      ?.let { declaredProgressEventFrom(it.artifacts) } ?: return null
+  val active =
+    event.workflowId == workflowId && event.eventKind != GoalProgressEventKind.PHASE_COMPLETED &&
+      event.outcome == GoalProgressOutcome.NONE
+  val matchesStep =
+    if (planning) {
+      event.operationKind == GOAL_PLANNING_OPERATION_KIND
+    } else {
+      (event.stepId ?: event.workflowPhase) == stepId
+    }
+  return event.takeIf { active && matchesStep }?.launchedModel?.takeIf(String::isNotBlank)?.let {
+    IdeStatusCurrentModel(it, event.effort?.takeIf(String::isNotBlank), event.stepId ?: event.workflowPhase)
   }
 }
 

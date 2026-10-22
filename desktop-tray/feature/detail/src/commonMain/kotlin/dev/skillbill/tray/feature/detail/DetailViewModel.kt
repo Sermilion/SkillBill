@@ -26,6 +26,7 @@ import dev.skillbill.tray.core.ui.NavigationEffects
 import dev.skillbill.tray.core.ui.acknowledged
 import dev.skillbill.tray.core.ui.withFeedback
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,7 @@ import kotlin.time.Instant
 
 /** Pages kept in memory per detail list. */
 private const val MAX_DETAIL_PAGES = 5
+private const val READ_FAILURE_GRACE_MS = 500L
 
 private val LAUNCH_REGISTRATION_TIMEOUT = 120.seconds
 
@@ -75,6 +77,7 @@ class DetailViewModel(
   private val mutex = Mutex()
   private var appendJob: Job? = null
   private var controlJob: Job? = null
+  private var readFailureJob: Job? = null
 
   val state: StateFlow<DetailUiState> = mutable.asStateFlow()
   val effects: Flow<DetailEffect> = navigation.flow
@@ -105,9 +108,9 @@ class DetailViewModel(
 
   private fun loaded(): DetailLoad.Loaded? = mutable.value.load as? DetailLoad.Loaded
 
-  private suspend fun applyObserved(observed: Outcome<Detail>) {
+  private suspend fun applyObserved(observed: Outcome<Detail>, retryReadFailure: Boolean = true) {
     when (observed) {
-      is Outcome.Failure -> readFailed(observed.problem)
+      is Outcome.Failure -> readFailed(observed.problem, retryReadFailure)
       is Outcome.Value -> {
         val retained = windows.toMap()
         val rereads = DetailList.entries.any { list ->
@@ -116,8 +119,10 @@ class DetailViewModel(
         }
         if (rereads) loaded()?.let { current -> mutable.update { it.copy(load = current.copy(refreshing = true)) } }
         when (val refreshed = reread(observed.value, retained)) {
-          is Reread.Failed -> readFailed(refreshed.problem)
+          is Reread.Failed -> readFailed(refreshed.problem, retryReadFailure)
           is Reread.Refreshed -> {
+            readFailureJob?.cancel()
+            readFailureJob = null
             windows.clear()
             windows.putAll(refreshed.windows)
             val item = refreshed.detail.item
@@ -127,6 +132,7 @@ class DetailViewModel(
             mutable.update {
               it.copy(
                 load = DetailLoad.Loaded(refreshed.detail),
+                readHealth = DetailReadHealth.Healthy,
                 appends = if (pending) it.appends.filterValues { append -> append == AppendState.Loading } else emptyMap(),
                 controllable = controllable,
               )
@@ -168,10 +174,27 @@ class DetailViewModel(
     return Reread.Refreshed(combined, refreshed)
   }
 
-  private fun readFailed(problem: Problem) {
+  private fun readFailed(problem: Problem, retry: Boolean) {
+    val current = loaded()
+    val health = mutable.value.readHealth
+    if (retry && current != null && health is DetailReadHealth.GracePeriod) return
+    if (retry && current != null && health == DetailReadHealth.Healthy) {
+      mutable.update { it.copy(readHealth = DetailReadHealth.GracePeriod(problem)) }
+      readFailureJob = viewModelScope.launch {
+        delay(READ_FAILURE_GRACE_MS)
+        mutex.withLock {
+          readFailureJob = null
+          applyObserved(details.detail(identity), retryReadFailure = false)
+        }
+      }
+      return
+    }
     mutable.update { state ->
-      val current = state.load as? DetailLoad.Loaded
-      state.copy(load = if (current != null) current.copy(refreshing = false, readError = problem) else DetailLoad.Failed(problem))
+      if (current == null) {
+        state.copy(load = DetailLoad.Failed(problem))
+      } else {
+        state.copy(load = current.copy(refreshing = false), readHealth = DetailReadHealth.Failed(problem))
+      }
     }
   }
 
@@ -205,7 +228,7 @@ class DetailViewModel(
   private fun perform(kind: ControlKind, agentId: String? = null) {
     val current = loaded() ?: return
     if (mutable.value.control is ControlState.InProgress) return
-    if (current.readError != null) {
+    if (mutable.value.readHealth.blocksControls) {
       refuse(kind, Problem(ProblemCode.STALE_TARGET, "Refresh the detail before using run controls."))
       return
     }
