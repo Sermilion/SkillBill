@@ -30,7 +30,7 @@ Selection:
 
 - When the user named a serial, use it. If it is not an authorized candidate, settle `skipped` and say why.
 - When exactly one authorized candidate exists, use it.
-- When more than one authorized candidate exists and the user named none, choose any free candidate and lease it with `skill-bill qa lease acquire`.
+- When more than one authorized candidate exists and the user named none, choose any free candidate, lease it with `skill-bill qa lease acquire`, and continue with that target.
 - If the candidate is contended or unusable, for example because it is out of storage, locked, or failing installation, release any lease this invocation acquired. When the user named a serial or AVD, settle `skipped` and say why; never substitute another target. Otherwise try another untried authorized candidate.
 - Try each candidate at most once. If none can be used, settle `skipped` and describe the obstacles; call it device-contended only when every authorized candidate is leased by someone else.
 
