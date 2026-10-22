@@ -359,7 +359,9 @@ they are not the per-criterion repair budget. The desktop phase summary shows
 the current criterion's repair attempt, which advances after an unsuccessful
 repair outcome and starts at one for the next criterion. The phase label and
 active audit chip identify the current criterion, such as `audit · AC-5`.
-Pipeline chips omit execution counters for every phase, including review passes.
+All chips and compact progress labels omit run, attempt, and pass counters,
+including tray progress and review, audit, and QA outcome labels. Execution
+counters belong in the phase summary and execution details.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted

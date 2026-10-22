@@ -45,10 +45,12 @@ class DetailPhaseResultsTest {
       ),
     )
 
-    onNodeWithText("pass 1 · approved").assertExists()
+    onNodeWithText("approved").assertExists()
+    onNodeWithText("pass 1", substring = true).assertDoesNotExist()
     onNodeWithText("No production-blocking findings; the retained field values survive a restart.").assertExists()
     onNodeWithText("Reviewed pause-state persistence and the detail query.").assertExists()
-    onNodeWithText("satisfied · 2 attempts").assertExists()
+    onNodeWithText("satisfied").assertExists()
+    onNodeWithText("2 attempts", substring = true).assertDoesNotExist()
     onNodeWithText("All criteria met.").assertExists()
   }
 
@@ -81,7 +83,8 @@ class DetailPhaseResultsTest {
       ),
     )
 
-    onNodeWithText("pass 1 · changes requested · 1 unresolved").assertExists()
+    onNodeWithText("changes requested · 1 unresolved").assertExists()
+    onNodeWithText("pass 1", substring = true).assertDoesNotExist()
     onNodeWithText("blocker · Pause is lost on restart").assertExists()
     onNodeWithText("The pause flag lives only in memory.").assertExists()
     onNodeWithText("BLOCKER").assertDoesNotExist()
@@ -109,7 +112,7 @@ class DetailPhaseResultsTest {
         GoalQaResult(
           "incomplete",
           "other",
-          0,
+          3,
           fixtureInstant,
           criteria =
             listOf(
@@ -135,6 +138,7 @@ class DetailPhaseResultsTest {
     onNodeWithText("incomplete", substring = true).assertExists()
     onNodeWithText("AC-001 failed; 1 of 2 criteria passed.").assertExists()
     onNodeWithText("other").assertDoesNotExist()
+    onNodeWithText("fix attempts", substring = true).assertDoesNotExist()
     onNodeWithText("AC-001 · failed").assertExists()
     onNodeWithText("AC-002 · passed").assertExists()
     onNodeWithText("Retained field values survive a restart.", substring = true).assertExists()

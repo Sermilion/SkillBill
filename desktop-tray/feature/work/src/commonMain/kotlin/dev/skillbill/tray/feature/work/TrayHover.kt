@@ -3,6 +3,7 @@ package dev.skillbill.tray.feature.work
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.stalled
+import dev.skillbill.tray.core.ui.phaseLabel
 import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.progressLabel
 
@@ -35,12 +36,11 @@ private fun StringBuilder.appendHoverCategory(label: String, items: List<WorkIte
       else -> "#9C9CA6"
     }
     val identifier = item.issueKey ?: item.phaseId ?: item.currentStepId
-    val step = if (item.lifecycle == Lifecycle.ACTIVE && !item.stalled()) item.currentStepLabel.lowercase() else item.outcomeLabel().lowercase()
+    val step = if (item.lifecycle == Lifecycle.ACTIVE && !item.stalled()) item.phaseExecution?.phaseLabel() ?: item.currentStepLabel.lowercase() else item.outcomeLabel().lowercase()
     val progress = item.progressLabel()?.let { " $it" }.orEmpty()
-    val execution = item.phaseExecution?.let { " ${it.count}/${it.total ?: "?"}" }.orEmpty()
     val repository = item.repositoryRoot.replace('\\', '/').trimEnd('/').substringAfterLast('/').boundedHoverText(22)
     append("<br/><font color=\"$color\">●</font> ")
-    append("${identifier.boundedHoverText(24).htmlEscaped()} · ${(step + progress + execution).boundedHoverText(48).htmlEscaped()}")
+    append("${identifier.boundedHoverText(24).htmlEscaped()} · ${(step + progress).boundedHoverText(48).htmlEscaped()}")
     append(" <font color=\"#9C9CA6\">${repository.htmlEscaped()}</font>")
   }
   append("</p>")
