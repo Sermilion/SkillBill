@@ -237,6 +237,33 @@ class CliPhasePlanRuntimeTest {
   }
 
   @Test
+  fun `full run on a reused key with an authored bundle plans it instead of reopening the earlier spec's plan`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir)
+    val planned =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, PLAN_INTAKE, "--agent", "codex"),
+        fixture.context(launcher = planner).copy(repositoryRoot = tempDir),
+      )
+    assertEquals(0, planned.exitCode, planned.stdout + planned.stderr)
+    val earlierPlan = planWorkflowId()
+    val specs = tempDir.resolve(".feature-specs")
+    val earlierBundle = specs.resolve(planner.bundleNames().single())
+    Files.move(earlierBundle, specs.resolve(earlierBundle.fileName.toString().replace(ISSUE_KEY, "SKILL-905")))
+    val reusedBundle = Files.createDirectories(specs.resolve("$ISSUE_KEY-unrelated-work"))
+    planner.authorBundle()
+
+    val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+    val result = runFull(PlanThenGoalLauncher(planner, goal), reusedBundle.toString())
+
+    assertEquals(3, result.exitCode, result.stdout + result.stderr)
+    val plans = planWorkflowIds()
+    assertEquals(2, plans.size, plans.toString())
+    assertTrue(earlierPlan in plans, plans.toString())
+    assertEquals(1, goal.childLaunches.size)
+  }
+
+  @Test
   fun `full run resumes an unfinished standalone plan without replacing its unbounded timeout`() {
     installGoalBuildPack(tempDir)
     val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
@@ -560,7 +587,7 @@ class CliPhasePlanRuntimeTest {
       return agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = "")
     }
 
-    private fun authorBundle(): String {
+    fun authorBundle(): String {
       if (authorNothingFirst && phaseIds.count { it == "plan" } == 1) return "Authored nothing yet."
       val bundle = seededBundle()
       Files.writeString(

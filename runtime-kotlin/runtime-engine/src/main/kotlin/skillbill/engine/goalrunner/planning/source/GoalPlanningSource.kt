@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompositionHash
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
+import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.engine.goalrunner.telemetry.GoalPlanningProgressRecorder
 import skillbill.error.core.SkillBillRuntimeException
@@ -273,10 +274,19 @@ class PlanWorkflowGoalPlanningSource(
 
   private fun linkedPlan(scope: PlanningScope): LinkedPlan? =
     database.read { unitOfWork ->
-      unitOfWork.workflowStates.findLinkedSubtaskPlanWorkflowId(scope.identity, scope.pending)?.let { workflowId ->
-        linkedPlanOf(workflowId, unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId))
+      val states = unitOfWork.workflowStates
+      states.findLinkedSubtaskPlanWorkflowId(scope.identity, scope.pending) { workflowId ->
+        states.getFeatureTaskExecutionIdentity(
+          workflowId,
+        )?.governedSpecPath?.let { scope.governsParentSpec(it) } ?: true
+      }?.let { workflowId ->
+        linkedPlanOf(workflowId, states.get(WorkflowFamily.TASK_RUNTIME, workflowId))
       }
     }
+
+  private fun PlanningScope.governsParentSpec(governedSpecPath: String): Boolean =
+    resolvedGovernedPath(canonicalRepository, governedSpecPath, repositories) ==
+      resolvedGovernedPath(canonicalRepository, state.manifest.parentSpecPath, repositories)
 
   private fun loadPlan(workflowId: String): LinkedPlan? =
     database.read { unitOfWork ->

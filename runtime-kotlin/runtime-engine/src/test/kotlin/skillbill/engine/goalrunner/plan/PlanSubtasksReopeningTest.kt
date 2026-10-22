@@ -249,7 +249,7 @@ class PlanSubtasksReopeningTest {
             identity.repositoryIdentity,
           ),
         )
-        assertEquals(sourceId, unit.workflowStates.findLinkedSubtaskPlanWorkflowId(identity, listOf(subtask)))
+        assertEquals(sourceId, unit.workflowStates.findLinkedSubtaskPlanWorkflowId(identity, listOf(subtask)) { true })
         assertEquals(
           emptyList(),
           unit.workflowStates.findImportedSubtaskPlanWorkflowIds(
