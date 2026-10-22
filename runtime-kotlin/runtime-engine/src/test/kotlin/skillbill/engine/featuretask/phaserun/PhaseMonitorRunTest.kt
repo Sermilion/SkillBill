@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.config.model.PhaseModelDirective
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
 import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
@@ -15,6 +17,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.monitoring.DefaultGoalRunnerCiMonitor
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.CheckBucket
@@ -22,6 +26,11 @@ import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
+import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -380,6 +389,54 @@ class PhaseMonitorRunTest {
   }
 
   @Test
+  fun `an opus 5_5 monitor repair is committed and pushed before CI is rechecked`() {
+    initFeatureBranch()
+    val repairLauncher = repairLauncher { Files.writeString(repoRoot.resolve("ci-fix.txt"), "Fix CI\n") }
+    val resolvedProfiles = mutableListOf<PhaseModelProfile>()
+    var observations = 0
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        observations += 1
+        if (observations > 1) {
+          assertEquals("Fix CI", git(origin, "show", "$FEATURE_BRANCH:ci-fix.txt"))
+          assertEquals(git(repoRoot, "rev-parse", "HEAD"), git(origin, "rev-parse", FEATURE_BRANCH))
+        }
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck(
+              "validate",
+              if (observations == 1) CheckBucket.FAIL else CheckBucket.PASS,
+              "https://ci.example/run",
+            ),
+          ),
+        )
+      }
+
+    val result =
+      entry(
+        checks = checks,
+        agentLauncher = repairLauncher,
+        launchModelResolver = { request ->
+          opusLaunchModel(request).also { resolvedProfiles += it.profile }
+        },
+      ).runMonitor(
+        "SKILL-904",
+        FeatureTaskRuntimeModelAssignment(
+          perPhaseDirectives = mapOf(MONITOR_FIX to PhaseModelDirective(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55)),
+        ),
+      )
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(listOf(PhaseModelProfile.OPUS_5_5), resolvedProfiles.filter { it != PhaseModelProfile.CANONICAL })
+    assertEquals(
+      PhaseModelProfileClassifier.ANTHROPIC_OPUS_55,
+      repairLauncher.requests.single().skillRunRequest.modelOverride,
+    )
+    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds(repairLauncher))
+    assertEquals(2, observations)
+  }
+
+  @Test
   fun `a rejected repair push blocks before CI can report success`() {
     initFeatureBranch()
     var publishedHead: String? = null
@@ -503,16 +560,37 @@ class PhaseMonitorRunTest {
     return output
   }
 
-  private fun monitorRequest(intake: String): PhaseRunRequest =
+  private fun monitorRequest(
+    intake: String,
+    modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  ): PhaseRunRequest =
     PhaseRunRequest(
       definitionId = SkeletonDefinition.MONITOR.id,
       repoRoot = repoRoot,
       invokedAgentId = "claude",
       intake = intake,
+      modelAssignment = modelAssignment,
     )
 
-  private fun PhaseRunEntry.runMonitor(intake: String): PhaseRunResult =
-    runForGoal(monitorRequest(intake), "goal-parent", FEATURE_BRANCH)
+  private fun PhaseRunEntry.runMonitor(
+    intake: String,
+    modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  ): PhaseRunResult = runForGoal(monitorRequest(intake, modelAssignment), "goal-parent", FEATURE_BRANCH)
+
+  private fun opusLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+    if (request.requestedModel == PhaseModelProfileClassifier.ANTHROPIC_OPUS_55) {
+      EffectiveLaunchModel(
+        requestedModel = request.requestedModel,
+        requestedEffort = request.requestedEffort,
+        effectiveModel = request.requestedModel,
+        namespace = LaunchProviderNamespace.ANTHROPIC_API,
+        provenance = LaunchModelProvenance.REQUESTED_EXACT,
+        unknownReason = null,
+        profile = PhaseModelProfile.OPUS_5_5,
+      )
+    } else {
+      passThroughResolvedLaunchModel(request)
+    }
 
   private fun repairLauncher(repair: () -> Unit): RuntimeRecordingLauncher =
     RuntimeRecordingLauncher { request ->
@@ -541,6 +619,7 @@ class PhaseMonitorRunTest {
     },
     checks: PullRequestChecksLookup = PassingPullRequestChecksLookup,
     agentLauncher: RuntimeRecordingLauncher = launcher,
+    launchModelResolver: (AgentRunLaunchModelRequest) -> EffectiveLaunchModel = ::passThroughResolvedLaunchModel,
   ): PhaseRunEntry {
     val config =
       RuntimeHarnessConfig(
@@ -556,7 +635,14 @@ class PhaseMonitorRunTest {
         runtimeConfig = config,
         databaseFactory = { database },
       )
-    return phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry)
+    return PhaseRunEntryFixture(
+      harness.strategies,
+      config.harnessGitOperations,
+      database,
+      clock,
+      harness.runLoopEntry,
+      launchModelResolver = launchModelResolver,
+    ).entry()
   }
 
   private companion object {

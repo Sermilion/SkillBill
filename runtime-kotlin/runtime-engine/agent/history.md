@@ -1,3 +1,13 @@
+## [2026-10-22] SKILL-437 subtask 1: opus-5-5 monitor wrapper forwards step hooks
+Areas: runtime-engine featuretask slot/monitor; runtime-engine test phaserun and slot
+- MonitorOpus55Strategy now overrides stepHooks and forwards to the composed canonical MonitorStrategy. Before, the wrapper inherited default hooks, so a recorded opus-5-5 monitor_fix never reached PhaseMonitorStepBinding.publishRepair and the repair was never committed or pushed.
+- PhaseRunEntryFixture takes an injectable launchModelResolver (default pass-through), so a test can record an OPUS_5_5 launch assignment through real accepted execution. reusable
+- Regression: an opus 5_5 monitor repair is committed and pushed to the bare origin before CI is rechecked, added beside the canonical scenario.
+- Temporary proof: PhaseStrategyCompositionTest reflects over open PhaseStrategy members with an explicit classification table, so an unclassified or unforwarded member fails. Subtask 2 deletes it with the wrappers.
+- Limits: archived execution-plan 0.2 fixtures for inline, acceptance-audit and monitor opus-5-5 are not authored. They need a capture producer run against the old wrappers before subtask 2 removes them.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented (validate ran full check green)
+
 ## [2026-10-22] SKILL-439: inline review keeps pre-#471 behavior with an additive code-quality lane
 Areas: runtime-engine featuretask slot/codereview, slot/codereview/opus, slot/standalonereview, slot/state, runloop/state, operation/verify; runtime-core di/featuretask
 - Inline review prompts are the pre-#471 text plus one appended code-quality lane section. The section says the agent still owns every review area, Routing/Ignore lines apply only to delegated review, and findings use the exact specialist identity. The rubric follows verbatim.
