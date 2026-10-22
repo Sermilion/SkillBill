@@ -19,7 +19,6 @@ import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrai
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.READ_ONLY_IDLE
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.SINGLE
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
@@ -30,7 +29,6 @@ import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
@@ -110,15 +108,12 @@ class PhaseStrategyCompositionTest {
         dbPathOverride = home.resolve("metrics.db").toString(),
         environment = emptyMap(),
       )
-    val fanOut = PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
     val standaloneMonitor = StandaloneMonitorStrategy(UnavailableStandaloneMonitorService.service)
     return strategies +
       listOf(
         standaloneMonitor,
         StandaloneMonitorPublicationStrategy(UnavailableStandaloneMonitorService.service),
-        DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
         DelegatedStandaloneReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-        fanOut,
         QaStrategy(
           unavailableQaReportSettlement(),
           testQaExecutionLifecycle(NoopWorkflowGitOperations),
@@ -151,7 +146,7 @@ class PhaseStrategyCompositionTest {
     listOf(
       RuntimeIntakeStrategy { testPlanIntake() },
       AgentPreplanStrategy(),
-      AgentPlanStrategy(),
+      PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1),
       ImplementThenSimplifyStrategy(),
       AcceptanceAuditStrategy(),
       InlineReviewStrategy(runner),
@@ -566,6 +561,7 @@ class PhaseStrategyCompositionTest {
         PHASE_INTAKE to policy(),
         PHASE_PREPLAN to policy(),
         PHASE_PLAN to policy(),
+        PHASE_PLAN_SUBTASKS to policy(),
         PHASE_IMPLEMENT to policy(MUTATING, FILE_MUTATING).extendingInventory(),
         PHASE_SIMPLIFY to
           policy(MUTATING, SINGLE, FILE_MUTATING).extendingInventory(),
@@ -643,9 +639,9 @@ class PhaseStrategyCompositionTest {
     if (definition == SkeletonDefinition.REVIEW) {
       assertEquals(
         if (reviewMode == CodeReviewExecutionMode.DELEGATED) {
-          DelegatedReviewStrategy.ID
+          DelegatedStandaloneReviewStrategy.ID
         } else {
-          InlineReviewStrategy.ID
+          InlineStandaloneReviewStrategy.ID
         },
         lookup.strategyFor(PHASE_PRESENT_FINDINGS, plan).strategyId,
       )

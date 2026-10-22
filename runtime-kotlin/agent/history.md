@@ -1,3 +1,13 @@
+## [2026-10-22] SKILL-437 subtask 3: live strategy registry with one shared runner
+Areas: runtime-kotlin/runtime-engine (featuretask slot registry, lookup, code_review strategies, test fixtures); runtime-kotlin/runtime-core (di/featuretask registry provider); runtime-kotlin/ARCHITECTURE.md
+- MEDIUM feature. Production registry now holds exactly the 17 strategy registrations live selection reaches; verified by comparing registrations with the pairs selected over every skeleton definition and its review, gate and QA facts.
+- Deleted unreachable `DelegatedReviewStrategy` (code_review `delegated`), its resource and the `delegated-opus-5-5` and `agent-plan-opus-5-5` aliases; `AgentPlanStrategy` stays as the unregistered helper `PlanFanOutStrategy` composes. Delegated standalone review is retained.
+- One `DefaultPhaseRunner` is injected into every registration; `InjectedPhaseStrategies` is removed and a regression test proves a failed run leaks no state into the next.
+- Reusable: `PlanningPhaseStrategies` and `PullRequestPhaseStrategies` group strategies per skeleton; `registeredRunners()` and `reachableStrategyPairs()` test fixtures check registry reachability.
+- Limits: fan-out stays registered for plan and plan_subtasks; a recorded plan naming `delegated` or `agent-plan` now fails as unregistered. Docs sweep is subtask 6, typed strategy families subtask 4.
+Feature flag: N/A
+Acceptance criteria: implemented per spec_subtask_3_live-registry.md (validate passed)
+
 ## [2026-10-22] SKILL-438 subtask 2: free device selection without ambiguous_target
 Areas: runtime-kotlin/runtime-engine QA execution and briefing; platform-packs/kmp and ios QA guidance
 - MEDIUM feature. Removed `QaSkipReason.AMBIGUOUS_TARGET` and replaced multi-target skip guidance with free-target leasing and retry rules.

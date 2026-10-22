@@ -1,12 +1,10 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
@@ -79,12 +77,10 @@ class PhaseStrategyRegistry(registrations: List<PhaseStrategyRegistration>) {
 private val HISTORICAL_STRATEGY_ALIASES: Map<Pair<PhaseSlot, String>, String> =
   mapOf(
     PhaseSlot.PREPLAN to "agent-preplan-opus-5-5" to AgentPreplanStrategy.ID,
-    PhaseSlot.PLAN to "agent-plan-opus-5-5" to AgentPlanStrategy.ID,
     PhaseSlot.PLAN to "goal-plan-fan-out-opus-5-5" to PlanFanOutStrategy.ID,
     PhaseSlot.IMPLEMENTATION to "implement-then-simplify-opus-5-5" to ImplementThenSimplifyStrategy.ID,
     PhaseSlot.AUDIT to "acceptance-audit-opus-5-5" to AcceptanceAuditStrategy.ID,
     PhaseSlot.CODE_REVIEW to "inline-opus-5-5" to InlineReviewStrategy.ID,
-    PhaseSlot.CODE_REVIEW to "delegated-opus-5-5" to DelegatedReviewStrategy.ID,
     PhaseSlot.STANDALONE_REVIEW to "inline-opus-5-5" to InlineStandaloneReviewStrategy.ID,
     PhaseSlot.STANDALONE_REVIEW to "delegated-opus-5-5" to DelegatedStandaloneReviewStrategy.ID,
     PhaseSlot.QUALITY_GATE to "pack-build-opus-5-5" to PackBuildStrategy.ID,

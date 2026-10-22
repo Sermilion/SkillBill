@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.slot.PhaseStrategyRegistration
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.engine.featuretask.slot.PhaseStrategySelection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
@@ -19,10 +18,10 @@ import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.qa.QaStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
@@ -48,8 +47,14 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): PhaseRunner = DefaultPhaseRunner(launcher, gitOperations)
 
   @Provides
-  fun planFanOutStrategy(fanOutPort: BoundedWorkFanOutPort): PlanFanOutStrategy =
-    PlanFanOutStrategy(fanOutPort, GOAL_PLANNING_WAVE_CAP)
+  fun planningPhaseStrategies(
+    fanOutPort: BoundedWorkFanOutPort,
+    planIntake: () -> FeatureTaskRuntimePlanIntake,
+  ): PlanningPhaseStrategies =
+    PlanningPhaseStrategies(
+      RuntimeIntakeStrategy(planIntake),
+      PlanFanOutStrategy(fanOutPort, GOAL_PLANNING_WAVE_CAP),
+    )
 
   @Provides
   fun prDescriptionStrategy(
@@ -82,43 +87,33 @@ internal interface RuntimeFeatureTaskSlotProvides {
 
   @Provides
   fun phaseStrategyRegistry(
-    runner: () -> PhaseRunner,
+    runner: PhaseRunner,
     reviewRunner: ParallelCodeReviewRunner,
-    planFanOut: PlanFanOutStrategy,
-    injected: InjectedPhaseStrategies,
-    planIntake: () -> FeatureTaskRuntimePlanIntake,
+    planning: PlanningPhaseStrategies,
+    pullRequest: PullRequestPhaseStrategies,
+    qa: QaStrategy,
   ): PhaseStrategyRegistry {
-    val inlineReviewRunner = runner()
-    val delegatedReviewRunner = runner()
-    val standaloneInlineRunner = runner()
-    val standaloneDelegatedRunner = runner()
     val inlineRubricResolver = InlineCodeQualityRubricResolver(reviewRunner::resolveInlineCodeQualityRubric)
     return PhaseStrategyRegistry(
       listOf(
-        PhaseStrategyRegistration(RuntimeIntakeStrategy(planIntake), runner()),
-        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
-        PhaseStrategyRegistration(planFanOut, runner()),
-        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
-        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
-        PhaseStrategyRegistration(InlineReviewStrategy(inlineReviewRunner, inlineRubricResolver), inlineReviewRunner),
-        PhaseStrategyRegistration(
-          DelegatedReviewStrategy(delegatedReviewRunner, reviewRunner),
-          delegatedReviewRunner,
-        ),
-        PhaseStrategyRegistration(
-          InlineStandaloneReviewStrategy(standaloneInlineRunner, inlineRubricResolver),
-          standaloneInlineRunner,
-        ),
-        PhaseStrategyRegistration(
-          DelegatedStandaloneReviewStrategy(standaloneDelegatedRunner, reviewRunner),
-          standaloneDelegatedRunner,
-        ),
-        PhaseStrategyRegistration(PackBuildStrategy(), runner()),
-        PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
-        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
-        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
-      ) + injected.registrations(runner),
+        planning.intake,
+        AgentPreplanStrategy(),
+        planning.fanOut,
+        ImplementThenSimplifyStrategy(),
+        AcceptanceAuditStrategy(),
+        InlineReviewStrategy(runner, inlineRubricResolver),
+        InlineStandaloneReviewStrategy(runner, inlineRubricResolver),
+        DelegatedStandaloneReviewStrategy(runner, reviewRunner),
+        PackBuildStrategy(),
+        AgentValidateStrategy(),
+        BoundaryHistoryStrategy(),
+        RuntimeCommitStrategy(),
+        pullRequest.prDescription,
+        pullRequest.monitor,
+        pullRequest.standaloneMonitor,
+        pullRequest.standalonePublication,
+        qa,
+      ).map { strategy -> PhaseStrategyRegistration(strategy, runner) },
     )
   }
 

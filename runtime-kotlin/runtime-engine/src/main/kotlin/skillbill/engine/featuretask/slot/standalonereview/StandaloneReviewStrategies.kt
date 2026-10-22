@@ -88,7 +88,7 @@ open class DelegatedStandaloneReviewStrategy(
 }
 
 abstract class StandaloneReviewStrategy(
-  private val runner: PhaseRunner,
+  internal val runner: PhaseRunner,
   private val reviewRunner: ParallelCodeReviewRunner?,
   private val qualityRubricResolver: InlineCodeQualityRubricResolver? =
     reviewRunner?.let { InlineCodeQualityRubricResolver(it::resolveInlineCodeQualityRubric) },

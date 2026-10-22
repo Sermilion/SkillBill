@@ -44,12 +44,12 @@ subtasks:
 - id: 3
   name: "Keep reachable registrations and share runner ownership"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_3_live-registry.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-173634-bsg2"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

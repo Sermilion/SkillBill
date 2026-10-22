@@ -8,19 +8,22 @@ import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.reachableStrategyPairs
+import skillbill.engine.featuretask.slot.registeredRunners
+import skillbill.engine.featuretask.slot.reviewStrategyRunners
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
@@ -40,6 +43,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class RuntimeFeatureTaskSlotProvidesTest {
@@ -101,6 +105,26 @@ class RuntimeFeatureTaskSlotProvidesTest {
       registered.filter { it.slot == PhaseSlot.QUALITY_GATE }.map { it.strategyId },
     )
     assertEquals(PhaseSlot.entries.toSet(), registered.map { it.slot }.toSet())
+  }
+
+  @Test
+  fun `production registrations are exactly the seventeen strategies live selection reaches`() {
+    val registered = strategies.registry.strategies.map { it.slot to it.strategyId }
+
+    assertEquals(registered.toSet(), strategies.reachableStrategyPairs())
+    assertEquals(17, registered.size)
+    assertFalse(registered.contains(PhaseSlot.CODE_REVIEW to "delegated"))
+    assertFalse(registered.contains(PhaseSlot.PLAN to "agent-plan"))
+  }
+
+  @Test
+  fun `every production registration and review strategy shares one phase runner`() {
+    val runners = strategies.registry.registeredRunners()
+    val reviewRunners = strategies.registry.reviewStrategyRunners()
+
+    assertEquals(17, runners.size)
+    assertEquals(3, reviewRunners.size)
+    (runners + reviewRunners).forEach { assertSame(runners.first(), it) }
   }
 
   @Test
@@ -170,15 +194,15 @@ class RuntimeFeatureTaskSlotProvidesTest {
       }
     }
     assertEquals(
-      listOf(AgentPlanStrategy.ID, PlanFanOutStrategy.ID),
+      listOf(PlanFanOutStrategy.ID),
       strategies.registry.strategies.filter { it.slot == PhaseSlot.PLAN }.map { it.strategyId },
     )
   }
 
   @Test
-  fun `delegated review is registered yet every accepted mode still selects inline`() {
+  fun `full-run review registers only the inline strategy and every accepted mode selects it`() {
     assertEquals(
-      listOf(InlineReviewStrategy.ID, DelegatedReviewStrategy.ID),
+      listOf(InlineReviewStrategy.ID),
       strategies.registry.strategies.filter { it.slot == PhaseSlot.CODE_REVIEW }.map { it.strategyId },
     )
     CodeReviewExecutionMode.entries.forEach { mode ->
@@ -193,9 +217,9 @@ class RuntimeFeatureTaskSlotProvidesTest {
   fun `the review definition selects delegated only for delegated mode and validation discovers project commands`() {
     val expected =
       mapOf(
-        CodeReviewExecutionMode.AUTO to InlineReviewStrategy.ID,
-        CodeReviewExecutionMode.INLINE to InlineReviewStrategy.ID,
-        CodeReviewExecutionMode.DELEGATED to DelegatedReviewStrategy.ID,
+        CodeReviewExecutionMode.AUTO to InlineStandaloneReviewStrategy.ID,
+        CodeReviewExecutionMode.INLINE to InlineStandaloneReviewStrategy.ID,
+        CodeReviewExecutionMode.DELEGATED to DelegatedStandaloneReviewStrategy.ID,
       )
     expected.forEach { (mode, strategyId) ->
       val facts = PhaseStrategySelectionFacts(SkeletonDefinition.REVIEW, setOf(mode))

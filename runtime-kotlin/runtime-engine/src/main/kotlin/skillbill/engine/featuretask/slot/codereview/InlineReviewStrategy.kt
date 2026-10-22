@@ -39,7 +39,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 
 class InlineReviewStrategy(
-  runner: PhaseRunner,
+  internal val runner: PhaseRunner,
   qualityRubricResolver: InlineCodeQualityRubricResolver? = null,
 ) : PhaseStrategyStatusProjection() {
   private val codeReview = CodeReviewSlot(runner, InlineReviewPass(qualityRubricResolver))

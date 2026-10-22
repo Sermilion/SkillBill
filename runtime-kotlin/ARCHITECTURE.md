@@ -1504,10 +1504,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 | Slot | Steps | Strategy |
 | --- | --- | --- |
 | `preplan` | preplan | `agent-preplan` |
-| `plan` | plan | `agent-plan` |
+| `plan` | plan, plan_subtasks | `goal-plan-fan-out` |
 | `implementation` | implement, simplify | `implement-then-simplify` |
 | `audit` | audit | `acceptance-audit` |
-| `code_review` | review, verify_findings, implement_fix | `inline` or `delegated` |
+| `code_review` | review, verify_findings, implement_fix | `inline` |
 | `quality_gate` | build or validate | `pack-build` or `agent-validate` |
 | `write_history` | write_history | `boundary-history` |
 | `commit_push` | commit_push | `runtime-commit` |
@@ -1549,8 +1549,8 @@ Composition:
   the ready step and calls `runStep`. It has no phase-id branch. The shared
   pre-launch block check lives in `FeatureTaskRuntimeRunLoopPreLaunch`.
 - `InlineReviewStrategy` (`slot.codereview`, id `inline`) owns the code_review
-  slot. Its review step prepares the pass, launches one agent through its own
-  `PhaseRunner` with the same launch facts as every other step (stamp sink,
+  slot. Its review step prepares the pass, launches one agent through the
+  shared `PhaseRunner` with the same launch facts as every other step (stamp sink,
   worktree-edit observer, model and effort override), decodes the register,
   and settles through `PhaseRunState`. `VerifyFindingsStep` and
   `ImplementFixStep` own their step policy and run the shared attempt path.
@@ -1602,11 +1602,10 @@ Composition:
   | Strategy | Package | Owns |
   | --- | --- | --- |
   | `agent-preplan` | `slot.preplan` | Preplan directive, ceremony line, prose settlement |
-  | `agent-plan` | `slot.plan` | Plan directive, shared planning directive, decomposition stop |
+  | `goal-plan-fan-out` | `slot.plan` | Plan directive, shared planning directive, decomposition stop, through the unregistered `AgentPlanStrategy` helper; per-subtask `plan_subtasks` fan-out |
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
   | `inline` | `slot.codereview` | Full-run review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps full-run modes here |
-  | `delegated` | `slot.codereview` | The full-run CodeReviewSlot, with a review step that runs ParallelCodeReviewRunner lanes inside its PhaseRunner session; full-run repair and checkpoint behavior stays here |
   | `inline` | `slot.standalonereview` | The report-only present_findings step, strict register and verdict admission, accepted target pinning and pass recording, one agent session, no repair or checkpoint path |
   | `delegated` | `slot.standalonereview` | The same report-only step through ParallelCodeReviewRunner, requiring complete lane coverage and integration disposition; no repair or checkpoint path |
   | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |

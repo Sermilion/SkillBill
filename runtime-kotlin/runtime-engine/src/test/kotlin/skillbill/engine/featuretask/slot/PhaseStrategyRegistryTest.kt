@@ -9,6 +9,8 @@ import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
 import skillbill.error.featuretask.PhaseStrategyStepOutsideSlotError
 import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
+import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -172,6 +174,17 @@ class PhaseStrategyRegistryTest {
     assertTrue(registry.contains(PhaseSlot.CODE_REVIEW, "inline-opus-5-5"))
     assertFalse(registry.contains(PhaseSlot.STANDALONE_REVIEW, "inline-opus-5-5"))
     assertFailsWith<UnknownPhaseStrategyError> { registry.strategy(PhaseSlot.CODE_REVIEW, "inline-opus-5-6") }
+  }
+
+  @Test
+  fun `every fixture registration is selectable and no selection names an unregistered strategy`() {
+    val lookup =
+      testPhaseStrategies(
+        GoalRunnerSubtaskLauncher { error("Selection must not launch a phase.") },
+        NoopWorkflowGitOperations,
+      )
+
+    assertEquals(lookup.registry.strategies.map { it.slot to it.strategyId }.toSet(), lookup.reachableStrategyPairs())
   }
 
   private fun facts(mode: CodeReviewExecutionMode) = PhaseStrategySelectionFacts(REVIEW_ONLY, setOf(mode))

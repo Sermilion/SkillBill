@@ -4,10 +4,8 @@ import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
@@ -449,13 +447,11 @@ class ModelDirectiveSupplements(val enabled: Boolean) {
     val RESOURCES: Map<Pair<PhaseSlot, String>, String> =
       mapOf(
         (PhaseSlot.PREPLAN to AgentPreplanStrategy.ID) to "$BASE/preplan/opus-5-5-agent-preplan.md",
-        (PhaseSlot.PLAN to AgentPlanStrategy.ID) to "$BASE/plan/opus-5-5-agent-plan.md",
         (PhaseSlot.PLAN to PlanFanOutStrategy.ID) to "$BASE/plan/opus-5-5-agent-plan.md",
         (PhaseSlot.IMPLEMENTATION to ImplementThenSimplifyStrategy.ID) to
           "$BASE/implementation/opus-5-5-implement-then-simplify.md",
         (PhaseSlot.AUDIT to AcceptanceAuditStrategy.ID) to "$BASE/audit/opus-5-5-acceptance-audit.md",
         (PhaseSlot.CODE_REVIEW to InlineReviewStrategy.ID) to "$BASE/codereview/opus-5-5-inline.md",
-        (PhaseSlot.CODE_REVIEW to DelegatedReviewStrategy.ID) to "$BASE/codereview/opus-5-5-delegated.md",
         (PhaseSlot.STANDALONE_REVIEW to InlineStandaloneReviewStrategy.ID) to
           "$BASE/standalonereview/opus-5-5-inline.md",
         (PhaseSlot.STANDALONE_REVIEW to DelegatedStandaloneReviewStrategy.ID) to

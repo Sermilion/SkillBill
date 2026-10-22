@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
@@ -17,7 +16,6 @@ import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
@@ -90,54 +88,50 @@ fun testPhaseStrategies(
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
   inlineRubricResolver: InlineCodeQualityRubricResolver? = null,
 ): PhaseStrategyLookup {
-  val runner = { DefaultPhaseRunner(launcher, gitOperations) }
+  val runner = DefaultPhaseRunner(launcher, gitOperations)
   val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
   val planFanOut = PlanFanOutStrategy(planFanOutPort, planFanOutCap)
-  val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
+  val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner) } ?: runner
   val registry =
     PhaseStrategyRegistry(
       listOfNotNull(
         PhaseStrategyRegistration(
           RuntimeIntakeStrategy { error("Test phase strategies do not run plan intake.") },
-          runner(),
+          runner,
         ),
-        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
-        PhaseStrategyRegistration(planFanOut, runner()),
-        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
-        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
+        PhaseStrategyRegistration(AgentPreplanStrategy(), runner),
+        PhaseStrategyRegistration(planFanOut, runner),
+        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner),
+        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner),
         PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner, inlineRubricResolver), codeReviewRunner),
         PhaseStrategyRegistration(
           InlineStandaloneReviewStrategy(codeReviewRunner, inlineRubricResolver),
           codeReviewRunner,
         ),
         delegatedReviewRunner?.let {
-          val delegatedRunner = runner()
-          PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(delegatedRunner, it), delegatedRunner)
+          PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(runner, it), runner)
         },
-        delegatedReviewRunner?.let {
-          val delegatedRunner = runner()
-          PhaseStrategyRegistration(DelegatedReviewStrategy(delegatedRunner, it), delegatedRunner)
-        },
-        PhaseStrategyRegistration(PackBuildStrategy(), runner()),
-        PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
-        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
-        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
+        PhaseStrategyRegistration(PackBuildStrategy(), runner),
+        PhaseStrategyRegistration(AgentValidateStrategy(), runner),
+        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner),
+        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner),
         PhaseStrategyRegistration(
           PrDescriptionStrategy(pullRequestIdentityLookup, LocalPullRequestTemplateFiles),
-          runner(),
+          runner,
         ),
-        PhaseStrategyRegistration(MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup), runner()),
-        PhaseStrategyRegistration(standaloneMonitor, runner()),
-        PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner()),
+        PhaseStrategyRegistration(MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup), runner),
+        PhaseStrategyRegistration(standaloneMonitor, runner),
+        PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner),
         PhaseStrategyRegistration(
           QaStrategy(qaReports, qaExecution, qaOutcomes),
-          runner(),
+          runner,
         ),
       ),
     )
-  val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
-  val bindings = testPhaseStrategyBindings(codeReviewStrategyId)
+  val bindings =
+    testPhaseStrategyBindings(
+      if (delegatedReviewRunner == null) InlineStandaloneReviewStrategy.ID else DelegatedStandaloneReviewStrategy.ID,
+    )
   return PhaseStrategyLookup(
     registry,
     PhaseStrategySelection(registry, bindings),
@@ -257,14 +251,8 @@ object LocalPullRequestTemplateFiles : PullRequestTemplateFiles {
 }
 
 fun testPhaseStrategyBindings(
-  codeReviewStrategyId: String = InlineReviewStrategy.ID,
+  standaloneDelegatedId: String = InlineStandaloneReviewStrategy.ID,
 ): Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> {
-  val standaloneDelegatedId =
-    if (codeReviewStrategyId == DelegatedReviewStrategy.ID) {
-      DelegatedStandaloneReviewStrategy.ID
-    } else {
-      codeReviewStrategyId
-    }
   val shared =
     mapOf(
       PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
@@ -272,7 +260,7 @@ fun testPhaseStrategyBindings(
       PhaseSlot.IMPLEMENTATION to PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID),
       PhaseSlot.AUDIT to PhaseStrategyBinding.Fixed(AcceptanceAuditStrategy.ID),
       PhaseSlot.CODE_REVIEW to
-        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { codeReviewStrategyId }),
+        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { InlineReviewStrategy.ID }),
       PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID),
       PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
       PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
