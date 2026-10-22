@@ -66,6 +66,7 @@ import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.PhaseExecution
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.FeedbackTone
@@ -271,7 +272,7 @@ private fun LoadedDetail(
                   )
                   task.blockedReason?.let { SelectionContainer { Text(it, color = orange, fontSize = 12.sp, lineHeight = 18.sp) } }
                   if (active && pipeline.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), phase.attemptCount) }
+                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), phase.attemptCount, item.phaseExecution?.takeIf { it.phaseId == phase.id }) }
                   }
                 }
                 if (active) Text(subtaskTime, color = blue, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
@@ -371,13 +372,13 @@ private fun LoadedDetail(
           ),
         )
         val attempts = buildList {
-          detail.attempts.phaseAttempts.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Attempts" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
+          detail.attempts.phaseAttempts.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Phase runs" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           detail.attempts.fixIterations.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Fix iterations" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           detail.attempts.findingsInScope?.let { add("Findings in scope" to it.toString()) }
           detail.attempts.reAttemptCauses.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Re-attempts" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           if (detail.attempts.supervisorKills > 0) add("Supervisor kills" to detail.attempts.supervisorKills.toString())
         }
-        MetadataPanel("Attempts and fixes", attempts)
+        MetadataPanel("Runs and fixes", attempts)
         if (detail.validation.isNotEmpty()) {
           LazyColumn(state = validationScroll, modifier = Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             this.item(key = detail.key("validation-header", "")) { DesignLabel("Validation") }
@@ -430,10 +431,11 @@ private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null
 }
 
 @Composable
-private fun PhaseChip(id: String, complete: Boolean, active: Boolean, attempts: Int) {
+private fun PhaseChip(id: String, complete: Boolean, active: Boolean, attempts: Int, execution: PhaseExecution? = null) {
   val color = if (active) Color(0xFF14100A) else if (complete) green else dim
+  val progress = if (active) execution?.label() ?: attempts.takeIf { it > 1 }?.let { "$it runs" } else null
   Text(
-    id + if (active && attempts > 1) " · $attempts" else "",
+    id + progress?.let { " · $it" }.orEmpty(),
     Modifier.background(if (active) green else Color.Transparent, RoundedCornerShape(5.dp))
       .border(1.dp, if (complete) green.copy(alpha = .35f) else dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(5.dp))
       .padding(horizontal = 7.dp, vertical = 4.dp),

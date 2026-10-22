@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phase.core
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -14,6 +15,7 @@ internal data class FeatureTaskRuntimeCurrentPhaseExecutionContext(
   val phases: List<FeatureTaskRuntimePhaseStatus>,
   val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   val gateRunCount: Int?,
+  val acceptanceCriterionRepair: AcceptanceCriterionRepairState? = null,
 )
 
 internal fun defaultPhaseExecution(

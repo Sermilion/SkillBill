@@ -33,8 +33,10 @@ fun PhaseExecution.label(): String = when (kind) {
   PhaseExecutionKind.SEMANTIC_LOOP -> "loop $count"
   PhaseExecutionKind.GATE_RUN -> "gate run $count"
   PhaseExecutionKind.BOUNDED_EDGE -> total?.let { "$count/$it" } ?: "edge $count"
-  PhaseExecutionKind.ATTEMPT -> "attempt $count"
+  PhaseExecutionKind.ATTEMPT -> if (phaseId in acceptanceAuditPhases) "repair attempt $count" else "run $count"
 }
+
+private val acceptanceAuditPhases = setOf("audit", "audit_plan_fix", "audit_implement_fix")
 
 /** A running clock that ticks forward from its last fresh reading and never runs backwards; a stale clock is frozen. */
 fun displayedDuration(baseMs: Long?, asOf: Instant?, now: Instant, freshness: Freshness, live: Boolean): Long? {
