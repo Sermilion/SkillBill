@@ -176,6 +176,7 @@ import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.ports.work.EmptyWorkListRepository
+import skillbill.ports.workflow.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
@@ -2316,6 +2317,7 @@ private fun FeatureTaskRuntimeWorkerOwnership.matchesActiveOwnership(
 
 internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
   private val workerOwnership = mutableMapOf<String, FeatureTaskRuntimeWorkerOwnership>()
+  private val workerGenerations = mutableMapOf<String, FeatureTaskRuntimeWorkerGenerationObservation>()
   private val goalChildWorkflowIds = mutableMapOf<String, List<String>>()
 
   fun seedGoalChildWorkflowIds(
@@ -2330,10 +2332,28 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
 
   fun seedWorkerOwnership(ownership: FeatureTaskRuntimeWorkerOwnership) {
     workerOwnership[ownership.workflowId] = ownership
+    recordWorkerGeneration(ownership)
   }
 
   override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String) =
     synchronized(this) { workerOwnership[workflowId] }
+
+  override fun getLatestFeatureTaskRuntimeWorkerGeneration(workflowId: String) =
+    synchronized(this) { workerGenerations[workflowId] }
+
+  private fun recordWorkerGeneration(ownership: FeatureTaskRuntimeWorkerOwnership) {
+    val latest = workerGenerations[ownership.workflowId]
+    if (latest == null || latest.generation < ownership.generation) {
+      workerGenerations[ownership.workflowId] =
+        FeatureTaskRuntimeWorkerGenerationObservation(
+          ownership.workflowId,
+          ownership.generation,
+          ownership.phaseId,
+          ownership.phaseAttempt,
+          ownership.heartbeatAt,
+        )
+    }
+  }
 
   override fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -2346,6 +2366,7 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
         return false
       }
       workerOwnership[ownership.workflowId] = ownership
+      recordWorkerGeneration(ownership)
       true
     }
 
@@ -2381,6 +2402,7 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
         return false
       }
       workerOwnership[ownership.workflowId] = ownership
+      recordWorkerGeneration(ownership)
       true
     }
 
@@ -2405,6 +2427,9 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
       if (!current.matchesActiveOwnership(workflowId, ownerToken, generation)) return false
       if (WorkflowStatus.fromWire(row.workflowStatus) in WorkflowStatus.terminalStatuses) return false
       workerOwnership[workflowId] = current.copy(phaseId = phaseId, phaseAttempt = phaseAttempt)
+      workerGenerations[workflowId]?.takeIf { it.generation == generation }?.let {
+        workerGenerations[workflowId] = it.copy(phaseId = phaseId, phaseAttempt = phaseAttempt)
+      }
       true
     }
 

@@ -26,6 +26,14 @@ fun operatorBlockRetryDirective(
   require(retry.phaseId == phaseId) {
     "Operator blocked-phase retry guidance for '${retry.phaseId}' cannot be delivered to phase '$phaseId'."
   }
+  if (retry.preserveBudget) {
+    return """
+      ## Incident recovery retry
+      The saved incident recovery reopened this phase after the user confirmed its prerequisites.
+      Continue under the existing attempt and worker limits. Apply the confirmed prerequisite and
+      current policy; this retry does not supersede an earlier operator decision.
+      """.trimIndent()
+  }
   return """
     ## Operator-applied blocked-phase retry decision
     An operator reviewed the prior block and explicitly reopened this phase. Apply this decision:

@@ -64,6 +64,7 @@ internal val BLOCK_INCIDENT_CLASSIFICATION_RULES: List<BlockIncidentClassificati
       null,
     ) { occurrence, _ ->
       occurrence.failureCode != null &&
+        occurrence.failureCode !in ATTEMPT_LIMIT_FAILURE_CODES &&
         occurrence.hasDisposition(FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION)
     },
   )
@@ -141,6 +142,13 @@ private val RUNTIME_DEFECT_FAILURE_CODES =
     FeatureTaskRuntimeFailureCode.MALFORMED_STEP_LAUNCH_ASSIGNMENT.label(),
     FeatureTaskRuntimeFailureCode.INCOHERENT_STEP_LAUNCH_ASSIGNMENTS.label(),
     FeatureTaskRuntimeFailureCode.UNSUPPORTED_EXECUTION_PLAN_VERSION.label(),
+  )
+
+// Attempt-budget and loop-cap blocks name the exhausted limit, not a fault in the user's environment.
+private val ATTEMPT_LIMIT_FAILURE_CODES =
+  setOf(
+    FeatureTaskRuntimeFailureCode.PHASE_ATTEMPT_BUDGET_EXHAUSTED.label(),
+    FeatureTaskRuntimeFailureCode.LOOP_EDGE_CAP_EXHAUSTED.label(),
   )
 
 private val OUTPUT_EVIDENCE_KINDS =

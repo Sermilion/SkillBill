@@ -337,4 +337,36 @@ internal val blockIncidentMigrations: List<DatabaseMigration> =
       name = "add-block-incident-diagnoses",
       operation = BlockIncidentDiagnosisMigration::apply,
     ),
+    DatabaseMigration(
+      version = 78,
+      name = "add-block-incident-recovery-attempts",
+      operation = BlockIncidentRecoveryAttemptsMigration::apply,
+    ),
+    DatabaseMigration(
+      version = 79,
+      name = "retain-latest-feature-task-worker-generation",
+      operation = { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute(
+            """
+            CREATE TABLE feature_task_runtime_worker_generations (
+              workflow_id TEXT PRIMARY KEY,
+              generation INTEGER NOT NULL CHECK (generation > 0),
+              phase_id TEXT NOT NULL,
+              phase_attempt INTEGER NOT NULL CHECK (phase_attempt > 0),
+              admitted_at TEXT NOT NULL
+            )
+            """.trimIndent(),
+          )
+          statement.execute(
+            """
+            INSERT INTO feature_task_runtime_worker_generations
+              (workflow_id, generation, phase_id, phase_attempt, admitted_at)
+            SELECT workflow_id, generation, phase_id, phase_attempt, heartbeat_at
+            FROM feature_task_runtime_worker_leases
+            """.trimIndent(),
+          )
+        }
+      },
+    ),
   )

@@ -1,6 +1,7 @@
 package skillbill.engine.diagnostics.block
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryInterruptedReconciliation
 import skillbill.error.blockincident.BlockIncidentFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.blockincident.BlockIncidentSpool
@@ -21,6 +22,7 @@ class BlockIncidentEntryReconciler(
   private val spool: BlockIncidentSpool,
   private val worker: BlockIncidentInvestigationWorker,
   private val capture: BlockIncidentCapture,
+  private val interruptedRecoveries: BlockIncidentRecoveryInterruptedReconciliation,
 ) {
   fun reconcileOnEntry() {
     val databaseAvailable =
@@ -35,6 +37,10 @@ class BlockIncidentEntryReconciler(
           BlockIncidentService.reconcilePending(unitOfWork.blockIncidents, clock, ENTRY_BATCH)
         }
       if (reconciled.isNotEmpty()) diagnostics.info("Reconciled ${reconciled.size} pending block incident(s).")
+    }
+    diagnostics.bestEffort("Interrupted block incident recovery reconciliation failed; continuing the run.", Unit) {
+      val settled = interruptedRecoveries.reconcile(ENTRY_BATCH)
+      if (settled > 0) diagnostics.info("Settled $settled interrupted block incident recovery attempt(s).")
     }
     if (spoolDrained) {
       reconcileOrphanedBlocks()

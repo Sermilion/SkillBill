@@ -293,6 +293,58 @@ internal class StandalonePhaseStatusStore(
       updateInTransaction(request)
     }
 
+  override fun releaseExpiredLease(
+    record: StandalonePhaseStatusRecord,
+    at: Instant,
+  ): StandalonePhaseStatusUpdateResult =
+    connection.inNestedWriteTransaction(diagnostics, transactionActive) {
+      releaseExpiredLeaseInTransaction(record, at)
+    }
+
+  private fun releaseExpiredLeaseInTransaction(
+    record: StandalonePhaseStatusRecord,
+    at: Instant,
+  ): StandalonePhaseStatusUpdateResult {
+    val current = readByExecution(record.executionId) ?: return StandalonePhaseStatusUpdateResult.MISSING
+    when {
+      current.statusRevision != record.statusRevision -> return StandalonePhaseStatusUpdateResult.STALE_REVISION
+      current.leaseOwner != record.leaseOwner ||
+        current.leaseGeneration != record.leaseGeneration ||
+        current.leaseExpiresAt.isAfter(at) -> return StandalonePhaseStatusUpdateResult.STALE_LEASE
+      current.lifecycleState in TERMINAL_STATES -> return StandalonePhaseStatusUpdateResult.IDEMPOTENT
+    }
+    val updated =
+      connection.prepareStatement(
+        """
+        UPDATE standalone_phase_status SET
+          status_revision = ?, lifecycle_state = 'blocked', current_activity = ?, updated_at = ?,
+          finished_at = ?, active_duration_as_of = NULL, terminal_result = ?, accepted_result = ?
+        WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(
+          listOf(
+            incrementDecimal(current.statusRevision),
+            RELEASED_OWNER_ACTIVITY,
+            at.toString(),
+            at.toString(),
+            RELEASED_OWNER_ACTIVITY,
+            RELEASED_OWNER_ACTIVITY,
+            current.executionId,
+            current.statusRevision,
+            current.leaseOwner,
+            current.leaseGeneration,
+          ),
+        )
+        statement.executeUpdate()
+      }
+    return if (updated == 1) {
+      StandalonePhaseStatusUpdateResult.ACCEPTED
+    } else {
+      StandalonePhaseStatusUpdateResult.STALE_LEASE
+    }
+  }
+
   private fun updateInTransaction(
     request: StandalonePhaseStatusUpdate,
     operatorCancellation: Boolean = false,
@@ -749,6 +801,7 @@ internal class StandalonePhaseStatusStore(
     const val MAX_LAUNCH_ARGUMENT_LENGTH = 16384
     const val MONITOR_PHASE_ID = "monitor"
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
+    const val RELEASED_OWNER_ACTIVITY = "Owner stopped; released for block incident recovery."
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked", "canceled")
     const val AFTER_ANCHOR_SQL: String =

@@ -14,6 +14,8 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalCo
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
 fun schemaError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)
@@ -93,10 +95,24 @@ internal fun operatorBlockRetryFrom(artifacts: Map<String, Any?>): FeatureTaskRu
       ?: schemaError(
         "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY' must decode to a map.",
       )
+  val recoveryAttemptId = entryMap[FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY]?.let {
+    it as? String ?: schemaError(
+      "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY' field " +
+        "'$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY' must decode to a string.",
+    )
+  }
+  val preserveBudget = entryMap[FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY]?.let {
+    it as? Boolean ?: schemaError(
+      "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY' field " +
+        "'$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY' must decode to a boolean.",
+    )
+  } ?: false
   return FeatureTaskRuntimeOperatorBlockRetry(
     phaseId = entryMap.requiredOperatorRetryString(SharedPayloadKeys.PHASE_ID),
     reason = entryMap.requiredOperatorRetryString(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY),
     retriedAt = entryMap.requiredOperatorRetryString(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY),
+    recoveryAttemptId = recoveryAttemptId,
+    preserveBudget = preserveBudget,
   )
 }
 

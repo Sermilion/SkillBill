@@ -5,8 +5,6 @@ import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeEx
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
-import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
-import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.resolvedBranchFromWorkflowArtifacts
@@ -17,7 +15,6 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.taskruntime.artifact.asCheckpointIdentitiesArtifactEntry
 import skillbill.workflow.taskruntime.artifact.asQuarantineWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -34,6 +31,7 @@ import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeAppend
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointRefName
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeOwnedPathDigest
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import java.time.Clock
 
 class FeatureTaskRuntimePhaseEvidenceRecorder(
@@ -91,11 +89,8 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
         edgeIteration = request.edgeIteration,
       )
     val updatedLedger =
-      appendBoundedHistoryBySequence(
-        existing = workflowArtifactEntryMaps(existingEntries.map { it.asWorkflowArtifactEntry() }),
-        entry = workflowArtifactEntryMap(entry.asWorkflowArtifactEntry()),
-        retentionLimit = FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
-      )
+      retainPhaseLedgerEvidence(existingEntries + entry, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+        .map { it.asWorkflowArtifactEntry() }
     workflowPersistence.persistArtifactsPatch(
       unitOfWork.workflowStates,
       record,

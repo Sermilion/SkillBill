@@ -8,6 +8,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClaim
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosisRecord
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecovery
 import java.time.Instant
 
 /** Reads the rollout marker and the blocked workflows that never received an incident after rollout. */
@@ -89,5 +90,11 @@ interface BlockIncidentRepository : BlockIncidentRolloutReads, BlockIncidentDiag
     expectedRevision: Long,
     observedOwnerToken: String?,
     observedOwnerGeneration: Long?,
+  ): Boolean
+
+  fun recordRecoveryOutcome(
+    occurrenceToken: String,
+    expectedRevision: Long,
+    recovery: BlockIncidentRecovery,
   ): Boolean
 }

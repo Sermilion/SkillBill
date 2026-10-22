@@ -15,8 +15,6 @@ import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.engine.featuretask.persist.attemptStatusFor
 import skillbill.engine.featuretask.persist.durationMillis
 import skillbill.engine.featuretask.persist.stepUpdatesFrom
-import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
-import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.persist.workflowStatusFor
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
@@ -34,7 +32,6 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asImplementationProgressWireMap
@@ -51,6 +48,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceR
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
@@ -111,11 +109,8 @@ class FeatureTaskRuntimePhaseStateRecorder(
         updated.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
       ),
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(
-        appendBoundedHistoryBySequence(
-          workflowArtifactEntryMaps(ledger.map { it.asWorkflowArtifactEntry() }),
-          workflowArtifactEntryMap(entry.asWorkflowArtifactEntry()),
-          FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
-        ),
+        retainPhaseLedgerEvidence(ledger + entry, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+          .map { it.asWorkflowArtifactEntry() },
       ),
     ) +
       implementationAttemptPatch(
@@ -664,11 +659,8 @@ class FeatureTaskRuntimePhaseStateRecorder(
           edgeIteration = request.edgeIteration,
         )
       val updatedLedger =
-        appendBoundedHistoryBySequence(
-          workflowArtifactEntryMaps(ledger.map { it.asWorkflowArtifactEntry() }),
-          workflowArtifactEntryMap(completion.asWorkflowArtifactEntry()),
-          FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
-        )
+        retainPhaseLedgerEvidence(ledger + completion, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+          .map { it.asWorkflowArtifactEntry() }
       recordQaOutcome(unitOfWork, request)
       workflowPersistence.persistArtifactsPatch(
         unitOfWork.workflowStates,

@@ -83,7 +83,12 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
       val record = states.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return
       val acceptedAlias = BlockIncidentAliases.fallback(observation)
       val existing = BlockIncidentIdentity.fromArtifacts(record.artifacts)
-      if (existing?.matchesAcceptedPhase(phaseId, attempt, observation.generation, acceptedAlias) == true) return
+      if (existing?.matchesAcceptedPhase(phaseId, attempt, observation.generation, acceptedAlias) == true &&
+        existing.failureCode == observation.failureCode &&
+        existing.failureDisposition?.wireValue == observation.failureDisposition
+      ) {
+        return
+      }
       val alias = BlockIncidentAliases.fallback(observation)
       val identity =
         BlockIncidentIdentity(
@@ -162,6 +167,7 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
         mutableMapOf(
           BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
           BlockIncidentCorrelatedField.EXECUTION_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+          BlockIncidentCorrelatedField.INVOCATION_ID to BlockIncidentFieldAvailability.NOT_CAPTURED,
         )
       val goalArtifact = states.get(WorkflowFamily.TASK_RUNTIME, workflowId)?.artifacts?.goalContinuationArtifact()
       if (goalArtifact == null) {
@@ -191,7 +197,7 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
         workflowId = workflowId.boundedIdentity(),
         phaseId = phaseId.boundedIdentity(),
         parentWorkflowId = goalArtifact?.parentWorkflowId?.boundedIdentity(),
-        invocationId = ownership?.ownerToken?.boundedIdentity(),
+        invocationId = null,
         generation = ownership?.generation?.takeIf { it > 0 },
         unavailableFields = unavailable,
       )

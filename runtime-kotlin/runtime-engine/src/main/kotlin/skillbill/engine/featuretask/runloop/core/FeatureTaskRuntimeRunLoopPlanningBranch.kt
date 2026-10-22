@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
@@ -57,6 +58,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
         loopId = transition.loopId,
         edgeIteration = transition.edgeIteration,
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+        failureCode = FeatureTaskRuntimeAttemptBudgets.LOOP_EDGE_CAP_FAILURE_CODE,
         payload = BlockAndPersistPayload(outputArtifact = state.phase(phaseId).output?.payload),
       ),
     )

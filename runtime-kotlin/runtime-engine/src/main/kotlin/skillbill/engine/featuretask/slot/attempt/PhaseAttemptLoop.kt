@@ -84,6 +84,7 @@ internal object PhaseAttemptSteps {
     coupling.transitions.beginPhaseAttemptLaunchAfterRequiredStart(
       run.phaseId,
       operatorReopened = operatorReopened,
+      preserveAttemptBudget = session.operatorBlockRetry?.let { it.phaseId == run.phaseId && it.preserveBudget } == true,
     )
     val semanticIteration =
       (

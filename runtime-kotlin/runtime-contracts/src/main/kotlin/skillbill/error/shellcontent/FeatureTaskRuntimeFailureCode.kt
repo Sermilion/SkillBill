@@ -43,6 +43,8 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   QA_WORKTREE_CHANGED,
   QA_REPOSITORY_UNREADABLE,
   UNKNOWN_QA_SELECTION,
+  PHASE_ATTEMPT_BUDGET_EXHAUSTED,
+  LOOP_EDGE_CAP_EXHAUSTED,
 }
 
 fun invalidFeatureTaskRuntimeRepairReceipt(

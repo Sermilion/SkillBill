@@ -27,6 +27,7 @@ import skillbill.engine.featuretask.runloop.core.withDisposition
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.paused
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeNonOutputAttempt
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -571,6 +572,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
             rejectedOutput = attempt.rejectedOutput,
           ),
         failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
+        failureCode = FeatureTaskRuntimeAttemptBudgets.ATTEMPT_BUDGET_FAILURE_CODE,
       ),
     )
   }

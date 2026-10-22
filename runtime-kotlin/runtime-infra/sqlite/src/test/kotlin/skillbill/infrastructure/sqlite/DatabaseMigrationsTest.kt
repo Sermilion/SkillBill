@@ -123,6 +123,8 @@ class DatabaseMigrationsTest {
             "'unknown_historical')",
         )
         DIAGNOSIS_TABLES.forEach { table -> statement.execute("DROP TABLE $table") }
+        statement.execute("DROP TABLE IF EXISTS block_incident_recovery_attempts")
+        statement.execute("DROP TABLE IF EXISTS feature_task_runtime_worker_generations")
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 77")
         statement.execute("PRAGMA user_version = 76")
       }
@@ -145,6 +147,42 @@ class DatabaseMigrationsTest {
         }
         assertFailsWith<SQLException> { statement.executeUpdate("DELETE FROM block_incident_diagnoses") }
       }
+    }
+  }
+
+  @Test
+  fun `block incident recovery migration preserves existing incidents and adds a unique attempt key`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-block-recovery-upgrade").resolve("upgrade.db")
+    val token = "bi_${"b".repeat(64)}"
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feature_task_workflows(workflow_id, mode, contract_version) " +
+            "VALUES ('wftr-recovery-existing', 'prose', '1.0')",
+        )
+        statement.executeUpdate(
+          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
+            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
+            "('$token', '0.1', 1, 'accepted_phase_block', 'original failure', " +
+            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
+            "'unknown_historical')",
+        )
+        statement.execute("DROP TABLE block_incident_recovery_attempts")
+        statement.execute("DROP TABLE feature_task_runtime_worker_generations")
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 78")
+        statement.execute("PRAGMA user_version = 77")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents WHERE occurrence_token = '$token'"))
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-recovery-existing'"),
+      )
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM sqlite_master WHERE name = 'block_incident_recovery_attempts'"))
+      assertEquals(2, scalarInt(connection, "SELECT count(*) FROM pragma_index_list('block_incident_recovery_attempts') WHERE \"unique\" = 1"))
+      assertEquals(6, scalarInt(connection, "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'block_incident_recovery_attempts'"))
     }
   }
 
@@ -2267,4 +2305,6 @@ private val expectedMigrationDefinitions =
     75 to "record-uncaptured-block-incident-generation",
     76 to "activate-block-incident-rollout",
     77 to "add-block-incident-diagnoses",
+    78 to "add-block-incident-recovery-attempts",
+    79 to "retain-latest-feature-task-worker-generation",
   )

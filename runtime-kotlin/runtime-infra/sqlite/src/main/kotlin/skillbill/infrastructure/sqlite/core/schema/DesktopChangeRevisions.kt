@@ -92,6 +92,12 @@ internal fun addBlockIncidentDiagnosisRevisionTriggers(connection: Connection) {
   }
 }
 
+internal fun addBlockIncidentRecoveryRevisionTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    createRevisionTriggers(statement, "block_incident_recovery_attempts", DesktopReadSchema.TOPICS)
+  }
+}
+
 private val REVISION_TRIGGER_OPERATIONS = listOf("INSERT", "UPDATE", "DELETE")
 
 private fun installDesktopReadIndexes(connection: Connection) {

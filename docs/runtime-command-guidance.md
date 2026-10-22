@@ -66,6 +66,110 @@ through their governed briefings. This does not change the spec, acceptance
 criteria, comparison baseline, or other workflows. A retry without `--mandate`
 does not promote its reason to a run mandate.
 
+## Block incident recovery
+
+When a block incident has a settled diagnosis with a supported action, preview it with
+`skill-bill work recover <work-id> --incident <token> --preview`. The JSON names the
+action, its effects, the exact target workflow or invocation, the phase, and the
+incident revision. If the diagnosis lists prerequisites, the result is
+`needs_prerequisites`. It lists each one and shows the planned preview the recovery
+would use once every user-confirmable prerequisite is confirmed.
+
+To apply, pass the revision from the preview:
+`skill-bill work recover <work-id> --incident <token> --revision <revision>`.
+Repeat `--confirm-prerequisite <kind>` once for each prerequisite you have confirmed,
+and pass `--agent <agent>` to choose who runs the resumed work. The runtime rejects a
+revision that no longer matches (`stale_incident`), an attempt that is still in
+flight (`recovery_in_progress`), and a work id that is not the incident's workflow,
+parent goal, or invocation (`unknown_target`). Each rejection exits 1. Repeating the
+same request replays the recorded attempt and does not apply the action twice. A
+recovered result reports the attempt status, any typed failure, and the launch result
+of the resumed run. A launch that fails settles the attempt as `failed` with
+`resume_failed`, and the command exits 1.
+
+Resume launches the target recorded on the attempt, either the goal workflow or the
+standalone phase invocation. It does not launch the work id you passed. Only one
+caller can claim an `applied` attempt for resume. A concurrent caller gets
+`recovery_in_progress` or the settled attempt.
+
+**Results.** Every response is JSON with a `result` field.
+
+- `available`: preview only. `preview` holds `action`, `label`, `effects`,
+  `target_workflow_id`, `target_invocation_id`, `phase_id`, `incident_token` and
+  `incident_revision`.
+- `needs_prerequisites`: preview only. `prerequisites` lists each unconfirmed
+  prerequisite as `kind` and `instruction`, and `planned_preview` shows the preview the
+  recovery would use.
+- `existing_attempt`: preview only. An attempt for this incident, action and revision
+  already exists. The payload carries `attempt_id`, `attempt_status` and `failure`.
+- `recovered`: apply only. The payload carries `attempt_id`, `attempt_status`,
+  `failure` and `launch`. `launch` is a nested result: `accepted`, `launch_failed`
+  with a `reason`, or `rejected` with a `reason`. It is `null` when no resume ran,
+  for example when a replayed attempt had already settled.
+- `rejected`: the payload carries `reason` and, for some reasons, `detail`.
+
+Preview never writes anything and exits 0 unless the result is `rejected`. Apply exits
+1 when the result is `rejected` or the attempt status is `failed`.
+
+**Rejection reasons.** A rejection writes nothing and exits 1.
+
+- `stale_incident`: `--revision` does not match the stored incident revision. Preview
+  again and pass the new revision.
+- `recovery_in_progress`: another attempt for the incident is `requested`, `applying`
+  or `resuming`, or a replayed attempt has not settled yet.
+- `unknown_target`: the work id is not the incident's workflow, parent goal or
+  invocation, or the work item cannot be resolved. A saved resume target that is
+  missing or belongs to another repository also returns this reason.
+- `not_found`: no incident exists for the token.
+- `ownership_mismatch`: a live goal-runner execution lease or worker lease, or a
+  process whose state cannot be verified, still holds the target.
+- `changed_target`: the database file changed during the request or between apply and
+  resume.
+- `prerequisite_unmet`: apply ran with unconfirmed prerequisites. `detail` is a
+  comma-separated list of their kinds. Confirm each with
+  `--confirm-prerequisite <kind>`.
+- `recovery_unavailable`: `detail` names the typed reason. Eligibility reasons are
+  `no_supported_action`, `investigation_not_settled`, `not_blocked`,
+  `generation_changed`, `attempt_limit_reached`, `operator_decision` and
+  `quality_gate`. Service refusals are `diagnosis_unavailable`, `action_changed` and
+  `policy_facts_unavailable`. Target-resolution failures use names such as
+  `workflow_not_blocked`, `occurrence_changed`, `worker_not_active`,
+  `missing_workflow` and `missing_invocation`. Blocks caused by
+  `attempt_limit_reached`, `operator_decision` or `quality_gate` are never
+  recoverable through this command. Use the normal operator path for them.
+
+**Attempt statuses.** `attempt_status` uses these values:
+
+- `requested`: the attempt is recorded and nothing has changed yet.
+- `applying`: the runtime holds the attempt under an owner lease and is applying the
+  action.
+- `applied`: the block cleared and resume is pending. Repeating the same request
+  resumes it once.
+- `resuming`: the runtime is launching the saved target.
+- `resumed`: the saved goal workflow or standalone invocation launched.
+- `failed`: the attempt ended. `failure` says why.
+
+**Failure values.** `failure` uses these values:
+
+- `stale_incident` and `prerequisite_unmet`: the request basis changed before the
+  action ran.
+- `ownership_mismatch`: another live owner held the work when the runtime tried to
+  take it.
+- `action_failed`: the reopen or retry step threw. The block occurrence and its
+  diagnosis are unchanged.
+- `block_not_cleared`: the action ran but the workflow is still blocked.
+- `resume_failed`: the block is cleared but the launch failed. Start the same work
+  with the normal launch (`skill-bill work` launch or the desktop run action).
+- `interrupted`: the owner lease of an `applying` or `resuming` attempt expired.
+  Entry reconciliation marked it failed without reapplying the action or relaunching.
+  Preview again and recover at the new revision.
+
+**Incident recovery summary.** The incident's recovery summary is `unavailable` when
+no supported action exists, `not_started` when recovery is offered but not tried,
+`complete` when an attempt reaches `resumed`, and `failed` when an attempt fails.
+Each change bumps the incident revision, so a new request after `failed` needs a fresh
+preview.
+
 ## Confirmed no-change claims
 
 A validated implementation no-change claim still requires the independent source

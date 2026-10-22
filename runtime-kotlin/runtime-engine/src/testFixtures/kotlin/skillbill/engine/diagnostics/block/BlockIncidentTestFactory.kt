@@ -1,5 +1,6 @@
 package skillbill.engine.diagnostics.block
 
+import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryInterruptedReconciliation
 import skillbill.ports.blockincident.InMemoryBlockIncidentSpool
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -43,5 +44,11 @@ fun testBlockIncidentEntryReconciler(
       DaemonThreadPort { _, _ -> },
     ),
     BlockIncidentCapture(database, clock, spool, diagnostics),
+    BlockIncidentRecoveryInterruptedReconciliation(
+      database,
+      clock,
+      NoopFeatureTaskRuntimeWorkerSupervisor,
+      diagnostics,
+    ),
   )
 }

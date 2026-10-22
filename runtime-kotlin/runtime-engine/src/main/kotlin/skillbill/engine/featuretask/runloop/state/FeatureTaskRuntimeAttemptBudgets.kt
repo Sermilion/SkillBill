@@ -1,10 +1,14 @@
 package skillbill.engine.featuretask.runloop.state
 
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 object FeatureTaskRuntimeAttemptBudgets {
   const val MAX_OUTPUT_GATE_RETRY_ATTEMPTS: Int = 1
   const val MAX_PROCESS_FAILURE_ATTEMPTS: Int = 3
+  val ATTEMPT_BUDGET_FAILURE_CODE: String = FeatureTaskRuntimeFailureCode.PHASE_ATTEMPT_BUDGET_EXHAUSTED.label()
+  val LOOP_EDGE_CAP_FAILURE_CODE: String = FeatureTaskRuntimeFailureCode.LOOP_EDGE_CAP_EXHAUSTED.label()
+  val ATTEMPT_LIMIT_FAILURE_CODES: Set<String> = setOf(ATTEMPT_BUDGET_FAILURE_CODE, LOOP_EDGE_CAP_FAILURE_CODE)
 
   fun processFailureBlockReason(
     phaseId: String,
@@ -73,3 +77,5 @@ object FeatureTaskRuntimeAttemptBudgets {
       "outcome, so the run blocks for an operator."
   }
 }
+
+private fun Enum<*>.label(): String = "${declaringJavaClass.simpleName}.$name"

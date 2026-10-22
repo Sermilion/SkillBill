@@ -17,6 +17,9 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaReport
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
@@ -159,6 +162,19 @@ class StandalonePhaseStatusEventSink(
         val blockedWorkflowId = (registered?.workflowId ?: registration.workflowId)?.takeIf(String::isNotBlank)
         val blockedStepId = stepId ?: registered?.phaseId ?: registration.phaseId
         val invocationId = registered?.invocationId ?: registration.invocationId
+        val workerCoordinates =
+          blockedWorkflowId?.let { id ->
+            database.read { unit ->
+              val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id) ?: return@read null
+              val step = workflow.steps.firstOrNull { it.stepId == blockedStepId } ?: return@read null
+              val observation = unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(id) ?: return@read null
+              observation.takeIf {
+                workflow.currentStepId == blockedStepId && workflow.workflowStatus == WorkflowStatus.BLOCKED &&
+                  step.status == WorkflowStepStatus.BLOCKED && step.attemptCount == observation.phaseAttempt &&
+                  observation.phaseId == blockedStepId
+              }
+            }
+          }
         BlockIncidentObservation(
           workflowId = blockedWorkflowId,
           phaseId = blockedStepId,
@@ -168,7 +184,8 @@ class StandalonePhaseStatusEventSink(
           reason = reason,
           alias = BlockIncidentAliases.standalonePhase(invocationId, blockedStepId),
           linkAcceptedFeatureTaskPhase = blockedWorkflowId != null,
-          generation = null,
+          attempt = workerCoordinates?.phaseAttempt,
+          generation = workerCoordinates?.generation,
           origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
           exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
           monitorSelector = monitorSelector?.takeIf { it.isNotBlank() && it.length <= MAX_MONITOR_SELECTOR_CHARS },
@@ -180,7 +197,12 @@ class StandalonePhaseStatusEventSink(
           unavailableFields =
             mapOf(
               BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-              BlockIncidentCorrelatedField.ATTEMPT to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+              BlockIncidentCorrelatedField.ATTEMPT to
+                if (workerCoordinates == null) {
+                  BlockIncidentFieldAvailability.NOT_CAPTURED
+                } else {
+                  BlockIncidentFieldAvailability.AVAILABLE
+                },
             ),
         )
       }.onFailure { error ->

@@ -1,0 +1,136 @@
+package skillbill.engine.diagnostics.block.recovery
+
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.process.IdentifierGeneratorPort
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecovery
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryFailure
+import java.time.Clock
+import java.time.Duration
+
+/**
+ * Owns the APPLIED to RESUMING to RESUMED or FAILED half of a recovery attempt. Only the caller that wins the
+ * APPLIED to RESUMING compare-and-set may launch the resumed run, so a repeated or concurrent resume never
+ * launches twice.
+ */
+internal class BlockIncidentRecoveryResume(
+  private val database: DatabaseSessionFactory,
+  private val clock: Clock,
+  private val identifiers: IdentifierGeneratorPort,
+  private val diagnostics: RuntimeDiagnostics,
+) {
+  /**
+   * Moves the APPLIED attempt with [idempotencyKey] to RESUMING under a fresh owner token and a [RESUME_LEASE].
+   * Any other status, a missing attempt, or a lost compare-and-set returns [BlockIncidentRecoveryResumeClaim.NotClaimed].
+   */
+  fun claim(
+    observation: DatabaseFileObservation,
+    idempotencyKey: String,
+  ): BlockIncidentRecoveryResumeClaim {
+    val result = database.transactionFenced(observation) { unit ->
+      val applied = unit.blockIncidentRecoveries.byIdempotencyKey(idempotencyKey)
+        ?: return@transactionFenced BlockIncidentRecoveryResumeClaim.NotClaimed(null)
+      if (applied.status != BlockIncidentRecoveryAttemptStatus.APPLIED) {
+        return@transactionFenced BlockIncidentRecoveryResumeClaim.NotClaimed(applied)
+      }
+      val now = clock.instant()
+      val ownerToken = identifiers.randomToken()
+      if (!unit.blockIncidentRecoveries.transition(
+          applied.attemptId,
+          BlockIncidentRecoveryAttemptStatus.APPLIED,
+          BlockIncidentRecoveryAttemptStatus.RESUMING,
+          null,
+          ownerToken,
+          applied.ownerGeneration,
+          now.plus(RESUME_LEASE),
+          now,
+        )
+      ) {
+        return@transactionFenced BlockIncidentRecoveryResumeClaim.NotClaimed(
+          unit.blockIncidentRecoveries.byIdempotencyKey(idempotencyKey),
+        )
+      }
+      val resuming = unit.blockIncidentRecoveries.byIdempotencyKey(idempotencyKey)
+        ?.takeIf { it.status == BlockIncidentRecoveryAttemptStatus.RESUMING && it.ownerToken == ownerToken }
+        ?: error("Claimed recovery attempt '${applied.attemptId}' was not readable after RESUMING.")
+      BlockIncidentRecoveryResumeClaim.Claimed(resuming)
+    }
+    return when (result) {
+      FencedTransactionResult.ChangedTarget -> BlockIncidentRecoveryResumeClaim.ChangedDatabaseFile
+      is FencedTransactionResult.Committed -> result.value
+    }
+  }
+
+  /**
+   * Settles a claimed resume. A launched run moves the attempt to RESUMED and the incident outcome to COMPLETE;
+   * a launch that did not happen moves it to FAILED with RESUME_FAILED and the outcome to FAILED. When the claim
+   * lost ownership meanwhile, for example to interrupted reconciliation, the stored row is returned unchanged.
+   */
+  fun settle(
+    observation: DatabaseFileObservation,
+    claim: BlockIncidentRecoveryResumeClaim.Claimed,
+    launched: Boolean,
+  ): BlockIncidentRecoveryResult {
+    val resuming = claim.attempt
+    val result = database.transactionFenced(observation) { unit ->
+      val now = clock.instant()
+      val next = if (launched) BlockIncidentRecoveryAttemptStatus.RESUMED else BlockIncidentRecoveryAttemptStatus.FAILED
+      val incident = unit.blockIncidents.find(resuming.occurrenceToken)
+      val moved = unit.blockIncidentRecoveries.transition(
+        resuming.attemptId,
+        BlockIncidentRecoveryAttemptStatus.RESUMING,
+        next,
+        if (launched) null else BlockIncidentRecoveryFailure.RESUME_FAILED,
+        resuming.ownerToken,
+        resuming.ownerGeneration,
+        null,
+        now,
+      )
+      val stored = unit.blockIncidentRecoveries.byIdempotencyKey(resuming.idempotencyKey)
+        ?: error("Resuming recovery attempt '${resuming.attemptId}' disappeared.")
+      if (!moved) return@transactionFenced BlockIncidentRecoveryResult.Existing(stored)
+      if (incident != null) {
+        recordBlockIncidentRecoveryOutcome(
+          unit,
+          incident,
+          if (launched) BlockIncidentRecovery.COMPLETE else BlockIncidentRecovery.FAILED,
+        )
+      }
+      if (launched) {
+        BlockIncidentRecoveryResult.Resumed(stored)
+      } else {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Block incident recovery attempt '${resuming.attemptId}' failed with " +
+            "${BlockIncidentRecoveryFailure.RESUME_FAILED.wireValue} for occurrence '${resuming.occurrenceToken}'.",
+        )
+        BlockIncidentRecoveryResult.Failed(stored)
+      }
+    }
+    return when (result) {
+      FencedTransactionResult.ChangedTarget ->
+        BlockIncidentRecoveryResult.Refused(BlockIncidentRecoveryRefusal.CHANGED_DATABASE_FILE)
+      is FencedTransactionResult.Committed -> result.value
+    }
+  }
+
+  private companion object {
+    val RESUME_LEASE: Duration = Duration.ofMinutes(5)
+  }
+}
+
+internal sealed interface BlockIncidentRecoveryResumeClaim {
+  /** This caller owns RESUMING and is the only one allowed to launch the resumed run. */
+  data class Claimed(val attempt: BlockIncidentRecoveryAttempt) : BlockIncidentRecoveryResumeClaim
+
+  /** The attempt was missing, not APPLIED, or claimed by someone else; never launch. */
+  data class NotClaimed(val attempt: BlockIncidentRecoveryAttempt?) : BlockIncidentRecoveryResumeClaim
+
+  /** The database file changed since the caller observed it; nothing was written. */
+  data object ChangedDatabaseFile : BlockIncidentRecoveryResumeClaim
+}

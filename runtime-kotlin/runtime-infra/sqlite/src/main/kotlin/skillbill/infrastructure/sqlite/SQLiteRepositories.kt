@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRepository
+import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentRecoveryRepository
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.goal.UnaddressedFindingsRuntime
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalStore
@@ -32,6 +33,7 @@ import skillbill.learnings.model.RejectedLearningSourceOutcome
 import skillbill.learnings.model.UpdateLearningRequest
 import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.blockincident.BlockIncidentRepository
+import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -92,6 +94,8 @@ internal class SQLiteUnitOfWork(
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
   override val blockIncidents: BlockIncidentRepository =
     SqliteBlockIncidentRepository(connection, clock, blockIncidentContractValidator, diagnostics)
+  override val blockIncidentRecoveries: BlockIncidentRecoveryRepository =
+    SqliteBlockIncidentRecoveryRepository(connection)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)
   override val lifecycleTelemetry: LifecycleTelemetryRepository =

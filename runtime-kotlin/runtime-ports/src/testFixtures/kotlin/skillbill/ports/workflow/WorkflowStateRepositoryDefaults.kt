@@ -169,6 +169,10 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
 
   open override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? = null
 
+  open override fun getLatestFeatureTaskRuntimeWorkerGeneration(
+    workflowId: String,
+  ): FeatureTaskRuntimeWorkerGenerationObservation? = null
+
   open override fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     expectedUpdatedAt: String?,

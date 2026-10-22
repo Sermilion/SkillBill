@@ -6,6 +6,8 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 interface FeatureTaskRuntimeWorkerRepository {
   fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership?
 
+  fun getLatestFeatureTaskRuntimeWorkerGeneration(workflowId: String): FeatureTaskRuntimeWorkerGenerationObservation?
+
   fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     expectedUpdatedAt: String?,
@@ -71,3 +73,11 @@ interface FeatureTaskRuntimeWorkerRepository {
     nowInstant: String,
   ): Boolean
 }
+
+data class FeatureTaskRuntimeWorkerGenerationObservation(
+  val workflowId: String,
+  val generation: Long,
+  val phaseId: String,
+  val phaseAttempt: Int,
+  val admittedAt: String,
+)

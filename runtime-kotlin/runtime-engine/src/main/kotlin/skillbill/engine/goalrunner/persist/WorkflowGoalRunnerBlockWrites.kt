@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.persist
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
@@ -52,15 +53,21 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phaseartifacts.asPendingForOperatorResume
 import java.time.Clock
 import java.time.ZoneOffset
 
+@Inject
 internal class WorkflowGoalRunnerBlockWrites(
   private val engine: WorkflowEngine,
   private val clock: Clock,
@@ -365,6 +372,39 @@ internal class WorkflowGoalRunnerBlockWrites(
     reason: String,
     expectedIdentity: FeatureTaskExecutionIdentity,
     expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+    recoveryAttemptId: String? = null,
+    admittedRecoveryAttempt: BlockIncidentRecoveryAttempt? = null,
+    admittedTargetWorkflowId: String? = null,
+  ): Boolean {
+    if (recoveryAttemptId != null && (reason.isBlank() || reason.length > MAX_RECOVERY_REASON_CHARS ||
+        recoveryAttemptId.isBlank() || admittedRecoveryAttempt?.attemptId != recoveryAttemptId ||
+        admittedTargetWorkflowId.isNullOrBlank())
+    ) {
+      return false
+    }
+    return reopenBlockedPhase(
+      unitOfWork,
+      preferredPhaseId,
+      reason,
+      expectedIdentity,
+      expectedExecutionPlan,
+      preserveAttempts = recoveryAttemptId != null,
+      recoveryAttemptId = recoveryAttemptId,
+      admittedRecoveryAttempt = admittedRecoveryAttempt,
+      admittedTargetWorkflowId = admittedTargetWorkflowId,
+    )
+  }
+
+  private fun reopenBlockedPhase(
+    unitOfWork: UnitOfWork,
+    preferredPhaseId: String,
+    reason: String,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+    preserveAttempts: Boolean,
+    recoveryAttemptId: String?,
+    admittedRecoveryAttempt: BlockIncidentRecoveryAttempt?,
+    admittedTargetWorkflowId: String?,
   ): Boolean {
     val workflowId = expectedIdentity.workflowId
     val family = WorkflowFamily.TASK_RUNTIME
@@ -377,6 +417,19 @@ internal class WorkflowGoalRunnerBlockWrites(
       identity.routeScope != FeatureTaskRouteScope.GOAL_CHILD
     ) {
       incompatiblePlan()
+    }
+    if (preserveAttempts) {
+      val admitted = admittedRecoveryAttempt ?: return false
+      if (unitOfWork.blockIncidentRecoveries.byIdempotencyKey(admitted.idempotencyKey) != admitted ||
+        admitted.status != BlockIncidentRecoveryAttemptStatus.APPLYING ||
+        admitted.ownerToken.isNullOrBlank() || admitted.ownerGeneration == null ||
+        admitted.ownerExpiresAt?.isAfter(clock.instant()) != true ||
+        admitted.targetWorkflowId != admittedTargetWorkflowId || admitted.targetInvocationId != null ||
+        admitted.attemptId != recoveryAttemptId ||
+        admitted.occurrenceToken != BlockIncidentIdentity.fromArtifacts(existing.artifacts)?.incidentToken
+      ) {
+        return false
+      }
     }
     val storedPlan =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(existing.artifacts)
@@ -392,14 +445,28 @@ internal class WorkflowGoalRunnerBlockWrites(
     }
     val artifacts = existing.artifacts
     val phaseRecords = phaseRecordsFromWorkflowArtifacts(artifacts)
-    val repairBudgetPatch = repairBudgetResetPatch(artifacts)
-    val blockedRecord =
-      operatorReopenablePhaseRecord(
-        phaseRecords,
-        preferredPhaseId,
-        existing.workflowStatus,
-      ) ?: phaseRecords[preferredPhaseId]?.takeIf { repairBudgetPatch.isNotEmpty() }
+    val repairBudgetPatch = if (preserveAttempts) emptyMap() else repairBudgetResetPatch(artifacts)
+    if (preserveAttempts &&
+      (existing.workflowStatus != WorkflowStatus.BLOCKED || existing.currentStepId != preferredPhaseId)
+    ) {
+      return false
+    }
+    val blockedRecord = if (preserveAttempts) {
+      phaseRecords[preferredPhaseId]?.takeIf { it.status == WorkflowStepStatus.BLOCKED } ?: return false
+    } else {
+      // Operator resume stays idempotent: nothing left to reopen is success, as before incident recovery.
+      operatorReopenablePhaseRecord(phaseRecords, preferredPhaseId, existing.workflowStatus)
+        ?: phaseRecords[preferredPhaseId]?.takeIf { repairBudgetPatch.isNotEmpty() }
         ?: return true
+    }
+    if (preserveAttempts) {
+      val blockedStep = existing.steps.firstOrNull { it.stepId == preferredPhaseId } ?: return false
+      if (blockedStep.status != WorkflowStepStatus.BLOCKED ||
+        blockedStep.attemptCount != blockedRecord.attemptCount
+      ) {
+        return false
+      }
+    }
     unitOfWork.workflowStates.save(
       family,
       engine.updateRecord(
@@ -411,6 +478,8 @@ internal class WorkflowGoalRunnerBlockWrites(
           phaseRecords,
           reason,
           repairBudgetPatch,
+          preserveAttempts,
+          recoveryAttemptId,
         ),
       ),
     )
@@ -446,6 +515,8 @@ internal class WorkflowGoalRunnerBlockWrites(
     phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
     reason: String,
     repairBudgetPatch: Map<String, Any?>,
+    preserveAttempts: Boolean,
+    recoveryAttemptId: String?,
   ): WorkflowUpdateInput {
     val artifacts = record.artifacts
     val ledger = phaseLedgerFromWorkflowArtifacts(artifacts)
@@ -456,11 +527,13 @@ internal class WorkflowGoalRunnerBlockWrites(
     val retryEntry =
       FeatureTaskRuntimePhaseLedgerEntry(
         action = FeatureTaskRuntimePhaseLedgerAction.RETRY,
-        sequenceNumber = (ledger.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
+        sequenceNumber = Math.addExact(ledger.maxOfOrNull { it.sequenceNumber } ?: -1, 1),
         timestamp = clock.instant().atOffset(ZoneOffset.UTC).toString(),
         phaseId = blockedRecord.phaseId,
         attemptCount = blockedRecord.attemptCount,
         resolvedAgentId = blockedRecord.resolvedAgentId,
+        recoveryAttemptId = recoveryAttemptId,
+        preserveBudget = preserveAttempts && recoveryAttemptId != null,
       )
     return WorkflowUpdateInput(
       workflowStatus = WorkflowStatus.RUNNING,
@@ -470,8 +543,12 @@ internal class WorkflowGoalRunnerBlockWrites(
           listOf(
             mapOf(
               SharedPayloadKeys.STEP_ID to blockedRecord.phaseId,
-              SharedPayloadKeys.STATUS to "pending",
-              "attempt_count" to 0,
+              SharedPayloadKeys.STATUS to WorkflowStepStatus.PENDING.wireValue,
+              FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT to if (preserveAttempts) {
+                record.steps.firstOrNull { it.stepId == blockedRecord.phaseId }?.attemptCount ?: blockedRecord.attemptCount
+              } else {
+                0
+              },
             ),
           ),
         ),
@@ -483,20 +560,24 @@ internal class WorkflowGoalRunnerBlockWrites(
               reopened.mapValues { (_, record) -> record.asWorkflowArtifactEntry() },
             ),
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(
-              (ledger.map { it.asWorkflowArtifactEntry() } + retryEntry.asWorkflowArtifactEntry()).takeLast(
-                FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
-              ),
+              retainPhaseLedgerEvidence(ledger + retryEntry, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+                .map { it.asWorkflowArtifactEntry() },
             ),
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY.entry(
-              mapOf(
-                SharedPayloadKeys.PHASE_ID to blockedRecord.phaseId,
-                OperatorBlockRetryArtifactKeys.REASON to reason,
-                OperatorBlockRetryArtifactKeys.RETRIED_AT to clock.instant().atOffset(ZoneOffset.UTC).toString(),
-                OperatorBlockRetryArtifactKeys.PREVIOUS_BLOCKED_REASON to (
-                  blockedRecord.blockedReason ?: artifacts[DecompositionManifestPayloadKeys.BLOCKED_REASON]?.toString()
-                ),
-                OperatorBlockRetryArtifactKeys.PREVIOUS_BLOCKED_RECORD to blockedRecord.asWorkflowArtifactEntry(),
-              ),
+              buildMap {
+                put(SharedPayloadKeys.PHASE_ID, blockedRecord.phaseId)
+                put(OperatorBlockRetryArtifactKeys.REASON, reason)
+                put(OperatorBlockRetryArtifactKeys.RETRIED_AT, clock.instant().atOffset(ZoneOffset.UTC).toString())
+                put(
+                  OperatorBlockRetryArtifactKeys.PREVIOUS_BLOCKED_REASON,
+                  blockedRecord.blockedReason ?: artifacts[DecompositionManifestPayloadKeys.BLOCKED_REASON]?.toString(),
+                )
+                put(OperatorBlockRetryArtifactKeys.PREVIOUS_BLOCKED_RECORD, blockedRecord.asWorkflowArtifactEntry())
+                recoveryAttemptId?.let {
+                  put(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RECOVERY_ATTEMPT_ID_KEY, it)
+                  put(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PRESERVE_BUDGET_KEY, true)
+                }
+              },
             ),
           ) + repairBudgetPatch +
             WorkflowGoalRunnerAcceptedBlockOutcomeBinding.patch(record, BlockIncidentIdentity.fromArtifacts(artifacts)),
@@ -506,6 +587,7 @@ internal class WorkflowGoalRunnerBlockWrites(
   }
 
   private companion object {
+    const val MAX_RECOVERY_REASON_CHARS = 256
     val GOAL_NOT_APPLICABLE_FIELDS =
       listOf(
         BlockIncidentCorrelatedField.INVOCATION_ID,

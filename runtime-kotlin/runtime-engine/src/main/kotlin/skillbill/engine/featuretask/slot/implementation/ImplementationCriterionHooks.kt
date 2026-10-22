@@ -218,6 +218,7 @@ internal object ImplementationCriterionHooks : PhaseStepHooks {
       session.operatorBlockRetry
         ?.takeIf { it.phaseId == turn.run.phaseId && !session.operatorBlockRetryCompleted }
         ?: return null
+    if (retry.preserveBudget) return null
     return retry.retriedAt.trim().replace(WHITESPACE, "_").takeIf(String::isNotEmpty)?.takeUnless { identity ->
       turn.ledger.records.any {
         it.marker.role == FeatureTaskRuntimeImplementationTurnRole.REOPEN && it.marker.retryIdentity == identity

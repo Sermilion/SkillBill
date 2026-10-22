@@ -99,6 +99,7 @@ object PhaseAttemptContinuations {
               normalizedOutput = attempt.incompleteWorkOutput,
             ),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+          failureCode = FeatureTaskRuntimeAttemptBudgets.ATTEMPT_BUDGET_FAILURE_CODE,
         ),
       )
     }
@@ -171,6 +172,7 @@ object PhaseAttemptContinuations {
             observability = context.observability,
             payload = BlockAndPersistPayload(fileManifest = owed.fileManifest),
             failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+            failureCode = FeatureTaskRuntimeAttemptBudgets.ATTEMPT_BUDGET_FAILURE_CODE,
           ),
         )
       }
@@ -220,6 +222,7 @@ object PhaseAttemptContinuations {
             BlockAndPersistPayload(fileManifest = terminal.fileManifest, normalizedOutput = terminal.normalizedOutput),
           failureDisposition =
             if (reportPersisted) terminal.failureDisposition else FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+          failureCode = FeatureTaskRuntimeAttemptBudgets.ATTEMPT_BUDGET_FAILURE_CODE.takeIf { reportPersisted },
         ),
       )
     }

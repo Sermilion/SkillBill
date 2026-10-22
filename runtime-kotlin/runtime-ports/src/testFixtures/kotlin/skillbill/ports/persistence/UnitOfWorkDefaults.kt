@@ -1,6 +1,8 @@
 package skillbill.ports.persistence
 
 import skillbill.ports.blockincident.BlockIncidentRepository
+import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
+import skillbill.ports.blockincident.InMemoryBlockIncidentRecoveryRepository
 import skillbill.ports.blockincident.InMemoryBlockIncidentRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
@@ -80,6 +82,11 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 
       override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
         StandalonePhaseStatusUpdateResult.MISSING
+
+      override fun releaseExpiredLease(
+        record: StandalonePhaseStatusRecord,
+        at: Instant,
+      ): StandalonePhaseStatusUpdateResult = StandalonePhaseStatusUpdateResult.MISSING
     }
   open override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =
     UnavailableRejectedOutputDiagnosticRepository
@@ -90,6 +97,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository()
   open override val operationProposals: OperationProposalRepository = UnavailableOperationProposalRepository
   open override val blockIncidents: BlockIncidentRepository = InMemoryBlockIncidentRepository()
+  open override val blockIncidentRecoveries: BlockIncidentRecoveryRepository = InMemoryBlockIncidentRecoveryRepository()
 
   override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
 

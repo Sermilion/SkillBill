@@ -320,6 +320,7 @@ object FeatureTaskRuntimeRunStateReconstruction {
   ) {
     initialLedger
       .filter { it.action == FeatureTaskRuntimePhaseLedgerAction.RETRY }
+      .filterNot { it.preserveBudget }
       .groupBy { it.phaseId }
       .forEach { (phaseId, retries) ->
         val latestRetry = retries.maxBy { it.sequenceNumber }

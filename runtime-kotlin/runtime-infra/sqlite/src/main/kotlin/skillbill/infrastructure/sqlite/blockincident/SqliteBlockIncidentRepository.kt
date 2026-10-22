@@ -38,6 +38,7 @@ internal class SqliteBlockIncidentRepository(
 ) : BlockIncidentRepository {
   private val rolloutQueries = SqliteBlockIncidentRolloutQueries(connection)
   private val diagnosisStore = SqliteBlockIncidentDiagnosisStore(connection, clock, diagnostics)
+  private val stateWrites = SqliteBlockIncidentStateWrites(connection)
 
   override fun rolloutActivatedAt(): Instant? = rolloutQueries.activatedAt()
 
@@ -650,6 +651,12 @@ internal class SqliteBlockIncidentRepository(
       }
     }
   }
+
+  override fun recordRecoveryOutcome(
+    occurrenceToken: String,
+    expectedRevision: Long,
+    recovery: BlockIncidentRecovery,
+  ): Boolean = stateWrites.recordRecoveryOutcome(occurrenceToken, expectedRevision, recovery)
 
   private fun persistAlias(
     alias: BlockIncidentAlias,

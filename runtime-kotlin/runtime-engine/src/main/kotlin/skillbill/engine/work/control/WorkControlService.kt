@@ -9,12 +9,14 @@ import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
+import skillbill.engine.work.control.model.WorkRecoveryPreviewResult
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
 import java.nio.file.Path
 
 @Inject
@@ -24,6 +26,7 @@ class WorkControlService(
   private val controls: GoalRunnerStatusService,
   private val cancellation: WorkCancellation,
   private val runs: WorkRunActions,
+  private val recovery: WorkControlRecovery,
 ) {
   fun options(target: WorkRunTarget): WorkRunOptions? =
     database.read { unit ->
@@ -38,11 +41,25 @@ class WorkControlService(
     when (action) {
       WorkControlAction.CANCEL -> cancellation.cancel(target)
       WorkControlAction.LAUNCH -> runs.launch(target, agentId)
-      WorkControlAction.PAUSE, WorkControlAction.STOP ->
+      WorkControlAction.PAUSE, WorkControlAction.STOP, WorkControlAction.RECOVER ->
         WorkControlResult.Rejected(
           WorkControlRejection.INELIGIBLE_TARGET,
         )
     }
+
+  fun recoveryPreview(
+    target: WorkRunTarget,
+    incidentToken: String,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind> = emptySet(),
+  ): WorkRecoveryPreviewResult = recovery.preview(target, incidentToken, confirmedPrerequisites)
+
+  fun recover(
+    target: WorkRunTarget,
+    incidentToken: String,
+    incidentRevision: Long,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+    agentId: String? = null,
+  ): WorkControlResult = recovery.recover(target, incidentToken, incidentRevision, confirmedPrerequisites, agentId)
 
   fun request(
     target: WorkControlTarget,

@@ -2,6 +2,8 @@ package skillbill.engine.work.control.model
 
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.work.model.WorkStoreObservation
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryFailure
 import java.nio.file.Path
 import java.time.Instant
 
@@ -21,7 +23,7 @@ data class WorkControlTarget(
   val databaseFileObservation: DatabaseFileObservation? = null,
 )
 
-enum class WorkControlAction { PAUSE, STOP, CANCEL, LAUNCH }
+enum class WorkControlAction { PAUSE, STOP, CANCEL, LAUNCH, RECOVER }
 
 enum class WorkControlRejection {
   UNKNOWN_TARGET,
@@ -37,6 +39,10 @@ enum class WorkControlRejection {
   AGENT_REQUIRED,
   BRANCH_CHANGED,
   BRANCH_UNAVAILABLE,
+  STALE_INCIDENT,
+  RECOVERY_UNAVAILABLE,
+  PREREQUISITE_UNMET,
+  RECOVERY_IN_PROGRESS,
 }
 
 sealed interface WorkControlResult {
@@ -57,5 +63,17 @@ sealed interface WorkControlResult {
 
   data class LaunchFailed(val reason: String) : WorkControlResult
 
-  data class Rejected(val reason: WorkControlRejection) : WorkControlResult
+  /** [detail] carries the typed recovery reason behind RECOVERY_UNAVAILABLE and PREREQUISITE_UNMET. */
+  data class Rejected(val reason: WorkControlRejection, val detail: String? = null) : WorkControlResult
+
+  /**
+   * A block incident recovery attempt reached [status]. [launch] is the resumed run's launch result, null when the
+   * attempt failed or settled before this request could resume it.
+   */
+  data class Recovered(
+    val attemptId: String,
+    val status: BlockIncidentRecoveryAttemptStatus,
+    val failure: BlockIncidentRecoveryFailure?,
+    val launch: WorkControlResult?,
+  ) : WorkControlResult
 }

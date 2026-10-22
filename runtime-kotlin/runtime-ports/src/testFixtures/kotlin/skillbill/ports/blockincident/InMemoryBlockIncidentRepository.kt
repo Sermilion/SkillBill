@@ -246,4 +246,17 @@ class InMemoryBlockIncidentRepository(private val clock: Clock = Clock.systemUTC
   private companion object {
     const val OBSERVATION_SKEW_SECONDS = 300L
   }
+
+  override fun recordRecoveryOutcome(
+    occurrenceToken: String,
+    expectedRevision: Long,
+    recovery: BlockIncidentRecovery,
+  ): Boolean =
+    synchronized(this) {
+      val current = incidents[occurrenceToken] ?: return false
+      if (current.state.revision != expectedRevision) return false
+      incidents[occurrenceToken] =
+        current.copy(state = current.state.copy(recovery = recovery, revision = expectedRevision + 1))
+      true
+    }
 }

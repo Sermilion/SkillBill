@@ -39,10 +39,11 @@ class WorkTopLevelCommands(
   status: WorkStatusCommand,
   board: WorkBoardCommand,
   detail: WorkDetailCommand,
+  recover: WorkRecoverCommand,
 ) {
   val command: DocumentedNoOpCliCommand =
     object : DocumentedNoOpCliCommand("work", "Inspect all persisted feature work.") {}
-      .subcommands(list, status, board, detail)
+      .subcommands(list, status, board, detail, recover)
 }
 
 @Inject

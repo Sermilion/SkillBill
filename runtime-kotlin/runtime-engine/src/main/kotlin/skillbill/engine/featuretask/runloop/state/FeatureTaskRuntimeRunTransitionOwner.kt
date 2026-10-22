@@ -288,8 +288,9 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
   fun beginPhaseAttemptLaunchAfterRequiredStart(
     phaseId: String,
     operatorReopened: Boolean,
+    preserveAttemptBudget: Boolean = false,
   ) {
-    if (operatorReopened) {
+    if (operatorReopened && !preserveAttemptBudget) {
       progress.restartAttemptBudget(phaseId)
     }
     progress.recordPhaseLaunched(phaseId)

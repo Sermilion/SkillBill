@@ -99,6 +99,7 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
       WorkControlResult.ExitConfirmed -> ControlResult.ExitConfirmed
       WorkControlResult.TerminationAttempted -> ControlResult.TerminationAttempted
       is WorkControlResult.LaunchFailed -> ControlResult.LaunchFailed(result.reason)
+      is WorkControlResult.Recovered -> ControlResult.Accepted
       is WorkControlResult.Rejected -> ControlResult.Rejected(result.reason.name.lowercase(), result.reason.toRefusal())
     }
   }
