@@ -29,7 +29,15 @@ internal object AuditImplementFixPromptSections {
       "and failure handling. A check in an earlier transaction does not protect a later mutation. Reconcile " +
       "already-applied edits and preserve completed work and governed contracts. Before reporting completion, " +
       "trace each supplied finding from its actual consumer through every reachable helper to the named " +
-      "operation, and finish any remaining in-scope repair. Renaming a getter, introducing a forwarding " +
+      "operation, and finish any remaining in-scope repair. Then do a separate read-only source closure " +
+      "pass against the authored invariant and retained failed-repair counterexamples. Trace the changed " +
+      "readers and writers through first execution, repeated execution, replay or resume after state " +
+      "advances, a new attempt or generation, and failure. Check each applicable sequence's expected " +
+      "state and identity against the final source, including lookups, equality checks, copied references " +
+      "and transaction boundaries. Explain inapplicable sequences. Resolve contradictory meanings " +
+      "across paths before claiming completion; another local guard does not close an inconsistent " +
+      "state model. Include the concrete counterexample and final consumer-to-writer source evidence " +
+      "in the closure report. Renaming a getter, introducing a forwarding " +
       "interface, or moving mutable authority behind a recoverable cast does not close an access finding. " +
       "Do not defer " +
       "known missing behavior to the next audit or validation. Do not spawn subagents or perform another " +
@@ -70,7 +78,7 @@ internal object AuditImplementFixPromptSections {
               "\n\nThe runtime did not provide a selected authored criterion. " +
                 "Do not edit; report the missing runtime context."
             )
-          ),
+          ) + inputs.priorAcceptanceRepairFailures?.let { "\n\n$it" }.orEmpty(),
       authoringDiscipline = projectAuthoringDisciplineDirective(),
       continuation = continuation(inputs),
       valueContent =

@@ -426,6 +426,8 @@ object PhaseLaunchPreparation {
             .output?.normalizedOutput?.envelopeWireMap(),
         ),
       currentAcceptanceCriterion = acceptanceCriterionContext(run),
+      priorAcceptanceRepairFailures =
+        (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.priorRepairFailures,
       noChangeClaim = auditNoChangeClaim(run),
       operatorBlockRetry =
         session.operatorBlockRetry

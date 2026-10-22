@@ -99,9 +99,10 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
             stepUpdates = null,
             artifactsPatch = WorkflowArtifactPatch.from(mapOf(bundleEntry)),
             sessionId = record.sessionId.orEmpty(),
+            acceptedSnapshotMutation = true,
           ),
         )
-      unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+      unitOfWork.workflowStates.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, updated)
     }
     return PlannedDetailsDiscard(
       bundlePresent = true,

@@ -144,3 +144,10 @@ Reason: Runs should warn and continue rather than block. The pushed commit goes 
 Context: 0AC-68 status applied an older completed child from another worktree to a live validation child because outcome discovery grouped by issue key and subtask ID across parent goals.
 Decision: Outcome reads and reconciliation require the parent workflow ID. SQLite filters by that parent before pagination and workflow decoding. Stale-outcome cleanup and measured completion writes use the same scope. Completion preference among children of the same parent remains intact.
 Reason: Issue keys and subtask IDs repeat across worktrees and restarted goals. The parent workflow identifies the goal that owns those children.
+## [2026-10-22] Persist scoped replan as an accepted snapshot mutation
+
+Context: Scoped replan discarded selected planning details through an ordinary update of the completed plan workflow. Both the engine and SQLite reject changes to terminal snapshots through that path, so an authorized replan failed before it could retire the stale child.
+
+Decision: Mark the selected bundle update as an accepted snapshot mutation and persist it through the existing named save. Keep the plan workflow's terminal status, finished time, steps and sibling planning details unchanged. The existing scoped-replan coordinator continues to enforce target selection and idle ownership before this transaction.
+
+Reason: Operator replan is an explicit mutation of retained planning, not an ordinary terminal replay. Reuse the existing operator mutation contract without changing terminal replay guards or giving ordinary saves permission to overwrite accepted history. A SQLite regression verifies both the authorized update and rejection of an ordinary terminal rewrite.

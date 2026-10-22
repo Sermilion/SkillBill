@@ -96,7 +96,7 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
     return when (stepId) {
       entryStep -> AcceptanceAuditPromptSections.sections(inputs)
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX ->
-        AuditPlanFixPromptSections.sections(inputs.currentAcceptanceCriterion)
+        AuditPlanFixPromptSections.sections(inputs.currentAcceptanceCriterion, inputs.priorAcceptanceRepairFailures)
       else -> AuditImplementFixPromptSections.sections(inputs)
     }
   }

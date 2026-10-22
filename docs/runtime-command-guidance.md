@@ -291,6 +291,11 @@ records and commits. The existing scoped-replan liveness and digest checks still
 refuse unsafe changes. Missing specs and invalid planning records stay with their
 existing recovery paths.
 
+Explicit scoped replan updates the selected unit of a completed plan through the
+accepted snapshot mutation path. It preserves the plan's terminal status, finish
+time, steps and sibling plans. Ordinary terminal saves still reject changed
+snapshots.
+
 ## Acceptance-audit repair planning
 
 The initial `audit` reads every authored acceptance criterion. It records findings
@@ -327,6 +332,18 @@ Only `no_progress` consumes an unsuccessful outcome; `progress` continues the
 reserved cycle with its saved plan and existing failure count. An ordinary state
 reload does not reset the budget. A successful outcome closes source work for it
 without erasing earlier failures.
+
+Planning and repair receive the selected criterion's latest three unsuccessful
+outcomes from durable accounting, including outcomes retained across operator
+resume. The prompt states how many outcomes it includes and how many exist.
+Earlier rejections are counterexamples to check against current source, not proof
+that a repaired gap remains open or permission to reopen another criterion.
+Planning identifies the required invariant, its owner, and the authoritative
+source for each fact before choosing edits. It traces applicable first execution,
+repeated execution, replay after state advances, new attempts, and failure through
+the affected readers and writers. Before claiming completion, repair performs a
+separate read-only source closure pass against that invariant and the retained
+counterexamples. Independent source verification still decides acceptance.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted
