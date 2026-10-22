@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.slot.audit
+package skillbill.engine.featuretask.slot.state
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
@@ -14,7 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
-class AcceptanceAuditHistoryTest {
+class PhaseHistoricalInterpreterTest {
   @Test
   fun `audit repair counters follow the current criterion across retries and advancement`() {
     val criteria =
@@ -48,8 +48,7 @@ class AcceptanceAuditHistoryTest {
       listOf("audit", "audit_plan_fix", "audit_implement_fix").forEach { phase ->
         val execution =
           assertNotNull(
-            auditCurrentExecution(
-              phase,
+            PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1).currentExecution(
               FeatureTaskRuntimeCurrentPhaseExecutionContext(
                 phase,
                 emptyMap(),
