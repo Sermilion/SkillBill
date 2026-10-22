@@ -344,6 +344,10 @@ repeated execution, replay after state advances, new attempts, and failure throu
 the affected readers and writers. Before claiming completion, repair performs a
 separate read-only source closure pass against that invariant and the retained
 counterexamples. Independent source verification still decides acceptance.
+Planning and repair explain how they avoid still-applicable rejected approaches.
+A reconstructed value or warning cannot substitute for an original artifact the
+criterion requires; unavailable historical data is an explicit constraint rather
+than evidence to invent.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted

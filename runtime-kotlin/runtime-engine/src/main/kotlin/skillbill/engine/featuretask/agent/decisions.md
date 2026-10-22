@@ -1,3 +1,17 @@
+## [2026-10-22] Reject fabricated evidence in acceptance repair plans
+
+Context: SKILL-438 repeatedly synthesized legacy QA finding text after source
+audits rejected it for failing to preserve the original section verbatim.
+
+Decision: Planning and repair use the existing criterion-local failure context
+and explicitly explain how their next approach resolves earlier rejections.
+They name unavailable historical data rather than fabricating a replacement
+for an original artifact required by the criterion. Current source remains the
+authority, and independent audit still decides acceptance.
+
+Reason: Retaining failure history helps only when the proposed repair addresses
+why the previous approach was rejected.
+
 ## [2026-10-22] Retain rejected repair evidence in later repair prompts
 
 Context: Durable accounting retained failed repairs, but planning and repair prompts included only the latest gap. A later rejection displaced earlier counterexamples, so agents could propose local fixes without checking whether the paths still agreed after replay or state advancement.

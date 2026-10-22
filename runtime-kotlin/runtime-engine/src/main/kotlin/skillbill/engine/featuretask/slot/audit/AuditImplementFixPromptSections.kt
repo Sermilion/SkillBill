@@ -10,7 +10,12 @@ internal object AuditImplementFixPromptSections {
     "Execute the persisted audit_plan_fix repair plan in its declared order. The supplied upstream output " +
       "contains that plan and the latest audit findings. Reconcile each planned item against the current " +
       "tree before editing, preserve work already completed, and implement its proposed production changes. " +
-      "Report closure evidence for every plan item and explain any source-backed adjustment. Do not " +
+      "Compare the plan with the retained rejection evidence before editing. Do not recreate an approach " +
+      "a prior audit rejected unless current source evidence resolves the reason for rejection. If the " +
+      "saved plan repeats that defect, adjust it within this criterion and explain the correction. " +
+      "Do not invent unavailable historical data or substitute reconstructed evidence for an original " +
+      "the criterion requires. Report closure evidence for every plan item and explain any " +
+      "source-backed adjustment. Do not " +
       "replace the repair plan with the original feature plan or silently omit a planned gap. " +
       "Repair every independent production gap for the runtime-selected authored criterion " +
       "reported by the latest audit in the supplied upstream output. " +

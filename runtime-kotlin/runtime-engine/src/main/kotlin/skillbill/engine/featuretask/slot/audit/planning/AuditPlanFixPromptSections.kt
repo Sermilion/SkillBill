@@ -6,7 +6,14 @@ internal object AuditPlanFixPromptSections {
   const val DIRECTIVE: String =
     "Plan how to repair every independent production gap in the runtime-selected authored criterion " +
       "from the latest persisted audit. Inspect the current source " +
-      "and original feature plan before proposing changes. Do not edit files, spawn subagents, compile, " +
+      "and original feature plan before proposing changes. Compare the latest gap with the retained " +
+      "unsuccessful repair evidence. Identify why earlier approaches failed and explain what changes in " +
+      "this plan; do not repeat a rejected approach without source evidence that resolves its rejection. " +
+      "Check that each proposed change satisfies the authored requirement itself: a reconstruction, " +
+      "fallback, warning, or renamed abstraction cannot substitute for behavior the criterion requires. " +
+      "When required historical data never existed or is no longer recoverable, identify that constraint " +
+      "explicitly instead of inventing replacement evidence or promising to recover it. " +
+      "Do not edit files, spawn subagents, compile, " +
       "build, run tests, format, lint, or run repository checks. This step plans repairs; the runtime " +
       "saves the plan before audit_implement_fix executes it. The latest named gap is an example of a " +
       "remaining defect class, not the whole plan. Inspect current source for sibling production paths " +
