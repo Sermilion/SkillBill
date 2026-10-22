@@ -30,9 +30,11 @@ Selection:
 
 - When the user named a serial, use it. If it is not an authorized candidate, settle `skipped` and say why.
 - When exactly one authorized candidate exists, use it.
-- When more than one authorized candidate exists and the user named none, skip with `ambiguous_target` and list how to name one, without printing serials into the report.
+- When more than one authorized candidate exists and the user named none, choose any free candidate and lease it with `skill-bill qa lease acquire`.
+- If the candidate is contended or unusable, for example because it is out of storage, locked, or failing installation, release any lease this invocation acquired. When the user named a serial or AVD, settle `skipped` and say why; never substitute another target. Otherwise try another untried authorized candidate.
+- Try each candidate at most once. If none can be used, settle `skipped` and describe the obstacles; call it device-contended only when every authorized candidate is leased by someone else.
 
-Name the device in the report by its lowercase hex sha256 of the trimmed serial, the same value `skill-bill qa lease` prints, never the raw serial.
+Name the device used in the report by its lowercase hex sha256 of the trimmed serial, the same value `skill-bill qa lease` prints, and say why it was chosen. Never print the raw serial.
 
 ## Emulator boot
 
@@ -42,11 +44,13 @@ When `adb devices -l` lists nothing, start an emulator instead of skipping.
 2. Run `<emulator> -list-avds`.
    - When the user named an AVD, use it. If it is not listed, settle `skipped` and name the listed AVDs in the report.
    - When exactly one AVD is listed, use it.
-   - When more than one is listed and the user named none, skip with `ambiguous_target`. Name the listed AVDs in the report and tell the user to pass the AVD name in the phase instructions.
+   - When more than one is listed and the user named none, choose an AVD that can be booted, then lease its emulator target with `skill-bill qa lease acquire`.
+   - If its target is contended or the booted or leased target is unusable, release any lease this invocation acquired and stop only the emulator this invocation booted. If the user named an AVD, settle `skipped` and say why; otherwise repeat steps 3–6 for another untried AVD.
+   - Try each AVD at most once. If none can be used, settle `skipped` and describe the obstacles; call it device-contended only when every AVD target is contended.
    - When none is listed, settle `skipped`. Fix: create an AVD in Android Studio's Device Manager or with `avdmanager create avd`.
 3. Start it detached so it outlives the command: `nohup <emulator> -avd <name> -no-snapshot-save -no-boot-anim > <invocation dir>/emulator.log 2>&1 &`. Add `-no-window` when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set.
 4. Run `adb wait-for-device`, then poll `adb -s <serial> shell getprop sys.boot_completed` every few seconds until it prints `1`, for up to 300 seconds. The serial is the `emulator-*` line that `adb devices` now shows.
-5. If boot does not finish in time, stop the emulator with `adb -s <serial> emu kill` and settle `skipped`. Put the last lines of `emulator.log` in the report without serials.
+5. If boot does not finish in time, stop only the emulator this run booted with `adb -s <serial> emu kill`, release any lease held for it, and follow step 2's retry or skip rule. Save the relevant log excerpt under the invocation directory and reference its path in the report.
 6. Unlock the screen with `adb -s <serial> shell input keyevent 82`, then continue with the device lease.
 
 Name a booted AVD in the report as an emulator and say why you booted it, for example "No device attached; booted the only AVD."
@@ -71,7 +75,7 @@ Before installing anything, run:
 skill-bill qa lease acquire --invocation <invocation id> --device <serial>
 ```
 
-`contended` means another QA run owns the device. Stop and write a `skipped` report that says the device is contended. When you finish, run the same command with `release`. The runtime also releases every lease of the invocation when the phase ends.
+`contended` means another QA run owns the device; do not use it or release its lease. If no serial or AVD was named, try another untried authorized target as described above. Skip when the named target is contended or no usable candidate remains, and say why. Release only leases this invocation acquired, using the same command with `release`, before switching targets and when you finish. The runtime also releases every lease of the invocation when the phase ends.
 
 ## Build and install
 

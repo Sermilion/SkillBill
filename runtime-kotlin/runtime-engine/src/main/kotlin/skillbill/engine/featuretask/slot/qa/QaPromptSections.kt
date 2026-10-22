@@ -72,8 +72,12 @@ internal object QaPromptSections {
     |- Report path: `${qa.workspace.reportPath}`. Write exactly one markdown report there.
     |- Before installing on a device, take its lease with
     |  `skill-bill qa lease acquire --invocation ${qa.workspace.invocationId} --device <serial>`. A `contended`
-    |  result means another run owns the device: report `skipped` and say the device was contended. Release it with
-    |  `skill-bill qa lease release --invocation ${qa.workspace.invocationId} --device <serial>` when you are done.
+    |  result means another run owns the device: do not use it or release its lease. When no target was named,
+    |  follow the pack guidance to try another untried authorized target. Preserve a named target; skip with the
+    |  reason if it cannot be used. If no candidate can be used, report `skipped` and describe the obstacles;
+    |  call it device-contended only when every authorized candidate is leased by someone else.
+    |  Release leases this invocation acquired before switching targets and when done with
+    |  `skill-bill qa lease release --invocation ${qa.workspace.invocationId} --device <serial>`.
     |
     |Report:
     |

@@ -1,3 +1,13 @@
+## [2026-10-22] SKILL-438 subtask 2: free device selection without ambiguous_target
+Areas: runtime-kotlin/runtime-engine QA execution and briefing; platform-packs/kmp and ios QA guidance
+- MEDIUM feature. Removed `QaSkipReason.AMBIGUOUS_TARGET` and replaced multi-target skip guidance with free-target leasing and retry rules.
+- Unnamed runs lease an authorized target, release and retry after contention or unusable storage, lock, or install conditions, and report the selected target plus rationale; named serials, AVDs, and UDIDs remain honored.
+- Device-contended remains reserved for the case where every authorized target is leased. The QA briefing carries the same release-and-switch behavior.
+- Reusable: agent-owned target selection with pack-specific guidance and explicit lease cleanup.
+- Limitation: unrelated `MonitorTargetRefusal.AMBIGUOUS_TARGET` pull-request target resolution remains outside this QA change.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented
+
 ## [2026-10-22] SKILL-438 subtask 1: prose QA reports across runtime and desktop
 Areas: runtime-kotlin QA settlement, goal/verify/standalone flows, ports and SQLite persistence; desktop-tray QA detail; platform QA guidance; docs, contracts, and skill content
 - MEDIUM feature. Replaced strict agent-authored JSON receipts with lenient `report.md` prose; the runtime extracts verdicts, finding ids, sections, and evidence while preserving full text.

@@ -1,3 +1,9 @@
+## [2026-10-22] Let the QA agent own free-target selection
+Context: Mobile QA had to preserve named targets while removing the ambiguous skip when several authorized targets were available.
+Decision: For unnamed runs, the QA agent leases a free authorized target, releases it when unusable, tries another candidate, and reports the selected target and rationale. Named serials, AVDs, and UDIDs remain authoritative; device-contended is used only when every candidate is leased.
+Reason: The lease mechanism is outside this subtask, and target choice stays with the agent so it can react to target-specific contention and usability while preserving the existing lease contract.
+Alternatives considered: Retaining the ambiguous skip or moving target selection and leasing into the runtime would violate the subtask boundary and lose usable-device runs.
+
 ## [2026-10-22] SKILL-438: keep agent QA as prose
 Context: A real device run was discarded because a JSON receipt exceeded a length cap and used an unsupported fallback enum; the schema path was also not available in the target repository.
 Decision: Agent QA writes `report.md` prose. The runtime extracts only the verdict, finding ids, sections, and evidence paths, stores and prints the full text, and authors text only for missing or stopped runs. `qa_receipt` is read-only compatibility.

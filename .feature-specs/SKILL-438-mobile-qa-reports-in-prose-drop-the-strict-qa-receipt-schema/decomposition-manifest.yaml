@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-438"
 feature_name: "mobile-qa-reports-in-prose-drop-the-strict-qa-receipt-schema"
 parent_spec_path: ".feature-specs/SKILL-438-mobile-qa-reports-in-prose-drop-the-strict-qa-receipt-schema/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-438-mobile-qa-reports-in-prose-drop-the-strict-qa-receipt-schema"
@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Pick a free device instead of skipping with ambiguous_target"
   spec_path: ".feature-specs/SKILL-438-mobile-qa-reports-in-prose-drop-the-strict-qa-receipt-schema/spec_subtask_2_free-device-selection.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-114742-5ej9"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

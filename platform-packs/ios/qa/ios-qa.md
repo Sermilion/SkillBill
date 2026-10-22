@@ -28,9 +28,9 @@ Check each one in order. The first that fails decides the skip, and the `skipped
 | Signing | the scheme builds for the device with the project's team | Select a team and a signing identity in the project. |
 | WebDriverAgent | the Appium XCUITest driver can build and launch WebDriverAgent on the device | Run `appium driver run xcuitest open-wda` and sign the runner. |
 
-More than one available device with none named by the user is `ambiguous_target`.
+When the user named a UDID or simulator, use only that target. If it is unavailable, unauthorized, contended, or unusable, release any held lease, settle `skipped`, and say why. When no target was named, choose any authorized free booted or bootable simulator or free device and lease it with `skill-bill qa lease acquire`. If the chosen target is contended or unusable, release the lease when held and try another untried target. Try each candidate at most once. If none can be used, settle `skipped` and describe the obstacles; call it device-contended only when every authorized target is leased by someone else.
 
-Name the device in the report by its lowercase hex sha256 of the trimmed device UDID, the same value `skill-bill qa lease` prints, never the raw UDID.
+Name the device or simulator used in the report by its lowercase hex sha256 of the trimmed device UDID, the same value `skill-bill qa lease` prints, and say why it was chosen. Never print the raw UDID.
 
 ## Background processes
 
@@ -50,7 +50,7 @@ Before installing anything, run:
 skill-bill qa lease acquire --invocation <invocation id> --device <udid>
 ```
 
-`contended` means another QA run owns the device. Stop and write a `skipped` report that says the device is contended. When you finish, run the same command with `release`.
+`contended` means another QA run owns the device; do not use it or release its lease. If no target was named, try another untried authorized target as described above. Skip when the named target is contended or no usable candidate remains, and say why. Release only leases this invocation acquired, using the same command with `release`, before switching targets and when you finish.
 
 ## Build, install, and launch
 
