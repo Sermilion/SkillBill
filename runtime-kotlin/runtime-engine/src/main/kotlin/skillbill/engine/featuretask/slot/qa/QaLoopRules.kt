@@ -9,18 +9,18 @@ import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.qa.report.hasQaOutput
 import skillbill.engine.featuretask.qa.report.qaVerdictOf
 import skillbill.engine.featuretask.slot.PhaseLoopContext
-import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.PhaseStepLoopRules
+import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal class QaLoopRules(
   private val outcomes: FeatureTaskQaOutcomeRecorder,
-) : PhaseLoopRules {
+) : PhaseStepLoopRules<PhaseQaStepBinding> {
   override fun crossSlotSettlement(
     stepId: String,
     context: PhaseLoopContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseQaStepBinding,
   ): FeatureTaskRuntimeVerdict? {
     if (stepId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY) return null
     val tested = testedTreeWithEvidence(state) ?: return null
@@ -46,13 +46,13 @@ internal class QaLoopRules(
     outcomes.recordWarning(context.request.workflowId, warning)
   }
 
-  private fun testedTreeWithEvidence(state: PhaseAcceptedStepExecution): String? {
+  private fun testedTreeWithEvidence(state: PhaseQaStepBinding): String? {
     val produced = completedQaOutputs(state) ?: return null
     val skipped = !hasQaOutput(produced) || qaVerdictOf(produced) == QaVerdict.SKIPPED
     return (produced[QaPhaseOutputKeys.TREE_IDENTITY] as? String).takeUnless { skipped }
   }
 
-  private fun completedQaOutputs(state: PhaseAcceptedStepExecution): Map<String, Any?>? {
+  private fun completedQaOutputs(state: PhaseQaStepBinding): Map<String, Any?>? {
     val qa = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA
     if (!state.isStepCompleted(qa)) return null
     val envelope =

@@ -4,9 +4,8 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PROMPT_COMPOSER_ISSUE_KEY
 import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
-import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
-import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -16,7 +15,6 @@ import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
 import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
@@ -27,6 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PhaseModelProfileSelectionTest {
@@ -76,7 +75,7 @@ class PhaseModelProfileSelectionTest {
   }
 
   @Test
-  fun `an unselected opus validate step does not specialize a goal-child build plan`() {
+  fun `an unselected opus validate step does not change a goal-child build plan`() {
     val lookup = testPhaseStrategies({ error("unused") }, NoopWorkflowGitOperations)
     val facts =
       PhaseStrategySelectionFacts(
@@ -93,7 +92,7 @@ class PhaseModelProfileSelectionTest {
   }
 
   @Test
-  fun `a mixed audit selects the opus variant and specializes only the qualifying repair step`() {
+  fun `a mixed audit selects the canonical owner and supplements only the opus repair step`() {
     val lookup = testPhaseStrategies({ error("unused") }, NoopWorkflowGitOperations)
     val facts =
       PhaseStrategySelectionFacts(
@@ -106,7 +105,7 @@ class PhaseModelProfileSelectionTest {
       )
     val plan = lookup.executionPlan(facts)
     assertEquals(
-      AcceptanceAuditOpus55Strategy.ID,
+      AcceptanceAuditStrategy.ID,
       plan.selectedStrategies.single { it.slot.wireValue == "audit" }.strategyId,
     )
     val strategy = lookup.strategyFor(PHASE_AUDIT, plan)
@@ -117,38 +116,74 @@ class PhaseModelProfileSelectionTest {
         stepProfile = PhaseModelProfile.CANONICAL,
       )
     val repairInputs = auditInputs.copy(stepProfile = PhaseModelProfile.OPUS_5_5)
+    val supplements = lookup.modelDirectiveSupplements
+    val canonicalAudit = strategy.promptSections(PHASE_AUDIT, auditInputs)
     assertEquals(
-      AcceptanceAuditStrategy().promptSections(PHASE_AUDIT, auditInputs).taskDirective,
-      strategy.promptSections(PHASE_AUDIT, auditInputs).taskDirective,
+      canonicalAudit,
+      supplements.supplement(canonicalAudit, strategy, PHASE_AUDIT, PhaseModelProfile.CANONICAL),
     )
+    val repair = strategy.promptSections(PHASE_AUDIT_IMPLEMENT_FIX, repairInputs)
     assertTrue(
-      strategy.promptSections(PHASE_AUDIT_IMPLEMENT_FIX, repairInputs).taskDirective.contains("Opus"),
+      supplements.supplement(repair, strategy, PHASE_AUDIT_IMPLEMENT_FIX, PhaseModelProfile.OPUS_5_5)
+        .taskDirective.contains("Opus"),
     )
   }
 
   @Test
-  fun `an opus monitor repair selects the standalone opus variant only for the internal standalone monitor`() {
+  fun `turning supplements off leaves every opus prompt unchanged`() {
+    val strategy = AcceptanceAuditStrategy()
+    val inputs =
+      FeatureTaskRuntimePhasePromptComposeInputs(
+        PROMPT_COMPOSER_ISSUE_KEY,
+        promptComposerBriefingFor(PHASE_AUDIT),
+        stepProfile = PhaseModelProfile.OPUS_5_5,
+      )
+    val sections = strategy.promptSections(PHASE_AUDIT, inputs)
+
+    assertEquals(
+      sections,
+      ModelDirectiveSupplements(
+        enabled = false,
+      ).supplement(sections, strategy, PHASE_AUDIT, PhaseModelProfile.OPUS_5_5),
+    )
+    assertNotEquals(
+      sections,
+      ModelDirectiveSupplements(enabled = true).supplement(sections, strategy, PHASE_AUDIT, PhaseModelProfile.OPUS_5_5),
+    )
+  }
+
+  @Test
+  fun `an opus monitor repair selects the canonical monitor owners and receives no supplement`() {
     val lookup = testPhaseStrategies({ error("unused") }, NoopWorkflowGitOperations)
 
-    fun monitorStrategy(definition: SkeletonDefinition): String =
-      lookup
-        .executionPlan(
+    fun monitorStrategy(definition: SkeletonDefinition): PhaseStrategy {
+      val plan =
+        lookup.executionPlan(
           PhaseStrategySelectionFacts(
             definition,
             emptySet(),
             mapOf(PHASE_MONITOR_FIX to opusAssignment(PHASE_MONITOR_FIX)),
           ),
-        ).selectedStrategies
-        .single { it.slot == PhaseSlot.MONITOR }
-        .strategyId
+        )
+      return lookup.strategyFor(PHASE_MONITOR_FIX, plan)
+    }
 
-    assertEquals(StandaloneMonitorOpus55Strategy.ID, monitorStrategy(SkeletonDefinition.STANDALONE_MONITOR))
-    assertEquals(MonitorOpus55Strategy.ID, monitorStrategy(SkeletonDefinition.MONITOR))
-    assertEquals(MonitorOpus55Strategy.ID, monitorStrategy(SkeletonDefinition.PR))
+    assertEquals(StandaloneMonitorStrategy.ID, monitorStrategy(SkeletonDefinition.STANDALONE_MONITOR).strategyId)
+    assertEquals(MonitorStrategy.ID, monitorStrategy(SkeletonDefinition.MONITOR).strategyId)
+    assertEquals(MonitorStrategy.ID, monitorStrategy(SkeletonDefinition.PR).strategyId)
+    listOf(SkeletonDefinition.STANDALONE_MONITOR, SkeletonDefinition.MONITOR, SkeletonDefinition.PR).forEach {
+      assertNull(
+        lookup.modelDirectiveSupplements.directiveFor(
+          monitorStrategy(it),
+          PHASE_MONITOR_FIX,
+          PhaseModelProfile.OPUS_5_5,
+        ),
+      )
+    }
   }
 
   @Test
-  fun `mutating caller assignments after resolution cannot reuse another plan`() {
+  fun `mutating caller assignments after resolution cannot reuse another plans launch assignments`() {
     val lookup = testPhaseStrategies({ error("unused") }, NoopWorkflowGitOperations)
     val mutating = mutableMapOf(PHASE_AUDIT to canonicalAssignment(PHASE_AUDIT))
     val facts = setOf(CodeReviewExecutionMode.INLINE)
@@ -157,16 +192,10 @@ class PhaseModelProfileSelectionTest {
     mutating[PHASE_AUDIT] = opusAssignment(PHASE_AUDIT)
     val second =
       lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE, facts, mutating))
-    assertNotEquals(
-      first.selectedStrategies.single { it.slot.wireValue == "audit" }.strategyId,
-      second.selectedStrategies.single { it.slot.wireValue == "audit" }.strategyId,
-    )
+    assertEquals(PhaseModelProfile.CANONICAL, first.stepLaunchAssignments.getValue(PHASE_AUDIT).profile)
+    assertEquals(PhaseModelProfile.OPUS_5_5, second.stepLaunchAssignments.getValue(PHASE_AUDIT).profile)
     assertEquals(
       AcceptanceAuditStrategy.ID,
-      first.selectedStrategies.single { it.slot.wireValue == "audit" }.strategyId,
-    )
-    assertEquals(
-      AcceptanceAuditOpus55Strategy.ID,
       second.selectedStrategies.single { it.slot.wireValue == "audit" }.strategyId,
     )
   }

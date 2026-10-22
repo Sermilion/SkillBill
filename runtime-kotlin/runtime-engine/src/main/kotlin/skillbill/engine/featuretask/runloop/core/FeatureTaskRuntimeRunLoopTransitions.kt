@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRul
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
@@ -125,7 +126,8 @@ object FeatureTaskRuntimeRunLoopTransitions {
     destinationPhaseId: String,
   ): Boolean {
     val checkpoint =
-      context.strategyFor(precedingPhaseId).loopRules?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
+      (context.strategyFor(precedingPhaseId) as? PhaseLoopCapability)
+        ?.loopRules?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
         ?: return true
     val failures = mutableListOf<String>()
     runCatching {

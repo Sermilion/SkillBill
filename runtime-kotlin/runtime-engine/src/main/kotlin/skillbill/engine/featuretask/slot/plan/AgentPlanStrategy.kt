@@ -7,6 +7,9 @@ import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -14,8 +17,8 @@ import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
+import skillbill.engine.featuretask.slot.state.PhasePlanningAgentStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -23,18 +26,10 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AgentPlanStrategy : PhaseStrategy() {
-  private val policies =
-    mapOf(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
-        PhaseStepPolicy(
-          mutating = false,
-          singleAgentSession = false,
-          readOnlyIdle = false,
-          fileMutating = false,
-          generationScoped = false,
-        ),
-    )
+class AgentPlanStrategy :
+  PhaseStrategy(),
+  PhaseResumeCapability by AgentPlanResume {
+  private val policies: Map<String, PhaseStepPolicy> = AGENT_PLAN_POLICIES
 
   override val slot: PhaseSlot = PhaseSlot.PLAN
   override val strategyId: String = ID
@@ -62,22 +57,17 @@ class AgentPlanStrategy : PhaseStrategy() {
     )
   }
 
-  override fun runStep(
+  internal fun runPlan(
     run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
+    state: PhasePlanningAgentStepBinding,
   ): PhaseOutcome = runAgentStep(run, state)
 
-  override fun stepHooks(stepId: String): PhaseStepHooks {
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
-    return PlanStepHooks
+    return PhaseStepDescriptor(PhaseBindingFamily.PlanningAgent, PlanStepHooks) { run, state -> runPlan(run, state) }
   }
 
-  override fun resumeRules(stepId: String): PhaseResumeRules {
-    policies.policyOf(stepId)
-    return PlanResumeRules
-  }
-
-  internal object PlanStepHooks : PhaseStepHooks {
+  internal object PlanStepHooks : PhaseStepHooks<PhasePlanningAgentStepBinding> {
     override val contextKind = PhaseStepHookContextKind.PLANNING
 
     override fun settleCompletedRound(
@@ -227,5 +217,24 @@ class AgentPlanStrategy : PhaseStrategy() {
           skipped: false
       ```
       """.trimIndent()
+  }
+}
+
+private val AGENT_PLAN_POLICIES: Map<String, PhaseStepPolicy> =
+  mapOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
+      PhaseStepPolicy(
+        mutating = false,
+        singleAgentSession = false,
+        readOnlyIdle = false,
+        fileMutating = false,
+        generationScoped = false,
+      ),
+  )
+
+private object AgentPlanResume : PhaseResumeCapability {
+  override fun resumeRules(stepId: String): PhaseResumeRules {
+    AGENT_PLAN_POLICIES.policyOf(stepId)
+    return AgentPlanStrategy.PlanResumeRules
   }
 }

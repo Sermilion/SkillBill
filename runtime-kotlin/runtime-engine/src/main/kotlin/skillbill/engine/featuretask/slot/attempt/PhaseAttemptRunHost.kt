@@ -29,6 +29,7 @@ import skillbill.engine.featuretask.runloop.state.runLoopCoupledProgress
 import skillbill.engine.featuretask.runloop.state.runLoopCoupledSession
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -145,6 +146,9 @@ internal class PhaseAttemptRunHost(
   val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = backingRunState.implementationChecklistStore
 
+  val modelDirectiveSupplements: ModelDirectiveSupplements
+    get() = backingRunState.modelDirectiveSupplements
+
   fun selectedOwnerOf(stepId: String): PhaseStrategy? = backingRunState.selectedOwnerOf(stepId)
 
   fun strategyFor(stepId: String): PhaseStrategy = backingRunState.strategyFor(stepId)
@@ -177,7 +181,7 @@ internal class PhaseAttemptRunHost(
     check(run.phaseId == boundPhaseId && run.request === request)
     check(input.stepName == boundPhaseId && input.facts.issueKey == request.issueKey)
     val owner = requireNotNull(backingRunState.selectedOwnerOf(boundPhaseId))
-    check(owner.acceptsAttemptStrategy(call.strategyId) && call.request === request)
+    check(owner.strategyId == call.strategyId && call.request === request)
     return backingRunState.runnerFor(boundPhaseId).run(input, launchState)
   }
 
@@ -188,7 +192,7 @@ internal class PhaseAttemptRunHost(
     call.requireAcceptedAttempt(run, call)
     check(run.phaseId == boundPhaseId && run.request === request)
     val owner = requireNotNull(backingRunState.selectedOwnerOf(boundPhaseId))
-    check(owner.acceptsAttemptStrategy(call.strategyId) && call.request === request)
+    check(owner.strategyId == call.strategyId && call.request === request)
     return backingRunState.runnerFor(boundPhaseId)
   }
 

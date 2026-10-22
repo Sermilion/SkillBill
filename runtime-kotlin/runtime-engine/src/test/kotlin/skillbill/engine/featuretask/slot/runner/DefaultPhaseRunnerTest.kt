@@ -176,6 +176,35 @@ class DefaultPhaseRunnerTest {
     }
   }
 
+  @Test
+  fun `one shared runner carries no failure or launch state from one invocation to the next`() {
+    var statusReads = 0
+    var launches = 0
+    val git =
+      object : WorkflowGitOperations by NoopWorkflowGitOperations {
+        override fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult =
+          if (++statusReads == 1) {
+            WorkflowGitOperationResult.Failed(error = "repository unavailable")
+          } else {
+            WorkflowGitOperationResult.Ok("")
+          }
+      }
+    val runner =
+      DefaultPhaseRunner(
+        GoalRunnerSubtaskLauncher { agentRunLaunchFacts(SupportedAgent.CLAUDE, stdout = "launch ${++launches}") },
+        git,
+      )
+    val tracked = input("monitor_fix").let { it.copy(facts = it.facts.copy(attempt = 1)) }
+
+    val first = runner.run(tracked, TrackedPhaseRunState)
+    val second = runner.run(tracked, TrackedPhaseRunState)
+
+    assertEquals(PhaseLaunchFailureKind.BEFORE_CAPTURE_FAILED, first.launchFailure?.kind)
+    assertEquals("", first.stdout.text)
+    assertNull(second.launchFailure)
+    assertEquals("launch 1", second.stdout.text)
+  }
+
   private fun launcher(stdout: String) =
     GoalRunnerSubtaskLauncher { agentRunLaunchFacts(SupportedAgent.CLAUDE, stdout = stdout) }
 

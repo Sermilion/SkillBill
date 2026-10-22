@@ -13,7 +13,6 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -29,13 +28,13 @@ internal class QaRepairHooks(
   private val execution: QaExecutionLifecycle,
   private val outcomes: FeatureTaskQaOutcomeRecorder,
   private val reports: QaReportSettlement,
-) : PhaseStepHooks {
+) : PhaseStepHooks<PhaseQaStepBinding> {
   override fun launchPromptSupplement(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseStepBinding,
+    state: PhaseQaStepBinding,
   ): String {
-    val findings = (state as PhaseQaStepBinding).qaRepairState()?.openFindings.orEmpty()
+    val findings = state.qaRepairState()?.openFindings.orEmpty()
     if (findings.isEmpty()) return ""
     return QaPromptSections.repairSupplement(
       findings,
@@ -47,10 +46,10 @@ internal class QaRepairHooks(
   override fun checkValidatedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseQaStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck {
-    val previous = (state as PhaseQaStepBinding).qaRepairState()
+    val previous = state.qaRepairState()
     val openIds = previous?.openFindings.orEmpty().map(QaOpenFinding::id)
     if (outputMap[SharedPayloadKeys.STATUS] != COMPLETED || openIds.isEmpty()) return PhaseStepOutputCheck.Accept
     val tested = previous?.lastReceiptTreeIdentity
@@ -70,12 +69,12 @@ internal class QaRepairHooks(
   override fun interpretedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseQaStepBinding,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): NormalizedFeatureTaskRuntimePhaseOutput {
     if (output.status != COMPLETED) return output
     val previous =
-      (state as PhaseQaStepBinding).qaRepairState()
+      state.qaRepairState()
         ?: error("qa_fix completed without the QA findings state it repairs.")
     val number = previous.consumedAttempts + 1
     val attempt =

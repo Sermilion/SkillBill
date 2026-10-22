@@ -3,34 +3,40 @@ contract_version: "0.5"
 issue_key: "SKILL-437"
 feature_name: "simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants"
 parent_spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec.md"
-status: "pending"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Restore monitor repair publication"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_1_monitor-publication.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-163120-8fr2"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "Replace model strategy variants with supplements and aliases"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_2_model-supplements-and-aliases.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-165135-mdlv"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false
@@ -38,12 +44,15 @@ subtasks:
 - id: 3
   name: "Keep reachable registrations and share runner ownership"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_3_live-registry.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-173634-bsg2"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 2
     optional: false
@@ -51,12 +60,15 @@ subtasks:
 - id: 4
   name: "Declare typed binding families"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_4_typed-binding-families.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-180137-nkwk"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 3
     optional: false
@@ -64,12 +76,15 @@ subtasks:
 - id: 5
   name: "Extract optional strategy capabilities"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_5_strategy-capabilities.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-194145-x2nl"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 4
     optional: false
@@ -77,12 +92,15 @@ subtasks:
 - id: 6
   name: "Document the simplified strategy architecture"
   spec_path: ".feature-specs/SKILL-437-simplify-the-skeleton-slot-strategy-layer-and-delete-the-opus-5-5-strategy-variants/spec_subtask_6_strategy-documentation.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-201630-vvfi"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 5
     optional: false

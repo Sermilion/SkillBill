@@ -6,15 +6,13 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal class ImplementFixStep : PhaseStepHooks {
+internal class ImplementFixStep : PhaseStepHooks<PhaseImplementFixStepBinding> {
   val policy =
     PhaseStepPolicy(
       mutating = true,
@@ -43,14 +41,13 @@ internal class ImplementFixStep : PhaseStepHooks {
   override fun launchPromptSupplement(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseStepBinding,
-  ): String =
-    ImplementFixReceipt.carriedFindingsSection(context.diagnostics, run.request, state as PhaseImplementFixStepBinding)
+    state: PhaseImplementFixStepBinding,
+  ): String = ImplementFixReceipt.carriedFindingsSection(context.diagnostics, run.request, state)
 
   override fun settleCompletedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseImplementFixStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): PhaseStepOutputCheck = ImplementFixReceipt.settle(context, state as PhaseImplementFixStepBinding, outputMap)
+  ): PhaseStepOutputCheck = ImplementFixReceipt.settle(context, state, outputMap)
 }

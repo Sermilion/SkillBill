@@ -74,7 +74,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -311,10 +310,9 @@ object PhaseOutputGate {
     val boundStep = args.boundStep
     with(context) {
       settleStepOutputCheck(
-        hooks.checkValidatedOutput(
+        boundStep.boundHooks.checkValidatedOutput(
           capture.run,
           context.stepOutputContext(capture.run, hooks),
-          boundStep as PhaseAcceptedStepExecution,
           outputMap,
         ),
         capture,
@@ -572,10 +570,9 @@ object PhaseOutputGate {
       ) ?: stepCompletionRejection(run, args.attested, boundStep, args.stepHooks)
     return rejection?.let { (rule, reason) -> args.reject(rule, reason) }
       ?: settleStepOutputCheck(
-        args.stepHooks.settleCompletedOutput(
+        boundStep.boundHooks.settleCompletedOutput(
           run,
           stepOutputContext(run, args.stepHooks),
-          boundStep as PhaseAcceptedStepExecution,
           args.attested.envelopeWireMap(),
         ),
         args.capture,
@@ -591,10 +588,9 @@ object PhaseOutputGate {
         FinalizeValidatedOutputAcceptanceArgs(
           capture = args.capture,
           attested =
-            args.stepHooks.interpretedOutput(
+            boundStep.boundHooks.interpretedOutput(
               run,
               stepOutputContext(run, args.stepHooks),
-              boundStep as PhaseAcceptedStepExecution,
               args.stepHooks.acceptedOutput(
                 stepOutputContext(run, args.stepHooks),
                 args.capture,
@@ -614,14 +610,13 @@ object PhaseOutputGate {
   private fun PhaseOutputSettlementContext.stepCompletionRejection(
     run: PhaseRun,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
-    boundStep: PhaseStepBinding,
-    stepHooks: PhaseStepHooks,
+    boundStep: PhaseAcceptedStepExecution,
+    stepHooks: PhaseStepHooks<*>,
   ): Pair<String, String>? =
-    stepHooks
+    boundStep.boundHooks
       .completionRejection(
         run,
         stepOutputContext(run, stepHooks),
-        boundStep as PhaseAcceptedStepExecution,
         attested.envelopeWireMap(),
       )?.let {
         "output-verification" to it
@@ -656,10 +651,9 @@ object PhaseOutputGate {
       )
     commitBlocked?.let { return it }
     PhaseOutputGate.retainSettledProducerOutput(request, progress, recorder, clock, capture)
-    args.stepHooks.recordAcceptedOutput(
+    args.boundStep.boundHooks.recordAcceptedOutput(
       run,
       stepOutputContext(run, args.stepHooks),
-      args.boundStep,
       finalised.envelopeWireMap(),
     )
     return with(FeatureTaskRuntimeRunLoopOutputVerification) {

@@ -166,8 +166,8 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
       }
       identity.steps.forEach { step ->
         if (
-          plan.stepPolicyIdentities[step] != strategy.stepPolicyIdentity(step) ||
-          plan.resumeInterpretationIdentities[step] != strategy.resumeInterpretationIdentity(step)
+          plan.stepPolicyIdentities[step] != strategy.stepPolicyIdentity(step, identity.strategyId) ||
+          plan.resumeInterpretationIdentities[step] != strategy.resumeInterpretationIdentity(step, identity.strategyId)
         ) {
           incompatible()
         }

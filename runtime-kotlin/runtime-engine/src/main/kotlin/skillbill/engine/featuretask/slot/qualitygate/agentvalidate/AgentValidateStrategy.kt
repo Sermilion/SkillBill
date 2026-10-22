@@ -3,12 +3,13 @@ package skillbill.engine.featuretask.slot.qualitygate.agentvalidate
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseReportedGate
-import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
+import skillbill.engine.featuretask.slot.PhaseStatusCapability
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
+import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.stepCall
 import skillbill.engine.featuretask.slot.qualitygate.QUALITY_GATE_STEP_POLICY
@@ -16,25 +17,17 @@ import skillbill.engine.featuretask.slot.qualitygate.VALIDATE_VALUE_CONTENT
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
 import skillbill.engine.featuretask.slot.qualitygate.validateGateTriagePhaseTask
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AgentValidateStrategy : PhaseStrategyStatusProjection() {
-  private val policies: Map<String, PhaseStepPolicy> =
-    mapOf(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE to
-        QUALITY_GATE_STEP_POLICY.copy(
-          singleAgentSession = true,
-          extendsOwnedInventory = true,
-        ),
-    )
-
-  override val qualityGateOperation = PhaseQualityGateOperation.AgentValidation
+class AgentValidateStrategy :
+  PhaseStrategy(),
+  PhaseResumeCapability by AgentValidateCapabilities,
+  PhaseStatusCapability by AgentValidateCapabilities {
+  private val policies: Map<String, PhaseStepPolicy> = AGENT_VALIDATE_POLICIES
 
   override val slot: PhaseSlot = PhaseSlot.QUALITY_GATE
   override val strategyId: String = ID
@@ -61,20 +54,30 @@ class AgentValidateStrategy : PhaseStrategyStatusProjection() {
     )
   }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome =
-    (
-      state as? PhaseQualityGateStepBinding
-        ?: error("Quality gate requires its accepted execution binding.")
-    ).runSelectedQualityGate(run, stepCall(run, state))
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return PhaseStepDescriptor(AGENT_VALIDATE_FAMILY, AgentValidateStepHooks) { run, state ->
+      state.runSelectedQualityGate(run, stepCall(run, state))
+    }
+  }
 
-  override fun stepHooks(stepId: String): PhaseStepHooks =
-    if (stepId in policies) AgentValidateStepHooks else PhaseStepHooks.None
+  companion object {
+    const val ID = "agent-validate"
+  }
+}
 
+private val AGENT_VALIDATE_POLICIES: Map<String, PhaseStepPolicy> =
+  mapOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE to
+      QUALITY_GATE_STEP_POLICY.copy(
+        singleAgentSession = true,
+        extendsOwnedInventory = true,
+      ),
+  )
+
+private object AgentValidateCapabilities : PhaseResumeCapability, PhaseStatusCapability {
   override fun resumeRules(stepId: String): PhaseResumeRules =
-    if (stepId in policies) AgentValidateResumeRules else PhaseResumeRules.None
+    if (stepId in AGENT_VALIDATE_POLICIES) AgentValidateResumeRules else PhaseResumeRules.None
 
   override fun currentExecution(
     stepId: String,
@@ -82,9 +85,7 @@ class AgentValidateStrategy : PhaseStrategyStatusProjection() {
   ): IdeStatusCurrentPhaseExecution? = gateCurrentExecution(stepId, context)
 
   override fun reportedGate(stepId: String): PhaseReportedGate? =
-    PhaseReportedGate.VALIDATION.takeIf { stepId in policies }
-
-  companion object {
-    const val ID = "agent-validate"
-  }
+    PhaseReportedGate.VALIDATION.takeIf { stepId in AGENT_VALIDATE_POLICIES }
 }
+
+private val AGENT_VALIDATE_FAMILY = PhaseBindingFamily.QualityGate(PhaseQualityGateOperation.AgentValidation)

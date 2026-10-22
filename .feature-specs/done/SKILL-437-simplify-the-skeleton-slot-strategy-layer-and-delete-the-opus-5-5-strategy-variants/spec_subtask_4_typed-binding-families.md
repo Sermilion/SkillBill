@@ -50,7 +50,7 @@ Implement authors production and test changes; audit inspects repository facts. 
 
 ## Implementation Details
 
-The ordered tasks below use only the upstream preplan digest. In these tasks, E is `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask`, ET is `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask`, and A is `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture`. Acceptance criterion references refer to this sub-spec. The implementation must accommodate the existing edits in `E/runloop/state/FeatureTaskRuntimeRunLoopStepBindings.kt` rather than replace that file wholesale.
+The ordered tasks below use only the upstream preplan digest. In these tasks, E is `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask`, ET is `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask`, and A is `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture`. Acceptance criterion references refer to this sub-spec. The implementation must accommodate the existing edits in `E/runloop/state/FeatureTaskRuntimeRunLoopStepBindings.kt` rather than replace that file wholesale.
 
 1. Define the typed family and step-capture contract. Serves criteria 1 and 3.
 
@@ -68,7 +68,7 @@ The ordered tasks below use only the upstream preplan digest. In these tasks, E 
 
 3. Declare narrow families on every live strategy and helper. Serves criteria 1, 2 and 3.
 
-   Update canonical owners under `E/slot/preplan`, `plan`, `implementation`, `audit`, `codereview`, `standalonereview`, `qualitygate`, `writehistory`, `commitpush`, `pullrequest`, `monitor`, `qa` and `intake`. Include the retained `AgentPlanStrategy` helper and typed fixture strategies in `runtime-kotlin/runtime-engine/src/testFixtures/kotlin/skillbill/engine/featuretask/slot/PhaseStrategyRegistryFixtures.kt`.
+   Update canonical owners under `E/slot/preplan`, `plan`, `implementation`, `audit`, `codereview`, `standalonereview`, `qualitygate`, `writehistory`, `commitpush`, `pullrequest`, `monitor`, `qa` and `intake`. Include the retained `AgentPlanStrategy` helper and typed fixture strategies in `../../../runtime-kotlin/runtime-engine/src/testFixtures/kotlin/skillbill/engine/featuretask/slot/PhaseStrategyRegistryFixtures.kt`.
 
    `CodeReviewSlot` declares separate review, verify_findings and implement_fix descriptors. `AcceptanceAuditStrategy` declares QA findings for its entry and agent descriptors for repairs. Preserve its historical planning mapping. Planning distinguishes outer fan-out from authorized unit execution. Keep standalone review, monitor and publication separate from full-run review, monitor and runtime commit. Pack-build and agent-validation families retain their selected operation and single-session policies. PR retains its narrowed context and both lookup cleanups in finally. Remove the accepted-binding casts rather than relocating them into descriptors or helper functions. Do not perform the optional-capability extraction assigned to subtask 5, except for typing required by these descriptors and hooks.
 

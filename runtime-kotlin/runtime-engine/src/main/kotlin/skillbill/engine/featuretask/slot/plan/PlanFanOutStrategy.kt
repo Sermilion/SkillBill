@@ -4,6 +4,9 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -11,8 +14,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalHookContex
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
+import skillbill.engine.featuretask.slot.state.PhasePlanningAgentStepBinding
 import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
@@ -26,11 +29,17 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class PlanFanOutStrategy(
+class PlanFanOutStrategy private constructor(
   private val fanOutPort: BoundedWorkFanOutPort,
   private val planFanOutCap: Int,
-) : PhaseStrategy() {
-  private val plan = AgentPlanStrategy()
+  private val plan: AgentPlanStrategy,
+) : PhaseStrategy(),
+  PhaseResumeCapability by PlanFanOutResume(plan) {
+  constructor(
+    fanOutPort: BoundedWorkFanOutPort,
+    planFanOutCap: Int,
+  ) : this(fanOutPort, planFanOutCap, AgentPlanStrategy())
+
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
@@ -39,7 +48,10 @@ class PlanFanOutStrategy(
         plan.policyFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN),
     )
 
-  override val plansInFanOut: Boolean = true
+  private val unitDescriptor =
+    PhaseStepDescriptor(PhaseBindingFamily.PlanningUnit, PlanSubtasksStepHooks) { run, state ->
+      runAgentStep(run, state)
+    }
 
   override val slot: PhaseSlot = PhaseSlot.PLAN
   override val strategyId: String = ID
@@ -69,29 +81,19 @@ class PlanFanOutStrategy(
   override fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
     plan.briefingInvariantFields(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN)
 
-  override fun stepHooks(stepId: String): PhaseStepHooks =
-    if (isSubtaskStep(stepId)) PlanSubtasksStepHooks else plan.stepHooks(stepId)
-
-  override fun resumeRules(stepId: String): PhaseResumeRules =
-    if (isSubtaskStep(stepId)) AgentPlanStrategy.PlanSubtasksResumeRules else plan.resumeRules(stepId)
-
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome {
-    val planning = state as PhasePlanningStepBinding
-    return if (isSubtaskStep(run.phaseId)) {
-      runSubtasks(run, planning)
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> =
+    if (isSubtaskStep(stepId)) {
+      PhaseStepDescriptor(PhaseBindingFamily.PlanningFanOut, PlanSubtasksStepHooks) { run, planning ->
+        runSubtasks(run, planning)
+      }
     } else {
-      planning.settleExistingBundle(run, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS)
-        ?: plan.runStep(run, state)
+      PhaseStepDescriptor(PhaseBindingFamily.PlanningFanOut, AgentPlanStrategy.PlanStepHooks) { run, planning ->
+        planning.settleExistingBundle(run, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS)
+          ?: plan.runPlan(run, planning)
+      }
     }
-  }
 
-  private fun isSubtaskStep(stepId: String): Boolean {
-    if (stepId !in policies) throw UnknownPhaseStepError(stepId)
-    return stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
-  }
+  private fun isSubtaskStep(stepId: String): Boolean = isPlanSubtasksStep(stepId, steps)
 
   private fun runSubtasks(
     run: PhaseRun,
@@ -152,16 +154,16 @@ class PlanFanOutStrategy(
     unitId: Int,
   ): PhaseOutcome {
     val sink = UnitAttributedOutputSink(fanOutPort, fanOut.outputSink, unitId)
-    val state = fanOut.unitState(unitId, sink)
+    val state = fanOut.unitState(unitId, sink, unitDescriptor)
     return try {
-      runAgentStep(run, state)
+      unitDescriptor.execute(run, state)
     } finally {
       state.finishStepExecution()
       sink.flushTrailingLines()
     }
   }
 
-  private object PlanSubtasksStepHooks : PhaseStepHooks {
+  private object PlanSubtasksStepHooks : PhaseStepHooks<PhasePlanningAgentStepBinding> {
     override val contextKind = PhaseStepHookContextKind.PLANNING
 
     override fun afterCompletion(
@@ -222,4 +224,29 @@ class PlanFanOutStrategy(
         "Finish with a short prose summary of the plan. " + PREPLAN_DIGEST_AUTHORITY +
         " " + PLANNING_INSTALL_PROHIBITION + " The assigned sub-spec is the only file this session reads."
   }
+}
+
+private class PlanFanOutResume(
+  private val plan: AgentPlanStrategy,
+) : PhaseResumeCapability {
+  override fun resumeRules(stepId: String): PhaseResumeRules =
+    if (isPlanSubtasksStep(stepId, PLAN_FAN_OUT_STEPS)) {
+      AgentPlanStrategy.PlanSubtasksResumeRules
+    } else {
+      plan.resumeRules(stepId)
+    }
+}
+
+private val PLAN_FAN_OUT_STEPS =
+  listOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+  )
+
+private fun isPlanSubtasksStep(
+  stepId: String,
+  steps: List<String>,
+): Boolean {
+  if (stepId !in steps) throw UnknownPhaseStepError(stepId)
+  return stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
 }

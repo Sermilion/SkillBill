@@ -3,14 +3,13 @@ package skillbill.engine.featuretask.slot.implementation
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
@@ -22,34 +21,15 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class ImplementThenSimplifyStrategy : PhaseStrategy() {
-  private val policies =
-    mapOf(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
-        PhaseStepPolicy(
-          mutating = true,
-          singleAgentSession = false,
-          readOnlyIdle = false,
-          fileMutating = true,
-          generationScoped = false,
-          extendsOwnedInventory = true,
-        ),
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
-        PhaseStepPolicy(
-          mutating = true,
-          singleAgentSession = true,
-          readOnlyIdle = false,
-          fileMutating = true,
-          generationScoped = false,
-          extendsOwnedInventory = true,
-        ),
-    )
+class ImplementThenSimplifyStrategy :
+  PhaseStrategy(),
+  PhaseResumeCapability by ImplementThenSimplifyResume {
+  private val policies: Map<String, PhaseStepPolicy> = IMPLEMENT_THEN_SIMPLIFY_POLICIES
 
   override val slot: PhaseSlot = PhaseSlot.IMPLEMENTATION
   override val strategyId: String = ID
   override val steps: List<String> = policies.keys.toList()
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
-  override val loopRules: PhaseLoopRules = ImplementThenSimplifyLoopRules
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
@@ -74,26 +54,16 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
       else -> throw UnknownPhaseStepError(stepId)
     }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = runAgentStep(run, state)
-
-  override fun stepHooks(stepId: String): PhaseStepHooks {
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
-    return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) {
-      ImplementationCriterionHooks
-    } else {
-      PhaseStepHooks.None
-    }
-  }
-
-  override fun resumeRules(stepId: String): PhaseResumeRules {
-    policies.policyOf(stepId)
-    return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) {
-      ImplementResumeRules
-    } else {
-      PhaseResumeRules.None
+    val hooks =
+      if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) {
+        ImplementationCriterionHooks
+      } else {
+        PhaseStepHooks.None
+      }
+    return PhaseStepDescriptor(PhaseBindingFamily.Agent, hooks, ImplementThenSimplifyLoopRules) { run, state ->
+      runAgentStep(run, state)
     }
   }
 
@@ -124,5 +94,38 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
 
   companion object {
     const val ID = "implement-then-simplify"
+  }
+}
+
+private val IMPLEMENT_THEN_SIMPLIFY_POLICIES: Map<String, PhaseStepPolicy> =
+  mapOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
+      PhaseStepPolicy(
+        mutating = true,
+        singleAgentSession = false,
+        readOnlyIdle = false,
+        fileMutating = true,
+        generationScoped = false,
+        extendsOwnedInventory = true,
+      ),
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
+      PhaseStepPolicy(
+        mutating = true,
+        singleAgentSession = true,
+        readOnlyIdle = false,
+        fileMutating = true,
+        generationScoped = false,
+        extendsOwnedInventory = true,
+      ),
+  )
+
+private object ImplementThenSimplifyResume : PhaseResumeCapability {
+  override fun resumeRules(stepId: String): PhaseResumeRules {
+    IMPLEMENT_THEN_SIMPLIFY_POLICIES.policyOf(stepId)
+    return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) {
+      ImplementThenSimplifyStrategy.ImplementResumeRules
+    } else {
+      PhaseResumeRules.None
+    }
   }
 }

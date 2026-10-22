@@ -20,6 +20,8 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.AcceptanceRepairCapability
+import skillbill.engine.featuretask.slot.MonitorRepairCapability
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.shellcontent.featureTaskRuntimeOperatorDecisionRejected
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -42,8 +44,9 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
 ) {
   internal fun acceptanceRepairSteps(plan: ResolvedPhaseExecutionPlan): AcceptanceCriterionRepairStepRoles? {
     val audit = plan.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
-    return audit.steps.mapNotNull { strategies.selectedOwnerOf(it, plan)?.acceptanceRepairSteps }
-      .distinct().singleOrNull()
+    return audit.steps.mapNotNull {
+      (strategies.selectedOwnerOf(it, plan) as? AcceptanceRepairCapability)?.acceptanceRepairSteps
+    }.distinct().singleOrNull()
   }
 
   internal fun driveExecutePreparedRunLoop(
@@ -93,7 +96,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
     val ledger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty()
     val roles =
       executionPlan.selectedStrategies.mapNotNull {
-        strategies.selectedOwnerOf(it.entryStep, executionPlan)?.monitorRepairSteps
+        (strategies.selectedOwnerOf(it.entryStep, executionPlan) as? MonitorRepairCapability)?.monitorRepairSteps
       }.singleOrNull()
     val history =
       roles?.let {

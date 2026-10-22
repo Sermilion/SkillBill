@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.qualitygate.agentvalidate
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
@@ -9,7 +10,7 @@ import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
-internal object AgentValidateStepHooks : PhaseStepHooks {
+internal object AgentValidateStepHooks : PhaseStepHooks<PhaseQualityGateStepBinding> {
   override val checksImmediateConsumerProjection: Boolean = true
 }
 

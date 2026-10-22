@@ -46,6 +46,7 @@ import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -90,6 +91,7 @@ internal data class PhaseRunEntryFixture(
   val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer = refusingMonitorPreparer(),
   val qaManifests: List<PlatformManifest> = emptyList(),
   val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  val launchModelResolver: (AgentRunLaunchModelRequest) -> EffectiveLaunchModel = ::passThroughResolvedLaunchModel,
 )
 
 internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
@@ -120,7 +122,7 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
     runLoopEntry = runLoopEntry,
     agentRunLauncher =
       object : AgentRunLauncher {
-        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
+        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
 
         override fun launch(request: AgentRunLaunchRequest) =
           error("A phase run fixture must not resolve launches through the test support launcher.")

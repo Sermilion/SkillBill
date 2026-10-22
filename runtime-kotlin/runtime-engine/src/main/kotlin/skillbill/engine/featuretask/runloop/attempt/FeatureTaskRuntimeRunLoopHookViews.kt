@@ -39,7 +39,7 @@ import java.nio.file.Path
 internal object FeatureTaskRuntimeRunLoopHookViews {
   internal fun PhaseAttemptLaunchRuntimeContext.launchHookContext(
     run: PhaseRun,
-    hooks: PhaseStepHooks,
+    hooks: PhaseStepHooks<*>,
   ): PhaseAttemptLaunchHookContext {
     check(request === run.request)
     return when (hooks.contextKind) {
@@ -102,7 +102,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
 
   internal fun PhaseOutputSettlementContext.stepOutputContext(
     run: PhaseRun,
-    hooks: PhaseStepHooks,
+    hooks: PhaseStepHooks<*>,
   ): PhaseStepOutputContext {
     check(request === run.request)
     return when (hooks.contextKind) {
@@ -261,7 +261,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
 
   internal fun PhaseAttemptTraversalRuntimeContext.traversalHookContext(
     output: FeatureTaskRuntimePhaseOutput,
-    hooks: PhaseStepHooks,
+    hooks: PhaseStepHooks<*>,
   ): PhaseAttemptTraversalHookContext =
     if (hooks.contextKind == PhaseStepHookContextKind.PLANNING) {
       PlanningTraversalView(this, output)

@@ -9,41 +9,28 @@ import skillbill.engine.featuretask.slot.PhaseStrategyRegistration
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.engine.featuretask.slot.PhaseStrategySelection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
-import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
-import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
-import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
+import skillbill.engine.featuretask.slot.qa.QaStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
-import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
-import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
-import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
+import skillbill.model.EnvironmentContext
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
@@ -60,12 +47,14 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): PhaseRunner = DefaultPhaseRunner(launcher, gitOperations)
 
   @Provides
-  fun planFanOutStrategy(fanOutPort: BoundedWorkFanOutPort): PlanFanOutStrategy =
-    PlanFanOutStrategy(fanOutPort, GOAL_PLANNING_WAVE_CAP)
-
-  @Provides
-  fun planFanOutOpus55Strategy(planFanOut: PlanFanOutStrategy): PlanFanOutOpus55Strategy =
-    PlanFanOutOpus55Strategy(planFanOut)
+  fun planningPhaseStrategies(
+    fanOutPort: BoundedWorkFanOutPort,
+    planIntake: () -> FeatureTaskRuntimePlanIntake,
+  ): PlanningPhaseStrategies =
+    PlanningPhaseStrategies(
+      RuntimeIntakeStrategy(planIntake),
+      PlanFanOutStrategy(fanOutPort, GOAL_PLANNING_WAVE_CAP),
+    )
 
   @Provides
   fun prDescriptionStrategy(
@@ -76,10 +65,6 @@ internal interface RuntimeFeatureTaskSlotProvides {
       pullRequestIdentityLookup,
       templateFiles,
     )
-
-  @Provides
-  fun prDescriptionOpus55Strategy(prDescription: PrDescriptionStrategy): PrDescriptionOpus55Strategy =
-    PrDescriptionOpus55Strategy(prDescription)
 
   @Provides
   fun monitorStrategy(
@@ -102,71 +87,33 @@ internal interface RuntimeFeatureTaskSlotProvides {
 
   @Provides
   fun phaseStrategyRegistry(
-    runner: () -> PhaseRunner,
+    runner: PhaseRunner,
     reviewRunner: ParallelCodeReviewRunner,
-    planFanOut: PlanFanOutStrategy,
-    injected: InjectedPhaseStrategies,
-    planIntake: () -> FeatureTaskRuntimePlanIntake,
+    planning: PlanningPhaseStrategies,
+    pullRequest: PullRequestPhaseStrategies,
+    qa: QaStrategy,
   ): PhaseStrategyRegistry {
-    val inlineReviewRunner = runner()
-    val delegatedReviewRunner = runner()
-    val standaloneInlineRunner = runner()
-    val standaloneDelegatedRunner = runner()
-    val opusInlineReviewRunner = runner()
-    val opusDelegatedReviewRunner = runner()
-    val opusStandaloneInlineRunner = runner()
-    val opusStandaloneDelegatedRunner = runner()
     val inlineRubricResolver = InlineCodeQualityRubricResolver(reviewRunner::resolveInlineCodeQualityRubric)
     return PhaseStrategyRegistry(
       listOf(
-        PhaseStrategyRegistration(RuntimeIntakeStrategy(planIntake), runner()),
-        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(planFanOut, runner()),
-        PhaseStrategyRegistration(PlanFanOutOpus55Strategy(planFanOut), runner()),
-        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
-        PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
-        PhaseStrategyRegistration(AcceptanceAuditOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(InlineReviewStrategy(inlineReviewRunner, inlineRubricResolver), inlineReviewRunner),
-        PhaseStrategyRegistration(
-          InlineReviewOpus55Strategy(opusInlineReviewRunner, inlineRubricResolver),
-          opusInlineReviewRunner,
-        ),
-        PhaseStrategyRegistration(
-          DelegatedReviewStrategy(delegatedReviewRunner, reviewRunner),
-          delegatedReviewRunner,
-        ),
-        PhaseStrategyRegistration(
-          DelegatedReviewOpus55Strategy(opusDelegatedReviewRunner, reviewRunner),
-          opusDelegatedReviewRunner,
-        ),
-        PhaseStrategyRegistration(
-          InlineStandaloneReviewStrategy(standaloneInlineRunner, inlineRubricResolver),
-          standaloneInlineRunner,
-        ),
-        PhaseStrategyRegistration(
-          InlineStandaloneReviewOpus55Strategy(opusStandaloneInlineRunner, inlineRubricResolver),
-          opusStandaloneInlineRunner,
-        ),
-        PhaseStrategyRegistration(
-          DelegatedStandaloneReviewStrategy(standaloneDelegatedRunner, reviewRunner),
-          standaloneDelegatedRunner,
-        ),
-        PhaseStrategyRegistration(
-          DelegatedStandaloneReviewOpus55Strategy(opusStandaloneDelegatedRunner, reviewRunner),
-          opusStandaloneDelegatedRunner,
-        ),
-        PhaseStrategyRegistration(PackBuildStrategy(), runner()),
-        PhaseStrategyRegistration(PackBuildOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
-        PhaseStrategyRegistration(AgentValidateOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
-        PhaseStrategyRegistration(BoundaryHistoryOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
-      ) + injected.registrations(runner),
+        planning.intake,
+        AgentPreplanStrategy(),
+        planning.fanOut,
+        ImplementThenSimplifyStrategy(),
+        AcceptanceAuditStrategy(),
+        InlineReviewStrategy(runner, inlineRubricResolver),
+        InlineStandaloneReviewStrategy(runner, inlineRubricResolver),
+        DelegatedStandaloneReviewStrategy(runner, reviewRunner),
+        PackBuildStrategy(),
+        AgentValidateStrategy(),
+        BoundaryHistoryStrategy(),
+        RuntimeCommitStrategy(),
+        pullRequest.prDescription,
+        pullRequest.monitor,
+        pullRequest.standaloneMonitor,
+        pullRequest.standalonePublication,
+        qa,
+      ).map { strategy -> PhaseStrategyRegistration(strategy, runner) },
     )
   }
 
@@ -178,5 +125,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
   fun phaseStrategyLookup(
     registry: PhaseStrategyRegistry,
     selection: PhaseStrategySelection,
-  ): PhaseStrategyLookup = PhaseStrategyLookup(registry, selection)
+    environmentContext: EnvironmentContext,
+  ): PhaseStrategyLookup =
+    PhaseStrategyLookup(registry, selection, ModelDirectiveSupplementsSetting.resolve(environmentContext.environment))
 }

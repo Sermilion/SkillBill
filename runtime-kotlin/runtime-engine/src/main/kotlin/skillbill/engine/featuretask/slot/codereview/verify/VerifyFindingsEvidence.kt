@@ -24,7 +24,6 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
-import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
@@ -45,6 +44,7 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFinding
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private const val MAX_REASON_CHARS = 300
+private const val FIRST_REVIEW_PASS = 1
 private val REFUTATION_CUE =
   Regex(
     """\b(rejected|refuted|false positive|not a defect|not reproducible|does not reproduce|dismissed)\b""",
@@ -170,11 +170,6 @@ internal object VerifyFindingsEvidence {
     if (!isGoalContinuationRun(run.request)) return
     val continuation = run.request.goalContinuation ?: return
     val reviewOutput = state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) ?: return
-    val passNumber =
-      (state as? PhaseReviewPassState)
-        ?.completedReviewPassCount
-        ?.takeIf { it > 0 }
-        ?: 1
     val recordedVerdicts = state.recordedFindingVerdicts(reviewOutput)
     val rejectedResult =
       GoalSubtaskReviewSummaryReducer.rejectedVerificationFindings(
@@ -185,7 +180,7 @@ internal object VerifyFindingsEvidence {
             issueKey = continuation.parentIssueKey,
             subtaskId = continuation.subtaskId,
             workflowId = run.request.workflowId,
-            reviewPassNumber = passNumber,
+            reviewPassNumber = FIRST_REVIEW_PASS,
           ),
         recordedVerdicts = recordedVerdicts,
       )
@@ -193,7 +188,7 @@ internal object VerifyFindingsEvidence {
       RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, record)
     }
     if (rejectedResult.findings.isEmpty()) return
-    state.appendRejectedVerificationFindings(passNumber, rejectedResult.findings)
+    state.appendRejectedVerificationFindings(FIRST_REVIEW_PASS, rejectedResult.findings)
   }
 
   private fun boundaryDispositionGate(

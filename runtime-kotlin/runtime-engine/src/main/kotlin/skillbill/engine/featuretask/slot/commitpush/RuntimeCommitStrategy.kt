@@ -3,13 +3,10 @@ package skillbill.engine.featuretask.slot.commitpush
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -55,20 +52,12 @@ class RuntimeCommitStrategy : PhaseStrategy() {
     return FeatureTaskRuntimeRunInvariantPromptAllowlist.FINALIZATION
   }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome {
-    state.requireAcceptedStep(run, strategyId)
-    return (
-      state as? PhaseCommitStepBinding
-        ?: error("Commit requires its accepted execution binding.")
-    ).runCommitPush(run)
-  }
-
-  override fun stepHooks(stepId: String): PhaseStepHooks {
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
-    return RuntimeCommitUpstreamHeadFallback
+    return PhaseStepDescriptor(PhaseBindingFamily.Commit, RuntimeCommitUpstreamHeadFallback) { run, state ->
+      state.requireAcceptedStep(run, strategyId)
+      state.runCommitPush(run)
+    }
   }
 
   companion object {

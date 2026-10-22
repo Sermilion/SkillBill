@@ -18,12 +18,12 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledProgress
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -82,20 +82,20 @@ internal class FeatureTaskRuntimeRunLoopContext(
         state.phase(stepId).record?.status?.let { it != WorkflowStepStatus.PENDING } == true
     }
 
-  fun acceptedStep(run: PhaseRun): PhaseAcceptedStepExecution {
+  fun bindingFactory(run: PhaseRun): PhaseBindingFactory {
     requireAcceptedRun(run)
     runState.stepBinding.beginStepBinding(run)
-    return FeatureTaskRuntimeRunLoopStepBindings.create(launchScope(run), run)
+    return FeatureTaskRuntimeRunLoopStepBindings.factory(launchScope(run), run)
   }
 
-  fun acceptedFanOutUnitStep(
+  fun fanOutUnitBindings(
     run: PhaseRun,
     unitId: Int,
     bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
-  ): PhaseAcceptedStepExecution {
+  ): PhaseBindingFactory {
     requireAcceptedRun(run)
     bindingCoordinator.beginStepBinding(run, unitId)
-    return FeatureTaskRuntimeRunLoopStepBindings.create(
+    return FeatureTaskRuntimeRunLoopStepBindings.factory(
       launchScope(run),
       run,
       unitId,
@@ -132,7 +132,7 @@ internal class FeatureTaskRuntimeRunLoopContext(
     return runState.strategyFor(stepId)
   }
 
-  fun stepHooks(run: PhaseRun): PhaseStepHooks = strategyFor(run.phaseId).stepHooks(run.phaseId)
+  fun stepHooks(run: PhaseRun): PhaseStepHooks<*> = strategyFor(run.phaseId).stepHooks(run.phaseId)
 
   override fun acceptedStepPolicy(stepId: String) =
     runState.selectedOwnerOf(stepId)?.policyFor(stepId)

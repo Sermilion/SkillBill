@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.state
 
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 
 /**
@@ -21,10 +22,11 @@ internal interface PhaseRunFanOut {
    * The state unit [unitId] reads and writes under the coordinator-authorized fan-out wave, streaming launches to
    * [outputSink].
    */
-  fun unitState(
+  fun <B : PhaseAcceptedStepExecution> unitState(
     unitId: Int,
     outputSink: AgentRunOutputSink,
-  ): PhaseAcceptedStepExecution
+    descriptor: PhaseStepDescriptor<B>,
+  ): B
 
   /** The outcome that stops the step after unit [unitId] settled with [result], or null when the unit completed. */
   fun settleUnit(

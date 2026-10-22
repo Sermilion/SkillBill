@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -254,7 +255,7 @@ internal interface PhaseAttemptLaunchPreparationContext :
   PhaseAttemptPlanAuthorization {
   val qualityGateCycles: RuntimeQualityGateCycles
 
-  fun stepHooks(run: PhaseRun): PhaseStepHooks
+  fun stepHooks(run: PhaseRun): PhaseStepHooks<*>
 
   fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField>
 
@@ -374,6 +375,9 @@ internal open class PhaseAttemptSettlementScope(
 
   internal fun selectedOwnerOf(stepId: String): PhaseStrategy? = boundHost.selectedOwnerOf(stepId)
 
+  internal val modelDirectiveSupplements: ModelDirectiveSupplements
+    get() = boundHost.modelDirectiveSupplements
+
   internal fun resolveStrategyFor(stepId: String): PhaseStrategy = boundHost.strategyFor(stepId)
 
   internal open val qualityGateCycles: RuntimeQualityGateCycles
@@ -426,7 +430,7 @@ internal open class PhaseAttemptLaunchCollaborationScope(
   override val qualityGateCycles: RuntimeQualityGateCycles
     get() = super.qualityGateCycles
 
-  override fun stepHooks(run: PhaseRun): PhaseStepHooks {
+  override fun stepHooks(run: PhaseRun): PhaseStepHooks<*> {
     requireAcceptedBoundStep(run.phaseId)
     return resolveStrategyFor(run.phaseId).stepHooks(run.phaseId)
   }

@@ -4,7 +4,6 @@ import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
 import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
@@ -61,48 +60,7 @@ sealed interface PhaseStrategyBinding {
       return matches.singleOrNull()?.second
     }
   }
-
-  class ByProfile(
-    private val definitionBinding: PhaseStrategyBinding,
-    opusVariants: Map<String, String>,
-  ) : PhaseStrategyBinding {
-    private val opusVariants: Map<String, String> = Collections.unmodifiableMap(LinkedHashMap(opusVariants))
-
-    init {
-      if (this.opusVariants.isEmpty() || this.opusVariants.any { it.key.isBlank() || it.value.isBlank() }) {
-        throw InvalidPhaseStrategyCompositionError("profile selection contains a blank strategy identity")
-      }
-    }
-
-    override val strategyIds: Set<String>
-      get() = definitionBinding.strategyIds + opusVariants.values
-
-    override fun resolve(facts: PhaseStrategySelectionFacts): String? = definitionBinding.resolve(facts)
-
-    fun specialize(
-      canonicalId: String,
-      participatingSteps: Collection<String>,
-      facts: PhaseStrategySelectionFacts,
-    ): String {
-      val qualifies =
-        participatingSteps.any { step -> facts.stepAssignments[step]?.profile == PhaseModelProfile.OPUS_5_5 }
-      if (!qualifies) return canonicalId
-      return opusVariants[canonicalId]
-        ?: throw InvalidPhaseStrategyCompositionError("no opus variant registered for $canonicalId")
-    }
-  }
 }
-
-fun PhaseStrategyBinding.withOpus(opusStrategyId: String): PhaseStrategyBinding.ByProfile {
-  val canonicalIds = strategyIds
-  if (canonicalIds.size != 1) {
-    throw InvalidPhaseStrategyCompositionError("opus profile binding requires exactly one canonical identity")
-  }
-  return PhaseStrategyBinding.ByProfile(this, mapOf(canonicalIds.single() to opusStrategyId))
-}
-
-fun PhaseStrategyBinding.withOpus(opusVariants: Map<String, String>): PhaseStrategyBinding.ByProfile =
-  PhaseStrategyBinding.ByProfile(this, opusVariants)
 
 class PhaseStrategySelection(
   registry: PhaseStrategyRegistry,
@@ -148,20 +106,6 @@ class PhaseStrategySelection(
         "no matching selection for ${facts.definition.id}/${slot.wireValue}: " +
           facts.values.map { "${it.javaClass.simpleName}.${it.name}" }.sorted().joinToString(),
       )
-  }
-
-  fun specializedStrategyIdFor(
-    slot: PhaseSlot,
-    facts: PhaseStrategySelectionFacts,
-    participatingSteps: Collection<String>,
-  ): String {
-    val canonicalId = strategyIdFor(slot, facts)
-    val binding = bindings[facts.definition]?.get(slot) ?: return canonicalId
-    return if (binding is PhaseStrategyBinding.ByProfile) {
-      binding.specialize(canonicalId, participatingSteps, facts)
-    } else {
-      canonicalId
-    }
   }
 
   private infix fun <T> Set<T>.xor(other: Set<T>): Set<T> = (this - other) + (other - this)

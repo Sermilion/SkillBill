@@ -19,43 +19,26 @@ import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrai
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.READ_ONLY_IDLE
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.SINGLE
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.LaneScript
-import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
-import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
-import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
-import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
-import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qa.QaStrategy
-import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
-import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
-import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
-import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.goalrunner.intake.testPlanIntake
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
@@ -108,39 +91,35 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPla
 class PhaseStrategyCompositionTest {
   @TempDir lateinit var home: Path
 
-  private fun productionRegistry(): PhaseStrategyRegistry {
+  private fun productionRegistry(): PhaseStrategyRegistry =
+    PhaseStrategyRegistry(productionStrategies().map { PhaseStrategyRegistration(it, runner) })
+
+  private fun testLookup(registry: PhaseStrategyRegistry): PhaseStrategyLookup =
+    PhaseStrategyLookup(
+      registry,
+      PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings),
+      ModelDirectiveSupplements(enabled = true),
+    )
+
+  private fun productionStrategies(): List<PhaseStrategy> {
     val database =
       sqliteSessionFactoryForTests(
         userHome = home,
         dbPathOverride = home.resolve("metrics.db").toString(),
         environment = emptyMap(),
       )
-    val fanOut = PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
     val standaloneMonitor = StandaloneMonitorStrategy(UnavailableStandaloneMonitorService.service)
-    return PhaseStrategyRegistry(
-      (
-        strategies +
-          listOf(
-            standaloneMonitor,
-            StandaloneMonitorOpus55Strategy(standaloneMonitor),
-            StandaloneMonitorPublicationStrategy(UnavailableStandaloneMonitorService.service),
-            DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-            DelegatedReviewOpus55Strategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-            DelegatedStandaloneReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-            DelegatedStandaloneReviewOpus55Strategy(
-              runner,
-              scriptedDelegatedReviewRunner(database, home, LaneScript()),
-            ),
-            fanOut,
-            PlanFanOutOpus55Strategy(fanOut),
-            QaStrategy(
-              unavailableQaReportSettlement(),
-              testQaExecutionLifecycle(NoopWorkflowGitOperations),
-              unusedQaOutcomeRecorder(),
-            ),
-          )
-      ).map { PhaseStrategyRegistration(it, runner) },
-    )
+    return strategies +
+      listOf(
+        standaloneMonitor,
+        StandaloneMonitorPublicationStrategy(UnavailableStandaloneMonitorService.service),
+        DelegatedStandaloneReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
+        QaStrategy(
+          unavailableQaReportSettlement(),
+          testQaExecutionLifecycle(NoopWorkflowGitOperations),
+          unusedQaOutcomeRecorder(),
+        ),
+      )
   }
 
   private val runner =
@@ -167,28 +146,17 @@ class PhaseStrategyCompositionTest {
     listOf(
       RuntimeIntakeStrategy { testPlanIntake() },
       AgentPreplanStrategy(),
-      AgentPreplanOpus55Strategy(),
-      AgentPlanStrategy(),
-      AgentPlanOpus55Strategy(),
+      PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1),
       ImplementThenSimplifyStrategy(),
-      ImplementThenSimplifyOpus55Strategy(),
       AcceptanceAuditStrategy(),
-      AcceptanceAuditOpus55Strategy(),
       InlineReviewStrategy(runner),
-      InlineReviewOpus55Strategy(runner),
       InlineStandaloneReviewStrategy(runner),
-      InlineStandaloneReviewOpus55Strategy(runner),
       PackBuildStrategy(),
-      PackBuildOpus55Strategy(),
       AgentValidateStrategy(),
-      AgentValidateOpus55Strategy(),
       BoundaryHistoryStrategy(),
-      BoundaryHistoryOpus55Strategy(),
       RuntimeCommitStrategy(),
       prDescriptionStrategy,
-      PrDescriptionOpus55Strategy(prDescriptionStrategy),
       monitorStrategy,
-      MonitorOpus55Strategy(monitorStrategy),
     )
 
   @Test
@@ -200,7 +168,7 @@ class PhaseStrategyCompositionTest {
 
   @Test
   fun `every implement strategy tells implement how to return a no-change claim`() {
-    listOf(ImplementThenSimplifyStrategy(), ImplementThenSimplifyOpus55Strategy()).forEach { strategy ->
+    listOf(ImplementThenSimplifyStrategy()).forEach { strategy ->
       val implement =
         strategy.promptSections(
           "implement",
@@ -269,7 +237,7 @@ class PhaseStrategyCompositionTest {
               ),
           ),
         )
-      val lookup = PhaseStrategyLookup(registry, selection)
+      val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
       val orders =
         listOf(
           linkedSetOf(FeatureTaskRuntimeQualityGateSelection.BUILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
@@ -295,7 +263,7 @@ class PhaseStrategyCompositionTest {
         registry,
         mapOf(definition to mapOf(PhaseSlot.CODE_REVIEW to PhaseStrategyBinding.Fixed("review-only"))),
       )
-    val lookup = PhaseStrategyLookup(registry, selection)
+    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(definition, emptySet()))
 
     assertFailsWith<InvalidPhaseStrategyCompositionError> {
@@ -307,7 +275,7 @@ class PhaseStrategyCompositionTest {
   fun `production resolver accepts every shipped definition and supported typed selection`() {
     val registry = productionRegistry()
     val selection = PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings)
-    val lookup = PhaseStrategyLookup(registry, selection)
+    val lookup = PhaseStrategyLookup(registry, selection, ModelDirectiveSupplements(enabled = true))
 
     SkeletonDefinition.entries.forEach { definition ->
       val reviewModes: List<CodeReviewExecutionMode?> =
@@ -345,7 +313,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `the internal standalone monitor binds its own strategies and leaves the legacy monitor bindings alone`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val standalone =
       lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE_MONITOR, emptySet()))
     val legacy = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.MONITOR, emptySet()))
@@ -356,14 +324,14 @@ class PhaseStrategyCompositionTest {
     assertEquals(MonitorStrategy.ID, lookup.strategyFor(PHASE_MONITOR, legacy).strategyId)
     assertEquals(RuntimeCommitStrategy.ID, lookup.strategyFor(PHASE_COMMIT_PUSH, legacy).strategyId)
     assertEquals(
-      setOf(StandaloneMonitorStrategy.ID, StandaloneMonitorOpus55Strategy.ID),
+      setOf(StandaloneMonitorStrategy.ID),
       SkeletonStrategyBindings.bindings
         .getValue(SkeletonDefinition.STANDALONE_MONITOR)
         .getValue(PhaseSlot.MONITOR)
         .strategyIds,
     )
     assertEquals(
-      setOf(MonitorStrategy.ID, MonitorOpus55Strategy.ID),
+      setOf(MonitorStrategy.ID),
       SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR).getValue(PhaseSlot.MONITOR).strategyIds,
     )
   }
@@ -371,7 +339,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `resolved compositions round trip through the production codec without losing traversal or policy semantics`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val codec = FeatureTaskRuntimeExecutionPlanCodec(FeatureTaskRuntimeExecutionPlanSchemaValidator())
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     SkeletonDefinition.entries.forEach { definition ->
@@ -434,7 +402,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `reader distinguishes descriptor failures before attaching runners`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
@@ -492,7 +460,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `supported composition refuses recorded selection and traversal changes without replacing the stored plan`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
@@ -526,7 +494,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `composition compatibility retains semantics across object order and fresh executable instances`() {
     val registry = productionRegistry()
-    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val lookup = testLookup(registry)
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val original = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
@@ -550,6 +518,7 @@ class PhaseStrategyCompositionTest {
               ),
           ),
         ),
+        ModelDirectiveSupplements(enabled = true),
       )
     val restored =
       FeatureTaskRuntimeExecutionPlanCompatibility(codec, freshLookup).requireSupportedComposition(
@@ -563,8 +532,7 @@ class PhaseStrategyCompositionTest {
   @Test
   fun `a validated traversal override becomes part of the resolved plan`() {
     val registry = productionRegistry()
-    val selection = PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings)
-    val lookup = PhaseStrategyLookup(registry, selection)
+    val lookup = testLookup(registry)
     val facts =
       PhaseStrategySelectionFacts(
         SkeletonDefinition.GOAL_CHILD,
@@ -593,6 +561,7 @@ class PhaseStrategyCompositionTest {
         PHASE_INTAKE to policy(),
         PHASE_PREPLAN to policy(),
         PHASE_PLAN to policy(),
+        PHASE_PLAN_SUBTASKS to policy(),
         PHASE_IMPLEMENT to policy(MUTATING, FILE_MUTATING).extendingInventory(),
         PHASE_SIMPLIFY to
           policy(MUTATING, SINGLE, FILE_MUTATING).extendingInventory(),
@@ -670,9 +639,9 @@ class PhaseStrategyCompositionTest {
     if (definition == SkeletonDefinition.REVIEW) {
       assertEquals(
         if (reviewMode == CodeReviewExecutionMode.DELEGATED) {
-          DelegatedReviewStrategy.ID
+          DelegatedStandaloneReviewStrategy.ID
         } else {
-          InlineReviewStrategy.ID
+          InlineStandaloneReviewStrategy.ID
         },
         lookup.strategyFor(PHASE_PRESENT_FINDINGS, plan).strategyId,
       )

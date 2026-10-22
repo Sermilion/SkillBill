@@ -11,24 +11,22 @@ import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
-import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStepSession
-import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.ReviewBindingFamily
 import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
@@ -36,8 +34,6 @@ import skillbill.engine.featuretask.slot.codereview.ReviewTargetResolver
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
 import skillbill.engine.featuretask.slot.codereview.resolveInlineRubric
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
@@ -47,8 +43,6 @@ import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
-import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ParallelReviewLaneResult
@@ -60,7 +54,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -89,20 +82,14 @@ open class DelegatedStandaloneReviewStrategy(
 }
 
 abstract class StandaloneReviewStrategy(
-  private val runner: PhaseRunner,
+  internal val runner: PhaseRunner,
   private val reviewRunner: ParallelCodeReviewRunner?,
   private val qualityRubricResolver: InlineCodeQualityRubricResolver? =
     reviewRunner?.let { InlineCodeQualityRubricResolver(it::resolveInlineCodeQualityRubric) },
-) : PhaseStrategyStatusProjection() {
+) : PhaseStrategy() {
   override val slot: PhaseSlot = PhaseSlot.STANDALONE_REVIEW
   override val steps: List<String> = listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS)
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
-  override val loopRules: PhaseLoopRules = object : PhaseLoopRules {}
-
-  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind {
-    check(stepId == entryStep)
-    return PhaseExecutionBindingKind.REVIEW
-  }
 
   override fun policyFor(stepId: String): PhaseStepPolicy {
     check(stepId == entryStep)
@@ -128,11 +115,17 @@ abstract class StandaloneReviewStrategy(
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections = PhaseStepPromptSections(taskDirective = directiveFor(stepId), settles = false)
 
-  override fun runStep(
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    check(stepId == entryStep)
+    return PhaseStepDescriptor(ReviewBindingFamily, PhaseStepHooks.None) { run, state ->
+      runReview(run, state)
+    }
+  }
+
+  private fun runReview(
     run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
+    binding: PhaseReviewStepBinding,
   ): PhaseOutcome {
-    val binding = state as? PhaseReviewStepBinding ?: error("Standalone review requires an accepted review binding.")
     val iteration = binding.nextStepIteration()
     binding.startReviewStep(run, iteration)?.let { return it }
     return runStartedReview(run, binding, iteration)
@@ -168,7 +161,7 @@ abstract class StandaloneReviewStrategy(
           is ParallelCodeReviewPlanned.Ready -> resolved.value?.let(::delegatedQualityRubricSection)
         }
       }
-    val directive = standaloneDirective(run, target, headSha, qualitySection)
+    val directive = standaloneDirective(run, binding, target, headSha, qualitySection)
     return runPreparedReview(
       run,
       binding,
@@ -317,6 +310,7 @@ abstract class StandaloneReviewStrategy(
 
   private fun standaloneDirective(
     run: PhaseRun,
+    binding: PhaseReviewStepBinding,
     target: ReviewTarget,
     head: String,
     qualitySection: String?,
@@ -336,16 +330,16 @@ abstract class StandaloneReviewStrategy(
         appendLine()
         append(it)
       }
-      if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
-        val extra =
-          when (strategyId) {
-            DelegatedStandaloneReviewOpus55Strategy.ID -> DelegatedStandaloneReviewOpus55Strategy.DIRECTIVE
-            else -> InlineStandaloneReviewOpus55Strategy.DIRECTIVE
-          }
+      supplement(run, binding)?.let {
         appendLine()
-        append(extra)
+        append(it)
       }
     }
+
+  private fun supplement(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+  ): String? = binding.modelDirectiveSupplements.directiveFor(run, binding.acceptedOwner)
 
   private fun delegatedQualityRubricSection(rubric: String): String =
     buildString {
@@ -451,12 +445,7 @@ abstract class StandaloneReviewStrategy(
               launch.skillRunRequest.progressIdleTimeout
                 ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
             modelOverride = run.launchAssignment?.launch?.effectiveModel,
-            directiveSuffix =
-              if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
-                DelegatedStandaloneReviewOpus55Strategy.DIRECTIVE
-              } else {
-                ""
-              },
+            directiveSuffix = supplement(run, binding).orEmpty(),
           )
         when (val outcome = delegatedRunner.run(request)) {
           is ParallelCodeReviewRunOutcome.PlanningFailed -> {
@@ -520,20 +509,6 @@ abstract class StandaloneReviewStrategy(
     )
     return PhaseOutcome.blocked(reason)
   }
-
-  override fun stepHooks(stepId: String): PhaseStepHooks = PhaseStepHooks.None
-
-  override fun resumeRules(stepId: String): PhaseResumeRules = PhaseResumeRules.None
-
-  override fun currentExecution(
-    stepId: String,
-    context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-  ): IdeStatusCurrentPhaseExecution? = null
-
-  override fun verdictRule(
-    stepId: String,
-    diagnostics: RuntimeDiagnostics,
-  ): FeatureTaskRuntimeStepVerdictRule? = null
 }
 
 private data class StandaloneLaunch(
