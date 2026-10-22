@@ -14,7 +14,7 @@ A real QA run was thrown away by schema validation. capmo-android ENG-1587, `ski
 
 Contributing causes:
 - `QaPromptSections.supplement` points the agent at `orchestration/contracts/qa-receipt-schema.yaml`, a path relative to the skill-bill repo that does not exist in the target repository.
-- `platform-packs/kmp/qa/android-qa.md` documents only `simulator_substitution`; `target_substitution` is undocumented.
+- `../../../platform-packs/kmp/qa/android-qa.md` documents only `simulator_substitution`; `target_substitution` is undocumented.
 - `android-qa.md:33` and `:45` (and the iOS guidance equivalent) tell the agent to skip with `ambiguous_target` when more than one authorized device is connected and none is named. An earlier ENG-1587 verify run skipped QA entirely for that reason with a phone and an emulator connected.
 
 ## Principle (operator decision, overrides the general runtime-contract rules in AGENTS.md for this agent output)
@@ -30,7 +30,7 @@ skill-bill works in prose. Agent-written QA output gets no strict schema, no enu
 5. Device selection: when several authorized targets are connected and none is named, the agent picks any free one it can lease (`skill-bill qa lease acquire`), tries another when one is unusable (for example out of storage), and names in the report which device it used and why. `ambiguous_target` is no longer a skip outcome. A named serial is still honoured.
 6. Delete what this replaces rather than keeping it alongside: `orchestration/contracts/qa-receipt-schema.yaml` and its schema port/locator/parity test, `QaReceiptValidator` schema checks, `QaReceiptNormalization` claim downgrades, the structured flow/assertion/fallback/target model, and the criteria-matrix rendering. Keep identity binding (the runtime knows the tested HEAD/tree itself; do not make the agent echo it) and HEAD/tree/worktree change warnings, device lease release, and evidence living under the invocation directory.
 7. Desktop tray: the QA panels (`feature/detail` QA findings and criteria, `RuntimeWorkMapper`, work models) show the prose report and the extracted findings with fixed/not_fixed state instead of the structured criteria matrix.
-8. Update `docs/runtime-command-guidance.md` QA paragraphs and the skill-bill skill content that describe receipts, schema validation, downgrade rules and `ambiguous_target`.
+8. Update `../../../docs/runtime-command-guidance.md` QA paragraphs and the skill-bill skill content that describe receipts, schema validation, downgrade rules and `ambiguous_target`.
 
 ## Acceptance Criteria
 

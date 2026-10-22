@@ -82,7 +82,8 @@ internal class VerifyOperationHarness : AutoCloseable {
   val delegatedReviews = mutableListOf<ParallelCodeReviewRequest>()
   var reviewFindings: List<ParallelReviewMergedFinding> = emptyList()
   var inlineQualityRubric: String? = null
-  val qaWorkspaces = InMemoryQaWorkspaces()
+  private val qaRoot: Path = root.resolve("qa")
+  val qaWorkspaces = InMemoryQaWorkspaces(qaRoot)
   val qaLeases = RecordingQaLeases()
   var qaManifests: List<PlatformManifest> = emptyList()
   var failWorktreeRemoval = false
@@ -207,7 +208,7 @@ internal class VerifyOperationHarness : AutoCloseable {
     qa: String? = null,
   ): OperationOutcome = invoke(OperationArguments(confirm = token, target = target, qa = qa))
 
-  fun qaWorktree(workflowId: String): Path = repo.toRealPath().resolve(".git/skill-bill/verify-qa/$workflowId")
+  val qaWorktree: Path get() = qaRoot.resolve(QA_INVOCATION).resolve("checkout")
 
   fun treeIdentity(path: Path): String =
     (git.repositoryTreeIdentity(path) as WorkflowGitOperationResult.Ok).value.trim()
@@ -216,9 +217,14 @@ internal class VerifyOperationHarness : AutoCloseable {
 
   private fun qaStep(): VerifyQaStep =
     VerifyQaStep(
-      testQaExecutionLifecycle(git, qaWorkspaces, qaLeases, QaCapabilityResolver(git) { qaManifests }),
+      testQaExecutionLifecycle(
+        qaGit,
+        qaWorkspaces,
+        qaLeases,
+        QaCapabilityResolver(git) { qaManifests },
+        diagnostics = recordingDiagnostics,
+      ),
       QaReportSettlement(qaWorkspaces, NoopRuntimeDiagnostics),
-      qaGit,
       recordingDiagnostics,
     )
 

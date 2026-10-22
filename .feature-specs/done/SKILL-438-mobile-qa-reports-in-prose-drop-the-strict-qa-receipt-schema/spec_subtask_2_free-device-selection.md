@@ -1,6 +1,6 @@
 # SKILL-438 subtask 2 - Pick a free device instead of skipping with ambiguous_target
 
-Parent spec: `.feature-specs/SKILL-438-mobile-qa-reports-in-prose-drop-the-strict-qa-receipt-schema/spec.md`
+Parent spec: `spec.md`
 
 ## Scope
 
@@ -9,16 +9,16 @@ This subtask covers parent requirement 5 and the `ambiguous_target` part of requ
 Areas touched:
 
 - `runtime-kotlin/.../QaExecutionPolicy.kt`: remove `QaSkipReason.AMBIGUOUS_TARGET` and any runtime branch that produces or maps it.
-- `platform-packs/kmp/qa/android-qa.md`: the "Selection" section (currently around lines 29–35) and the AVD-list step (currently around line 45).
-- `platform-packs/ios/qa/ios-qa.md`: the target-selection line (currently around line 31).
+- `../../../platform-packs/kmp/qa/android-qa.md`: the "Selection" section (currently around lines 29–35) and the AVD-list step (currently around line 45).
+- `../../../platform-packs/ios/qa/ios-qa.md`: the target-selection line (currently around line 31).
 - The QA run briefing in `QaPromptSections.supplement`, wherever it names `ambiguous_target`.
-- `docs/runtime-command-guidance.md`, `docs/observability-policy.md`, and the skill-bill skill content, wherever they name `ambiguous_target`.
+- `../../../docs/runtime-command-guidance.md`, `docs/observability-policy.md`, and the skill-bill skill content, wherever they name `ambiguous_target`.
 - If it is still present on the tree, `orchestration/contracts/qa-receipt-schema.yaml`'s skip-reason enum entry.
 
 ## Acceptance Criteria
 
 1. The Android and iOS QA guidance tells the agent what to do when several authorized targets are connected and none is named. The agent takes any free one it can lease with `skill-bill qa lease acquire`, and tries another free target if the chosen one is unusable (for example, out of storage). It then names in its QA report which device or simulator it used and why. A named serial, UDID, or AVD is still honoured.
-2. `QaSkipReason` has no `AMBIGUOUS_TARGET` value. No runtime source, contract, QA guidance, QA run briefing, doc, or skill content names `ambiguous_target` as a skip outcome. `agent/history.md` and `agent/decisions.md` are historical records and are excluded.
+2. `QaSkipReason` has no `AMBIGUOUS_TARGET` value. No runtime source, contract, QA guidance, QA run briefing, doc, or skill content names `ambiguous_target` as a skip outcome. `../../../agent/history.md` and `agent/decisions.md` are historical records and are excluded.
 
 ## Non-Goals
 
@@ -45,8 +45,8 @@ Run the tasks in order. Task 1 sets the edit list for tasks 2–7. This subtask 
 
 ### Task 1 — Find every occurrence (serves AC 2)
 
-- Do one case-insensitive search of the working tree for `ambiguous_target`, `AMBIGUOUS_TARGET`, and `ambiguous target`. Cover `runtime-kotlin/`, `orchestration/`, `platform-packs/`, `docs/`, `skills/`, `desktop-tray/`, and the repo-root markdown files.
-- Exclude `runtime-kotlin/agent/history.md`, `runtime-kotlin/agent/decisions.md`, and `.feature-specs/`. The bundles under `.feature-specs/` are planning records. They are not runtime source, contract, guidance, briefing, doc, or skill content.
+- Do one case-insensitive search of the working tree for `ambiguous_target`, `AMBIGUOUS_TARGET`, and `ambiguous target`. Cover `../../../runtime-kotlin`, `orchestration/`, `platform-packs/`, `docs/`, `skills/`, `desktop-tray/`, and the repo-root markdown files.
+- Exclude `../../../runtime-kotlin/agent/history.md`, `runtime-kotlin/agent/decisions.md`, and `.feature-specs/`. The bundles under `.feature-specs/` are planning records. They are not runtime source, contract, guidance, briefing, doc, or skill content.
 - Each hit goes to one of tasks 2–7. A hit outside those buckets, such as a resource copy under `src/main/resources` or a generated agent config, follows the closest task's rule: remove the skip outcome and point to the pick-a-free-target behavior.
 - Assumption to confirm: the digest never found the "skill-bill skill content" file. This search is how implement finds it, so do not search for it separately.
 
@@ -59,7 +59,7 @@ Run the tasks in order. Task 1 sets the edit list for tasks 2–7. This subtask 
 
 ### Task 3 — Rewrite Android selection guidance (serves AC 1, AC 2)
 
-In `platform-packs/kmp/qa/android-qa.md`:
+In `../../../platform-packs/kmp/qa/android-qa.md`:
 
 - Replace the multi-device `ambiguous_target` skip in the "Selection" section (about lines 29–35) with these rules:
   - If the operator named a serial or AVD, use it.
@@ -72,7 +72,7 @@ In `platform-packs/kmp/qa/android-qa.md`:
 
 ### Task 4 — Rewrite iOS selection guidance (serves AC 1, AC 2)
 
-- In `platform-packs/ios/qa/ios-qa.md` (about line 31), make the same change as task 3 for simulators and devices.
+- In `../../../platform-packs/ios/qa/ios-qa.md` (about line 31), make the same change as task 3 for simulators and devices.
 - A named UDID or simulator is used.
 - Otherwise, pick any free booted or bootable simulator, or any free device, and lease it with `skill-bill qa lease acquire`.
 - If it is unusable, release it and try another free one.
@@ -88,9 +88,9 @@ In `platform-packs/kmp/qa/android-qa.md`:
 
 ### Task 6 — Docs and skill content (serves AC 2)
 
-- In `docs/runtime-command-guidance.md`, `docs/observability-policy.md`, and the skill content file found in task 1, remove `ambiguous_target` as a skip outcome. Where the text lists skip reasons, either drop the entry or replace it with one line on the pick-a-free-target behavior.
-- Do not edit `runtime-kotlin/agent/history.md` or `runtime-kotlin/agent/decisions.md`.
-- `runtime-kotlin/ARCHITECTURE.md` needs an edit only if task 1 finds the string in it.
+- In `../../../docs/runtime-command-guidance.md`, `docs/observability-policy.md`, and the skill content file found in task 1, remove `ambiguous_target` as a skip outcome. Where the text lists skip reasons, either drop the entry or replace it with one line on the pick-a-free-target behavior.
+- Do not edit `../../../runtime-kotlin/agent/history.md` or `runtime-kotlin/agent/decisions.md`.
+- `../../../runtime-kotlin/ARCHITECTURE.md` needs an edit only if task 1 finds the string in it.
 
 ### Task 7 — Receipt schema enum, only if present (serves AC 2)
 

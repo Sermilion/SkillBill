@@ -59,7 +59,7 @@ class VerifyQaOperationTest {
       assertContains(verdictDirective, "no installed pack declares qa_capability for this repository")
       assertFalse(VerifyPromptSections.QA_STEP in harness.runner.stepNames())
       assertEquals(listOf(VerifyOperationHarness.QA_INVOCATION), harness.qaLeases.releasedInvocations)
-      assertFalse(Files.exists(harness.qaWorktree(parked.token)))
+      assertFalse(Files.exists(harness.qaWorktree))
     }
   }
 
@@ -74,18 +74,18 @@ class VerifyQaOperationTest {
       val written = qaTestReport(QaVerdict.PASSED, expected())
       var testedGreeter: String? = null
       harness.runner.sideEffects[VerifyPromptSections.QA_STEP] = {
-        testedGreeter = harness.qaWorktree(token).resolve("src/main/kotlin/Greeter.kt").readText()
+        testedGreeter = harness.qaWorktree.resolve("src/main/kotlin/Greeter.kt").readText()
         harness.qaWorkspaces.report = written
       }
 
       val report = assertIs<OperationOutcome.Completed>(harness.confirm(token))
 
       assertContains(report.text, "QA outcome: passed")
-      assertEquals(harness.qaWorktree(token), harness.runner.input(VerifyPromptSections.QA_STEP).facts.repoRoot)
+      assertEquals(harness.qaWorktree, harness.runner.input(VerifyPromptSections.QA_STEP).facts.repoRoot)
       assertEquals("fun greet(name: String) = \"hi \$name\"\n", testedGreeter)
       assertEquals(status, harness.status())
       assertEquals(head, harness.headCommit())
-      assertFalse(Files.exists(harness.qaWorktree(token)))
+      assertFalse(Files.exists(harness.qaWorktree))
       val steps = harness.runner.stepNames()
       assertEquals(
         listOf(
@@ -137,7 +137,7 @@ class VerifyQaOperationTest {
       assertEquals("incomplete", artifact["verdict"])
       assertEquals(written, artifact["report_text"])
       assertContains(harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive, written)
-      assertFalse(Files.exists(harness.qaWorktree(token)))
+      assertFalse(Files.exists(harness.qaWorktree))
     }
   }
 
@@ -160,14 +160,15 @@ class VerifyQaOperationTest {
   @Test
   fun `a failed worktree removal is recorded as a cleanup note on the report and in diagnostics`() {
     VerifyOperationHarness().use { harness ->
+      harness.qaManifests = listOf(ANDROID_PACK)
       harness.failWorktreeRemoval = true
       val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on")).token
 
       assertIs<OperationOutcome.Completed>(harness.confirm(token))
 
       val cleanup = qaReport(harness, token)["cleanup"].toString()
-      assertContains(cleanup, "retained worktree ${harness.qaWorktree(token)}")
-      assertTrue(harness.warnings.any { "verify qa worktree retained" in it }, harness.warnings.toString())
+      assertContains(cleanup, "retained worktree ${harness.qaWorktree}")
+      assertTrue(harness.warnings.any { "qa checkout retained" in it }, harness.warnings.toString())
     }
   }
 

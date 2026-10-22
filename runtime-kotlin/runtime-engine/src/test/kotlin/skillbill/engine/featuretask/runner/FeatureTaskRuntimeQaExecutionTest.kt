@@ -66,6 +66,7 @@ class FeatureTaskRuntimeQaExecutionTest {
           .single { phaseIdFromPrompt(it.promptOverride.orEmpty()) == "qa" }
       val prompt = assertNotNull(qaLaunch.promptOverride)
       assertEquals(listOf(Path.of(QA_TEST_QA_ROOT, "qa-test-invocation")), qaLaunch.additionalWritableDirectories)
+      assertEquals(Path.of(QA_TEST_QA_ROOT, "qa-test-invocation", "checkout"), qaLaunch.repoRoot)
       assertContains(prompt, "qa/android-qa.md")
       assertContains(prompt, "Report path: `${qaTestEvidencePrefix("qa-test-invocation")}report.md`")
       val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
@@ -115,9 +116,10 @@ class FeatureTaskRuntimeQaExecutionTest {
 
     assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
 
-    assertTrue(
-      fixture.launcher.requests.any { phaseIdFromPrompt(it.skillRunRequest.promptOverride.orEmpty()) == "qa_fix" },
-    )
+    val repair =
+      fixture.launcher.requests.map { it.skillRunRequest }
+        .first { phaseIdFromPrompt(it.promptOverride.orEmpty()) == "qa_fix" }
+    assertEquals(fixture.harness.request.repoRoot, repair.repoRoot)
     assertEquals(listOf("qa-test-invocation"), fixture.leases.releasedInvocations)
     assertEquals(listOf("qa-test-invocation"), fixture.workspaces.closedInvocations)
   }

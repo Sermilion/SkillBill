@@ -4,7 +4,6 @@ import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.QA_TEST_QA_ROOT
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
-import skillbill.engine.featuretask.qa.report.qaTestEvidencePrefix
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.qa.QaWorkspacePort
@@ -17,7 +16,9 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Path
 
-internal class InMemoryQaWorkspaces : QaWorkspacePort {
+internal class InMemoryQaWorkspaces(
+  private val root: Path = Path.of(QA_TEST_QA_ROOT),
+) : QaWorkspacePort {
   var report: String? = null
   val closedInvocations = mutableListOf<String>()
   val reports = mutableMapOf<Path, String>()
@@ -27,8 +28,8 @@ internal class InMemoryQaWorkspaces : QaWorkspacePort {
     repoRoot: Path,
     invocationId: String,
   ): QaWorkspace {
-    val directory = Path.of(QA_TEST_QA_ROOT, invocationId)
-    return QaWorkspace(invocationId, directory, directory.resolve("report.md"), qaTestEvidencePrefix(invocationId))
+    val directory = root.resolve(invocationId)
+    return QaWorkspace(invocationId, directory, directory.resolve("report.md"), "$directory/")
       .also { current = it }
   }
 

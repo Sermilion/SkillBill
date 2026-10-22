@@ -1,12 +1,12 @@
 # SKILL-438 subtask 1 - Prose QA report across runtime, verify, persistence, and desktop tray
 
-Parent spec: `.feature-specs/SKILL-438-mobile-qa-reports-in-prose-drop-the-strict-qa-receipt-schema/spec.md`
+Parent spec: `spec.md`
 
 ## Scope
 
 The JSON QA receipt becomes a prose markdown report everywhere it is written, settled, stored, printed, and shown. That covers parent requirements 1, 2, 3, 4, 6, and 7, plus the parts of requirement 8 about receipts, schema validation, and downgrade rules. Device selection and `ambiguous_target` belong to subtask 2.
 
-Areas touched. All runtime paths are under `runtime-kotlin/` unless noted.
+Areas touched. All runtime paths are under `../../../runtime-kotlin` unless noted.
 
 - Settlement and model: `runtime-engine/.../featuretask/qa/receipt/` (`QaReceipt.kt`, `QaReceiptValidator.kt`, `QaReceiptDecoding.kt`, `QaReceiptNormalization.kt`, `QaReceiptSettlement.kt`, `QaPhaseOutputKeys.kt`, `FeatureTaskQaOutcomeRecords.kt`, `FeatureTaskQaOutcomeRecorder.kt`).
 - Strategy and loop: `runtime-engine/.../featuretask/slot/qa/` (`QaStrategy.kt`, `QaPromptSections.kt`, `QaRepairHooks.kt`, `QaVerdictRule.kt`, `QaLoopRules.kt`), `featuretask/qa/execution/QaExecutionLifecycle.kt` (only the moved `QaRetainedResource` import), and `runtime-domain/.../model/qa/QaRepairState.kt`.
@@ -14,15 +14,15 @@ Areas touched. All runtime paths are under `runtime-kotlin/` unless noted.
 - Goal loop and status: `engine/goalrunner/qa/DefaultGoalRunnerQaGate.kt`, `engine/goalrunner/execution/support/GoalRunnerBranchPlan.kt`, `GoalRunnerStatusProjectionAssembler.kt`, `GoalRunnerStatusProjectionModels.kt`, `runtime-cli/.../goal/status/GoalCliStatusTextLines.kt`, and `GoalCliStatusFormatting.kt`.
 - Ports and persistence: `ports/featuretask/model/FeatureTaskQaOutcome.kt`, `ports/idestatus/model/StandaloneQaReportModels.kt` and its consumers (`StandalonePhaseStatusModels.kt`, `WorkDetailModels.kt`, `PhaseRunModels.kt`, `StandalonePhaseStatusEventSink.kt`, `WorkExecutionHistory.kt`), `SqliteFeatureTaskQaOutcomeStore`, `StandalonePhaseStatusStore`, `core/migration/area/idestatus/StandaloneQaReportMigration.kt`, `DatabaseMigrationEntries.kt`, `runtime-contracts/.../contracts/persistence/DesktopReadSchema.kt`, and `featuretask/persist/FeatureTaskRuntimeWorkflowPersistence.kt` (`readQaRepairState`).
 - Workspace, schema, and errors: `QaWorkspacePort`, `ports/qa/model/QaWorkspace.kt`, `FileSystemQaWorkspace`, `runtime-ports/.../qa/QaReceiptSchemaPort.kt`, `runtime-infra/contracts/.../qa/QaReceiptSchemaValidator.kt`, `QaReceiptSchemaPaths` in `FeatureTaskRuntimeSchemaPaths.kt`, the `qa-receipt-schema.yaml` copy in `runtime-infra/contracts/build.gradle.kts`, `RuntimeQaProvides.qaReceiptSchemaPort()`, `runtime-contracts/.../qa/QaReceiptContract.kt`, `runtime-contracts/.../error/featuretask/qa/QaRuntimeErrors.kt`, `FeatureTaskRuntimeFailureCode.kt`, and `orchestration/contracts/qa-receipt-schema.yaml`.
-- Guidance and docs: the report-shape, verdict, fallback, and receipt wording in `platform-packs/kmp/qa/android-qa.md` and `platform-packs/ios/qa/ios-qa.md`, the QA paragraphs of `docs/runtime-command-guidance.md`, `docs/observability-policy.md` where it describes receipts, `runtime-kotlin/ARCHITECTURE.md` where it describes the receipt schema port, and any skill-bill skill content under `skills/` or `orchestration/` that describes receipts, schema validation, or downgrade rules.
-- Desktop tray, a separate Gradle build under `desktop-tray/`: `core/domain/.../model/WorkModels.kt`, `core/data/.../runtime/RuntimeWorkMapper.kt`, and in `feature/detail` `QaCriteria.kt`, `QaFindings.kt`, `DetailContent.kt`, and `PhaseResultsPreview.kt`.
+- Guidance and docs: the report-shape, verdict, fallback, and receipt wording in `../../../platform-packs/kmp/qa/android-qa.md` and `platform-packs/ios/qa/ios-qa.md`, the QA paragraphs of `docs/runtime-command-guidance.md`, `docs/observability-policy.md` where it describes receipts, `runtime-kotlin/ARCHITECTURE.md` where it describes the receipt schema port, and any skill-bill skill content under `skills/` or `orchestration/` that describes receipts, schema validation, or downgrade rules.
+- Desktop tray, a separate Gradle build under `../../../desktop-tray`: `core/domain/.../model/WorkModels.kt`, `core/data/.../runtime/RuntimeWorkMapper.kt`, and in `feature/detail` `QaCriteria.kt`, `QaFindings.kt`, `DetailContent.kt`, and `PhaseResultsPreview.kt`.
 
 ## Acceptance Criteria
 
 1. QA settlement reads `report.md` from the QA invocation directory and settles from its text with no schema check, size cap, or format rejection. The verdict comes from the first report line that names `passed`, `findings` (or `findings_open`), `incomplete`, or `skipped`, case-insensitively. Finding ids and titles come from `### <finding-id> <title>` headings, and each finding's section text is kept verbatim. A report with no recognizable verdict settles `incomplete`. Every settled report's full text is stored with the QA outcome. Only a missing `report.md` or a stopped agent settles without report text.
 2. Goal finalization runs `qa -> qa_fix -> build -> qa` from the extracted findings, with up to three repair attempts across relaunches. The `qa_fix` prompt carries each open finding's section verbatim plus the evidence paths named in it. Findings are matched by id across QA runs and recorded `fixed` or `not_fixed`. Findings still open after the third attempt appear in the PR body's Mobile QA section as not fixed. `skill-bill goal status` prints `qa_findings: fixed=<n> not_fixed=<m>` with the open ids and no `qa_criteria:` line. QA never blocks the goal, `qa:off` skips without probing a device, and workflows whose stored phase output still carries a legacy `qa_receipt` load and settle.
 3. Standalone `skill-bill phase qa` and `operation:verify qa:on` print the verdict, the report text verbatim, warnings, and the runtime cleanup note instead of the flows/assertions/criteria rendering. The verify verdict directive embeds the prose report. It still turns APPROVE into APPROVE WITH FIXES when QA findings are open, and it still treats skipped or incomplete QA as untested coverage.
-4. Agent-written QA output is described only in prose, and no JSON schema, enum, or length cap applies to it. `orchestration/contracts/qa-receipt-schema.yaml` is deleted, along with its schema port, adapter, locator paths, Gradle copy, DI provider, receipt contract version, claim-normalization code, strict decoding, the structured flow/assertion/fallback/target model and its enums, the criteria-matrix model and rendering, and the receipt-schema error constructors. The QA run briefing, `android-qa.md`, `ios-qa.md`, `docs/runtime-command-guidance.md`, and the skill content describe the `report.md` shape from parent requirement 1 instead of a receipt.
+4. Agent-written QA output is described only in prose, and no JSON schema, enum, or length cap applies to it. `orchestration/contracts/qa-receipt-schema.yaml` is deleted, along with its schema port, adapter, locator paths, Gradle copy, DI provider, receipt contract version, claim-normalization code, strict decoding, the structured flow/assertion/fallback/target model and its enums, the criteria-matrix model and rendering, and the receipt-schema error constructors. The QA run briefing, `android-qa.md`, `ios-qa.md`, `../../../docs/runtime-command-guidance.md`, and the skill content describe the `report.md` shape from parent requirement 1 instead of a receipt.
 5. The desktop tray's QA panels show the stored prose report text and the extracted findings, each with its fixed or not fixed state. The desktop work models, `RuntimeWorkMapper`, and `feature/detail` contain no criteria-matrix types or criteria panel.
 
 ## Decisions
@@ -41,8 +41,8 @@ These settle the preplan's open questions. Implement follows them unless the tre
 - **Persistence.** Add the next free named `DatabaseMigration`. Assumption: that is v66, `record-qa-report-text`, because v65 `record-standalone-plan-report` is the latest per preplan. Implement confirms the number on the current tree. The migration adds a nullable `qa_report_text` TEXT column to the goal QA outcome table and to the standalone phase status table. Set `DesktopReadSchema.VERSION` to that migration number. Don't reuse `ensureColumn` in an older heal step, because it never reaches existing databases. The old `criteria_summary` and `qa_report` matrix columns stay physically in place and are no longer read or written. Legacy rows load with no report text. `findings_summary` keeps its JSON keys, including `receipt_path`, so old rows decode unchanged. `affected_criteria` is no longer written and is ignored on read. Kotlin names may be renamed while persisted keys stay.
 - **Errors.** Delete `invalidQaReceipt`, `qaReceiptIdentityMismatch`, and `qaReceiptUnsupportedClaim` together with their `FeatureTaskRuntimeFailureCode` entries and `QA_FAILURE_CODES` membership. Implement greps for the code names first. A code that's read outside QA, for example in telemetry, history, or desktop mapping, keeps its entry. `qaReceiptMissing` is replaced by the missing-report settlement result and deleted if nothing else uses it. Expected outcomes are results, not exceptions.
 - **Printing.** Standalone `value` becomes the verdict line plus reason. `targetReport` is the `Warning:` lines, then the report text verbatim, then the runtime cleanup note covering lease release and retained resources. `qaOutcome` stays. `PhaseRunResult.Completed.qaReport` is replaced by the report text. Verify prints the same blocks.
-- **Desktop.** `GoalQaResult.criteria`, `QaRunReport`, `QaCriterionResult`, `QaCheckResult`, and `QaCriterionFinding` are replaced by a nullable report text. `GoalQaFinding(id, title, evidencePath, fixed)` stays. `QaCriteriaSection` becomes a report-text panel showing the stored text verbatim and selectable. `QaFindingsSection` stays. Previews are updated. Assumption: `desktop-tray/` compiles against the runtime-ports models (it maps `StandaloneQaReport` today), so these desktop edits ship in this commit to keep both builds compiling.
-- **Skill content location.** The preplan didn't find the skill text that describes receipts. Implement greps `skills/`, `orchestration/`, `platform-packs/`, and `docs/` once for `QA receipt`, `receipt.json`, `qa-receipt`, and `downgrade` and updates every hit. `agent/history.md` and `agent/decisions.md` are historical records and stay as written.
+- **Desktop.** `GoalQaResult.criteria`, `QaRunReport`, `QaCriterionResult`, `QaCheckResult`, and `QaCriterionFinding` are replaced by a nullable report text. `GoalQaFinding(id, title, evidencePath, fixed)` stays. `QaCriteriaSection` becomes a report-text panel showing the stored text verbatim and selectable. `QaFindingsSection` stays. Previews are updated. Assumption: `../../../desktop-tray` compiles against the runtime-ports models (it maps `StandaloneQaReport` today), so these desktop edits ship in this commit to keep both builds compiling.
+- **Skill content location.** The preplan didn't find the skill text that describes receipts. Implement greps `../../../skills`, `orchestration/`, `platform-packs/`, and `docs/` once for `QA receipt`, `receipt.json`, `qa-receipt`, and `downgrade` and updates every hit. `agent/history.md` and `agent/decisions.md` are historical records and stay as written.
 
 ## Non-Goals
 
@@ -77,7 +77,7 @@ Each obligation names the bug it catches. Rewrite existing tests in place where 
 
 ## Implementation Details
 
-Tasks run in order. Each one names the criteria it serves, the paths or symbols it touches, and its tests. Paths are under `runtime-kotlin/` unless noted. Implement runs no build, test, or check command. The build phase proves compilation and the validate phase owns `./gradlew check` and the `desktop-tray/` build. Nothing here runs an install, uninstall, or install-sync step.
+Tasks run in order. Each one names the criteria it serves, the paths or symbols it touches, and its tests. Paths are under `../../../runtime-kotlin` unless noted. Implement runs no build, test, or check command. The build phase proves compilation and the validate phase owns `./gradlew check` and the `desktop-tray/` build. Nothing here runs an install, uninstall, or install-sync step.
 
 ### Task 0: Census on the current tree (criteria 1, 2, 4)
 
@@ -85,7 +85,7 @@ Before editing, run single grep pipelines and record the results in the subtask 
 
 - `DatabaseMigrationEntries.kt`: the highest migration number and name. The new migration takes the next number. The assumption is v66 `record-qa-report-text`. If v66 is already taken, use the next free number and record the deviation.
 - `FeatureTaskRuntimeFailureCode.kt` and the whole tree (runtime, desktop, docs): every use of `INVALID_QA_RECEIPT_SCHEMA`, `QA_RECEIPT_IDENTITY_MISMATCH`, `QA_RECEIPT_UNSUPPORTED_CLAIM`, and `QA_RECEIPT_MISSING`. A code read outside the QA package, in telemetry, history, or a desktop mapping, keeps its enum entry. Record which entries stay.
-- `skills/`, `orchestration/`, `platform-packs/`, and `docs/`: hits for `QA receipt`, `receipt.json`, `qa-receipt`, `qa_receipt`, and `downgrade`. This list is the guidance worklist for Task 13.
+- `../../../skills`, `orchestration/`, `platform-packs/`, and `docs/`: hits for `QA receipt`, `receipt.json`, `qa-receipt`, `qa_receipt`, and `downgrade`. This list is the guidance worklist for Task 13.
 - The runtime and desktop source and test trees: every reference to `QaReceipt`, `QaReceiptValidator`, `QaReceiptSettlement`, `decodeQaReceipt`, `normalizeQaReceiptClaims`, `restrictedToCriteria`, `StandaloneQaReport`, `StandaloneQaCriterion`, `QaRunReport`, `qaReport`, `QaReceiptSchemaPort`, `QaReceiptPayloadKeys`, and `QA_RECEIPT_CONTRACT_VERSION`. This is the compile-follow worklist for Tasks 1–15.
 - `StandaloneQaReportMigration.kt`: whether it is pure DDL or references the matrix model types. If it references them, Task 9 inlines the few constants it needs, so the historical migration step stays byte-for-byte equivalent in effect.
 
@@ -266,16 +266,16 @@ Before editing, run single grep pipelines and record the results in the subtask 
 
 ### Task 15: Guidance and docs (criterion 4)
 
-- `platform-packs/kmp/qa/android-qa.md` and `platform-packs/ios/qa/ios-qa.md`:
+- `../../../platform-packs/kmp/qa/android-qa.md` and `platform-packs/ios/qa/ios-qa.md`:
   - Replace every receipt field (`device_fingerprint`, `selection`, `fallbacks`, `cleanup.outcome`, `target.kind`, `artifact.path_ref`) and the Verdict section (`incomplete_reason`, `skip_reason`) with the prose `report.md` shape. Name the device and any fallback in prose.
   - Leave the Selection and AVD lines that mention `ambiguous_target` as present. Subtask 2 owns them.
-- `docs/runtime-command-guidance.md` (~128, ~155, ~173): replace the receipt-path, schema-validation, `Criteria:` block, downgrade, and invalid-receipt sentences with the `report.md` description, lenient verdict extraction, verbatim printing, and the id-based closure rule.
-- Update receipt descriptions in `docs/observability-policy.md` and the receipt schema port line in `runtime-kotlin/ARCHITECTURE.md`.
-- Update every hit on the Task 0 skill-content worklist. `runtime-kotlin/agent/history.md` and `agent/decisions.md` stay as written.
+- `../../../docs/runtime-command-guidance.md` (~128, ~155, ~173): replace the receipt-path, schema-validation, `Criteria:` block, downgrade, and invalid-receipt sentences with the `report.md` description, lenient verdict extraction, verbatim printing, and the id-based closure rule.
+- Update receipt descriptions in `../../../docs/observability-policy.md` and the receipt schema port line in `runtime-kotlin/ARCHITECTURE.md`.
+- Update every hit on the Task 0 skill-content worklist. `../../../runtime-kotlin/agent/history.md` and `agent/decisions.md` stay as written.
 
 ### Task 16: Desktop tray (criterion 5)
 
-These edits are under `desktop-tray/`, a separate Gradle build, and ship in this commit.
+These edits are under `../../../desktop-tray`, a separate Gradle build, and ship in this commit.
 
 - `core/domain/.../model/WorkModels.kt`:
   - `GoalQaResult` drops `criteria` and gains `reportText: String?`.
@@ -293,13 +293,13 @@ These edits are under `desktop-tray/`, a separate Gradle build, and ship in this
 
 ### Task 17: Residue census (criteria 4, 5)
 
-Grep `runtime-kotlin/`, `desktop-tray/`, `orchestration/`, `platform-packs/`, `docs/`, and `skills/` for `qa-receipt-schema`, `QaReceiptSchema`, `QaReceiptValidator`, `normalizeQaReceiptClaims`, `StandaloneQaCriterion`, `QaCriterionResult`, `qa_criteria:`, `receipt.json`, and `MAX_RECEIPT_BYTES`.
+Grep `../../../runtime-kotlin`, `desktop-tray/`, `orchestration/`, `platform-packs/`, `docs/`, and `skills/` for `qa-receipt-schema`, `QaReceiptSchema`, `QaReceiptValidator`, `normalizeQaReceiptClaims`, `StandaloneQaCriterion`, `QaCriterionResult`, `qa_criteria:`, `receipt.json`, and `MAX_RECEIPT_BYTES`.
 
 The only allowed hits are:
 - legacy read constants (`LEGACY_*`, `QA_RECEIPT` artifact fallback, the `receipt.json` legacy-reference check)
 - persisted key strings
 - historical migrations
-- `agent/history.md` and `agent/decisions.md`
+- `../../../agent/history.md` and `agent/decisions.md`
 
 Record the result in the census.
 
@@ -311,7 +311,7 @@ Record the result in the census.
 
 ## Validation Strategy
 
-The validate phase runs `./gradlew check`, which includes agent-config validation, plus the `desktop-tray/` build and tests. Then it reads the tree against criteria 1–5. Implement and audit run no builds or tests. No install, uninstall, or install-sync step belongs to this subtask.
+The validate phase runs `./gradlew check`, which includes agent-config validation, plus the `../../../desktop-tray` build and tests. Then it reads the tree against criteria 1–5. Implement and audit run no builds or tests. No install, uninstall, or install-sync step belongs to this subtask.
 
 ## Next Path
 

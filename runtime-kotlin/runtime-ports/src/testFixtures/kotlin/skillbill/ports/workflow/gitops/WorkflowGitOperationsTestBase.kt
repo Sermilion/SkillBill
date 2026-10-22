@@ -3,6 +3,7 @@ package skillbill.ports.workflow.gitops
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
+import skillbill.ports.workflow.gitops.model.WorkflowIgnoredFilesCopyResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeNumstatResult
 import java.nio.file.Path
 
@@ -28,16 +29,22 @@ abstract class WorkflowGitOperationsTestBase :
 
   override fun stageAll(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
 
-  override fun linkedWorktreePath(
-    repoRoot: Path,
-    commonDirRelativePath: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Failed(error = "No linked worktree was supplied.")
-
   override fun addDetachedWorktree(
     repoRoot: Path,
-    commonDirRelativePath: String,
+    worktree: Path,
     revision: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Failed(error = "No linked worktree was supplied.")
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = worktree.toString())
+
+  override fun copyWorkingState(
+    repoRoot: Path,
+    worktree: Path,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = worktree.toString())
+
+  override fun copyIgnoredFiles(
+    repoRoot: Path,
+    worktree: Path,
+    maxFileBytes: Long,
+  ): WorkflowIgnoredFilesCopyResult = WorkflowIgnoredFilesCopyResult.Copied(emptyList(), emptyList())
 
   override fun removeWorktree(
     repoRoot: Path,

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.qa.execution
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.qa.QaWorkspacePort
@@ -24,13 +25,15 @@ fun testQaExecutionLifecycle(
   leases: QaDeviceLeasePort = TestQaLeases(),
   capabilities: QaCapabilityResolver = QaCapabilityResolver(gitOperations) { emptyList() },
   identifiers: IdentifierGeneratorPort = IdentifierGeneratorPort { "test-invocation" },
+  diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
 ): QaExecutionLifecycle =
   QaExecutionLifecycle(
     workspaces,
     leases,
     capabilities,
+    QaCheckouts(gitOperations, diagnostics),
     gitOperations,
-    NoopRuntimeDiagnostics,
+    diagnostics,
     identifiers,
   )
 
