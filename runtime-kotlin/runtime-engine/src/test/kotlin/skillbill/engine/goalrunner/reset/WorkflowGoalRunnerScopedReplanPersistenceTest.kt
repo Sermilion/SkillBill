@@ -43,15 +43,7 @@ class WorkflowGoalRunnerScopedReplanPersistenceTest {
           FeatureTaskRuntimePlanBundleOrigin.EXISTING,
           "parent-spec",
           "manifest",
-          manifest.subtasks.map {
-            FeatureTaskRuntimePlanBundleSubtask(
-              it.id,
-              it.specPath,
-              "scope-${it.id}",
-              "details-${it.id}",
-              "Plan ${it.id}",
-            )
-          },
+          manifest.subtasks.map { plannedSubtask(it.id, it.specPath) },
         )
       database.transaction { unit ->
         execution.seed(unit.workflowStates, parentId)
@@ -108,4 +100,10 @@ class WorkflowGoalRunnerScopedReplanPersistenceTest {
       home.toFile().deleteRecursively()
     }
   }
+
+  private fun plannedSubtask(
+    id: Int,
+    specPath: String,
+  ): FeatureTaskRuntimePlanBundleSubtask =
+    FeatureTaskRuntimePlanBundleSubtask(id, specPath, "scope-$id", "details-$id", "Plan $id")
 }

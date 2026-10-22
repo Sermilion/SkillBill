@@ -395,28 +395,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           when (phase) {
             "audit" -> {
               audits++
-              when {
-                state == null -> serialDiscoveryOutput()
-                state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION &&
-                  repairs >= 3 ->
-                  serialStructuredAuditOutput(
-                    audits,
-                    state,
-                    "The production paths preserve the accepted identity.",
-                  )
-                else -> {
-                  val finding =
-                    when (repairs) {
-                      1 -> firstRejection
-                      2 -> secondRejection
-                      else -> "The selected criterion still has incomplete production paths."
-                    }
-                  auditRemainingAcOutput("$finding Open criteria: ${state.currentCriterionRef}").replace(
-                    "\"status\": \"completed\",",
-                    "\"status\": \"completed\", \"verdict\": \"advance\",",
-                  )
-                }
-              }
+              repairRejectionAuditOutput(audits, state, repairs, listOf(firstRejection, secondRejection))
             }
             "audit_plan_fix", "audit_implement_fix" -> {
               if (state?.currentCriterionRef == "AC-002") {
@@ -454,6 +433,28 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
     }
   }
+
+  private fun repairRejectionAuditOutput(
+    audits: Int,
+    state: AcceptanceCriterionRepairState?,
+    repairs: Int,
+    rejections: List<String>,
+  ): String =
+    when {
+      state == null -> serialDiscoveryOutput()
+      state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION && repairs >= 3 ->
+        serialStructuredAuditOutput(audits, state, "The production paths preserve the accepted identity.")
+      else -> {
+        val finding =
+          rejections.getOrNull(
+            repairs - 1,
+          ) ?: "The selected criterion still has incomplete production paths."
+        auditRemainingAcOutput("$finding Open criteria: ${state.currentCriterionRef}").replace(
+          "\"status\": \"completed\",",
+          "\"status\": \"completed\", \"verdict\": \"advance\",",
+        )
+      }
+    }
 
   @Test
   fun `a failed repair returns to focused planning once and an accepted queue moves to review without another audit`() {
@@ -679,18 +680,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         )
       val resumed = assertNotNull(scope.snapshot)
       if (settlementAvailable) {
-        val firstResumedRepairPrompts =
-          launcher.requests.drop(launchesBeforeResume).mapNotNull { it.skillRunRequest.promptOverride }.filter {
-            phaseIdFromPrompt(it) in setOf("audit_plan_fix", "audit_implement_fix")
-          }.take(2)
-        assertEquals(2, firstResumedRepairPrompts.size)
-        firstResumedRepairPrompts.forEach { prompt ->
-          assertContains(prompt, "retained failures: 0 of 3")
-          exhausted.outcomes.filter { it.criterionRef == "AC-002" && !it.successful }.forEach { outcome ->
-            assertContains(prompt, outcome.outcomeId)
-            assertContains(prompt, outcome.evidenceRef)
-          }
-        }
+        assertResumedRepairEvidence(launcher, launchesBeforeResume, exhausted)
         assertEquals("audit_plan_fix", harness.launchedPromptPhaseOrder().drop(beforeResume).firstOrNull(), "$report")
         assertContains(report.blockedReason, "three unsuccessful repair attempts")
         assertEquals(mapOf("AC-002" to 6), repairs)
@@ -708,6 +698,25 @@ class FeatureTaskRuntimeSerialRepairTest {
       }
       assertEquals(exhausted.outcomes, resumed.outcomes.take(exhausted.outcomes.size))
       assertEquals(exhausted.criteria.first(), resumed.criteria.first())
+    }
+  }
+
+  private fun assertResumedRepairEvidence(
+    launcher: RuntimeRecordingLauncher,
+    launchesBeforeResume: Int,
+    exhausted: AcceptanceCriterionRepairState,
+  ) {
+    val prompts =
+      launcher.requests.drop(launchesBeforeResume).mapNotNull { it.skillRunRequest.promptOverride }.filter {
+        phaseIdFromPrompt(it) in setOf("audit_plan_fix", "audit_implement_fix")
+      }.take(2)
+    assertEquals(2, prompts.size)
+    prompts.forEach { prompt ->
+      assertContains(prompt, "retained failures: 0 of 3")
+      exhausted.outcomes.filter { it.criterionRef == "AC-002" && !it.successful }.forEach { outcome ->
+        assertContains(prompt, outcome.outcomeId)
+        assertContains(prompt, outcome.evidenceRef)
+      }
     }
   }
 
