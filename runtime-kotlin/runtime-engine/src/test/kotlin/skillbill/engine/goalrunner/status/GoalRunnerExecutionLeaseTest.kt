@@ -57,6 +57,24 @@ class GoalRunnerExecutionLeaseTest {
   }
 
   @Test
+  fun `an expired execution lease renews while its owner is unchanged`() {
+    val dbPath = Files.createTempDirectory("skillbill-goal-expired-lease-renewal").resolve("metrics.db")
+    val lease = leaseFixture(generation = 2, ownerToken = "owner-token-renewal")
+
+    withGoalRunnerControlRepository(dbPath) { store ->
+      assertTrue(store.acquireExecutionLease("parent-renewal", lease))
+      val afterSleep =
+        lease.copy(
+          heartbeatAt = Instant.parse("2026-08-02T10:00:52Z"),
+          expiresAt = Instant.parse("2026-08-02T10:01:22Z"),
+        )
+      assertFalse(store.heartbeatExecutionLease("parent-renewal", afterSleep.copy(ownerToken = "different-owner")))
+      assertTrue(store.heartbeatExecutionLease("parent-renewal", afterSleep))
+      assertEquals(afterSleep, store.executionLease("parent-renewal"))
+    }
+  }
+
+  @Test
   fun `expired execution lease releases only at the expiry boundary with matching fencing`() {
     val dbPath = Files.createTempDirectory("skillbill-goal-expired-lease-release").resolve("metrics.db")
     val lease = leaseFixture(generation = 3, ownerToken = "owner-token-expired")

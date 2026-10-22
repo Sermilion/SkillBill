@@ -13,7 +13,6 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
-import java.time.Instant
 
 class AcquiredFeatureTaskRuntimeWorker internal constructor(
   private val ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -38,16 +37,13 @@ class AcquiredFeatureTaskRuntimeWorker internal constructor(
   internal fun ownsAuditStep(phaseId: String): Boolean =
     execution.plan.dispatchStrategyByStep[phaseId]?.slot == PhaseSlot.AUDIT
 
-  internal fun admits(
-    states: WorkflowStateRepository,
-    now: Instant,
-  ): Boolean {
+  internal fun admits(states: WorkflowStateRepository): Boolean {
     if (!active) return false
     if (states.get(WorkflowFamily.TASK_RUNTIME, workflowId)?.workflowStatus != WorkflowStatus.RUNNING) return false
     execution.requireCurrent(states, workflowId)
     val current = states.getFeatureTaskRuntimeWorkerOwnership(workflowId) ?: return false
     return current.ownerToken == ownership.ownerToken && current.generation == ownership.generation &&
-      current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE && current.expiresAtInstant.isAfter(now)
+      current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE
   }
 
   internal fun originalSnapshot(states: WorkflowStateRepository): WorkflowStateSnapshot? {

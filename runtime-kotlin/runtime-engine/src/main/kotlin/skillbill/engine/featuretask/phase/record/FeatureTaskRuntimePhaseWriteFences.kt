@@ -11,7 +11,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import java.time.Clock
 
 internal val WORKER_TERMINAL_STATUSES =
   setOf(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.ABANDONED)
@@ -20,7 +19,6 @@ internal fun requireCurrentWorker(
   admitted: AdmittedFeatureTaskRuntimeExecution,
   states: WorkflowStateRepository,
   workflowId: String,
-  clock: Clock,
 ): Boolean {
   admitted.requireCurrent(states, workflowId)
   val expected = admitted.workerOwnership ?: return true
@@ -35,8 +33,7 @@ internal fun requireCurrentWorker(
   }
   return current.ownerToken == expected.ownerToken &&
     current.generation == expected.generation &&
-    current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE &&
-    current.expiresAtInstant > clock.instant()
+    current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE
 }
 
 internal fun phaseEventAdmissible(

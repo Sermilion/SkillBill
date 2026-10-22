@@ -736,19 +736,24 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     )
   }
 
-  override fun amendReviewRemediationCheckpoint(): Boolean {
+  override fun amendReviewRemediationCheckpoint(): String? {
     requireActiveReviewBinding()
-    return FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
-      remediationContext,
-      precedingPhaseId = run.phaseId,
-      loopId = null,
-      intent = FeatureTaskRuntimeCheckpointMessage.INTENT_REMEDIATION,
-      blockedReason = { branch, error ->
-        "Feature-task-runtime could not amend review changes on the feature branch '$branch'" +
-          (if (error.isBlank()) "." else " ($error).") +
-          " Refusing to complete review with uncommitted review fixes."
-      },
-    )
+    var failure: String? = null
+    val established =
+      FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
+        remediationContext,
+        precedingPhaseId = run.phaseId,
+        loopId = null,
+        intent = FeatureTaskRuntimeCheckpointMessage.INTENT_REMEDIATION,
+        blockedReason = { branch, error ->
+          (
+            "Feature-task-runtime could not amend review changes on the feature branch '$branch'" +
+              (if (error.isBlank()) "." else " ($error).") +
+              " Refusing to complete review with uncommitted review fixes."
+          ).also { failure = it }
+        },
+      )
+    return if (established) null else failure ?: REVIEW_AMEND_FAILED
   }
 
   override fun retainReviewOutput(
@@ -1094,3 +1099,6 @@ internal object FeatureTaskRuntimeRunLoopStepBindings {
         FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
     }
 }
+
+private const val REVIEW_AMEND_FAILED: String =
+  "Feature-task-runtime could not establish the review remediation checkpoint."

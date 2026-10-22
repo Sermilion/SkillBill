@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
@@ -23,6 +24,10 @@ internal class VerifyFindingsStep : PhaseStepHooks {
       fileMutating = true,
       generationScoped = false,
     )
+
+  override fun failureContinuationOutput(
+    upstream: List<FeatureTaskRuntimePhaseOutput>,
+  ): NormalizedFeatureTaskRuntimePhaseOutput = VerifyFindingsFailureOutput.carryReviewFindings(upstream)
 
   override fun launchPromptSupplement(
     run: PhaseRun,

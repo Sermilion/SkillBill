@@ -344,7 +344,6 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
           testWorkflowSnapshotValidator,
           featureTaskRuntimeWireArtifactValidatorForTest(),
         ),
-        testHarnessClock,
       )
     return AdoptionHarness(
       repository = repository,

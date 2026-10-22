@@ -5,15 +5,14 @@ fun agentFailureExcerpt(
   stdout: String,
   maxChars: Int,
 ): String? {
-  val preferred = stderr.takeIf(String::isNotBlank) ?: stdout.takeIf(String::isNotBlank) ?: return null
-  val signal =
-    preferred.lineSequence()
+  fun signal(stream: String): String =
+    stream.lineSequence()
       .map(String::trim)
       .filter { it.isNotBlank() }
       .filterNot(::isHarnessStatusBanner)
       .joinToString("\n")
-      .ifBlank { preferred.trim() }
-  return headAndTailExcerpt(signal, maxChars)
+  val preferred = signal(stderr).ifBlank { signal(stdout) }
+  return headAndTailExcerpt(preferred, maxChars)
 }
 
 private fun isHarnessStatusBanner(line: String): Boolean {

@@ -35,6 +35,7 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.progressToken
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -163,8 +164,11 @@ internal class WorkflowGoalRunnerProgressRecording(
           historyFamily = DurableWorkflowArtifactFamily.GOAL_PROGRESS_RUN_HISTORY,
           retentionLimit = GOAL_PROGRESS_HISTORY_LIMIT,
         ),
-    ) { sequenceNumber ->
-      GoalRunnerWirePayload.from(request.draft.toEvent(sequenceNumber).toPersistenceWire()).payload.also { entryMap ->
+    ) { sequenceNumber, record ->
+      val event =
+        request.draft.toEvent(sequenceNumber)
+          .withContinuingLaunch(declaredProgressEventFrom(record.artifacts))
+      GoalRunnerWirePayload.from(event.toPersistenceWire()).payload.also { entryMap ->
         wireArtifactValidator.validate(
           FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT,
           FeatureTaskRuntimeWorkflowArtifactMap.from(entryMap),
@@ -183,7 +187,7 @@ internal class WorkflowGoalRunnerProgressRecording(
           historyFamily = DurableWorkflowArtifactFamily.GOAL_ATTEMPT_LEDGER,
           retentionLimit = GOAL_ATTEMPT_LEDGER_LIMIT,
         ),
-    ) { sequenceNumber ->
+    ) { sequenceNumber, _ ->
       GoalRunnerWirePayload.from(request.draft.toEntry(sequenceNumber).toPersistenceWire()).payload
     }
 
@@ -323,7 +327,7 @@ internal class WorkflowGoalRunnerProgressRecording(
     workflowId: String,
     issueKey: String,
     history: SequencedHistoryArtifact,
-    buildEntry: (Int) -> Any,
+    buildEntry: (Int, WorkflowStateSnapshot) -> Any,
   ): Boolean =
     database.transaction { unitOfWork ->
       val historyFamily = history.historyFamily
@@ -348,7 +352,7 @@ internal class WorkflowGoalRunnerProgressRecording(
         }
       }
       val entryMap =
-        checkNotNull(JsonCodec.anyToStringAnyMap(buildEntry(nextSequence(highest)))) {
+        checkNotNull(JsonCodec.anyToStringAnyMap(buildEntry(nextSequence(highest), record))) {
           "${historyFamily.label()} entry must encode as an object."
         }
       val existing =

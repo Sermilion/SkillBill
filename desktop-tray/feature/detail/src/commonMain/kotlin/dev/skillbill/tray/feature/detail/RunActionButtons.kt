@@ -32,7 +32,7 @@ internal fun RunActionButtons(detail: Detail, busy: Boolean, available: Boolean,
   val idle = !busy && available
   val controllable = item.eligibleForControl()
   val canLaunch = options?.canLaunch == true
-  val resumable = item.lifecycle == Lifecycle.CANCELED || item.lifecycle == Lifecycle.PAUSED
+  val resumable = item.lifecycle != Lifecycle.ACTIVE && item.lifecycle != Lifecycle.TERMINAL
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       DesignButton(
@@ -62,7 +62,9 @@ internal fun RunActionButtons(detail: Detail, busy: Boolean, available: Boolean,
         onAction(DetailAction.Cancel)
       }
     }
-    options?.unavailableReason?.let { Text(it, color = muted, fontSize = 11.sp) }
+    if (resumable) {
+      options?.unavailableReason?.let { Text(it, color = muted, fontSize = 11.sp) }
+    }
     if (canLaunch && resumable) {
       Text("Starts the installed agent harness", color = muted, fontSize = 11.sp)
     }

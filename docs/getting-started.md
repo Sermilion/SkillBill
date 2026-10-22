@@ -483,6 +483,13 @@ non-blank stdout prose as the value; it does not parse a JSON envelope or
 relaunch for format. Later phases read the selected spec as a persisted
 handoff rather than a value restated in the briefing.
 
+Claude and Codex phase workers get the `skill-bill` server on their own command
+line, bound to the runtime's database, so settlement does not depend on the
+user's agent config still registering it. The runtime finds the server binary
+through `SKILL_BILL_RUNTIME_MCP_BIN`, falling back to
+`~/.skill-bill/runtime/runtime-mcp/bin/runtime-mcp`. Governed review launches
+keep only their isolated evidence server.
+
 ## Validation Gate
 
 Maintainers should run the full gate before shipping runtime, scaffold, contract, docs, or agent-config changes:

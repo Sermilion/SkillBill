@@ -149,7 +149,7 @@ class AcceptanceCriterionRepairPersistence(
   ): AcceptanceCriterionRepairAdoptionResult {
     val preflightRefusal =
       when {
-        !worker.admits(work.workflowStates, clock.instant()) || binding.executionId != worker.workflowId ->
+        !worker.admits(work.workflowStates) || binding.executionId != worker.workflowId ->
           AcceptanceCriterionRepairRefusal.OWNER_CHANGED
         !adoption.sourceMatches(worker, root, binding) -> AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED
         else -> null
@@ -164,7 +164,7 @@ class AcceptanceCriterionRepairPersistence(
       return refuseAdoption(worker, AcceptanceCriterionRepairRefusal.HISTORICAL_EVIDENCE_UNPROVABLE)
     }
     val receipt = original?.let { admitLegacy(worker, it, binding, proof, root) }
-    val stillOwned = worker.admits(work.workflowStates, clock.instant())
+    val stillOwned = worker.admits(work.workflowStates)
     return if (receipt == null || !stillOwned) {
       val refusal =
         if (receipt == null) {
@@ -310,10 +310,7 @@ class AcceptanceCriterionRepairPersistence(
     repositoryRoot: Path,
   ): AcceptanceCriterionRepairWriteResult {
     val states = work.workflowStates
-    if (!worker.admits(
-        states,
-        clock.instant(),
-      )
+    if (!worker.admits(states)
     ) {
       return refuse(worker, null, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
     }
@@ -478,10 +475,7 @@ class AcceptanceCriterionRepairPersistence(
     next: AcceptanceCriterionRepairState,
     request: AcceptanceCriterionRepairCommit,
   ): AcceptanceCriterionRepairWriteResult {
-    if (!worker.admits(
-        work.workflowStates,
-        clock.instant(),
-      )
+    if (!worker.admits(work.workflowStates)
     ) {
       return refuse(worker, next, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
     }

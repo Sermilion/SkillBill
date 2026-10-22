@@ -27,13 +27,11 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProdu
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
-import java.time.Clock
 
 class FeatureTaskRuntimePhaseBriefingRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
-  private val clock: Clock,
 ) {
   fun recordOwnedPhaseBriefing(
     workflowId: String,
@@ -43,7 +41,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): RequiredPhaseWrite =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction RequiredPhaseWrite.Rejected(
           writeKind = RequiredPhaseWriteKind.BRIEFING,
           workflowId = workflowId,
@@ -134,7 +132,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, context.workflowId.orEmpty(), clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, context.workflowId.orEmpty())) {
         return@transaction false
       }
       recordProjectionRejectionMeasurement(
@@ -180,7 +178,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, rejection.workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, rejection.workflowId)) {
         return@transaction false
       }
       recordProjectionRejectionMeasurement(unitOfWork, rejection)

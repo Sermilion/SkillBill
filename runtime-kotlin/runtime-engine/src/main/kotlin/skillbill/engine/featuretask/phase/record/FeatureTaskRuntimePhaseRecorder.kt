@@ -317,7 +317,6 @@ private fun phaseRecorderParts(
         injected.database,
         workflowPersistence,
         runtimeOwnedPersistence,
-        injected.clock,
       ),
     goalReviewCompletion =
       FeatureTaskRuntimeGoalReviewCompletionRecorder(
@@ -332,9 +331,8 @@ private fun phaseRecorderParts(
         injected.database,
         workflowPersistence,
         injected.wireArtifactValidator,
-        injected.clock,
       ),
-    gateProgress = FeatureTaskRuntimeGateProgressRecorder(injected.database, workflowPersistence, injected.clock),
+    gateProgress = FeatureTaskRuntimeGateProgressRecorder(injected.database, workflowPersistence),
   )
 }
 

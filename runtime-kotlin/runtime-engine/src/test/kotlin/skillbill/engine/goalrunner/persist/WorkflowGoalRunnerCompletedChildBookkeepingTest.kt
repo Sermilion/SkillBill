@@ -34,6 +34,42 @@ import kotlin.test.assertTrue
 
 class WorkflowGoalRunnerCompletedChildBookkeepingTest {
   @Test
+  fun `durable activity keeps its launch model but a new step or attempt does not inherit it`() {
+    val store = testWorkflowGoalRunnerOutcomeStore(completedChildDatabase())
+    val start =
+      GoalProgressEventDraft(
+        GoalProgressEventKind.PHASE_STARTED,
+        CHILD_WORKFLOW_ID,
+        "pr",
+        true,
+        COMPLETED_AT,
+        stepId = "pr",
+        launchedModel = "pr-model",
+        effort = "high",
+      )
+
+    fun record(draft: GoalProgressEventDraft) {
+      assertTrue(store.recordProgressEvent(GoalRunnerProgressEventRecordRequest(CHILD_WORKFLOW_ID, ISSUE_KEY, draft)))
+    }
+    val activity =
+      start.copy(
+        eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+        operationName = "Writing pull request",
+        launchedModel = null,
+        effort = null,
+      )
+    record(start)
+    record(activity)
+    assertEquals("pr-model", store.progressEvents(CHILD_WORKFLOW_ID).last().launchedModel)
+    assertEquals("high", store.progressEvents(CHILD_WORKFLOW_ID).last().effort)
+    record(activity.copy(eventKind = GoalProgressEventKind.PHASE_STARTED))
+    assertEquals(null, store.progressEvents(CHILD_WORKFLOW_ID).last().launchedModel)
+    record(start)
+    record(activity.copy(workflowPhase = "monitor", stepId = "monitor"))
+    assertEquals(null, store.progressEvents(CHILD_WORKFLOW_ID).last().launchedModel)
+  }
+
+  @Test
   fun `a completed child acknowledges its review summary pass and stays completed`() {
     val database = completedChildDatabase()
     val store = testWorkflowGoalRunnerOutcomeStore(database)

@@ -193,7 +193,15 @@ class DefaultGoalRunnerQaGate(
       }
       else -> return
     }
-    recordProgress(state, request, progressDraft(state, request, phaseId, kind, outcome))
+    val started = event as? FeatureTaskRuntimeRunEvent.PhaseStarted
+    recordProgress(
+      state,
+      request,
+      progressDraft(state, request, phaseId, kind, outcome).copy(
+        launchedModel = started?.model,
+        effort = started?.effort,
+      ),
+    )
     request.outputSink.write(AgentRunOutputStream.STDERR, "$phaseId: ${kind.wireValue}\n")
   }
 

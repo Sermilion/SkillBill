@@ -19,19 +19,72 @@ Keep each criterion focused on one observable production outcome. Never drop req
 criteria in nested lists, or combine unrelated outcomes to fit the limit. Preserve every requirement
 across the bundle and record dependencies between the resulting subtasks.
 
-Default to one subtask when its scope fits within five criteria. Also split when one implement pass
-cannot carry the work to a reviewable end, a later part cannot be specified until an earlier contract
-or schema lands, or the parts ship separately. Not reasons to split: layer order, one file or symbol each, "add the field, then read
+Default to one subtask when its scope fits within five criteria and no criterion is subtask-sized
+(see Criterion Sizing). Also split when one implement pass cannot carry the work to a reviewable end,
+a later part cannot be specified until an earlier contract or schema lands, or the parts ship
+separately. Not reasons to split: layer order, one file or symbol each, "add the field, then read
 the field", tests on their own, or a narrative of steps one agent would finish in a sitting.
 
-Breadth is never a reason. A subtask has no cap on files or diff size, and one coherent twenty-file
-commit is cheaper to run and easier to judge than four five-file commits that only make sense read
-together. Since each subtask is one commit, the only shape that matters is whether that commit
-stands alone: a commit that deletes a path whose replacement lands later, or adds a field nothing
-reads, belongs in the commit that finishes the change.
+Since each subtask is one commit, the commit must stand alone: a commit that deletes a path whose
+replacement lands later, or adds a field nothing reads, belongs in the commit that finishes the
+change. When promoting a criterion to its own subtask would break that rule, move the dependent
+work into the promoted subtask with it.
 
 Keep related work together within the five-criterion limit. There is no fixed limit on the number
-of subtasks; create as many as the acceptance criteria and execution boundaries require.
+of subtasks; create as many as the acceptance criteria, criterion sizes, and execution boundaries
+require.
+
+## Criterion Sizing
+
+Assess every acceptance criterion before you assign it to a subtask. A repair worker gets one
+criterion at a time, and a criterion too large for one implement pass never converges: each pass
+lands part of it and the next audit finds more. Estimate from the preplan digest and the files the
+criterion must change, not from the length of its text.
+
+For each criterion, estimate:
+
+- production lines added or changed, excluding tests, fixtures, and generated files
+- production files created or changed
+- areas touched, where an area is one module or owning package, such as `runtime-domain`,
+  `runtime-infra/sqlite`, `orchestration/contracts`, or the goal-runner package in `runtime-engine`;
+  name each area
+
+A criterion is subtask-sized when any estimate exceeds these limits: about 300 production lines,
+8 production files, or 3 areas. A subtask-sized criterion becomes its own full subtask. Give that
+subtask its own spec with its own one to five acceptance criteria, written to the same standard, and
+size those criteria again. Do not keep a subtask-sized criterion as one item and hope implement
+finishes it.
+
+Record the assessment in a `## Criterion Sizing` section of every subtask spec, after the
+acceptance criteria. Write one numbered entry per criterion, using the criterion's number, with the
+three estimates, the named areas, and the verdict: fits, or promoted to subtask N. When a criterion
+was promoted, the spec it came from still lists the sizing entry that justified the promotion. The
+estimates are planning judgments, not completion conditions. Audit does not fail a criterion because
+the real diff differs from its estimate.
+
+## Writing Acceptance Criteria
+
+A one-sentence criterion is not allowed. An implement, audit, or repair worker reads the criterion
+and must know exactly what to build and what done looks like without guessing. Unwrap every
+criterion into several sentences that state:
+
+- the production end state, in plain terms
+- where it lives: the files, symbols, contracts, tables, or commands that change, by name
+- the exact values involved: field names, enum members, wire keys, limits, orderings, error codes,
+  and the behavior for each edge case and failure path the criterion covers
+- the boundary: what this criterion does not cover, and which other criterion or subtask owns the
+  adjacent work
+- how audit confirms it by reading the tree
+
+Put every detail the criterion depends on inside the criterion itself. Do not leave requirements in
+a separate prose section for a worker to connect to a criterion. If a requirements section lists
+facts that two criteria share, restate the shared facts in each criterion that needs them. A vague
+noun such as "identities", "failure facts", or "validated persistence" must be followed by the exact
+list it means.
+
+Write each criterion as one numbered list item. Continue its sentences on indented lines under the
+number. Never use nested bullets inside a criterion; the runtime reads them as separate
+subcriteria.
 
 An authored parent spec has at most five feature-level outcome criteria; the subtask specs carry
 the detailed outcomes. An existing operator-authored parent is immutable input and may contain
@@ -161,20 +214,28 @@ contract or the runtime fails the run with "must list at least one criterion":
   Ask for a file under the spec folder instead (for example
   `census_subtask_N.md`).
 
-Prefer the canonical numbered form the runtime writer emits:
+Prefer the canonical numbered form the runtime writer emits, with each criterion unwrapped over
+several sentences on indented continuation lines:
 
 ```markdown
 ## Acceptance Criteria
 
-1. First criterion.
-2. Second criterion.
+1. First criterion end state. The files and symbols it changes.
+   The exact fields, values, and edge-case behavior.
+   What it does not cover and who owns that. How audit confirms it.
+2. Second criterion, written the same way.
+
+## Criterion Sizing
+
+1. About 180 production lines, 5 files, 2 areas (`runtime-domain`, `runtime-infra/sqlite`). Fits.
+2. About 420 production lines, 11 files, 4 areas (...). Promoted to subtask 3.
 ```
 
 ## Output Rules
 
 The manifest is validated against the decomposition manifest schema contract before persistence and again when the runtime reads it.
 
-Each subtask spec must contain scope, acceptance criteria, non-goals, dependency notes, validation strategy, and next path, plus `## Test Obligations` when the change needs tests. The acceptance-criteria section must follow the **Spec Format Contract** above so the runtime can extract it.
+Each subtask spec must contain scope, acceptance criteria, criterion sizing, non-goals, dependency notes, validation strategy, and next path, plus `## Test Obligations` when the change needs tests. The acceptance-criteria section must follow the **Spec Format Contract** above so the runtime can extract it.
 
 For decomposed goals, the runtime creates or amends the active subtask commit before review. Review and approval bind to the exact committed target and tree; later code repairs invalidate that approval. Finalization may add only the declared boundary-history outputs under `agent/history.md` and `agent/decisions.md` after the reviewed tree is verified.
 

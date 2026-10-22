@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
@@ -27,6 +28,7 @@ import skillbill.ports.work.model.WorkItemKind
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaPlatform
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -800,6 +802,23 @@ class IdeStatusServiceGoalProjectionTest {
     val fixture = gitRepoFixture("ide-status-goal-qa", branch = "feat/SKILL-148-status-fix")
     val identity = testGoalRepositoryIdentity(fixture)
     val original = zeroAc46Database(identity, includeFeatureGoalWorkItem = true)
+    val progress =
+      parkedParentFinalizationProgress("qa", GoalProgressEventKind.PHASE_STARTED).let {
+        val launch = it.latestDeclaredProgressEvent?.copy(launchedModel = "qa-model", effort = "high")
+        it.copy(latestDeclaredProgressEvent = launch)
+      }
+    original.workflows.saveFeatureTaskWorkflow(
+      runtimeRecord("goal-1", "2026-08-06T11:55:00Z", currentStep = "plan").copy(
+        artifactsJson =
+          JsonCodec.mapToJsonString(
+            mapOf(
+              DurableWorkflowArtifactFamily.GOAL_PROGRESS_LATEST_EVENT.label() to
+                progress.latestDeclaredProgressEvent?.toPersistenceWire(),
+            ),
+          ),
+      ),
+      FeatureTaskWorkflowMode.PROSE,
+    )
     val database =
       TrackingDatabase(
         work = original.work.filter { it.workflowId == "goal-1" },
@@ -821,14 +840,16 @@ class IdeStatusServiceGoalProjectionTest {
         outcomeStore =
           object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
             override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
-              parkedParentFinalizationProgress("qa", GoalProgressEventKind.PHASE_STARTED)
-                .takeIf { workflowId == "goal-1" }
+              progress.takeIf { workflowId == "goal-1" }
           },
       ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
     assertEquals(IdeStatusLifecycleState.ACTIVE, status.snapshot.lifecycleState)
     assertEquals("qa", status.snapshot.currentStep.id)
     assertEquals("Goal SKILL-148 is active on qa.", status.snapshot.summary)
+    assertEquals("qa-model", status.snapshot.currentModel?.model)
+    assertEquals("high", status.snapshot.currentModel?.effort)
+    assertEquals("qa", status.snapshot.currentModel?.phaseId)
   }
 
   @Test

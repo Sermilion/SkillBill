@@ -1,3 +1,35 @@
+## [2026-10-22] Reject fabricated evidence in acceptance repair plans
+
+Context: SKILL-438 repeatedly synthesized legacy QA finding text after source
+audits rejected it for failing to preserve the original section verbatim.
+
+Decision: Planning and repair use the existing criterion-local failure context
+and explicitly explain how their next approach resolves earlier rejections.
+They name unavailable historical data rather than fabricating a replacement
+for an original artifact required by the criterion. Current source remains the
+authority, and independent audit still decides acceptance.
+
+Reason: Retaining failure history helps only when the proposed repair addresses
+why the previous approach was rejected.
+
+## [2026-10-22] Retain rejected repair evidence in later repair prompts
+
+Context: Durable accounting retained failed repairs, but planning and repair prompts included only the latest gap. A later rejection displaced earlier counterexamples, so agents could propose local fixes without checking whether the paths still agreed after replay or state advancement.
+
+Decision: Derive the selected criterion's latest three unsuccessful outcomes from existing accounting and pass them to planning and repair. State the included and total counts, retain outcomes across operator resume, and treat the reports as counterexamples to inspect against current source. Require planning to identify the invariant and its owner and trace applicable execution sequences. Require repair to perform a separate read-only source closure pass before reporting completion.
+
+Reason: This repairs the context handoff without new persisted state or output fields. Independent audit remains the acceptance authority. Budgets, progress admission, phase routing, and execution semantics are unchanged, so the wording and prompt delivery change does not require a semantic revision bump.
+
+## [2026-10-22] Block repeated verdict-less audits
+
+Context: An audit completion without a verdict is a clarification request, which
+re-runs audit. Nothing counted those requests, so an audit agent that could not
+reach the settlement tools relaunched 100 times on one subtask.
+
+Decision: `AcceptanceAuditRound` blocks the step with a `runtime:` reason when a
+verdict-less audit follows a pending audit clarification. Repair-admission
+clarifications do not count. The check needs no new repair-state field.
+
 ## [2026-10-21] Continue partial acceptance repairs without spending failure budget
 
 Context: Direct `progress` repair reports took the same incomplete-work path as

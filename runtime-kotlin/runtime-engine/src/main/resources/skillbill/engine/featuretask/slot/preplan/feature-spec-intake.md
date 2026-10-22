@@ -23,3 +23,8 @@ most one. Six criteria become two specs with three each. Each criterion stays fo
 Use `single_spec`
 only when the scope fits that limit and one implementation pass. Mode is sizing and planning metadata
 only; it never changes the artifact shape or executor.
+
+For each acceptance criterion, record in the digest the production files and areas it must change,
+so planning can estimate its lines, files, and areas. A criterion estimated above about 300
+production lines, 8 production files, or 3 areas is subtask-sized, and planning turns it into its own
+subtask. When any criterion is subtask-sized, choose `decomposed`.

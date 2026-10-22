@@ -156,7 +156,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
     phaseStart: Boolean = false,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
         return@transaction false
       }
       if (admitted != null && phaseStart && !bindPhaseCoordinates(unitOfWork.workflowStates, request, admitted)) {
@@ -205,7 +205,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock) &&
+      requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId) &&
         bindPhaseCoordinates(unitOfWork.workflowStates, request, admitted)
     }
 
@@ -250,7 +250,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution?,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
         return@transaction false
       }
       val record =
@@ -301,7 +301,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
           write.attemptNumber,
           detail = detail,
         )
-      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, write.workflowId, clock)) {
+      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, write.workflowId)) {
         return@transaction rejected("This process no longer owns the workflow.")
       }
       val record =
@@ -528,7 +528,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
       seam = "FeatureTaskRuntimePhaseRecorder.recordCompletedPhase",
       expected = "runtime-owned completed phase state",
     ) { unitOfWork ->
-      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
         return@requiredWrite false
       }
       val record =

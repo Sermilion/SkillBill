@@ -24,16 +24,26 @@ sealed interface DetailLoad {
   /** The first read failed, so there is no detail to show. */
   data class Failed(val problem: Problem) : DetailLoad
 
-  /**
-   * The detail is shown. [refreshing] means retained pages are being read again; [readError] is a failed refresh that kept the
-   * detail on screen, which therefore may be behind the store.
-   */
-  data class Loaded(val detail: Detail, val refreshing: Boolean = false, val readError: Problem? = null) : DetailLoad
+  /** The detail is shown. [refreshing] means retained pages are being read again. */
+  data class Loaded(val detail: Detail, val refreshing: Boolean = false) : DetailLoad
+}
+
+sealed interface DetailReadHealth {
+  data object Healthy : DetailReadHealth
+  data class GracePeriod(val problem: Problem) : DetailReadHealth
+  data class Failed(val problem: Problem) : DetailReadHealth
+
+  val reportedProblem: Problem?
+    get() = (this as? Failed)?.problem
+
+  val blocksControls: Boolean
+    get() = this != Healthy
 }
 
 data class DetailUiState(
   val identity: WorkIdentity,
   val load: DetailLoad = DetailLoad.Loading,
+  val readHealth: DetailReadHealth = DetailReadHealth.Healthy,
   /** Lists whose next page is being fetched or failed; any other list is idle or exhausted according to its cursor. */
   val appends: Map<DetailList, AppendState> = emptyMap(),
   val control: ControlState = ControlState.Idle,

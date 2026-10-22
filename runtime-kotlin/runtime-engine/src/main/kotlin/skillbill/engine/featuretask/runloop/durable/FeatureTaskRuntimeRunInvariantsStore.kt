@@ -12,13 +12,11 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import java.time.Clock
 
 @Inject
 class FeatureTaskRuntimeRunInvariantsStore(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-  private val clock: Clock,
 ) {
   fun resolve(
     workflowId: String,
@@ -47,7 +45,7 @@ class FeatureTaskRuntimeRunInvariantsStore(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: return@transaction
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
       ) {
         return@transaction
       }

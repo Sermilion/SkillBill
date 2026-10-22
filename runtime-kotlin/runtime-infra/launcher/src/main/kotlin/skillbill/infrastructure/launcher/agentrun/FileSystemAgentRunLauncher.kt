@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.infrastructure.launcher.mcp.resolveRuntimeMcpBin
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.install.model.SupportedAgent
@@ -22,6 +23,7 @@ class FileSystemAgentRunLauncher internal constructor(
   databasePath: Path? = null,
   private val providerEnvironment: Map<String, String> = emptyMap(),
   diagnostics: RuntimeDiagnostics,
+  runtimeMcpBin: Path? = null,
 ) : AgentRunLauncher {
   @Inject
   constructor(
@@ -36,10 +38,17 @@ class FileSystemAgentRunLauncher internal constructor(
     databasePath = databaseSessionFactory.resolveDbPath(),
     providerEnvironment = environment.environment,
     diagnostics = diagnostics,
+    runtimeMcpBin = resolveRuntimeMcpBin(environment.environment, environment.userHome),
   )
 
   private val adapters: Map<SupportedAgent, ProcessAgentRunAdapter> =
-    headlessAgentRunAdapters(processRunner, executableLookup, databasePath, providerEnvironment, diagnostics)
+    headlessAgentRunAdapters(
+      processRunner,
+      executableLookup,
+      AgentRunWorkerBinding(databasePath, runtimeMcpBin),
+      providerEnvironment,
+      diagnostics,
+    )
 
   override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
     resolveAgentRunLaunchModel(request, providerEnvironment)

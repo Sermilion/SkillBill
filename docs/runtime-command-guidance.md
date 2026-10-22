@@ -95,6 +95,11 @@ five criteria splits into the fewest dependency-ordered subtask specs needed to 
 limit. Distribute criteria evenly, with counts differing by at most one. Six criteria become two
 specs with three each; eleven become three specs with four, four, and three.
 Every requirement remains covered, and each criterion describes one focused production outcome.
+Planning sizes each criterion by estimated production lines, files, and areas (modules or owning
+packages). A criterion above about 300 lines, 8 files, or 3 areas becomes its own subtask with its
+own criteria, and each subtask spec records the estimates in a `## Criterion Sizing` section.
+A criterion is never one sentence: it names the files and symbols it changes, the exact values and
+edge cases, what it leaves to other criteria, and how audit confirms it.
 The parent summarizes feature-level outcomes within the same limit. An existing operator-authored
 parent remains unchanged, even when it has more than five criteria; its executable subtasks still
 obey the limit. This is a planning instruction and sizing rule. It adds no runtime rejection or
@@ -116,6 +121,12 @@ runtime executes internal phases through its run loop; workers carry out their
 supplied briefing without starting standalone phase or operation commands.
 
 ### Phases
+
+`verify_findings` checks whether review findings are real and worth addressing before
+repair. It never blocks the run. Invalid output, failed execution, unavailable evidence,
+and persisted verification blocks emit an error and continue with the original review
+findings retained for repair. A failed verification never dismisses a finding. A valid
+verification still removes findings it refutes.
 
 Workflow phases advance in order. Once execution leaves a phase, later edits,
 validation repairs, checkpoint commits, and resume do not reopen it. Repair loops
@@ -280,6 +291,11 @@ records and commits. The existing scoped-replan liveness and digest checks still
 refuse unsafe changes. Missing specs and invalid planning records stay with their
 existing recovery paths.
 
+Explicit scoped replan updates the selected unit of a completed plan through the
+accepted snapshot mutation path. It preserves the plan's terminal status, finish
+time, steps and sibling plans. Ordinary terminal saves still reject changed
+snapshots.
+
 ## Acceptance-audit repair planning
 
 The initial `audit` reads every authored acceptance criterion. It records findings
@@ -294,13 +310,19 @@ the same forbidden pattern. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
 repair cycle records at most one unsuccessful outcome. A partial source-work report with
 verdict `progress` stays in the same reserved repair cycle, retains its saved plan
-and edits, and does not consume a criterion failure. A retryable block first goes
+and edits, and does not consume a criterion failure when that round changed source
+files. A `progress` report from a round that changed no source files is charged like
+`no_progress`, so three idle rounds block the criterion. A retryable block first goes
 to read-only report admission. That admission returns `progress` for unfinished
 implementation that can continue, `satisfied` for a completed repair awaiting
 independent source verification, or `advance` for a concrete external obstacle.
 An agent stopping after one partial edit is not an external obstacle. Explicit
 `no_progress` reports, failed independent verification, and admitted failures
 retain the per-criterion cap.
+A completed repair claim, with verdict `completed`, `satisfied`, or no verdict,
+goes directly to independent source verification. A verifier's `progress` verdict
+rejects that completion claim and consumes one unsuccessful outcome. It cannot
+turn the completed claim into an uncharged partial repair.
 The third unsuccessful
 outcome blocks that criterion. Explicit operator resume of the blocked goal resets
 the active failure counts to zero and grants three new outcomes per criterion,
@@ -310,6 +332,22 @@ Only `no_progress` consumes an unsuccessful outcome; `progress` continues the
 reserved cycle with its saved plan and existing failure count. An ordinary state
 reload does not reset the budget. A successful outcome closes source work for it
 without erasing earlier failures.
+
+Planning and repair receive the selected criterion's latest three unsuccessful
+outcomes from durable accounting, including outcomes retained across operator
+resume. The prompt states how many outcomes it includes and how many exist.
+Earlier rejections are counterexamples to check against current source, not proof
+that a repaired gap remains open or permission to reopen another criterion.
+Planning identifies the required invariant, its owner, and the authoritative
+source for each fact before choosing edits. It traces applicable first execution,
+repeated execution, replay after state advances, new attempts, and failure through
+the affected readers and writers. Before claiming completion, repair performs a
+separate read-only source closure pass against that invariant and the retained
+counterexamples. Independent source verification still decides acceptance.
+Planning and repair explain how they avoid still-applicable rejected approaches.
+A reconstructed value or warning cannot substitute for an original artifact the
+criterion requires; unavailable historical data is an explicit constraint rather
+than evidence to invent.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted
@@ -322,6 +360,11 @@ without criterion attribution remain unavailable, not zero. Starting prospective
 per-criterion accounting for such a workflow requires a separate explicit
 operator decision. Audit, repair planning, and source repair do not run builds or
 tests.
+
+An audit that completes without a verdict is read as a clarification request and
+runs again once. A second verdict-less audit in a row blocks the step with a
+`runtime:` reason instead of relaunching, because the usual cause is an audit agent
+that cannot reach the skill-bill settlement tools.
 
 When a completed phase cannot be admitted, the block report retains the rejected
 completion's reason and attempt. A changed or unreadable bound spec names its

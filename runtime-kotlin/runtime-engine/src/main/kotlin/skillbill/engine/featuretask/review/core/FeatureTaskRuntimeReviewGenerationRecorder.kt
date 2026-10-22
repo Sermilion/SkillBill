@@ -30,13 +30,11 @@ import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArt
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
-import java.time.Clock
 
 class FeatureTaskRuntimeReviewGenerationRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
-  private val clock: Clock,
 ) {
   fun persistOwnedReviewGenerationInvalidation(
     workflowId: String,
@@ -44,7 +42,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Int? =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction null
       }
       persistReviewGenerationInvalidationInTransaction(unitOfWork, workflowId, reviewStepId)
@@ -154,7 +152,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
         throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
       }
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
       ) {
         return@transaction false
       }
@@ -263,7 +261,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     if (rejected.isEmpty()) return
     database.transaction { unitOfWork ->
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
       ) {
         return@transaction
       }

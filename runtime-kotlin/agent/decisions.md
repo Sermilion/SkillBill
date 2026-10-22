@@ -24,6 +24,17 @@ Decision: Add migration 66 with `qa_report_text` and report-named outputs; retai
 Reason: New runs expose the complete report without destructive migration, and in-flight workflows and old rows remain readable through the rollout.
 Alternatives considered: Replacing old columns and keys or rewriting existing state was rejected because rollout must preserve stored runs.
 Revisit when: All supported stores and in-flight workflows no longer need legacy reads.
+## [2026-10-22] Finding verification failures continue with original review findings
+
+`verify_findings` is advisory. An output, execution, or evidence failure records an
+error and completes with the original review finding census carried into repair.
+The fallback describes verification as unavailable. It never treats failed
+verification as clearance and never persists a new verification block. Resuming
+an existing verification block uses the same continuation.
+
+The selected step hook supplies the fallback output as a run fact. Shared failure
+settlement persists that output without branching on phase names. Other steps keep
+their blocking behavior. Rejected agent output stays in private diagnostics.
 
 ## [2026-10-20] Standalone plan records the subtasks it planned
 Context: `phase plan` settled its status with the bare result `completed`. The desktop phase activity panel showed that word under the run and nothing about what the plan decided, although the plan had just written a decomposition manifest naming the feature and every subtask.

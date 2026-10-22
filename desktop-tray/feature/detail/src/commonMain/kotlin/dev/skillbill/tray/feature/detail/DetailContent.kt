@@ -159,7 +159,8 @@ private fun LoadedDetail(
   val executionScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "executions", executionKeys)
   val validationScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "validation", validationKeys)
   val copy = rememberCopyToClipboard()
-  val fresh = effectiveFreshness(item, false, load.readError != null) == Freshness.FRESH
+  val readError = state.readHealth.reportedProblem
+  val fresh = effectiveFreshness(item, false, readError != null) == Freshness.FRESH
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val frozen = !fresh
   val operation = item.family == WorkFamily.FEATURE_VERIFY
@@ -184,7 +185,7 @@ private fun LoadedDetail(
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         RepositoryLocationLinks(item)
-        load.readError?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
+        readError?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
         state.pendingFeedback.forEach { feedback ->
           Text(
             feedback.message,
@@ -213,7 +214,7 @@ private fun LoadedDetail(
           }
         }
       }
-      RunActionButtons(detail, state.control is ControlState.InProgress, state.controllable && load.readError == null, onAction)
+      RunActionButtons(detail, state.control is ControlState.InProgress, state.controllable && !state.readHealth.blocksControls, onAction)
     }
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -365,7 +366,7 @@ private fun LoadedDetail(
           "Execution",
           listOfNotNull(
             item.workflowId?.let { "Workflow" to it }, item.invocationId?.let { "Invocation" to it },
-            detail.activeAgent?.let { "Agent" to it }, item.currentModel?.let { "Model" to "$it${item.currentEffort?.let { effort -> " · $effort" }.orEmpty()}" },
+            detail.activeAgent?.let { "Agent" to it }, "Model" to (item.currentModel?.let { "$it${item.currentEffort?.let { effort -> " · $effort" }.orEmpty()}" } ?: "Not reported"),
             detail.executionLiveness?.let { "Liveness" to livenessText(it, item, now) }, item.startedAt?.let { "Started" to formatInstant(it, "d MMM HH:mm") },
             "Last update" to formatInstant(item.updatedAt, "HH:mm:ss"),
           ),

@@ -143,6 +143,10 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
 
 /** The launch behaviour one strategy step adds to the shared launch preparation and pre-launch checks. */
 internal interface PhaseStepLaunchHooks {
+  fun failureContinuationOutput(
+    upstream: List<FeatureTaskRuntimePhaseOutput>,
+  ): NormalizedFeatureTaskRuntimePhaseOutput? = null
+
   /** Whether the launch prompt of this step carries the build command the validation gate declares. */
   val carriesPackBuildCommand: Boolean
     get() = false

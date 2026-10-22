@@ -4,6 +4,8 @@ import skillbill.contracts.review.GovernedReviewEvidenceContracts
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
+import skillbill.infrastructure.launcher.mcp.claudeRuntimeMcpArguments
+import skillbill.infrastructure.launcher.mcp.codexRuntimeMcpArguments
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.AGENT_LAUNCHER_CLIS
@@ -149,6 +151,7 @@ internal class ClaudeAgentRunCommandBuilder(
       configFormat = McpRegistrationOperations.configFormatFor(SupportedAgent.CLAUDE),
     ),
   private val databasePath: Path? = null,
+  private val runtimeMcpBin: Path? = null,
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.CLAUDE
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CLAUDE_JSON
@@ -186,6 +189,7 @@ internal class ClaudeAgentRunCommandBuilder(
             add("--tools")
             add(governedReviewToolList(request.reviewFanOut))
           }
+          addAll(claudeRuntimeMcpArguments(request, runtimeMcpBin, databasePath))
           add("--dangerously-skip-permissions")
           (listOf(request.repoRoot) + request.additionalWritableDirectories).forEach { directory ->
             add("--add-dir")
@@ -220,6 +224,7 @@ internal class CodexAgentRunCommandBuilder(
       configFormat = McpRegistrationOperations.configFormatFor(SupportedAgent.CODEX),
     ),
   private val databasePath: Path? = null,
+  private val runtimeMcpBin: Path? = null,
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.CODEX
   override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.CODEX_JSONL
@@ -245,6 +250,7 @@ internal class CodexAgentRunCommandBuilder(
             add("--dangerously-bypass-approvals-and-sandbox")
             add("--config")
             add("shell_environment_policy.inherit=all")
+            addAll(codexRuntimeMcpArguments(request, runtimeMcpBin, databasePath))
           } else {
             add("--skip-git-repo-check")
             add("--ignore-user-config")

@@ -1,8 +1,13 @@
 package dev.skillbill.tray.feature.detail
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
@@ -12,6 +17,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import dev.skillbill.tray.core.designsystem.DesignSystemTheme
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.RunOptions
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.fixtureInstant
@@ -19,6 +25,7 @@ import dev.skillbill.tray.core.testing.workItem
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import dev.skillbill.tray.core.ui.RepositoryNavigation
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
 @OptIn(ExperimentalTestApi::class)
@@ -26,6 +33,33 @@ class DetailFailureBannerTest {
   private val navigation = object : RepositoryNavigation {
     override suspend fun openRepository(root: String, branch: String?) = Outcome.Value(Unit)
     override suspend fun openDirectory(root: String) = Outcome.Value(Unit)
+  }
+
+  @Test
+  fun `a provider blocked run offers Resume once its running owner exits`() = runComposeUiTest {
+    val item = workItem("provider-limit", Lifecycle.BLOCKED)
+    val reason = "This run still has a running owner."
+    var options by mutableStateOf(RunOptions(
+      canCancel = true,
+      canLaunch = false,
+      launchLabel = "Resume",
+      agentId = "claude",
+      agentChoices = listOf("claude"),
+      unavailableReason = reason,
+    ))
+    val actions = mutableListOf<DetailAction>()
+    setContent {
+      DesignSystemTheme {
+        RunActionButtons(detail(item).copy(runOptions = options), busy = false, available = true, onAction = actions::add)
+      }
+    }
+
+    onNodeWithText("Resume").assertIsNotEnabled()
+    onNodeWithText(reason).assertExists()
+    runOnIdle { options = options.copy(canLaunch = true, unavailableReason = null) }
+    onNodeWithText(reason).assertDoesNotExist()
+    onNodeWithText("Resume").assertIsEnabled().performClick()
+    assertEquals(listOf<DetailAction>(DetailAction.Launch("claude")), actions)
   }
 
   @Test

@@ -20,6 +20,7 @@ import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompo
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
+import skillbill.engine.goalrunner.telemetry.GoalPlanningProgressRecorder
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.idestatus.model.IdeStatusLaunchScope
@@ -60,6 +61,7 @@ class PlanWorkflowGoalPlanningSource(
   planner: FeatureTaskRuntimeDecompositionPlanner,
   private val legacyPreparations: GoalPlanningPreparationCheckpoint,
   private val replannedChildren: GoalReplannedChildCleanup,
+  private val progressRecorder: GoalPlanningProgressRecorder,
 ) : GoalPlanningSource {
   private val snapshots = PlanBundleSnapshots(planner)
 
@@ -150,7 +152,8 @@ class PlanWorkflowGoalPlanningSource(
     val request = scope.request
     val issueKey = scope.state.manifest.issueKey
     val agentId = request.configuredAgentOverrideId ?: request.invokedAgentId
-    val inputFor = { specPath: String -> planInput(request, agentId, specPath) }
+    val progress = progressRecorder.sink(scope.state.parentWorkflowId, issueKey, agentId)
+    val inputFor = { specPath: String -> planInput(request, agentId, specPath).copy(eventSink = progress) }
     val linked = linkedPlan(scope)
     val replanned =
       if (linked == null) {

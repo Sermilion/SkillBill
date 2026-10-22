@@ -101,7 +101,7 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
     database.transaction { unitOfWork ->
       val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
       ) {
         return@transaction
       }
@@ -393,7 +393,7 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.appendRemediationBaseRe
   database.transaction { unitOfWork ->
     val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction
     if (admitted != null &&
-      !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+      !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
     ) {
       return@transaction
     }

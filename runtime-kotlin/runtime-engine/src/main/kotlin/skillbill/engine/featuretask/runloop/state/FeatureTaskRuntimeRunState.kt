@@ -426,12 +426,13 @@ internal class FeatureTaskRuntimeRunState(
   }
 
   override fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart {
+    val plannedPhaseId = plannedResumePhase(requestedPhaseId)
     val phaseId =
-      if (requestedPhaseId in completedPhases) {
-        requestedPhaseId
+      if (plannedPhaseId in completedPhases) {
+        plannedPhaseId
       } else {
-        transitions.entryGateViolation(requestedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
-          ?: requestedPhaseId
+        transitions.entryGateViolation(plannedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
+          ?: plannedPhaseId
       }
     if (phaseId !in completedPhases) return ExplicitResumeStart(phaseId, reopen = true)
     if (openRepairReentry(phaseId)) return ExplicitResumeStart(phaseId, reopen = false)
@@ -645,6 +646,15 @@ internal class FeatureTaskRuntimeRunState(
     val record = initialRecords[phaseId] ?: return verdictFor(phaseId)
     val output = validatedRecordToOutput(record) ?: return verdictFor(phaseId)
     return FeatureTaskRuntimeOutputVerification.verdictFor(parsedOutput(output), stepVerdictRuleFor(phaseId))
+  }
+
+  private fun plannedResumePhase(requestedPhaseId: String): String {
+    if (requestedPhaseId in transitions.forwardPhaseIds) return requestedPhaseId
+    val canonicalStepIds = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
+    val canonicalIndex = canonicalStepIds.indexOf(requestedPhaseId)
+    if (canonicalIndex < 0) return requestedPhaseId
+    return canonicalStepIds.drop(canonicalIndex + 1).firstOrNull { it in transitions.forwardPhaseIds }
+      ?: requestedPhaseId
   }
 
   private fun completedResumePast(requestedPhaseId: String): ExplicitResumeStart? {

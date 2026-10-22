@@ -66,6 +66,7 @@ import dev.skillbill.tray.core.ui.effectiveFreshness
 import dev.skillbill.tray.core.ui.label
 import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.phaseElapsedText
+import dev.skillbill.tray.core.ui.progressLabel
 import dev.skillbill.tray.core.ui.repositoryTitle
 import dev.skillbill.tray.core.ui.statusColor
 import dev.skillbill.tray.core.ui.tickingNow
@@ -206,7 +207,7 @@ internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, sta
           listOfNotNull(phase, item.phaseExecution?.label(), if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else duration.takeIf { it != "not available" }).joinToString(" · "),
           Modifier.weight(1f), color = if (attention) color else muted, fontFamily = mono, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        item.progressTotal?.let { Text("${item.progressCompleted ?: 0}/$it", color = ink, fontFamily = mono, fontSize = 11.5.sp) }
+        item.progressLabel()?.let { Text(it, color = ink, fontFamily = mono, fontSize = 11.5.sp) }
       }
       val progressTotal = item.progressTotal
       if (!attention && progressTotal != null && progressTotal > 0) Box(Modifier.fillMaxWidth().height(3.dp).background(surface3, RoundedCornerShape(50))) {

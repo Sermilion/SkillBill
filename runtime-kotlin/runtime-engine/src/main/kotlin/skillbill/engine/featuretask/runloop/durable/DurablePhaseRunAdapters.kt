@@ -67,7 +67,6 @@ import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlo
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.nio.file.Path
-import java.time.Clock
 
 internal class DurableOwnedNoChangePause(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
@@ -458,7 +457,6 @@ internal class DurablePhaseRunGoal(
 internal class DurablePhaseRunSettlements(
   private val database: DatabaseSessionFactory,
   private val admitted: AdmittedFeatureTaskRuntimeExecution,
-  private val clock: Clock,
   private val service: FeatureTaskPhaseSettlementService,
 ) : PhaseRunSettlements {
   override fun findEnvelope(
@@ -473,7 +471,7 @@ internal class DurablePhaseRunSettlements(
     attempt: Int,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       unitOfWork.featureTaskPhaseSettlements.delete(workflowId, phaseId, attempt)

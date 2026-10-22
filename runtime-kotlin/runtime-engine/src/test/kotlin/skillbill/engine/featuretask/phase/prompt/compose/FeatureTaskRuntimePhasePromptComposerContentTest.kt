@@ -276,6 +276,19 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
+  fun `planning sizes each criterion and promotes a subtask-sized one instead of writing a one-sentence criterion`() {
+    val plan = composePromptForPhase("plan")
+
+    assertContains(plan, "## Criterion Sizing")
+    assertContains(plan, "about 300 production lines,\n8 production files, or 3 areas")
+    assertContains(plan, "A subtask-sized criterion becomes its own full subtask.")
+    assertContains(plan, "A one-sentence criterion is not allowed.")
+    assertContains(plan, "Never use nested bullets inside a criterion")
+    assertFalse(plan.contains("Breadth is never a reason"), "size now decides whether a criterion splits")
+    assertContains(composePromptForPhase("preplan"), "When any criterion is subtask-sized, choose `decomposed`.")
+  }
+
+  @Test
   fun `plan_subtasks prompt names only the assigned sub-spec and asks for its implementation details`() {
     val prompt = composePromptForPhase("plan_subtasks")
 

@@ -10,7 +10,12 @@ internal object AuditImplementFixPromptSections {
     "Execute the persisted audit_plan_fix repair plan in its declared order. The supplied upstream output " +
       "contains that plan and the latest audit findings. Reconcile each planned item against the current " +
       "tree before editing, preserve work already completed, and implement its proposed production changes. " +
-      "Report closure evidence for every plan item and explain any source-backed adjustment. Do not " +
+      "Compare the plan with the retained rejection evidence before editing. Do not recreate an approach " +
+      "a prior audit rejected unless current source evidence resolves the reason for rejection. If the " +
+      "saved plan repeats that defect, adjust it within this criterion and explain the correction. " +
+      "Do not invent unavailable historical data or substitute reconstructed evidence for an original " +
+      "the criterion requires. Report closure evidence for every plan item and explain any " +
+      "source-backed adjustment. Do not " +
       "replace the repair plan with the original feature plan or silently omit a planned gap. " +
       "Repair every independent production gap for the runtime-selected authored criterion " +
       "reported by the latest audit in the supplied upstream output. " +
@@ -29,7 +34,15 @@ internal object AuditImplementFixPromptSections {
       "and failure handling. A check in an earlier transaction does not protect a later mutation. Reconcile " +
       "already-applied edits and preserve completed work and governed contracts. Before reporting completion, " +
       "trace each supplied finding from its actual consumer through every reachable helper to the named " +
-      "operation, and finish any remaining in-scope repair. Renaming a getter, introducing a forwarding " +
+      "operation, and finish any remaining in-scope repair. Then do a separate read-only source closure " +
+      "pass against the authored invariant and retained failed-repair counterexamples. Trace the changed " +
+      "readers and writers through first execution, repeated execution, replay or resume after state " +
+      "advances, a new attempt or generation, and failure. Check each applicable sequence's expected " +
+      "state and identity against the final source, including lookups, equality checks, copied references " +
+      "and transaction boundaries. Explain inapplicable sequences. Resolve contradictory meanings " +
+      "across paths before claiming completion; another local guard does not close an inconsistent " +
+      "state model. Include the concrete counterexample and final consumer-to-writer source evidence " +
+      "in the closure report. Renaming a getter, introducing a forwarding " +
       "interface, or moving mutable authority behind a recoverable cast does not close an access finding. " +
       "Do not defer " +
       "known missing behavior to the next audit or validation. Do not spawn subagents or perform another " +
@@ -46,7 +59,9 @@ internal object AuditImplementFixPromptSections {
       "One guard or one safe edit is not completion when the saved plan still has missing behavior. " +
       "If the session ends with unfinished source work, call feature_task_phase_complete with verdict progress " +
       "and explain the remaining work in prose. The runtime retains the same reservation and continues repair, " +
-      "without replanning or charging a failed criterion outcome. Never use feature_task_phase_block or a " +
+      "without replanning or charging a failed criterion outcome when this session changed source files. " +
+      "A progress report from a session that changed no source files counts as a failed repair attempt. " +
+      "Never use feature_task_phase_block or a " +
       "retryable failure to hand off unfinished implementation. " +
       "The runtime preserves applied edits and saved repair reports across continuation sessions. " +
       "Known unfinished production work is not a needs_user_action blocker. Use that disposition only " +
@@ -68,7 +83,7 @@ internal object AuditImplementFixPromptSections {
               "\n\nThe runtime did not provide a selected authored criterion. " +
                 "Do not edit; report the missing runtime context."
             )
-          ),
+          ) + inputs.priorAcceptanceRepairFailures?.let { "\n\n$it" }.orEmpty(),
       authoringDiscipline = projectAuthoringDisciplineDirective(),
       continuation = continuation(inputs),
       valueContent =
@@ -97,7 +112,8 @@ internal object AuditImplementFixPromptSections {
       the runtime-selected criterion. Prior completion claims and test-only classifications remain claims
       to verify. Continue every remaining production item in the saved plan in this repair reservation.
       Report verdict progress only if the session ends before that work is finished. This retains the
-      reservation and does not spend a criterion failure. Do not replace the plan with another partial guard.
+      reservation and does not spend a criterion failure only when this session changed source files; a
+      progress report with no source edits spends one. Do not replace the plan with another partial guard.
 
       $reports
 

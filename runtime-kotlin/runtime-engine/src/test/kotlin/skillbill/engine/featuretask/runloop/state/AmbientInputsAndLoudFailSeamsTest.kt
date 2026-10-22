@@ -117,6 +117,39 @@ class AmbientInputsAndLoudFailSeamsTest {
   }
 
   @Test
+  fun `explicit resume of a goal-level qa step starts the goal child's next planned phase`() {
+    val state =
+      FeatureTaskRuntimeRunState(
+        initialRecords =
+          mapOf(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to
+              completedRecord(
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
+                PREPLAN_OUTPUT,
+              ),
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
+              completedRecord(
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+                PLAN_OUTPUT,
+              ),
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
+              completedRecord(
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+                settledAuditSatisfiedRecord(),
+              ),
+          ),
+        transitions = SkeletonDefinition.GOAL_CHILD.declaration(),
+        resumeRulesFn = RESUME_RULES,
+      )
+
+    val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, start.phaseId)
+    state.reopenFromExplicitResume(start.phaseId)
+
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
+  }
+
+  @Test
   fun `explicit resume of an audit that must advance stays on the completed audit`() {
     val state =
       FeatureTaskRuntimeRunState(

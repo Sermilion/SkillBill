@@ -17,7 +17,6 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalCo
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
-import java.time.Clock
 
 interface FeatureTaskRuntimeReadinessEvidencePort {
   fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence?
@@ -42,7 +41,6 @@ interface FeatureTaskRuntimeNoChangePausePort {
 class FeatureTaskRuntimeGateProgressRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-  private val clock: Clock,
 ) : FeatureTaskRuntimeReadinessEvidencePort,
   FeatureTaskRuntimeNoChangePausePort {
   fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
@@ -63,7 +61,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       persistValidationGateProgressInTransaction(unitOfWork, workflowId, progress)
@@ -175,7 +173,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       persistNoChangePauseInTransaction(unitOfWork, workflowId, pause)
@@ -216,7 +214,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       persistBuildGateProgressInTransaction(unitOfWork, workflowId, progress)

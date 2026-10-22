@@ -212,11 +212,11 @@ internal class CodeReviewStep(
     reviewed: ReviewedPass,
   ): PhaseOutcome {
     val pass = reviewed.pass
-    if (!state.amendReviewRemediationCheckpoint()) {
+    state.amendReviewRemediationCheckpoint()?.let { failure ->
       return blockStep(
         state,
         pass.iteration,
-        "Runtime-owned review changes could not be committed before review settlement.",
+        "Runtime-owned review changes could not be committed before review settlement. $failure",
         FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
       )
     }

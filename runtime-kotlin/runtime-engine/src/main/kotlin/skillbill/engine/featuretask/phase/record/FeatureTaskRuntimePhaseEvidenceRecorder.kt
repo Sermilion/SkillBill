@@ -47,7 +47,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
         return@transaction false
       }
       val record =
@@ -109,7 +109,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, args.workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, args.workflowId)) {
         return@transaction false
       }
       val record =
@@ -128,7 +128,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       appendQuarantineEntryInTransaction(unitOfWork, workflowId, entry)
@@ -189,7 +189,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       val record =
@@ -314,7 +314,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
     database.transaction { unitOfWork ->
-      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)) {
         return@transaction false
       }
       recordWorkflowOwnedPathsInTransaction(unitOfWork, workflowId, ownedPaths)

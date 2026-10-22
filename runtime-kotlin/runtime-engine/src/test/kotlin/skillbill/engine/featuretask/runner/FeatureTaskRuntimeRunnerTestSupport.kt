@@ -908,7 +908,6 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
           NoopWorkflowSnapshotValidator,
           featureTaskRuntimeWireArtifactValidatorForTest(),
         ),
-        testHarnessClock,
       ),
   )
 

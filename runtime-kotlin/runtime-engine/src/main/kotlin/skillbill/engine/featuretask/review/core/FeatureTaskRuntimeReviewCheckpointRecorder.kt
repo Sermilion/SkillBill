@@ -9,26 +9,22 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import java.time.Clock
 
 class FeatureTaskRuntimeReviewCheckpointRecorder(
   database: DatabaseSessionFactory,
   workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
-  clock: Clock,
 ) : FeatureTaskRuntimeReviewGenerationPort, FeatureTaskRuntimeFindingVerificationPort {
   private val reviewGeneration =
     FeatureTaskRuntimeReviewGenerationRecorder(
       database,
       workflowPersistence,
       runtimeOwnedPersistence,
-      clock,
     )
   private val findingVerification =
     FeatureTaskRuntimeFindingVerificationRecorder(
       database,
       workflowPersistence,
-      clock,
     )
 
   override fun persistOwnedReviewGenerationInvalidation(
