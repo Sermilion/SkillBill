@@ -7,11 +7,12 @@ import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClaim
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitions
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Produces a diagnosis for one claimed block incident without changing its observation. */
@@ -34,18 +35,18 @@ class BlockIncidentInvestigationWorker(
   private val processSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val daemonThread: DaemonThreadPort,
 ) {
-  fun runEligible(limit: Int, observedSince: Instant? = null) {
+  fun runEligible(
+    limit: Int,
+    observedSince: Instant? = null,
+  ) {
     val deadline = clock.instant().plus(BlockIncidentService.INVESTIGATION_DEADLINE)
-    val candidates = try {
-      database.transaction { unit ->
-        val activatedAt = unit.blockIncidents.rolloutActivatedAt() ?: return@transaction emptyList()
-        unit.blockIncidents.pending(limit).filter { it.occurrence.observedAt >= activatedAt }
-      }
-    } catch (failure: Exception) {
-      if (failure is CancellationException) throw failure
-      diagnostics.warning("Block incident investigation scan failed.", failure)
-      return
-    }
+    val candidates =
+      diagnostics.bestEffort("Block incident investigation scan failed.", null) {
+        database.transaction { unit ->
+          val activatedAt = unit.blockIncidents.rolloutActivatedAt() ?: return@transaction emptyList()
+          unit.blockIncidents.pending(limit).filter { it.occurrence.observedAt >= activatedAt }
+        }
+      } ?: return
     candidates.filter { observedSince == null || it.occurrence.observedAt >= observedSince }.forEach { candidate ->
       if (!clock.instant().isBefore(deadline)) return
       investigate(candidate)
@@ -58,24 +59,25 @@ class BlockIncidentInvestigationWorker(
     val ownerGeneration = (candidate.state.claim?.ownerGeneration ?: 0L) + 1L
     val now = clock.instant()
     val expiresAt = now.plus(CLAIM_LEASE)
-    val claimed = try {
-      database.transaction { unit ->
-        unit.blockIncidents.claim(
-          candidate.occurrence.occurrenceToken,
-          candidate.state.revision,
-          ownerToken,
-          ownerGeneration,
-          identity.hostIdentity,
-          identity.pid,
-          expiresAt,
-        )
+    val claimed =
+      diagnostics.bestEffort("Block incident claim failed.", false) {
+        database.transaction { unit ->
+          unit.blockIncidents.claim(
+            candidate.occurrence.occurrenceToken,
+            candidate.state.revision,
+            BlockIncidentClaim(ownerToken, ownerGeneration, identity.hostIdentity, identity.pid, expiresAt),
+          )
+        }
       }
-    } catch (failure: Exception) {
-      if (failure is CancellationException) throw failure
-      diagnostics.warning("Block incident claim failed.", failure)
+    if (!claimed) return
+    val takeoverExhausted =
+      candidate.state.diagnosis == BlockIncidentDiagnosis.INVESTIGATING &&
+        candidate.state.claim?.expiresAt?.let { it <= now } == true &&
+        candidate.state.retryCount >= BlockIncidentTransitions.MAX_RETRIES
+    if (takeoverExhausted) {
+      settle(candidate, ownerToken, ownerGeneration, BlockIncidentDiagnosis.CRASHED)
       return
     }
-    if (!claimed) return
     val stopRenewals = AtomicBoolean(false)
     daemonThread.runWithJoinBudget(
       action = {
@@ -86,29 +88,38 @@ class BlockIncidentInvestigationWorker(
       },
       joinBudgetMillis = 1,
     )
-    val diagnosis = try {
-      investigator.investigate(candidate)
-    } catch (failure: CancellationException) {
-      throw failure
-    } catch (failure: Exception) {
-      diagnostics.warning("Block incident investigator failed.", failure)
-      BlockIncidentDiagnosis.CRASHED
-    } finally {
-      stopRenewals.set(true)
-    }
-    try {
-      val settled = database.transaction { unit ->
-        unit.blockIncidents.settle(candidate.occurrence.occurrenceToken, ownerToken, ownerGeneration, diagnosis, null)
+    val diagnosis =
+      try {
+        diagnostics.bestEffort("Block incident investigator failed.", BlockIncidentDiagnosis.CRASHED) {
+          investigator.investigate(candidate)
+        }
+      } finally {
+        stopRenewals.set(true)
       }
+    settle(candidate, ownerToken, ownerGeneration, diagnosis)
+  }
+
+  private fun settle(
+    candidate: BlockIncident,
+    ownerToken: String,
+    ownerGeneration: Long,
+    diagnosis: BlockIncidentDiagnosis,
+  ) {
+    diagnostics.bestEffort("Block incident settlement failed; its claim will expire.", Unit) {
+      val settled =
+        database.transaction { unit ->
+          unit.blockIncidents.settle(candidate.occurrence.occurrenceToken, ownerToken, ownerGeneration, diagnosis, null)
+        }
       if (!settled) diagnostics.warning("Block incident settlement was refused; its claim will expire.")
-    } catch (failure: Exception) {
-      if (failure is CancellationException) throw failure
-      diagnostics.warning("Block incident settlement failed; its claim will expire.", failure)
     }
   }
 
-  private fun renew(candidate: BlockIncident, ownerToken: String, ownerGeneration: Long) {
-    try {
+  private fun renew(
+    candidate: BlockIncident,
+    ownerToken: String,
+    ownerGeneration: Long,
+  ) {
+    diagnostics.bestEffort("Block incident claim renewal failed.", Unit) {
       database.transaction { unit ->
         unit.blockIncidents.renew(
           candidate.occurrence.occurrenceToken,
@@ -117,9 +128,6 @@ class BlockIncidentInvestigationWorker(
           clock.instant().plus(CLAIM_LEASE),
         )
       }
-    } catch (failure: Exception) {
-      if (failure is CancellationException) throw failure
-      diagnostics.warning("Block incident claim renewal failed.", failure)
     }
   }
 

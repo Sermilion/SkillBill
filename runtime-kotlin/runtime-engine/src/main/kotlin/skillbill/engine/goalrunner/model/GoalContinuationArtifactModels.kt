@@ -2,8 +2,8 @@ package skillbill.engine.goalrunner.model
 
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.goalrunner.model.GoalContinuation
-import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
+import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -31,6 +31,20 @@ data class GoalContinuationCandidate(
   val outcome: GoalRunnerStoredOutcome?,
 )
 
+data class GoalRunnerBlockRequest(
+  val workflowId: String,
+  val blockedReason: String,
+  val lastResumableStep: String,
+  val supervisionEvent: GoalRunnerSupervisionEvent? = null,
+  val causingChildWorkflowId: String? = null,
+  val executionGeneration: Long? = null,
+  val executionOwnerToken: String? = null,
+  val failureExitCode: Int? = null,
+  val failureThrowableType: String? = null,
+  val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
+)
+
 data class GoalRunnerBlockWrite(
   val family: WorkflowFamily,
   val record: WorkflowStateSnapshot,
@@ -41,7 +55,6 @@ data class GoalRunnerBlockWrite(
   val executionGeneration: Long? = null,
   val failureExitCode: Int? = null,
   val failureThrowableType: String? = null,
-  val causingIncidentToken: String? = null,
   val causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )

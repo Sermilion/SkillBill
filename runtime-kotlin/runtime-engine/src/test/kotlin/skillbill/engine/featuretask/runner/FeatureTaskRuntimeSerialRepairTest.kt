@@ -1,12 +1,12 @@
 package skillbill.engine.featuretask.runner
 
-import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -238,7 +238,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         )
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(listOf("AC-001", "AC-002", "AC-002", "AC-002"), focused)
+      assertEquals(listOf("AC-001", "AC-002", "AC-002"), focused)
       assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
     }
@@ -376,7 +376,6 @@ class FeatureTaskRuntimeSerialRepairTest {
           "audit",
           "audit_plan_fix",
           "audit_implement_fix",
-          "audit",
           "audit",
           "audit",
         ),
@@ -819,7 +818,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         "audit" -> {
           audit++
           if (audit <= 4) assertContains(prompt, "AC-1")
-          if (audit == 7) assertContains(prompt, "AC-2")
+          if (audit == 6) assertContains(prompt, "AC-2")
           val state = currentState()
           if (audit == 1) {
             facts(serialDiscoveryOutput())
@@ -1031,6 +1030,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         harness.gitOperations,
         source,
       ),
+      testBlockIncidentCapture(database, testHarnessClock),
     )
   }
 }

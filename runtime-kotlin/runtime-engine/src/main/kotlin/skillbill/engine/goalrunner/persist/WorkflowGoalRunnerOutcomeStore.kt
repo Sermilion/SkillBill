@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconc
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
@@ -19,13 +20,13 @@ import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
-import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.validatedGoalReviewPasses
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -204,76 +205,7 @@ class WorkflowGoalRunnerOutcomeStore
     ): Map<Int, GoalRunnerStoredOutcome> =
       reconcile.reconcileAuthoritativeOutcomes(issueKey, parentWorkflowId, activeWorkflowIds, gate, repoRoot)
 
-    override fun markBlocked(
-      workflowId: String,
-      blockedReason: String,
-      lastResumableStep: String,
-      supervisionEvent: GoalRunnerSupervisionEvent?,
-      executionGeneration: Long?,
-      failureExitCode: Int?,
-      executionOwnerToken: String?,
-      failureThrowableType: String?,
-      causingIncidentToken: String?,
-    ): GoalRunnerAcceptedBlock? = blocks.markBlocked(
-      workflowId,
-      blockedReason,
-      lastResumableStep,
-      supervisionEvent,
-      null,
-      executionGeneration,
-      failureExitCode,
-      executionOwnerToken,
-      failureThrowableType,
-      causingIncidentToken,
-    )
-
-    override fun markBlockedForChild(
-      workflowId: String,
-      blockedReason: String,
-      lastResumableStep: String,
-      causingChildWorkflowId: String,
-      supervisionEvent: GoalRunnerSupervisionEvent?,
-      executionGeneration: Long?,
-      failureExitCode: Int?,
-      executionOwnerToken: String?,
-      failureThrowableType: String?,
-      causingIncidentToken: String?,
-    ): GoalRunnerAcceptedBlock? = blocks.markBlocked(
-      workflowId,
-      blockedReason,
-      lastResumableStep,
-      supervisionEvent,
-      causingChildWorkflowId,
-      executionGeneration,
-      failureExitCode,
-      executionOwnerToken,
-      failureThrowableType,
-      causingIncidentToken,
-    )
-
-    override fun markBlockedWithReference(
-      workflowId: String,
-      blockedReason: String,
-      lastResumableStep: String,
-      causingChildWorkflowId: String?,
-      acceptedBlockReference: GoalRunnerAcceptedBlockReference?,
-      executionGeneration: Long?,
-      executionOwnerToken: String?,
-      historicalBlockReference: GoalRunnerAcceptedBlockReference?,
-    ): GoalRunnerAcceptedBlock? = blocks.markBlocked(
-      workflowId,
-      blockedReason,
-      lastResumableStep,
-      null,
-      causingChildWorkflowId,
-      executionGeneration,
-      null,
-      executionOwnerToken,
-      null,
-      acceptedBlockReference?.incidentToken,
-      acceptedBlockReference,
-      historicalBlockReference,
-    )
+    override fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock? = blocks.markBlocked(request)
 
     override fun reopenBlockedPhaseForOperatorResume(
       workflowId: String,
@@ -527,12 +459,13 @@ internal class WorkflowGoalRunnerReconcileBridge(
     gate: GoalRunnerReconcileGate,
     repoRoot: Path?,
   ): Map<Int, GoalRunnerStoredOutcome> {
-    val result = database.transaction { unitOfWork ->
-      outcomeReconcile.reconcileAuthoritativeOutcomesInTransaction(
-        unitOfWork,
-        GoalOutcomeReconciliationRequest(issueKey, parentWorkflowId, activeWorkflowIds, gate, repoRoot),
-      )
-    }
+    val result =
+      database.transaction { unitOfWork ->
+        outcomeReconcile.reconcileAuthoritativeOutcomesInTransaction(
+          unitOfWork,
+          GoalOutcomeReconciliationRequest(issueKey, parentWorkflowId, activeWorkflowIds, gate, repoRoot),
+        )
+      }
     result.blockObservations.forEach(blockIncidentCapture::capture)
     return result.outcomes
   }
@@ -567,45 +500,12 @@ internal class WorkflowGoalRunnerBlockBridge(
   private val blockIncidentCapture: BlockIncidentCapture,
   private val clock: Clock,
 ) {
-  fun markBlocked(
-    workflowId: String,
-    blockedReason: String,
-    lastResumableStep: String,
-    supervisionEvent: GoalRunnerSupervisionEvent?,
-    causingChildWorkflowId: String?,
-    executionGeneration: Long? = null,
-    failureExitCode: Int? = null,
-    executionOwnerToken: String? = null,
-    failureThrowableType: String? = null,
-    causingIncidentToken: String? = null,
-    causingAcceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
-    historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
-  ): GoalRunnerAcceptedBlock? {
-    val result = database.transaction { unitOfWork ->
-      if (executionOwnerToken != null) {
-        val currentLease = unitOfWork.goalRunnerControls.controlState(workflowId).executionLease
-        if (currentLease == null || currentLease.ownerToken != executionOwnerToken ||
-          currentLease.generation != executionGeneration || !currentLease.expiresAtInstant.isAfter(clock.instant())
-        ) {
-          return@transaction null
-        }
+  fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock? {
+    val result =
+      database.transaction { unitOfWork ->
+        if (!unitOfWork.holdsExecutionLease(request)) return@transaction null
+        blockWrites.markBlocked(request, unitOfWork.workflowStates, unitOfWork.blockIncidents)
       }
-      blockWrites.markBlocked(
-        workflowId,
-        blockedReason,
-        lastResumableStep,
-        supervisionEvent,
-        unitOfWork.workflowStates,
-        unitOfWork.blockIncidents,
-        causingChildWorkflowId,
-        executionGeneration,
-        failureExitCode,
-        failureThrowableType,
-        causingIncidentToken,
-        causingAcceptedBlockReference,
-        historicalBlockReference,
-      )
-    }
     val capture = result?.let { blockIncidentCapture.capture(it.observation) }
     val incidentToken =
       when (capture) {
@@ -614,6 +514,13 @@ internal class WorkflowGoalRunnerBlockBridge(
         BlockIncidentCaptureOutcome.Unsaved, null -> null
       }
     return result?.let { GoalRunnerAcceptedBlock(it.stepId, incidentToken, it.acceptedBlockReference) }
+  }
+
+  private fun UnitOfWork.holdsExecutionLease(request: GoalRunnerBlockRequest): Boolean {
+    val ownerToken = request.executionOwnerToken ?: return true
+    val lease = goalRunnerControls.controlState(request.workflowId).executionLease ?: return false
+    val owned = lease.ownerToken == ownerToken && lease.generation == request.executionGeneration
+    return owned && lease.expiresAtInstant.isAfter(clock.instant())
   }
 
   fun reopenBlockedPhaseForOperatorResume(

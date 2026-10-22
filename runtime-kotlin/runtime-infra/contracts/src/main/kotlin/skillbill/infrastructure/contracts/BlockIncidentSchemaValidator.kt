@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.networknt.schema.JsonSchema
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.blockincident.BLOCK_INCIDENT_CONTRACT_VERSION
-import skillbill.error.core.BlockIncidentFailureCode
+import skillbill.error.blockincident.BlockIncidentFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.BlockIncidentSchemaPaths
 import skillbill.ports.blockincident.BlockIncidentContractValidator
@@ -30,8 +30,10 @@ class BlockIncidentSchemaValidator : BlockIncidentContractValidator {
   }
 }
 
-private fun invalidBlockIncidentSchema(message: String, cause: Throwable? = null) =
-  SkillBillRuntimeException(BlockIncidentFailureCode.INVALID_SCHEMA, message, cause)
+private fun invalidBlockIncidentSchema(
+  message: String,
+  cause: Throwable? = null,
+) = SkillBillRuntimeException(BlockIncidentFailureCode.INVALID_SCHEMA, message, cause)
 
 private fun blockIncidentSchema(): JsonSchema =
   ClasspathContractSchemaLoader.compiledSchema(

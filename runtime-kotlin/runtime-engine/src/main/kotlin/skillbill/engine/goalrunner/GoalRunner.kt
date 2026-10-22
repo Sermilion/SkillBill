@@ -2,7 +2,6 @@ package skillbill.engine.goalrunner
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
-import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
 import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
 import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
@@ -20,6 +19,7 @@ import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunPreparation
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -52,7 +52,6 @@ class GoalRunner(
   private val perRunLoopAssembler: GoalRunnerPerRunLoopAssembler,
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val intakePreparation: GoalIntakePreparation,
-  private val blockIncidentReconciler: BlockIncidentEntryReconciler,
 ) {
   fun admitIntake(
     intake: String,
@@ -89,8 +88,12 @@ class GoalRunner(
     manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&
       intakePreparation.prepare(request) == null
 
-  fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
-    blockIncidentReconciler.reconcileOnEntry()
+  fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
+    runPreparation.guardEntry({ it is GoalRunnerRunReport.Stopped && it.stop.reason in ACCEPTED_GOAL_BLOCK_REASONS }) {
+      runAfterReconciliation(request)
+    }
+
+  private fun runAfterReconciliation(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val durableState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
     val admittedState =
@@ -118,10 +121,11 @@ class GoalRunner(
     val execute: (Long, String?) -> GoalRunnerRunReport = { generation, ownerToken ->
       val ownedRequest = request.copy(executionGeneration = generation)
       val state = reconcileStateBeforeRun(loadedState)
-      val report = when (val preparation = runPreparation.prepareRun(state, ownedRequest)) {
-        is GoalRunPreparation.PreparationBlocked -> preparation.report
-        is GoalRunPreparation.Prepared -> runPrepared(preparation)
-      }
+      val report =
+        when (val preparation = runPreparation.prepareRun(state, ownedRequest)) {
+          is GoalRunPreparation.PreparationBlocked -> preparation.report
+          is GoalRunPreparation.Prepared -> runPrepared(preparation)
+        }
       settleAcceptedGoalBlock(loadedState, report, generation, ownerToken)
     }
     val owned =
@@ -144,22 +148,26 @@ class GoalRunner(
   ): GoalRunnerRunReport {
     val stop = (report as? GoalRunnerRunReport.Stopped)?.stop ?: return report
     if (stop.reason !in ACCEPTED_GOAL_BLOCK_REASONS) return report
-    val acceptedChildReference = (stop.acceptedBlockReference ?: stop.historicalBlockReference)?.takeIf {
-      it.sourceWorkflowId == stop.workflowId && it.sourceWorkflowId != state.parentWorkflowId
-    }
+    val acceptedChildReference =
+      (stop.acceptedBlockReference ?: stop.historicalBlockReference)?.takeIf {
+        it.sourceWorkflowId == stop.workflowId && it.sourceWorkflowId != state.parentWorkflowId
+      }
     val childWorkflowId = acceptedChildReference?.sourceWorkflowId
-    val acceptedChildBlockReference = stop.acceptedBlockReference?.takeIf {
-      it.sourceWorkflowId == childWorkflowId
-    }
-    outcomeStore.markBlockedWithReference(
-      workflowId = state.parentWorkflowId,
-      blockedReason = stop.blockedReason,
-      lastResumableStep = stop.lastResumableStep,
-      causingChildWorkflowId = childWorkflowId,
-      acceptedBlockReference = acceptedChildBlockReference,
-      historicalBlockReference = stop.historicalBlockReference,
-      executionGeneration = executionGeneration,
-      executionOwnerToken = executionOwnerToken,
+    val acceptedChildBlockReference =
+      stop.acceptedBlockReference?.takeIf {
+        it.sourceWorkflowId == childWorkflowId
+      }
+    outcomeStore.markBlocked(
+      GoalRunnerBlockRequest(
+        workflowId = state.parentWorkflowId,
+        blockedReason = stop.blockedReason,
+        lastResumableStep = stop.lastResumableStep,
+        causingChildWorkflowId = childWorkflowId,
+        causingAcceptedBlockReference = acceptedChildBlockReference,
+        historicalBlockReference = stop.historicalBlockReference,
+        executionGeneration = executionGeneration,
+        executionOwnerToken = executionOwnerToken,
+      ),
     )
     return report
   }
@@ -176,11 +184,12 @@ class GoalRunner(
   }
 
   private companion object {
-    val ACCEPTED_GOAL_BLOCK_REASONS = setOf(
-      GoalRunnerStopReason.BLOCKED,
-      GoalRunnerStopReason.POLICY_BLOCKED,
-      GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
-    )
+    val ACCEPTED_GOAL_BLOCK_REASONS =
+      setOf(
+        GoalRunnerStopReason.BLOCKED,
+        GoalRunnerStopReason.POLICY_BLOCKED,
+        GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
+      )
   }
 
   private fun recordGoalCompletion(

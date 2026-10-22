@@ -324,7 +324,7 @@ class StandalonePlanRun(
     reason: String,
     workflowId: String? = null,
   ): StandalonePlanResult.Refused {
-    statusPublisher?.settleBlocked(reason, workflowId)
+    statusPublisher?.settleRefused(reason, workflowId)
     return StandalonePlanResult.Refused(reason, workflowId)
   }
 
@@ -350,11 +350,19 @@ class StandalonePlanRun(
     when (result) {
       is StandalonePlanResult.Completed ->
         statusSink?.settlePlan("completed", result.workflowId, planReport(report.issueKey, repoRoot))
-      is StandalonePlanResult.Blocked -> statusSink?.settleBlocked(result.reason, result.workflowId)
-      is StandalonePlanResult.Refused -> statusSink?.settleBlocked(result.reason, result.workflowId)
+      is StandalonePlanResult.Blocked ->
+        statusSink?.settleBlocked(result.reason, result.workflowId, blockedStepId(report))
+      is StandalonePlanResult.Refused -> statusSink?.settleRefused(result.reason, result.workflowId)
     }
     return result
   }
+
+  private fun blockedStepId(report: FeatureTaskRuntimeRunReport): String? =
+    when (report) {
+      is FeatureTaskRuntimeRunReport.Blocked -> report.lastIncompletePhase
+      is FeatureTaskRuntimeRunReport.Paused -> report.pausedPhase
+      is FeatureTaskRuntimeRunReport.Completed, is FeatureTaskRuntimeRunReport.Decomposed -> null
+    }
 
   private fun isKeyResolvedSpec(
     issueKey: String,

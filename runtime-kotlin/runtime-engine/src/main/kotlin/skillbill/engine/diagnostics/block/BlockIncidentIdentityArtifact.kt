@@ -1,22 +1,23 @@
 package skillbill.engine.diagnostics.block
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.identity.blockincident.BlockIncidentOccurrenceKeys
 import skillbill.contracts.workflow.identity.blockincident.BlockIncidentSpoolKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAliasKind
-import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 
 internal data class BlockIncidentIdentity(
   val stepId: String,
-  val attempt: Int,
+  val attempt: Int?,
   val generation: Long?,
   val childWorkflowId: String?,
   val childIncidentToken: String?,
   val incidentToken: String,
-  val aliasSequence: Long,
   val alias: BlockIncidentAlias,
   val sourceAlias: BlockIncidentAlias? = null,
 ) {
@@ -28,7 +29,6 @@ internal data class BlockIncidentIdentity(
       executionGeneration = generation,
       aliasKind = alias.kind.wireValue,
       aliasValue = alias.value,
-      aliasSequence = aliasSequence,
       incidentToken = incidentToken,
       childIncidentToken = childIncidentToken,
       sourceAliasKind = sourceAlias?.kind?.wireValue,
@@ -44,7 +44,6 @@ internal data class BlockIncidentIdentity(
         BlockIncidentIdentityKeys.CHILD_WORKFLOW_ID to childWorkflowId,
         BlockIncidentIdentityKeys.CHILD_INCIDENT_TOKEN to childIncidentToken,
         BlockIncidentIdentityKeys.INCIDENT_TOKEN to incidentToken,
-        BlockIncidentIdentityKeys.ALIAS_SEQUENCE to aliasSequence,
         BlockIncidentSpoolKeys.ALIAS_KIND to alias.kind.wireValue,
         BlockIncidentSpoolKeys.ALIAS_VALUE to alias.value,
         BlockIncidentIdentityKeys.SOURCE_ALIAS_KIND to sourceAlias?.kind?.wireValue,
@@ -53,77 +52,104 @@ internal data class BlockIncidentIdentity(
     )
 
   companion object {
-    private fun invalidIdentity(): Nothing = throw invalidWorkflowStateSchemaError("Invalid durable block incident identity.")
+    private fun invalidIdentity(): Nothing =
+      throw invalidWorkflowStateSchemaError(
+        "Invalid durable block incident identity.",
+      )
+
+    fun matchesBlockedAttempt(
+      artifacts: Map<String, Any?>,
+      stepId: String,
+      attempt: Int?,
+      currentAttempt: Int?,
+    ): Boolean =
+      currentAttempt?.takeIf { it > 0 } == attempt ||
+        previousBlockedAttempt(artifacts, stepId)?.takeIf { it > 0 } == attempt
+
+    fun acceptedFor(
+      artifacts: Map<String, Any?>,
+      steps: List<WorkflowStepState>,
+      blockedStepId: String?,
+      workflowId: String,
+    ): GoalRunnerAcceptedBlockReference? =
+      fromArtifacts(artifacts)
+        ?.takeIf { identity ->
+          identity.stepId == blockedStepId &&
+            matchesBlockedAttempt(
+              artifacts,
+              identity.stepId,
+              identity.attempt,
+              steps.firstOrNull { step -> step.stepId == identity.stepId }?.attemptCount,
+            )
+        }
+        ?.acceptedReference(workflowId)
+
+    private fun previousBlockedAttempt(
+      artifacts: Map<String, Any?>,
+      stepId: String,
+    ): Int? {
+      val retry =
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY.value(artifacts) as? Map<*, *>
+          ?: return null
+      val previous = retry[OperatorBlockRetryArtifactKeys.PREVIOUS_BLOCKED_RECORD] as? Map<*, *> ?: return null
+      if (previous[SharedPayloadKeys.PHASE_ID] != stepId) return null
+      return (previous[FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT] as? Number)?.toInt()
+    }
 
     fun fromArtifacts(artifacts: Map<String, Any?>): BlockIncidentIdentity? {
       val raw = DurableWorkflowArtifactFamily.GOAL_BLOCK_IDENTITY.value(artifacts) ?: return null
       val value = raw as? Map<*, *> ?: invalidIdentity()
-      val stepId = value[SharedPayloadKeys.STEP_ID] as? String ?: invalidIdentity()
-      val attempt = (value[SharedPayloadKeys.ATTEMPT] as? Number)?.toInt() ?: invalidIdentity()
-      val sourceAliasKind = value[BlockIncidentIdentityKeys.SOURCE_ALIAS_KIND] as? String
-      val sourceAliasValue = value[BlockIncidentIdentityKeys.SOURCE_ALIAS_VALUE] as? String
-      if ((sourceAliasKind == null) != (sourceAliasValue == null) ||
-        (sourceAliasKind != null && BlockIncidentAliasKind.entries.none { it.wireValue == sourceAliasKind })
-      ) invalidIdentity()
+      val attempt =
+        value[SharedPayloadKeys.ATTEMPT]?.let {
+          (it as? Number)?.toInt()?.takeIf { attempt -> attempt > 0 } ?: invalidIdentity()
+        }
       return BlockIncidentIdentity(
-        stepId = stepId,
+        stepId = value[SharedPayloadKeys.STEP_ID] as? String ?: invalidIdentity(),
         attempt = attempt,
         generation = (value[BlockIncidentOccurrenceKeys.GENERATION] as? Number)?.toLong(),
         childWorkflowId = value[BlockIncidentIdentityKeys.CHILD_WORKFLOW_ID] as? String,
         childIncidentToken = value[BlockIncidentIdentityKeys.CHILD_INCIDENT_TOKEN] as? String,
         incidentToken = value[BlockIncidentIdentityKeys.INCIDENT_TOKEN] as? String ?: invalidIdentity(),
-        aliasSequence = (value[BlockIncidentIdentityKeys.ALIAS_SEQUENCE] as? Number)?.toLong() ?: invalidIdentity(),
-        alias = BlockIncidentAlias(
-          BlockIncidentAliasKind.entries.firstOrNull { it.wireValue == value[BlockIncidentSpoolKeys.ALIAS_KIND] }
-            ?: invalidIdentity(),
-          value[BlockIncidentSpoolKeys.ALIAS_VALUE] as? String ?: invalidIdentity(),
-        ),
-        sourceAlias = sourceAliasKind?.let { rawKind ->
-          val kind = BlockIncidentAliasKind.entries.firstOrNull { it.wireValue == rawKind } ?: invalidIdentity()
-          BlockIncidentAlias(kind, sourceAliasValue ?: invalidIdentity())
-        },
+        alias =
+          BlockIncidentAlias(
+            aliasKind(value[BlockIncidentSpoolKeys.ALIAS_KIND]) ?: invalidIdentity(),
+            value[BlockIncidentSpoolKeys.ALIAS_VALUE] as? String ?: invalidIdentity(),
+          ),
+        sourceAlias = sourceAlias(value),
       )
     }
 
-    fun acceptedReferenceFromDisplacement(artifacts: Map<String, Any?>): GoalRunnerAcceptedBlockReference? {
-      val rawDisplacement = DurableWorkflowArtifactFamily.GOAL_CONTINUATION_OUTCOME_DISPLACEMENT.value(artifacts)
-        ?: return null
-      val displacement = rawDisplacement as? Map<*, *> ?: invalidIdentity()
-      val raw = (displacement[BlockIncidentDisplacementKeys.ADDITIONAL_ACCEPTED_BLOCK_REFERENCES] as? List<*>)
-        ?.lastOrNull()
-        ?: displacement[BlockIncidentDisplacementKeys.ACCEPTED_BLOCK_REFERENCE]
-        ?: return null
-      val value = raw as? Map<*, *> ?: invalidIdentity()
-      val workflowId = value[SharedPayloadKeys.WORKFLOW_ID] as? String ?: invalidIdentity()
-      val aliasKind = value[BlockIncidentDisplacementKeys.ALIAS_KIND] as? String ?: invalidIdentity()
-      if (BlockIncidentAliasKind.entries.none { it.wireValue == aliasKind }) invalidIdentity()
-      val sourceAliasKind = value[BlockIncidentDisplacementKeys.SOURCE_ALIAS_KIND] as? String
-      val sourceAliasValue = value[BlockIncidentDisplacementKeys.SOURCE_ALIAS_VALUE] as? String
-      if ((sourceAliasKind == null) != (sourceAliasValue == null) ||
-        (sourceAliasKind != null && BlockIncidentAliasKind.entries.none { it.wireValue == sourceAliasKind })
-      ) invalidIdentity()
-      return GoalRunnerAcceptedBlockReference(
-        sourceWorkflowId = workflowId,
-        blockedStepId = value[SharedPayloadKeys.STEP_ID] as? String ?: invalidIdentity(),
-        attempt = (value[SharedPayloadKeys.ATTEMPT] as? Number)?.toInt() ?: invalidIdentity(),
-        executionGeneration = (value[BlockIncidentDisplacementKeys.EXECUTION_GENERATION] as? Number)?.toLong(),
-        aliasKind = aliasKind,
-        aliasValue = value[BlockIncidentDisplacementKeys.ALIAS_VALUE] as? String ?: invalidIdentity(),
-        aliasSequence = (value[BlockIncidentDisplacementKeys.ALIAS_SEQUENCE] as? Number)?.toLong() ?: invalidIdentity(),
-        incidentToken = value[BlockIncidentDisplacementKeys.INCIDENT_TOKEN] as? String ?: invalidIdentity(),
-        childIncidentToken = value[BlockIncidentDisplacementKeys.CHILD_INCIDENT_TOKEN] as? String,
-        sourceAliasKind = sourceAliasKind,
-        sourceAliasValue = sourceAliasValue,
-      )
+    private fun sourceAlias(value: Map<*, *>): BlockIncidentAlias? {
+      val kind = value[BlockIncidentIdentityKeys.SOURCE_ALIAS_KIND] as? String
+      val aliasValue = value[BlockIncidentIdentityKeys.SOURCE_ALIAS_VALUE] as? String
+      if ((kind == null) != (aliasValue == null)) invalidIdentity()
+      if (kind == null || aliasValue == null) return null
+      return BlockIncidentAlias(aliasKind(kind) ?: invalidIdentity(), aliasValue)
     }
+
+    private fun aliasKind(raw: Any?): BlockIncidentAliasKind? =
+      BlockIncidentAliasKind.entries.firstOrNull {
+        it.wireValue == raw
+      }
   }
+}
+
+internal fun GoalRunnerAcceptedBlockReference.boundTo(
+  workflowId: String,
+  blockedStepId: String?,
+): GoalRunnerAcceptedBlockReference? = takeIf { it.sourceWorkflowId == workflowId && it.blockedStepId == blockedStepId }
+
+internal object OperatorBlockRetryArtifactKeys {
+  const val REASON = "reason"
+  const val RETRIED_AT = "retried_at"
+  const val PREVIOUS_BLOCKED_REASON = "previous_blocked_reason"
+  const val PREVIOUS_BLOCKED_RECORD = "previous_blocked_record"
 }
 
 private object BlockIncidentIdentityKeys {
   const val CHILD_WORKFLOW_ID = "child_workflow_id"
   const val CHILD_INCIDENT_TOKEN = "child_incident_token"
   const val INCIDENT_TOKEN = "incident_token"
-  const val ALIAS_SEQUENCE = "alias_sequence"
   const val SOURCE_ALIAS_KIND = "source_alias_kind"
   const val SOURCE_ALIAS_VALUE = "source_alias_value"
 }
@@ -134,7 +160,6 @@ internal object BlockIncidentDisplacementKeys {
   const val EXECUTION_GENERATION = "execution_generation"
   const val ALIAS_KIND = "alias_kind"
   const val ALIAS_VALUE = "alias_value"
-  const val ALIAS_SEQUENCE = "alias_sequence"
   const val INCIDENT_TOKEN = "incident_token"
   const val CHILD_INCIDENT_TOKEN = "child_incident_token"
   const val SOURCE_ALIAS_KIND = "source_alias_kind"

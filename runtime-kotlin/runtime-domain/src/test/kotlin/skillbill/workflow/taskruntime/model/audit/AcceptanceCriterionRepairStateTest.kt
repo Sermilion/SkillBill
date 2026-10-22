@@ -228,6 +228,88 @@ class AcceptanceCriterionRepairStateTest {
   }
 
   @Test
+  fun `five criteria advance without spending another criterion's three failure budget`() {
+    val criteria =
+      (1..5).map { ordinal ->
+        criterion("AC-00$ordinal", ordinal, "criterion $ordinal")
+      }
+    var state =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            criteria.map { it.originalText },
+            criteria,
+            emptyList(),
+          ),
+        ),
+      )
+    state =
+      assertNotNull(
+        state.recordProseAudit(
+          AcceptanceCriterionProseAudit(
+            "discovery",
+            state.revision + 1,
+            null,
+            false,
+            "b".repeat(64),
+            "Open criteria: ${criteria.joinToString { it.canonicalRef }}",
+            "c".repeat(64),
+            "checkpoint",
+          ),
+        ),
+      )
+    assertEquals(emptyMap(), state.unsuccessfulTotals)
+
+    fun repair(
+      ref: String,
+      attempt: Int,
+      successful: Boolean,
+    ) {
+      val reservationId = "$ref:$attempt"
+      val reserved = assertNotNull(state.reserve(reservationId))
+      val completed =
+        assertNotNull(
+          reserved.completeRepairAwaitingTargetedVerification(
+            reservationId,
+            "repair:$reservationId",
+            "d".repeat(64),
+            "checkpoint:$reservationId",
+          ),
+        )
+      state = assertNotNull(completed.record(outcome(reservationId, reservationId, ref, successful)))
+      state = assertNotNull(AcceptanceCriterionRepairState.restore(state))
+    }
+
+    listOf(0, 1, 2, 1).forEachIndexed { index, failures ->
+      val ref = criteria[index].canonicalRef
+      assertEquals(ref, state.currentCriterionRef)
+      assertEquals(0, state.unsuccessfulTotals.getOrDefault(ref, 0))
+      repeat(failures) { attempt ->
+        repair(ref, attempt + 1, successful = false)
+        assertEquals(attempt + 1, state.unsuccessfulTotals[ref])
+        assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, state.stage)
+      }
+      repair(ref, failures + 1, successful = true)
+      assertEquals(failures, state.unsuccessfulTotals.getOrDefault(ref, 0))
+      assertEquals(criteria[index + 1].canonicalRef, state.currentCriterionRef)
+      assertEquals(0, state.unsuccessfulTotals.getOrDefault(assertNotNull(state.currentCriterionRef), 0))
+      assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, state.stage)
+    }
+
+    assertEquals(4, state.unsuccessfulTotals.values.sum())
+    repeat(3) { attempt ->
+      repair("AC-005", attempt + 1, successful = false)
+    }
+    assertEquals(3, state.unsuccessfulTotals["AC-005"])
+    assertEquals("AC-005", state.currentCriterionRef)
+    assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, state.stage)
+    assertNull(state.reserve("AC-005:4"))
+  }
+
+  @Test
   fun `deferred unavailable prerequisites refuse admission while source closed prerequisites remain usable`() {
     val prerequisite =
       criterion("AC-001", 1, "first").copy(

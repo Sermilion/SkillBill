@@ -43,10 +43,10 @@ import skillbill.di.scaffold.RuntimeScaffoldValidationProvides
 import skillbill.di.telemetry.RuntimeTelemetryProvides
 import skillbill.di.workflow.RuntimeWorkflowProvides
 import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
 import skillbill.engine.diagnostics.block.DefaultBlockIncidentInvestigator
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
@@ -170,7 +170,6 @@ abstract class RuntimeComponent(
     clock: Clock,
     diagnostics: RuntimeDiagnostics,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
-    runtimeVersion: RuntimeVersion,
     blockIncidentContractValidator: BlockIncidentContractValidator,
   ): DatabaseSessionFactory =
     SQLiteDatabaseSessionFactory(
@@ -178,7 +177,7 @@ abstract class RuntimeComponent(
       clock,
       diagnostics,
       workflowSnapshotValidator,
-      runtimeVersion.value,
+      runtimeVersion().value,
       blockIncidentContractValidator,
     )
 

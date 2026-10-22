@@ -38,7 +38,7 @@ class RuntimeComponentInvocationSnapshotTest {
           Clock.systemUTC(),
           component.runtimeDiagnostics,
           NoOpWorkflowSnapshotValidator,
-          component.runtimeVersion(),
+          {},
         )
           .resolveDbPath().toAbsolutePath().normalize()
       val firstConfigPath =
@@ -55,7 +55,7 @@ class RuntimeComponentInvocationSnapshotTest {
           Clock.systemUTC(),
           component.runtimeDiagnostics,
           NoOpWorkflowSnapshotValidator,
-          component.runtimeVersion(),
+          {},
         ).resolveDbPath().toAbsolutePath().normalize()
       val secondConfigPath =
         component.telemetryConfigStore(FileTelemetryConfigStore(afterMutationEnvironment))
@@ -158,14 +158,14 @@ class RuntimeComponentInvocationSnapshotTest {
         Clock.systemUTC(),
         componentA.runtimeDiagnostics,
         NoOpWorkflowSnapshotValidator,
-        componentA.runtimeVersion(),
+        {},
       ),
       componentB.databaseSessionFactory(
         componentB.resolvedEnvironmentContext,
         Clock.systemUTC(),
         componentB.runtimeDiagnostics,
         NoOpWorkflowSnapshotValidator,
-        componentB.runtimeVersion(),
+        {},
       ),
     )
   }

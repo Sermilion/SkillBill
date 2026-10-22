@@ -251,6 +251,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
           wiring.clock,
           GoalRunnerStatusTestPorts(gitOperations = wiring.gitOperations, diagnostics = wiring.diagnostics),
         ),
+        testBlockIncidentEntryReconciler(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
@@ -265,8 +266,6 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
         UnavailableDecompositionManifestStore,
       ),
-    blockIncidentReconciler =
-      testBlockIncidentEntryReconciler(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
   )
 }
 

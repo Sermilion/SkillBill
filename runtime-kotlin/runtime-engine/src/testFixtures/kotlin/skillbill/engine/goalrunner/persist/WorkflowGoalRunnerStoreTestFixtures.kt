@@ -1,10 +1,10 @@
 package skillbill.engine.goalrunner.persist
 
-import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.testHarnessClock
 import skillbill.config.model.RepoLocalConfig
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission

@@ -1,11 +1,7 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration.area.blockincident
 
 import java.sql.Connection
 
-/**
- * Adds durable keyset progress for bounded incident selection and a per-incident quarantine ledger. A quarantined
- * incident keeps its active row, token and alias reservations; only selection skips it.
- */
 internal object BlockIncidentScanProgressMigration {
   fun apply(connection: Connection) {
     connection.createStatement().use { statement ->

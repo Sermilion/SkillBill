@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.model
 
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import java.nio.file.Path
 

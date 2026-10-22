@@ -1,12 +1,7 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration.area.blockincident
 
 import java.sql.Connection
 
-/**
- * Lets an incident record that its worker generation was not captured instead of storing a placeholder. The
- * incident and alias tables are rebuilt from their stored definitions, so every row, index and trigger installed
- * by earlier migrations (immutability, retention, legacy capture and revision triggers) is preserved unchanged.
- */
 internal object BlockIncidentNullableGenerationMigration {
   fun apply(connection: Connection) {
     val incidentsTable = storedDefinition(connection, "table", INCIDENTS)
@@ -35,14 +30,17 @@ internal object BlockIncidentNullableGenerationMigration {
     }
   }
 
-  private fun storedDefinition(connection: Connection, type: String, name: String): String =
+  private fun storedDefinition(
+    connection: Connection,
+    type: String,
+    name: String,
+  ): String =
     connection.prepareStatement("SELECT sql FROM sqlite_master WHERE type = ? AND name = ?").use { statement ->
       statement.setString(1, type)
       statement.setString(2, name)
       statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
     } ?: error("Stored definition for $type $name is missing.")
 
-  /** Indexes and triggers in creation order; they are recreated after the rebuilt tables hold every row. */
   private fun dependentDefinitions(connection: Connection): List<String> =
     connection.prepareStatement(
       "SELECT sql FROM sqlite_master WHERE type IN ('index', 'trigger') AND tbl_name IN (?, ?) " +
@@ -53,7 +51,10 @@ internal object BlockIncidentNullableGenerationMigration {
       statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }
     }
 
-  private fun columns(connection: Connection, table: String): String =
+  private fun columns(
+    connection: Connection,
+    table: String,
+  ): String =
     connection.createStatement().use { statement ->
       statement.executeQuery("PRAGMA table_info($table)").use { rows ->
         buildList { while (rows.next()) add(rows.getString("name")) }

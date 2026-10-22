@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runner
 
-import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.RecordingSpecScratchStore
 import skillbill.application.RecordingSpecStatusWriter
@@ -47,6 +46,7 @@ import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.core.settleScriptedEnvelope
+import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder

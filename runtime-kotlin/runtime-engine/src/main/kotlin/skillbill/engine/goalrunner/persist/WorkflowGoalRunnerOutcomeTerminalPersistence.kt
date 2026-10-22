@@ -1,9 +1,11 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
-import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
+import skillbill.engine.diagnostics.block.boundTo
+import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.CrashReconcileExpiredWorkerRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.goalrunner.commitShaFrom
@@ -26,6 +28,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.engine.model.isTerminalStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import java.nio.file.Path
 import java.time.Clock
@@ -173,8 +176,8 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
     val issueKey = args.issueKey
     val subtaskId = args.subtaskId
     val workflowId = args.workflowId
-    val terminalArtifact = missingResultPrefixTerminalOutcomeArtifact(output, issueKey, subtaskId, workflowId)
     val existingArtifacts = record.artifacts
+    val terminalArtifact = recoveredTerminalArtifact(record, output, issueKey, subtaskId, workflowId)
     val artifactsPatch =
       linkedMapOf<String, Any?>(
         "goal_runner_missing_result_prefix_recovery" to
@@ -211,17 +214,42 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
       recoveredContinuation?.let {
         goalContinuationOutcome(recoveredArtifacts, issueKey, subtaskId, it.suppressPr)
       }?.copy(workflowId = workflowId)
-    return recovered ?: resolveTerminalOutcome(workflowStates, workflowId, issueKey, subtaskId) { null }
+    val updatedSnapshot = workflowStates.get(family, workflowId) ?: updated
+    return recovered?.withAcceptedBlockReference(updatedSnapshot)
+      ?: resolveTerminalOutcome(workflowStates, workflowId, issueKey, subtaskId) { null }
+  }
+
+  private fun recoveredTerminalArtifact(
+    record: WorkflowStateSnapshot,
+    output: Any,
+    issueKey: String,
+    subtaskId: Int,
+    workflowId: String,
+  ): FeatureTaskRuntimeWorkflowArtifactMap? {
+    val raw = missingResultPrefixTerminalOutcomeArtifact(output, issueKey, subtaskId, workflowId) ?: return null
+    val blockedStep =
+      (raw[DecompositionManifestPayloadKeys.LAST_RESUMABLE_STEP] as? String)
+        .takeIf { raw[SharedPayloadKeys.STATUS] == GoalRunnerTerminalStatus.BLOCKED.wireValue }
+    val acceptedReference = BlockIncidentIdentity.acceptedFor(record.artifacts, record.steps, blockedStep, workflowId)
+    return missingResultPrefixTerminalOutcomeArtifact(output, issueKey, subtaskId, workflowId, acceptedReference)
   }
 }
 
 internal fun GoalRunnerStoredOutcome.withAcceptedBlockReference(
   snapshot: WorkflowStateSnapshot,
-): GoalRunnerStoredOutcome =
-  copy(
+): GoalRunnerStoredOutcome {
+  if (status != GoalRunnerTerminalStatus.BLOCKED) return copy(acceptedBlockReference = null)
+  return copy(
     acceptedBlockReference =
-      BlockIncidentIdentity.fromArtifacts(snapshot.artifacts)?.acceptedReference(snapshot.workflowId),
+      acceptedBlockReference?.boundTo(workflowId, lastResumableStep)
+        ?: BlockIncidentIdentity.acceptedFor(
+          snapshot.artifacts,
+          snapshot.steps,
+          lastResumableStep,
+          snapshot.workflowId,
+        ),
   )
+}
 
 internal fun WorkflowGitOperationResult.measuredCommitSha(): String? =
   when (this) {

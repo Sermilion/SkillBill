@@ -1,14 +1,8 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration.area.blockincident
 
 import skillbill.infrastructure.sqlite.core.schema.addBlockIncidentRevisionTriggers
 import java.sql.Connection
 
-/**
- * Rebuilds the incident tables so contract 0.2 rows can be written. Existing 0.1 rows stay in place with their
- * original version, so their occurrence tokens and alias reservations cannot be reused, and the repository treats
- * them as unsupported legacy records rather than upgrading them. A 0.2 row must carry its full occurrence. Alias
- * ownership no longer cascades from occurrence deletion.
- */
 internal object BlockIncidentContractV02Migration {
   fun apply(connection: Connection) {
     connection.createStatement().use { statement ->

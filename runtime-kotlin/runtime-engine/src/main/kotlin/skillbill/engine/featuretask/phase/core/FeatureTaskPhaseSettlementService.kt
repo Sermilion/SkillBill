@@ -5,14 +5,14 @@ import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckStatus
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknowledgment
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
-import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
-import skillbill.engine.diagnostics.block.BlockIncidentAliases
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
@@ -89,29 +89,35 @@ class FeatureTaskPhaseSettlementService(
         kind = KIND_BLOCK,
         envelope = envelope,
       )
-    val (acknowledgment, observation) = database.transaction { unitOfWork ->
-      val acknowledgment = persist(persistRequest, unitOfWork.featureTaskPhaseSettlements)
-      val observation = if (acknowledgment.status == FeatureTaskPhaseSettlementAckStatus.OK) {
-        val phaseObservation = BlockIncidentFeatureTaskCorrelation.resolve(
-          unitOfWork.workflowStates,
-          request.workflowId,
-          request.phaseId,
-          admitted = null,
-        ).acceptedPhaseBlock(
-          attempt = request.attempt,
-          blockedReason = request.reason,
-          failureDisposition = request.failureDisposition,
-          failureCode = null,
-        )
-        phaseObservation.copy(
-          alias = phaseObservation.invocationId?.let {
-            BlockIncidentAliases.featureTaskPhase(request.workflowId, request.phaseId, it, request.attempt)
-          },
-        )
-      } else null
-      observation?.let { BlockIncidentFeatureTaskCorrelation.persistAcceptedIdentity(unitOfWork.workflowStates, it) }
-      acknowledgment to observation
-    }
+    val (acknowledgment, observation) =
+      database.transaction { unitOfWork ->
+        val acknowledgment = persist(persistRequest, unitOfWork.featureTaskPhaseSettlements)
+        val observation =
+          if (acknowledgment.status == FeatureTaskPhaseSettlementAckStatus.OK) {
+            val phaseObservation =
+              BlockIncidentFeatureTaskCorrelation.resolve(
+                unitOfWork.workflowStates,
+                request.workflowId,
+                request.phaseId,
+                admitted = null,
+              ).acceptedPhaseBlock(
+                attempt = request.attempt,
+                blockedReason = request.reason,
+                failureDisposition = request.failureDisposition,
+                failureCode = null,
+              )
+            phaseObservation.copy(
+              alias =
+                phaseObservation.invocationId?.let {
+                  BlockIncidentAliases.featureTaskPhase(request.workflowId, request.phaseId, it, request.attempt)
+                },
+            )
+          } else {
+            null
+          }
+        observation?.let { BlockIncidentFeatureTaskCorrelation.persistAcceptedIdentity(unitOfWork.workflowStates, it) }
+        acknowledgment to observation
+      }
     observation?.let(blockIncidentCapture::capture)
     return acknowledgment
   }

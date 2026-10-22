@@ -14,12 +14,16 @@ fun testPhaseSettlementService(
   database: DatabaseSessionFactory? = null,
 ): FeatureTaskPhaseSettlementService {
   val base = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
-  val selected = database ?: object : DatabaseSessionFactory by base {
-    override fun <T> transaction(block: (UnitOfWork) -> T): T = base.transaction { unit ->
-      block(object : UnitOfWork by unit {
-        override val featureTaskPhaseSettlements = repository
-      })
+  val selected =
+    database ?: object : DatabaseSessionFactory by base {
+      override fun <T> transaction(block: (UnitOfWork) -> T): T =
+        base.transaction { unit ->
+          block(
+            object : UnitOfWork by unit {
+              override val featureTaskPhaseSettlements = repository
+            },
+          )
+        }
     }
-  }
   return FeatureTaskPhaseSettlementService(repository, clock, selected, testBlockIncidentCapture(selected, clock))
 }

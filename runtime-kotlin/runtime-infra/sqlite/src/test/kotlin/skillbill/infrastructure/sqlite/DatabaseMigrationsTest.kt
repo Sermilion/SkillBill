@@ -52,16 +52,23 @@ class DatabaseMigrationsTest {
           "INSERT INTO feature_task_workflows(workflow_id, mode, contract_version) " +
             "VALUES ('wftr-existing', 'prose', '1.0')",
         )
-        statement.execute("DROP TABLE block_incident_aliases")
-        statement.execute("DROP TABLE block_incidents")
-        statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 66")
+        val blockIncidentTables =
+          statement.executeQuery(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'block\\_incident%' ESCAPE '\\' " +
+              "ORDER BY name = 'block_incidents'",
+          ).use { rows -> generateSequence { if (rows.next()) rows.getString(1) else null }.toList() }
+        blockIncidentTables.forEach { table -> statement.execute("DROP TABLE $table") }
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 66")
         statement.execute("PRAGMA user_version = 65")
       }
     }
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-existing'"))
-      assertEquals(66, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-existing'"),
+      )
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
       assertTrue(
         scalarInt(
           connection,
@@ -78,9 +85,10 @@ class DatabaseMigrationsTest {
       connection.createStatement().use { statement ->
         statement.executeUpdate(
           "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
-            "observed_at, evidence_availability, deadline) VALUES " +
+            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
             "('bi_${"a".repeat(64)}', '0.1', 1, 'accepted_phase_block', 'original failure', " +
-            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z')",
+            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
+            "'unknown_historical')",
         )
         assertFailsWith<SQLException> {
           statement.executeUpdate(
@@ -2202,4 +2210,14 @@ private val expectedMigrationDefinitions =
     64 to "record-feature-task-qa-criteria-summary",
     65 to "record-standalone-plan-report",
     66 to "add-durable-block-incidents",
+    67 to "persist-block-incident-exit-behavior",
+    68 to "retain-block-incident-alias-reservations",
+    69 to "persist-block-incident-identity-availability",
+    70 to "archive-incomplete-block-incident-v01-records",
+    71 to "retain-later-block-incident-v01-archive-snapshots",
+    72 to "persist-full-block-incident-occurrence",
+    73 to "accept-block-incident-contract-v02",
+    74 to "track-block-incident-scan-progress",
+    75 to "record-uncaptured-block-incident-generation",
+    76 to "activate-block-incident-rollout",
   )

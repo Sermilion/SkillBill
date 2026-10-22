@@ -29,17 +29,6 @@ interface RejectedOutputDiagnosticRepository {
     generation: Int = 0,
   ): ProducerOutputEvidence?
 
-  fun readProducerOutputExact(
-    workflowId: String,
-    phaseId: String,
-    attempt: Int,
-    agentId: String,
-    generation: Int,
-    repairTurn: Int,
-    expectedDigest: String,
-    expectedByteSize: Long,
-  ): ProducerOutputEvidence? = null
-
   fun deleteProducerOutputsBefore(before: Instant): Int
 }
 

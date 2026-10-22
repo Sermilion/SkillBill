@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.phase.record
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeRejectedOutputRecorder
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
@@ -43,7 +44,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import java.time.Clock
 
 class FeatureTaskRuntimePhaseRecorder private constructor(

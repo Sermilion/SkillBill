@@ -65,23 +65,25 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
       )
     persistMeasuredCompletions(unitOfWork, initialCandidates, request.repoRoot)
     val initialAuthoritative = initialCandidates.authoritativeOutcomesBySubtask()
-    val blockObservations = blockStaleRunningCandidates(
-      StaleRunningCandidatesBlockRequest(
-        unitOfWork = unitOfWork,
-        normalizedIssueKey = normalizedIssueKey,
-        candidates = initialCandidates,
-        initialAuthoritative = initialAuthoritative,
-        activeSet = activeSet,
-        gate = request.gate,
-      ),
-    )
-    val outcomes = loadContinuationCandidates(
-      unitOfWork.workflowStates,
-      normalizedIssueKey,
-      request.parentWorkflowId,
-      request.repoRoot,
-    )
-      .authoritativeOutcomesBySubtask()
+    val blockObservations =
+      blockStaleRunningCandidates(
+        StaleRunningCandidatesBlockRequest(
+          unitOfWork = unitOfWork,
+          normalizedIssueKey = normalizedIssueKey,
+          candidates = initialCandidates,
+          initialAuthoritative = initialAuthoritative,
+          activeSet = activeSet,
+          gate = request.gate,
+        ),
+      )
+    val outcomes =
+      loadContinuationCandidates(
+        unitOfWork.workflowStates,
+        normalizedIssueKey,
+        request.parentWorkflowId,
+        request.repoRoot,
+      )
+        .authoritativeOutcomesBySubtask()
     return GoalOutcomeReconciliationResult(outcomes, blockObservations)
   }
 

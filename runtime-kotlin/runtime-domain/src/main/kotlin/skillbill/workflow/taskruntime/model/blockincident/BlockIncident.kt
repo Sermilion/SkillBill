@@ -3,28 +3,32 @@ package skillbill.workflow.taskruntime.model.blockincident
 import java.time.Instant
 import java.util.Collections
 
-class BlockIncidentOccurrence(
-  val occurrenceToken: String,
-  val workflowId: String?,
-  val parentWorkflowId: String?,
-  val phaseId: String?,
-  val phaseRunId: String?,
-  val invocationId: String?,
-  val executionId: String?,
-  val attempt: Int?,
-  val generation: Long?,
+data class BlockIncidentScope(
+  val workflowId: String? = null,
+  val parentWorkflowId: String? = null,
+  val phaseId: String? = null,
+  val phaseRunId: String? = null,
+  val invocationId: String? = null,
+  val executionId: String? = null,
+  val attempt: Int? = null,
+  val generation: Long? = null,
+)
+
+data class BlockIncidentFailure(
   val origin: BlockIncidentOrigin,
   val reason: String,
   val reasonTruncated: Boolean = false,
   val originalReasonLength: Int = reason.length,
   val originalReasonDigest: String? = null,
-  val failureCode: String?,
-  val failureDisposition: String?,
-  val throwableType: String?,
-  val exitCode: Int?,
-  val observedAt: Instant,
-  val evidenceAvailability: BlockIncidentEvidenceAvailability,
-  val identityAvailability: BlockIncidentIdentityAvailability,
+  val reasonRetention: BlockIncidentReasonRetention,
+  val failureCode: String? = null,
+  val failureDisposition: String? = null,
+  val throwableType: String? = null,
+  val exitCode: Int? = null,
+  val exitBehavior: BlockIncidentExitBehavior,
+)
+
+data class BlockIncidentCorrelation(
   val repairTurn: Int? = null,
   val outputGeneration: Long? = null,
   val monitorSelector: String? = null,
@@ -33,9 +37,17 @@ class BlockIncidentOccurrence(
   val headRepository: String? = null,
   val headBranch: String? = null,
   val worktreePath: String? = null,
-  val exitBehavior: BlockIncidentExitBehavior,
+)
+
+class BlockIncidentOccurrence(
+  val occurrenceToken: String,
+  val scope: BlockIncidentScope,
+  val failure: BlockIncidentFailure,
+  val observedAt: Instant,
+  val evidenceAvailability: BlockIncidentEvidenceAvailability,
+  val identityAvailability: BlockIncidentIdentityAvailability,
   fieldAvailability: Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability>,
-  val reasonRetention: BlockIncidentReasonRetention,
+  val correlation: BlockIncidentCorrelation = BlockIncidentCorrelation(),
   retainedEvidenceReferences: List<BlockIncidentEvidenceReference> = emptyList(),
 ) {
   val evidenceReferences: List<BlockIncidentEvidenceReference> =
@@ -43,95 +55,48 @@ class BlockIncidentOccurrence(
   val fieldAvailability: Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> =
     Collections.unmodifiableMap(LinkedHashMap(fieldAvailability))
 
-  fun copy(
-    occurrenceToken: String = this.occurrenceToken,
-    workflowId: String? = this.workflowId,
-    parentWorkflowId: String? = this.parentWorkflowId,
-    phaseId: String? = this.phaseId,
-    phaseRunId: String? = this.phaseRunId,
-    invocationId: String? = this.invocationId,
-    executionId: String? = this.executionId,
-    attempt: Int? = this.attempt,
-    generation: Long? = this.generation,
-    origin: BlockIncidentOrigin = this.origin,
-    reason: String = this.reason,
-    reasonTruncated: Boolean = this.reasonTruncated,
-    originalReasonLength: Int = this.originalReasonLength,
-    originalReasonDigest: String? = this.originalReasonDigest,
-    failureCode: String? = this.failureCode,
-    failureDisposition: String? = this.failureDisposition,
-    throwableType: String? = this.throwableType,
-    exitCode: Int? = this.exitCode,
-    observedAt: Instant = this.observedAt,
-    evidenceAvailability: BlockIncidentEvidenceAvailability = this.evidenceAvailability,
-    identityAvailability: BlockIncidentIdentityAvailability = this.identityAvailability,
-    repairTurn: Int? = this.repairTurn,
-    outputGeneration: Long? = this.outputGeneration,
-    monitorSelector: String? = this.monitorSelector,
-    pullRequestId: String? = this.pullRequestId,
-    pullRequestUrl: String? = this.pullRequestUrl,
-    headRepository: String? = this.headRepository,
-    headBranch: String? = this.headBranch,
-    worktreePath: String? = this.worktreePath,
-    exitBehavior: BlockIncidentExitBehavior = this.exitBehavior,
-    fieldAvailability: Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> = this.fieldAvailability,
-    reasonRetention: BlockIncidentReasonRetention = this.reasonRetention,
-    retainedEvidenceReferences: List<BlockIncidentEvidenceReference> = this.evidenceReferences,
-  ): BlockIncidentOccurrence = BlockIncidentOccurrence(
-    occurrenceToken, workflowId, parentWorkflowId, phaseId, phaseRunId, invocationId, executionId, attempt,
-    generation, origin, reason, reasonTruncated, originalReasonLength, originalReasonDigest, failureCode,
-    failureDisposition, throwableType, exitCode, observedAt, evidenceAvailability, identityAvailability,
-    repairTurn, outputGeneration, monitorSelector, pullRequestId, pullRequestUrl, headRepository, headBranch,
-    worktreePath, exitBehavior, fieldAvailability, reasonRetention, retainedEvidenceReferences,
-  )
+  val workflowId: String? get() = scope.workflowId
+  val parentWorkflowId: String? get() = scope.parentWorkflowId
+  val phaseId: String? get() = scope.phaseId
+  val phaseRunId: String? get() = scope.phaseRunId
+  val invocationId: String? get() = scope.invocationId
+  val executionId: String? get() = scope.executionId
+  val attempt: Int? get() = scope.attempt
+  val generation: Long? get() = scope.generation
+  val origin: BlockIncidentOrigin get() = failure.origin
+  val reason: String get() = failure.reason
+  val reasonTruncated: Boolean get() = failure.reasonTruncated
+  val originalReasonLength: Int get() = failure.originalReasonLength
+  val originalReasonDigest: String? get() = failure.originalReasonDigest
+  val reasonRetention: BlockIncidentReasonRetention get() = failure.reasonRetention
+  val failureCode: String? get() = failure.failureCode
+  val failureDisposition: String? get() = failure.failureDisposition
+  val throwableType: String? get() = failure.throwableType
+  val exitCode: Int? get() = failure.exitCode
+  val exitBehavior: BlockIncidentExitBehavior get() = failure.exitBehavior
+  val repairTurn: Int? get() = correlation.repairTurn
+  val outputGeneration: Long? get() = correlation.outputGeneration
+  val monitorSelector: String? get() = correlation.monitorSelector
+  val pullRequestId: String? get() = correlation.pullRequestId
+  val pullRequestUrl: String? get() = correlation.pullRequestUrl
+  val headRepository: String? get() = correlation.headRepository
+  val headBranch: String? get() = correlation.headBranch
+  val worktreePath: String? get() = correlation.worktreePath
 
-  fun correlatedValue(field: BlockIncidentCorrelatedField): Any? = when (field) {
-    BlockIncidentCorrelatedField.WORKFLOW_ID -> workflowId
-    BlockIncidentCorrelatedField.PARENT_WORKFLOW_ID -> parentWorkflowId
-    BlockIncidentCorrelatedField.PHASE_ID -> phaseId
-    BlockIncidentCorrelatedField.PHASE_RUN_ID -> phaseRunId
-    BlockIncidentCorrelatedField.INVOCATION_ID -> invocationId
-    BlockIncidentCorrelatedField.EXECUTION_ID -> executionId
-    BlockIncidentCorrelatedField.ATTEMPT -> attempt
-    BlockIncidentCorrelatedField.GENERATION -> generation
-    BlockIncidentCorrelatedField.FAILURE_CODE -> failureCode
-    BlockIncidentCorrelatedField.THROWABLE_TYPE -> throwableType
-    BlockIncidentCorrelatedField.EXIT_CODE -> exitCode
-    BlockIncidentCorrelatedField.REASON -> reason
-    BlockIncidentCorrelatedField.REPAIR_TURN -> repairTurn
-    BlockIncidentCorrelatedField.OUTPUT_GENERATION -> outputGeneration
-    BlockIncidentCorrelatedField.MONITOR_SELECTOR -> monitorSelector
-    BlockIncidentCorrelatedField.PULL_REQUEST_ID -> pullRequestId
-    BlockIncidentCorrelatedField.PULL_REQUEST_URL -> pullRequestUrl
-    BlockIncidentCorrelatedField.HEAD_REPOSITORY -> headRepository
-    BlockIncidentCorrelatedField.HEAD_BRANCH -> headBranch
-    BlockIncidentCorrelatedField.WORKTREE_PATH -> worktreePath
-  }
+  fun correlatedValue(field: BlockIncidentCorrelatedField): Any? = field.read(this)
 
-  override fun equals(other: Any?): Boolean = other is BlockIncidentOccurrence &&
-    occurrenceToken == other.occurrenceToken && workflowId == other.workflowId &&
-    parentWorkflowId == other.parentWorkflowId && phaseId == other.phaseId && phaseRunId == other.phaseRunId &&
-    invocationId == other.invocationId && executionId == other.executionId && attempt == other.attempt &&
-    generation == other.generation && origin == other.origin && reason == other.reason &&
-    reasonTruncated == other.reasonTruncated && originalReasonLength == other.originalReasonLength &&
-    originalReasonDigest == other.originalReasonDigest && failureCode == other.failureCode &&
-    failureDisposition == other.failureDisposition && throwableType == other.throwableType &&
-    exitCode == other.exitCode &&
-    observedAt == other.observedAt && evidenceAvailability == other.evidenceAvailability &&
-    identityAvailability == other.identityAvailability && repairTurn == other.repairTurn &&
-    outputGeneration == other.outputGeneration && monitorSelector == other.monitorSelector &&
-    pullRequestId == other.pullRequestId && pullRequestUrl == other.pullRequestUrl &&
-    headRepository == other.headRepository && headBranch == other.headBranch && worktreePath == other.worktreePath &&
-    exitBehavior == other.exitBehavior && fieldAvailability == other.fieldAvailability &&
-    reasonRetention == other.reasonRetention && evidenceReferences == other.evidenceReferences
+  override fun equals(other: Any?): Boolean =
+    other is BlockIncidentOccurrence &&
+      occurrenceToken == other.occurrenceToken && scope == other.scope && failure == other.failure &&
+      observedAt == other.observedAt && evidenceAvailability == other.evidenceAvailability &&
+      identityAvailability == other.identityAvailability && fieldAvailability == other.fieldAvailability &&
+      correlation == other.correlation && evidenceReferences == other.evidenceReferences
 
-  override fun hashCode(): Int = listOf(
-    occurrenceToken, workflowId, parentWorkflowId, phaseId, phaseRunId, invocationId, executionId, attempt,
-    generation, origin, reason, reasonTruncated, originalReasonLength, originalReasonDigest, failureCode,
-    failureDisposition, throwableType, exitCode, observedAt, evidenceAvailability, identityAvailability, repairTurn,
-    outputGeneration, monitorSelector, pullRequestId, pullRequestUrl, headRepository, headBranch, worktreePath,
-    exitBehavior, fieldAvailability, reasonRetention, evidenceReferences,
-  ).hashCode()
+  override fun hashCode(): Int =
+    listOf(
+      occurrenceToken, scope, failure, observedAt, evidenceAvailability, identityAvailability, fieldAvailability,
+      correlation, evidenceReferences,
+    ).hashCode()
 }
 
 data class BlockIncidentEvidenceReference(
@@ -236,101 +201,102 @@ class BlockIncident(
 
   override fun hashCode(): Int = listOf(occurrence, aliases, state).hashCode()
 
-  fun validation(): List<BlockIncidentViolation> = buildList {
+  fun validation(): List<BlockIncidentViolation> =
+    buildList {
+      addIdentityViolations()
+      addFailureViolations()
+      addEvidenceViolations()
+      addAliasViolations()
+      addStateViolations()
+    }
+
+  fun isValid(): Boolean = validation().isEmpty()
+
+  private fun MutableList<BlockIncidentViolation>.addIdentityViolations() {
     if (!OCCURRENCE_TOKEN_PATTERN.matches(occurrence.occurrenceToken)) {
       addViolation(BlockIncidentViolationCode.INVALID_OCCURRENCE_TOKEN, "occurrence.occurrence_token")
     }
-    if (occurrence.generation != null && occurrence.generation <= 0) {
+    if (!occurrence.generation.isValidOptionalPositive()) {
       addViolation(BlockIncidentViolationCode.INVALID_GENERATION, "occurrence.generation")
     }
-    if (occurrence.attempt != null && occurrence.attempt <= 0) {
+    if (!occurrence.attempt.isValidOptionalPositive()) {
       addViolation(BlockIncidentViolationCode.INVALID_ATTEMPT, "occurrence.attempt")
     }
-    if (occurrence.reason.isBlank() || occurrence.reason.length > MAX_REASON_CHARS) {
-      addViolation(BlockIncidentViolationCode.INVALID_REASON, "occurrence.reason")
-    }
-    if (occurrence.originalReasonLength < occurrence.reason.length ||
-      occurrence.reasonTruncated != (occurrence.originalReasonLength > occurrence.reason.length) ||
-      occurrence.reasonTruncated != (occurrence.originalReasonDigest != null) ||
-      !occurrence.reasonRetention.isConsistentWith(occurrence.reasonTruncated)
-    ) addViolation(BlockIncidentViolationCode.INCOHERENT_REASON_TRUNCATION, "occurrence.reason_truncated")
-    if (occurrence.originalReasonDigest != null && !DIGEST_PATTERN.matches(occurrence.originalReasonDigest)) {
-      addViolation(BlockIncidentViolationCode.INVALID_ORIGINAL_REASON_DIGEST, "occurrence.original_reason_digest")
-    }
-    if ((occurrence.exitBehavior == BlockIncidentExitBehavior.EXITED_WITH_CODE) != (occurrence.exitCode != null)) {
-      addViolation(BlockIncidentViolationCode.INCOHERENT_EXIT, "occurrence.exit_code")
-    }
     listOf(
-      occurrence.workflowId, occurrence.parentWorkflowId, occurrence.phaseId, occurrence.phaseRunId,
-      occurrence.invocationId, occurrence.executionId,
+      occurrence.workflowId,
+      occurrence.parentWorkflowId,
+      occurrence.phaseId,
+      occurrence.phaseRunId,
+      occurrence.invocationId,
+      occurrence.executionId,
     ).forEachIndexed { index, value ->
-      if (!value.isValidOptionalIdentity()) {
+      if (!value.isValidOptionalBounded(MAX_IDENTITY_CHARS)) {
         addViolation(BlockIncidentViolationCode.INVALID_IDENTITY, IDENTITY_FIELDS[index])
       }
     }
-    if (!occurrence.failureCode.isValidOptionalBounded(MAX_FAILURE_CODE_CHARS) ||
-      !occurrence.failureDisposition.isValidOptionalBounded(MAX_FAILURE_DISPOSITION_CHARS) ||
-      !occurrence.throwableType.isValidOptionalBounded(MAX_THROWABLE_TYPE_CHARS)
-    ) addViolation(BlockIncidentViolationCode.INVALID_FAILURE_FACT, "occurrence.failure_code")
-    if (!occurrence.repairTurn.isValidOptionalNonnegative() ||
-      !occurrence.outputGeneration.isValidOptionalNonnegative() ||
-      !occurrence.monitorSelector.isValidOptionalBounded(MAX_MONITOR_SELECTOR_CHARS) ||
-      !occurrence.pullRequestId.isValidOptionalBounded(MAX_PR_ID_CHARS) ||
-      !occurrence.pullRequestUrl.isValidOptionalBounded(MAX_PR_URL_CHARS) ||
-      !occurrence.headRepository.isValidOptionalBounded(MAX_REPOSITORY_CHARS) ||
-      !occurrence.headBranch.isValidOptionalBounded(MAX_BRANCH_CHARS) ||
-      !occurrence.worktreePath.isValidOptionalBounded(MAX_WORKTREE_PATH_CHARS)
-    ) addViolation(BlockIncidentViolationCode.INVALID_CORRELATION_FACT, "occurrence.correlation")
     if (!occurrence.hasConsistentFieldAvailability()) {
       addViolation(BlockIncidentViolationCode.FIELD_AVAILABILITY_MISMATCH, "occurrence.field_availability")
     }
     if (!occurrence.identityAvailability.isConsistentWith(occurrence.fieldAvailability)) {
       addViolation(BlockIncidentViolationCode.IDENTITY_AVAILABILITY_MISMATCH, "occurrence.identity_availability")
     }
-    if (occurrence.evidenceReferences.size > MAX_EVIDENCE_REFERENCES) {
+  }
+
+  private fun MutableList<BlockIncidentViolation>.addFailureViolations() {
+    val failure = occurrence.failure
+    if (!failure.reason.isValidOptionalBounded(MAX_REASON_CHARS)) {
+      addViolation(BlockIncidentViolationCode.INVALID_REASON, "occurrence.reason")
+    }
+    if (!failure.hasCoherentReasonTruncation()) {
+      addViolation(BlockIncidentViolationCode.INCOHERENT_REASON_TRUNCATION, "occurrence.reason_truncated")
+    }
+    if (failure.originalReasonDigest != null && !DIGEST_PATTERN.matches(failure.originalReasonDigest)) {
+      addViolation(BlockIncidentViolationCode.INVALID_ORIGINAL_REASON_DIGEST, "occurrence.original_reason_digest")
+    }
+    if ((failure.exitBehavior == BlockIncidentExitBehavior.EXITED_WITH_CODE) != (failure.exitCode != null)) {
+      addViolation(BlockIncidentViolationCode.INCOHERENT_EXIT, "occurrence.exit_code")
+    }
+    if (!failure.hasValidFailureFacts()) {
+      addViolation(BlockIncidentViolationCode.INVALID_FAILURE_FACT, "occurrence.failure_code")
+    }
+    if (!occurrence.correlation.isValid()) {
+      addViolation(BlockIncidentViolationCode.INVALID_CORRELATION_FACT, "occurrence.correlation")
+    }
+  }
+
+  private fun MutableList<BlockIncidentViolation>.addEvidenceViolations() {
+    val references = occurrence.evidenceReferences
+    if (references.size > MAX_EVIDENCE_REFERENCES) {
       addViolation(BlockIncidentViolationCode.TOO_MANY_EVIDENCE_REFERENCES, "occurrence.evidence_references")
     }
-    val selectedEvidenceBytes = occurrence.evidenceReferences
-      .filter { it.availability == BlockIncidentEvidenceReferenceAvailability.AVAILABLE }
-      .mapNotNull { it.byteSize }
-      .fold(0L) { total, size ->
-        if (size > MAX_SELECTED_EVIDENCE_BYTES - total) MAX_SELECTED_EVIDENCE_BYTES + 1 else total + size
-      }
-    if (selectedEvidenceBytes > MAX_SELECTED_EVIDENCE_BYTES) {
+    if (references.selectedEvidenceBytes() > MAX_SELECTED_EVIDENCE_BYTES) {
       addViolation(BlockIncidentViolationCode.EVIDENCE_SELECTION_TOO_LARGE, "occurrence.evidence_references")
     }
-    if (occurrence.evidenceReferences.distinctBy { evidence ->
-        listOf(
-          evidence.kind.wireValue,
-          evidence.provenance.wireValue,
-          evidence.sourceIdentity ?: evidence.source,
-          evidence.repairTurn?.toString(),
-          evidence.outputGeneration?.toString(),
-          evidence.sourceOffset?.toString(),
-          evidence.sourceLine?.toString(),
-          evidence.sourceColumn?.toString(),
-        )
-      }.size != occurrence.evidenceReferences.size
-    ) {
+    if (references.distinctBy { it.selectionKey() }.size != references.size) {
       addViolation(BlockIncidentViolationCode.DUPLICATE_EVIDENCE_REFERENCE, "occurrence.evidence_references")
     }
-    occurrence.evidenceReferences.forEachIndexed { index, evidence ->
+    references.forEachIndexed { index, evidence ->
       if (!evidence.isValid()) {
         addViolation(BlockIncidentViolationCode.INVALID_EVIDENCE_REFERENCE, "occurrence.evidence_references[$index]")
       }
-      if (evidence.availability == BlockIncidentEvidenceReferenceAvailability.AVAILABLE &&
-        evidence.byteSize != null && evidence.byteSize > MAX_RETAINED_EVIDENCE_BYTES
-      ) {
+      if (evidence.exceedsRetainedSize()) {
         addViolation(
           BlockIncidentViolationCode.EVIDENCE_SOURCE_TOO_LARGE,
           "occurrence.evidence_references[$index].byte_size",
         )
       }
     }
-    if (aliases.size !in 1..MAX_ALIASES ||
-      aliases.distinctBy { it.kind to it.value }.size != aliases.size ||
-      aliases.any { it.value.isBlank() || it.value.length > MAX_ALIAS_CHARS }
-    ) addViolation(BlockIncidentViolationCode.INVALID_ALIASES, "aliases")
+  }
+
+  private fun MutableList<BlockIncidentViolation>.addAliasViolations() {
+    val distinct = aliases.distinctBy { it.kind to it.value }.size == aliases.size
+    val bounded = aliases.all { it.value.isValidOptionalBounded(MAX_ALIAS_CHARS) }
+    if (aliases.size !in 1..MAX_ALIASES || !distinct || !bounded) {
+      addViolation(BlockIncidentViolationCode.INVALID_ALIASES, "aliases")
+    }
+  }
+
+  private fun MutableList<BlockIncidentViolation>.addStateViolations() {
     if (state.revision <= 0) addViolation(BlockIncidentViolationCode.INVALID_REVISION, "state.revision")
     if (state.retryCount !in 0..MAX_RETRIES) {
       addViolation(BlockIncidentViolationCode.INVALID_RETRY_COUNT, "state.retry_count")
@@ -352,14 +318,12 @@ class BlockIncident(
     }
   }
 
-  fun isValid(): Boolean = validation().isEmpty()
-
-  private fun MutableList<BlockIncidentViolation>.addViolation(code: BlockIncidentViolationCode, field: String) {
+  private fun MutableList<BlockIncidentViolation>.addViolation(
+    code: BlockIncidentViolationCode,
+    field: String,
+  ) {
     add(BlockIncidentViolation(code, field))
   }
-
-  private fun String?.isValidOptionalIdentity(): Boolean =
-    this == null || (this.isNotBlank() && this.length <= MAX_IDENTITY_CHARS)
 
   private fun String?.isValidOptionalBounded(limit: Int): Boolean =
     this == null || (this.isNotBlank() && this.length <= limit)
@@ -367,6 +331,59 @@ class BlockIncident(
   private fun Int?.isValidOptionalNonnegative(): Boolean = this == null || this >= 0
 
   private fun Long?.isValidOptionalNonnegative(): Boolean = this == null || this >= 0
+
+  private fun Int?.isValidOptionalPositive(): Boolean = this == null || this > 0
+
+  private fun Long?.isValidOptionalPositive(): Boolean = this == null || this > 0
+
+  private fun BlockIncidentFailure.hasCoherentReasonTruncation(): Boolean {
+    val lengthCoherent =
+      originalReasonLength >= reason.length && reasonTruncated == (originalReasonLength > reason.length)
+    return lengthCoherent &&
+      reasonTruncated == (originalReasonDigest != null) &&
+      reasonRetention.isConsistentWith(reasonTruncated)
+  }
+
+  private fun BlockIncidentFailure.hasValidFailureFacts(): Boolean =
+    failureCode.isValidOptionalBounded(MAX_FAILURE_CODE_CHARS) &&
+      failureDisposition.isValidOptionalBounded(MAX_FAILURE_DISPOSITION_CHARS) &&
+      throwableType.isValidOptionalBounded(MAX_THROWABLE_TYPE_CHARS)
+
+  private fun BlockIncidentCorrelation.isValid(): Boolean =
+    repairTurn.isValidOptionalNonnegative() &&
+      outputGeneration.isValidOptionalNonnegative() &&
+      listOf(
+        monitorSelector to MAX_MONITOR_SELECTOR_CHARS,
+        pullRequestId to MAX_PR_ID_CHARS,
+        pullRequestUrl to MAX_PR_URL_CHARS,
+        headRepository to MAX_REPOSITORY_CHARS,
+        headBranch to MAX_BRANCH_CHARS,
+        worktreePath to MAX_WORKTREE_PATH_CHARS,
+      ).all { (value, limit) -> value.isValidOptionalBounded(limit) }
+
+  private fun List<BlockIncidentEvidenceReference>.selectedEvidenceBytes(): Long =
+    filter { it.availability == BlockIncidentEvidenceReferenceAvailability.AVAILABLE }
+      .mapNotNull { it.byteSize }
+      .fold(0L) { total, size ->
+        if (size > MAX_SELECTED_EVIDENCE_BYTES - total) MAX_SELECTED_EVIDENCE_BYTES + 1 else total + size
+      }
+
+  private fun BlockIncidentEvidenceReference.selectionKey(): List<String?> =
+    listOf(
+      kind.wireValue,
+      provenance.wireValue,
+      sourceIdentity ?: source,
+      repairTurn?.toString(),
+      outputGeneration?.toString(),
+      sourceOffset?.toString(),
+      sourceLine?.toString(),
+      sourceColumn?.toString(),
+    )
+
+  private fun BlockIncidentEvidenceReference.exceedsRetainedSize(): Boolean =
+    availability == BlockIncidentEvidenceReferenceAvailability.AVAILABLE &&
+      byteSize != null &&
+      byteSize > MAX_RETAINED_EVIDENCE_BYTES
 
   private fun BlockIncidentOccurrence.hasConsistentFieldAvailability(): Boolean {
     if (fieldAvailability.keys != BlockIncidentCorrelatedField.entries.toSet()) return false
@@ -376,15 +393,17 @@ class BlockIncident(
       val value = correlatedValue(field)
       when (fieldAvailability.getValue(field)) {
         BlockIncidentFieldAvailability.AVAILABLE -> value != null
-        // The reason is always required text; NOT_CAPTURED marks a runtime-authored statement.
         BlockIncidentFieldAvailability.NOT_CAPTURED -> value == null || field == BlockIncidentCorrelatedField.REASON
         BlockIncidentFieldAvailability.NOT_APPLICABLE -> value == null
         BlockIncidentFieldAvailability.UNKNOWN_HISTORICAL -> false
       }
-    } && (origin != BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK || GOAL_NOT_APPLICABLE_FIELDS.all { field ->
-      correlatedValue(field) != null ||
-        fieldAvailability.getValue(field) == BlockIncidentFieldAvailability.NOT_APPLICABLE
-    })
+    } && (
+      origin != BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK ||
+        GOAL_NOT_APPLICABLE_FIELDS.all { field ->
+          correlatedValue(field) != null ||
+            fieldAvailability.getValue(field) == BlockIncidentFieldAvailability.NOT_APPLICABLE
+        }
+    )
   }
 
   private fun BlockIncidentIdentityAvailability.isConsistentWith(
@@ -393,7 +412,6 @@ class BlockIncident(
     val identities = IDENTITY_CORRELATED_FIELDS.mapNotNull { fieldAvailability[it] }
     val available = identities.count { it == BlockIncidentFieldAvailability.AVAILABLE }
     val notCaptured = identities.count { it == BlockIncidentFieldAvailability.NOT_CAPTURED }
-    // Rows written before per-field availability existed keep their recorded summary unchanged.
     if (fieldAvailability.values.all { it == BlockIncidentFieldAvailability.UNKNOWN_HISTORICAL }) return true
     return when (this) {
       BlockIncidentIdentityAvailability.AVAILABLE -> available > 0 && notCaptured == 0
@@ -403,41 +421,63 @@ class BlockIncident(
     }
   }
 
-  private fun BlockIncidentReasonRetention.isConsistentWith(reasonTruncated: Boolean): Boolean = when (this) {
-    BlockIncidentReasonRetention.COMPLETE -> !reasonTruncated
-    BlockIncidentReasonRetention.PREFIX_WITH_SHA256 -> reasonTruncated
-    BlockIncidentReasonRetention.UNKNOWN_HISTORICAL -> true
-  }
+  private fun BlockIncidentReasonRetention.isConsistentWith(reasonTruncated: Boolean): Boolean =
+    when (this) {
+      BlockIncidentReasonRetention.COMPLETE -> !reasonTruncated
+      BlockIncidentReasonRetention.PREFIX_WITH_SHA256 -> reasonTruncated
+      BlockIncidentReasonRetention.UNKNOWN_HISTORICAL -> true
+    }
 
   private fun BlockIncidentEvidenceReference.isValid(): Boolean =
-    source.isNotBlank() && source.length <= MAX_EVIDENCE_SOURCE_CHARS &&
-      (reference == null || reference.isNotBlank() && reference.length <= MAX_EVIDENCE_REFERENCE_CHARS) &&
-      (digest == null || DIGEST_PATTERN.matches(digest)) &&
-      (byteSize == null || byteSize >= 0) &&
-      (sourceIdentity == null ||
-        sourceIdentity.isNotBlank() && sourceIdentity.length <= MAX_EVIDENCE_REFERENCE_CHARS) &&
-      (retainedReferenceId == null ||
-        retainedReferenceId.isNotBlank() && retainedReferenceId.length <= MAX_EVIDENCE_REFERENCE_CHARS) &&
-      (sourceOffset == null || sourceOffset >= 0) && (sourceLine == null || sourceLine > 0) &&
-      (sourceColumn == null || sourceColumn > 0) &&
-      ((sourceLine == null) == (sourceColumn == null)) &&
-      (availability != BlockIncidentEvidenceReferenceAvailability.AVAILABLE ||
-        reference != null && digest != null && byteSize != null && retainedReferenceId != null &&
-          sourceIdentity != null && provenance != BlockIncidentEvidenceProvenance.UNKNOWN_HISTORICAL) &&
-      (availability != BlockIncidentEvidenceReferenceAvailability.AVAILABLE ||
-        kind != BlockIncidentEvidenceKind.PRODUCER_OUTPUT || repairTurn != null && outputGeneration != null) &&
-      (kind != BlockIncidentEvidenceKind.PRODUCER_OUTPUT ||
-        provenance == BlockIncidentEvidenceProvenance.ORIGINAL_PRODUCER_OUTPUT ||
-        provenance == BlockIncidentEvidenceProvenance.REPAIRED_PRODUCER_OUTPUT) &&
-      (kind != BlockIncidentEvidenceKind.REJECTED_OUTPUT_DIAGNOSTIC ||
-        provenance == BlockIncidentEvidenceProvenance.REJECTED_OUTPUT) &&
-      repairTurn.isValidOptionalNonnegative() && outputGeneration.isValidOptionalNonnegative()
+    hasValidText() && hasValidPosition() && hasAvailableFacts() && hasCoherentProvenance()
 
-  private fun BlockIncidentClaim?.isValidClaim(deadline: Instant, observedAt: Instant): Boolean =
+  private fun BlockIncidentEvidenceReference.hasValidText(): Boolean =
+    source.isValidOptionalBounded(MAX_EVIDENCE_SOURCE_CHARS) &&
+      listOf(reference, sourceIdentity, retainedReferenceId).all {
+        it.isValidOptionalBounded(MAX_EVIDENCE_REFERENCE_CHARS)
+      } &&
+      (digest == null || DIGEST_PATTERN.matches(digest))
+
+  private fun BlockIncidentEvidenceReference.hasValidPosition(): Boolean {
+    val counters =
+      byteSize.isValidOptionalNonnegative() &&
+        repairTurn.isValidOptionalNonnegative() &&
+        outputGeneration.isValidOptionalNonnegative()
+    val location =
+      sourceOffset.isValidOptionalNonnegative() &&
+        sourceLine.isValidOptionalPositive() &&
+        sourceColumn.isValidOptionalPositive()
+    return counters && location && (sourceLine == null) == (sourceColumn == null)
+  }
+
+  private fun BlockIncidentEvidenceReference.hasAvailableFacts(): Boolean {
+    if (availability != BlockIncidentEvidenceReferenceAvailability.AVAILABLE) return true
+    val retained = listOf(reference, digest, byteSize, retainedReferenceId, sourceIdentity).all { it != null }
+    val producerTurn =
+      kind != BlockIncidentEvidenceKind.PRODUCER_OUTPUT || repairTurn != null && outputGeneration != null
+    return retained && provenance != BlockIncidentEvidenceProvenance.UNKNOWN_HISTORICAL && producerTurn
+  }
+
+  private fun BlockIncidentEvidenceReference.hasCoherentProvenance(): Boolean =
+    when (kind) {
+      BlockIncidentEvidenceKind.PRODUCER_OUTPUT ->
+        provenance == BlockIncidentEvidenceProvenance.ORIGINAL_PRODUCER_OUTPUT ||
+          provenance == BlockIncidentEvidenceProvenance.REPAIRED_PRODUCER_OUTPUT
+      BlockIncidentEvidenceKind.REJECTED_OUTPUT_DIAGNOSTIC ->
+        provenance == BlockIncidentEvidenceProvenance.REJECTED_OUTPUT
+      BlockIncidentEvidenceKind.OTHER -> true
+    }
+
+  private fun BlockIncidentClaim?.isValidClaim(
+    deadline: Instant,
+    observedAt: Instant,
+  ): Boolean =
     this == null ||
-      (ownerToken.isNotBlank() && ownerToken.length <= MAX_IDENTITY_CHARS && ownerGeneration > 0 &&
-        hostIdentity.isNotBlank() && hostIdentity.length <= MAX_IDENTITY_CHARS && processId > 0 &&
-        expiresAt.isAfter(observedAt) && !expiresAt.isAfter(deadline))
+      (
+        ownerToken.isNotBlank() && ownerToken.length <= MAX_IDENTITY_CHARS && ownerGeneration > 0 &&
+          hostIdentity.isNotBlank() && hostIdentity.length <= MAX_IDENTITY_CHARS && processId > 0 &&
+          expiresAt.isAfter(observedAt) && !expiresAt.isAfter(deadline)
+      )
 
   private fun Instant?.isValidNextEligibility(
     diagnosis: BlockIncidentDiagnosis,
@@ -470,22 +510,30 @@ class BlockIncident(
     private const val MAX_FAILURE_DISPOSITION_CHARS = 256
     private const val MAX_THROWABLE_TYPE_CHARS = 512
     private const val MAX_RETRIES = 2
-    private val IDENTITY_FIELDS = listOf(
-      "occurrence.workflow_id", "occurrence.parent_workflow_id", "occurrence.phase_id",
-      "occurrence.phase_run_id", "occurrence.invocation_id", "occurrence.execution_id",
-    )
-    private val IDENTITY_CORRELATED_FIELDS = listOf(
-      BlockIncidentCorrelatedField.WORKFLOW_ID, BlockIncidentCorrelatedField.PARENT_WORKFLOW_ID,
-      BlockIncidentCorrelatedField.PHASE_ID, BlockIncidentCorrelatedField.PHASE_RUN_ID,
-      BlockIncidentCorrelatedField.INVOCATION_ID, BlockIncidentCorrelatedField.EXECUTION_ID,
-      BlockIncidentCorrelatedField.MONITOR_SELECTOR, BlockIncidentCorrelatedField.PULL_REQUEST_ID,
-      BlockIncidentCorrelatedField.PULL_REQUEST_URL, BlockIncidentCorrelatedField.HEAD_REPOSITORY,
-      BlockIncidentCorrelatedField.HEAD_BRANCH, BlockIncidentCorrelatedField.WORKTREE_PATH,
-    )
-    private val GOAL_NOT_APPLICABLE_FIELDS = listOf(
-      BlockIncidentCorrelatedField.PHASE_ID, BlockIncidentCorrelatedField.PHASE_RUN_ID,
-      BlockIncidentCorrelatedField.ATTEMPT,
-    )
+    private val IDENTITY_FIELDS =
+      listOf(
+        "occurrence.workflow_id",
+        "occurrence.parent_workflow_id",
+        "occurrence.phase_id",
+        "occurrence.phase_run_id",
+        "occurrence.invocation_id",
+        "occurrence.execution_id",
+      )
+    private val IDENTITY_CORRELATED_FIELDS =
+      listOf(
+        BlockIncidentCorrelatedField.WORKFLOW_ID, BlockIncidentCorrelatedField.PARENT_WORKFLOW_ID,
+        BlockIncidentCorrelatedField.PHASE_ID, BlockIncidentCorrelatedField.PHASE_RUN_ID,
+        BlockIncidentCorrelatedField.INVOCATION_ID, BlockIncidentCorrelatedField.EXECUTION_ID,
+        BlockIncidentCorrelatedField.MONITOR_SELECTOR, BlockIncidentCorrelatedField.PULL_REQUEST_ID,
+        BlockIncidentCorrelatedField.PULL_REQUEST_URL, BlockIncidentCorrelatedField.HEAD_REPOSITORY,
+        BlockIncidentCorrelatedField.HEAD_BRANCH, BlockIncidentCorrelatedField.WORKTREE_PATH,
+      )
+    private val GOAL_NOT_APPLICABLE_FIELDS =
+      listOf(
+        BlockIncidentCorrelatedField.PHASE_ID,
+        BlockIncidentCorrelatedField.PHASE_RUN_ID,
+        BlockIncidentCorrelatedField.ATTEMPT,
+      )
     private val OCCURRENCE_TOKEN_PATTERN = Regex("bi_[0-9a-f]{64}")
     private val DIGEST_PATTERN = Regex("[0-9a-f]{64}")
   }
@@ -525,27 +573,30 @@ enum class BlockIncidentFieldAvailability(val wireValue: String) {
   UNKNOWN_HISTORICAL("unknown_historical"),
 }
 
-enum class BlockIncidentCorrelatedField(val wireValue: String) {
-  WORKFLOW_ID("workflow_id"),
-  PARENT_WORKFLOW_ID("parent_workflow_id"),
-  PHASE_ID("phase_id"),
-  PHASE_RUN_ID("phase_run_id"),
-  INVOCATION_ID("invocation_id"),
-  EXECUTION_ID("execution_id"),
-  ATTEMPT("attempt"),
-  GENERATION("generation"),
-  FAILURE_CODE("failure_code"),
-  THROWABLE_TYPE("throwable_type"),
-  EXIT_CODE("exit_code"),
-  REASON("reason"),
-  REPAIR_TURN("repair_turn"),
-  OUTPUT_GENERATION("output_generation"),
-  MONITOR_SELECTOR("monitor_selector"),
-  PULL_REQUEST_ID("pull_request_id"),
-  PULL_REQUEST_URL("pull_request_url"),
-  HEAD_REPOSITORY("head_repository"),
-  HEAD_BRANCH("head_branch"),
-  WORKTREE_PATH("worktree_path"),
+enum class BlockIncidentCorrelatedField(
+  val wireValue: String,
+  val read: (BlockIncidentOccurrence) -> Any?,
+) {
+  WORKFLOW_ID("workflow_id", BlockIncidentOccurrence::workflowId),
+  PARENT_WORKFLOW_ID("parent_workflow_id", BlockIncidentOccurrence::parentWorkflowId),
+  PHASE_ID("phase_id", BlockIncidentOccurrence::phaseId),
+  PHASE_RUN_ID("phase_run_id", BlockIncidentOccurrence::phaseRunId),
+  INVOCATION_ID("invocation_id", BlockIncidentOccurrence::invocationId),
+  EXECUTION_ID("execution_id", BlockIncidentOccurrence::executionId),
+  ATTEMPT("attempt", BlockIncidentOccurrence::attempt),
+  GENERATION("generation", BlockIncidentOccurrence::generation),
+  FAILURE_CODE("failure_code", BlockIncidentOccurrence::failureCode),
+  THROWABLE_TYPE("throwable_type", BlockIncidentOccurrence::throwableType),
+  EXIT_CODE("exit_code", BlockIncidentOccurrence::exitCode),
+  REASON("reason", BlockIncidentOccurrence::reason),
+  REPAIR_TURN("repair_turn", BlockIncidentOccurrence::repairTurn),
+  OUTPUT_GENERATION("output_generation", BlockIncidentOccurrence::outputGeneration),
+  MONITOR_SELECTOR("monitor_selector", BlockIncidentOccurrence::monitorSelector),
+  PULL_REQUEST_ID("pull_request_id", BlockIncidentOccurrence::pullRequestId),
+  PULL_REQUEST_URL("pull_request_url", BlockIncidentOccurrence::pullRequestUrl),
+  HEAD_REPOSITORY("head_repository", BlockIncidentOccurrence::headRepository),
+  HEAD_BRANCH("head_branch", BlockIncidentOccurrence::headBranch),
+  WORKTREE_PATH("worktree_path", BlockIncidentOccurrence::worktreePath),
 }
 
 enum class BlockIncidentReasonRetention(val wireValue: String) {

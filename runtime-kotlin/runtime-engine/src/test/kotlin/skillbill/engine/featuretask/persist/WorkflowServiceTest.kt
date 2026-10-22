@@ -48,6 +48,7 @@ import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalProgressEventDraft
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
@@ -2628,7 +2629,7 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val blockedStep = store.markBlocked("wfl-child", "timeout", "preplan")
+    val blockedStep = store.markBlocked(GoalRunnerBlockRequest("wfl-child", "timeout", "preplan"))
 
     assertEquals("implement", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-child")).toSnapshot()
@@ -2683,7 +2684,7 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val blockedStep = store.markBlocked("wftr-child", "no terminal outcome", "preplan")
+    val blockedStep = store.markBlocked(GoalRunnerBlockRequest("wftr-child", "no terminal outcome", "preplan"))
 
     assertEquals("implement", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-child", RUNTIME)).toSnapshot()
@@ -2740,7 +2741,7 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val blockedStep = store.markBlocked("wftr-clean-review", "no terminal outcome", "preplan")
+    val blockedStep = store.markBlocked(GoalRunnerBlockRequest("wftr-clean-review", "no terminal outcome", "preplan"))
 
     assertEquals("audit", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-clean-review", RUNTIME)).toSnapshot()
@@ -2796,7 +2797,7 @@ class WorkflowGoalRunnerReconciliationTest {
         testWorkflowSnapshotValidator,
       )
 
-    val blockedStep = store.markBlocked("wftr-mid-fix", "no terminal outcome", "preplan")
+    val blockedStep = store.markBlocked(GoalRunnerBlockRequest("wftr-mid-fix", "no terminal outcome", "preplan"))
 
     assertEquals("implement_fix", blockedStep?.stepId)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-mid-fix", RUNTIME)).toSnapshot()

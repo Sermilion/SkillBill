@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
@@ -10,8 +11,6 @@ import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
-import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
-import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -120,51 +119,7 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
     repoRoot: Path? = null,
   ): Map<Int, GoalRunnerStoredOutcome>
 
-  fun markBlocked(
-    workflowId: String,
-    blockedReason: String,
-    lastResumableStep: String,
-    supervisionEvent: GoalRunnerSupervisionEvent? = null,
-    executionGeneration: Long? = null,
-    failureExitCode: Int? = null,
-    executionOwnerToken: String? = null,
-    failureThrowableType: String? = null,
-    causingIncidentToken: String? = null,
-  ): GoalRunnerAcceptedBlock?
-
-  fun markBlockedForChild(
-    workflowId: String,
-    blockedReason: String,
-    lastResumableStep: String,
-    causingChildWorkflowId: String,
-    supervisionEvent: GoalRunnerSupervisionEvent? = null,
-    executionGeneration: Long? = null,
-    failureExitCode: Int? = null,
-    executionOwnerToken: String? = null,
-    failureThrowableType: String? = null,
-    causingIncidentToken: String? = null,
-  ): GoalRunnerAcceptedBlock? = markBlocked(
-    workflowId,
-    blockedReason,
-    lastResumableStep,
-    supervisionEvent,
-    executionGeneration,
-    failureExitCode,
-    executionOwnerToken,
-    failureThrowableType,
-    causingIncidentToken,
-  )
-
-  fun markBlockedWithReference(
-    workflowId: String,
-    blockedReason: String,
-    lastResumableStep: String,
-    causingChildWorkflowId: String?,
-    acceptedBlockReference: GoalRunnerAcceptedBlockReference?,
-    executionGeneration: Long?,
-    executionOwnerToken: String?,
-    historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
-  ): GoalRunnerAcceptedBlock?
+  fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock?
 
   fun reopenBlockedPhaseForOperatorResume(
     workflowId: String,

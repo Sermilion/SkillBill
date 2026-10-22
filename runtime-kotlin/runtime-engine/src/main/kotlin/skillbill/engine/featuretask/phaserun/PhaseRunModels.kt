@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.config.model.CompactionSettings
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
@@ -78,6 +79,7 @@ sealed interface PhaseRunResult {
     override val targetReport: List<String> = emptyList(),
     val qaOutcome: StandaloneQaOutcome? = null,
     val qaReport: StandaloneQaReport? = null,
+    val agentBlock: PhaseRunBlockedStep? = null,
   ) : PhaseRunResult
 
   data class Blocked(
@@ -91,11 +93,22 @@ sealed interface PhaseRunResult {
   ) : PhaseRunResult
 }
 
+data class PhaseRunBlockedStep(
+  val stepId: String,
+  val reason: String,
+)
+
 @Inject
 class StandalonePhaseRunners(
   private val monitor: StandaloneMonitorExecutionPreparer,
   private val qa: QaStandalonePhaseRun,
+  private val blockIncidents: BlockIncidentEntryReconciler,
 ) {
+  internal fun guardEntry(run: () -> PhaseRunResult): PhaseRunResult =
+    blockIncidents.guardEntry({
+      it is PhaseRunResult.Blocked || (it as? PhaseRunResult.Completed)?.agentBlock != null
+    }, run)
+
   internal fun prepareMonitor(request: MonitorPreparationRequest): MonitorPreparation = monitor.prepare(request)
 
   fun runQa(

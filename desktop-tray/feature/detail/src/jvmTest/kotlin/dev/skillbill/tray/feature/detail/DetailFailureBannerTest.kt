@@ -12,6 +12,10 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import dev.skillbill.tray.core.designsystem.DesignSystemTheme
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.PhaseExecution
+import dev.skillbill.tray.core.domain.model.PhaseExecutionKind
+import dev.skillbill.tray.core.domain.model.WorkPhase
+import dev.skillbill.tray.core.domain.model.WorkSubtask
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.fixtureInstant
@@ -26,6 +30,30 @@ class DetailFailureBannerTest {
   private val navigation = object : RepositoryNavigation {
     override suspend fun openRepository(root: String, branch: String?) = Outcome.Value(Unit)
     override suspend fun openDirectory(root: String) = Outcome.Value(Unit)
+  }
+
+  @Test
+  fun `the phase header and chip show the criterion repair attempt instead of accumulated launches`() = runComposeUiTest {
+    val item = workItem("repair").copy(
+      currentSubtaskId = "1",
+      currentPhaseId = "audit_plan_fix",
+      phaseExecution = PhaseExecution("audit_plan_fix", PhaseExecutionKind.ATTEMPT, 1, null),
+    )
+    val detail = detail(item).copy(
+      phases = listOf(WorkPhase("audit_plan_fix", "running", 3, false)),
+      subtasks = listOf(WorkSubtask(1, "Block capture", "in_progress", null, null, emptyList())),
+    )
+    setContent {
+      CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
+        DesignSystemTheme {
+          DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(detail)), fixtureInstant, {})
+        }
+      }
+    }
+
+    onNodeWithText("repair attempt 1").assertExists()
+    onNodeWithText("audit_plan_fix · repair attempt 1").assertExists()
+    onNodeWithText("audit_plan_fix · 3 runs").assertDoesNotExist()
   }
 
   @Test

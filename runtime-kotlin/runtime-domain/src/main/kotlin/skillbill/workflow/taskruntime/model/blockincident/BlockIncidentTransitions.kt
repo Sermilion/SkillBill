@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.model.blockincident
 
-import java.time.Instant
 import java.time.Duration
+import java.time.Instant
 
 sealed interface BlockIncidentTransitionDecision {
   data class Accepted(val candidate: BlockIncident) : BlockIncidentTransitionDecision
@@ -22,8 +22,15 @@ enum class BlockIncidentTransitionRefusal {
   INVALID_SETTLEMENT,
 }
 
+data class BlockIncidentOwner(
+  val ownerToken: String,
+  val ownerGeneration: Long,
+)
+
 object BlockIncidentTransitions {
-  private const val MAX_RETRIES = 2
+  const val MAX_RETRIES = 2
+  private const val INVESTIGATION_DEADLINE_MINUTES = 5L
+  private val INVESTIGATION_DEADLINE: Duration = Duration.ofMinutes(INVESTIGATION_DEADLINE_MINUTES)
 
   fun claim(
     current: BlockIncident,
@@ -31,106 +38,76 @@ object BlockIncidentTransitions {
     expectedRevision: Long,
     claim: BlockIncidentClaim,
   ): BlockIncidentTransitionDecision {
-    if (!current.isValid()) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.INVALID_CURRENT,
-    )
-    if (current.state.revision != expectedRevision) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.STALE_REVISION,
-    )
-    val takeover = current.state.diagnosis == BlockIncidentDiagnosis.INVESTIGATING &&
-      current.state.claim?.expiresAt?.let { it <= now } == true
-    if (current.state.diagnosis != BlockIncidentDiagnosis.PENDING && !takeover) {
-      return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.NOT_PENDING)
-    }
-    if (current.state.retryCount >= MAX_RETRIES) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.RETRIES_EXHAUSTED,
-    )
-    if (current.state.deadline <= now) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.DEADLINE_EXPIRED,
-    )
-    if (current.state.nextEligibleAt?.isAfter(now) == true) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.NOT_ELIGIBLE,
-    )
+    val takeover =
+      current.state.diagnosis == BlockIncidentDiagnosis.INVESTIGATING &&
+        current.state.claim?.expiresAt?.let { it <= now } == true
     val deadline = now.plus(INVESTIGATION_DEADLINE)
-    if (!claim.expiresAt.isAfter(now) || claim.expiresAt.isAfter(deadline) ||
-      claim.ownerToken.isBlank() || claim.ownerGeneration <= 0 || claim.hostIdentity.isBlank() || claim.processId <= 0
-    ) return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.INVALID_LEASE)
-    val candidate = current.copy(
-      state = current.state.copy(
-        diagnosis = BlockIncidentDiagnosis.INVESTIGATING,
-        nextEligibleAt = null,
-        revision = current.state.revision + 1,
-        claim = claim,
-        deadline = deadline,
-        retryCount = current.state.retryCount + if (takeover) 1 else 0,
-      ),
-    )
-    return candidate.acceptedOrRefused()
+    val refusal =
+      claimRefusal(current, now, expectedRevision, takeover)
+        ?: BlockIncidentTransitionRefusal.INVALID_LEASE.takeUnless { claim.isValidLease(now, deadline) }
+    if (refusal != null) return BlockIncidentTransitionDecision.Refused(refusal)
+    val takeoverRetry = if (takeover && current.state.retryCount < MAX_RETRIES) 1 else 0
+    return current.copy(
+      state =
+        current.state.copy(
+          diagnosis = BlockIncidentDiagnosis.INVESTIGATING,
+          nextEligibleAt = null,
+          revision = current.state.revision + 1,
+          claim = claim,
+          deadline = deadline,
+          retryCount = current.state.retryCount + takeoverRetry,
+        ),
+    ).acceptedOrRefused()
   }
 
   fun renew(
     current: BlockIncident,
     now: Instant,
-    ownerToken: String,
-    ownerGeneration: Long,
+    owner: BlockIncidentOwner,
     expiresAt: Instant,
   ): BlockIncidentTransitionDecision {
-    if (!current.isValid()) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.INVALID_CURRENT,
-    )
     val claim = current.state.claim
-    if (current.state.diagnosis != BlockIncidentDiagnosis.INVESTIGATING || claim == null ||
-      claim.ownerToken != ownerToken || claim.ownerGeneration != ownerGeneration
-    ) return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.CLAIM_MISMATCH)
-    if (claim.expiresAt <= now) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.CLAIM_EXPIRED,
-    )
-    if (expiresAt <= claim.expiresAt || expiresAt > current.state.deadline) {
-      return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.INVALID_LEASE)
+    val refusal =
+      ownedClaimRefusal(current, now, owner)
+        ?: BlockIncidentTransitionRefusal.INVALID_LEASE.takeIf {
+          claim == null || expiresAt <= claim.expiresAt || expiresAt > current.state.deadline
+        }
+    if (refusal != null || claim == null) {
+      return BlockIncidentTransitionDecision.Refused(refusal ?: BlockIncidentTransitionRefusal.CLAIM_MISMATCH)
     }
-    val candidate = current.copy(
-      state = current.state.copy(
-        revision = current.state.revision + 1,
-        claim = claim.copy(expiresAt = expiresAt),
-      ),
-    )
-    return candidate.acceptedOrRefused()
+    return current.copy(
+      state =
+        current.state.copy(
+          revision = current.state.revision + 1,
+          claim = claim.copy(expiresAt = expiresAt),
+        ),
+    ).acceptedOrRefused()
   }
 
   fun settle(
     current: BlockIncident,
     now: Instant,
-    ownerToken: String,
-    ownerGeneration: Long,
+    owner: BlockIncidentOwner,
     diagnosis: BlockIncidentDiagnosis,
     nextEligibleAt: Instant?,
   ): BlockIncidentTransitionDecision {
-    if (!current.isValid()) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.INVALID_CURRENT,
-    )
-    val claim = current.state.claim
-    if (current.state.diagnosis != BlockIncidentDiagnosis.INVESTIGATING || claim == null ||
-      claim.ownerToken != ownerToken || claim.ownerGeneration != ownerGeneration
-    ) return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.CLAIM_MISMATCH)
-    if (claim.expiresAt <= now) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.CLAIM_EXPIRED,
-    )
-    if (diagnosis == BlockIncidentDiagnosis.INVESTIGATING || diagnosis == BlockIncidentDiagnosis.PENDING &&
-      (current.state.retryCount + 1 >= MAX_RETRIES || nextEligibleAt == null || nextEligibleAt <= now ||
-        nextEligibleAt >= current.state.deadline) ||
-      (diagnosis != BlockIncidentDiagnosis.PENDING && nextEligibleAt != null) ||
-      (diagnosis == BlockIncidentDiagnosis.TIMED_OUT) != (current.state.deadline <= now)
-    ) return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.INVALID_SETTLEMENT)
-    val candidate = current.copy(
-      state = current.state.copy(
-        diagnosis = diagnosis,
-        retryCount = current.state.retryCount + 1,
-        revision = current.state.revision + 1,
-        nextEligibleAt = nextEligibleAt,
-        claim = null,
-      ),
-    )
-    return candidate.acceptedOrRefused()
+    val refusal =
+      ownedClaimRefusal(current, now, owner)
+        ?: BlockIncidentTransitionRefusal.INVALID_SETTLEMENT.takeUnless {
+          current.state.acceptsSettlement(now, diagnosis, nextEligibleAt)
+        }
+    if (refusal != null) return BlockIncidentTransitionDecision.Refused(refusal)
+    val exhaustedCrash = diagnosis == BlockIncidentDiagnosis.CRASHED && current.state.retryCount >= MAX_RETRIES
+    return current.copy(
+      state =
+        current.state.copy(
+          diagnosis = diagnosis,
+          retryCount = current.state.retryCount + if (exhaustedCrash) 0 else 1,
+          revision = current.state.revision + 1,
+          nextEligibleAt = nextEligibleAt,
+          claim = null,
+        ),
+    ).acceptedOrRefused()
   }
 
   fun expireDeadline(
@@ -140,37 +117,100 @@ object BlockIncidentTransitions {
     observedOwnerToken: String?,
     observedOwnerGeneration: Long?,
   ): BlockIncidentTransitionDecision {
-    if (!current.isValid()) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.INVALID_CURRENT,
-    )
-    if (current.state.revision != expectedRevision) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.STALE_REVISION,
-    )
-    if (current.state.deadline > now) return BlockIncidentTransitionDecision.Refused(
-      BlockIncidentTransitionRefusal.NOT_ELIGIBLE,
-    )
     val claim = current.state.claim
-    if (current.state.diagnosis != BlockIncidentDiagnosis.PENDING &&
-      current.state.diagnosis != BlockIncidentDiagnosis.INVESTIGATING
-    ) return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.NOT_PENDING)
-    if (claim?.ownerToken != observedOwnerToken || claim?.ownerGeneration != observedOwnerGeneration) {
-      return BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.CLAIM_MISMATCH)
+    val ownerMatches = claim?.ownerToken == observedOwnerToken && claim?.ownerGeneration == observedOwnerGeneration
+    val refusal =
+      when {
+        !current.isValid() -> BlockIncidentTransitionRefusal.INVALID_CURRENT
+        current.state.revision != expectedRevision -> BlockIncidentTransitionRefusal.STALE_REVISION
+        current.state.deadline > now -> BlockIncidentTransitionRefusal.NOT_ELIGIBLE
+        current.state.diagnosis !in EXPIRABLE_DIAGNOSES -> BlockIncidentTransitionRefusal.NOT_PENDING
+        !ownerMatches -> BlockIncidentTransitionRefusal.CLAIM_MISMATCH
+        else -> null
+      }
+    if (refusal != null) return BlockIncidentTransitionDecision.Refused(refusal)
+    return current.copy(
+      state =
+        current.state.copy(
+          diagnosis = BlockIncidentDiagnosis.TIMED_OUT,
+          revision = current.state.revision + 1,
+          retryCount = current.state.retryCount + if (claim == null) 0 else 1,
+          nextEligibleAt = null,
+          claim = null,
+        ),
+    ).acceptedOrRefused()
+  }
+
+  private fun claimRefusal(
+    current: BlockIncident,
+    now: Instant,
+    expectedRevision: Long,
+    takeover: Boolean,
+  ): BlockIncidentTransitionRefusal? =
+    when {
+      !current.isValid() -> BlockIncidentTransitionRefusal.INVALID_CURRENT
+      current.state.revision != expectedRevision -> BlockIncidentTransitionRefusal.STALE_REVISION
+      current.state.diagnosis != BlockIncidentDiagnosis.PENDING && !takeover ->
+        BlockIncidentTransitionRefusal.NOT_PENDING
+      current.state.retryCount >= MAX_RETRIES && !takeover -> BlockIncidentTransitionRefusal.RETRIES_EXHAUSTED
+      current.state.deadline <= now -> BlockIncidentTransitionRefusal.DEADLINE_EXPIRED
+      current.state.nextEligibleAt?.isAfter(now) == true -> BlockIncidentTransitionRefusal.NOT_ELIGIBLE
+      else -> null
     }
-    val candidate = current.copy(
-      state = current.state.copy(
-        diagnosis = BlockIncidentDiagnosis.TIMED_OUT,
-        revision = current.state.revision + 1,
-        retryCount = current.state.retryCount + if (claim == null) 0 else 1,
-        nextEligibleAt = null,
-        claim = null,
-      ),
-    )
-    return candidate.acceptedOrRefused()
+
+  private fun ownedClaimRefusal(
+    current: BlockIncident,
+    now: Instant,
+    owner: BlockIncidentOwner,
+  ): BlockIncidentTransitionRefusal? {
+    val claim = current.state.claim
+    val owned =
+      current.state.diagnosis == BlockIncidentDiagnosis.INVESTIGATING &&
+        claim?.ownerToken == owner.ownerToken &&
+        claim.ownerGeneration == owner.ownerGeneration
+    return when {
+      !current.isValid() -> BlockIncidentTransitionRefusal.INVALID_CURRENT
+      !owned -> BlockIncidentTransitionRefusal.CLAIM_MISMATCH
+      claim.expiresAt <= now -> BlockIncidentTransitionRefusal.CLAIM_EXPIRED
+      else -> null
+    }
+  }
+
+  private fun BlockIncidentClaim.isValidLease(
+    now: Instant,
+    deadline: Instant,
+  ): Boolean {
+    val window = expiresAt.isAfter(now) && !expiresAt.isAfter(deadline)
+    val holder = ownerToken.isNotBlank() && ownerGeneration > 0
+    val process = hostIdentity.isNotBlank() && processId > 0
+    return window && holder && process
+  }
+
+  private fun BlockIncidentState.acceptsSettlement(
+    now: Instant,
+    diagnosis: BlockIncidentDiagnosis,
+    nextEligibleAt: Instant?,
+  ): Boolean {
+    val timeoutMatchesDeadline = (diagnosis == BlockIncidentDiagnosis.TIMED_OUT) == (deadline <= now)
+    val eligibility =
+      when (diagnosis) {
+        BlockIncidentDiagnosis.INVESTIGATING -> false
+        BlockIncidentDiagnosis.PENDING ->
+          retryCount + 1 < MAX_RETRIES &&
+            nextEligibleAt != null &&
+            nextEligibleAt > now &&
+            nextEligibleAt < deadline
+        else -> nextEligibleAt == null
+      }
+    return timeoutMatchesDeadline && eligibility
   }
 
   private fun BlockIncident.acceptedOrRefused(): BlockIncidentTransitionDecision =
-    if (isValid()) BlockIncidentTransitionDecision.Accepted(this)
-    else BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.INVALID_SETTLEMENT)
+    if (isValid()) {
+      BlockIncidentTransitionDecision.Accepted(this)
+    } else {
+      BlockIncidentTransitionDecision.Refused(BlockIncidentTransitionRefusal.INVALID_SETTLEMENT)
+    }
 
-  private val INVESTIGATION_DEADLINE: Duration = Duration.ofMinutes(5)
+  private val EXPIRABLE_DIAGNOSES = setOf(BlockIncidentDiagnosis.PENDING, BlockIncidentDiagnosis.INVESTIGATING)
 }

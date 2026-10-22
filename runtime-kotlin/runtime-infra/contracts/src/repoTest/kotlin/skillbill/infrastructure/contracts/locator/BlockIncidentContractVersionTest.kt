@@ -28,7 +28,9 @@ private fun blockIncidentRepoRoot(): Path {
     if (
       Files.isRegularFile(current.resolve("runtime-kotlin/settings.gradle.kts")) &&
       Files.isDirectory(current.resolve("orchestration/contracts"))
-    ) return current
+    ) {
+      return current
+    }
     current = current.parent
   }
   error("Could not locate skill-bill repo root from ${Path.of("").toAbsolutePath().normalize()}")

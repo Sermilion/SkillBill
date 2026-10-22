@@ -8,10 +8,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -21,6 +17,10 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaReport
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CancellationException
@@ -31,6 +31,7 @@ class StandalonePhaseStatusEventSink(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val blockIncidentCapture: BlockIncidentCapture,
+  private val monitorSelector: String? = null,
 ) : FeatureTaskRuntimeRunEventSink {
   private var registered: StandalonePhaseStatusRecord? = null
   private var revision: String? = null
@@ -83,10 +84,10 @@ class StandalonePhaseStatusEventSink(
   }
 
   fun settle(result: PhaseRunResult) {
-    runCatching {
-      ensureRegistered(null)
-      when (result) {
-        is PhaseRunResult.Completed -> {
+    when (result) {
+      is PhaseRunResult.Completed -> {
+        runCatching {
+          ensureRegistered(null)
           result.qaOutcome?.let(::recordQaOutcome)
           qaReport = result.qaReport
           persist(
@@ -95,47 +96,13 @@ class StandalonePhaseStatusEventSink(
             terminalResult = result.value,
             acceptedResult = result.acceptedOutput ?: result.value,
           )
+        }.onFailure { error ->
+          if (error is CancellationException) throw error
+          RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status settlement failed", error)
         }
-        is PhaseRunResult.Blocked -> {
-          persist(
-            state = "blocked",
-            finishedAt = null,
-            terminalResult = result.reason,
-          )
-          val target = registered?.monitorTarget
-          blockIncidentCapture.capture(
-            BlockIncidentObservation(
-              workflowId = registered?.workflowId?.takeIf(String::isNotBlank),
-              phaseId = result.stepId,
-              phaseRunId = null,
-              invocationId = result.invocationId,
-              executionId = registered?.executionId,
-              reason = result.reason,
-              alias = BlockIncidentAliases.standalonePhase(result.invocationId, result.stepId),
-              generation = null,
-              origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
-              exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
-              pullRequestId = target?.pullRequestKey,
-              pullRequestUrl = target?.pullRequestUrl,
-              headRepository = target?.headRepository,
-              headBranch = target?.headRef,
-              worktreePath = target?.worktreePath,
-              unavailableFields = mapOf(
-                BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-                BlockIncidentCorrelatedField.ATTEMPT to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-                BlockIncidentCorrelatedField.MONITOR_SELECTOR to if (target == null) {
-                  BlockIncidentFieldAvailability.NOT_CAPTURED
-                } else {
-                  BlockIncidentFieldAvailability.AVAILABLE
-                },
-              ),
-            ),
-          )
-        }
+        result.agentBlock?.let { observeBlocked(it.reason, null, it.stepId) }
       }
-    }.onFailure { error ->
-      if (error is CancellationException) throw error
-      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status settlement failed", error)
+      is PhaseRunResult.Blocked -> settleBlocked(result.reason, stepId = result.stepId)
     }
   }
 
@@ -161,6 +128,15 @@ class StandalonePhaseStatusEventSink(
   fun settleBlocked(
     reason: String,
     workflowId: String? = null,
+    stepId: String? = null,
+  ) {
+    settleRefused(reason, workflowId)
+    observeBlocked(reason, workflowId, stepId)
+  }
+
+  fun settleRefused(
+    reason: String,
+    workflowId: String? = null,
   ) {
     runCatching {
       ensureRegistered(workflowId)
@@ -169,6 +145,49 @@ class StandalonePhaseStatusEventSink(
       if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status blocked settlement failed", error)
     }
+  }
+
+  private fun observeBlocked(
+    reason: String,
+    workflowId: String?,
+    stepId: String?,
+  ) {
+    val observation =
+      runCatching {
+        val registration = registrationForWorkflow(workflowId)
+        val target = registered?.monitorTarget ?: registration.monitorTarget
+        val blockedWorkflowId = (registered?.workflowId ?: registration.workflowId)?.takeIf(String::isNotBlank)
+        val blockedStepId = stepId ?: registered?.phaseId ?: registration.phaseId
+        val invocationId = registered?.invocationId ?: registration.invocationId
+        BlockIncidentObservation(
+          workflowId = blockedWorkflowId,
+          phaseId = blockedStepId,
+          phaseRunId = null,
+          invocationId = invocationId,
+          executionId = registered?.executionId ?: registration.executionId,
+          reason = reason,
+          alias = BlockIncidentAliases.standalonePhase(invocationId, blockedStepId),
+          linkAcceptedFeatureTaskPhase = blockedWorkflowId != null,
+          generation = null,
+          origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+          exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
+          monitorSelector = monitorSelector?.takeIf { it.isNotBlank() && it.length <= MAX_MONITOR_SELECTOR_CHARS },
+          pullRequestId = target?.pullRequestKey,
+          pullRequestUrl = target?.pullRequestUrl,
+          headRepository = target?.headRepository,
+          headBranch = target?.headRef,
+          worktreePath = target?.worktreePath,
+          unavailableFields =
+            mapOf(
+              BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+              BlockIncidentCorrelatedField.ATTEMPT to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+            ),
+        )
+      }.onFailure { error ->
+        if (error is CancellationException) throw error
+        RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone block incident observation failed", error)
+      }.getOrNull() ?: return
+    blockIncidentCapture.capture(observation)
   }
 
   fun settleFailure(
@@ -305,5 +324,6 @@ class StandalonePhaseStatusEventSink(
     const val MAX_VISIBLE_NAME_TEXT = 28
     const val MAX_VISIBLE_TRANSITIONS = 2
     const val MAX_VISIBLE_PENDING_NAMES = 2
+    const val MAX_MONITOR_SELECTOR_CHARS = 2048
   }
 }

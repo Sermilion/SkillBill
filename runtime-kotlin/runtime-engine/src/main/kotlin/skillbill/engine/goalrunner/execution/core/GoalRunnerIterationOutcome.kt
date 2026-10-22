@@ -17,6 +17,7 @@ import skillbill.engine.goalrunner.execution.support.recoverySafeAction
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
@@ -377,17 +378,23 @@ class GoalRunnerIterationOutcome(
     val progress = progressReader.safeProgress(knownWorkflowId)
     val acceptedBlock =
       outcomeStore.markBlocked(
-        workflowId = knownWorkflowId,
-        blockedReason = reconciled.blockedReason.withStopDiagnostics(knownWorkflowId, progress, reconciled.liveness),
-        lastResumableStep = reconciled.lastResumableStep,
-        failureExitCode = failureExitCode,
-        supervisionEvent =
-          supervisionEvent(
-            reason = reconciled.reason,
-            knownWorkflowId = knownWorkflowId,
-            progress = progress,
-            liveness = reconciled.liveness,
-          ),
+        GoalRunnerBlockRequest(
+          workflowId = knownWorkflowId,
+          blockedReason = reconciled.blockedReason.withStopDiagnostics(knownWorkflowId, progress, reconciled.liveness),
+          lastResumableStep = reconciled.lastResumableStep,
+          failureExitCode = failureExitCode,
+          historicalBlockReference =
+            reconciled.acceptedBlockReference?.takeIf {
+              it.sourceWorkflowId == knownWorkflowId && it.blockedStepId == reconciled.lastResumableStep
+            },
+          supervisionEvent =
+            supervisionEvent(
+              reason = reconciled.reason,
+              knownWorkflowId = knownWorkflowId,
+              progress = progress,
+              liveness = reconciled.liveness,
+            ),
+        ),
       )
     return acceptedBlock?.let { block ->
       reconciled.copy(

@@ -18,9 +18,9 @@ subtasks:
   status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: "wftr-20261022-063011-yuvn"
+  workflow_id: "wftr-20261022-105126-62xm"
   blocked_reason: null
-  last_resumable_step: "audit_implement_fix"
+  last_resumable_step: "audit"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

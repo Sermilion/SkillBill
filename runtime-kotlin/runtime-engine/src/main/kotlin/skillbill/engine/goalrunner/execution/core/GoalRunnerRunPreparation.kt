@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonSelection
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
@@ -14,9 +15,9 @@ import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
-import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
@@ -47,7 +48,13 @@ class GoalRunnerRunPreparation(
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val gitOperations: WorkflowGitOperations,
   private val repairCoordinator: GoalRunnerRepairCoordinator,
+  private val blockIncidents: BlockIncidentEntryReconciler,
 ) {
+  internal fun guardEntry(
+    blocked: (GoalRunnerRunReport) -> Boolean,
+    run: () -> GoalRunnerRunReport,
+  ): GoalRunnerRunReport = blockIncidents.guardEntry(blocked, run)
+
   internal fun prepareStart(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
@@ -79,11 +86,12 @@ class GoalRunnerRunPreparation(
     }
     if (repair.status == GoalRunnerRepairStatus.OPERATOR_REQUIRED) {
       val subtaskId = state.manifest.currentSubtaskIntent.subtaskId
-      val acceptedBlockReference = repair.diagnoses
-        .firstOrNull { diagnosis -> diagnosis.subtaskId == subtaskId }
-        ?.wedges
-        ?.firstOrNull { finding -> finding.wedgeClass == GoalRunnerWedgeClass.STALE_BLOCKED_CONTINUATION_OUTCOME }
-        ?.acceptedBlockReference
+      val acceptedBlockReference =
+        repair.diagnoses
+          .firstOrNull { diagnosis -> diagnosis.subtaskId == subtaskId }
+          ?.wedges
+          ?.firstOrNull { finding -> finding.wedgeClass == GoalRunnerWedgeClass.STALE_BLOCKED_CONTINUATION_OUTCOME }
+          ?.acceptedBlockReference
       return GoalRunPreparation.PreparationBlocked(
         stopped(
           StoppedReportArgs(

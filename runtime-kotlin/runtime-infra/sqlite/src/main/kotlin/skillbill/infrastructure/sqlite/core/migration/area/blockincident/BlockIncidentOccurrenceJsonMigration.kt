@@ -1,12 +1,7 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration.area.blockincident
 
 import java.sql.Connection
 
-/**
- * Stores the complete original failure, including truncation facts and evidence references, beside the
- * indexed columns. Legacy rows keep a null value and decode from their columns. The archive capture triggers
- * are recreated so later 0.1 snapshots retain the same full occurrence.
- */
 internal object BlockIncidentOccurrenceJsonMigration {
   fun apply(connection: Connection) {
     connection.createStatement().use { statement ->

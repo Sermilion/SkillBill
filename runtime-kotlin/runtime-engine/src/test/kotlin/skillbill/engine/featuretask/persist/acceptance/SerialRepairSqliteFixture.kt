@@ -1,10 +1,9 @@
 package skillbill.engine.featuretask.persist.acceptance
 
-import skillbill.engine.diagnostics.block.testBlockIncidentCapture
-import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
@@ -19,9 +18,9 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.sha256Hex
-import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
@@ -226,6 +225,7 @@ internal class SerialRepairSqliteFixture(
         gitOperations,
         source,
       ),
+      testBlockIncidentCapture(db, clock, diagnostics),
     )
   }
 

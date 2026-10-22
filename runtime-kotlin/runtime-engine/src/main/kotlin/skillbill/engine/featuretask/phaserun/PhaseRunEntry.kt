@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.phaserun
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
-import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -33,6 +33,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import java.time.Clock
 import java.util.UUID
+import java.util.concurrent.CancellationException
 
 @Inject
 class PhaseRunEntry(
@@ -47,20 +48,22 @@ class PhaseRunEntry(
   private val agentRunLauncher: AgentRunLauncher,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val standaloneRunners: StandalonePhaseRunners,
-  private val blockIncidentReconciler: BlockIncidentEntryReconciler,
 ) {
-  fun run(request: PhaseRunRequest): PhaseRunResult {
-    blockIncidentReconciler.reconcileOnEntry()
-    if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
-    val invocationId = newInvocationId()
-    return withStatus(request, invocationId, request.definitionId) { statusRequest ->
-      if (SkeletonDefinition.runHarnessOf(request.definitionId) == PhaseRunHarness.DEVICE_QA) {
-        standaloneRunners.runQa(statusRequest, invocationId) { runInternal(it, invocationId) }
+  fun run(request: PhaseRunRequest): PhaseRunResult =
+    standaloneRunners.guardEntry {
+      if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) {
+        runStandaloneMonitor(request)
       } else {
-        runInternal(statusRequest, invocationId)
+        val invocationId = newInvocationId()
+        withStatus(request, request.statusLaunch(request.definitionId, invocationId)) { statusRequest ->
+          if (SkeletonDefinition.runHarnessOf(request.definitionId) == PhaseRunHarness.DEVICE_QA) {
+            standaloneRunners.runQa(statusRequest, invocationId) { runInternal(it, invocationId) }
+          } else {
+            runInternal(statusRequest, invocationId)
+          }
+        }
       }
     }
-  }
 
   internal fun runStandaloneMonitor(request: PhaseRunRequest): PhaseRunResult {
     val invocationId = newInvocationId()
@@ -69,11 +72,13 @@ class PhaseRunEntry(
         "Phase ${request.definitionId} has no prepared standalone execution."
       }
     val branch = currentBranch(request)?.branch
-    val selector = request.intake?.trim()?.takeIf(String::isNotEmpty) ?: branch?.let { "branch $it" } ?: "no target"
+    val monitorSelector = request.intake?.trim()?.takeIf(String::isNotEmpty) ?: branch?.let { "branch $it" }
+    val selector = monitorSelector ?: "no target"
+    val launch = request.statusLaunch(request.definitionId, invocationId, monitorSelector)
     if (request.recoverStaleOwner != null && request.intake.isNullOrBlank()) {
       return monitorBlocked(
         request,
-        invocationId,
+        launch,
         "Stale owner recovery needs an explicit pull request target.",
         listOf("Selector: $selector"),
       )
@@ -88,7 +93,7 @@ class PhaseRunEntry(
         ),
       )
     return when (preparation) {
-      is MonitorPreparation.Prepared -> runPrepared(request, definition, invocationId, preparation)
+      is MonitorPreparation.Prepared -> runPrepared(request, definition, launch, preparation)
       is MonitorPreparation.Completed ->
         PhaseRunResult.Completed(
           invocationId,
@@ -102,7 +107,7 @@ class PhaseRunEntry(
       is MonitorPreparation.Blocked ->
         monitorBlocked(
           request,
-          invocationId,
+          launch,
           listOfNotNull(preparation.detail, preparation.path?.let { "Path: $it." }).joinToString(" "),
           earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
           preparation.attempt,
@@ -110,7 +115,7 @@ class PhaseRunEntry(
       is MonitorPreparation.Refused ->
         monitorBlocked(
           request,
-          invocationId,
+          launch,
           (listOf("Monitor target refused (${preparation.reason}): ${preparation.detail}") + preparation.candidateUrls)
             .joinToString(" "),
           earlyReport(selector, null),
@@ -118,7 +123,7 @@ class PhaseRunEntry(
       is MonitorPreparation.Failed ->
         monitorBlocked(
           request,
-          invocationId,
+          launch,
           preparation.reason,
           earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
           preparation.attempt,
@@ -135,7 +140,7 @@ class PhaseRunEntry(
   private fun runPrepared(
     request: PhaseRunRequest,
     definition: SkeletonDefinition,
-    invocationId: String,
+    launch: StandalonePhaseStatusLaunch,
     prepared: MonitorPreparation.Prepared,
   ): PhaseRunResult {
     val ownedRequest =
@@ -144,8 +149,8 @@ class PhaseRunEntry(
         repoRoot = prepared.context.worktree.path,
       )
     try {
-      return withStatus(ownedRequest, invocationId, request.definitionId, prepared) { statusRequest ->
-        runInternal(statusRequest, invocationId, standalone = prepared)
+      return withStatus(ownedRequest, launch, prepared) { statusRequest ->
+        runInternal(statusRequest, launch.invocationId, standalone = prepared)
       }
     } finally {
       prepared.cleanup.settle(
@@ -156,8 +161,7 @@ class PhaseRunEntry(
 
   private fun withStatus(
     request: PhaseRunRequest,
-    invocationId: String,
-    publicPhaseId: String,
+    launch: StandalonePhaseStatusLaunch,
     monitor: MonitorPreparation.Prepared? = null,
     body: (PhaseRunRequest) -> PhaseRunResult,
   ): PhaseRunResult {
@@ -170,18 +174,9 @@ class PhaseRunEntry(
             it.context.primaryRoot,
             it.context.worktree.path,
           ),
-          publicPhaseId,
-          invocationId,
-          request.invokedAgentId,
-          request.launchArguments,
+          launch,
         )
-      } ?: statusPublisherFactory.forPhase(
-        request.repoRoot,
-        publicPhaseId,
-        invocationId,
-        request.invokedAgentId,
-        request.launchArguments,
-      )
+      } ?: statusPublisherFactory.forPhase(request.repoRoot, launch)
     val statusRequest =
       request.copy(
         eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher),
@@ -190,7 +185,7 @@ class PhaseRunEntry(
           request.activityOutput?.invoke(stepName, activity)
         },
       )
-    if (SkeletonDefinition.runHarnessOf(publicPhaseId) == PhaseRunHarness.DEVICE_QA) {
+    if (SkeletonDefinition.runHarnessOf(launch.phaseId) == PhaseRunHarness.DEVICE_QA) {
       publisher.recordQaOutcome(StandaloneQaOutcome.ATTEMPTED)
     }
     monitor?.cleanup?.onSettled { settlement ->
@@ -207,29 +202,27 @@ class PhaseRunEntry(
 
   private fun monitorBlocked(
     request: PhaseRunRequest,
-    invocationId: String,
+    launch: StandalonePhaseStatusLaunch,
     reason: String,
     targetReport: List<String>,
     attempt: MonitorAttemptTarget? = null,
   ): PhaseRunResult.Blocked {
     val result =
       PhaseRunResult.Blocked(
-        invocationId,
+        launch.invocationId,
         emptyList(),
         null,
         request.definitionId,
         reason,
         targetReport = targetReport,
       )
-    attempt?.let {
-      statusPublisherFactory.forMonitor(
-        it,
-        request.definitionId,
-        invocationId,
-        request.invokedAgentId,
-        request.launchArguments,
-      ).settle(result)
-    }
+    runCatching {
+      attempt?.let { statusPublisherFactory.forMonitor(it, launch) }
+        ?: statusPublisherFactory.forPhase(request.repoRoot, launch)
+    }.onFailure { error ->
+      if (error is CancellationException) throw error
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Monitor block status publisher setup failed", error)
+    }.getOrNull()?.settle(result)
     return result
   }
 
@@ -389,3 +382,16 @@ private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID(
 
 private const val INVOCATION_ID_PREFIX = "phr-"
 private const val DETACHED_HEAD = "HEAD"
+
+private fun PhaseRunRequest.statusLaunch(
+  phaseId: String,
+  invocationId: String,
+  monitorSelector: String? = null,
+): StandalonePhaseStatusLaunch =
+  StandalonePhaseStatusLaunch(
+    phaseId,
+    invocationId,
+    invokedAgentId,
+    launchArguments,
+    monitorSelector,
+  )

@@ -1,22 +1,21 @@
 package skillbill.engine.diagnostics.block
 
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReference
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-/**
- * Correlation identities that a feature-task producer can actually read when it accepts a phase block. Values the
- * runtime does not hold stay null and carry the reason they are missing instead of a placeholder.
- */
 internal class BlockIncidentFeatureTaskCorrelation private constructor(
   private val workflowId: String?,
   private val phaseId: String?,
@@ -25,7 +24,6 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
   private val generation: Long?,
   private val unavailableFields: Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability>,
 ) {
-  /** Builds the observation for an accepted phase block, which returns a failure rather than throwing or exiting. */
   fun acceptedPhaseBlock(
     attempt: Int,
     blockedReason: String?,
@@ -34,17 +32,21 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
     evidenceReferences: List<BlockIncidentEvidenceReference> = emptyList(),
   ): BlockIncidentObservation {
     val recordedReason = blockedReason?.takeIf(String::isNotBlank)
-    val reason = recordedReason
-      ?: "Phase ${phaseId ?: "unknown"} attempt $attempt was accepted as blocked without a recorded reason " +
-      "(failure_disposition=${failureDisposition ?: "none"})."
-    val failureFacts = buildMap {
-      put(BlockIncidentCorrelatedField.THROWABLE_TYPE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
-      put(BlockIncidentCorrelatedField.EXIT_CODE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
-      if (failureCode == null) {
-        put(BlockIncidentCorrelatedField.FAILURE_CODE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
+    val reason =
+      recordedReason
+        ?: "Phase ${phaseId ?: "unknown"} attempt $attempt was accepted as blocked without a recorded reason " +
+        "(failure_disposition=${failureDisposition ?: "none"})."
+    val failureFacts =
+      buildMap {
+        put(BlockIncidentCorrelatedField.THROWABLE_TYPE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
+        put(BlockIncidentCorrelatedField.EXIT_CODE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
+        if (failureCode == null) {
+          put(BlockIncidentCorrelatedField.FAILURE_CODE, BlockIncidentFieldAvailability.NOT_APPLICABLE)
+        }
+        if (recordedReason == null) {
+          put(BlockIncidentCorrelatedField.REASON, BlockIncidentFieldAvailability.NOT_CAPTURED)
+        }
       }
-      if (recordedReason == null) put(BlockIncidentCorrelatedField.REASON, BlockIncidentFieldAvailability.NOT_CAPTURED)
-    }
     return BlockIncidentObservation(
       workflowId = workflowId,
       parentWorkflowId = parentWorkflowId,
@@ -63,47 +65,75 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
   }
 
   companion object {
-    fun persistAcceptedIdentity(states: WorkflowStateRepository, observation: BlockIncidentObservation) {
-      val workflowId = observation.workflowId ?: return
-      val phaseId = observation.phaseId ?: return
-      val attempt = observation.attempt ?: return
+    fun persistAcceptedIdentity(
+      states: WorkflowStateRepository,
+      observation: BlockIncidentObservation,
+    ) {
+      val workflowId = observation.workflowId
+      val phaseId = observation.phaseId
+      val attempt = observation.attempt
+      if (workflowId == null || phaseId == null || attempt == null) return
       val record = states.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return
-      val alias = BlockIncidentAliases.fallback(observation)
+      val canonical = BlockIncidentAliases.goal(workflowId, phaseId, observation.generation, attempt, null)
       val existing = BlockIncidentIdentity.fromArtifacts(record.artifacts)
-      if (existing != null && existing.attempt == attempt && existing.generation == observation.generation &&
-        existing.alias == BlockIncidentAliases.goal(workflowId, existing.stepId, existing.aliasSequence)
-      ) return
-      val identity = BlockIncidentIdentity(
-        stepId = phaseId,
-        attempt = attempt,
-        generation = observation.generation,
-        childWorkflowId = null,
-        childIncidentToken = null,
-        incidentToken = BlockIncidentAliases.token(alias),
-        aliasSequence = observation.generation ?: attempt.toLong(),
-        alias = alias,
-      )
+      if (existing?.matchesAcceptedPhase(phaseId, attempt, observation.generation, canonical) == true) return
+      val alias = BlockIncidentAliases.fallback(observation)
+      val identity =
+        BlockIncidentIdentity(
+          stepId = phaseId,
+          attempt = attempt,
+          generation = observation.generation,
+          childWorkflowId = null,
+          childIncidentToken = null,
+          incidentToken = BlockIncidentAliases.token(alias),
+          alias = alias,
+        )
       states.save(
         WorkflowFamily.TASK_RUNTIME,
         record.copy(artifacts = DurableWorkflowArtifacts.fromMap(record.artifacts + identity.artifactEntry())),
       )
     }
 
-    private const val MAX_IDENTITY_CHARS = 512
-    private val PULL_REQUEST_PHASES = setOf(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
-    )
-    private val PULL_REQUEST_FIELDS = listOf(
-      BlockIncidentCorrelatedField.MONITOR_SELECTOR, BlockIncidentCorrelatedField.PULL_REQUEST_ID,
-      BlockIncidentCorrelatedField.PULL_REQUEST_URL, BlockIncidentCorrelatedField.HEAD_REPOSITORY,
-      BlockIncidentCorrelatedField.HEAD_BRANCH, BlockIncidentCorrelatedField.WORKTREE_PATH,
-    )
+    fun acceptedPhaseIncidentToken(
+      states: WorkflowStateRepository,
+      workflowId: String,
+      phaseId: String,
+    ): String? {
+      val record = states.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return null
+      val identity =
+        BlockIncidentIdentity.fromArtifacts(record.artifacts)
+          ?.takeIf { it.stepId == phaseId && it.childWorkflowId == null && it.attempt != null }
+          ?: return null
+      val phase = decodePhaseRecords(record.artifacts)[phaseId]
+      return identity.incidentToken.takeIf {
+        phase != null && phase.status == WorkflowStepStatus.BLOCKED && phase.attemptCount == identity.attempt
+      }
+    }
 
-    /**
-     * Reads the parent workflow from the goal-continuation artifact and the invocation and generation from the
-     * active worker lease. Phase-run and execution identities are not modeled for feature-task phases.
-     */
+    private fun BlockIncidentIdentity.matchesAcceptedPhase(
+      phaseId: String,
+      acceptedAttempt: Int,
+      acceptedGeneration: Long?,
+      canonical: BlockIncidentAlias,
+    ): Boolean =
+      stepId == phaseId && attempt == acceptedAttempt && generation == acceptedGeneration && alias == canonical
+
+    private const val MAX_IDENTITY_CHARS = 512
+    internal val PULL_REQUEST_PHASES =
+      setOf(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+      )
+    internal val PULL_REQUEST_FIELDS =
+      listOf(
+        BlockIncidentCorrelatedField.MONITOR_SELECTOR,
+        BlockIncidentCorrelatedField.PULL_REQUEST_ID,
+        BlockIncidentCorrelatedField.PULL_REQUEST_URL,
+        BlockIncidentCorrelatedField.HEAD_REPOSITORY,
+        BlockIncidentCorrelatedField.HEAD_BRANCH,
+        BlockIncidentCorrelatedField.WORKTREE_PATH,
+      )
+
     fun resolve(
       states: WorkflowStateRepository,
       workflowId: String,
@@ -111,18 +141,20 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
       admitted: AdmittedFeatureTaskRuntimeExecution?,
       hasRepairEvidence: Boolean = false,
     ): BlockIncidentFeatureTaskCorrelation {
-      val unavailable = mutableMapOf(
-        BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-        BlockIncidentCorrelatedField.EXECUTION_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-      )
+      val unavailable =
+        mutableMapOf(
+          BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+          BlockIncidentCorrelatedField.EXECUTION_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+        )
       val goalArtifact = states.get(WorkflowFamily.TASK_RUNTIME, workflowId)?.artifacts?.goalContinuationArtifact()
       if (goalArtifact == null) {
         unavailable[BlockIncidentCorrelatedField.PARENT_WORKFLOW_ID] = BlockIncidentFieldAvailability.NOT_APPLICABLE
       }
-      val ownership = admitted?.workerOwnership
-        ?.takeIf { it.workflowId == workflowId && it.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE }
-        ?: states.getFeatureTaskRuntimeWorkerOwnership(workflowId)
+      val ownership =
+        admitted?.workerOwnership
           ?.takeIf { it.workflowId == workflowId && it.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE }
+          ?: states.getFeatureTaskRuntimeWorkerOwnership(workflowId)
+            ?.takeIf { it.workflowId == workflowId && it.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE }
       val pullRequestAvailability =
         if (phaseId in PULL_REQUEST_PHASES) {
           BlockIncidentFieldAvailability.NOT_CAPTURED
@@ -130,7 +162,6 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
           BlockIncidentFieldAvailability.NOT_APPLICABLE
         }
       PULL_REQUEST_FIELDS.forEach { field -> unavailable[field] = pullRequestAvailability }
-      // Repair evidence records digests and a source location, not the repair turn or output generation.
       val repairAvailability =
         if (hasRepairEvidence) {
           BlockIncidentFieldAvailability.NOT_CAPTURED
@@ -149,7 +180,6 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
       )
     }
 
-    /** An identity the contract cannot hold is recorded as not captured rather than shortened. */
     private fun String.boundedIdentity(): String? = takeIf { it.isNotBlank() && it.length <= MAX_IDENTITY_CHARS }
   }
 }

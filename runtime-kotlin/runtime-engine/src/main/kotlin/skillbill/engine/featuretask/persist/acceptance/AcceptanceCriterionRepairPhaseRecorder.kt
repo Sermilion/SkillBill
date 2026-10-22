@@ -194,7 +194,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
         setOf(
           FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
           FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
-        ) || phase.phaseId == session.steps.repair &&
+        ) || phase.phaseId == session.steps.repair && phase.failureDisposition == null &&
         (conclusion == null || conclusion == FeatureTaskRuntimeVerdict.COMPLETED.wireValue)
     val clarification = needsClarification(conclusion)
     val evidence =

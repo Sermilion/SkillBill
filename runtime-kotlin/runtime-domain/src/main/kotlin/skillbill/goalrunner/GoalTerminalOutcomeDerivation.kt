@@ -65,12 +65,13 @@ fun derivedTerminalOutcomeFor(
     commitShaFrom(artifacts)
       ?: if (commitPushCompletedUnderSuppressPr(steps, goalContinuation.suppressPr)) measuredCommitSha() else null
   return terminalStatus(snapshot, steps, goalContinuation.suppressPr, commitSha)?.let { status ->
+    val blockedStep = if (status == GoalRunnerTerminalStatus.BLOCKED) liveBlockedStep(snapshot, steps) else null
     GoalRunnerStoredOutcome(
       status = status,
       workflowId = snapshot.workflowId,
       commitSha = commitSha,
       blockedReason = blockedReasonFrom(artifacts, steps, status),
-      lastResumableStep = snapshot.currentStepId,
+      lastResumableStep = blockedStep?.stepId ?: snapshot.currentStepId,
       suppressPr = goalContinuation.suppressPr,
     )
   }

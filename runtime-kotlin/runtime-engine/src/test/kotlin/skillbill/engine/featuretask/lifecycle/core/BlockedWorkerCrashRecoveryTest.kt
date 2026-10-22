@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
+import skillbill.engine.diagnostics.block.testBlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
@@ -68,6 +69,7 @@ class BlockedWorkerCrashRecoveryTest {
             TestNoopGoalPlanningManifestStore,
             testWorkflowGoalRunnerOutcomeStore(database),
           ),
+          testBlockIncidentEntryReconciler(database, testHarnessClock, NoopRuntimeDiagnostics),
         )
       val manifest =
         DecompositionManifest(

@@ -348,6 +348,16 @@ reserved cycle with its saved plan and existing failure count. An ordinary state
 reload does not reset the budget. A successful outcome closes source work for it
 without erasing earlier failures.
 
+Finding gaps and routing to repair are normal transitions and consume no repair
+budget. Closing one criterion and selecting the next also consumes no budget.
+Each criterion has its own allowance of three unsuccessful repair outcomes. If
+AC-002 fails verification once and passes after its second repair, AC-003 starts
+with zero failures used and three available. AC-002's failure remains in history
+and does not reduce AC-003's allowance. Phase execution counts identify launches;
+they are not the per-criterion repair budget. The desktop audit header and active
+phase chip show the current criterion's repair attempt, which advances after an
+unsuccessful repair outcome and starts at one for the next criterion.
+
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted
 criterion is never re-checked, and no full audit runs again. When the focused

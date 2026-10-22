@@ -9,11 +9,6 @@ import skillbill.infrastructure.sqlite.core.migration.addGoalRunnerControlState
 import skillbill.infrastructure.sqlite.core.migration.addGoalRunnerControls
 import skillbill.infrastructure.sqlite.core.migration.addReviewFindingOutcomeKey
 import skillbill.infrastructure.sqlite.core.migration.addReviewRunLaneAttribution
-import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentContractV02Migration
-import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentNullableGenerationMigration
-import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentRolloutMigration
-import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentScanProgressMigration
-import skillbill.infrastructure.sqlite.core.migration.area.BlockIncidentOccurrenceJsonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseSettlementsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseStrategyTelemetryMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigration
@@ -23,6 +18,11 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.blockincident.BlockIncidentContractV02Migration
+import skillbill.infrastructure.sqlite.core.migration.area.blockincident.BlockIncidentNullableGenerationMigration
+import skillbill.infrastructure.sqlite.core.migration.area.blockincident.BlockIncidentOccurrenceJsonMigration
+import skillbill.infrastructure.sqlite.core.migration.area.blockincident.BlockIncidentRolloutMigration
+import skillbill.infrastructure.sqlite.core.migration.area.blockincident.BlockIncidentScanProgressMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
@@ -45,8 +45,8 @@ import skillbill.infrastructure.sqlite.core.migration.persistGoalPlanningRepairE
 import skillbill.infrastructure.sqlite.core.migration.persistLegacyGoalPlanningRepairEvidence
 import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenceByAgent
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
-import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.core.schema.addBlockIncidentRevisionTriggers
+import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch

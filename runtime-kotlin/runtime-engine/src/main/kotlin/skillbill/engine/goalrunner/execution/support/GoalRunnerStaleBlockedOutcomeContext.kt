@@ -1,8 +1,9 @@
 package skillbill.engine.goalrunner.execution.support
 
+import skillbill.engine.diagnostics.block.BlockIncidentIdentity
+import skillbill.engine.diagnostics.block.boundTo
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding
-import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.goalrunner.repair.PASSED_CONTINUATION_OUTCOME
 import skillbill.goalrunner.derivedTerminalOutcomeFor
 import skillbill.goalrunner.goalContinuationOutcome
@@ -10,7 +11,6 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.nonCompleteStoredOutcomeIsCorroborated
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 
 internal data class GoalRunnerStaleBlockedOutcomeContext(
@@ -19,19 +19,17 @@ internal data class GoalRunnerStaleBlockedOutcomeContext(
   val issueKey: String,
   val subtaskId: Int,
 ) {
-  val acceptedBlockReference = run {
-    val displaced = BlockIncidentIdentity.acceptedReferenceFromDisplacement(artifacts)
-    val continuation = DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()
-      ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
-    val stored = continuation?.let { goalContinuationOutcome(artifacts, issueKey, subtaskId, it.suppressPr) }
-      ?.takeIf { it.status == GoalRunnerTerminalStatus.BLOCKED }
-    val identity = BlockIncidentIdentity.fromArtifacts(artifacts)
-      ?.takeIf { current ->
-        record.workflowStatus == WorkflowStatus.BLOCKED && current.stepId == stored?.lastResumableStep &&
-          record.steps.firstOrNull { step -> step.stepId == current.stepId }?.attemptCount == current.attempt
-      }
-    displaced ?: identity?.acceptedReference(record.workflowId)
-  }
+  val acceptedBlockReference =
+    run {
+      val continuation =
+        DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()
+          ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
+      val stored =
+        continuation?.let { goalContinuationOutcome(artifacts, issueKey, subtaskId, it.suppressPr) }
+          ?.takeIf { it.status == GoalRunnerTerminalStatus.BLOCKED }
+      stored?.acceptedBlockReference?.boundTo(record.workflowId, stored.lastResumableStep)
+        ?: BlockIncidentIdentity.acceptedFor(artifacts, record.steps, stored?.lastResumableStep, record.workflowId)
+    }
 }
 
 internal fun diagnoseStaleBlockedOutcome(

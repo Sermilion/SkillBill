@@ -1,12 +1,12 @@
 package skillbill.engine.diagnostics.block
 
-import skillbill.ports.process.IdentifierGeneratorPort
-import skillbill.ports.process.DaemonThreadPort
-import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.blockincident.InMemoryBlockIncidentSpool
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.process.DaemonThreadPort
+import skillbill.ports.process.IdentifierGeneratorPort
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import java.time.Clock
 
 fun testBlockIncidentCapture(

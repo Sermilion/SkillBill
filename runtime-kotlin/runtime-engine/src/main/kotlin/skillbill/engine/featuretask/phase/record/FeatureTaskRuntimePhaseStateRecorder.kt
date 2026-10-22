@@ -3,6 +3,10 @@ package skillbill.engine.featuretask.phase.record
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -14,14 +18,6 @@ import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.persist.workflowStatusFor
-import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
-import skillbill.engine.diagnostics.block.BlockIncidentAliases
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
-import skillbill.engine.diagnostics.block.BlockIncidentObservation
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReference
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReferenceAvailability
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceKind
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceProvenance
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -48,6 +44,10 @@ import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromA
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.implementationAttemptRecordWorkflowArtifact
 import skillbill.workflow.taskruntime.artifact.operatorBlockRetryFromWorkflowArtifacts
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceKind
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceProvenance
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReference
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceReferenceAvailability
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
@@ -64,6 +64,7 @@ import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlo
 import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
+import java.util.HexFormat
 
 @Inject
 class FeatureTaskRuntimePhaseStateRecorder(
@@ -165,53 +166,57 @@ class FeatureTaskRuntimePhaseStateRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution?,
     phaseStart: Boolean = false,
   ): Boolean {
-    val (accepted, observation) = database.transaction { unitOfWork ->
-      if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
-        return@transaction false to null
-      }
-      if (admitted != null && phaseStart && !bindPhaseCoordinates(unitOfWork.workflowStates, request, admitted)) {
-        return@transaction false to null
-      }
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
-          ?: return@transaction false to null
-      val artifacts = record.artifacts
-      val existingRecords = decodePhaseRecords(artifacts)
-      val now = clock.instant()
-      val previous = existingRecords[request.phaseId]
-      if (
-        previous?.status == WorkflowStepStatus.COMPLETED &&
-        !(phaseStart && request.attemptCount > previous.attemptCount)
-      ) {
-        return@transaction completedPhaseRequestMatches(request, previous) to null
-      }
-      if (!phaseEventAdmissible(request, previous, phaseStart)) return@transaction false to null
-      val phaseRecord = featureTaskRuntimePhaseRecordFor(request, previous, now)
-      val updatedRecords = LinkedHashMap(existingRecords).apply { put(request.phaseId, phaseRecord) }
-      val patch =
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
-            updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
+    val (accepted, observation) =
+      database.transaction { unitOfWork ->
+        if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+          return@transaction false to null
+        }
+        if (admitted != null && phaseStart && !bindPhaseCoordinates(unitOfWork.workflowStates, request, admitted)) {
+          return@transaction false to null
+        }
+        val record =
+          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
+            ?: return@transaction false to null
+        val artifacts = record.artifacts
+        val existingRecords = decodePhaseRecords(artifacts)
+        val now = clock.instant()
+        val previous = existingRecords[request.phaseId]
+        if (
+          previous?.status == WorkflowStepStatus.COMPLETED &&
+          !(phaseStart && request.attemptCount > previous.attemptCount)
+        ) {
+          return@transaction completedPhaseRequestMatches(request, previous) to null
+        }
+        if (!phaseEventAdmissible(request, previous, phaseStart)) return@transaction false to null
+        val phaseRecord = featureTaskRuntimePhaseRecordFor(request, previous, now)
+        val updatedRecords = LinkedHashMap(existingRecords).apply { put(request.phaseId, phaseRecord) }
+        val patch =
+          mapOf(
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+              updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
+            ),
+          ) + implementationAttemptPatch(artifacts, request, attemptStatusFor(request)) +
+            findingVerificationCheckpointPatch(request) + qaRepairStatePatch(request)
+        recordQaOutcome(unitOfWork, request)
+        workflowPersistence.persistArtifactsPatch(
+          unitOfWork.workflowStates,
+          record,
+          patch,
+          WorkflowRowAdvance(
+            terminalInstant = now,
+            currentStepId = request.phaseId,
+            workflowStatus = workflowStatusFor(request),
+            stepUpdates = stepUpdatesFrom(updatedRecords),
           ),
-        ) + implementationAttemptPatch(artifacts, request, attemptStatusFor(request)) +
-          findingVerificationCheckpointPatch(request) + qaRepairStatePatch(request)
-      recordQaOutcome(unitOfWork, request)
-      workflowPersistence.persistArtifactsPatch(
-        unitOfWork.workflowStates,
-        record,
-        patch,
-        WorkflowRowAdvance(
-          terminalInstant = now,
-          currentStepId = request.phaseId,
-          workflowStatus = workflowStatusFor(request),
-          stepUpdates = stepUpdatesFrom(updatedRecords),
-        ),
-      )
-      val observation = if (request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
-        observeAcceptedBlock(unitOfWork, request, admitted)
-      } else null
-      true to observation
-    }
+        )
+        val observation =
+          if (request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
+            observeAcceptedBlock(unitOfWork, request, admitted)
+          } else {
+            null
+          }
+        true to observation
+      }
     observation?.let(blockIncidentCapture::capture)
     return accepted
   }
@@ -232,7 +237,8 @@ class FeatureTaskRuntimePhaseStateRecorder(
     blockedReason: String? = request.blockedReason,
     failureCode: String? = null,
   ): BlockIncidentObservation {
-    val observation = BlockIncidentFeatureTaskCorrelation.resolve(
+    val observation =
+      BlockIncidentFeatureTaskCorrelation.resolve(
         unitOfWork.workflowStates,
         request.workflowId,
         request.phaseId,
@@ -245,11 +251,13 @@ class FeatureTaskRuntimePhaseStateRecorder(
         failureCode = failureCode,
         evidenceReferences = request.blockEvidenceReferences(),
       )
-    val correlated = observation.copy(
-      alias = observation.invocationId?.let {
-        BlockIncidentAliases.featureTaskPhase(request.workflowId, request.phaseId, it, request.attemptCount)
-      },
-    )
+    val correlated =
+      observation.copy(
+        alias =
+          observation.invocationId?.let {
+            BlockIncidentAliases.featureTaskPhase(request.workflowId, request.phaseId, it, request.attemptCount)
+          },
+      )
     BlockIncidentFeatureTaskCorrelation.persistAcceptedIdentity(unitOfWork.workflowStates, correlated)
     return correlated
   }
@@ -305,9 +313,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
   }
 
   private fun String.sha256Digest(): String =
-    MessageDigest.getInstance("SHA-256").digest(toByteArray()).joinToString("") { byte ->
-      "%02x".format(byte.toInt() and 0xff)
-    }
+    HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(toByteArray()))
 
   private fun bindPhaseCoordinates(
     states: WorkflowStateRepository,

@@ -1,28 +1,18 @@
 package skillbill.engine.diagnostics.block
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.ports.blockincident.BlockedWorkflowWithoutIncident
-import skillbill.ports.blockincident.BlockIncidentRepository
+import skillbill.error.blockincident.BlockIncidentFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.blockincident.BlockIncidentSpool
-import skillbill.ports.blockincident.BlockIncidentSpoolEntry
+import skillbill.ports.blockincident.model.BlockIncidentSpoolEntry
+import skillbill.ports.blockincident.model.BlockedWorkflowWithoutIncident
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceAvailability
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentIdentityAvailability
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
-import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReasonRetention
+import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.workflow.model.WorkflowStatus
 import java.time.Clock
 import java.time.Instant
 
-/**
- * Runs one bounded block-incident reconciliation pass when a run entry starts, so incidents left pending or
- * investigating by an earlier process reach their deadline state without a separate command. A failed pass is
- * reported and the run continues.
- */
 @Inject
 class BlockIncidentEntryReconciler(
   private val database: DatabaseSessionFactory,
@@ -33,155 +23,127 @@ class BlockIncidentEntryReconciler(
   private val capture: BlockIncidentCapture,
 ) {
   fun reconcileOnEntry() {
-    if (!database.databaseExists()) return
-    importSpool()
-    try {
-      val reconciled = database.transaction { unitOfWork ->
-        BlockIncidentService.reconcilePending(unitOfWork.blockIncidents, clock, ENTRY_BATCH)
+    val databaseAvailable =
+      diagnostics.bestEffort("Block incident database availability check failed; continuing the run.", false) {
+        database.databaseExists()
       }
+    if (!databaseAvailable) return
+    val spoolDrained = importSpool()
+    diagnostics.bestEffort("Block incident reconciliation failed; continuing the run.", Unit) {
+      val reconciled =
+        database.transaction { unitOfWork ->
+          BlockIncidentService.reconcilePending(unitOfWork.blockIncidents, clock, ENTRY_BATCH)
+        }
       if (reconciled.isNotEmpty()) diagnostics.info("Reconciled ${reconciled.size} pending block incident(s).")
-    } catch (failure: RuntimeException) {
-      diagnostics.warning("Block incident reconciliation failed; continuing the run.", failure)
     }
-    try {
+    if (spoolDrained) {
+      reconcileOrphanedBlocks()
+    } else {
+      diagnostics.warning("Block incident spool still holds records; deferring uncaptured block recovery.")
+    }
+    diagnostics.bestEffort("Block incident investigation failed; continuing the run.", Unit) {
       worker.runEligible(ENTRY_BATCH)
-    } catch (failure: RuntimeException) {
-      diagnostics.warning("Block incident investigation failed; continuing the run.", failure)
-    }
-    reconcileOrphanedBlocks()
-  }
-
-  fun investigateAfterEntry(entryStartedAt: Instant) = worker.runEligible(ENTRY_BATCH, entryStartedAt)
-
-  private fun importSpool() {
-    val entries = try {
-      spool.pending(ENTRY_BATCH)
-    } catch (failure: RuntimeException) {
-      diagnostics.warning("Block incident spool scan failed; continuing the run.", failure)
-      return
-    }
-    try {
-      database.transaction { unit -> entries.forEach { entry -> entry.importInto(unit.blockIncidents) } }
-      entries.forEach { entry -> spool.remove(entry.recordId) }
-    } catch (failure: RuntimeException) {
-      diagnostics.warning("Block incident spool import failed; records remain for retry.", failure)
     }
   }
+
+  fun <T> guardEntry(
+    blocked: (T) -> Boolean,
+    run: () -> T,
+  ): T {
+    val entryStartedAt = clock.instant()
+    reconcileOnEntry()
+    val result = run()
+    if (blocked(result)) investigateAfterEntry(entryStartedAt)
+    return result
+  }
+
+  fun investigateAfterEntry(entryStartedAt: Instant) {
+    diagnostics.bestEffort("New block incident investigation failed; preserving the completed block.", Unit) {
+      worker.runEligible(ENTRY_BATCH, entryStartedAt)
+    }
+  }
+
+  private fun importSpool(): Boolean {
+    val entries = diagnostics.bestEffort(SPOOL_SCAN_FAILED, null) { spool.pending(ENTRY_BATCH) } ?: return false
+    for (entry in entries) {
+      if (!importEntry(entry)) return false
+      diagnostics.bestEffort("Imported block incident spool record ${entry.recordId} could not be removed.", Unit) {
+        spool.remove(entry.recordId)
+      }
+    }
+    return diagnostics.bestEffort(SPOOL_SCAN_FAILED, false) { spool.pending(1).isEmpty() }
+  }
+
+  private fun importEntry(entry: BlockIncidentSpoolEntry): Boolean {
+    var entered = false
+    val failure =
+      recoverableFailureOf {
+        database.transaction { unit ->
+          entered = true
+          BlockIncidentService.importSpooled(unit.blockIncidents, clock, entry.record)
+        }
+      } ?: return true
+    val record = entry.record
+    if (entered && failure.isPermanentImportRejection()) {
+      diagnostics.warning(
+        "Block incident evidence availability UNSAVED. Spool record ${entry.recordId} can never import " +
+          "(token ${record.occurrenceToken}, alias ${record.alias.value}, workflow ${record.workflowId}, " +
+          "code ${(failure as? SkillBillRuntimeException)?.code}); discarding it.",
+        failure,
+      )
+      return true
+    }
+    diagnostics.warning("Block incident spool import failed; records remain for retry.", failure)
+    return false
+  }
+
+  private fun Exception.isPermanentImportRejection(): Boolean =
+    this is IllegalArgumentException ||
+      this is SkillBillRuntimeException && code in PERMANENT_IMPORT_REJECTIONS
 
   private fun reconcileOrphanedBlocks() {
-    val activatedAt = try {
-      database.read { it.blockIncidents.rolloutActivatedAt() } ?: return
-    } catch (failure: RuntimeException) {
-      diagnostics.warning("Block incident rollout marker could not be read.", failure)
-      return
-    }
-    val blocked = try {
-      database.read { it.blockIncidents.blockedWithoutIncident(activatedAt, ENTRY_BATCH) }
-    } catch (failure: RuntimeException) {
-      diagnostics.warning("Uncaptured blocked workflow scan failed.", failure)
-      return
-    }
-    blocked.forEach { workflow ->
-      val alias = when (workflow.kind) {
-        BlockedWorkflowWithoutIncident.Kind.GOAL ->
-          BlockIncidentAliases.goal(workflow.workflowId, workflow.phaseId ?: "unknown", workflow.attempt?.toLong() ?: 1L)
-        BlockedWorkflowWithoutIncident.Kind.PHASE ->
-          BlockIncidentAliases.standalonePhase(workflow.workflowId, workflow.phaseId ?: "unknown")
-      }
-      capture.capture(
-        BlockIncidentObservation(
-          workflowId = workflow.workflowId,
-          parentWorkflowId = workflow.parentWorkflowId,
-          phaseId = workflow.phaseId,
-          attempt = workflow.attempt,
-          reason = workflow.blockedReason,
-          alias = alias,
-          generation = null,
-          origin = if (workflow.kind == BlockedWorkflowWithoutIncident.Kind.GOAL) {
-            BlockIncidentOrigin.ACCEPTED_GOAL_BLOCK
-          } else {
-            BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK
-          },
-          exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
-          unavailableFields = mapOf(
-            BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-            BlockIncidentCorrelatedField.INVOCATION_ID to BlockIncidentFieldAvailability.NOT_CAPTURED,
-            BlockIncidentCorrelatedField.EXECUTION_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
-            BlockIncidentCorrelatedField.ATTEMPT to if (workflow.attempt == null) {
-              BlockIncidentFieldAvailability.NOT_CAPTURED
-            } else {
-              BlockIncidentFieldAvailability.AVAILABLE
-            },
-          ),
-        ),
-      )
-    }
+    val activatedAt =
+      diagnostics.bestEffort("Block incident rollout marker could not be read.", null) {
+        database.read { it.blockIncidents.rolloutActivatedAt() }
+      } ?: return
+    val observations =
+      diagnostics.bestEffort("Uncaptured blocked workflow scan failed.", null) {
+        database.read { unit ->
+          unit.blockIncidents.blockedWithoutIncident(activatedAt, ENTRY_BATCH).mapNotNull { candidate ->
+            recoveredObservation(unit.workflowStates, candidate)
+          }
+        }
+      } ?: return
+    observations.forEach(capture::capture)
   }
 
-  private fun BlockIncidentSpoolEntry.importInto(repository: BlockIncidentRepository) {
-    val record = record
-    val values = mapOf(
-      BlockIncidentCorrelatedField.WORKFLOW_ID to record.workflowId,
-      BlockIncidentCorrelatedField.PARENT_WORKFLOW_ID to record.parentWorkflowId,
-      BlockIncidentCorrelatedField.PHASE_ID to record.phaseId,
-      BlockIncidentCorrelatedField.INVOCATION_ID to record.invocationId,
-      BlockIncidentCorrelatedField.ATTEMPT to record.attempt,
-      BlockIncidentCorrelatedField.FAILURE_CODE to record.failureCode,
-      BlockIncidentCorrelatedField.THROWABLE_TYPE to record.throwableType,
-      BlockIncidentCorrelatedField.EXIT_CODE to record.exitCode,
-    )
-    val fieldAvailability = BlockIncidentCorrelatedField.entries.associateWith { field ->
-      if (field == BlockIncidentCorrelatedField.REASON || values[field] != null) {
-        BlockIncidentFieldAvailability.AVAILABLE
-      } else {
-        BlockIncidentFieldAvailability.NOT_CAPTURED
-      }
+  private fun recoveredObservation(
+    states: WorkflowStateRepository,
+    candidate: BlockedWorkflowWithoutIncident,
+  ): BlockIncidentObservation? =
+    diagnostics.bestEffort("Uncaptured block of workflow ${candidate.workflowId} could not be read.", null) {
+      states.get(candidate.family, candidate.workflowId)
+        ?.takeIf { it.workflowStatus == WorkflowStatus.BLOCKED }
+        ?.let { record ->
+          val identity =
+            diagnostics.bestEffort(
+              "Blocked workflow ${candidate.workflowId} has an unreadable block identity; recovering without it.",
+              null,
+            ) {
+              BlockIncidentIdentity.fromArtifacts(record.artifacts)
+            }
+          BlockIncidentRecoveredObservations.build(candidate, record, identity)
+        }
     }
-    val availableIdentities = listOf(
-      BlockIncidentCorrelatedField.WORKFLOW_ID,
-      BlockIncidentCorrelatedField.PARENT_WORKFLOW_ID,
-      BlockIncidentCorrelatedField.PHASE_ID,
-      BlockIncidentCorrelatedField.INVOCATION_ID,
-    ).count { fieldAvailability.getValue(it) == BlockIncidentFieldAvailability.AVAILABLE }
-    val occurrence = BlockIncidentOccurrence(
-      occurrenceToken = record.occurrenceToken,
-      workflowId = record.workflowId,
-      parentWorkflowId = record.parentWorkflowId,
-      phaseId = record.phaseId,
-      phaseRunId = null,
-      invocationId = record.invocationId,
-      executionId = null,
-      attempt = record.attempt,
-      generation = null,
-      origin = record.origin,
-      reason = record.reason,
-      failureCode = record.failureCode,
-      failureDisposition = record.failureDisposition,
-      throwableType = record.throwableType,
-      exitCode = record.exitCode,
-      observedAt = record.observedAt,
-      evidenceAvailability = BlockIncidentEvidenceAvailability.FALLBACK_SPOOL,
-      identityAvailability = when (availableIdentities) {
-        0 -> BlockIncidentIdentityAvailability.UNAVAILABLE
-        4 -> BlockIncidentIdentityAvailability.AVAILABLE
-        else -> BlockIncidentIdentityAvailability.PARTIAL
-      },
-      exitBehavior = when {
-        record.exitCode != null -> BlockIncidentExitBehavior.EXITED_WITH_CODE
-        record.throwableType != null -> BlockIncidentExitBehavior.THROWN
-        else -> BlockIncidentExitBehavior.RETURNED_FAILURE
-      },
-      fieldAvailability = fieldAvailability,
-      reasonRetention = BlockIncidentReasonRetention.COMPLETE,
-    )
-    repository.createOrLink(
-      occurrence,
-      record.alias,
-      clock.instant().plus(BlockIncidentService.INVESTIGATION_PICKUP_WINDOW),
-    )
-  }
 
   private companion object {
     const val ENTRY_BATCH = 16
+    const val SPOOL_SCAN_FAILED = "Block incident spool scan failed; continuing the run."
+    val PERMANENT_IMPORT_REJECTIONS =
+      setOf(
+        BlockIncidentFailureCode.IMMUTABLE_CONFLICT,
+        BlockIncidentFailureCode.INVALID_SCHEMA,
+        BlockIncidentFailureCode.QUARANTINE,
+      )
   }
 }

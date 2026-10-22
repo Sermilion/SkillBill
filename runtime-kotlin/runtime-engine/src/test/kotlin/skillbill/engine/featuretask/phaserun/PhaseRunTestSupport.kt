@@ -128,8 +128,8 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
       StandalonePhaseRunners(
         standaloneMonitorPreparer,
         qaStandalonePhaseRun(gitOperations, qaManifests),
+        testBlockIncidentEntryReconciler(database, clock, NoopRuntimeDiagnostics),
       ),
-    blockIncidentReconciler = testBlockIncidentEntryReconciler(database, clock, NoopRuntimeDiagnostics),
   )
 
 internal fun refusingMonitorPreparer(

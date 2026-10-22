@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.model.execution.QaPolicy
+import skillbill.engine.featuretask.phaserun.PhaseRunBlockedStep
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
@@ -47,7 +48,12 @@ class QaStandalonePhaseRun(
             QaAttempt(validator.skipped(target.reason, target.detail, qa.expected, qa.policy), emptyList())
           is QaExecutionTarget.Supported ->
             when (val result = launch(request.copy(qaExecution = qa))) {
-              is PhaseRunResult.Blocked -> QaAttempt(stopped(qa, result.reason), result.completedStepIds)
+              is PhaseRunResult.Blocked ->
+                QaAttempt(
+                  stopped(qa, result.reason),
+                  result.completedStepIds,
+                  PhaseRunBlockedStep(result.stepId, result.reason),
+                )
               is PhaseRunResult.Completed -> QaAttempt(settlement.settle(qa), result.completedStepIds)
             }
         }
@@ -65,6 +71,7 @@ class QaStandalonePhaseRun(
       targetReport = warnings.map(::warningLine) + receipt.targetReport(),
       qaOutcome = receipt.qaOutcome(),
       qaReport = receipt.qaReport(),
+      agentBlock = outcome.agentBlock,
     )
   }
 
@@ -97,6 +104,7 @@ class QaStandalonePhaseRun(
   private data class QaAttempt(
     val receipt: QaReceipt,
     val completedStepIds: List<String>,
+    val agentBlock: PhaseRunBlockedStep? = null,
   )
 
   private companion object {

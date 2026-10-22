@@ -1,13 +1,17 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
+import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.runloop.observability.continuation
+import skillbill.goalrunner.model.FeatureTaskRuntimeGoalContinuationOutcome
+import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
@@ -45,8 +49,15 @@ class FeatureTaskRuntimeGoalContinuationStateRecorder(
       }
       val continuationPatch = continuationPatch(supplied, existingContinuation)
       val reviewStatePatch = reviewStatePatch(request.copy(continuation = supplied), artifacts, existingContinuation)
+      val acceptedOutcome =
+        request.outcome?.let { outcome ->
+          outcome.withAcceptedBlockReference(record) {
+            admitted?.workerOwnership?.generation
+              ?: unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(record.workflowId)?.generation
+          }
+        }
       val outcomePatch =
-        request.outcome?.let {
+        acceptedOutcome?.let {
           mapOf(
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME.entry(it.toPersistenceWire()),
           )
@@ -70,7 +81,7 @@ class FeatureTaskRuntimeGoalContinuationStateRecorder(
                 WorkflowStatus.fromWire(status)
                   ?: error("Unknown workflow status '$status'.")
               } ?: record.workflowStatus,
-            currentStepId = request.outcome?.lastResumableStep ?: record.currentStepId,
+            currentStepId = acceptedOutcome?.lastResumableStep ?: record.currentStepId,
             stepUpdates = null,
             artifactsPatch =
               WorkflowArtifactPatch.from(
@@ -82,6 +93,31 @@ class FeatureTaskRuntimeGoalContinuationStateRecorder(
       unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
       true
     }
+
+  private fun FeatureTaskRuntimeGoalContinuationOutcome.withAcceptedBlockReference(
+    record: WorkflowStateSnapshot,
+    expectedGeneration: () -> Long?,
+  ): FeatureTaskRuntimeGoalContinuationOutcome {
+    if (status != GoalRunnerTerminalStatus.BLOCKED) return copy(acceptedBlockReference = null)
+    val identity = BlockIncidentIdentity.fromArtifacts(record.artifacts) ?: return copy(acceptedBlockReference = null)
+    val generation = expectedGeneration()
+    val acceptedAttempt =
+      record.steps.find { it.stepId == lastResumableStep }
+        ?.attemptCount?.takeIf { it > 0 }
+    val reference =
+      identity.takeIf {
+        it.stepId == lastResumableStep &&
+          it.attempt == acceptedAttempt &&
+          (generation == null || it.generation == generation)
+      }?.acceptedReference(record.workflowId)
+    val retained =
+      acceptedBlockReference?.takeIf {
+        it.matchesIdentity(record.workflowId, lastResumableStep, identity.attempt, identity.generation) &&
+          it.incidentToken == identity.incidentToken &&
+          it.aliasValue == identity.alias.value
+      }
+    return copy(acceptedBlockReference = retained ?: reference)
+  }
 
   fun reviewState(workflowId: String): GoalSubtaskReviewState? =
     database.read { unitOfWork ->

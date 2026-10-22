@@ -1,4 +1,4 @@
-package skillbill.ports.blockincident
+package skillbill.ports.blockincident.model
 
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 

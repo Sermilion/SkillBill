@@ -17,4 +17,5 @@ object BlockIncidentSpoolKeys {
   const val EXIT_CODE = "exit_code"
   const val OBSERVED_AT = "observed_at"
   const val CAPTURE_FAILURE_CODE = "capture_failure_code"
+  const val ADDITIONAL_ALIASES = "additional_aliases"
 }

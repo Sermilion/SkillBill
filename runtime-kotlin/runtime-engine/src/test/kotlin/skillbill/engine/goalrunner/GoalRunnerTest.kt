@@ -45,6 +45,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
@@ -5248,18 +5249,14 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     return outcomes[workflowId]
   }
 
-  override fun markBlocked(
-    workflowId: String,
-    blockedReason: String,
-    lastResumableStep: String,
-    supervisionEvent: GoalRunnerSupervisionEvent?,
-    executionGeneration: Long?,
-    failureExitCode: Int?,
-    executionOwnerToken: String?,
-    failureThrowableType: String?,
-    causingIncidentToken: String?,
-  ): GoalRunnerAcceptedBlock {
-    blockedWorkflows += BlockedWorkflow(workflowId, blockedReason, lastResumableStep, supervisionEvent)
+  override fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock {
+    blockedWorkflows +=
+      BlockedWorkflow(
+        request.workflowId,
+        request.blockedReason,
+        request.lastResumableStep,
+        request.supervisionEvent,
+      )
     return GoalRunnerAcceptedBlock("implement", "bi_test")
   }
 
