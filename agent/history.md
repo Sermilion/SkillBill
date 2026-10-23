@@ -1,3 +1,16 @@
+## [2026-10-23] SKILL-440 subtask 2 installer and uninstaller remove retired IDE plugin copies
+Areas: install.sh, uninstall.sh, scripts/install_smoke_test.sh
+- install.sh gains cleanup_retired_ide_plugins, run on every full install after the legacy config migration. It removes copies of the retired IntelliJ plugin (id dev.skillbill.status) and VS Code extension (skill-bill.skill-bill-status) left by the retired IDE plugin trees.
+- IntelliJ-family plugins are matched by the id inside META-INF/plugin.xml of lib jars or loose jars, never by directory name. Roots cover macOS JetBrains and AndroidStudio, Linux modern (XDG data home) and Linux legacy (~/.config) layouts.
+- VS Code, Insiders, VSCodium and Cursor use their CLI uninstall only when a matching directory exists, then rm -rf any leftover. Every match goes through one remove helper.
+- Always returns 0: removed items print ok lines plus one restart note and one desktop-app notice; nothing found prints one line; a failed removal warns "Could not remove". bash 3.2 safe (reusable shape for best-effort installer cleanups).
+- uninstall.sh carries a byte-identical marker-delimited copy, gated off when SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 (the pre-install wipe), and leaves REMOVED_TARGETS and SKIPPED_TARGETS alone.
+- Smoke test gains fixture-jar seeding, a read-only root, recording and failing CLI stubs, an XDG_DATA_HOME override, a byte-identical block parity check, and unsets SKILL_BILL_GOAL_CONTINUATION so it runs inside goal sessions.
+- Retired plugin-v* and extension-v* releases are still skipped by the latest-release resolver; comments now call them retired.
+- Limit: the plugin trees' own uninstall path is gone, so a missed layout leaves stale copies.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-21] SKILL-430 subtask 1 build identity records and matched-pair install
 Areas: build-identity (new included plugin build), install.sh, .github/workflows/release.yml, runtime-kotlin (catalog, runtime-cli, runtime-mcp, build-logic), desktop-tray, scripts smoke tests
 - build-identity/ adds plugin skillbill.build-identity. writeBuildIdentity writes commit, dirty, release_tag, install_run_id in fixed order with no timestamp; all four are task inputs. Both builds include it from settings (reusable).
