@@ -1,5 +1,18 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-10-23] SKILL-441 subtask 1: project store resolver and identity
+Areas: runtime-infra/host (projectstore), runtime-infra/workflow (git lineage), runtime-ports, runtime-contracts, runtime-core DI, runtime-cli, runtime-application uninstall, uninstall.sh, orchestration/contracts
+- ProjectStoreResolver (host/projectstore) maps a checkout to a store under the state dir's projects/ directory. Linked worktrees of one repo share a store through the real path of the primary git common dir; a moved checkout is adopted by root-commit lineage; a second clone gets a suffixed id; a repo with no commits is re-keyed to lineage once it has one; a non-git directory uses a path-hash key.
+- Any resolve failure falls back to a working-directory store with a git_unavailable warning. Malformed records are warned about, skipped and never rewritten. The resolver keeps a per-common-dir cache and touches last_seen atomically.
+- `skill-bill project link <id>` rebinds the current repo to an existing store and sets linked_to on the old one. An unknown id fails loudly with PROJECT_STORE_TARGET_UNKNOWN.
+- Record schema orchestration/contracts/project-store-record-schema.yaml (contract_version 0.1, additionalProperties false). A repoTest pins its property keys to ProjectStoreRecordKeys.
+- Uninstall now preserves projects/ in both the shell and the Kotlin path, with test coverage.
+- Pattern: ProjectStorePort and RepositoryLineagePort in runtime-ports; git lineage adapter in the workflow module so host stays free of a workflow dependency. Reusable: ProjectStoreRecordCodec parse seam and l-/p-/d- id helpers.
+- Package-ceiling guard forced subpackages: host/projectstore, workflow git/lineage, error/projectstore. runtimeComponentInboundApi lists projectStorePort because runtime-cli cannot see runtime-infra:host.
+- Limits: no consumer reads the store yet; later subtasks move project state in. Host tests use fake .git layouts, and GitRepositoryLineage has no dedicated test. The packagedDataSmoke check is left to CI.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-08] An unresolved gate JVM no longer blocks non-JVM gates
 Areas: runtime-infra/workflow validation
 - `FileSystemValidationGateRunner` used to throw `GateJvmUnresolvedException` before launching any gate when no Java 21+ was found. That blocked TypeScript, Python, Go, Rust and PHP gates that never run Java.

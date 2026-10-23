@@ -187,7 +187,7 @@ internal fun removeInstallState(
       return
     }
   entries.filterNot { name ->
-    name == "backups" || DATABASE_STATE_NAME.matches(name)
+    name == "backups" || name == "projects" || DATABASE_STATE_NAME.matches(name)
   }.forEach { name ->
     removeRecursively(fileSystem, stateRoot.resolve(name), removed, recorder)
   }

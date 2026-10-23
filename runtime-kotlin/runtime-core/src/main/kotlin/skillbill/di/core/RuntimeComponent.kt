@@ -76,10 +76,12 @@ import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.blockincident.FileProductReportDeliveryOwnership
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.host.process.EnvironmentGhProductIssueCredential
+import skillbill.infrastructure.host.projectstore.ProjectStoreResolver
 import skillbill.infrastructure.host.system.PackagedRuntimeBuildIdentity
 import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
+import skillbill.infrastructure.workflow.git.lineage.GitRepositoryLineage
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion
@@ -98,6 +100,8 @@ import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.RepositoryLineagePort
 import skillbill.ports.qa.QaDeviceLeasePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
@@ -207,6 +211,12 @@ abstract class RuntimeComponent(
   @Provides
   fun repositoryEnclosingRootPort(): RepositoryEnclosingRootPort = CanonicalRepositoryRoot
 
+  @Provides
+  fun repositoryLineagePort(adapter: GitRepositoryLineage): RepositoryLineagePort = adapter
+
+  @Provides @RuntimeSingleton
+  fun projectStorePort(resolver: ProjectStoreResolver): ProjectStorePort = resolver
+
   @Provides @RuntimeSingleton
   fun databaseSessionFactory(
     context: EnvironmentContext,
@@ -243,6 +253,7 @@ abstract class RuntimeComponent(
   abstract val resolvedEnvironmentContext: EnvironmentContext
 
   abstract val repositoryEnclosingRootPort: RepositoryEnclosingRootPort
+  abstract val projectStorePort: ProjectStorePort
   abstract val checkedOutBranchSource: CheckedOutBranchSource
 
   abstract val featureTaskContinuationLookupService: FeatureTaskContinuationLookupService

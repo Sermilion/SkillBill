@@ -3,24 +3,27 @@ contract_version: "0.5"
 issue_key: "SKILL-441"
 feature_name: "move-skill-bill-project-state-out-of-user-projects-into-a-project-associated-store"
 parent_spec_path: ".feature-specs/SKILL-441-move-skill-bill-project-state-out-of-user-projects-into-a-project-associated-store/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-441-move-skill-bill-project-state-out-of-user-projects-into-a-project-associated-store"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Project store resolver, identity and install lifecycle"
   spec_path: ".feature-specs/SKILL-441-move-skill-bill-project-state-out-of-user-projects-into-a-project-associated-store/spec_subtask_1_project-store-resolver-and-identity.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261023-135814-dqe2"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "Single legacy path owner and legacy state notice"
@@ -31,6 +34,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false
@@ -44,6 +50,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false
@@ -60,6 +69,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false
@@ -76,6 +88,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 2
     optional: false
@@ -92,6 +107,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false
@@ -111,6 +129,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 6
     optional: false

@@ -1,0 +1,45 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/project-store-record-schema.yaml
+title: Project store record
+description: The project.json record that binds one project store under the Skill Bill state directory to a checkout identity.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - project_id
+  - key_kind
+  - common_dir
+  - root_commits
+  - last_seen
+properties:
+  contract_version:
+    const: "0.1"
+  project_id:
+    type: string
+    minLength: 1
+  key_kind:
+    enum:
+      - lineage
+      - no_commits_path
+      - non_git_path
+  common_dir:
+    type: string
+    minLength: 1
+    description: Absolute real path of the git common dir, or of the directory for a non-git project.
+  root_commits:
+    type: array
+    description: Sorted root commit ids. Empty for no_commits_path and non_git_path.
+    items:
+      type: string
+      pattern: "^[0-9a-f]{40}$"
+  last_seen:
+    type: string
+    description: ISO-8601 UTC instant of the last successful resolve.
+  remote_url:
+    type:
+      - string
+      - "null"
+  linked_to:
+    type: string
+    minLength: 1
+    description: Project id of the store that took over this checkout through skill-bill project link.
