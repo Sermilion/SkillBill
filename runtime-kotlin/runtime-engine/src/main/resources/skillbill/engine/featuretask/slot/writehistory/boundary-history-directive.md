@@ -12,7 +12,7 @@
 
 ## Input Recovery
 
-- If the caller omits part of the context, derive only the missing pieces from the current diff and `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md` when available.
+- If the caller omits part of the context, derive only the missing pieces from the current diff and the project store spec `specs/<ISSUE_KEY>-<feature-name>/spec.md` (`skill-bill project path` prints the store), or the legacy `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md`, when available.
 - Do not skip writing solely because the caller forgot to pass a change summary.
 
 ## Write/Skip Rules

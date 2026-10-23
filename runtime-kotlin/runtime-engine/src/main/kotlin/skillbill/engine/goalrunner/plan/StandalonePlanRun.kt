@@ -244,11 +244,16 @@ class StandalonePlanRun(
       return refused(
         statusPublisher,
         "The supplied spec $plannedPath is not the governed spec for $issueKey; settlement guards the spec " +
-          "found under .feature-specs/$issueKey-*/. Move it there and plan again.",
+          "found under ${decompositionPlanner.specsRoot(repoRoot)}/$issueKey-*/ " +
+          "(`skill-bill project path` prints the project store). Move it there and plan again.",
       )
     }
     val specPath =
-      if (existing) plannedPath else repositories.canonicalPath(repoRoot).resolve(repoRoot.relativize(plannedPath))
+      if (existing || !plannedPath.startsWith(repoRoot)) {
+        plannedPath
+      } else {
+        repositories.canonicalPath(repoRoot).resolve(repoRoot.relativize(plannedPath))
+      }
     val input =
       inputFor(specPath.toString()).copy(
         definition = SkeletonDefinition.PLAN,
@@ -378,8 +383,8 @@ class StandalonePlanRun(
     repoRoot: Path,
   ): Boolean {
     val root = repoRoot.toAbsolutePath().normalize()
-    val launched = root.resolve(intakePreparation.resolvePlanSpec(issueKey, intake, repoRoot).specPath).normalize()
-    return launched == root.resolve(governedSpecPath).normalize()
+    val launched = intakePreparation.resolvePlanSpec(issueKey, intake, repoRoot).specPath
+    return specLocation(root, launched) == specLocation(root, Path.of(governedSpecPath))
   }
 
   private fun isKeyResolvedSpec(
@@ -388,7 +393,12 @@ class StandalonePlanRun(
     repoRoot: Path,
   ): Boolean =
     decompositionPlanner.existingParentSpec(repoRoot, issueKey)
-      ?.let { resolved -> repoRoot.resolve(resolved).normalize() == repoRoot.resolve(specPath).normalize() } == true
+      ?.let { resolved -> specLocation(repoRoot, resolved) == specLocation(repoRoot, specPath) } == true
+
+  private fun specLocation(
+    repoRoot: Path,
+    specPath: Path,
+  ): Path = decompositionPlanner.bundlePath(repoRoot, specPath.toString())
 
   private fun planReport(
     issueKey: String,

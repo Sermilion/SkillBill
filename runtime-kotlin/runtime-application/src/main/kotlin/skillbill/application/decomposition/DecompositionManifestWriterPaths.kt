@@ -18,6 +18,16 @@ fun resolvedParentSpecPath(
 
 fun repoRelativePath(
   repoRoot: Path,
+  store: ProjectStoreLocation,
+  path: Path,
+): String {
+  val checkout = repoRoot.toAbsolutePath().normalize()
+  val location = path.takeIf(Path::isAbsolute)?.let { store.classifySpecPath(it.normalize(), checkout) }
+  return location?.relative ?: repoRelativePath(repoRoot, path)
+}
+
+fun repoRelativePath(
+  repoRoot: Path,
   path: Path,
 ): String {
   if (!path.isAbsolute) return path.normalize().joinToString("/")

@@ -7,7 +7,10 @@ import skillbill.application.decomposition.model.DecompositionManifestWorkflowPr
 import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningResult
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.workflow.payload.WorkflowArtifactKeys
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
@@ -19,6 +22,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.time.Instant
 import skillbill.application.decomposition.loadDecompositionManifest as loadManifestFromStore
 
 object TestDecompositionManifestStore : DecompositionManifestStore {
@@ -26,15 +30,8 @@ object TestDecompositionManifestStore : DecompositionManifestStore {
 
   override fun isRegularFile(path: Path): Boolean = Files.isRegularFile(path)
 
-  override fun findDecompositionManifestFiles(repoRoot: Path): List<Path> {
-    val featureSpecsRoot = repoRoot.resolve(".feature-specs")
-    if (!Files.isDirectory(featureSpecsRoot)) return emptyList()
-    return Files.walk(featureSpecsRoot).use { paths ->
-      paths
-        .filter { path -> Files.isRegularFile(path) && path.fileName.toString() == DECOMPOSITION_MANIFEST_FILENAME }
-        .toList()
-    }
-  }
+  override fun findDecompositionManifestFiles(repoRoot: Path): List<Path> =
+    manifestsUnder(repoRoot.resolve(LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY))
 
   override fun listDirectChildDirectories(directory: Path): List<Path> {
     if (!Files.isDirectory(directory)) return emptyList()
@@ -44,6 +41,8 @@ object TestDecompositionManifestStore : DecompositionManifestStore {
   }
 
   override fun listTree(directory: Path): List<Path> = Files.walk(directory).use { paths -> paths.toList() }
+
+  override fun lastModified(path: Path): Instant = Files.getLastModifiedTime(path).toInstant()
 
   override fun deleteIfExists(target: Path) {
     Files.deleteIfExists(target)
@@ -98,6 +97,24 @@ object TestDecompositionManifestStore : DecompositionManifestStore {
       }
       throw failure
     }
+  }
+}
+
+fun storeAwareTestDecompositionManifestStore(projectStore: ProjectStorePort): DecompositionManifestStore =
+  object : DecompositionManifestStore by TestDecompositionManifestStore {
+    override fun findDecompositionManifestFiles(repoRoot: Path): List<Path> =
+      projectStore.resolve(repoRoot).specBundleRoots(repoRoot).flatMap(::manifestsUnder)
+
+    override fun findDecompositionManifestFilesWithoutRecovery(repoRoot: Path): List<Path> =
+      findDecompositionManifestFiles(repoRoot)
+  }
+
+private fun manifestsUnder(specsRoot: Path): List<Path> {
+  if (!Files.isDirectory(specsRoot)) return emptyList()
+  return Files.walk(specsRoot).use { paths ->
+    paths
+      .filter { path -> Files.isRegularFile(path) && path.fileName.toString() == DECOMPOSITION_MANIFEST_FILENAME }
+      .toList()
   }
 }
 

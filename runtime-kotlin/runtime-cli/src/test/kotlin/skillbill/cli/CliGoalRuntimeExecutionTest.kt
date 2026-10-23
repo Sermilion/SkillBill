@@ -205,9 +205,9 @@ class CliGoalRuntimeExecutionTest {
             }
           assertEquals(
             listOf(
-              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec.md", "standalone"),
-              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec_subtask_1_part.md", "goal_child"),
-              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec_subtask_2_part.md", "goal_child"),
+              Triple("SKILL-901", "specs/SKILL-901-goal/spec.md", "standalone"),
+              Triple("SKILL-901", "specs/SKILL-901-goal/spec_subtask_1_part.md", "goal_child"),
+              Triple("SKILL-901", "specs/SKILL-901-goal/spec_subtask_2_part.md", "goal_child"),
             ),
             identities,
           )

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.lifecycle.execution
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.migration.RuntimeMigrationReceipt
@@ -88,11 +89,18 @@ internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
   when (val result = resolveFeatureTaskGovernedSpecPath(this, projectStore, repoRoot, specPath)) {
     is FeatureTaskGovernedSpecPathResult.Ok -> result.relativePath
     is FeatureTaskGovernedSpecPathResult.OutsideRepository ->
-      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "spec is outside the project store and checkout")
+      throw invalidFeatureTaskExecutionIdentitySchema(
+        workflowId,
+        "spec is outside the project store specs root ${projectStore.resolve(repoRoot).specsRoot} " +
+          "(`skill-bill project path` prints the project store) and outside a " +
+          "${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} in the checkout",
+      )
     FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
       throw invalidFeatureTaskExecutionIdentitySchema(
         workflowId,
-        "spec is not Markdown beneath the project store specs/ or .feature-specs/",
+        "spec is not Markdown beneath the project store specs root ${projectStore.resolve(repoRoot).specsRoot} " +
+          "(`skill-bill project path` prints the project store); a ${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} " +
+          "spec is accepted only as a legacy in-place spec",
       )
   }
 

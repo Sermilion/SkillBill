@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
@@ -16,6 +18,7 @@ import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
+import skillbill.engine.goalrunner.intake.LegacySpecIntake
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -44,6 +47,7 @@ import skillbill.ports.monitor.model.MonitorWorktree
 import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.review.ReviewContextEnvelopeValidator
+import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
@@ -118,11 +122,7 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
       ),
     diagnostics = diagnostics,
     clock = clock,
-    intakeResolver =
-      PhaseRunIntakeResolver(
-        FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
-        FileSystemFeatureTaskRuntimeRunInvariantsSource(),
-      ),
+    intakeResolver = testPhaseRunIntakeResolver(database),
     runLoopEntry = runLoopEntry,
     agentRunLauncher =
       object : AgentRunLauncher {
@@ -137,6 +137,26 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         qaStandalonePhaseRun(gitOperations, qaManifests),
       ),
   )
+
+internal fun testPhaseRunIntakeResolver(
+  database: DatabaseSessionFactory,
+  invariantsSource: FeatureTaskRuntimeRunInvariantsSource = FileSystemFeatureTaskRuntimeRunInvariantsSource(),
+): PhaseRunIntakeResolver {
+  val specPathResolver = FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE)
+  return PhaseRunIntakeResolver(
+    specPathResolver,
+    invariantsSource,
+    RUNNER_TEST_PROJECT_STORE,
+    LegacySpecIntake(
+      database,
+      TestRepositoryEnclosingRoot,
+      RUNNER_TEST_PROJECT_STORE,
+      TestDecompositionManifestStore,
+      NoopRuntimeDiagnostics,
+      specPathResolver,
+    ),
+  )
+}
 
 internal fun refusingMonitorPreparer(
   resources: StandaloneMonitorResources = UnreachableMonitorResources(),

@@ -621,7 +621,7 @@ class CliGoalExecutionOptionsTest {
     val staleChild = startRunningGoalChild(fixture)
     recordRunningGoalChildProgress(fixture, staleChild, sequence = 9, message = "stale active event")
     seedAuthoritativeCompleteChild(fixture, staleChild)
-    val archivedBundle = fixture.tempDir.resolve(".feature-specs/done/SKILL-901-goal")
+    val archivedBundle = fixture.parentSpec.parent.resolveSibling("done").resolve("SKILL-901-goal")
     Files.createDirectories(archivedBundle.parent)
     Files.move(fixture.parentSpec.parent, archivedBundle)
     Files.writeString(archivedBundle.resolve("decomposition-manifest.yaml"), "invalid projection")

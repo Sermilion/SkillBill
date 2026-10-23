@@ -82,12 +82,12 @@ subtasks:
 - id: 5
   name: "Spec write side, legacy intake and Cursor/Junie staging"
   spec_path: ".feature-specs/SKILL-441-move-skill-bill-project-state-out-of-user-projects-into-a-project-associated-store/spec_subtask_5_spec-write-side-intake-and-staging.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261023-174553-9r4r"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

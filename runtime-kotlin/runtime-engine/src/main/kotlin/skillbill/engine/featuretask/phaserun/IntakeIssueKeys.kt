@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
+import skillbill.contracts.issuekey.goalIntakeSpecBundleDirectory
 import skillbill.contracts.issuekey.issueAndFeature
 import java.nio.file.Path
 
@@ -9,7 +10,6 @@ object IntakeIssueKeys {
   private val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
   private const val SPEC_EXTENSION = ".md"
   private const val URL_SCHEME_SEPARATOR = "://"
-  private const val FEATURE_SPECS_DIRECTORY = ".feature-specs"
 
   fun tokens(intake: String?): List<String> = intake?.trim().orEmpty().split(WHITESPACE).filter(String::isNotBlank)
 
@@ -23,9 +23,8 @@ object IntakeIssueKeys {
   }
 
   fun ofSpecPath(specPath: Path): String? =
-    specPath.normalize().toList().map(Path::toString).zipWithNext()
-      .firstOrNull { (parent, _) -> parent == FEATURE_SPECS_DIRECTORY }
-      ?.let { (_, directory) -> issueAndFeature(directory).first.takeIf(ISSUE_KEY::matches) }
+    goalIntakeSpecBundleDirectory(specPath.normalize().toString())
+      ?.let { directory -> issueAndFeature(directory).first.takeIf(ISSUE_KEY::matches) }
 
   fun ofBranch(branch: String): String? {
     val leaf = branch.substringAfterLast('/')

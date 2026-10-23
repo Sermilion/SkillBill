@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.intake
 
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
@@ -15,7 +16,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalIntakePreparationTest {
-  private val preparation = testGoalIntakePreparation()
+  private val store = FixedProjectStorePort(Files.createTempDirectory("skillbill-goal-intake-store"))
+  private val specsRoot = store.root.resolve("specs")
+  private val preparation = testGoalIntakePreparation(projectStore = store)
 
   @Test
   fun `prepare finds no bundle for an intake and writes no manifest or subtask spec`() {
@@ -50,9 +53,9 @@ class GoalIntakePreparationTest {
   fun `plan intake keeps a listed operator spec byte for byte and writes nothing else`() {
     val repoRoot = Files.createTempDirectory("skillbill-plan-intake-listed")
     val listedSpec = "# SKILL-77 Listed\n\n## Acceptance Criteria\n\n1. The desktop app compiles.\n"
-    val parentSpec = writeParentSpec(repoRoot, listedSpec)
+    val parentSpec = writeStoreSpec(listedSpec)
 
-    val seed = intakePlanSpec("SKILL-77", PARENT_SPEC_PATH, repoRoot)
+    val seed = intakePlanSpec("SKILL-77", parentSpec.toString(), repoRoot)
 
     assertEquals(FeatureTaskRuntimePlanSpecOrigin.OPERATOR, seed.specOrigin)
     assertEquals(parentSpec, seed.specPath)
@@ -63,9 +66,9 @@ class GoalIntakePreparationTest {
   @Test
   fun `plan intake replaces a table-form spec in place with quoted prose and a readable list`() {
     val repoRoot = Files.createTempDirectory("skillbill-plan-intake-table")
-    val parentSpec = writeParentSpec(repoRoot, TABLE_SPEC)
+    val parentSpec = writeStoreSpec(TABLE_SPEC)
 
-    val seed = intakePlanSpec("SKILL-77", PARENT_SPEC_PATH, repoRoot)
+    val seed = intakePlanSpec("SKILL-77", parentSpec.toString(), repoRoot)
 
     val rewritten = Files.readString(parentSpec)
     assertEquals(FeatureTaskRuntimePlanSpecOrigin.SEEDED, seed.specOrigin)
@@ -81,7 +84,7 @@ class GoalIntakePreparationTest {
 
     val seed = intakePlanSpec("SKILL-78", "SKILL-78 Add dark mode\nUsers can switch themes.", repoRoot)
 
-    val expected = repoRoot.resolve(".feature-specs/SKILL-78-add-dark-mode/spec.md")
+    val expected = specsRoot.resolve("SKILL-78-add-dark-mode/spec.md")
     assertEquals(FeatureTaskRuntimePlanSpecOrigin.SEEDED, seed.specOrigin)
     assertEquals(expected, seed.specPath)
     assertTrue(acceptanceCriteria(Files.readString(expected)).isNotEmpty())
@@ -95,7 +98,8 @@ class GoalIntakePreparationTest {
     val planned =
       preparation.resolvePlanSpec("SKILL-78", "SKILL-78 Add dark mode\nUsers can switch themes.", repoRoot).specPath
 
-    assertEquals(repoRoot.resolve(".feature-specs/SKILL-78-add-dark-mode/spec.md"), planned)
+    assertEquals(specsRoot.resolve("SKILL-78-add-dark-mode/spec.md"), planned)
+    assertTrue(Files.notExists(specsRoot))
     assertTrue(Files.notExists(repoRoot.resolve(".feature-specs")))
     assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
       preparation.resolvePlanSpec("SKILL-78", "SKILL-78", repoRoot)
@@ -113,6 +117,13 @@ class GoalIntakePreparationTest {
 
   private fun acceptanceCriteria(specText: String): List<String> =
     GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }
+
+  private fun writeStoreSpec(text: String): Path {
+    val storeSpec = specsRoot.resolve("SKILL-77-table-criteria/spec.md")
+    Files.createDirectories(storeSpec.parent)
+    Files.writeString(storeSpec, text)
+    return storeSpec
+  }
 
   private fun writeParentSpec(
     repoRoot: Path,

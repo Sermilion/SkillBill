@@ -75,7 +75,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplanPrompt, "full preplan covering boundaries")
     assertContains(preplanPrompt, "Do not modify repository files during this phase.")
     assertContains(preplanPrompt, "as prose")
-    assertContains(planPrompt, "modify no other repository file")
+    assertContains(planPrompt, "it is the only writable location, so modify no other file")
     assertContains(planPrompt, "upstream preplan digest")
     assertContains(implementPrompt, "Reconcile the repository to the intended state")
     assertContains(implementPrompt, "read the file named by spec_reference")

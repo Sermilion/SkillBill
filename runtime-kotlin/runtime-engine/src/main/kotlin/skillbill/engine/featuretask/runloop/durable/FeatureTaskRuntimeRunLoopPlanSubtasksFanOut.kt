@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
+import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.phase.planning.PlanUnitSettlement
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunCheckpoints
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunGoal
@@ -18,10 +19,13 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
+import skillbill.engine.featuretask.runloop.planning.PlanBundleStagingPromotion
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runloop.planning.PlanUnit
 import skillbill.engine.featuretask.runloop.planning.PlanUnitAttempt
 import skillbill.engine.featuretask.runloop.planning.PlanUnitRecords
+import skillbill.engine.featuretask.runloop.planning.PromotionRequest
+import skillbill.engine.featuretask.runloop.planning.StagedUnit
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
@@ -52,6 +56,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 
@@ -59,15 +64,21 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   private val parent: PhaseRunState,
   private val facts: FeatureTaskRuntimeRunFacts,
   private val stepId: String,
-  planner: FeatureTaskRuntimeDecompositionPlanner,
+  private val planner: FeatureTaskRuntimeDecompositionPlanner,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunFanOut {
   private val snapshots = PlanBundleSnapshots(planner)
   private val unitStates = ConcurrentHashMap<Int, FeatureTaskRuntimeRunLoopPlanUnitState>()
+  private var staging: PromotionRequest? = null
 
   override val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE
 
   override fun pendingUnits(): PhaseFanOutUnits {
+    val wave = parent.stepBinding.requireAuthorizedFanOutWave()
+    staging =
+      (PlanBundleStagingPromotion.targetFor(planner, wave) as? PlanBundleTarget.Staged)?.let { target ->
+        PromotionRequest(target, facts.repoRoot, wave.resolvedAgent.resolvedAgentId, parentSpecProtected = false)
+      }
     val bundle =
       parent.records.loadPlanBundle(facts.workflowId)
         ?: return PhaseFanOutUnits.Stopped(PhaseOutcome.blocked(MISSING_BUNDLE_REASON))
@@ -90,12 +101,16 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     descriptor: PhaseStepDescriptor<B>,
   ): B {
     val run = parent.stepBinding.requireAuthorizedFanOutWave()
+    val storeSubSpec = storeSubSpec(parent.records.loadPlanBundle(facts.workflowId), unitId)
+    val staged = stagedUnit(storeSubSpec)
+    val location =
+      staged?.let { PlanBundleStagingPromotion.seedUnit(planner, parent.diagnostics, it) } ?: storeSubSpec
     val unit =
       FeatureTaskRuntimeRunLoopPlanUnitState(
         parent,
         facts,
         PlanUnit(facts.workflowId, stepId, unitId),
-        outputSink,
+        PlanUnitLaunch(outputSink, location?.toString(), staged != null),
         runLoopEntry,
       )
     unitStates[unitId] = unit
@@ -114,6 +129,9 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
     if (outcome !is PhaseOutcome.Completed) return outcome
     val bundle =
       parent.records.loadPlanBundle(facts.workflowId) ?: return PhaseOutcome.blocked(MISSING_BUNDLE_REASON)
+    stagedUnit(storeSubSpec(bundle, unitId))?.let { staged ->
+      PlanBundleStagingPromotion.promoteUnit(planner, parent.diagnostics, staged)
+    }
     return when (val settled = snapshots.settleUnit(facts.repoRoot, facts.issueKey, bundle, unitId)) {
       is PlanUnitSettlement.Rejected -> PhaseOutcome.blocked(settled.reason)
       is PlanUnitSettlement.Planned ->
@@ -123,6 +141,16 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
           PhaseOutcome.blocked("Planning subtask $unitId could not be recorded.")
         }
     }
+  }
+
+  private fun storeSubSpec(
+    bundle: FeatureTaskRuntimePlanBundle?,
+    unitId: Int,
+  ): Path? = bundle?.subtask(unitId)?.specPath?.let { planner.bundlePath(facts.repoRoot, it) }
+
+  private fun stagedUnit(storeSubSpec: Path?): StagedUnit? {
+    val request = staging ?: return null
+    return storeSubSpec?.let { StagedUnit(request.target, it, request.provider) }
   }
 
   private fun recordUnit(
@@ -153,6 +181,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   override fun completed(): PhaseOutcome {
     val bundle =
       parent.records.loadPlanBundle(facts.workflowId) ?: return PhaseOutcome.blocked(MISSING_BUNDLE_REASON)
+    staging?.let { PlanBundleStagingPromotion.finishStaging(planner, parent.diagnostics, it) }
     val ids = bundle.subtasks.map { it.id }
     val summary =
       "Planned subtasks ${ids.joinToString(", ")}; unit records " +
@@ -180,10 +209,24 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
 internal fun planSubtaskLaunchContext(
   bundle: FeatureTaskRuntimePlanBundle?,
   unitId: Int,
-): String =
-  checkNotNull(bundle?.subtask(unitId)) {
-    "Plan subtask unit $unitId has no entry in the recorded plan bundle."
-  }.let { subtask -> "\n\n## Planning session context\n\nCurrent governed sub-spec: ${subtask.specPath}\n" }
+  subSpecLocation: String? = null,
+  staged: Boolean = false,
+): String {
+  val subtask =
+    checkNotNull(bundle?.subtask(unitId)) { "Plan subtask unit $unitId has no entry in the recorded plan bundle." }
+  val stagedNote = if (staged) STAGED_SUB_SPEC_NOTE else ""
+  return "\n\n## Planning session context\n\nCurrent governed sub-spec: ${subSpecLocation ?: subtask.specPath}\n" +
+    stagedNote
+}
+
+private const val STAGED_SUB_SPEC_NOTE =
+  "This is a checkout staging copy; write only this file, and the runtime promotes it into the project store.\n"
+
+private data class PlanUnitLaunch(
+  val outputSink: AgentRunOutputSink,
+  val subSpecLocation: String?,
+  val staged: Boolean,
+)
 
 internal fun planSubtaskUpstreamRecords(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
@@ -197,9 +240,10 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
   private val parent: PhaseRunState,
   private val facts: FeatureTaskRuntimeRunFacts,
   private val unit: PlanUnit,
-  override val launchOutputSink: AgentRunOutputSink,
+  private val launch: PlanUnitLaunch,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
+  override val launchOutputSink: AgentRunOutputSink get() = launch.outputSink
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = parent.implementationChecklistStore
     set(value) {
@@ -211,7 +255,12 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
       parent.commitPushManifestCompletion = value
     }
   override val launchPromptContext: String =
-    planSubtaskLaunchContext(parent.records.loadPlanBundle(facts.workflowId), unit.subtaskId)
+    planSubtaskLaunchContext(
+      parent.records.loadPlanBundle(facts.workflowId),
+      unit.subtaskId,
+      launch.subSpecLocation,
+      launch.staged,
+    )
   override val progress =
     FeatureTaskRuntimeRunState(
       initialRecords =

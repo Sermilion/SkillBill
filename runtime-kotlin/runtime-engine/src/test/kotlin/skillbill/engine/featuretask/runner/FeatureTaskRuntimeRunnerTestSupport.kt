@@ -4,6 +4,7 @@ import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.RecordingSpecScratchStore
 import skillbill.application.RecordingSpecStatusWriter
 import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
@@ -14,7 +15,6 @@ import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.seedHarnessSpecIntentProjection
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
 import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
@@ -1613,10 +1613,12 @@ private fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
       FeatureSpecPreparationWriter(
         decompositionManifestValidator = testDecompositionManifestValidator,
         fileStore = TestDecompositionManifestStore,
-        decompositionManifestWriter = testDecompositionManifestWriter,
+        decompositionManifestWriter = DecompositionManifestWriter(RUNNER_TEST_PROJECT_STORE),
+        projectStore = RUNNER_TEST_PROJECT_STORE,
       ),
     specPathResolver = FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
     projectStore = RUNNER_TEST_PROJECT_STORE,
+    fileStore = TestDecompositionManifestStore,
   )
 
 internal fun facts(stdout: String): AgentRunLaunchOutcome =
@@ -1937,11 +1939,13 @@ internal const val PLAN_BUNDLE_PROSE: String = "Authored the ordered spec bundle
 internal fun writePlanBundle(
   repoRoot: Path,
   issueKey: String,
+  projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
 ): FeatureSpecWriteResult =
   FeatureSpecPreparationWriter(
     decompositionManifestValidator = testDecompositionManifestValidator,
     fileStore = TestDecompositionManifestStore,
-    decompositionManifestWriter = testDecompositionManifestWriter,
+    decompositionManifestWriter = DecompositionManifestWriter(projectStore),
+    projectStore = projectStore,
   ).write(
     repoRoot = repoRoot,
     request =

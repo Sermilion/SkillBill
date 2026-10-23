@@ -436,6 +436,8 @@ internal data class GoalCliFixture(
     context(launcher = NoopGoalTestAgentRunLauncher, requester = requester),
   )
 
+  fun specLabel(path: Path): String = parentSpec.parent.parent.parent.relativize(path).joinToString("/")
+
   fun goalCommand(
     dbPath: Path = this@GoalCliFixture.dbPath,
     extra: List<String> = emptyList(),
@@ -648,13 +650,26 @@ internal fun forcePendingPauseRequest(dbPath: Path) {
 internal fun goalFixture(
   subtaskCount: Int,
   seedWorkflow: Boolean = true,
+  legacyBundle: Boolean = false,
 ): GoalCliFixture {
   val tempDir = Files.createTempDirectory("skillbill-cli-goal")
   val gitInit = ProcessBuilder("git", "init", "--quiet", tempDir.toString()).redirectErrorStream(true).start()
   val gitOutput = gitInit.inputStream.bufferedReader().use { it.readText() }
   check(gitInit.waitFor() == 0) { gitOutput }
   installGoalBuildPack(tempDir)
-  val parentSpec = tempDir.resolve(".feature-specs/SKILL-901-goal/spec.md")
+  val dbPath = tempDir.resolve("metrics.db")
+  val bundleRoot =
+    if (legacyBundle) {
+      tempDir
+    } else {
+      GoalCliFixture(
+        tempDir,
+        dbPath,
+        tempDir,
+        emptyList(),
+      ).projectStoreRoot()
+    }
+  val parentSpec = bundleRoot.resolve("${if (legacyBundle) ".feature-specs" else "specs"}/SKILL-901-goal/spec.md")
   Files.createDirectories(parentSpec.parent)
   Files.writeString(
     parentSpec,
@@ -675,7 +690,7 @@ internal fun goalFixture(
   val fixture =
     GoalCliFixture(
       tempDir = tempDir,
-      dbPath = tempDir.resolve("metrics.db"),
+      dbPath = dbPath,
       parentSpec = parentSpec,
       subtaskSpecs = subtaskSpecs,
     )
@@ -711,14 +726,14 @@ internal fun parentArtifactsPatch(fixture: GoalCliFixture): String =
       "plan" to
         mapOf(
           "mode" to "decompose",
-          "parent_spec_path" to fixture.tempDir.relativize(fixture.parentSpec).toString(),
+          "parent_spec_path" to fixture.specLabel(fixture.parentSpec),
           "recommended_first_subtask_id" to 1,
           "subtasks" to
             fixture.subtaskSpecs.mapIndexed { index, path ->
               mapOf(
                 "id" to index + 1,
                 "name" to "Part ${index + 1}",
-                "spec_path" to fixture.tempDir.relativize(path).toString(),
+                "spec_path" to fixture.specLabel(path),
                 "depends_on" to if (index == 0) emptyList<Int>() else listOf(index),
               )
             },

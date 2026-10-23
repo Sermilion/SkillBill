@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefi
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
+import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructions
@@ -35,6 +36,7 @@ import skillbill.engine.featuretask.runloop.core.PreparedLaunchReady
 import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
 import skillbill.engine.featuretask.runloop.core.resolveLaunchRejectionAttribution
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputVerification
+import skillbill.engine.featuretask.runloop.planning.PlanBundleStagingPromotion
 import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoopValidationScope
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runner.LaunchResult
@@ -59,6 +61,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProdu
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 
 object PhaseLaunchPreparation {
   internal fun PhaseAttemptLaunchPreparationContext.prepareLaunchForCapture(
@@ -300,6 +303,7 @@ object PhaseLaunchPreparation {
           )
         } ?: assembledBriefing
       recordLaunchBriefing(context, args, briefing, sharedEvidence)?.let { return it }
+      PhaseLaunchPreparation.seedStagedPlanBundle(context, run)
       val inputs =
         PhaseLaunchPreparation
           .run { context.composeLaunchPromptInputs(args, handoff, briefing) }
@@ -401,6 +405,31 @@ object PhaseLaunchPreparation {
     FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
       boundStep.boundHooks.launchPromptSupplement(run, context.launchHookContext(run, context.stepHooks(run)))
 
+  private fun PhaseAttemptLaunchPreparationContext.planBundleTargetFor(run: PhaseRun): PlanBundleTarget? {
+    if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) return null
+    return PlanBundleStagingPromotion.targetFor(decompositionPlanner, run)
+  }
+
+  private fun seedStagedPlanBundle(
+    context: PhaseAttemptLaunchPreparationContext,
+    run: PhaseRun,
+  ) {
+    val target = context.planBundleTargetFor(run) as? PlanBundleTarget.Staged ?: return
+    PlanBundleStagingPromotion.seed(
+      context.decompositionPlanner,
+      target,
+      context.diagnostics,
+      run.resolvedAgent.resolvedAgentId,
+    )
+  }
+
+  private fun PhaseAttemptLaunchPreparationContext.planSpecsRootFor(run: PhaseRun): Path? =
+    if (run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) {
+      decompositionPlanner.specsRoot(run.request.repoRoot)
+    } else {
+      null
+    }
+
   private fun PhaseAttemptLaunchPreparationContext.composeLaunchPromptInputs(
     args: DeclaredLaunchArgs,
     handoff: FeatureTaskRuntimePhaseHandoff,
@@ -435,6 +464,8 @@ object PhaseLaunchPreparation {
       issueKey = run.request.issueKey,
       briefing = briefing,
       specRewritable = run.request.protectedSpecSha256 == null,
+      planBundleTarget = planBundleTargetFor(run),
+      planSpecsRoot = planSpecsRootFor(run),
       codeReviewMode = launchReviewTier.executedTier,
       reviewPassNumber = launchReviewTier.passNumber,
       goalSubtaskReviewInput = run.goalReviewInput,

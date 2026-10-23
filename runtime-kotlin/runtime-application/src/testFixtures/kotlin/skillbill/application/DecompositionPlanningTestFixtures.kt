@@ -7,6 +7,7 @@ import skillbill.application.decomposition.model.DecompositionPlanningSubtaskOpt
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.contracts.decomposition.DecompositionPlanningStackBranchWire
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import java.nio.file.Path
 
 fun decompositionPlanningPlan(parentSpecPath: Path): DecompositionPlanningResult =
@@ -35,7 +36,7 @@ fun decompositionPlanningPlan(parentSpecPath: Path): DecompositionPlanningResult
   )
 
 fun stackedDecompositionPlanningPlan(
-  parentSpecPath: Path = Path.of(".feature-specs/SKILL-51-decomposition/spec.md"),
+  parentSpecPath: Path = Path.of("${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX}SKILL-51-decomposition/spec.md"),
 ): DecompositionPlanningResult =
   decompositionPlanningResult(
     parentSpecPath = parentSpecPath.toString(),

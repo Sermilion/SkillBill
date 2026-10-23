@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationT
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
+import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimePriorReviewContext
@@ -17,6 +18,8 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val issueKey: String,
   val briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   val specRewritable: Boolean = false,
+  val planBundleTarget: PlanBundleTarget? = null,
+  val planSpecsRoot: Path? = null,
   val codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.DEFAULT,
   val reviewPassNumber: Int? = null,
   val goalSubtaskReviewInput: GoalSubtaskReviewInput? = null,

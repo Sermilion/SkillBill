@@ -1,9 +1,13 @@
 package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.goalrunner.intake.LegacySpecIntake
+import skillbill.engine.goalrunner.intake.LegacySpecRoute
 import skillbill.error.featuretask.PhaseIntakeRequiredError
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -16,6 +20,8 @@ import java.nio.file.Path
 class PhaseRunIntakeResolver(
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
+  private val projectStore: ProjectStorePort,
+  private val legacySpecIntake: LegacySpecIntake,
 ) {
   internal fun resolve(
     definition: SkeletonDefinition,
@@ -24,7 +30,9 @@ class PhaseRunIntakeResolver(
   ): PhaseRunIntake {
     val intake = request.intake?.trim().orEmpty()
     val tokens = IntakeIssueKeys.tokens(intake)
-    val specPath = IntakeIssueKeys.specPathToken(tokens)?.let(request.repoRoot::resolve)
+    val store = projectStore.resolve(request.repoRoot)
+    val specPath =
+      IntakeIssueKeys.specPathToken(tokens)?.let { token -> store.resolveSpecPath(token, request.repoRoot) }
     val issueKey = IntakeIssueKeys.ofIntake(intake)
     val reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT
     return when (definition.intake) {
@@ -44,7 +52,8 @@ class PhaseRunIntakeResolver(
           issueKey ?: throw PhaseIntakeRequiredError(
             definition.id,
             "the intake must name an issue key such as SKILL-123, an issue URL, or a spec path under " +
-              ".feature-specs/<KEY>-<name>/.",
+              "${projectStore.resolve(request.repoRoot).specsRoot}/<KEY>-<name>/ " +
+              "(`skill-bill project path` prints the project store).",
           )
         val invariants =
           specInvariants(key, specPath, bareKey = tokens.size == 1, repoRoot = request.repoRoot)
@@ -73,6 +82,19 @@ class PhaseRunIntakeResolver(
             ?.let(Path::of)
         }
         ?: return null
+    val route =
+      when {
+        issueKey == null -> LegacySpecRoute.NotLegacy
+        explicitSpecPath != null -> legacySpecIntake.route(specPath, issueKey, repoRoot)
+        else -> legacySpecIntake.routeIssueKey(issueKey, repoRoot)
+      }
+    if (route is LegacySpecRoute.Replan) {
+      return FeatureTaskRuntimeRunInvariants(
+        specReference = route.intake,
+        acceptanceCriteria = listOf(route.intake),
+        mandatesAndOverrides = emptyList(),
+      )
+    }
     return when (val read = invariantsSource.read(specPath)) {
       is FeatureTaskRuntimeRunInvariantsRead.Read -> read.invariants
       is FeatureTaskRuntimeRunInvariantsRead.Rejected -> null

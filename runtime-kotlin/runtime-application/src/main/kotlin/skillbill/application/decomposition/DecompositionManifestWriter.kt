@@ -228,7 +228,10 @@ class DecompositionManifestWriter(
   }
 
   private fun DecompositionManifestWriteRequest.toManifest(store: ProjectStoreLocation): DecompositionManifest {
-    val subtasks = parseSubtasks(planningResult, parentSpecPath.toString())
+    val subtasks =
+      parseSubtasks(planningResult, parentSpecPath.toString()).map { subtask ->
+        subtask.copy(specPath = repoRelativePath(repoRoot, store, Path.of(subtask.specPath)))
+      }
     val currentId =
       currentSubtaskId
         ?: planningResult.currentSubtaskIdOrNull()
@@ -251,7 +254,7 @@ class DecompositionManifestWriter(
       }
     val typedPlan =
       DecompositionManifestPlan(
-        parentSpecPath = repoRelativePath(repoRoot, parentSpecPath),
+        parentSpecPath = repoRelativePath(repoRoot, store, parentSpecPath),
         baseBranch = baseBranch,
         featureBranch = featureBranch,
         specSource = specSource,
@@ -287,7 +290,7 @@ private fun assertParentSpecIsNotDecomposedSubtask(
   fileStore: DecompositionManifestStore,
 ) {
   val normalizedParentSpec = resolvedParentSpecPath(repoRoot, parentSpecPath, store).normalize()
-  val parentSpecLabel = repoRelativePath(repoRoot, parentSpecPath)
+  val parentSpecLabel = repoRelativePath(repoRoot, store, parentSpecPath)
   val referringManifests =
     fileStore.findDecompositionManifestFiles(repoRoot)
       .filterNot { manifestPath -> archivedDecompositionManifest(repoRoot, store, manifestPath) }

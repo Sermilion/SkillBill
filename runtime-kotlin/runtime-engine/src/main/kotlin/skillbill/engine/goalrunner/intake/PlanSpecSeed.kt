@@ -6,4 +6,5 @@ import java.nio.file.Path
 data class PlanSpecSeed(
   val specPath: Path,
   val specOrigin: FeatureTaskRuntimePlanSpecOrigin,
+  val suppliedIntake: String? = null,
 )

@@ -28,6 +28,7 @@ import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
+import skillbill.engine.goalrunner.intake.LegacySpecIntake
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -258,18 +259,32 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
-    intakePreparation =
-      GoalIntakePreparation(
-        wiring.manifestStore,
-        FeatureSpecPreparationWriter(
-          testDecompositionManifestValidator,
-          UnavailableDecompositionManifestStore,
-          DecompositionManifestWriter(testProjectStore),
-        ),
-        FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
-        UnavailableDecompositionManifestStore,
-        testProjectStore,
-      ),
+    intakePreparation = goalRunnerIntakePreparation(wiring),
+  )
+}
+
+private fun goalRunnerIntakePreparation(wiring: GoalRunnerTestWiring): GoalIntakePreparation {
+  val noMatchResolver =
+    FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) }
+  return GoalIntakePreparation(
+    wiring.manifestStore,
+    FeatureSpecPreparationWriter(
+      testDecompositionManifestValidator,
+      UnavailableDecompositionManifestStore,
+      DecompositionManifestWriter(testProjectStore),
+      testProjectStore,
+    ),
+    noMatchResolver,
+    UnavailableDecompositionManifestStore,
+    testProjectStore,
+    LegacySpecIntake(
+      TestGoalActivityStampDatabase,
+      TestRepositoryEnclosingRoot,
+      testProjectStore,
+      UnavailableDecompositionManifestStore,
+      wiring.diagnostics,
+      noMatchResolver,
+    ),
   )
 }
 

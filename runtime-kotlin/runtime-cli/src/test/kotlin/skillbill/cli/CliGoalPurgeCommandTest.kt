@@ -57,7 +57,7 @@ class CliGoalPurgeCommandTest {
 
   @Test
   fun `confirmed goal purge restores a tracked bundle and preflight reports new work`() {
-    val fixture = goalFixture(subtaskCount = 2)
+    val fixture = goalFixture(subtaskCount = 2, legacyBundle = true)
     val manifestPath = fixture.parentSpec.parent.resolve("decomposition-manifest.yaml")
     val seed = we5006Seed(fixture)
     seedGoalOwnedState(fixture, seed)

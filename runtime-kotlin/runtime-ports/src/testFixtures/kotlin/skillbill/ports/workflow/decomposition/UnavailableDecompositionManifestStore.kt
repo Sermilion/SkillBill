@@ -2,6 +2,7 @@ package skillbill.ports.workflow.decomposition
 
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import java.nio.file.Path
+import java.time.Instant
 
 object UnavailableDecompositionManifestStore : DecompositionManifestStore {
   override fun readText(path: Path): String = unavailableDecompositionManifestStore()
@@ -20,6 +21,8 @@ object UnavailableDecompositionManifestStore : DecompositionManifestStore {
   override fun listDirectChildDirectories(directory: Path): List<Path> = unavailableDecompositionManifestStore()
 
   override fun listTree(directory: Path): List<Path> = unavailableDecompositionManifestStore()
+
+  override fun lastModified(path: Path): Instant = unavailableDecompositionManifestStore()
 
   override fun writeTextAtomically(
     target: Path,

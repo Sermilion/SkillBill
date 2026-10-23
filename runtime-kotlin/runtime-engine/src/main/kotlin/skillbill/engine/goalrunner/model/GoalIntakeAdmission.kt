@@ -6,8 +6,10 @@ sealed interface GoalIntakeAdmission {
   data class Admitted(val issueKey: String) : GoalIntakeAdmission
 
   /**
-   * Intake resolves to an active spec whose bundle also sits under `.feature-specs/done/`, so the work already
-   * finished and [activeSpecPath] is a stale copy; both paths are repository-relative.
+   * Intake resolves to an active spec whose bundle also sits under the `done/` archive of the project store
+   * `specs/` root (`skill-bill project path` prints the store) or of a legacy `.feature-specs/` directory, so the
+   * work already finished and [activeSpecPath] is a stale copy; both paths are store-relative or
+   * repository-relative.
    */
   data class ArchivedSpec(
     val issueKey: String,

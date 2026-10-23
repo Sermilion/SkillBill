@@ -124,7 +124,7 @@ can proceed (no partial state):
    unauthenticated, loud-fail with a clear message **before** creating any Linear issue or
    writing any artifact. Create nothing and write nothing on this path.
 2. **Compose all spec content in memory first** — the parent spec, every subtask spec, and
-   the manifest. The `.feature-specs/{KEY}-{name}/` directory name is not known
+   the manifest. The `specs/{KEY}-{name}/` directory name is not known
    until the parent issue key is returned, so do not write to disk yet.
 3. **Create the parent Linear issue**, tagged `task`, whose description is the parent spec
    content. Capture the returned issue key.
@@ -133,7 +133,7 @@ can proceed (no partial state):
    human-legible. Capture each sub-issue's `linear_issue_id`. Rehydration keys off
    `linear_issue_id`, not header text, so the header is for humans only.
 5. **Adopt the parent issue's returned key** as the issue key, the
-   `.feature-specs/{KEY}-{name}/` directory name, and the manifest `issue_key`.
+   `specs/{KEY}-{name}/` directory name, and the manifest `issue_key`.
 6. **Write via the shared preparation path**, stamping manifest `spec_source: linear` and
    recording every subtask's `linear_issue_id`. Do not fork writing logic by preparation mode.
 7. **Mid-sequence failure (orphan parent):** if a sub-issue create fails after the parent

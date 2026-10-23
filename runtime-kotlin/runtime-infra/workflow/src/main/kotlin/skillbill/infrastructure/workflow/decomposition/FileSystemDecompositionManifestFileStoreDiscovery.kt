@@ -8,6 +8,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.time.Instant
 
 internal class FileSystemDecompositionManifestFileStoreDiscovery(
   private val projectStore: ProjectStorePort,
@@ -21,6 +22,8 @@ internal class FileSystemDecompositionManifestFileStoreDiscovery(
   }
 
   override fun listTree(directory: Path): List<Path> = Files.walk(directory).use { paths -> paths.toList() }
+
+  override fun lastModified(path: Path): Instant = Files.getLastModifiedTime(path).toInstant()
 
   override fun findDecompositionManifestFiles(repoRoot: Path): List<Path> =
     findManifests(repoRoot, recoverPending = true)
