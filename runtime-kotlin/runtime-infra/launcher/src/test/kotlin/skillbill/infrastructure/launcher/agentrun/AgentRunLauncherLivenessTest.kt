@@ -166,7 +166,7 @@ class AgentRunLauncherLivenessTest {
         ) {
           timeout = 30.seconds
           progressIdleTimeout = 500.milliseconds
-          fileActivityGraceTimeout = 2.seconds
+          fileActivityGraceTimeout = 10.seconds
           progressProbe = AgentRunProgressProbe { "workflow-token" }
           activityProbe =
             object : AgentRunActivityProbe {
@@ -280,16 +280,16 @@ class AgentRunLauncherLivenessTest {
     val result =
       JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
         testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 1.2"),
+          listOf("sh", "-c", "sleep 2.4"),
           Path.of(".").toAbsolutePath().normalize(),
         ) {
-          timeout = 1.seconds
+          timeout = 2.seconds
           progressProbe =
             object : AgentRunProgressProbe {
               override fun progressToken(): String = "step-${++probeCount}"
 
               override fun progressLabel(): String =
-                "subtask 8 workflow wfl-child step ${if (probeCount <= 2) "implement" else "validate"}"
+                "subtask 8 workflow wfl-child step ${if (probeCount <= 4) "implement" else "validate"}"
             }
         },
       )
@@ -304,7 +304,7 @@ class AgentRunLauncherLivenessTest {
     val result =
       JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
         testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 1.2"),
+          listOf("sh", "-c", "sleep 5"),
           Path.of(".").toAbsolutePath().normalize(),
         ) {
           timeout = 1.seconds
