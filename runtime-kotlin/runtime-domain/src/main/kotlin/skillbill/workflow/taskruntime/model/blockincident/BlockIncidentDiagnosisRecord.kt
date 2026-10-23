@@ -34,6 +34,10 @@ data class BlockIncidentDiagnosisRecord(
   val degradations: Set<BlockIncidentDegradation>,
   val investigatorKind: BlockIncidentInvestigatorKind,
   val completedAt: Instant,
+  val reproductionSteps: String? = null,
+  val providerId: String? = null,
+  val phaseStrategyId: String? = null,
+  val modelId: String? = null,
 ) {
   companion object {
     const val SUMMARY_MAX = 280

@@ -1,5 +1,5 @@
 
-package skillbill.infrastructure.host
+package skillbill.infrastructure.host.system
 
 import com.fasterxml.jackson.core.JacksonException
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper

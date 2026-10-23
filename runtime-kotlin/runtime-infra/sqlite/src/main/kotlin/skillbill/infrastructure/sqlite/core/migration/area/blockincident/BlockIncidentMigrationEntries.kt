@@ -2,6 +2,8 @@ package skillbill.infrastructure.sqlite.core.migration.area.blockincident
 
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
 import skillbill.infrastructure.sqlite.core.schema.addBlockIncidentRevisionTriggers
+import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportFailure
+import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportStatus
 
 internal val blockIncidentMigrations: List<DatabaseMigration> =
   listOf(
@@ -366,6 +368,54 @@ internal val blockIncidentMigrations: List<DatabaseMigration> =
             FROM feature_task_runtime_worker_leases
             """.trimIndent(),
           )
+        }
+      },
+    ),
+    DatabaseMigration(
+      version = 80,
+      name = "add-block-incident-product-reports",
+      operation = ProductReportMigration::apply,
+    ),
+    DatabaseMigration(
+      version = 81,
+      name = "retain-product-report-submission-and-recovery-evidence",
+      operation = { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute("ALTER TABLE block_incident_reports ADD COLUMN create_payload TEXT")
+          statement.execute("ALTER TABLE block_incident_reports ADD COLUMN create_payload_sha256 TEXT")
+          statement.execute("ALTER TABLE block_incident_reports ADD COLUMN create_intent INTEGER NOT NULL DEFAULT 0")
+          statement.execute(
+            "ALTER TABLE block_incident_reports ADD COLUMN create_unresolved INTEGER NOT NULL DEFAULT 0",
+          )
+          statement.execute("ALTER TABLE block_incident_reports ADD COLUMN attempt_open INTEGER NOT NULL DEFAULT 0")
+          statement.execute("ALTER TABLE block_incident_reports ADD COLUMN last_remote_failure TEXT")
+          statement.execute("ALTER TABLE block_incident_report_links ADD COLUMN included_recovery_attempts TEXT")
+          statement.execute(
+            "UPDATE block_incident_reports SET create_unresolved = 1, attempt_open = 1 " +
+              "WHERE status IN ('${ProductReportStatus.AMBIGUOUS.wireValue}', " +
+              "'${ProductReportStatus.SUBMITTING.wireValue}') OR " +
+              "((status = '${ProductReportStatus.PENDING.wireValue}' OR " +
+              "(status = '${ProductReportStatus.LOCAL_ONLY.wireValue}' AND " +
+              "failure_reason = '${ProductReportFailure.MISSING_AUTH.wireValue}')) AND attempts > 0)",
+          )
+          statement.execute(
+            "UPDATE block_incident_reports SET last_remote_failure = failure_reason " +
+              "WHERE failure_reason IS NOT NULL " +
+              "AND failure_reason != '${ProductReportFailure.MISSING_AUTH.wireValue}' " +
+              "AND status IN ('${ProductReportStatus.AMBIGUOUS.wireValue}', " +
+              "'${ProductReportStatus.SUBMITTING.wireValue}', '${ProductReportStatus.PENDING.wireValue}')",
+          )
+        }
+      },
+    ),
+    DatabaseMigration(
+      version = 82,
+      name = "persist-pending-product-report-comments",
+      operation = { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute("ALTER TABLE block_incident_report_links ADD COLUMN pending_comment_body TEXT")
+          statement.execute("ALTER TABLE block_incident_report_links ADD COLUMN pending_comment_sha256 TEXT")
+          statement.execute("ALTER TABLE block_incident_report_links ADD COLUMN pending_comment_recovery_attempts TEXT")
         }
       },
     ),

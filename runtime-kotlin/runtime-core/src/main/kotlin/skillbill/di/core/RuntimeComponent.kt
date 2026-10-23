@@ -15,6 +15,7 @@ import skillbill.application.scaffold.InstallAgentService
 import skillbill.application.scaffold.SkillRemove
 import skillbill.application.system.SystemService
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
+import skillbill.application.telemetry.service.BlockIncidentTelemetry
 import skillbill.application.telemetry.service.TelemetryService
 import skillbill.application.uninstall.SkillBillUninstallService
 import skillbill.application.updatecheck.SkillBillUpdateService
@@ -46,6 +47,9 @@ import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
 import skillbill.engine.diagnostics.block.investigation.EvidenceBlockIncidentInvestigator
+import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFactsReader
+import skillbill.engine.diagnostics.block.report.ProductReportDelivery
+import skillbill.engine.diagnostics.block.report.ProductReportScheduler
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
@@ -69,7 +73,11 @@ import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
+import skillbill.infrastructure.host.blockincident.FileProductReportDeliveryOwnership
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
+import skillbill.infrastructure.host.process.EnvironmentGhProductIssueCredential
+import skillbill.infrastructure.host.system.PackagedRuntimeBuildIdentity
+import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
@@ -78,6 +86,10 @@ import skillbill.model.RuntimeVersion
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.blockincident.BlockIncidentContractValidator
+import skillbill.ports.blockincident.BlockIncidentTelemetryPort
+import skillbill.ports.blockincident.ProductIssueCredentialPort
+import skillbill.ports.blockincident.ProductIssueTrackerPort
+import skillbill.ports.blockincident.ProductReportDeliveryOwnershipPort
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
@@ -91,6 +103,7 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
 import skillbill.ports.system.CheckedOutBranchSource
+import skillbill.ports.system.RuntimeBuildIdentityPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
@@ -145,6 +158,35 @@ abstract class RuntimeComponent(
   fun remoteTransportPort(ctx: TransportContext): RemoteTransportPort =
     ctx.requester
       ?: error("RemoteTransportPort is unresolved; provide it from the composition root after bootstrap resolution.")
+
+  @Provides
+  fun productIssueTrackerPort(adapter: GitHubProductIssueAdapter): ProductIssueTrackerPort = adapter
+
+  @Provides
+  fun productIssueCredentialPort(adapter: EnvironmentGhProductIssueCredential): ProductIssueCredentialPort = adapter
+
+  @Provides
+  fun productReportDeliveryOwnershipPort(
+    adapter: FileProductReportDeliveryOwnership,
+  ): ProductReportDeliveryOwnershipPort = adapter
+
+  @Provides
+  fun runtimeBuildIdentityPort(adapter: PackagedRuntimeBuildIdentity): RuntimeBuildIdentityPort = adapter
+
+  @Provides
+  fun blockIncidentTelemetryPort(adapter: BlockIncidentTelemetry): BlockIncidentTelemetryPort = adapter
+
+  @Provides
+  fun optionalBlockIncidentTelemetry(adapter: BlockIncidentTelemetryPort): BlockIncidentTelemetryPort? = adapter
+
+  @Provides
+  fun optionalProductReportScheduler(scheduler: ProductReportScheduler): ProductReportScheduler? = scheduler
+
+  @Provides
+  fun optionalProductReportDelivery(delivery: ProductReportDelivery): ProductReportDelivery? = delivery
+
+  @Provides
+  fun optionalBlockIncidentLaunchFacts(reader: BlockIncidentLaunchFactsReader): BlockIncidentLaunchFactsReader? = reader
 
   @Provides
   fun workflowOpsContext(ctx: RuntimeContext): WorkflowOpsContext = ctx.workflowOps

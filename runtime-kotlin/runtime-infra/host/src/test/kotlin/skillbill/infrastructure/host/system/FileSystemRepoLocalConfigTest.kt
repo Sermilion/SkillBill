@@ -1,4 +1,4 @@
-package skillbill.infrastructure.host
+package skillbill.infrastructure.host.system
 
 import skillbill.config.model.RepoLocalConfig
 import skillbill.config.model.SpecType

@@ -33,7 +33,9 @@ internal class SqliteBlockIncidentDiagnosisStore(
     connection.prepareStatement(
       "INSERT INTO block_incident_diagnoses(occurrence_token, revision, summary, what_happened, cause, certainty, " +
         "uncertainty_note, responsible_category, proposed_recovery_action, recovery_effects, no_workaround_known, " +
-        "degradations, investigator_kind, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "degradations, investigator_kind, completed_at, reproduction_steps, provider_id, " +
+        "phase_strategy_id, model_id) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).use { statement ->
       statement.bindAll(
         record.occurrenceToken,
@@ -51,6 +53,10 @@ internal class SqliteBlockIncidentDiagnosisStore(
           .joinToString(BlockIncidentDiagnosisKeys.DEGRADATION_SEPARATOR),
         record.investigatorKind.wireValue,
         record.completedAt.toString(),
+        record.reproductionSteps,
+        record.providerId,
+        record.phaseStrategyId,
+        record.modelId,
       )
       statement.executeUpdate()
     }
@@ -134,6 +140,10 @@ internal class SqliteBlockIncidentDiagnosisStore(
           .toSet(),
       investigatorKind = text("investigator_kind").decodeEnum(BlockIncidentInvestigatorKind.entries) { it.wireValue },
       completedAt = text("completed_at").toInstant("completed_at"),
+      reproductionSteps = values["reproduction_steps"],
+      providerId = values["provider_id"],
+      phaseStrategyId = values["phase_strategy_id"],
+      modelId = values["model_id"],
     )
   }
 
@@ -239,6 +249,10 @@ internal class SqliteBlockIncidentDiagnosisStore(
         "degradations",
         "investigator_kind",
         "completed_at",
+        "reproduction_steps",
+        "provider_id",
+        "phase_strategy_id",
+        "model_id",
       )
   }
 }

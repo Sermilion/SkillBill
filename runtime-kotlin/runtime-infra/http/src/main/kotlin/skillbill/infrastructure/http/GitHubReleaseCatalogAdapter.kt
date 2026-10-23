@@ -92,7 +92,7 @@ class GitHubReleaseCatalogAdapter(
     error.message.orEmpty().ifBlank { error.failureCodeLabel() ?: error::class.simpleName.orEmpty() }
 
   private companion object {
-    const val RELEASES_URL: String = "https://api.github.com/repositories/1183084383/releases"
+    const val RELEASES_URL: String = "$SKILL_BILL_PRODUCT_REPOSITORY_API/releases"
     const val GITHUB_JSON_MEDIA_TYPE: String = "application/vnd.github+json"
     const val UPDATE_CHECK_USER_AGENT: String = "skill-bill-update-check"
     const val HTTP_FORBIDDEN: Int = 403

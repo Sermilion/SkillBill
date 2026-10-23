@@ -223,6 +223,8 @@ private class GoalControlsFixture : AutoCloseable {
         WorkflowGoalRunnerBlockWrites(ideStatusClock),
         FeatureTaskRuntimeStandaloneIncidentRecovery(ideStatusClock),
       ),
+      reportDelivery = null,
+      telemetry = null,
     )
   val service =
     WorkControlService(

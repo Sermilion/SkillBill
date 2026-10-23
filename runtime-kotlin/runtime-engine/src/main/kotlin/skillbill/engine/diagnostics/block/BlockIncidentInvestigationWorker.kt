@@ -1,6 +1,10 @@
 package skillbill.engine.diagnostics.block
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.block.report.ProductReportDelivery
+import skillbill.engine.diagnostics.block.report.ProductReportScheduler
+import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.DaemonThreadPort
@@ -12,10 +16,13 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDegradati
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosisRecord
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentEvidenceAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitions
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Produces a diagnosis for one claimed block incident without changing its observation. */
@@ -44,10 +51,14 @@ class BlockIncidentInvestigationWorker(
   private val identifiers: IdentifierGeneratorPort,
   private val processSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val daemonThread: DaemonThreadPort,
+  private val reportScheduler: ProductReportScheduler?,
+  private val reportDelivery: ProductReportDelivery?,
+  private val telemetry: BlockIncidentTelemetryPort?,
 ) {
   fun runEligible(
     limit: Int,
     observedSince: Instant? = null,
+    dispatchReports: Boolean = true,
   ) {
     val deadline = clock.instant().plus(BlockIncidentService.INVESTIGATION_DEADLINE)
     val candidates =
@@ -61,6 +72,7 @@ class BlockIncidentInvestigationWorker(
       if (!clock.instant().isBefore(deadline)) return
       investigate(candidate, workerDegradations(candidate, observedSince))
     }
+    if (dispatchReports) reportDelivery?.deliver()
   }
 
   private fun workerDegradations(
@@ -129,9 +141,27 @@ class BlockIncidentInvestigationWorker(
       settle(candidate, ownerToken, ownerGeneration, BlockIncidentDiagnosis.CRASHED)
       return
     }
-    val recorded =
-      diagnostics.bestEffort("Block incident diagnosis could not be saved.", null) {
-        database.transaction { unit ->
+    val recorded = recordDiagnosis(candidate, ownerToken, ownerGeneration, result)
+    when (recorded) {
+      null -> settle(candidate, ownerToken, ownerGeneration, BlockIncidentDiagnosis.PERSIST_FAILED)
+      DiagnosisSettlement.Refused ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Block incident diagnosis settlement was refused; its claim will expire.",
+        )
+      is DiagnosisSettlement.Settled -> publishSettlement(recorded.value, scheduleReport = true)
+    }
+  }
+
+  private fun recordDiagnosis(
+    candidate: BlockIncident,
+    ownerToken: String,
+    ownerGeneration: Long,
+    result: BlockIncidentInvestigationResult,
+  ): DiagnosisSettlement? =
+    diagnostics.bestEffort("Block incident diagnosis could not be saved.", null) {
+      database.transaction { unit ->
+        val accepted =
           unit.blockIncidents.settleWithDiagnosis(
             ownerToken,
             ownerGeneration,
@@ -139,14 +169,26 @@ class BlockIncidentInvestigationWorker(
             result.record,
             null,
           )
+        if (!accepted) {
+          DiagnosisSettlement.Refused
+        } else {
+          val committed = checkNotNull(unit.blockIncidents.find(candidate.occurrence.occurrenceToken))
+          val committedDiagnosis =
+            checkNotNull(
+              unit.blockIncidents.diagnoses(candidate.occurrence.occurrenceToken)
+                .firstOrNull { it.revision == committed.state.revision },
+            )
+          DiagnosisSettlement.Settled(
+            InvestigationSettlement(
+              committed.occurrence,
+              committed.state.diagnosis,
+              committedDiagnosis,
+              unit.blockIncidentRecoveries.history(candidate.occurrence.occurrenceToken),
+            ),
+          )
         }
       }
-    when (recorded) {
-      null -> settle(candidate, ownerToken, ownerGeneration, BlockIncidentDiagnosis.PERSIST_FAILED)
-      false -> diagnostics.warning("Block incident diagnosis settlement was refused; its claim will expire.")
-      true -> Unit
     }
-  }
 
   private fun settle(
     candidate: BlockIncident,
@@ -154,12 +196,80 @@ class BlockIncidentInvestigationWorker(
     ownerGeneration: Long,
     diagnosis: BlockIncidentDiagnosis,
   ) {
-    diagnostics.bestEffort("Block incident settlement failed; its claim will expire.", Unit) {
-      val settled =
+    val result =
+      diagnostics.bestEffort("Block incident settlement failed; its claim will expire.", null) {
         database.transaction { unit ->
-          unit.blockIncidents.settle(candidate.occurrence.occurrenceToken, ownerToken, ownerGeneration, diagnosis, null)
+          val settled =
+            unit.blockIncidents.settle(
+              candidate.occurrence.occurrenceToken,
+              ownerToken,
+              ownerGeneration,
+              diagnosis,
+              null,
+            )
+          val committed = if (settled) unit.blockIncidents.find(candidate.occurrence.occurrenceToken) else null
+          committed?.let {
+            InvestigationSettlement(
+              it.occurrence,
+              it.state.diagnosis,
+              null,
+              unit.blockIncidentRecoveries.history(candidate.occurrence.occurrenceToken),
+            )
+          }
         }
-      if (!settled) diagnostics.warning("Block incident settlement was refused; its claim will expire.")
+      }
+    if (result == null) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Block incident settlement was refused; its claim will expire.",
+      )
+    } else {
+      publishSettlement(result, scheduleReport = false)
+    }
+  }
+
+  private fun publishSettlement(
+    settlement: InvestigationSettlement,
+    scheduleReport: Boolean,
+  ) {
+    if (scheduleReport) {
+      val diagnosis = settlement.diagnosis
+      if (diagnosis == null) {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Settled block incident diagnosis could not be read; report scheduling was skipped.",
+        )
+      } else {
+        runCatching {
+          reportScheduler?.schedule(settlement.occurrence, diagnosis, settlement.recoveryHistory)
+        }.getOrElse { error ->
+          error.rethrowIfInterrupted()
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Product report scheduling failed after diagnosis settlement.",
+            error,
+          )
+        }
+      }
+    }
+    runCatching {
+      telemetry?.diagnosed(settlement.occurrence, settlement.status, settlement.diagnosis)
+    }.getOrElse { error ->
+      error.rethrowIfInterrupted()
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Block incident telemetry failed after diagnosis settlement.",
+        error,
+      )
+    }
+  }
+
+  private fun Throwable.rethrowIfInterrupted() {
+    if (this !is Exception) throw this
+    if (this is CancellationException || this is InterruptedException ||
+      Thread.currentThread().isInterrupted
+    ) {
+      throw this
     }
   }
 
@@ -183,5 +293,18 @@ class BlockIncidentInvestigationWorker(
   private companion object {
     val CLAIM_LEASE: Duration = Duration.ofSeconds(90)
     val RENEW_INTERVAL: Duration = Duration.ofSeconds(30)
+  }
+
+  private data class InvestigationSettlement(
+    val occurrence: BlockIncidentOccurrence,
+    val status: BlockIncidentDiagnosis,
+    val diagnosis: BlockIncidentDiagnosisRecord?,
+    val recoveryHistory: List<BlockIncidentRecoveryAttempt>,
+  )
+
+  private sealed interface DiagnosisSettlement {
+    data object Refused : DiagnosisSettlement
+
+    data class Settled(val value: InvestigationSettlement) : DiagnosisSettlement
   }
 }

@@ -151,6 +151,7 @@ class EvidenceBlockIncidentInvestigatorTest {
     CLOCK,
     BlockIncidentEvidenceCollector(RuntimeVersion("9.9.9")),
     BlockIncidentAgentPass(launcher, RepositoryRoot(Path.of("/tmp/repository")), CLOCK),
+    launchFactsReader = null,
   )
 
   private fun launcher(

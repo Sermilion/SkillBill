@@ -42,6 +42,9 @@ fun testBlockIncidentEntryReconciler(
       IdentifierGeneratorPort { "test-investigator" },
       NoopFeatureTaskRuntimeWorkerSupervisor,
       DaemonThreadPort { _, _ -> },
+      reportScheduler = null,
+      reportDelivery = null,
+      telemetry = null,
     ),
     BlockIncidentCapture(database, clock, spool, diagnostics),
     BlockIncidentRecoveryInterruptedReconciliation(
@@ -49,6 +52,9 @@ fun testBlockIncidentEntryReconciler(
       clock,
       NoopFeatureTaskRuntimeWorkerSupervisor,
       diagnostics,
+      reportDelivery = null,
+      telemetry = null,
     ),
+    productReportDelivery = null,
   )
 }

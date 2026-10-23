@@ -1,3 +1,18 @@
+## [2026-10-23] Reconcile durable submission intent before creating another issue
+Context: GitHub can accept a create before the response is lost, and a process can stop between posting a comment and recording its result.
+Decision: Persist sanitized submission intent and pending comment snapshots, search by fingerprint before create, and reconcile incident comment markers under per-report ownership outside database transactions.
+Reason: Local status alone cannot prove whether GitHub accepted a write. Durable intent and remote markers preserve deduplication across restarts without replaying recovery or holding database locks during HTTP calls.
+
+## [2026-10-23] Use existing credentials for the fixed product repository
+Context: The parent spec authorizes automatic defect reports to product repository 1183084383, while absent credentials and reporting failures must leave recovery available.
+Decision: Read GH_TOKEN, then GITHUB_TOKEN, then bounded gh auth token output. Keep reports local with MISSING_AUTH when none succeeds; expose no repository override or credential prompt.
+Reason: Existing account authorization supplies the permitted submission identity without storing a secret or redirecting reports to the user's project. Public reporting remains independent of telemetry consent and recovery success.
+
+## [2026-10-23] Sanitize allowlisted evidence before retaining public report content
+Context: Saved diagnosis evidence can contain credentials, personal paths, private prompts or output that must never reach a public issue.
+Decision: Build bounded report bodies from explicit allowed fields, record field-level redaction outcomes, and withhold drafts that fail the final residual-secret scan. Apply the same sanitizer to incident comments.
+Reason: Redacting a wholesale log upload cannot establish which private content remains. An allowlist preserves useful correlation and evidence while excluding project bodies, environment dumps and database content by construction.
+
 ## [2026-10-23] Preserve retry budgets through recovery ledger evidence
 Context: Recovery reopens a blocked goal or standalone phase without permission to bypass attempt limits or erase completed work.
 Decision: Record the admitted recovery attempt on retry metadata, preserve its budget, and retain retry and subsequent settlement anchors when bounding the phase ledger.

@@ -3,6 +3,7 @@ package skillbill.application
 import skillbill.application.telemetry.service.REDACTED_ERROR_MESSAGE
 import skillbill.application.telemetry.service.enqueueRuntimeException
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
+import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
@@ -128,6 +129,11 @@ class RuntimeExceptionTelemetryTest {
       override fun latestError(): String? = null
 
       override fun lastSyncedAt(): String? = null
+
+      override fun latestByCorrelation(
+        events: Set<TelemetryOutboxEvent>,
+        incidentToken: String,
+      ): TelemetryCorrelationStatus? = null
 
       override fun markSynced(
         eventIds: List<Long>,

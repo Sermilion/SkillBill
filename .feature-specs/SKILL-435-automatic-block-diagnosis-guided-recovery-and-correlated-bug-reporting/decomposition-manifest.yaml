@@ -63,12 +63,12 @@ subtasks:
 - id: 4
   name: "Sanitized product reports and correlated telemetry"
   spec_path: ".feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec_subtask_4_sanitized-product-reports-and-telemetry.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261023-061230-e93g"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

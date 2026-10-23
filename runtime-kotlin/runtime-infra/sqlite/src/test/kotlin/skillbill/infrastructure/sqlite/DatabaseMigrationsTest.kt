@@ -51,6 +51,55 @@ private val DIAGNOSIS_TABLES =
 
 class DatabaseMigrationsTest {
   @Test
+  fun `product report migration preserves incidents and starts with empty report tables`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-product-reports-upgrade").resolve("upgrade.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO block_incidents (occurrence_token, contract_version, generation, origin, reason, " +
+            "observed_at, evidence_availability, deadline, exit_behavior, identity_availability) VALUES " +
+            "('bi_${"a".repeat(64)}', '0.1', 1, 'accepted_phase_block', 'kept incident', " +
+            "'2026-10-21T12:00:00Z', 'database', '2026-10-21T12:05:00Z', 'unknown_historical', " +
+            "'unknown_historical')",
+        )
+        statement.execute("DROP TABLE block_incident_report_links")
+        statement.execute("DROP TABLE block_incident_reports")
+        listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
+          statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
+        }
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 80")
+        statement.execute("PRAGMA user_version = 79")
+        statement.executeUpdate(
+          "UPDATE room_master_table SET identity_hash = '7915a1b532fab60d83518e19b12c4aa0' WHERE id = 42",
+        )
+      }
+    }
+
+    DatabaseRuntime.migrateExistingDatabase(dbPath, SqliteTestDiagnostics)
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM block_incidents WHERE reason = 'kept incident'"))
+      assertEquals(0, scalarInt(connection, "SELECT count(*) FROM block_incident_reports"))
+      assertEquals(0, scalarInt(connection, "SELECT count(*) FROM block_incident_report_links"))
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT create_unresolved, attempt_open, last_remote_failure FROM block_incident_reports",
+        ).use { rows -> assertFalse(rows.next()) }
+        statement.executeQuery(
+          "SELECT pending_comment_body, pending_comment_sha256, pending_comment_recovery_attempts " +
+            "FROM block_incident_report_links",
+        ).use { rows -> assertFalse(rows.next()) }
+      }
+      assertTrue(
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name LIKE 'block_incident_report%'",
+        ) > 0,
+      )
+    }
+  }
+
+  @Test
   fun `block incident migration upgrades version 65 without changing existing workflows`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-block-incident-upgrade").resolve("upgrade.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
@@ -126,6 +175,8 @@ class DatabaseMigrationsTest {
         DIAGNOSIS_TABLES.forEach { table -> statement.execute("DROP TABLE $table") }
         statement.execute("DROP TABLE IF EXISTS block_incident_recovery_attempts")
         statement.execute("DROP TABLE IF EXISTS feature_task_runtime_worker_generations")
+        statement.execute("DROP TABLE block_incident_report_links")
+        statement.execute("DROP TABLE block_incident_reports")
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 77")
         statement.execute("PRAGMA user_version = 76")
       }
@@ -170,6 +221,11 @@ class DatabaseMigrationsTest {
         )
         statement.execute("DROP TABLE block_incident_recovery_attempts")
         statement.execute("DROP TABLE feature_task_runtime_worker_generations")
+        statement.execute("DROP TABLE block_incident_report_links")
+        statement.execute("DROP TABLE block_incident_reports")
+        listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
+          statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
+        }
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 78")
         statement.execute("PRAGMA user_version = 77")
       }
@@ -2332,4 +2388,7 @@ private val expectedMigrationDefinitions =
     77 to "add-block-incident-diagnoses",
     78 to "add-block-incident-recovery-attempts",
     79 to "retain-latest-feature-task-worker-generation",
+    80 to "add-block-incident-product-reports",
+    81 to "retain-product-report-submission-and-recovery-evidence",
+    82 to "persist-pending-product-report-comments",
   )

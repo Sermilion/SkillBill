@@ -1,0 +1,71 @@
+package skillbill.contracts.workflow.identity.blockincident
+
+import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
+
+object BlockIncidentReportKeys {
+  const val STATUS_LOCAL_ONLY = "local_only"
+  const val STATUS_PENDING = "pending"
+  const val STATUS_SUBMITTING = "submitting"
+  const val STATUS_AMBIGUOUS = "ambiguous"
+  const val STATUS_DELIVERED = "delivered"
+  const val STATUS_LINKED_EXISTING = "linked_existing"
+  const val STATUS_FAILED = "failed"
+  const val FAILURE_MISSING_AUTH = "missing_auth"
+  const val FAILURE_OFFLINE = "offline"
+  const val FAILURE_PERMISSION_REFUSED = "permission_refused"
+  const val FAILURE_RATE_LIMITED = "rate_limited"
+  const val FAILURE_SUBMISSION_FAILED = "submission_failed"
+  const val FAILURE_RESIDUAL_SECRET = "residual_secret"
+  const val FAILURE_RETRIES_EXHAUSTED = "retries_exhausted"
+  const val OUTCOME_KEPT = "kept"
+  const val OUTCOME_REDACTED = "redacted"
+  const val OUTCOME_TRUNCATED = "truncated"
+  const val OUTCOME_DROPPED = "dropped"
+  const val COMMENT_NOT_REQUIRED = "not_required"
+  const val COMMENT_PENDING = STATUS_PENDING
+  const val COMMENT_POSTED = "posted"
+  const val INCIDENT_TOKEN = "incident_token"
+  const val WORKFLOW_ID = BlockIncidentOccurrenceKeys.WORKFLOW_ID
+  const val PARENT_WORKFLOW_ID = BlockIncidentOccurrenceKeys.PARENT_WORKFLOW_ID
+  const val PHASE_ID = BlockIncidentOccurrenceKeys.PHASE_ID
+  const val INVOCATION_ID = BlockIncidentOccurrenceKeys.INVOCATION_ID
+  const val ATTEMPT = BlockIncidentOccurrenceKeys.ATTEMPT
+  const val DIAGNOSIS_REVISION = "diagnosis_revision"
+  const val DIAGNOSIS_STATUS = "diagnosis_status"
+  const val RECOVERY_ATTEMPT_ID = "recovery_attempt_id"
+  const val REPORT_ID = "report_id"
+  const val RESPONSIBLE_CATEGORY = "responsible_category"
+  const val CERTAINTY = "certainty"
+  const val FAILURE_CODE = BlockIncidentOccurrenceKeys.FAILURE_CODE
+  const val FAILURE_DISPOSITION = BlockIncidentOccurrenceKeys.FAILURE_DISPOSITION
+  const val REPORT_STATUS = "report_status"
+  const val RECOVERY_STATUS = "recovery_status"
+  const val SUMMARY = "summary"
+  const val WHAT_HAPPENED = "what_happened"
+  const val CAUSE = "cause"
+  const val REPRODUCTION_STEPS = "reproduction_steps"
+  const val RUNTIME_VERSION = "runtime_version"
+  const val RUNTIME_BUILD = "runtime_build"
+  const val OS_FAMILY = "os_family"
+  const val PROVIDER_ID = "provider_id"
+  const val PHASE_STRATEGY_ID = "phase_strategy_id"
+  const val MODEL_ID = "model_id"
+  const val EVIDENCE = "evidence"
+  const val OBSERVED_AT = BlockIncidentOccurrenceKeys.OBSERVED_AT
+  const val DIAGNOSED_AT = "diagnosed_at"
+  const val RECOVERY_OUTCOMES = "recovery_outcomes"
+  const val WORKTREE_PATH = "worktree_path"
+  const val REPOSITORY_ROOT = "repository_root"
+  const val PROMPTS = "prompts"
+  const val BRIEFING_TEXT = "briefing_text"
+  const val PRODUCER_OUTPUT_BODIES = "producer_output_bodies"
+  const val ENVIRONMENT_VARIABLES = "environment_variables"
+  const val DATABASE_ROW_CONTENT = "database_row_content"
+  const val ISSUE_URL = "issue_url"
+  const val INSTALL_ID = TelemetryProxyPayloadKeys.INSTALL_ID
+  const val RECOVERY_AT = "recovery_at"
+  const val REPORT_BODY = "report_body"
+  const val REPORT_TITLE = "report_title"
+  const val REPORT_FINGERPRINT_MARKER = "<!-- skill-bill-report-fingerprint:"
+  const val REPORT_ORIGIN_MARKER = "<!-- skill-bill-report-origin:"
+}

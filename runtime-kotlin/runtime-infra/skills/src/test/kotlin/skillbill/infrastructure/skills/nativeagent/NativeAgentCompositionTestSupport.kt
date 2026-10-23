@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.nativeagent
 
 import skillbill.config.model.RepoLocalConfig
-import skillbill.infrastructure.host.FileSystemRepoLocalConfig
+import skillbill.infrastructure.host.system.FileSystemRepoLocalConfig
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource

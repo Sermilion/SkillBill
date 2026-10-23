@@ -2,6 +2,7 @@ package skillbill.engine.diagnostics.block
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryInterruptedReconciliation
+import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.error.blockincident.BlockIncidentFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.blockincident.BlockIncidentSpool
@@ -23,8 +24,9 @@ class BlockIncidentEntryReconciler(
   private val worker: BlockIncidentInvestigationWorker,
   private val capture: BlockIncidentCapture,
   private val interruptedRecoveries: BlockIncidentRecoveryInterruptedReconciliation,
+  private val productReportDelivery: ProductReportDelivery?,
 ) {
-  fun reconcileOnEntry() {
+  fun reconcileOnEntry(dispatchProductReports: Boolean = true) {
     val databaseAvailable =
       diagnostics.bestEffort("Block incident database availability check failed; continuing the run.", false) {
         database.databaseExists()
@@ -48,8 +50,9 @@ class BlockIncidentEntryReconciler(
       diagnostics.warning("Block incident spool still holds records; deferring uncaptured block recovery.")
     }
     diagnostics.bestEffort("Block incident investigation failed; continuing the run.", Unit) {
-      worker.runEligible(ENTRY_BATCH)
+      worker.runEligible(ENTRY_BATCH, dispatchReports = false)
     }
+    if (dispatchProductReports) dispatchReports()
   }
 
   fun <T> guardEntry(
@@ -57,15 +60,25 @@ class BlockIncidentEntryReconciler(
     run: () -> T,
   ): T {
     val entryStartedAt = clock.instant()
-    reconcileOnEntry()
+    reconcileOnEntry(dispatchProductReports = false)
     val result = run()
-    if (blocked(result)) investigateAfterEntry(entryStartedAt)
+    if (blocked(result)) investigateAfterEntry(entryStartedAt, dispatchReports = false)
+    dispatchReports()
     return result
   }
 
-  fun investigateAfterEntry(entryStartedAt: Instant) {
+  fun investigateAfterEntry(
+    entryStartedAt: Instant,
+    dispatchReports: Boolean = true,
+  ) {
     diagnostics.bestEffort("New block incident investigation failed; preserving the completed block.", Unit) {
-      worker.runEligible(ENTRY_BATCH, entryStartedAt)
+      worker.runEligible(ENTRY_BATCH, entryStartedAt, dispatchReports = dispatchReports)
+    }
+  }
+
+  private fun dispatchReports() {
+    diagnostics.bestEffort("Product report delivery failed; continuing the run.", Unit) {
+      productReportDelivery?.deliver()
     }
   }
 

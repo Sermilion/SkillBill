@@ -1,3 +1,16 @@
+## [2026-10-23] SKILL-435 subtask 4: sanitized product reports and correlated telemetry
+Areas: runtime-engine diagnostics/block; runtime-domain blockincident/report; runtime-ports; runtime-contracts; runtime-application telemetry; runtime-infra/sqlite, http/productissue and host; runtime-core; docs/telemetry-privacy.md
+- MEDIUM feature. Eligible post-rollout Skill Bill defect diagnoses create local reports, deduplicate by normalized-cause fingerprint and link repeated incidents.
+- A pure allowlist sanitizer records field outcomes, bounds evidence to 8 items of 512 characters and bodies to 16 KiB, redacts secrets and personal paths, and withholds residual-secret drafts. reusable
+- Append-only migrations 80, 81 and 82 persist reports, links, submission intent, unresolved creates, retry accounting and pending comment snapshots. DesktopReadSchema is 82.
+- Delivery processes at most four reports per entry under per-report ownership and database identity fencing, with short transactions around network calls. Search reconciles ambiguous creates; incident markers deduplicate comments.
+- Pending comments retain sanitized recovery evidence. Retry state survives restart; missing credentials retain LOCAL_ONLY reports that become eligible again when credentials appear.
+- The GitHub adapter targets product repository 1183084383 and reuses environment or gh credentials without prompting or storing secrets. The release adapter shares the numeric repository identity.
+- Diagnosis, terminal recovery and report telemetry use actual saved identities through the outbox. Off queues nothing; anonymous omits report ids and issue URLs; availability exposes exact lookup identifiers. reusable
+- Reporting and telemetry failures emit diagnostics independently of diagnosis and recovery. Limits: corrupt report digests fail loudly on read; optional build metadata is omitted when unavailable; direct PostHog links and report presentation remain outside this subtask.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-23] SKILL-435 subtask 3: typed, fenced, user-initiated incident recovery
 Areas: runtime-engine diagnostics/block, featuretask, goalrunner and work/control; runtime-domain blockincident and phase ledger; runtime-ports; runtime-infra/sqlite; runtime-contracts; runtime-core; runtime-cli; desktop-tray runtime adapter; docs
 - MEDIUM feature. Added a pure eligibility policy and read-only preview with prerequisite instructions. Recovery rejects stale revisions, changed generations, live or unverifiable owners, exhausted budgets, operator decisions and gate failures.

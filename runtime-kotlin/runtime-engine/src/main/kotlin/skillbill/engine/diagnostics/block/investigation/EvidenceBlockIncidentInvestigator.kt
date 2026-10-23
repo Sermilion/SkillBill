@@ -3,6 +3,8 @@ package skillbill.engine.diagnostics.block.investigation
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigationResult
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
+import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFacts
+import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFactsReader
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClassifier
@@ -17,15 +19,21 @@ class EvidenceBlockIncidentInvestigator(
   private val clock: Clock,
   private val collector: BlockIncidentEvidenceCollector,
   private val agentPass: BlockIncidentAgentPass,
+  private val launchFactsReader: BlockIncidentLaunchFactsReader?,
 ) : BlockIncidentInvestigator {
   override fun investigate(
     claimed: BlockIncident,
     workerDegradations: Set<BlockIncidentDegradation>,
   ): BlockIncidentInvestigationResult {
-    val (incident, evidence) =
+    val (incident, evidence, launchFacts) =
       database.read { unitOfWork ->
         val current = unitOfWork.blockIncidents.find(claimed.occurrence.occurrenceToken) ?: claimed
-        current to collector.collect(unitOfWork, current)
+        Triple(
+          current,
+          collector.collect(unitOfWork, current),
+          launchFactsReader?.read(unitOfWork, current.occurrence)
+            ?: BlockIncidentLaunchFacts(null, null, null),
+        )
       }
     val draft =
       BlockIncidentClassifier.classify(
@@ -34,7 +42,16 @@ class EvidenceBlockIncidentInvestigator(
         evidence.degradations + workerDegradations,
         clock.instant(),
       )
-    val record = agentPass.enrich(incident, evidence, draft).copy(completedAt = clock.instant())
+    val record =
+      agentPass.enrich(
+        incident,
+        evidence,
+        draft.copy(
+          providerId = launchFacts.providerId,
+          phaseStrategyId = launchFacts.phaseStrategyId,
+          modelId = launchFacts.modelId,
+        ),
+      ).copy(completedAt = clock.instant())
     return BlockIncidentInvestigationResult(settledDiagnosis(incident, record), record)
   }
 

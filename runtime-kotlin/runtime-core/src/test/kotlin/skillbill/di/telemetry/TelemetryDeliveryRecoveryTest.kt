@@ -10,6 +10,7 @@ import skillbill.infrastructure.sqlite.withTelemetryOutboxStore
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.telemetry.model.TELEMETRY_DELIVERY_ATTEMPT_BUDGET
+import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
@@ -215,6 +216,11 @@ class TelemetryDeliveryRecoveryTest {
         override fun latestError(): String? = null
 
         override fun lastSyncedAt(): String? = null
+
+        override fun latestByCorrelation(
+          events: Set<TelemetryOutboxEvent>,
+          incidentToken: String,
+        ): TelemetryCorrelationStatus? = null
 
         override fun markSynced(
           eventIds: List<Long>,

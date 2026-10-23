@@ -2,8 +2,9 @@ package skillbill.engine.diagnostics.block.recovery
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.diagnostics.block.bestEffort
+import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -20,6 +21,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryFailure
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CancellationException
 
 @Inject
 class BlockIncidentRecoveryInterruptedReconciliation(
@@ -27,20 +29,78 @@ class BlockIncidentRecoveryInterruptedReconciliation(
   private val clock: Clock,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
+  private val reportDelivery: ProductReportDelivery?,
+  private val telemetry: BlockIncidentTelemetryPort?,
 ) {
   fun reconcile(limit: Int = RECONCILE_BATCH): Int {
     val batch = limit.coerceIn(1, MAX_BATCH)
     val interrupted =
-      diagnostics.bestEffort("Interrupted block incident recovery scan failed; continuing the run.", emptyList()) {
+      runCatching {
         database.read { it.blockIncidentRecoveries.interrupted(clock.instant(), batch) }
+      }.getOrElse { failure ->
+        failure.rethrowIfInterrupted()
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Interrupted block incident recovery scan failed; continuing the run.",
+          failure,
+        )
+        emptyList()
       }
     return interrupted.count { attempt ->
-      diagnostics.bestEffort(
-        "Interrupted block incident recovery attempt '${attempt.attemptId}' could not be settled; continuing the run.",
-        false,
-      ) {
-        database.transaction { unit -> settle(unit, attempt, clock.instant()) }
+      val settled =
+        runCatching {
+          database.transaction { unit -> settle(unit, attempt, clock.instant()) }
+        }.getOrElse { failure ->
+          failure.rethrowIfInterrupted()
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Interrupted recovery attempt '${attempt.attemptId}' could not be settled; continuing the run.",
+            failure,
+          )
+          null
+        }
+      if (settled != null) {
+        runCatching {
+          val occurrence = database.read { unit -> unit.blockIncidents.find(settled.occurrenceToken)?.occurrence }
+          if (occurrence == null) {
+            RuntimeDiagnosticsBestEffortWarning.record(
+              diagnostics,
+              "Interrupted recovery telemetry skipped because incident context is missing.",
+            )
+          } else {
+            telemetry?.recovery(occurrence, settled)
+          }
+        }.getOrElse { failure ->
+          failure.rethrowIfInterrupted()
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Interrupted recovery telemetry failed for '${settled.attemptId}'; continuing the run.",
+            failure,
+          )
+        }
+        runCatching {
+          reportDelivery?.recoverySettled(settled, dispatch = false)
+        }.getOrElse { failure ->
+          if (failure is CancellationException || failure is InterruptedException ||
+            Thread.currentThread().isInterrupted
+          ) {
+            throw failure
+          }
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Interrupted recovery report notification failed for '${settled.attemptId}'; continuing the run.",
+            failure,
+          )
+        }
       }
+      settled != null
+    }
+  }
+
+  private fun Throwable.rethrowIfInterrupted() {
+    if (this !is Exception) throw this
+    if (this is CancellationException || this is InterruptedException || Thread.currentThread().isInterrupted) {
+      throw this
     }
   }
 
@@ -48,11 +108,11 @@ class BlockIncidentRecoveryInterruptedReconciliation(
     unit: UnitOfWork,
     observed: BlockIncidentRecoveryAttempt,
     now: Instant,
-  ): Boolean {
+  ): BlockIncidentRecoveryAttempt? {
     val stored =
       unit.blockIncidentRecoveries.byIdempotencyKey(observed.idempotencyKey)
         ?.takeIf { it.isStillInterrupted(observed, now) }
-        ?: return false
+        ?: return null
     val incident = unit.blockIncidents.find(stored.occurrenceToken)
     val next = interruptedStatus(unit, incident, stored, now)
     val moved =
@@ -68,7 +128,7 @@ class BlockIncidentRecoveryInterruptedReconciliation(
           now,
         ),
       )
-    if (!moved) return false
+    if (!moved) return null
     val outcome =
       when (next) {
         BlockIncidentRecoveryAttemptStatus.FAILED -> BlockIncidentRecovery.FAILED
@@ -82,7 +142,7 @@ class BlockIncidentRecoveryInterruptedReconciliation(
         "${stored.status.wireValue} to ${next.wireValue} for occurrence '${stored.occurrenceToken}'" +
         if (incident == null) "; the incident was missing, so no recovery outcome was recorded." else ".",
     )
-    return true
+    return if (outcome == null) null else unit.blockIncidentRecoveries.byIdempotencyKey(stored.idempotencyKey)
   }
 
   private fun interruptedStatus(

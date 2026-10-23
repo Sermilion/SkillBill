@@ -4,11 +4,13 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.status.releaseExecutionLeaseIfExpired
 import skillbill.engine.work.observation.workerOwnership
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
@@ -65,6 +67,8 @@ class BlockIncidentRecoveryService(
   private val identifiers: IdentifierGeneratorPort,
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val actions: BlockIncidentRecoveryActions,
+  private val telemetry: BlockIncidentTelemetryPort?,
+  private val reportDelivery: ProductReportDelivery?,
 ) {
   private val engine = WorkflowEngine()
   private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
@@ -113,13 +117,16 @@ class BlockIncidentRecoveryService(
       }.getOrElse { failure ->
         if (failure is CancellationException) throw failure
         val admitted = dispatched ?: throw failure
-        return settleActionException(request, admitted, failure)
+        return settleActionException(request, admitted, failure).also(::emitTerminalTelemetry)
       }
-    return when (result) {
-      FencedTransactionResult.ChangedTarget ->
-        BlockIncidentRecoveryResult.Refused(BlockIncidentRecoveryRefusal.CHANGED_DATABASE_FILE)
-      is FencedTransactionResult.Committed -> result.value
-    }
+    val settled =
+      when (result) {
+        FencedTransactionResult.ChangedTarget ->
+          BlockIncidentRecoveryResult.Refused(BlockIncidentRecoveryRefusal.CHANGED_DATABASE_FILE)
+        is FencedTransactionResult.Committed -> result.value
+      }
+    emitTerminalTelemetry(settled)
+    return settled
   }
 
   private fun applyInTransaction(
@@ -254,7 +261,46 @@ class BlockIncidentRecoveryService(
     observation: DatabaseFileObservation,
     claim: BlockIncidentRecoveryResumeClaim.Claimed,
     launched: Boolean,
-  ): BlockIncidentRecoveryResult = resume.settle(observation, claim, launched)
+  ): BlockIncidentRecoveryResult = resume.settle(observation, claim, launched).also(::emitTerminalTelemetry)
+
+  private fun emitTerminalTelemetry(result: BlockIncidentRecoveryResult) {
+    val attempt =
+      when (result) {
+        is BlockIncidentRecoveryResult.Failed -> result.attempt
+        is BlockIncidentRecoveryResult.Resumed -> result.attempt
+        else -> return
+      }
+    if (
+      attempt.status !in
+      setOf(BlockIncidentRecoveryAttemptStatus.RESUMED, BlockIncidentRecoveryAttemptStatus.FAILED)
+    ) {
+      return
+    }
+    runCatching {
+      val occurrence = database.read { unit -> unit.blockIncidents.find(attempt.occurrenceToken)?.occurrence }
+      occurrence?.let { telemetry?.recovery(it, attempt) }
+    }.onFailure { error ->
+      error.rethrowIfInterrupted()
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Block incident recovery telemetry lookup failed.", error)
+    }
+    runCatching {
+      reportDelivery?.recoverySettled(attempt)
+    }.getOrElse { error ->
+      error.rethrowIfInterrupted()
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Block incident recovery report delivery request failed.",
+        error,
+      )
+    }
+  }
+
+  private fun Throwable.rethrowIfInterrupted() {
+    if (this !is Exception) throw this
+    if (this is CancellationException || this is InterruptedException || Thread.currentThread().isInterrupted) {
+      throw this
+    }
+  }
 
   internal fun requestBasis(incidentToken: String): BlockIncidentRecoveryBasis? =
     database.read { unit ->

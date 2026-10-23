@@ -93,10 +93,13 @@ class SQLiteDatabaseSchemaTest {
     establishTemporarySchemaReadiness("skillbill-schema-cached-ledger").use { fixture ->
       val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
       database.transaction { }
-      val latestMigration = DatabaseMigrations.migrations.maxOf { it.version }
+      val workerGenerationMigration =
+        DatabaseMigrations.migrations.single {
+          it.name == "retain-latest-feature-task-worker-generation"
+        }.version
       fixture.connection.createStatement().use {
         it.execute("DROP TABLE feature_task_runtime_worker_generations")
-        it.execute("DELETE FROM schema_migrations WHERE version = $latestMigration")
+        it.execute("DELETE FROM schema_migrations WHERE version = $workerGenerationMigration")
       }
       schemaFor(fixture.tempDir, fixture.dbPath).ensureDatabaseReady()
       DatabaseRuntime.openExistingReadDbAt(fixture.dbPath, SqliteTestDiagnostics).close()
