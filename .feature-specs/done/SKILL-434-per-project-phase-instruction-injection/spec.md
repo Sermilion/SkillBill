@@ -22,7 +22,7 @@ Out of scope: runtime-executed `before_phase` commands.
 
 The work touches four seams that preplan located:
 
-- Installer gitignore scaffold: `InstallApplyRepoLocalConfig.kt` in runtime-infra/skills (`appendGitignoreEntryIfAbsent`), plus the repository's own root `.gitignore`.
+- Installer gitignore scaffold: `InstallApplyRepoLocalConfig.kt` in runtime-infra/skills (`appendGitignoreEntryIfAbsent`), plus the repository's own root `../../../.gitignore`.
 - Checkpoint scope: `FeatureTaskRuntimeCheckpointScope.isRuntimePrivatePath` in runtime-engine lifecycle/checkpoint.
 - Prompt composition: `phasePromptMiddleSections` and `FeatureTaskRuntimePhasePromptComposeInputs` in runtime-engine phase/prompt/compose, fed by the single production call site `PhaseLaunchPreparation.composeLaunchPrompt`, which every launch (initial, retry, repair, standalone, goal/feature) passes through.
 - Activity record: the per-launch briefing artifact `FeatureTaskRuntimePhaseLaunchBriefing` (wire map and `ALLOWED_FIELDS`), recorded by `recordLaunchBriefing`, plus `RuntimeDiagnostics`.
@@ -31,7 +31,7 @@ All four belong in one commit: each part is small, they share the launch-prepara
 
 ## Acceptance Criteria
 
-1. `.skill-bill/phases/` files are trackable: the installer's gitignore scaffold and the repository root `.gitignore` un-ignore them next to `!.skill-bill/config.yaml`, and `FeatureTaskRuntimeCheckpointScope` treats paths under `.skill-bill/phases/` as trackable rather than runtime-private.
+1. `.skill-bill/phases/` files are trackable: the installer's gitignore scaffold and the repository root `../../../.gitignore` un-ignore them next to `!.skill-bill/config.yaml`, and `FeatureTaskRuntimeCheckpointScope` treats paths under `.skill-bill/phases/` as trackable rather than runtime-private.
 2. Every launch of a phase id (standalone and goal/feature runs, including retries and fix/repair attempts) whose `.skill-bill/phases/<phase_id>.md` exists gets a "Project instructions for this phase" prompt section placed after the briefing and before every retry, continuation, and output/settlement contract section.
 3. A missing file adds no section and leaves the prompt unchanged; an unknown filename, oversized file, or unreadable file produces a `Warning:` diagnostics line and record, is skipped, and the launch continues without blocking.
 4. The phase activity record for a launch names the injected instruction file and its SHA-256 content hash.

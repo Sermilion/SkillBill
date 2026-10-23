@@ -6,16 +6,16 @@ Make `.skill-bill/phases/<phase_id>.md` a committed, per-project source of extra
 
 Production seams (from the preplan digest; implement confirms exact signatures):
 
-- `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/install/apply/InstallApplyRepoLocalConfig.kt`: `appendGitignoreEntryIfAbsent` and its `GITIGNORE_*` constants.
-- Repository root `.gitignore` (lines near `.skill-bill/**` and `!.skill-bill/config.yaml`).
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/checkpoint/FeatureTaskRuntimeCheckpointScope.kt`: `isRuntimePrivatePath`.
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/phase/prompt/compose/`: `FeatureTaskRuntimePhasePromptComposerSections.kt` (`phasePromptMiddleSections`), `FeatureTaskRuntimePhasePromptComposeInputs.kt`, and a new resolver file in the same package.
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/attempt/PhaseLaunchPreparation.kt`: `prepareLaunch`, `composeLaunchPromptInputs`, `recordLaunchBriefing`.
+- `../../../runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/install/apply/InstallApplyRepoLocalConfig.kt`: `appendGitignoreEntryIfAbsent` and its `GITIGNORE_*` constants.
+- Repository root `../../../.gitignore` (lines near `.skill-bill/**` and `!.skill-bill/config.yaml`).
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/checkpoint/FeatureTaskRuntimeCheckpointScope.kt`: `isRuntimePrivatePath`.
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/phase/prompt/compose`: `FeatureTaskRuntimePhasePromptComposerSections.kt` (`phasePromptMiddleSections`), `FeatureTaskRuntimePhasePromptComposeInputs.kt`, and a new resolver file in the same package.
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/attempt/PhaseLaunchPreparation.kt`: `prepareLaunch`, `composeLaunchPromptInputs`, `recordLaunchBriefing`.
 - `FeatureTaskRuntimePhaseLaunchBriefing` (model/phase): `briefingArtifactWireMap`, `fromBriefingArtifactWire`, `ALLOWED_FIELDS`.
 
 Settled decisions:
 
-1. Gitignore lines. `.skill-bill/**` keeps files under an un-ignored directory ignored, so the decision's single `!.skill-bill/phases/` line does not track `qa.md` on its own. Emit both `!.skill-bill/phases/` and `!.skill-bill/phases/**` after `!.skill-bill/config.yaml`. The early return in `appendGitignoreEntryIfAbsent` must require both new lines too, so installs that already carry the old two lines gain the new ones on the next install. The legacy `/.skill-bill/` early return stays unchanged. Apply the same two lines to the root `.gitignore`.
+1. Gitignore lines. `.skill-bill/**` keeps files under an un-ignored directory ignored, so the decision's single `!.skill-bill/phases/` line does not track `qa.md` on its own. Emit both `!.skill-bill/phases/` and `!.skill-bill/phases/**` after `!.skill-bill/config.yaml`. The early return in `appendGitignoreEntryIfAbsent` must require both new lines too, so installs that already carry the old two lines gain the new ones on the next install. The legacy `/.skill-bill/` early return stays unchanged. Apply the same two lines to the root `../../../.gitignore`.
 2. Checkpoint scope. Add a trackable prefix constant for `.skill-bill/phases`; `isRuntimePrivatePath` returns false when the normalized path equals it or starts with `.skill-bill/phases/`. `.skill-bill/phasesx` stays private. Agent edits to phase files during a run become stageable; that is intended.
 3. Resolver. A new resolver in the compose package, e.g. `PhaseProjectInstructions.resolve(repoRoot, phaseId)`, returns a sealed result: absent, injected (relative path `.skill-bill/phases/<file>.md`, content, sha256 lowercase hex over the exact bytes read), or skipped (path, reason). It catches IO, security, and malformed-UTF-8 failures and never throws. A non-regular file or a read failure counts as unreadable. Files above 16 KiB (a named constant; checked with the file size before reading) count as oversized. Reuse an existing sha256 hex helper if implement finds one nearby; otherwise use `MessageDigest` inline.
 4. Name matching. A file stem matches when it equals a value in `FeatureTaskRuntimePhaseIds.all`, or through a small alias map `{code_review -> review}` so the spec's `code_review.md` example works. The lookup for a launch keys on the effective post-rewrite `inputs.briefing.phaseId`. When both `review.md` and `code_review.md` exist, `review.md` wins and the alias file gets a skip warning (assumption; implement may pick the reverse if it records why). Any other `*.md` in `.skill-bill/phases/` is an unknown filename and produces a skip warning on each launch; non-`.md` entries are ignored.
@@ -25,8 +25,8 @@ Settled decisions:
 
 ## Acceptance Criteria
 
-1. `InstallApplyRepoLocalConfig` scaffolds `!.skill-bill/phases/` and `!.skill-bill/phases/**` alongside `!.skill-bill/config.yaml`, appends any of them that are missing to an existing gitignore without duplicating present lines, and the repository root `.gitignore` carries the same two lines.
-2. `FeatureTaskRuntimeCheckpointScope.isRuntimePrivatePath` returns false for `.skill-bill/phases` and any path under `.skill-bill/phases/`, while other `.skill-bill/` paths (including `.skill-bill/phasesx`) stay runtime-private.
+1. `InstallApplyRepoLocalConfig` scaffolds `!.skill-bill/phases/` and `!.skill-bill/phases/**` alongside `!.skill-bill/config.yaml`, appends any of them that are missing to an existing gitignore without duplicating present lines, and the repository root `../../../.gitignore` carries the same two lines.
+2. `FeatureTaskRuntimeCheckpointScope.isRuntimePrivatePath` returns false for `.skill-bill/phases` and any path under `.skill-bill/phases/`, while other `../../../.skill-bill` paths (including `.skill-bill/phasesx`) stay runtime-private.
 3. `phasePromptMiddleSections` emits a "Project instructions for this phase" section holding the resolved file content immediately after the briefing text and before all trailing retry, continuation, and output/settlement sections, and emits nothing when no instructions were resolved.
 4. `PhaseLaunchPreparation.prepareLaunch` resolves `.skill-bill/phases/<phase_id>.md` (with the `code_review` alias for `review`) from the run's repo root on every launch, and an unknown filename, a file over the 16 KiB cap, or an unreadable file is skipped with a `Warning:`-prefixed diagnostics warning while the launch proceeds; the resolver never throws.
 5. The launch briefing artifact records an optional `project_instructions` entry with the injected file's relative path and SHA-256 hex hash, serialized only when present and accepted by the briefing decoder alongside rows that lack it.
@@ -49,14 +49,14 @@ Ordered tasks. Each names the criteria it serves, the files or symbols it touche
 - In `appendGitignoreEntryIfAbsent`, leave the legacy `/.skill-bill/` early return as it is. The modern early return must now require all four lines: `.skill-bill/**`, the config exception, and both phases exceptions.
 - Build `linesToAppend` in the fixed order runtime-state, config exception, phases dir, phases files, keeping only the missing ones, then write through the existing `appendLines(existing, linesToAppend)`. Lines already present are never duplicated.
 - Fresh scaffolds go through the same function, so they get all four lines with no other change. Assumption: no separate template string for the fresh case exists. If one does, update it the same way.
-- Root `.gitignore`: add `!.skill-bill/phases/` and `!.skill-bill/phases/**` directly after `!.skill-bill/config.yaml` (lines 8-10), and extend the comment above them to mention phase instructions.
+- Root `../../../.gitignore`: add `!.skill-bill/phases/` and `!.skill-bill/phases/**` directly after `!.skill-bill/config.yaml` (lines 8-10), and extend the comment above them to mention phase instructions.
 - Tests: `InstallApplyRepoLocalConfigTest`. Extend the three existing cases with exactly-one-occurrence assertions for both new lines, and add the old-two-lines upgrade case from Test Obligations. Use the existing `setupApplyFixture()`, `fixture.request(agents = setOf(SupportedAgent.CODEX))`, `planInstallForTest`, `applyInstallForTest` and `fixture.repoRoot` helpers.
 - Constraints: never run the installer to check this. The tests cover it.
 
 ### Task 2. Checkpoint scope treats phases as trackable (AC 2)
 
 - Touches `FeatureTaskRuntimeCheckpointScope.kt`. Add `RUNTIME_TRACKABLE_PHASES = ".skill-bill/phases"` beside `RUNTIME_TRACKABLE_CONFIG`.
-- In `isRuntimePrivatePath`, after `normalizeForAliasComparison`, return false when `normalized == RUNTIME_TRACKABLE_PHASES` or `normalized.startsWith("$RUNTIME_TRACKABLE_PHASES/")`. Put the check next to the config check, before the generic `.skill-bill/` prefix check. Matching is case-insensitive through the existing lowercase normalization, which is accepted.
+- In `isRuntimePrivatePath`, after `normalizeForAliasComparison`, return false when `normalized == RUNTIME_TRACKABLE_PHASES` or `normalized.startsWith("$RUNTIME_TRACKABLE_PHASES/")`. Put the check next to the config check, before the generic `../../../.skill-bill` prefix check. Matching is case-insensitive through the existing lowercase normalization, which is accepted.
 - `decide` and `phaseWrittenPaths` take the change through the shared predicate, so they need no edits.
 - Tests: the single `FeatureTaskRuntimeCheckpointScopeTest` case from Test Obligations, either beside or extending `trackable skill-bill config is not treated as runtime-private`. The `decide()` case and the `FeatureTaskRuntimePhaseSafetyPolicyTest` line stay optional and are not planned, since the predicate test already catches the realistic bug.
 
@@ -113,7 +113,7 @@ Ordered tasks. Each names the criteria it serves, the files or symbols it touche
 
 - Implement does not compile, build or run tests. Build and validate own that.
 - No installer, uninstall or install-sync commands anywhere.
-- Docs: if a README or docs section describes `.skill-bill/config.yaml`, add a short note on `.skill-bill/phases/<phase_id>.md`, the 16 KiB cap, the `code_review` alias, and the need to re-run install, or hand-add the two gitignore lines, in existing repos. Leave `runtime-kotlin/agent/history.md` to write_history.
+- Docs: if a README or docs section describes `../../../.skill-bill/config.yaml`, add a short note on `.skill-bill/phases/<phase_id>.md`, the 16 KiB cap, the `code_review` alias, and the need to re-run install, or hand-add the two gitignore lines, in existing repos. Leave `runtime-kotlin/agent/history.md` to write_history.
 
 ## Non-Goals
 
