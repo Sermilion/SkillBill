@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.persist.acceptance
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
@@ -16,6 +17,7 @@ import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
@@ -54,13 +56,16 @@ class AcceptanceCriterionRepairLegacyAdoption(
   private val phaseOutputs: FeatureTaskRuntimePhaseOutputMigration,
   private val git: WorkflowGitOperations,
   private val source: FeatureTaskRuntimeRunInvariantsSource,
+  private val projectStore: ProjectStorePort,
 ) {
   internal fun sourceMatches(
     worker: AcquiredFeatureTaskRuntimeWorker,
     repositoryRoot: Path,
     binding: AcceptanceCriterionRepairBinding,
   ): Boolean {
-    val current = source.read(repositoryRoot.resolve(worker.governedSpecPath))
+    val governedSpec =
+      resolvedParentSpecPath(repositoryRoot, Path.of(worker.governedSpecPath), projectStore.resolve(repositoryRoot))
+    val current = source.read(governedSpec)
     return current is FeatureTaskRuntimeRunInvariantsRead.Read && current.sourceDigest == binding.specDigest &&
       current.invariants.acceptanceCriteria == binding.authoredCriteria && binding
         .catalogId == sha256Hex(JsonCodec.valueToJsonString(binding.authoredCriteria))

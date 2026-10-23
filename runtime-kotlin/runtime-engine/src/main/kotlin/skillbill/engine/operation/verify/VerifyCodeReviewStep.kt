@@ -73,7 +73,7 @@ internal class VerifyCodeReviewStep(
     val target = ReviewTarget.Scoped(ParallelReviewScope.BRANCH, baseRevision, headRevision)
     val agentId = context.invokedAgentId.orEmpty()
     val input = GoalSubtaskReviewInput(baseRevision, headRevision, trackedDelta = "", ownedUntrackedPatches = "")
-    val request = delegatedReviewRequest(agentId, context.repoRoot, target, input)
+    val request = delegatedReviewRequest(agentId, context.repoRoot, context.projectStoreRoot, target, input)
     val qualityRubric =
       if (mode == VerifyReviewMode.INLINE) {
         when (val prepared = delegatedReviewer.qualityRubric(request)) {

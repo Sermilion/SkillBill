@@ -277,7 +277,7 @@ class StandalonePlanRun(
         candidate.workflowId,
       )
     }
-    val specPath = repositories.canonicalPath(repoRoot).resolve(candidate.governedSpecPath)
+    val specPath = decompositionPlanner.bundlePath(repositories.canonicalPath(repoRoot), candidate.governedSpecPath)
     val seed = seedRecorder.read(candidate.workflowId)
     if (seed != null && intake != null && sha256HexUtf8(intake) != seed.intakeSha256) {
       return refused(

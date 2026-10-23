@@ -55,8 +55,8 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     written: FeatureSpecWriteResult,
     origin: FeatureTaskRuntimePlanBundleOrigin,
   ): FeatureTaskRuntimePlanBundle {
-    val parentPath = repoRoot.resolve(written.parentSpecPath).normalize()
-    val manifestPath = repoRoot.resolve(written.decompositionManifestPath).normalize()
+    val parentPath = planner.bundlePath(repoRoot, written.parentSpecPath)
+    val manifestPath = planner.bundlePath(repoRoot, written.decompositionManifestPath)
     val ids = planner.authoredSubtasks(parentPath).map { it.id }
     return FeatureTaskRuntimePlanBundle(
       origin = origin,
@@ -81,7 +81,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
       return false
     }
     val recorded = subtask.detailsSha256 ?: return false
-    val text = readOrNull(repoRoot.resolve(subtask.specPath).normalize()) ?: return false
+    val text = readOrNull(planner.bundlePath(repoRoot, subtask.specPath)) ?: return false
     return sha256HexUtf8(PlanBundleSpecText.scopeOf(text)) == subtask.scopeSha256 &&
       PlanBundleSpecText.detailsOf(text)?.let(::sha256HexUtf8) == recorded
   }
@@ -100,7 +100,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
       return "The decomposition manifest changed while the subtasks were planned."
     }
     return bundle.subtasks.firstNotNullOfOrNull { subtask ->
-      val text = readOrNull(repoRoot.resolve(subtask.specPath).normalize())
+      val text = readOrNull(planner.bundlePath(repoRoot, subtask.specPath))
       if (text != null && sha256HexUtf8(PlanBundleSpecText.scopeOf(text)) == subtask.scopeSha256) {
         null
       } else {
@@ -143,7 +143,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     subtask: FeatureTaskRuntimePlanBundleSubtask,
   ): PlanUnitSettlement {
     val text =
-      readOrNull(repoRoot.resolve(subtask.specPath).normalize())
+      readOrNull(planner.bundlePath(repoRoot, subtask.specPath))
         ?: return PlanUnitSettlement.Rejected("The spec of subtask ${subtask.id} is no longer readable.")
     val details =
       PlanBundleSpecText.detailsOf(text)
@@ -161,7 +161,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     subtask: FeatureTaskRuntimePlanBundleSubtask,
     settled: Boolean,
   ): FeatureTaskRuntimePlanBundleSubtask {
-    val text = readOrNull(repoRoot.resolve(subtask.specPath).normalize()) ?: return subtask
+    val text = readOrNull(planner.bundlePath(repoRoot, subtask.specPath)) ?: return subtask
     val scopeSha256 = sha256HexUtf8(PlanBundleSpecText.scopeOf(text))
     val details = PlanBundleSpecText.detailsOf(text)
     val editedDetails =
@@ -183,7 +183,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     specPath: String,
     origin: FeatureTaskRuntimePlanBundleOrigin,
   ): FeatureTaskRuntimePlanBundleSubtask {
-    val text = planner.specText(repoRoot.resolve(specPath).normalize())
+    val text = planner.specText(planner.bundlePath(repoRoot, specPath))
     val keptDetails =
       PlanBundleSpecText.detailsOf(text)?.takeIf { origin == FeatureTaskRuntimePlanBundleOrigin.EXISTING }
     return FeatureTaskRuntimePlanBundleSubtask(

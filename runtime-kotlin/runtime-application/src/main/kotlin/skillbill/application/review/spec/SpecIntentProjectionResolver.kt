@@ -3,13 +3,15 @@ package skillbill.application.review.spec
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.branchName
 import skillbill.application.decomposition.parentSpecPath
-import skillbill.application.decomposition.repoRelativePath
+import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.unreadableSpecIntentProjectionError
 import skillbill.model.toPath
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.review.context.model.execution.SpecIntentAbsenceReason
@@ -30,14 +32,15 @@ class SpecIntentProjectionResolver(
   private val fileStore: DecompositionManifestStore,
   private val validator: DecompositionManifestValidator,
   private val extractor: SpecIntentProjectionExtractor,
+  private val projectStore: ProjectStorePort,
 ) {
   fun resolve(request: SpecIntentProjectionResolveRequest): SpecIntentResolution {
     val degradations = mutableListOf<SpecIntentDegradationRecord>()
     val explicit = request.explicitSpecPath
     if (explicit != null) {
-      return when (
-        val read = extractor.extract(request.repoRoot.toPath(), explicit.toPath(), request.budget, surrounding = null)
-      ) {
+      val repoRoot = request.repoRoot.toPath()
+      val store = projectStore.resolve(repoRoot)
+      return when (val read = extractor.extract(repoRoot, explicit.toPath(), request.budget, null, store)) {
         is SpecIntentSourceRead.Read -> SpecIntentResolution.Resolved(read.value)
         is SpecIntentSourceRead.Unavailable ->
           throw unreadableSpecIntentProjectionError(read.specPath, read.reason, read.cause)
@@ -57,7 +60,9 @@ class SpecIntentProjectionResolver(
     issueKey: String?,
     degradations: MutableList<SpecIntentDegradationRecord>,
   ): SpecIntentResolution? {
-    val candidates = fileStore.findDecompositionManifestFiles(request.repoRoot.toPath())
+    val repoRoot = request.repoRoot.toPath()
+    val store = projectStore.resolve(repoRoot)
+    val candidates = fileStore.findDecompositionManifestFiles(repoRoot)
     if (candidates.isEmpty()) return null
     val loaded = mutableListOf<Pair<Path, DecompositionManifest>>()
     candidates.forEach { path ->
@@ -68,7 +73,7 @@ class SpecIntentProjectionResolver(
               seam = MANIFEST_UNREADABLE_SEAM,
               reason = MANIFEST_UNREADABLE_REASON,
               rung = SpecIntentResolutionRung.GLOB.wireValue,
-              resolvedPath = repoRelativePath(request.repoRoot.toPath(), path),
+              resolvedPath = specProvenancePath(repoRoot, path, store),
             )
         else -> loaded += path to manifest
       }
@@ -82,9 +87,9 @@ class SpecIntentProjectionResolver(
     if (matching.size != 1) return null
     val manifest = matching.single()
     val owner = owningSubtask(manifest, request)
-    val primary = Path.of(owner?.specPath ?: manifest.parentSpecPath)
+    val primary = resolvedParentSpecPath(repoRoot, Path.of(owner?.specPath ?: manifest.parentSpecPath), store)
     val surrounding = owner?.let { loadSurroundingContext(request, manifest.parentSpecPath, degradations) }
-    return when (val read = extractor.extract(request.repoRoot.toPath(), primary, request.budget, surrounding)) {
+    return when (val read = extractor.extract(repoRoot, primary, request.budget, surrounding, store)) {
       is SpecIntentSourceRead.Read -> SpecIntentResolution.Resolved(read.value)
       is SpecIntentSourceRead.Unavailable -> {
         degradations +=
@@ -104,18 +109,23 @@ class SpecIntentProjectionResolver(
     issueKey: String,
     degradations: MutableList<SpecIntentDegradationRecord>,
   ): SpecIntentResolution {
+    val repoRoot = request.repoRoot.toPath()
+    val store = projectStore.resolve(repoRoot)
     val matches =
-      fileStore.listDirectChildDirectories(request.repoRoot.resolve(".feature-specs").toPath())
-        .filter { it.fileName.toString().startsWith("$issueKey-") }
-        .map { it.resolve("spec.md") }
-        .filter { fileStore.isRegularFile(it) }
-        .sorted()
+      store.specBundleRoots(repoRoot).asSequence()
+        .map { specRoot ->
+          fileStore.listDirectChildDirectories(specRoot)
+            .filter { it.fileName.toString().startsWith("$issueKey-") }
+            .map { it.resolve("spec.md") }
+            .filter { fileStore.isRegularFile(it) }
+            .sorted()
+        }
+        .firstOrNull { it.isNotEmpty() }
+        .orEmpty()
     return when (matches.size) {
       0 -> none(SpecIntentAbsenceReason.NO_SPEC_FOUND, SpecIntentResolutionRung.GLOB, degradations)
       1 ->
-        when (
-          val read = extractor.extract(request.repoRoot.toPath(), matches.single(), request.budget, surrounding = null)
-        ) {
+        when (val read = extractor.extract(repoRoot, matches.single(), request.budget, null, store)) {
           is SpecIntentSourceRead.Read -> SpecIntentResolution.Resolved(read.value)
           is SpecIntentSourceRead.Unavailable ->
             none(SpecIntentAbsenceReason.NO_SPEC_FOUND, SpecIntentResolutionRung.GLOB, degradations)
@@ -146,7 +156,10 @@ class SpecIntentProjectionResolver(
     parentSpecPath: String,
     degradations: MutableList<SpecIntentDegradationRecord>,
   ): SpecIntentSurroundingContext? {
-    return when (val read = extractor.surroundingContext(request.repoRoot.toPath(), Path.of(parentSpecPath))) {
+    val repoRoot = request.repoRoot.toPath()
+    val store = projectStore.resolve(repoRoot)
+    val parentSpec = resolvedParentSpecPath(repoRoot, Path.of(parentSpecPath), store)
+    return when (val read = extractor.surroundingContext(repoRoot, parentSpec, store)) {
       is SpecIntentSourceRead.Read -> read.value
       is SpecIntentSourceRead.Unavailable -> {
         degradations +=

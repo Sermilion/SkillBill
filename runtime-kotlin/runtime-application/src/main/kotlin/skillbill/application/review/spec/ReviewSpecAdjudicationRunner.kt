@@ -74,6 +74,7 @@ class ReviewSpecAdjudicationRunner(
               job,
               AdjudicationLaunchEnv(
                 repoRoot = request.launch.repoRoot,
+                projectStoreRoot = request.launch.projectStoreRoot,
                 timeout = request.launch.timeout,
                 modelOverride = request.launch.modelOverride,
                 promptSuffix = request.launch.promptSuffix,
@@ -185,6 +186,7 @@ class ReviewSpecAdjudicationRunner(
 
   private data class AdjudicationLaunchEnv(
     val repoRoot: Path,
+    val projectStoreRoot: Path,
     val timeout: Duration?,
     val modelOverride: String?,
     val promptSuffix: String,
@@ -214,6 +216,7 @@ class ReviewSpecAdjudicationRunner(
               timeout = env.timeout,
               promptOverride = prompt,
               modelOverride = env.modelOverride,
+              additionalWritableDirectories = listOf(env.projectStoreRoot),
             ).boundedReviewLane(env.laneProgressIdleTimeout),
         ),
       )

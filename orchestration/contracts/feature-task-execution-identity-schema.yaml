@@ -25,7 +25,7 @@ properties:
     pattern: "^repo-root-realpath-v1:/[^\\r\\n]+$"
   governed_spec_path:
     type: string
-    pattern: "^\\.feature-specs/(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\r\\n]+\\.md$"
+    pattern: "^(?:\\.feature-specs(?!.*(?:^|/)\\.{1,2}(?:/|$))|specs(?!.*(?:^|/)\\.{1,2}(?:/|$)))/[^\\r\\n]+\\.md$"
   mode:
     enum: [prose, runtime]
   route_scope:

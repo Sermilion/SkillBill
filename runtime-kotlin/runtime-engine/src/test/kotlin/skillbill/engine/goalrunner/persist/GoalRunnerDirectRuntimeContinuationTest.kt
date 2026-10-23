@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.application.testHarnessClock
+import skillbill.application.testProjectStore
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
@@ -35,6 +36,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
+        projectStore = testProjectStore,
       )
 
     val launchRequest =
@@ -75,6 +77,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
         worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
+        projectStore = testProjectStore,
       )
 
     val launchRequest =

@@ -4,12 +4,14 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
+import java.nio.file.Path
 
 internal fun workRunHarnessCommand(
   request: WorkRunLaunchRequest,
   harness: WorkRunLaunchKind.AgentHarness,
   agent: SupportedAgent,
   environment: Map<String, String>,
+  projectStoreRoot: Path,
 ): AgentRunCommand {
   val builder =
     when (agent) {
@@ -24,6 +26,7 @@ internal fun workRunHarnessCommand(
       repoRoot = request.repositoryRoot,
       promptOverride = harness.prompt,
       streamProviderOutput = true,
+      additionalWritableDirectories = listOf(projectStoreRoot),
     ),
   )
 }

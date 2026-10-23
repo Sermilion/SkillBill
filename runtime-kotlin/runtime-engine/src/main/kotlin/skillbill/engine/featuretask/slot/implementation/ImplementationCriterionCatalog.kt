@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phase.planning.PlanBundleSpecText
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.attempt.PhaseImplementationTurnAccess
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnRecord
@@ -57,7 +58,10 @@ internal sealed interface ImplementationCriterionCatalog {
       access: PhaseImplementationTurnAccess,
     ): String? =
       try {
-        access.specText(run.request.repoRoot.resolve(run.request.runInvariants.specReference).normalize())
+        access.specText(
+          resolveSpecPath(run.projectStoreRoot, run.request.repoRoot, run.request.runInvariants.specReference)
+            .normalize(),
+        )
       } catch (_: IOException) {
         null
       } catch (_: InvalidPathException) {

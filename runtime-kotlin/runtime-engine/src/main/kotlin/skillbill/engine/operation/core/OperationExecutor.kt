@@ -1,6 +1,7 @@
 package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.ports.projectstore.ProjectStorePort
 import java.nio.file.Path
 import java.util.UUID
 
@@ -22,6 +23,7 @@ class OperationExecutor(
   private val registry: OperationRegistry,
   private val gate: OperationConfirmationGate,
   private val steps: OperationStepRunner,
+  private val projectStore: ProjectStorePort,
 ) {
   fun execute(request: OperationRequest): OperationResult {
     val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
@@ -44,6 +46,7 @@ class OperationExecutor(
       OperationContext(
         invocationId = invocationId,
         repoRoot = request.repoRoot,
+        projectStoreRoot = projectStore.resolve(request.repoRoot).root,
         invokedAgentId = request.invokedAgentId,
         arguments = request.arguments,
         instructions = request.instructions,

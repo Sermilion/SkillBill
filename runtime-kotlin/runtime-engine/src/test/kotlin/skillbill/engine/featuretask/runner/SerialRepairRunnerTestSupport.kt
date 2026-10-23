@@ -71,6 +71,7 @@ internal fun harnessAcceptanceRecorder(
         ContractFeatureTaskRuntimePhaseOutputMigration(),
         gitOperations,
         source,
+        RUNNER_TEST_PROJECT_STORE,
       ),
     ),
     gitOperations,

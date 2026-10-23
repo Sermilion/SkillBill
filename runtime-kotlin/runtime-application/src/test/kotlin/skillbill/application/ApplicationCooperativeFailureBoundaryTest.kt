@@ -54,6 +54,7 @@ class ApplicationCooperativeFailureBoundaryTest {
         Path.of("/tmp/audit-repo"),
         Path.of("spec.md"),
         ReviewContextBudgetPolicy.DEFAULT,
+        store = testProjectStore.resolve(Path.of("/tmp/audit-repo")),
       )
     }
   }
@@ -74,6 +75,7 @@ class ApplicationCooperativeFailureBoundaryTest {
         Path.of("/tmp/audit-repo"),
         Path.of("spec.md"),
         ReviewContextBudgetPolicy.DEFAULT,
+        store = testProjectStore.resolve(Path.of("/tmp/audit-repo")),
       )
     }
   }
@@ -91,6 +93,7 @@ class ApplicationCooperativeFailureBoundaryTest {
         Path.of("/tmp/audit-repo"),
         Path.of("spec.md"),
         ReviewContextBudgetPolicy.DEFAULT,
+        store = testProjectStore.resolve(Path.of("/tmp/audit-repo")),
       )
     val unavailable = assertIs<SpecIntentSourceRead.Unavailable>(read)
     assertEquals("unreadable", unavailable.reason)

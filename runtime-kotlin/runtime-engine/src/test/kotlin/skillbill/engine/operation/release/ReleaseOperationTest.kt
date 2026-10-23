@@ -28,6 +28,7 @@ import skillbill.engine.operation.core.unknownToken
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
+import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -46,6 +47,7 @@ class ReleaseOperationTest {
   private val repo: Path = root.resolve("repo")
   private val runner = ChangelogRunner(CHANGELOG)
   private val git = GitWorkflowGitOperations()
+  private val projectStore = FixedProjectStorePort(root.resolve("project-store"))
   private val proposals =
     SqliteOperationProposalRepository(
       sqliteSessionFactoryForTests(
@@ -59,12 +61,14 @@ class ReleaseOperationTest {
       OperationRegistry(listOf(ReleaseOperation(git))),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
+      projectStore,
     )
   private val executorWithOtherOperation =
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git), OtherConfirmableOperation)),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
+      projectStore,
     )
 
   init {

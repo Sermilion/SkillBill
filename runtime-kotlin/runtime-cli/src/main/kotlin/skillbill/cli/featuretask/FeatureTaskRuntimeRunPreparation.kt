@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -30,6 +31,7 @@ class FeatureTaskRuntimeRunPreparation(
   private val executableLookup: ExecutableLookup,
   private val lookupService: FeatureTaskContinuationLookupService,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val projectStorePort: ProjectStorePort,
   private val inputs: CliRunInputs,
 ) {
   internal fun prepareResume(
@@ -69,7 +71,7 @@ class FeatureTaskRuntimeRunPreparation(
     repoRoot: Path,
     specPath: Path,
   ) {
-    if (persistedPath != repositoryEnclosingRootPort.governedSpecPathForCli(repoRoot, specPath)) {
+    if (persistedPath != repositoryEnclosingRootPort.governedSpecPathForCli(projectStorePort, repoRoot, specPath)) {
       throw UsageError("Workflow '$workflowId' was persisted with a different governed spec path.")
     }
   }

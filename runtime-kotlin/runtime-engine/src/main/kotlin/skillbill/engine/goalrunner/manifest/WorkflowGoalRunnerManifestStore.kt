@@ -9,7 +9,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
-import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.reset.GoalChildWorkflowSaveResult
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
@@ -50,9 +49,9 @@ class WorkflowGoalRunnerManifestStore
     private val manifestLoader: WorkflowGoalRunnerManifestLoader,
     private val decompositionManifestWriter: DecompositionManifestWriter,
     private val repositoryRoot: RepositoryRoot,
-    private val planningHydrator: GoalChildPlanningHydratorPort,
     private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
     private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
+    private val childWorkflowPersistence: WorkflowGoalRunnerChildWorkflowPersistence,
   ) : GoalRunnerManifestStore,
     GoalRunnerManifestPurgeCommands by WorkflowGoalRunnerPurgePersistence(database, repositoryEnclosingRootPort),
     GoalRunnerStatusManifestQueries by WorkflowGoalRunnerStatusManifestQueries(database, repositoryEnclosingRootPort),
@@ -88,14 +87,6 @@ class WorkflowGoalRunnerManifestStore
         repositoryRoot,
         decompositionManifestValidator,
         decompositionManifestStore,
-      )
-    private val childWorkflowPersistence =
-      WorkflowGoalRunnerChildWorkflowPersistence(
-        engine,
-        planningHydrator,
-        parentProjection,
-        executionAdmission,
-        clock,
       )
     private val scopedReplanPersistence = WorkflowGoalRunnerScopedReplanPersistence(projectionPersistence)
     private val controls =

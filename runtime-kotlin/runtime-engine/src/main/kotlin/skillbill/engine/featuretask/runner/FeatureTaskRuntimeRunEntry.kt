@@ -12,11 +12,10 @@ import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWor
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIdentityResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
-import skillbill.engine.featuretask.lifecycle.execution.expectedFeatureTaskExecutionIdentity
-import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairHydration
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
@@ -30,7 +29,6 @@ import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -55,7 +53,7 @@ class FeatureTaskRuntimeRunEntry(
   private val workerCoordinator: FeatureTaskRuntimeWorkerCoordinator,
   private val runInvariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val runner: FeatureTaskRuntimeRunner,
-  private val repositories: RepositoryEnclosingRootPort,
+  private val identities: FeatureTaskExecutionIdentityResolver,
   private val stepLaunches: FeatureTaskRuntimeStepLaunchResolver,
   private val diagnostics: RuntimeDiagnostics,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
@@ -96,8 +94,7 @@ class FeatureTaskRuntimeRunEntry(
         request.timeout,
         workflowId,
       )
-    val identity =
-      repositories.expectedFeatureTaskExecutionIdentity(workflowId, request.issueKey, request.repoRoot, specPath, scope)
+    val identity = identities.expected(workflowId, request.issueKey, request.repoRoot, specPath, scope)
     return workerCoordinator.runOwned(
       workflowId,
       effectiveInputs,
@@ -303,8 +300,8 @@ class FeatureTaskRuntimeRunEntry(
           sessionId = "",
           currentStepId = null,
           issueKey = input.issueKey,
-          repositoryIdentity = repositories.repositoryIdentity(input.repoRoot),
-          governedSpecPath = repositories.governedFeatureTaskSpecPath("unassigned", input.repoRoot, specPath),
+          repositoryIdentity = identities.repositoryIdentity(input.repoRoot),
+          governedSpecPath = identities.governedSpecPath("unassigned", input.repoRoot, specPath),
           routeScope = scope,
           initialArtifacts = input.openArtifacts,
           executionPlan =

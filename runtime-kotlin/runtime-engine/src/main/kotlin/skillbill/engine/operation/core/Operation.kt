@@ -68,6 +68,7 @@ interface SelfConfirmingOperation : Operation
 data class OperationContext(
   val invocationId: String,
   val repoRoot: Path,
+  val projectStoreRoot: Path,
   val invokedAgentId: String?,
   val arguments: OperationArguments,
   val instructions: String?,

@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.preflight
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
@@ -11,6 +12,7 @@ import skillbill.engine.goalrunner.model.GoalPreflightRequest
 import skillbill.engine.goalrunner.model.GoalPreflightResult
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -24,6 +26,7 @@ class GoalPreflightService(
   private val manifestFileStore: DecompositionManifestStore,
   private val manifestValidator: DecompositionManifestValidator,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val projectStore: ProjectStorePort,
 ) {
   private val gateBlockBuilder =
     GoalPreflightGateBlockBuilder(
@@ -41,7 +44,7 @@ class GoalPreflightService(
     val normalizedIssueKey = GoalPreflightInputValidation.normalizeIssueKey(request.issueKey)
     val projectedManifest =
       resolveDecompositionManifest(
-        repoRoot = root,
+        scope = SpecBundleScope(root, projectStore.resolve(root)),
         issueKey = normalizedIssueKey,
         fileStore = manifestFileStore,
         validator = manifestValidator,

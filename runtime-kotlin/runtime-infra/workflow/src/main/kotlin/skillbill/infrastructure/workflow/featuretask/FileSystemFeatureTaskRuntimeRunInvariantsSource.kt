@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.featuretask
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.infrastructure.workflow.decomposition.DecompositionManifestBundleJournal
@@ -56,12 +57,15 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
 
   private fun authorizedRealPath(normalizedPath: Path): Path? {
     val realPath = normalizedPath.toRealPath()
+    return realPath.takeIf { it.startsWith(authorizedRoot(normalizedPath)) }
+  }
+
+  private fun authorizedRoot(normalizedPath: Path): Path {
     val specsRoot =
       generateSequence(normalizedPath.parent) { it.parent }.firstOrNull {
-        it.fileName?.toString() == FEATURE_SPECS_DIRECTORY
+        it.fileName?.toString() in ProjectStoreLayout.SPEC_BUNDLE_ROOT_DIRECTORY_NAMES
       }
-    val authorizedRoot = (specsRoot ?: normalizedPath.parent).toRealPath()
-    return realPath.takeIf { it.startsWith(authorizedRoot) }
+    return (specsRoot ?: normalizedPath.parent).toRealPath()
   }
 
   private fun requireSelectedBundleEntry(normalizedPath: Path): String? {
@@ -97,12 +101,8 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
 
   private fun authorizationReason(normalizedPath: Path): String {
     val realPath = normalizedPath.toRealPath()
-    val specsRoot =
-      generateSequence(normalizedPath.parent) { it.parent }.firstOrNull {
-        it.fileName?.toString() == FEATURE_SPECS_DIRECTORY
-      }
-    val authorizedRoot = (specsRoot ?: normalizedPath.parent).toRealPath()
-    return "feature-task-runtime spec path '$normalizedPath' resolves to '$realPath' outside '$authorizedRoot'."
+    return "feature-task-runtime spec path '$normalizedPath' resolves to '$realPath' outside " +
+      "'${authorizedRoot(normalizedPath)}'."
   }
 
   private fun rejected(reason: String) = FeatureTaskRuntimeRunInvariantsRead.Rejected(reason)
@@ -123,7 +123,6 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
 
   private companion object {
     val FEATURE_SIZE_LINE = Regex("""(?im)^\s*(?:feature[_ -]size|size)\s*:\s*([^\r\n#]+)(?:\s+#.*)?$""")
-    const val FEATURE_SPECS_DIRECTORY = ".feature-specs"
     const val MANIFEST_FILE_NAME = "decomposition-manifest.yaml"
   }
 }

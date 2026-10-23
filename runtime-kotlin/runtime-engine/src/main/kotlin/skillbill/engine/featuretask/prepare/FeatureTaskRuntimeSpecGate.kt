@@ -7,6 +7,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.workflow.decomposition.model.SpecSource
@@ -17,6 +18,7 @@ class FeatureTaskRuntimeSpecGate(
   private val specScratchStore: SpecScratchStore,
   private val specStatusWriter: FeatureTaskRuntimeSpecStatusWriter,
   private val diagnostics: RuntimeDiagnostics,
+  private val projectStore: ProjectStorePort,
 ) {
   fun finalizeSingleSpecOnTerminal(
     request: FeatureTaskRuntimeRunRequest,
@@ -61,7 +63,11 @@ class FeatureTaskRuntimeSpecGate(
       return
     }
     val specDir =
-      resolvedParentSpecPath(request.repoRoot, Path.of(request.runInvariants.specReference)).parent
+      resolvedParentSpecPath(
+        request.repoRoot,
+        Path.of(request.runInvariants.specReference),
+        projectStore.resolve(request.repoRoot),
+      ).parent
         ?: return
     runCatching { specScratchStore.deleteDirectoryIfExists(specDir) }
       .onFailure { error ->

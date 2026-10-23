@@ -3,6 +3,10 @@ package skillbill.application.decomposition
 import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningResult
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
+import skillbill.contracts.projectstore.ProjectStoreLayout
+import skillbill.ports.projectstore.model.ProjectStoreLocation
+import skillbill.ports.projectstore.model.classifySpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.intentFor
@@ -12,15 +16,20 @@ import skillbill.workflow.decomposition.withParentStatus
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
+private val ARCHIVED_BUNDLE_PREFIXES =
+  listOf(
+    "${ProjectStoreLayout.SPECS_PREFIX}done/",
+    "${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX}done/",
+  )
+
 fun archivedDecompositionManifest(
   repoRoot: Path,
+  store: ProjectStoreLocation,
   manifestPath: Path,
 ): Boolean {
-  val relative =
-    runCatching { repoRoot.normalize().relativize(manifestPath.normalize()).toString() }
-      .getOrDefault(manifestPath.toString())
-      .replace('\\', '/')
-  return relative.startsWith(".feature-specs/done/")
+  val location =
+    store.classifySpecPath(manifestPath.toAbsolutePath().normalize(), repoRoot.toAbsolutePath().normalize())
+  return location != null && ARCHIVED_BUNDLE_PREFIXES.any { prefix -> location.relative.startsWith(prefix) }
 }
 
 fun loadManifestOrNull(
@@ -36,6 +45,7 @@ fun loadManifestOrNull(
 
 internal fun manifestPathFromArtifacts(
   repoRoot: Path,
+  store: ProjectStoreLocation,
   artifactsPatch: Map<String, Any?>?,
   existingArtifacts: Map<String, Any?>,
   planningResult: DecompositionPlanningResult? = null,
@@ -50,11 +60,14 @@ internal fun manifestPathFromArtifacts(
   planningResult?.takeIf { it.isDecomposeMode() }?.let { plan ->
     return decompositionManifestPath(
       repoRoot,
+      store,
       Path.of(parentSpecPath(plan)),
       plan.subtasks.map { it.specPath },
     )
   }
-  return specPath?.let { resolvedParentSpecPath(repoRoot, Path.of(it)).parent.resolve(DECOMPOSITION_MANIFEST_FILENAME) }
+  return specPath?.let {
+    resolvedParentSpecPath(repoRoot, Path.of(it), store).parent.resolve(DECOMPOSITION_MANIFEST_FILENAME)
+  }
 }
 
 internal fun DecompositionManifest.assertExecutionModelCanReplace(
@@ -73,9 +86,10 @@ internal fun DecompositionManifest.assertExecutionModelCanReplace(
 
 internal fun DecompositionManifest.withRuntimeUpdate(
   repoRoot: Path,
+  store: ProjectStoreLocation,
   update: DecompositionManifestRuntimeUpdate,
 ): DecompositionManifest {
-  val subtaskId = currentSubtaskIdForUpdate(repoRoot, update) ?: return this
+  val subtaskId = currentSubtaskIdForUpdate(repoRoot, store, update) ?: return this
   val status = statusFromUpdate(update)
   val updatedSubtasks =
     subtasks.map { subtask ->

@@ -1,5 +1,7 @@
 package skillbill.infrastructure.workflow.decomposition
 
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestDiscoveryPort
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -8,6 +10,7 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
 internal class FileSystemDecompositionManifestFileStoreDiscovery(
+  private val projectStore: ProjectStorePort,
   private val bundleJournal: DecompositionManifestBundleJournal,
 ) : DecompositionManifestDiscoveryPort {
   override fun listDirectChildDirectories(directory: Path): List<Path> {
@@ -29,12 +32,19 @@ internal class FileSystemDecompositionManifestFileStoreDiscovery(
     repoRoot: Path,
     recoverPending: Boolean,
   ): List<Path> {
-    val featureSpecsRoot = repoRoot.resolve(".feature-specs")
-    if (!Files.isDirectory(featureSpecsRoot)) return emptyList()
-    val archivedRoot = featureSpecsRoot.resolve("done")
+    val specsRoots = projectStore.resolve(repoRoot).specBundleRoots(repoRoot)
+    return specsRoots.flatMap { specsRoot -> manifestsUnder(specsRoot, recoverPending) }
+  }
+
+  private fun manifestsUnder(
+    specsRoot: Path,
+    recoverPending: Boolean,
+  ): List<Path> {
+    if (!Files.isDirectory(specsRoot)) return emptyList()
+    val archivedRoot = specsRoot.resolve("done")
     val manifests = mutableListOf<Path>()
     Files.walkFileTree(
-      featureSpecsRoot,
+      specsRoot,
       object : SimpleFileVisitor<Path>() {
         override fun preVisitDirectory(
           dir: Path,

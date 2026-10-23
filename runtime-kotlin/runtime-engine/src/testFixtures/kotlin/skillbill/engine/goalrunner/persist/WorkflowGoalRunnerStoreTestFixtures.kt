@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
+import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
@@ -28,6 +29,8 @@ import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -41,6 +44,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.time.Clock
+import kotlin.io.path.createTempDirectory
 import kotlin.random.Random
 
 data class OutcomeStoreTestArtifactPorts(
@@ -90,8 +94,16 @@ fun engineWorkflowGoalRunnerManifestStore(
   planningHydrator: GoalChildPlanningHydratorPort,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
   executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility = testExecutionPlanCompatibility(),
-): GoalRunnerManifestStore =
-  WorkflowGoalRunnerManifestStore(
+  projectStore: ProjectStorePort = FixedProjectStorePort(createTempDirectory("goal-runner-manifest-project-store")),
+): GoalRunnerManifestStore {
+  val executionAdmission =
+    FeatureTaskRuntimeExecutionAdmission(
+      executionPlanCompatibility,
+      NoopRuntimeDiagnostics,
+      ContractFeatureTaskRuntimePhaseOutputMigration(),
+      NoopFeatureTaskRuntimeWorkerSupervisor,
+    )
+  return WorkflowGoalRunnerManifestStore(
     database = database,
     workflowSnapshotValidator = workflowSnapshotValidator,
     decompositionManifestValidator = decompositionManifestValidator,
@@ -104,19 +116,23 @@ fun engineWorkflowGoalRunnerManifestStore(
         decompositionManifestStore,
         clock,
         Random.Default,
+        projectStore,
       ),
     decompositionManifestWriter = decompositionManifestWriter,
     repositoryRoot = repositoryRoot,
-    planningHydrator = planningHydrator,
     repositoryEnclosingRootPort = repositoryEnclosingRootPort,
-    executionAdmission =
-      FeatureTaskRuntimeExecutionAdmission(
-        executionPlanCompatibility,
-        NoopRuntimeDiagnostics,
-        ContractFeatureTaskRuntimePhaseOutputMigration(),
-        NoopFeatureTaskRuntimeWorkerSupervisor,
+    executionAdmission = executionAdmission,
+    childWorkflowPersistence =
+      WorkflowGoalRunnerChildWorkflowPersistence(
+        planningHydrator,
+        decompositionManifestValidator,
+        executionAdmission,
+        clock,
+        repositoryEnclosingRootPort,
+        projectStore,
       ),
   )
+}
 
 private fun testFeatureTaskRuntimeCrashReconciler(
   database: DatabaseSessionFactory,

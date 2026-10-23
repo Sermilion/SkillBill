@@ -98,7 +98,13 @@ internal class InlineReviewPass(
   ): ParallelCodeReviewRunOutcome {
     val qualityRubric =
       qualityRubricResolver.resolveInlineRubric(
-        delegatedReviewRequest(run.resolvedAgent.resolvedAgentId, run.request.repoRoot, run.reviewTarget, input),
+        delegatedReviewRequest(
+          run.resolvedAgent.resolvedAgentId,
+          run.request.repoRoot,
+          run.projectStoreRoot,
+          run.reviewTarget,
+          input,
+        ),
         state.reviewExecutionContext().diagnostics,
       )
     val composed =

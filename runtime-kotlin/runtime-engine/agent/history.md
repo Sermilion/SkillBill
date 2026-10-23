@@ -1,3 +1,16 @@
+## [2026-10-23] SKILL-441 subtask 4: spec read side and agent access to the project store
+Areas: runtime-engine featuretask, goalrunner, operation core/verify, diagnostics/block; runtime-application decomposition, review spec, workflow; runtime-domain identity policy; runtime-ports featurespec, projectstore; runtime-contracts projectstore; runtime-infra workflow, host, launcher; runtime-cli featuretask; orchestration/contracts
+- Governed spec paths accept store-relative `specs/...` and legacy repo-relative `.feature-specs/...`. FeatureTaskGovernedSpecPathResolution takes ProjectStorePort and resolves checkout, store root and spec path through their nearest existing real ancestor, so macOS /var and /tmp symlinks do not look like outside paths.
+- The identity schema `governed_spec_path` pattern is an alternation of both forms and rejects dot segments; contract_version stays 0.1 because it only widens. A parity test pins the pattern to FeatureTaskExecutionIdentityPolicy.
+- Spec discovery is store-first, then legacy. FeatureSpecOrigin (STORE/LEGACY) rides on Explicit and SingleMatch results; the manifest file store scans the store specs root first and skips `done`. reusable
+- Shared path helpers: ProjectStoreLayout (runtime-contracts) and classifySpecPath/resolveSpecPath/SpecPathLocation (runtime-ports). Bundle-root walk-ups are name-based so modules without the store port still work. reusable
+- Spec-intent provenance paths are store-relative or repo-relative, never absolute, to satisfy the review-context `path` schema (SpecIntentProvenancePath).
+- Every agent launch grants the store root: PhaseRun.projectStoreRoot feeds additionalWritableDirectories (plus the QA workspace, de-duplicated); OperationContext carries it to each operation step; BlockIncidentAgentPass takes ProjectStorePort. Claude and Codex map the list to --add-dir.
+- Detekt fixes extracted GoalSpecScratchCleanup, FeatureTaskExecutionIdentityResolver, ProjectCheckout and SpecBundleScope; WorkflowGoalRunnerChildWorkflowPersistence is now an injected class.
+- Limits: resolvedParentSpecPath has an optional store param that engine and writer callers do not pass yet (legacy-only), left for subtask 5, as is Cursor and Junie additional-dir support. TestDecompositionManifestStore stays legacy-only.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented (validate ran full check green)
+
 ## [2026-10-22] SKILL-435 subtask 1: block capture and investigation lifecycle
 Areas: runtime-engine diagnostics/block, goalrunner persist and execution, featuretask phase core/record, acceptance repair, phaserun, runner; runtime-domain blockincident; runtime-ports blockincident; runtime-infra sqlite and host; runtime-contracts blockincident keys; runtime-core DI; desktop-tray detail
 - Every goal block (WorkflowGoalRunnerBlockWrites.markBlocked) and standalone phase block (StandalonePhaseStatusEventSink.settleBlocked) creates or links one incident after the BLOCKED write commits. Feature-task settlement, phase-state recorder and serial repair producers do the same.

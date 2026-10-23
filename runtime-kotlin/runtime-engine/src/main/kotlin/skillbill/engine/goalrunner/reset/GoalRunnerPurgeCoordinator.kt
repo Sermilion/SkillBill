@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.reset
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.findMatchingDecompositionManifests
+import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
@@ -40,7 +41,8 @@ class GoalRunnerPurgeCoordinator(
   private val goalStateFiles: GoalRuntimeStateFileStore,
   private val projectStore: ProjectStorePort,
 ) {
-  private val specBundleReset = GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator)
+  private val specBundleReset =
+    GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator, projectStore)
 
   fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult {
     val repoRoot = request.repoRoot ?: error("repoRoot is required to purge goal '${request.issueKey}'.")
@@ -101,7 +103,7 @@ class GoalRunnerPurgeCoordinator(
     val ownership = manifestStore.discoverPurgeOwnership(issueKey, repoRoot)
     val diskCandidate =
       findMatchingDecompositionManifests(
-        repoRoot = repoRoot,
+        scope = SpecBundleScope(repoRoot, projectStore.resolve(repoRoot)),
         issueKey = issueKey,
         fileStore = manifestFileStore,
         validator = manifestValidator,
@@ -139,7 +141,13 @@ class GoalRunnerPurgeCoordinator(
   private fun derivedManifestPath(
     repoRoot: Path,
     manifest: DecompositionManifest,
-  ): Path = decompositionManifestPath(repoRoot, Path.of(manifest.parentSpecPath), manifest.subtasks.map { it.specPath })
+  ): Path =
+    decompositionManifestPath(
+      repoRoot,
+      projectStore.resolve(repoRoot),
+      Path.of(manifest.parentSpecPath),
+      manifest.subtasks.map { it.specPath },
+    )
 
   private fun refusal(
     issueKey: String,

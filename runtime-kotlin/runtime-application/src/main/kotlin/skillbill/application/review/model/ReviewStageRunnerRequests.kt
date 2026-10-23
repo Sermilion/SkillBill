@@ -18,6 +18,7 @@ internal data class ReviewDelegatedStageLaunch(
   val budget: ReviewContextBudgetPolicy,
   val brokerId: String,
   val repoRoot: Path,
+  val projectStoreRoot: Path,
   val timeout: Duration?,
   val modelOverride: String? = null,
   val promptSuffix: String = "",

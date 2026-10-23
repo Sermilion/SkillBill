@@ -1,7 +1,8 @@
 # Decomposition manifest schema (canonical source of truth).
 #
 # This file describes the authoritative prepared-feature manifest written beside
-# a feature's parent spec under `.feature-specs/<issue>-<feature>/`. It is
+# a feature's parent spec in the project store under `specs/<issue>-<feature>/`
+# (legacy bundles under `.feature-specs/<issue>-<feature>/` stay accepted). It is
 # authored in YAML for human readability and consumed as a JSON Schema
 # (Draft 2020-12) by the Kotlin runtime
 # (`DecompositionManifestSchemaValidator` in `runtime-contracts`).

@@ -10,6 +10,7 @@ import java.nio.file.Path
 internal fun delegatedReviewRequest(
   agentId: String,
   repoRoot: Path,
+  projectStoreRoot: Path,
   target: ReviewTarget,
   input: GoalSubtaskReviewInput,
 ): ParallelCodeReviewRequest {
@@ -25,6 +26,7 @@ internal fun delegatedReviewRequest(
     agent1Id = agentId,
     scope = scope,
     repoRoot = repoRoot,
+    projectStoreRoot = projectStoreRoot,
     timeout = null,
     codeReviewMode = CodeReviewExecutionMode.DELEGATED,
     resolvedTier = CodeReviewExecutionMode.DELEGATED,

@@ -14,6 +14,10 @@ import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.ProjectStoreLocation
+import skillbill.ports.projectstore.model.classifySpecPath
+import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
@@ -26,6 +30,7 @@ class GoalIntakePreparation(
   private val specWriter: FeatureSpecPreparationWriter,
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val fileStore: DecompositionManifestStore,
+  private val projectStore: ProjectStorePort,
 ) {
   fun issueKeyForExistingSpec(
     intake: String,
@@ -38,17 +43,24 @@ class GoalIntakePreparation(
   ): GoalIntakeAdmission.ArchivedSpec? {
     val active = activeSpecPath(intake, repoRoot) ?: return null
     val root = repoRoot.toAbsolutePath().normalize()
-    val activeRoot = root.resolve(FEATURE_SPECS)
-    val doneRoot = activeRoot.resolve(ARCHIVE)
-    if (!active.startsWith(activeRoot) || active.startsWith(doneRoot)) return null
-    val archived = doneRoot.resolve(activeRoot.relativize(active))
+    val store = projectStore.resolve(repoRoot)
+    val activeRoot =
+      store.specBundleRoots(root).map { it.toAbsolutePath().normalize() }
+        .firstOrNull { active.startsWith(it) && !active.startsWith(it.resolve(ARCHIVE)) }
+        ?: return null
+    val archived = activeRoot.resolve(ARCHIVE).resolve(activeRoot.relativize(active))
     if (!fileStore.isRegularFile(archived)) return null
     return GoalIntakeAdmission.ArchivedSpec(
       issueKey = GoalIntake.parse(active.toString()).issueKey,
-      activeSpecPath = root.relativize(active).joinToString("/"),
-      archivedSpecPath = root.relativize(archived).joinToString("/"),
+      activeSpecPath = store.specLabel(active, root),
+      archivedSpecPath = store.specLabel(archived, root),
     )
   }
+
+  private fun ProjectStoreLocation.specLabel(
+    path: Path,
+    checkoutRoot: Path,
+  ): String = classifySpecPath(path, checkoutRoot)?.relative ?: checkoutRoot.relativize(path).joinToString("/")
 
   private fun activeSpecPath(
     intake: String,
@@ -206,7 +218,6 @@ class GoalIntakePreparation(
   }
 
   private companion object {
-    const val FEATURE_SPECS = ".feature-specs"
     const val ARCHIVE = "done"
     val ACCEPTANCE_HEADING = Regex("(?i)#{1,6}\\s+acceptance criteria\\s*")
     val ITEM = Regex("\\s*(?:[-*]|[0-9]+[.)])\\s+(?:\\[[ xX]\\]\\s+)?(.+)")

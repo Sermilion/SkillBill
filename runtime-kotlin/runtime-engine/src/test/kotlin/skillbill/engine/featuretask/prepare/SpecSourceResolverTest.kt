@@ -7,6 +7,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.application.decomposition.writeDecompositionManifestText
 import skillbill.application.testDecompositionManifestValidator
+import skillbill.application.testProjectStore
 import skillbill.engine.goalrunner.manifest
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -21,7 +22,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class SpecSourceResolverTest {
-  private val resolver = SpecSourceResolver(TestDecompositionManifestStore, testDecompositionManifestValidator)
+  private val resolver =
+    SpecSourceResolver(TestDecompositionManifestStore, testDecompositionManifestValidator, testProjectStore)
 
   @Test
   fun `reads spec_source from the decomposition manifest for decomposed runs`() {

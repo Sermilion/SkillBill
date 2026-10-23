@@ -19,7 +19,7 @@ class DelegatedReviewRequestTest {
       )
 
     cases.forEach { (target, expected) ->
-      val request = delegatedReviewRequest("claude", Path.of("/tmp/repo"), target, INPUT)
+      val request = delegatedReviewRequest("claude", Path.of("/tmp/repo"), PROJECT_STORE_ROOT, target, INPUT)
 
       assertEquals(expected, Triple(request.scope, request.baseRevision, request.headRevision), "$target")
       assertEquals(CodeReviewExecutionMode.DELEGATED, request.codeReviewMode, "$target")
@@ -31,7 +31,7 @@ class DelegatedReviewRequestTest {
     val diff = Path.of("/tmp/review.diff")
     val target = ReviewTarget.Scoped(ParallelReviewScope.STAGED, BASE, HEAD, diff)
 
-    val request = delegatedReviewRequest("claude", Path.of("/tmp/repo"), target, INPUT)
+    val request = delegatedReviewRequest("claude", Path.of("/tmp/repo"), PROJECT_STORE_ROOT, target, INPUT)
 
     assertEquals(
       Triple(ParallelReviewScope.STAGED, BASE, HEAD),
@@ -53,5 +53,6 @@ class DelegatedReviewRequestTest {
     val HEAD = "b".repeat(40)
     val COMMIT = "c".repeat(40)
     val INPUT = GoalSubtaskReviewInput(BASE, HEAD, trackedDelta = "", ownedUntrackedPatches = "")
+    val PROJECT_STORE_ROOT: Path = Path.of("/tmp/project-store")
   }
 }

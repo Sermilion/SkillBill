@@ -10,6 +10,8 @@ import skillbill.application.decomposition.executionModel
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -146,7 +148,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     assertFailsWith<IllegalArgumentException> {
@@ -199,7 +201,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     val result =
@@ -257,7 +259,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     val result =
@@ -310,7 +312,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     db.transaction { unitOfWork ->
@@ -400,7 +402,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
   }
 
@@ -445,7 +447,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     db.transaction { unitOfWork ->
@@ -522,7 +524,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     db.transaction { unitOfWork ->
@@ -591,7 +593,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     db.transaction { unitOfWork ->
@@ -616,7 +618,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        checkout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     val result =

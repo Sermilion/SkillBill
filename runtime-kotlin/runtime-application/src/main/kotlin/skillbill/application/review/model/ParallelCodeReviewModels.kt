@@ -24,6 +24,7 @@ data class ParallelCodeReviewRequest(
   val agent1Id: String,
   val scope: ParallelReviewScope,
   val repoRoot: Path,
+  val projectStoreRoot: Path,
   val timeout: Duration?,
   val codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.DEFAULT,
   val resolvedTier: CodeReviewExecutionMode? = null,

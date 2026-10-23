@@ -7,6 +7,7 @@ import skillbill.application.decomposition.model.DecompositionManifestWriteReque
 import skillbill.application.loadDecompositionManifest
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
 import skillbill.application.writeIfDecomposed
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
@@ -29,6 +30,7 @@ class DecompositionManifestCommitCompletionTest {
       testDecompositionManifestWriter,
       testDecompositionManifestValidator,
       TestDecompositionManifestStore,
+      testProjectStore,
     )
 
   @Test

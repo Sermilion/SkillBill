@@ -17,7 +17,9 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
@@ -590,12 +592,12 @@ class DecompositionManifestCommitProjectionTest {
         decompositionManifestStore = fileStore,
         workflowSnapshotValidator = testWorkflowSnapshotValidator,
         decompositionManifestValidator = testDecompositionManifestValidator,
-        decompositionManifestWriter = DecompositionManifestWriter(),
+        decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
         repositoryRoot = RepositoryRoot(repoRoot),
         goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(

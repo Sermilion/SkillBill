@@ -5,8 +5,10 @@ import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
@@ -46,7 +48,7 @@ class WorkflowIssueKeyPersistenceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     val firstRuntime =
@@ -98,7 +100,7 @@ class WorkflowIssueKeyPersistenceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     assertFailsWith<SkillBillRuntimeException> {

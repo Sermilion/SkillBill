@@ -15,6 +15,8 @@ import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -220,6 +222,38 @@ class SpecIntentProjectionResolverTest {
   }
 
   @Test
+  fun `a store bundle wins over a legacy bundle for the same issue and keeps a store relative provenance path`() {
+    val repo = tempRepo()
+    val storeRoot = Files.createTempDirectory("spec-intent-store")
+    writeSpec(repo, ".feature-specs/SKILL-191-legacy/spec.md", governedSpec("Legacy outcome", "Legacy criterion."))
+    writeSpec(storeRoot, "specs/SKILL-191-stored/spec.md", governedSpec("Stored outcome", "Stored criterion."))
+
+    val resolved =
+      resolver(projectStore = FixedProjectStorePort(storeRoot)).resolve(
+        SpecIntentProjectionResolveRequest(repoRoot = repo.toFileLocation(), branchName = "feat/SKILL-191-runtime"),
+      )
+
+    val projection = assertIs<SpecIntentResolution.Resolved>(resolved).projection
+    assertEquals("Stored outcome", projection.intendedOutcome)
+    assertEquals("specs/SKILL-191-stored/spec.md", projection.provenance.specPath)
+  }
+
+  @Test
+  fun `a legacy only bundle still resolves with a legacy relative provenance path`() {
+    val repo = tempRepo()
+    writeSpec(repo, ".feature-specs/SKILL-191-legacy/spec.md", governedSpec("Legacy outcome", "Legacy criterion."))
+
+    val resolved =
+      resolver().resolve(
+        SpecIntentProjectionResolveRequest(repoRoot = repo.toFileLocation(), branchName = "feat/SKILL-191-runtime"),
+      )
+
+    val projection = assertIs<SpecIntentResolution.Resolved>(resolved).projection
+    assertEquals("Legacy outcome", projection.intendedOutcome)
+    assertEquals(".feature-specs/SKILL-191-legacy/spec.md", projection.provenance.specPath)
+  }
+
+  @Test
   fun `no glob match resolves to none with no_spec_found`() {
     val repo = tempRepo()
     Files.createDirectories(repo.resolve(".feature-specs"))
@@ -385,6 +419,7 @@ class SpecIntentProjectionResolverTest {
           },
           store,
         ),
+        FixedProjectStorePort(Files.createTempDirectory("spec-intent-store")),
       )
 
     assertFailsWith<InterruptedException> {
@@ -445,7 +480,15 @@ private fun extractProjection(
   spec: Path,
   budget: ReviewContextBudgetPolicy = ReviewContextBudgetPolicy.DEFAULT,
 ): SpecIntentProjection =
-  when (val read = extractor().extract(repo, spec, budget)) {
+  when (
+    val read =
+      extractor().extract(
+        repo,
+        spec,
+        budget,
+        store = FixedProjectStorePort(Files.createTempDirectory("spec-intent-store")).resolve(repo),
+      )
+  ) {
     is SpecIntentSourceRead.Read -> read.value
     is SpecIntentSourceRead.Unavailable -> error("Expected a readable spec but it was ${read.reason}: ${read.specPath}")
   }
@@ -461,12 +504,15 @@ private fun extractor() =
     TestDecompositionManifestStore,
   )
 
-internal fun resolver(validator: DecompositionManifestValidator = testDecompositionManifestValidator) =
-  SpecIntentProjectionResolver(
-    TestDecompositionManifestStore,
-    validator,
-    extractor(),
-  )
+internal fun resolver(
+  validator: DecompositionManifestValidator = testDecompositionManifestValidator,
+  projectStore: ProjectStorePort = FixedProjectStorePort(Files.createTempDirectory("spec-intent-store")),
+) = SpecIntentProjectionResolver(
+  TestDecompositionManifestStore,
+  validator,
+  extractor(),
+  projectStore,
+)
 
 private fun repairedManifestValidator(): DecompositionManifestValidator =
   object : DecompositionManifestValidator by testDecompositionManifestValidator {

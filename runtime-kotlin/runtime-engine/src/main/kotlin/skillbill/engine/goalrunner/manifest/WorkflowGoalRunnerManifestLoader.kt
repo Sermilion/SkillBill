@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.manifest
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.application.workflow.decomposition.findDecomposedParentOrCorruptFallback
@@ -13,6 +14,7 @@ import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -37,6 +39,7 @@ class WorkflowGoalRunnerManifestLoader(
   private val decompositionManifestStore: DecompositionManifestStore,
   private val clock: Clock,
   private val random: Random,
+  private val projectStore: ProjectStorePort,
 ) {
   private val engine = WorkflowEngine()
   private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
@@ -46,7 +49,7 @@ class WorkflowGoalRunnerManifestLoader(
     issueKey: String,
     recoverPending: Boolean = true,
   ) = resolveDecompositionManifest(
-    repoRoot = repoRoot,
+    scope = SpecBundleScope(repoRoot, projectStore.resolve(repoRoot)),
     issueKey = issueKey,
     fileStore = decompositionManifestStore,
     validator = decompositionManifestValidator,

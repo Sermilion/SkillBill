@@ -158,7 +158,12 @@ class VerifyQaStep(
         checkout,
         run.target.headRevision,
       ) + QaPromptSections.supplement(qa)
-    val context = run.context.copy(repoRoot = checkout, additionalWritableDirectories = listOf(qa.workspace.directory))
+    val context =
+      run.context.copy(
+        repoRoot = checkout,
+        additionalWritableDirectories =
+          (run.context.additionalWritableDirectories + listOf(qa.workspace.directory)).distinct(),
+      )
     return when (val step = run.context.steps.runReportOnly(context, VerifyPromptSections.QA_STEP, directive, prior)) {
       is OperationStepResult.Failed -> stopped(step.reason)
       is OperationStepResult.Refused -> stopped(step.refusal.reason)

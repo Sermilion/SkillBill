@@ -33,6 +33,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -55,6 +56,7 @@ internal class FeatureTaskRuntimeRunLoopContext(
   val qualityGateCycles: RuntimeQualityGateCycles,
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
+  val projectStoreRoot: Path,
 ) : PhaseRunLoopAttemptCollaborators {
   val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = runState.commitPushManifestCompletion
@@ -231,6 +233,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
   private val diffResolver: DiffResolverPort,
   private val implementationChecklistStore: FeatureTaskImplementationChecklistStore,
   private val commitPushManifestCompletion: CommitPushManifestCompletion,
+  private val projectStore: ProjectStorePort,
 ) {
   internal fun context(
     request: FeatureTaskRuntimeRunFacts,
@@ -249,6 +252,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
       qualityGateCycles,
       sharedEvidenceResolver,
       diffResolver,
+      projectStore.resolve(request.repoRoot).root,
     )
   }
 

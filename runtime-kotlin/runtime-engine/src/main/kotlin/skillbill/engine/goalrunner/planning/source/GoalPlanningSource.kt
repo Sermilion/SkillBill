@@ -1,6 +1,8 @@
 package skillbill.engine.goalrunner.planning.source
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
+import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.config.model.CompactionSettings
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
@@ -19,6 +21,7 @@ import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompositionHash
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
+import skillbill.engine.goalrunner.planning.outcome.canonicalStore
 import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.engine.goalrunner.telemetry.GoalPlanningProgressRecorder
@@ -30,6 +33,8 @@ import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -63,6 +68,7 @@ class PlanWorkflowGoalPlanningSource(
   private val legacyPreparations: GoalPlanningPreparationCheckpoint,
   private val replannedChildren: GoalReplannedChildCleanup,
   private val progressRecorder: GoalPlanningProgressRecorder,
+  private val projectStore: ProjectStorePort,
 ) : GoalPlanningSource {
   private val snapshots = PlanBundleSnapshots(planner)
 
@@ -91,6 +97,7 @@ class PlanWorkflowGoalPlanningSource(
         repositories.repositoryIdentity(request.repoRoot),
       ),
     canonicalRepository = canonicalRepository(request.repoRoot, repositories),
+    store = canonicalStore(projectStore.resolve(request.repoRoot), repositories),
   )
 
   private fun fromPlanWorkflow(scope: PlanningScope): GoalPlanningSweepOutcome.PreparedAll? =
@@ -285,8 +292,8 @@ class PlanWorkflowGoalPlanningSource(
     }
 
   private fun PlanningScope.governsParentSpec(governedSpecPath: String): Boolean =
-    resolvedGovernedPath(canonicalRepository, governedSpecPath, repositories) ==
-      resolvedGovernedPath(canonicalRepository, state.manifest.parentSpecPath, repositories)
+    resolvedGovernedPath(canonicalRepository, store, governedSpecPath, repositories) ==
+      resolvedGovernedPath(canonicalRepository, store, state.manifest.parentSpecPath, repositories)
 
   private fun loadPlan(workflowId: String): LinkedPlan? =
     database.read { unitOfWork ->
@@ -316,11 +323,14 @@ class PlanWorkflowGoalPlanningSource(
     }
 
   private fun PlanningScope.governedPathOf(subtask: DecompositionSubtask): String? =
-    resolvedSubSpecPath(canonicalRepository, subtask.specPath, repositories)
-      ?.let { path -> canonicalRepository.relativize(path).joinToString("/") }
+    subtask.specPath.takeIf(String::isNotBlank)?.let { specPath ->
+      val governed =
+        resolveFeatureTaskGovernedSpecPath(repositories, projectStore, request.repoRoot, Path.of(specPath))
+      (governed as? FeatureTaskGovernedSpecPathResult.Ok)?.relativePath
+    }
 
   private fun PlanningScope.diskHashOf(subtask: DecompositionSubtask): String? {
-    val path: Path = resolvedSubSpecPath(canonicalRepository, subtask.specPath, repositories) ?: return null
+    val path: Path = resolvedSubSpecPath(canonicalRepository, store, subtask.specPath, repositories) ?: return null
     return if (fileStore.isRegularFile(path)) sha256HexUtf8(fileStore.readText(path)) else null
   }
 
@@ -346,6 +356,7 @@ class PlanWorkflowGoalPlanningSource(
     val request: GoalRunnerRunRequest,
     val identity: GoalPlanningIdentity,
     val canonicalRepository: Path,
+    val store: ProjectStoreLocation,
   ) {
     val planned: List<DecompositionSubtask> =
       state.manifest.subtasks.filter { it.status.decompositionStatus() != DecompositionStatus.SKIPPED }

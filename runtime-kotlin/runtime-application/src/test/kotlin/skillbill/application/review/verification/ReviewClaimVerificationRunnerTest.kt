@@ -223,6 +223,7 @@ class ReviewClaimVerificationRunnerTest {
         budget = ReviewContextBudgetPolicy.DEFAULT,
         brokerId = "codex",
         repoRoot = repoRoot,
+        projectStoreRoot = repoRoot.resolve("project-store"),
         timeout = 1.seconds,
       ),
   )

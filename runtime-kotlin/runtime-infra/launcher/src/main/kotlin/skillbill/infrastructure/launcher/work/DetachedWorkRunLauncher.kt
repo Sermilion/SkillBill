@@ -8,6 +8,7 @@ import skillbill.install.model.AGENT_LAUNCHER_CLIS
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
@@ -25,10 +26,11 @@ class DetachedWorkRunLauncher internal constructor(
   private val environment: EnvironmentContext,
   private val diagnostics: RuntimeDiagnostics,
   private val startupGrace: Duration,
+  private val projectStore: ProjectStorePort,
 ) : WorkRunLauncher {
   @Inject
-  constructor(environment: EnvironmentContext, diagnostics: RuntimeDiagnostics) :
-    this(environment, diagnostics, STARTUP_GRACE)
+  constructor(environment: EnvironmentContext, diagnostics: RuntimeDiagnostics, projectStore: ProjectStorePort) :
+    this(environment, diagnostics, STARTUP_GRACE, projectStore)
 
   override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
     val launchEnvironment = launchEnvironment(request)
@@ -103,7 +105,14 @@ class DetachedWorkRunLauncher internal constructor(
     val executable =
       resolveExecutable(requireNotNull(AGENT_LAUNCHER_CLIS[agent]).executables)
         ?: return InstalledLaunch.Refused("The ${agent.id} harness is not installed or is not on PATH.")
-    val built = workRunHarnessCommand(request, harness, agent, launchEnvironment)
+    val built =
+      workRunHarnessCommand(
+        request,
+        harness,
+        agent,
+        launchEnvironment,
+        projectStore.resolve(request.repositoryRoot).root,
+      )
     return InstalledLaunch.Ready(
       listOf(executable.toString()) + built.command.drop(1),
       built.stdinText,

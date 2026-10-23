@@ -195,7 +195,8 @@ fun testWorkflowGoalRunnerManifestStore(
     decompositionManifestValidator = decompositionManifestValidator,
     decompositionManifestStore = decompositionManifestStore,
     clock = clock,
-    decompositionManifestWriter = DecompositionManifestWriter(),
+    decompositionManifestWriter =
+      DecompositionManifestWriter(FixedProjectStorePort(createTempDirectory("goal-runner-writer-project-store"))),
     repositoryRoot = testRepositoryRoot,
     planningHydrator = testGoalChildPlanningHydratorPort,
   )

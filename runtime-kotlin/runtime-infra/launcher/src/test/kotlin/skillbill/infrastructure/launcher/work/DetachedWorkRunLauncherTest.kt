@@ -4,6 +4,7 @@ import skillbill.install.model.AGENT_LAUNCHER_CLIS
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
@@ -220,6 +221,7 @@ class DetachedWorkRunLauncherTest {
           userHome = home,
         ),
         NoopRuntimeDiagnostics,
+        FixedProjectStorePort(home.resolve("project-store")),
       )
     val request =
       harnessRequest(home, "Resume monitor").copy(
@@ -243,6 +245,7 @@ class DetachedWorkRunLauncherTest {
         EnvironmentContext(environment = TRAY_ENVIRONMENT, userHome = home),
         NoopRuntimeDiagnostics,
         Duration.ofSeconds(10),
+        FixedProjectStorePort(home.resolve("project-store")),
       )
     val request = harnessRequest(home, "Resume monitor")
     repeat(2) {
@@ -272,6 +275,7 @@ class DetachedWorkRunLauncherTest {
     DetachedWorkRunLauncher(
       EnvironmentContext(environment = TRAY_ENVIRONMENT, userHome = home),
       NoopRuntimeDiagnostics,
+      FixedProjectStorePort(home.resolve("project-store")),
     )
 
   private fun await(condition: () -> Boolean) {

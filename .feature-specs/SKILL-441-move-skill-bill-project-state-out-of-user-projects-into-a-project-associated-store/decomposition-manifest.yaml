@@ -63,12 +63,12 @@ subtasks:
 - id: 4
   name: "Spec read side through the store and agent store access"
   spec_path: ".feature-specs/SKILL-441-move-skill-bill-project-state-out-of-user-projects-into-a-project-associated-store/spec_subtask_4_spec-read-side-and-agent-access.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261023-155717-1lvn"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

@@ -19,6 +19,7 @@ import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionManifestFileStore
 import skillbill.model.EnvironmentContext
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.nio.file.Files
 import java.nio.file.Path
@@ -30,8 +31,9 @@ import kotlin.test.assertTrue
 
 class FeatureSpecPreparationWriterValidationTest {
   private val validator = DecompositionManifestSchemaValidator()
-  private val fileStore = FileSystemDecompositionManifestFileStore()
-  private val writer = FeatureSpecPreparationWriter(validator, fileStore, DecompositionManifestWriter())
+  private val projectStore = FixedProjectStorePort(Files.createTempDirectory("skillbill-feature-spec-project-store"))
+  private val fileStore = FileSystemDecompositionManifestFileStore(projectStore)
+  private val writer = FeatureSpecPreparationWriter(validator, fileStore, DecompositionManifestWriter(projectStore))
 
   @Test
   fun `one subtask preparation writes runnable specs without inventing goal status`() {

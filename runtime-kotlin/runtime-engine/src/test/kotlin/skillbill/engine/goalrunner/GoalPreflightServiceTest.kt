@@ -13,6 +13,7 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.application.testDecompositionManifestValidator
+import skillbill.application.testProjectStore
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
@@ -304,6 +305,7 @@ class GoalPreflightServiceTest {
       manifestFileStore = fileStore,
       manifestValidator = testDecompositionManifestValidator,
       repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+      projectStore = testProjectStore,
     )
   }
 

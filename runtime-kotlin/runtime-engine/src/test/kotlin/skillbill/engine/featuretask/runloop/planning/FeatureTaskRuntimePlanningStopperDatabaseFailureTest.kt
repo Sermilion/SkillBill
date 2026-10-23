@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitionOwner
+import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
 import skillbill.engine.featuretask.runner.writePlanBundle
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -109,7 +110,8 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
           fileStore = TestDecompositionManifestStore,
           decompositionManifestWriter = testDecompositionManifestWriter,
         ),
-      specPathResolver = FileSystemFeatureSpecPathResolver(),
+      specPathResolver = FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+      projectStore = RUNNER_TEST_PROJECT_STORE,
     )
 
   private fun bundleRequest(): FeatureTaskRuntimeRunFacts =

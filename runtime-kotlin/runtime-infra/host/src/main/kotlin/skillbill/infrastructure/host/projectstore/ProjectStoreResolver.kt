@@ -3,6 +3,7 @@ package skillbill.infrastructure.host.projectstore
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.projectstore.PROJECT_STORE_RECORD_CONTRACT_VERSION
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.projectstore.ProjectStoreFailureCode
@@ -352,7 +353,7 @@ class ProjectStoreResolver(
     return ProjectStoreLocation(
       projectId = projectId,
       root = root,
-      specsRoot = root.resolve("specs"),
+      specsRoot = root.resolve(ProjectStoreLayout.SPECS_DIRECTORY),
       configPath = root.resolve("config.yaml"),
       runEvidenceRoot = root.resolve("run-evidence"),
       trackingRoot = root.resolve("feature-task-tracking"),

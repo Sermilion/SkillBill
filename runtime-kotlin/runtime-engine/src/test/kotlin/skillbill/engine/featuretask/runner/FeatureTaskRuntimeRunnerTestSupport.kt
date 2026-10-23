@@ -30,6 +30,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconc
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.lifecycle.core.ownership
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIdentityResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
@@ -153,6 +154,7 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
@@ -736,7 +738,11 @@ internal data class RuntimeHarnessConfig(
 }
 
 private fun runtimeSpecSourceResolver(): SpecSourceResolver =
-  SpecSourceResolver(TestDecompositionManifestStore, testDecompositionManifestValidator)
+  SpecSourceResolver(
+    TestDecompositionManifestStore,
+    testDecompositionManifestValidator,
+    RUNNER_TEST_PROJECT_STORE,
+  )
 
 private data class RuntimePhaseGatesDeps(
   val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
@@ -802,7 +808,8 @@ private fun defaultRepoLocalConfigPort(): RepoLocalConfigPort =
 private fun testSpecGate(
   specScratchStore: SpecScratchStore = RecordingSpecScratchStore(),
   specStatusWriter: FeatureTaskRuntimeSpecStatusWriter = RecordingSpecStatusWriter(),
-): FeatureTaskRuntimeSpecGate = FeatureTaskRuntimeSpecGate(specScratchStore, specStatusWriter, NoopRuntimeDiagnostics)
+): FeatureTaskRuntimeSpecGate =
+  FeatureTaskRuntimeSpecGate(specScratchStore, specStatusWriter, NoopRuntimeDiagnostics, RUNNER_TEST_PROJECT_STORE)
 
 private fun disabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory): FeatureTaskRuntimeLifecycleTelemetry =
   FeatureTaskRuntimeLifecycleTelemetry(
@@ -1470,6 +1477,7 @@ private fun runnerExecutionEntry(
       fixture.admission,
       resolver,
       repositories,
+      FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
     )
   }
   val facts = runnerSelectionFacts(config)
@@ -1496,7 +1504,13 @@ private fun runnerExecutionEntry(
       )
     }
   }
-  return FeatureTaskRuntimeExecutionEntry(database, fixture.admission, resolver, repositories)
+  return FeatureTaskRuntimeExecutionEntry(
+    database,
+    fixture.admission,
+    resolver,
+    repositories,
+    FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
+  )
 }
 
 private fun runnerSelectionFacts(config: RuntimeHarnessConfig): PhaseStrategySelectionFacts =
@@ -1525,6 +1539,10 @@ private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
   )
 }
 
+internal val RUNNER_TEST_STORE_ROOT: Path = Files.createTempDirectory("skillbill-runner-project-store")
+
+internal val RUNNER_TEST_PROJECT_STORE: ProjectStorePort = FixedProjectStorePort(RUNNER_TEST_STORE_ROOT)
+
 internal open class TestFeatureTaskRuntimeRunLoopEntry(
   gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
   decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner = testDecompositionPlanner(),
@@ -1541,6 +1559,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
         ReviewContextEnvelopeValidator { _, _ -> },
         TestDecompositionManifestStore,
       ),
+      RUNNER_TEST_PROJECT_STORE,
     ),
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry =
     FeatureTaskRuntimeLifecycleTelemetry(
@@ -1562,6 +1581,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
       FixedProjectStorePort(Files.createTempDirectory("skillbill-runner-store")),
     ),
   commitPushManifestCompletion: CommitPushManifestCompletion = NoopCommitPushManifestCompletion,
+  projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,
     decompositionPlanner,
@@ -1573,6 +1593,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
     diffResolver,
     implementationChecklistStore,
     commitPushManifestCompletion,
+    projectStore,
   ) {
   private var delegate: FeatureTaskRuntimeRunLoopEntry? = null
 
@@ -1594,7 +1615,8 @@ private fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
         fileStore = TestDecompositionManifestStore,
         decompositionManifestWriter = testDecompositionManifestWriter,
       ),
-    specPathResolver = FileSystemFeatureSpecPathResolver(),
+    specPathResolver = FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+    projectStore = RUNNER_TEST_PROJECT_STORE,
   )
 
 internal fun facts(stdout: String): AgentRunLaunchOutcome =
@@ -2722,4 +2744,5 @@ internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState)
     qualityGateCycles,
     sharedEvidenceResolver,
     diffResolver,
+    projectStoreRoot,
   )

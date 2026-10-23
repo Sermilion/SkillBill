@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.qa
 
 import org.junit.jupiter.api.io.TempDir
+import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -371,6 +372,7 @@ class GoalQaRepairLoopTest {
           testActivityStampWriter(),
           outcomes,
           QaCapabilityResolver(git) { listOf(pack) },
+          testProjectStore,
         )
     }
 

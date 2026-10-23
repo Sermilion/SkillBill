@@ -28,6 +28,7 @@ import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.evidence.ReviewEvidenceBrokerFactory
 import skillbill.ports.review.model.ResolvedReviewRubric
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
@@ -51,6 +52,8 @@ internal fun scriptedDelegatedReviewRunner(
   lanes: LaneScript,
 ): ParallelCodeReviewRunner {
   val envelopeValidator = ReviewContextSchemaValidator()
+  val projectStore = FixedProjectStorePort(home.resolve("project-store"))
+  val manifestStore = FileSystemDecompositionManifestFileStore(projectStore)
   return parallelCodeReviewRunnerOf(
     diffResolver = WorktreeDiffResolver(diffForChanges(DELEGATED_REVIEWED_PATH to "val connection = open()")),
     repoLocalConfig = DefaultRepoLocalConfig,
@@ -62,9 +65,10 @@ internal fun scriptedDelegatedReviewRunner(
       InstalledPlatformPackCatalogPort { listOf(sparseReviewPack("kotlin", "architecture", emptyMap())) },
     specIntentProjectionResolver =
       SpecIntentProjectionResolver(
-        FileSystemDecompositionManifestFileStore(),
+        manifestStore,
         DecompositionManifestSchemaValidator(),
-        SpecIntentProjectionExtractor(envelopeValidator, FileSystemDecompositionManifestFileStore()),
+        SpecIntentProjectionExtractor(envelopeValidator, manifestStore),
+        projectStore,
       ),
     parentReviewLauncher = lanes,
     reviewEvidenceBrokerFactory = ReviewEvidenceBrokerFactory(::FileSystemReviewEvidenceBroker),

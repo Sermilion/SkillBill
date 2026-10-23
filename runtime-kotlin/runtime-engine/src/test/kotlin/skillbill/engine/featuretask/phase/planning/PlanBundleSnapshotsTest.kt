@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runloop.planning.PlanUnit
 import skillbill.engine.featuretask.runloop.planning.PlanUnitRecords
+import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
 import skillbill.engine.featuretask.runner.writePlanBundle
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -40,7 +41,8 @@ class PlanBundleSnapshotsTest {
             fileStore = TestDecompositionManifestStore,
             decompositionManifestWriter = testDecompositionManifestWriter,
           ),
-        specPathResolver = FileSystemFeatureSpecPathResolver(),
+        specPathResolver = FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+        projectStore = RUNNER_TEST_PROJECT_STORE,
       ),
     )
 

@@ -6,12 +6,15 @@ import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
 import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanSeedRecorder
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.ports.projectstore.FixedProjectStorePort
+import kotlin.io.path.createTempDirectory
 
 fun testPlanIntake(): FeatureTaskRuntimePlanIntake =
   FeatureTaskRuntimePlanIntake(
@@ -19,6 +22,7 @@ fun testPlanIntake(): FeatureTaskRuntimePlanIntake =
     FeatureTaskRuntimePlanSeedRecorder(FakeDatabaseSessionFactory(InMemoryWorkflowStates())),
     TestDecompositionManifestStore,
     TestRepositoryEnclosingRoot,
+    FixedProjectStorePort(createTempDirectory("goal-intake-project-store")),
   )
 
 fun testGoalIntakePreparation(): GoalIntakePreparation =
@@ -31,4 +35,5 @@ fun testGoalIntakePreparation(): GoalIntakePreparation =
     ),
     FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
     TestDecompositionManifestStore,
+    testProjectStore,
   )

@@ -65,7 +65,10 @@ class FeatureTaskRuntimeQaExecutionTest {
         fixture.launcher.requests.map { it.skillRunRequest }
           .single { phaseIdFromPrompt(it.promptOverride.orEmpty()) == "qa" }
       val prompt = assertNotNull(qaLaunch.promptOverride)
-      assertEquals(listOf(Path.of(QA_TEST_QA_ROOT, "qa-test-invocation")), qaLaunch.additionalWritableDirectories)
+      assertEquals(
+        listOf(RUNNER_TEST_STORE_ROOT, Path.of(QA_TEST_QA_ROOT, "qa-test-invocation")),
+        qaLaunch.additionalWritableDirectories,
+      )
       assertEquals(Path.of(QA_TEST_QA_ROOT, "qa-test-invocation", "checkout"), qaLaunch.repoRoot)
       assertContains(prompt, "qa/android-qa.md")
       assertContains(prompt, "Report path: `${qaTestEvidencePrefix("qa-test-invocation")}report.md`")

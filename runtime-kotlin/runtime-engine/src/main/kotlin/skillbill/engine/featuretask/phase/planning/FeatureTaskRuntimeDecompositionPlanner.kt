@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.phase.planning
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
+import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
@@ -10,6 +11,7 @@ import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import java.nio.file.Path
@@ -19,7 +21,13 @@ class FeatureTaskRuntimeDecompositionPlanner(
   private val preparationRuntime: FeatureSpecPreparationRuntime,
   private val preparationWriter: FeatureSpecPreparationWriter,
   private val specPathResolver: FeatureSpecPathResolverPort,
+  private val projectStore: ProjectStorePort,
 ) {
+  fun bundlePath(
+    repoRoot: Path,
+    value: String,
+  ): Path = resolvedParentSpecPath(repoRoot, Path.of(value), projectStore.resolve(repoRoot))
+
   fun existingParentSpec(
     repoRoot: Path,
     issueKey: String,

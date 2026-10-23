@@ -1,8 +1,11 @@
 package skillbill.application.decomposition
 
 import skillbill.application.decomposition.model.DecompositionManifestFileCandidate
+import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema
+import skillbill.ports.projectstore.model.ProjectStoreLocation
+import skillbill.ports.projectstore.model.classifySpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -30,12 +33,13 @@ fun loadDecompositionManifest(
 }
 
 fun findMatchingDecompositionManifests(
-  repoRoot: Path,
+  scope: SpecBundleScope,
   issueKey: String,
   fileStore: DecompositionManifestStore,
   validator: DecompositionManifestValidator,
   recoverPending: Boolean = true,
 ): List<DecompositionManifestFileCandidate> {
+  val (repoRoot, store) = scope
   val normalizedIssueKey = issueKey.trim().uppercase()
   val issueKeyInPath = Regex("(?<![A-Za-z0-9])${Regex.escape(normalizedIssueKey)}(?![A-Za-z0-9])")
   val manifestFiles =
@@ -47,13 +51,8 @@ fun findMatchingDecompositionManifests(
   return manifestFiles
     .asSequence()
     .sortedBy(Path::toString)
-    .filterNot { path -> archivedDecompositionManifest(repoRoot, path) }
-    .filter { path ->
-      val relativePath =
-        runCatching { repoRoot.relativize(path).toString() }
-          .getOrElse { path.toString() }
-      issueKeyInPath.containsMatchIn(relativePath.uppercase())
-    }
+    .filterNot { path -> archivedDecompositionManifest(repoRoot, store, path) }
+    .filter { path -> issueKeyInPath.containsMatchIn(manifestLabel(repoRoot, store, path).uppercase()) }
     .map { path ->
       val manifest =
         try {
@@ -80,21 +79,30 @@ fun findMatchingDecompositionManifests(
     .toList()
 }
 
-fun resolveDecompositionManifest(
+private fun manifestLabel(
   repoRoot: Path,
+  store: ProjectStoreLocation,
+  path: Path,
+): String =
+  store.classifySpecPath(path.toAbsolutePath().normalize(), repoRoot.toAbsolutePath().normalize())?.relative
+    ?: runCatching { repoRoot.relativize(path).toString() }.getOrElse { path.toString() }
+
+fun resolveDecompositionManifest(
+  scope: SpecBundleScope,
   issueKey: String,
   fileStore: DecompositionManifestStore,
   validator: DecompositionManifestValidator,
   recoverPending: Boolean = true,
 ): DecompositionManifest? {
-  val candidates = findMatchingDecompositionManifests(repoRoot, issueKey, fileStore, validator, recoverPending)
+  val (repoRoot, store) = scope
+  val candidates = findMatchingDecompositionManifests(scope, issueKey, fileStore, validator, recoverPending)
   val activeCandidates = candidates.filter { candidate -> candidate.manifest.isActiveGoalRuntime() }
   if (activeCandidates.size > 1) {
     throw invalidDecompositionManifestSchema(
       sourceLabel = issueKey,
       reason =
         "multiple active decomposition manifests match the requested issue key: " +
-          activeCandidates.joinToString { candidate -> repoRoot.relativize(candidate.path).toString() } + ".",
+          activeCandidates.joinToString { candidate -> manifestLabel(repoRoot, store, candidate.path) } + ".",
       code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_DUPLICATE_ACTIVE,
     )
   }

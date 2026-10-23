@@ -42,6 +42,7 @@ import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
@@ -57,6 +58,7 @@ class GoalRunnerLaunchReconciler(
   private val worktreeEditJournalWriter: WorktreeEditJournalWriter,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
+  private val projectStore: ProjectStorePort,
 ) {
   private data class SubtaskLaunchDependencies(
     val tickReader: GoalRunnerTickProgressReader,
@@ -136,6 +138,7 @@ class GoalRunnerLaunchReconciler(
           spawnAuthorization = spawnAuthorization,
           activityStampSink = dependencies.activityStampSink,
           worktreeEditObserver = dependencies.worktreeEditObserver,
+          additionalWritableDirectories = listOf(projectStore.resolve(request.repoRoot).root),
         ),
     )
   }

@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionP
 import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.EnabledRuntimeTelemetrySettingsProvider
+import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
@@ -118,7 +119,10 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
     diagnostics = diagnostics,
     clock = clock,
     intakeResolver =
-      PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), FileSystemFeatureTaskRuntimeRunInvariantsSource()),
+      PhaseRunIntakeResolver(
+        FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+        FileSystemFeatureTaskRuntimeRunInvariantsSource(),
+      ),
     runLoopEntry = runLoopEntry,
     agentRunLauncher =
       object : AgentRunLauncher {

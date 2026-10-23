@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
 import skillbill.error.featuretask.PhaseIntakeRequiredError
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -16,7 +17,10 @@ import kotlin.test.assertFailsWith
 class PhaseRunIntakeResolverTest {
   private val repoRoot: Path = Files.createTempDirectory("skillbill-phase-intake-repo")
   private val resolver =
-    PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), FileSystemFeatureTaskRuntimeRunInvariantsSource())
+    PhaseRunIntakeResolver(
+      FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+      FileSystemFeatureTaskRuntimeRunInvariantsSource(),
+    )
 
   @AfterTest
   fun cleanUp() {
@@ -61,7 +65,7 @@ class PhaseRunIntakeResolverTest {
         override fun read(specPath: Path) = FeatureTaskRuntimeRunInvariantsRead.Rejected("spec token is unreadable")
       }
     val intake =
-      PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), source).resolve(
+      PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE), source).resolve(
         SkeletonDefinition.PLAN,
         PhaseRunRequest(
           definitionId = SkeletonDefinition.PLAN.id,

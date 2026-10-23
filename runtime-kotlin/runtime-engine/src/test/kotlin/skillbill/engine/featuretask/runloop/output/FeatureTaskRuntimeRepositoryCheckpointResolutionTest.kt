@@ -264,6 +264,7 @@ class FeatureTaskRuntimeRepositoryCheckpointResolutionTest {
           fileMutating = true,
           generationScoped = false,
         ),
+      projectStoreRoot = repoRoot.resolve("project-store"),
     )
 
   private fun memoryRecords(resolved: FeatureTaskRuntimeResolvedBranch) =

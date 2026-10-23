@@ -8,6 +8,7 @@ import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
@@ -34,6 +35,7 @@ class DecompositionManifestCommitCompletion(
   private val writer: DecompositionManifestWriter,
   private val validator: DecompositionManifestValidator,
   private val fileStore: DecompositionManifestStore,
+  private val projectStore: ProjectStorePort,
 ) : CommitPushManifestCompletion {
   override fun markCompleteBeforeFinalCommit(
     request: FeatureTaskRuntimeRunFacts,
@@ -57,7 +59,11 @@ class DecompositionManifestCommitCompletion(
     lastResumableStep: String,
   ): String? {
     val manifestPath =
-      resolvedParentSpecPath(request.repoRoot, Path.of(request.runInvariants.specReference))
+      resolvedParentSpecPath(
+        request.repoRoot,
+        Path.of(request.runInvariants.specReference),
+        projectStore.resolve(request.repoRoot),
+      )
         .parent
         ?.resolve(DECOMPOSITION_MANIFEST_FILENAME)
         ?: return "Goal commit could not resolve a decomposition manifest beside " +

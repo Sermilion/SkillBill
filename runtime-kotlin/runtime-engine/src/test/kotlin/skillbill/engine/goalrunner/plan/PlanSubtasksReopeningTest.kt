@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerm
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
+import skillbill.engine.featuretask.runner.RUNNER_TEST_PROJECT_STORE
 import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkflowIds
 import skillbill.engine.goalrunner.planning.source.findLinkedSubtaskPlanWorkflowId
@@ -389,7 +390,8 @@ class PlanSubtasksReopeningTest {
           TestDecompositionManifestStore,
           testDecompositionManifestWriter,
         ),
-        FileSystemFeatureSpecPathResolver(),
+        FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+        RUNNER_TEST_PROJECT_STORE,
       ),
       FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
       testHarnessClock,
