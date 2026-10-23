@@ -41,7 +41,7 @@ The desktop archive filename still carries the exact Skill Bill release version.
 
 After each runtime release publishes, the workflow deletes assets from every
 older runtime release, including prereleases. Their release pages and notes stay
-available, and plugin releases keep their own downloads. Only the newest
+available. Only the newest
 published runtime release keeps downloads. Ordinary pushes to `main` do not
 build the tray app. Pull requests that touch `desktop-tray` or `runtime-kotlin`
 run the cross-platform build and publish a downloadable snapshot; cleanup keeps
@@ -197,39 +197,3 @@ git clone --branch "$TAG" --depth 1 <this-repo> ~/Development/skill-bill
 cd ~/Development/skill-bill
 ./install.sh
 ```
-
-## Releasing the IntelliJ plugin
-
-The IntelliJ plugin releases on its own tag stream, separate from the runtime.
-
-- **Tag format**: `plugin-vX.Y.Z` (plain semver only — `plugin-v0.1.0`, never
-  `plugin-v0.1` or `plugin-v0.1.0-rc.1`). Pushing such a tag runs
-  `.github/workflows/plugin-release.yml`, which derives the build version from the
-  tag (`plugin-v0.1.0` → `0.1.0`) and passes it to Gradle as `-Pversion`;
-  `intellij-plugin/gradle.properties` keeps its `-SNAPSHOT` version for local work.
-- **Independent versioning**: the plugin version has no relationship to the runtime
-  semver in `VERSION`. Plugin compatibility is dictated by the IDE build range in
-  `intellij-plugin/build.gradle.kts`, not by which runtime release is current.
-- **Published assets**: exactly two —
-  `skill-bill-intellij-plugin-<version>.zip` and its `.sha256` sidecar. The workflow
-  fails before creating the release if either is missing or if any other file is
-  staged.
-- **Never cross the streams**: a `plugin-v*` tag must never be used to cut a runtime
-  release, and a runtime `v*` tag must never build or publish the plugin. Runtime tags
-  are handled solely by `release.yml`, which knows nothing about the plugin.
-
-## Releasing the VS Code extension
-
-The VS Code extension releases on its own tag stream, separate from the runtime and
-IntelliJ plugin.
-
-- **Tag format**: `extension-vX.Y.Z` (plain semver only — `extension-v0.1.0`, never
-  `extension-v0.1` or `extension-v0.1.0-rc.1`). Pushing such a tag runs
-  `.github/workflows/extension-release.yml`, which derives the build version from the
-  tag (`extension-v0.1.0` → `0.1.0`) and passes it to `npm version` before `vsce package`.
-- **Published assets**: exactly two —
-  `skill-bill-vscode-extension-<version>.vsix` and its `.sha256` sidecar. The workflow
-  fails before creating the release if either is missing or if any other file is staged.
-- **Never cross the streams**: an `extension-v*` tag must never be used to cut a runtime
-  or plugin release, and runtime `v*` / `plugin-v*` tags must never build the extension.
-  Self-hosted runners are not used for extension packaging.

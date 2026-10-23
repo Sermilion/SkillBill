@@ -233,7 +233,7 @@ Goal activity for another run. Each subtask lists its review verdict, audit resu
 | `skill-bill goal APP-123 --agent claude` | Launch or continue the goal with a given agent |
 | `skill-bill work status --format json` | Repository work snapshot for integrations |
 
-**IDE plugins.** The [IntelliJ plugin](intellij-plugin/README.md) and [VS Code extension](vscode-extension/README.md) show work status, planning progress, the active phase, and elapsed time, with stop and pause controls. They ship separately as `plugin-v*` and `extension-v*` releases.
+**IDE plugins retired.** The Skill Bill desktop app replaces the former IntelliJ plugin and VS Code extension. They are retired and no longer supported or released; running the installer removes previously installed copies.
 
 ## Platform packs
 
@@ -467,7 +467,7 @@ Telemetry and stored workflow rows still use some retired names, such as `bill-c
 
 ## Contributing
 
-See [Contributing](CONTRIBUTING.md), the [source-generation guide](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing contracts. The runtime, desktop app, IntelliJ plugin, and VS Code extension build separately.
+See [Contributing](CONTRIBUTING.md), the [source-generation guide](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing contracts. The runtime and desktop app build separately.
 
 ## License
 

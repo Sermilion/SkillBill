@@ -22,8 +22,6 @@ Those surfaces use the same governed repo structure:
 - `platform-packs/` contains manifest-declared platform packs
 - `orchestration/` contains shared contracts and playbooks
 - `runtime-kotlin/` contains the packaged CLI and MCP runtime
-- `intellij-plugin/` contains the isolated IntelliJ IDEA status plugin (separate Gradle build; see `intellij-plugin/README.md` and `intellij-plugin/ARCHITECTURE.md`)
-- `vscode-extension/` contains the isolated VS Code status extension (separate npm build; see `vscode-extension/README.md` and `vscode-extension/ARCHITECTURE.md`)
 - `scripts/` and `tests/` contain repo validation and maintainer tooling
 
 ## Install
@@ -502,14 +500,6 @@ scripts/validate_agent_configs
 ```
 
 `./gradlew check` is a maintainer validation command inside `runtime-kotlin/`; it is not part of normal installed command execution.
-
-When changing the IntelliJ plugin, also run its isolated gate (JDK 21):
-
-```bash
-(cd intellij-plugin && ./gradlew check verifyPlugin)
-```
-
-Do not fold IntelliJ Platform tasks into `runtime-kotlin`. Plugin local setup, CLI path resolution (preference override then `PATH` lookup of `skill-bill`), compatibility range (IDEA 2025.2 and newer), and architecture notes live in `intellij-plugin/README.md` and `intellij-plugin/ARCHITECTURE.md`.
 
 ## Reference Docs
 

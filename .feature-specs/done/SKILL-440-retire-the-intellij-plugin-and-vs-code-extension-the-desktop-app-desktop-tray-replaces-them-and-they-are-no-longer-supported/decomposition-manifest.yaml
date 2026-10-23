@@ -1,0 +1,40 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-440"
+feature_name: "retire-the-intellij-plugin-and-vs-code-extension-the-desktop-app-desktop-tray-replaces-them-and-they-are-no-longer-supported"
+parent_spec_path: ".feature-specs/SKILL-440-retire-the-intellij-plugin-and-vs-code-extension-the-desktop-app-desktop-tray-replaces-them-and-they-are-no-longer-supported/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-440-retire-the-intellij-plugin-and-vs-code-extension-the-desktop-app-desktop-tray-replaces-them-and-they-are-no-longer-supported"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Remove the plugin trees, workflows, and every live reference"
+  spec_path: ".feature-specs/SKILL-440-retire-the-intellij-plugin-and-vs-code-extension-the-desktop-app-desktop-tray-replaces-them-and-they-are-no-longer-supported/spec_subtask_1_remove-plugin-trees-and-references.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261023-101407-z1hh"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "Installer and uninstaller remove retired IDE plugin copies"
+  spec_path: ".feature-specs/SKILL-440-retire-the-intellij-plugin-and-vs-code-extension-the-desktop-app-desktop-tray-replaces-them-and-they-are-no-longer-supported/spec_subtask_2_installer-retired-plugin-cleanup.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261023-102903-m71y"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

@@ -647,7 +647,6 @@ object PrincipleEnforcementInventory {
   val inlineFqnScanRoots: List<String> =
     listOf(
       "runtime-kotlin",
-      "intellij-plugin",
       "runtime-kotlin/build-logic",
     )
 
@@ -767,7 +766,7 @@ object PrincipleEnforcementInventory {
       .filterNot { moduleName -> moduleName == "runtime-infra" }
       .map { moduleName ->
         "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory(moduleName)}/src/main/kotlin"
-      } + "intellij-plugin/src/main/kotlin"
+      }
 
   val packageSiblingCountRemainderInventory: Map<String, String> = emptyMap()
 

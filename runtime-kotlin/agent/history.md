@@ -1,3 +1,14 @@
+## [2026-10-23] SKILL-440 subtask 1: retire the IntelliJ plugin and VS Code extension trees
+Areas: intellij-plugin and vscode-extension (deleted); .github/workflows; README.md, CONTRIBUTING.md, RELEASING.md, AGENTS.md, docs; orchestration/shell-content-contract; scripts; runtime-kotlin/runtime-core repoTest architecture guards; runtime-infra/contracts readiness schema test
+- MEDIUM feature. The top-level `intellij-plugin/` and `vscode-extension/` projects (with their own agent history and decisions files) and the `plugin-ci`, `plugin-release` and `extension-release` workflows are removed, along with their `.gitignore` entries. The desktop app replaces both.
+- README "IDE plugins" paragraph is now a retirement note (desktop app replaces them, no longer supported or released, installer removes old copies). The plugin sections of CONTRIBUTING, RELEASING and getting-started are deleted.
+- Authored-Kotlin root lists in AGENTS, code-principles and shell-ceremony now name only `runtime-kotlin` and `runtime-kotlin/build-logic`; the two skill361 helper scripts drop the plugin scan roots.
+- Architecture guards (`ArchitectureBaselineRecorder`, both production line-ceiling tests, `PrincipleEnforcementInventory`) scan only `runtime-kotlin`; the `intellij plugin retains its layer package roots` case in `PackageSiblingCountArchitectureTest` is deleted. The readiness schema test now cites the `desktop-tray` gate command.
+- Limits: `scripts/install_smoke_test.sh` keeps one `skill-bill-intellij-plugin` asset fixture, and `plugin-v*` comments remain in `install.sh` and the smoke script; installer cleanup is subtask 2. History and decision files that mention the plugins stay as records.
+- Validate passed (runtime check, agnix, agent-config validation, desktop-tray check); the install smoke scripts were not runnable headless, so PR CI is authoritative for them.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate passed)
+
 ## [2026-10-22] SKILL-437 subtask 6: strategy documentation for the simplified layer
 Areas: docs (model-specific-phase-strategies, runtime-command-guidance); runtime-kotlin/ARCHITECTURE.md; runtime-kotlin/agent/decisions.md
 - MEDIUM feature, documentation only. `docs/model-specific-phase-strategies.md` is rewritten around the landed design: a model is not a strategy, and adding one is a single `PhaseModelProfileClassifier` case plus directive resources registered with `ModelDirectiveSupplements`.

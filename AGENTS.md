@@ -90,7 +90,7 @@ Write few, high-value tests; name the realistic bug each would catch before auth
 
 ## Comments
 
-Authored Kotlin under `runtime-kotlin`, `intellij-plugin`, and
+Authored Kotlin under `runtime-kotlin` and
 `runtime-kotlin/build-logic` must contain no `//` line comments and no non-KDoc
 `/* */` block comments. `/** */` KDoc is allowed only on `interface` declarations
 and their members (including nested types inside an interface). Irreducible

@@ -289,8 +289,8 @@ rule asserted in prose or review with no entry in `enforceableRules` or
 
 ## Imports And Simple Names (No Inline FQN)
 
-**Rule.** Production and test Kotlin under `runtime-kotlin`, `intellij-plugin`,
-and `runtime-kotlin/build-logic` reference types by imported simple name. Inline
+**Rule.** Production and test Kotlin under `runtime-kotlin` and
+`runtime-kotlin/build-logic` reference types by imported simple name. Inline
 fully-qualified references are not a style option.
 
 **Preferred shapes.** `import` at file top; `import a.Foo as FooA` when simple
@@ -314,7 +314,7 @@ names for tests, not production style.
 
 ## Comments And Interface KDoc
 
-**Rule.** Authored Kotlin under `runtime-kotlin`, `intellij-plugin`, and
+**Rule.** Authored Kotlin under `runtime-kotlin` and
 `runtime-kotlin/build-logic` contains no `//` line comments and no non-KDoc
 `/* */` block comments. `/** */` KDoc is allowed only on `interface` declarations
 and their members, including nested types inside an interface. Move irreducible why-only prose to the owning area

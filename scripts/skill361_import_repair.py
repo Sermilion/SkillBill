@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCAN_ROOTS = [REPO / "runtime-kotlin", REPO / "intellij-plugin"]
+SCAN_ROOTS = [REPO / "runtime-kotlin"]
 
 SYMBOL_RE = re.compile(
     r"^(?:(?:private|internal|public)\s+)?(?:data\s+|sealed\s+|open\s+|abstract\s+|enum\s+)?"
