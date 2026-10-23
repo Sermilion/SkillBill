@@ -81,6 +81,12 @@ object UnavailableRepositoryOwnedPathsGitOperations : RepositoryOwnedPathsGitOpe
 }
 
 object UnavailableRepositoryFingerprintGitOperations : RepositoryFingerprintGitOperations {
+  override fun scopedContentFingerprint(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult =
+    error("WorkflowGitOperations must provide a scoped content fingerprint implementation.")
+
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     error("WorkflowGitOperations must provide a repository fingerprint implementation.")
 

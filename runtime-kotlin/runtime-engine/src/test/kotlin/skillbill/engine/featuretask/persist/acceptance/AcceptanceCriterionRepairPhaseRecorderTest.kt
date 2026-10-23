@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
@@ -41,6 +42,10 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   private val git =
     object : WorkflowGitOperations by NoopWorkflowGitOperations {
       override fun repositoryFingerprint(repoRoot: Path) = WorkflowGitOperationResult.Ok("current-source")
+
+      override fun trackedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(emptyList())
+
+      override fun repositoryOwnedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(emptyList())
     }
 
   @Test

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.persist.acceptance
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEvidence
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairCommit
@@ -16,9 +17,12 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.core.auditProseValue
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -162,7 +166,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
         "Initial acceptance discovery requires the audit phase.",
       )
     }
-    if (gitOperations.repositoryFingerprint(session.root).let {
+    if (sourceFingerprint(session.root).let {
         !it.ok || it.value.isBlank()
       }
     ) {
@@ -185,7 +189,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): RequiredPhaseWrite {
     val prose = auditProseValue(envelope) ?: phase.outputArtifact.orEmpty()
     val checkpoint =
-      gitOperations.repositoryFingerprint(session.root).takeIf { it.ok && it.value.isNotBlank() }?.value
+      sourceFingerprint(session.root).takeIf { it.ok && it.value.isNotBlank() }?.value
         ?: return rejected(phase, "The repository fingerprint is unavailable.")
     val tree = sha256Hex(checkpoint)
     val digest = sha256Hex("${phase.workflowId}:${phase.phaseId}:${phase.attemptCount}:${state.revision}:$prose:$tree")
@@ -237,6 +241,23 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val clarification: Boolean,
     val continuing: Boolean,
   )
+
+  private fun sourceFingerprint(root: Path): WorkflowGitOperationResult {
+    val tracked =
+      when (val result = gitOperations.trackedPaths(root)) {
+        is WorkflowGitNameListResult.Listed -> result.names
+        is WorkflowGitNameListResult.Failed -> return WorkflowGitOperationResult.Failed(error = result.error)
+      }
+    val dirty =
+      when (val result = gitOperations.repositoryOwnedPaths(root)) {
+        is WorkflowGitNameListResult.Listed -> result.names
+        is WorkflowGitNameListResult.Failed -> return WorkflowGitOperationResult.Failed(error = result.error)
+      }
+    val paths =
+      (tracked + dirty)
+        .filterNot { isRuntimePrivatePath(it) || FeatureTaskRuntimeRunEvidenceOwnership.isRunEvidencePath(it) }
+    return gitOperations.scopedContentFingerprint(root, paths)
+  }
 
   private data class CommitContext(
     val auditEvidence: AcceptanceCriterionRepairAuditEvidence? = null,

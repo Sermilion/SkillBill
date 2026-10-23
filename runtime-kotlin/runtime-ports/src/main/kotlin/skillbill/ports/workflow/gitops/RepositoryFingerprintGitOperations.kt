@@ -6,6 +6,12 @@ import java.nio.file.Path
 interface RepositoryFingerprintGitOperations {
   fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult
 
+  /** Digests current contents of the supplied paths independently of HEAD and index state. */
+  fun scopedContentFingerprint(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult
+
   fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult
 
   fun revisionTreeIdentity(

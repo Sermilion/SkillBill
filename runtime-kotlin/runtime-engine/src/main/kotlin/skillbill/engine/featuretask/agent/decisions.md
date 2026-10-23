@@ -1,3 +1,24 @@
+## [2026-10-23] Bind acceptance verification to source contents
+
+Context: GV-1 recorded three satisfied AC-001 audits as failed repairs. The
+repair recorder compared repository fingerprints that included mutable
+`.skill-bill` projections, run evidence, HEAD and index state. Runtime writes
+and checkpoint commits changed that fingerprint without changing source.
+
+Decision: Acceptance discovery and repair verification digest current tracked
+and untracked file contents through a scoped Git port. The engine excludes
+runtime-private files and run evidence using the existing path policies.
+Repository configuration and phase instructions remain in scope. The digest
+includes executable modes and symlink targets, and remains stable across
+staging, commits and committed deletions. Other fingerprint consumers retain
+their existing semantics.
+
+Reason: Independent verification must accept unchanged source after runtime
+bookkeeping while still rejecting edits after repair completion. Real Git and
+SQLite integration tests reproduce the false failure and check source,
+configuration and phase-instruction edits. Prior outcomes remain in history;
+the existing operator resume path grants a new budget to the blocked run.
+
 ## [2026-10-22] Project phase instructions skip with a warning and never touch the output contract
 Context: SKILL-434 lets a repo add `.skill-bill/phases/<phase>.md` text to a phase prompt, and that file is untrusted, user-edited input.
 Decision: The resolver never throws; an unreadable, oversized, malformed or unknown-phase file is skipped with a warning and the run continues. The prompt section says the text cannot change the output or settlement contract, and the launch briefing records only path and sha256.

@@ -401,6 +401,11 @@ class RecordingWorkflowGitOperations(
     )
   }
 
+  override fun scopedContentFingerprint(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult = repositoryFingerprint(repoRoot)
+
   override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult = repositoryFingerprint(repoRoot)
 
   override fun revisionTreeIdentity(

@@ -8,10 +8,71 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class GitRepositoryFingerprintOperationsTest {
+  @Test
+  fun `scoped contents survive staging commits and committed deletions but detect file changes`() {
+    val root = initRepo("skillbill-content-fingerprint")
+    try {
+      val operations = GitWorkflowGitOperations()
+      val added = root.resolve("new.txt")
+      Files.writeString(added, "new source\n")
+      val paths = listOf("tracked.txt", "new.txt")
+
+      fun fingerprint() =
+        assertIs<WorkflowGitOperationResult.Ok>(operations.scopedContentFingerprint(root, paths)).value
+      val before = fingerprint()
+      git(root, "add", ".")
+      assertEquals(before, fingerprint())
+      git(root, "commit", "-m", "checkpoint")
+      assertEquals(before, fingerprint())
+      Files.writeString(added, "changed source\n")
+      assertNotEquals(before, fingerprint())
+      Files.delete(added)
+      val deleted = fingerprint()
+      git(root, "add", ".")
+      git(root, "commit", "-m", "delete")
+      assertEquals(deleted, operations.scopedContentFingerprint(root, listOf("tracked.txt")).value)
+      assertIs<WorkflowGitOperationResult.Failed>(operations.scopedContentFingerprint(root, listOf("../outside")))
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `scoped contents detect executable mode symlink targets and same size large file edits`() {
+    val root = initRepo("skillbill-content-fingerprint-types")
+    try {
+      val operations = GitWorkflowGitOperations()
+      val source = root.resolve("tracked.txt")
+      val link = root.resolve("source.link")
+      Files.createSymbolicLink(link, Path.of("tracked.txt"))
+
+      fun fingerprint() =
+        assertIs<WorkflowGitOperationResult.Ok>(
+          operations.scopedContentFingerprint(root, listOf("tracked.txt", "source.link")),
+        ).value
+      val before = fingerprint()
+      assertTrue(source.toFile().setExecutable(!Files.isExecutable(source)))
+      val executable = fingerprint()
+      assertNotEquals(before, executable)
+      Files.delete(link)
+      Files.createSymbolicLink(link, Path.of("absent.txt"))
+      assertNotEquals(executable, fingerprint())
+      Files.write(source, ByteArray(2 * 1024 * 1024) { 1 })
+      val large = fingerprint()
+      val modified = Files.getLastModifiedTime(source)
+      Files.write(source, ByteArray(2 * 1024 * 1024) { 2 })
+      Files.setLastModifiedTime(source, modified)
+      assertNotEquals(large, fingerprint())
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
   @Test
   fun `repository fingerprint changes when tracked content changes`() {
     val repoRoot = initRepo("skillbill-fingerprint-tracked")

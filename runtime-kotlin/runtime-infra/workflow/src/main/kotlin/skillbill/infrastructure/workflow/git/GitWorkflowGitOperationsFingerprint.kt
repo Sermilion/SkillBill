@@ -38,6 +38,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
@@ -45,6 +46,51 @@ import java.security.MessageDigest
 internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOperations {
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     worktreeDigest(repoRoot, "head", "HEAD")
+
+  override fun scopedContentFingerprint(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult {
+    val root = repoRoot.toAbsolutePath().normalize()
+    val digest = newSha256Digest()
+    return try {
+      for (path in paths.distinct().sorted()) {
+        val resolved = root.resolve(path).normalize()
+        if (!resolved.startsWith(root)) {
+          return WorkflowGitOperationResult.Failed(error = "Content fingerprint path escapes repository root: $path")
+        }
+        val attributes =
+          try {
+            Files.readAttributes(resolved, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+          } catch (_: NoSuchFileException) {
+            continue
+          }
+        val content =
+          when {
+            attributes.isSymbolicLink -> "symlink:${Files.readSymbolicLink(resolved)}"
+            attributes.isRegularFile -> {
+              requirePathContainedIn(resolved, root) { "Content fingerprint path escapes repository root: $path" }
+              val fileDigest = newSha256Digest()
+              Files.newInputStream(resolved).use { input ->
+                val buffer = ByteArray(UNTRACKED_FINGERPRINT_BUFFER_BYTES)
+                var read = input.read(buffer)
+                while (read >= 0) {
+                  fileDigest.update(buffer, 0, read)
+                  read = input.read(buffer)
+                }
+              }
+              val hash = fileDigest.digest().joinToString("") { "%02x".format(it) }
+              "file:${Files.isExecutable(resolved)}:$hash"
+            }
+            else -> return WorkflowGitOperationResult.Failed(error = "Cannot fingerprint non-file path: $path")
+          }
+        UntrackedFingerprintDigest.digestPart(digest, path, content.toByteArray())
+      }
+      WorkflowGitOperationResult.Ok(value = digest.digest().joinToString("") { "%02x".format(it) })
+    } catch (error: IOException) {
+      WorkflowGitOperationResult.Failed(error = "Could not fingerprint scoped contents: ${error.message}")
+    }
+  }
 
   override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
     worktreeDigest(repoRoot, "head_tree", "HEAD^{tree}")
