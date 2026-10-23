@@ -1,6 +1,8 @@
 package skillbill.cli.goal.status
 
 import skillbill.cli.kernel.payload.CliPayloadStatus
+import skillbill.cli.kernel.work.GoalIncidentDetail
+import skillbill.cli.kernel.work.incidentText
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 
 internal fun goalStatusExitCode(
@@ -11,6 +13,8 @@ internal fun goalStatusExitCode(
 internal data class GoalWatchRefreshPresentation(
   val refreshIndex: Int,
   val projection: GoalRunnerStatusProjection?,
+  val incidentDetails: List<GoalIncidentDetail> = emptyList(),
+  val verbose: Boolean = false,
 )
 
 internal data class GoalWatchPresentation(
@@ -71,4 +75,5 @@ internal fun goalWatchRefreshText(refresh: GoalWatchRefreshPresentation): String
       )
     }
     projection?.let { appendDiffStatusLines(it, watchIndex = refresh.refreshIndex.toString()) }
+    refresh.incidentDetails.incidentText(refresh.verbose).forEach { appendLine(it) }
   }

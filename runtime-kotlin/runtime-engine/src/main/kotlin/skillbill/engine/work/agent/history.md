@@ -1,3 +1,16 @@
+## [2026-10-23] SKILL-435 subtask 5: shared incident presentation
+Areas: runtime-engine work, diagnostics and goalrunner; runtime-ports idestatus and blockincident; runtime-domain blockincident; runtime-contracts work and persistence; runtime-infra sqlite; runtime-cli kernel/work, goal, featuretask and phase; desktop-tray data, domain, detail and bootstrap; build-identity; docs
+- Added one runtime-built incident projection for terminal and desktop, with cause, progress, next action, evidence, recovery, report and telemetry status.
+- Retained up to 10 earlier incidents newest first after resume; current incident selection requires the accepted live workflow or invocation identity.
+- Followed runtime-owned recovery policy and read-only projection. Recovery attempts take precedence over eligibility when deriving progress.
+- reusable: incident projection DTOs, stable wire keys, bounded history reads, and shared CLI JSON/text mapping and recover-command formatting under cli/kernel/work.
+- Desktop maps typed recovery controls, refreshes detail after results, and presents prerequisite confirmation, preview, keyboard-accessible evidence and retained history.
+- Build identity advertises incident-detail capability and minimum read schema; unsupported runtimes show the newer-runtime message before incompatible detail access.
+- Compatibility: work detail adds incident and incident_history. Recovery commands include incident revision and prerequisite confirmations; no desktop writable database or recovery coordinator was added.
+- Known limits: history is capped at 10; telemetry exposes search identifiers without a PostHog URL.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-11] SKILL-418 subtask 1: governed work board and detail CLI
 Areas: runtime-engine work; runtime-cli work; runtime-contracts identity/status and failures; runtime-ports idestatus; runtime-infra contracts and sqlite; runtime-core workflow DI; orchestration/contracts
 - Added read-only work board and work detail commands with schema-validated 1.0 envelopes around existing ide-status 0.3 snapshots.

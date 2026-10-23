@@ -7,6 +7,7 @@ import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
@@ -329,11 +330,11 @@ internal fun ideStatusService(
     branchSource = CheckedOutBranchSource(::fixtureCheckedOutBranch),
     clock = ideStatusClock,
     repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
-    manifestStore = manifestStore,
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
     workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
     diagnostics = NoopRuntimeDiagnostics,
+    incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
 

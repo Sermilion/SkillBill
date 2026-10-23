@@ -13,6 +13,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentReport
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentState
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitionDecision
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitions
+import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
 import skillbill.workflow.taskruntime.model.blockincident.validation
 import java.time.Clock
 import java.time.Instant
@@ -103,6 +104,34 @@ class InMemoryBlockIncidentRepository(private val clock: Clock = Clock.systemUTC
     }
 
   override fun find(occurrenceToken: String): BlockIncident? = synchronized(this) { incidents[occurrenceToken] }
+
+  override fun listForWork(
+    workflowId: String?,
+    invocationId: String?,
+    limit: Int,
+  ): List<BlockIncident> =
+    synchronized(this) {
+      require(limit in 1..11)
+      incidents.values
+        .filter { incident ->
+          (
+            workflowId != null && (
+              incident.occurrence.workflowId == workflowId || incident.occurrence.parentWorkflowId == workflowId
+            )
+          ) ||
+            (
+              invocationId != null && (
+                incident.occurrence.invocationId == invocationId ||
+                  incident.aliases.any { StandalonePhaseIncidentAlias.belongsToInvocation(it, invocationId) }
+              )
+            )
+        }
+        .sortedWith(
+          compareByDescending<BlockIncident> { it.occurrence.observedAt }
+            .thenByDescending { it.occurrence.occurrenceToken },
+        )
+        .take(limit)
+    }
 
   override fun pending(limit: Int): List<BlockIncident> =
     synchronized(this) {

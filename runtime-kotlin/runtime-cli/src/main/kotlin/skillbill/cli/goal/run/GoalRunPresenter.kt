@@ -41,10 +41,16 @@ class GoalRunPresenter(
     )
   }
 
-  fun eventSink(): GoalRunnerEventSink =
+  fun eventSink(
+    renderIncident: (GoalRunnerRunEvent.SubtaskStopped) -> List<String> = { emptyList() },
+  ): GoalRunnerEventSink =
     GoalRunnerEventSink { event ->
       if (event is GoalRunnerRunEvent.ResumeRepaired) {
         inputs.liveStdout(event.repairs.joinToString("") { goalResumeRepairLine(event.issueKey, it) + "\n" })
+      }
+      if (liveOutput && event is GoalRunnerRunEvent.SubtaskStopped) {
+        val lines = renderIncident(event)
+        if (lines.isNotEmpty()) inputs.liveStdout(lines.joinToString("\n", postfix = "\n"))
       }
     }
 

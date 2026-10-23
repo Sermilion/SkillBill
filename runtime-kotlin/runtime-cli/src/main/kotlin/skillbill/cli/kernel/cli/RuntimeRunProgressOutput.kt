@@ -7,12 +7,22 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 internal fun runtimeRunEventSink(
   inputs: CliRunInputs,
   monitor: Boolean,
+  incidentLines: (String) -> List<String> = { emptyList() },
 ): FeatureTaskRuntimeRunEventSink =
   if (!monitor) {
     FeatureTaskRuntimeRunEventSink.NONE
   } else {
     FeatureTaskRuntimeRunEventSink { event ->
-      inputs.liveStdout(event.runtimeProgressLine())
+      val workflowId =
+        when (event) {
+          is FeatureTaskRuntimeRunEvent.PhaseBlocked -> event.workflowId
+          is FeatureTaskRuntimeRunEvent.BranchSetupBlocked -> event.workflowId
+          else -> null
+        }
+      val extra =
+        workflowId?.let(incidentLines)
+          ?.takeIf { it.isNotEmpty() }?.joinToString("\n", prefix = "\n").orEmpty()
+      inputs.liveStdout(event.runtimeProgressLine() + extra)
     }
   }
 

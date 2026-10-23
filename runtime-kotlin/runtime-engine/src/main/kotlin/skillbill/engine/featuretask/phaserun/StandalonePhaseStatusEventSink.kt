@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
@@ -25,6 +24,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelate
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
+import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CancellationException
@@ -134,8 +134,17 @@ class StandalonePhaseStatusEventSink(
     workflowId: String? = null,
     stepId: String? = null,
   ) {
-    settleRefused(reason, workflowId)
-    observeBlocked(reason, workflowId, stepId)
+    var blockedStepId: String? = null
+    runCatching {
+      ensureRegistered(workflowId)
+      blockedStepId = stepId ?: currentStep
+      currentStep = requireNotNull(blockedStepId)
+      persist(state = "blocked", finishedAt = null, terminalResult = reason)
+    }.onFailure { error ->
+      if (error is CancellationException) throw error
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status blocked settlement failed", error)
+    }
+    observeBlocked(reason, workflowId, blockedStepId ?: stepId)
   }
 
   fun settleRefused(
@@ -185,7 +194,7 @@ class StandalonePhaseStatusEventSink(
           invocationId = invocationId,
           executionId = registered?.executionId ?: registration.executionId,
           reason = reason,
-          alias = BlockIncidentAliases.standalonePhase(invocationId, blockedStepId),
+          alias = StandalonePhaseIncidentAlias.create(invocationId, blockedStepId),
           linkAcceptedFeatureTaskPhase = blockedWorkflowId != null,
           attempt = workerCoordinates?.phaseAttempt,
           generation = workerCoordinates?.generation,
@@ -280,7 +289,7 @@ class StandalonePhaseStatusEventSink(
     val record = database.transaction { it.standalonePhaseStatuses.register(registrationForWorkflow(workflowId)) }
     registered = record
     revision = record.statusRevision
-    currentStep = record.phaseId
+    currentStep = record.currentStep
   }
 
   private fun activityFor(event: FeatureTaskRuntimeRunEvent): String =

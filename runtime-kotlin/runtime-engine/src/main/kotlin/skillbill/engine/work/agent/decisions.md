@@ -1,3 +1,13 @@
+## [2026-10-23] Keep incident and recovery decisions in the runtime
+Context: SKILL-435 requires terminal and desktop to present the same saved incident account for goals and standalone phases.
+Decision: Build progress, next action and recovery eligibility once in the runtime work projection. CLI and desktop render it; desktop recovery uses runtime preview and control services.
+Reason: Independent presentation-side policy could disagree about recoverability or the next action. The shared projection preserves one account without adding a desktop writable database or recovery coordinator.
+
+## [2026-10-23] Separate the live incident from retained incident history
+Context: Work detail must keep earlier incidents after resume while recovery still targets the current accepted block.
+Decision: Select the current incident through its accepted workflow or invocation reference, and retain up to 10 other incidents newest first. Move resumed incidents to history.
+Reason: A recent historical incident does not establish the live recovery target. Keeping history separate preserves the saved account after resume without treating an old block as current.
+
 ## [2026-10-17] Diagnose skipped board rows as incompatible_record
 Context: Board consumers had only missing or invalid repository identity and missing completion time, so a skipped malformed work-list row had no coordinated diagnostic.
 Decision: Work-board contract 1.2 adds incompatible_record. Kotlin WorkBoardDiagnosticReason, schema const, and skipIncompatibleBoardItem emit it; ide-status stays 0.3.

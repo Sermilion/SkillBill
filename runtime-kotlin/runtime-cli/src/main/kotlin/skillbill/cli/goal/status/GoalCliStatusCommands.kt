@@ -14,11 +14,17 @@ import skillbill.cli.goal.run.IDLE_STOP_CONSECUTIVE_REFRESHES
 import skillbill.cli.goal.run.MILLIS_PER_SECOND
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.work.GoalIncidentDetail
+import skillbill.cli.kernel.work.GoalIncidentPresentationKeys
+import skillbill.cli.kernel.work.goalIncidentReferences
+import skillbill.cli.kernel.work.incidentPayload
+import skillbill.cli.kernel.work.readGoalIncidentDetails
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.MAX_ISSUE_KEY_LENGTH
 import skillbill.contracts.issuekey.isWellFormedIssueKey
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.work.IdeStatusService
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.databaseAccessCondition
@@ -36,6 +42,7 @@ class GoalStatusCommand(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
+  private val ideStatusService: IdeStatusService,
 ) : DocumentedCliCommand("status", "Show read-only decomposed goal status.") {
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
   private val monitorOnly by option(
@@ -74,6 +81,7 @@ class GoalStatusCommand(
     "--diff-hunk-max-bytes",
     help = "Maximum selected diff bytes to print across requested hunks.",
   ).int().default(DEFAULT_SELECTED_DIFF_MAX_BYTES)
+  private val verbose by option("--verbose", help = "Include saved incident evidence references.").flag(default = false)
 
   override fun run() {
     val options = statusCliRequestOptions()
@@ -86,9 +94,12 @@ class GoalStatusCommand(
     if (options.monitorOnly && (diffStat || diffHunks.isNotEmpty())) {
       throw UsageError("Monitor accepts only one bounded status snapshot; omit diff options.")
     }
+    var incidentDetails = emptyList<GoalIncidentDetail>()
     val projection =
       try {
-        goalRunnerStatusService.status(inputs.goalStatusRequest(options, repositoryEnclosingRootPort))
+        goalRunnerStatusService.status(inputs.goalStatusRequest(options, repositoryEnclosingRootPort)).also { current ->
+          incidentDetails = readGoalIncidentDetails(ideStatusService, current.goalIncidentReferences())
+        }
       } catch (error: SkillBillRuntimeException) {
         error.rethrowUnless(
           error.code in
@@ -103,7 +114,7 @@ class GoalStatusCommand(
         val reason = databaseAccessCondition(error)
         val payload = databaseUnavailableGoalStatusCliMap(issueKey, reason)
         state.completeText(
-          goalMonitorStatusText(issueKey, projection = null, databaseUnavailableReason = reason),
+          goalMonitorStatusText(issueKey, projection = null, databaseUnavailableReason = reason, verbose = verbose),
           payload,
           exitCode = goalStatusExitCode(projection = null, databaseUnavailable = true),
         )
@@ -111,15 +122,15 @@ class GoalStatusCommand(
       }
     val payload =
       if (options.monitorOnly) {
-        projection.toBoundedGoalStatusCliMap(issueKey)
+        projection.toBoundedGoalStatusCliMap(issueKey, incidentDetails)
       } else {
-        projection.toGoalStatusCliMap(issueKey)
+        projection.toGoalStatusCliMap(issueKey, incidentDetails)
       }
     val text =
       if (options.monitorOnly) {
-        goalMonitorStatusText(issueKey, projection)
+        goalMonitorStatusText(issueKey, projection, incidentDetails = incidentDetails, verbose = verbose)
       } else {
-        goalStatusText(issueKey, projection)
+        goalStatusText(issueKey, projection, incidentDetails, verbose)
       }
     state.completeText(text, payload, exitCode = goalStatusExitCode(projection))
   }
@@ -148,6 +159,7 @@ class GoalWatchCommand(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
+  private val ideStatusService: IdeStatusService,
 ) : DocumentedCliCommand("watch", "Refresh decomposed goal status without starting child runs.") {
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
   private val agent by option(
@@ -202,12 +214,14 @@ class GoalWatchCommand(
     "--suppress-unchanged",
     help = "Print only changed refreshes. The first and loop-ending refresh are always shown.",
   ).flag(default = false)
+  private val verbose by option("--verbose", help = "Include saved incident evidence references.").flag(default = false)
 
   override fun run() {
     require(intervalSeconds >= 0) { "--interval-seconds must be non-negative." }
     require(maxRefreshes >= 0) { "--max-refreshes must be non-negative." }
     var latestRefresh: Map<String, Any?>? = null
     var latestProjection: GoalRunnerStatusProjection? = null
+    var latestPresentation: GoalWatchRefreshPresentation? = null
     var refreshCount = 0
     var stopReason = ""
     var lastPrintedRefresh: String? = null
@@ -218,9 +232,12 @@ class GoalWatchCommand(
         goalRunnerStatusService.statusRefresh(
           inputs.goalStatusRequest(statusCliRequestOptions(), repositoryEnclosingRootPort),
         )
-      val refresh = projection.toGoalStatusCliMap(issueKey).withWatchRefresh(refreshCount)
+      val incidentDetails = readGoalIncidentDetails(ideStatusService, projection.goalIncidentReferences())
+      val refreshPresentation = GoalWatchRefreshPresentation(refreshCount, projection, incidentDetails, verbose)
+      val refresh = projection.toGoalStatusCliMap(issueKey, incidentDetails).withWatchRefresh(refreshCount)
       latestRefresh = refresh
       latestProjection = projection
+      latestPresentation = refreshPresentation
       consecutiveIdleRefreshes =
         if (projection?.executionLiveness == ExecutionLiveness.IDLE) {
           consecutiveIdleRefreshes + 1
@@ -233,8 +250,8 @@ class GoalWatchCommand(
         maxRefreshes = maxRefreshes,
         idleStop = consecutiveIdleRefreshes >= IDLE_STOP_CONSECUTIVE_REFRESHES,
       ) ?: ""
-      val renderedRefresh = goalWatchRefreshText(GoalWatchRefreshPresentation(refreshCount, projection))
-      val normalizedRefresh = goalWatchRefreshText(GoalWatchRefreshPresentation(0, projection))
+      val renderedRefresh = goalWatchRefreshText(refreshPresentation)
+      val normalizedRefresh = goalWatchRefreshText(refreshPresentation.copy(refreshIndex = 0))
       val endsLoop = stopReason.isNotEmpty()
       val refreshChanged = lastPrintedRefresh == null || normalizedRefresh != lastPrintedRefresh
       val shouldPrintRefresh = endsLoop || showUnchanged || !suppressUnchanged || refreshChanged
@@ -249,6 +266,16 @@ class GoalWatchCommand(
         Thread.sleep(intervalSeconds * MILLIS_PER_SECOND)
       }
     }
+    completeWatch(latestRefresh, latestProjection, latestPresentation, refreshCount, stopReason)
+  }
+
+  private fun completeWatch(
+    latestRefresh: Map<String, Any?>?,
+    latestProjection: GoalRunnerStatusProjection?,
+    latestPresentation: GoalWatchRefreshPresentation?,
+    refreshCount: Int,
+    stopReason: String,
+  ) {
     val payload =
       linkedMapOf<String, Any?>(
         SharedPayloadKeys.STATUS to latestRefresh.orEmpty().get(SharedPayloadKeys.STATUS),
@@ -257,6 +284,8 @@ class GoalWatchCommand(
         "interval_seconds" to intervalSeconds,
         "latest_refresh" to latestRefresh,
         "stop_reason" to stopReason,
+        GoalIncidentPresentationKeys.INCIDENT_DETAILS to
+          latestPresentation?.incidentDetails.orEmpty().incidentPayload(),
       )
     state.completeText(
       goalWatchText(
@@ -264,7 +293,7 @@ class GoalWatchCommand(
           issueKey = issueKey,
           refreshCount = refreshCount,
           intervalSeconds = intervalSeconds,
-          latestRefresh = latestProjection?.let { GoalWatchRefreshPresentation(refreshCount, it) },
+          latestRefresh = latestPresentation,
           stopReason = stopReason,
         ),
       ),

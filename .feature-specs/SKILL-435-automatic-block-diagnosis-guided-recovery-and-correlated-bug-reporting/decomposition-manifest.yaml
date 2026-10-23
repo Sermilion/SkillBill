@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-435"
 feature_name: "automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting"
 parent_spec_path: ".feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting"
@@ -85,12 +85,12 @@ subtasks:
 - id: 5
   name: "Shared incident presentation in terminal and desktop"
   spec_path: ".feature-specs/SKILL-435-automatic-block-diagnosis-guided-recovery-and-correlated-bug-reporting/spec_subtask_5_shared-incident-presentation.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261023-100926-lju8"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

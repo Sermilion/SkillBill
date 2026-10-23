@@ -156,6 +156,8 @@ internal fun GoalRunnerRunRequest.emitStoppedSubtaskEvent(
   issueKey: String,
   subtaskId: Int,
   stoppedOutcome: GoalRunnerReconciledOutcome.Stop,
+  parentWorkflowId: String,
+  workflowId: String?,
 ) {
   eventSink.emit(
     GoalRunnerRunEvent.SubtaskStopped(
@@ -164,6 +166,8 @@ internal fun GoalRunnerRunRequest.emitStoppedSubtaskEvent(
       reason = stoppedOutcome.reason.name.lowercase(),
       blockedReason = stoppedOutcome.blockedReason,
       currentStepId = stoppedOutcome.lastResumableStep.takeIf(String::isNotBlank),
+      parentWorkflowId = parentWorkflowId,
+      workflowId = workflowId,
     ),
   )
 }

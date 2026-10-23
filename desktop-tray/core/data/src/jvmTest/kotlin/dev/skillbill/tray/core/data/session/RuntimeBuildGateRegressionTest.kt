@@ -24,7 +24,10 @@ import kotlin.test.assertIs
  * refuse before any session exists, and a later selection must read the installed record again.
  */
 class RuntimeBuildGateRegressionTest {
-  private fun record(commit: String) = "commit=$commit\ndirty=false\nrelease_tag=\ninstall_run_id=\n"
+  private fun record(commit: String) = "commit=$commit\ndirty=false\nrelease_tag=\ninstall_run_id=\n" +
+    "read_schema=${DesktopReadSchema.VERSION}\n" +
+    "incident_detail_version=${DesktopReadSchema.INCIDENT_DETAIL_CAPABILITY_VERSION}\n" +
+    "min_incident_detail_read_schema=${DesktopReadSchema.MIN_INCIDENT_DETAIL_READ_SCHEMA}\n"
 
   private fun Connection.userVersion(): Int =
     createStatement().use { statement -> statement.executeQuery("PRAGMA user_version").use { rows -> rows.next(); rows.getInt(1) } }

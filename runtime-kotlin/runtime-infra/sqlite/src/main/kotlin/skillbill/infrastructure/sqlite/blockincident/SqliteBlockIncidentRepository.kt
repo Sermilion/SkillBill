@@ -37,6 +37,7 @@ internal class SqliteBlockIncidentRepository(
   private val diagnostics: RuntimeDiagnostics? = null,
 ) : BlockIncidentRepository {
   private val rolloutQueries = SqliteBlockIncidentRolloutQueries(connection)
+  private val workQueries = SqliteBlockIncidentWorkQueries(connection)
   private val diagnosisStore = SqliteBlockIncidentDiagnosisStore(connection, clock, diagnostics)
   private val stateWrites = SqliteBlockIncidentStateWrites(connection)
 
@@ -156,6 +157,15 @@ internal class SqliteBlockIncidentRepository(
       BlockIncidentLookup.Absent -> null
       is BlockIncidentLookup.Quarantined -> throw quarantined(lookup)
     }
+
+  override fun listForWork(
+    workflowId: String?,
+    invocationId: String?,
+    limit: Int,
+  ): List<BlockIncident> {
+    require(limit in 1..MAX_WORK_INCIDENTS)
+    return workQueries.listForWork(workflowId, invocationId, limit).mapNotNull(::find)
+  }
 
   override fun lookup(occurrenceToken: String): BlockIncidentLookup =
     try {
@@ -729,3 +739,5 @@ internal class SqliteBlockIncidentRepository(
     private val OCCURRENCE_TOKEN_PATTERN = Regex("bi_[0-9a-f]{64}")
   }
 }
+
+private const val MAX_WORK_INCIDENTS = 11

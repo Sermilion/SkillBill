@@ -1,5 +1,6 @@
 package dev.skillbill.tray.bootstrap
 
+import skillbill.contracts.persistence.DesktopReadSchema
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import java.nio.file.Files
 import kotlin.test.Test
@@ -53,5 +54,8 @@ class DesktopBootstrapTest {
     assertTrue(runtimeCliJar.toUri().toURL() in developmentLaunch.classpath)
   }
 
-  private fun identity(commit: String) = "commit=$commit\ndirty=false\nrelease_tag=\ninstall_run_id=\n"
+  private fun identity(commit: String) = "commit=$commit\ndirty=false\nrelease_tag=\ninstall_run_id=\n" +
+    "read_schema=${DesktopReadSchema.VERSION}\n" +
+    "incident_detail_version=${DesktopReadSchema.INCIDENT_DETAIL_CAPABILITY_VERSION}\n" +
+    "min_incident_detail_read_schema=${DesktopReadSchema.MIN_INCIDENT_DETAIL_READ_SCHEMA}\n"
 }

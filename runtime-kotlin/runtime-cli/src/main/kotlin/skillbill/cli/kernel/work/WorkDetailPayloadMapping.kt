@@ -1,8 +1,9 @@
-package skillbill.cli.work
+package skillbill.cli.kernel.work
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.contracts.work.WorkIncidentWireKeys
 import skillbill.contracts.workflow.identity.status.IdeStatusPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
@@ -29,6 +30,11 @@ internal fun workDetailItemWireMap(
 ): Map<String, Any?> =
   buildMap {
     put(WorkBoardPayloadKeys.SNAPSHOT, snapshot)
+    put(WorkIncidentWireKeys.INCIDENT, item.incident?.let { workIncidentWireMap(it, item.recoveryWorkId) })
+    put(
+      WorkIncidentWireKeys.INCIDENT_HISTORY,
+      item.incidentHistory.map { workIncidentWireMap(it, item.recoveryWorkId) },
+    )
     put(WorkBoardPayloadKeys.REPOSITORY_ROOT, item.repositoryRoot)
     put(WorkBoardPayloadKeys.FINISHED_AT, item.finishedAt?.toString())
     put(WorkBoardPayloadKeys.FINISHED_AT_SOURCE, item.finishedAtSource?.wireValue)

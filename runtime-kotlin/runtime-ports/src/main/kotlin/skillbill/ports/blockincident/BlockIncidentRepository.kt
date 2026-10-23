@@ -9,6 +9,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosisRecord
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecovery
+import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
 import java.time.Instant
 
 /** Reads the rollout marker and the blocked workflows that never received an incident after rollout. */
@@ -36,6 +37,7 @@ interface BlockIncidentDiagnosisReads {
 interface BlockIncidentRepository :
   BlockIncidentRolloutReads,
   BlockIncidentDiagnosisReads,
+  BlockIncidentHistoryReads,
   BlockIncidentRecoveryWrites {
   /** Returns the incident already associated with this alias, if one exists. */
   fun findByAlias(alias: BlockIncidentAlias): BlockIncident?
@@ -103,4 +105,18 @@ interface BlockIncidentRecoveryWrites {
     expectedRevision: Long,
     recovery: BlockIncidentRecovery,
   ): Boolean
+}
+
+interface BlockIncidentHistoryReads {
+  /**
+   * Lists incidents associated with the workflow, its parent workflow, or the invocation. Invocation association
+   * includes original occurrence coordinates and durable standalone phase aliases identified by
+   * [StandalonePhaseIncidentAlias]. Associations are deduplicated before the global newest-first limit. Mutable
+   * status, accepted references, recovery eligibility, and current registration do not affect retained history.
+   */
+  fun listForWork(
+    workflowId: String?,
+    invocationId: String?,
+    limit: Int,
+  ): List<BlockIncident>
 }

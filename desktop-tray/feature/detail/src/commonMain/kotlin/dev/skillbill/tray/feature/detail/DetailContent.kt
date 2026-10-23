@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,6 +37,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +66,7 @@ import dev.skillbill.tray.core.designsystem.red
 import dev.skillbill.tray.core.designsystem.strongBorder
 import dev.skillbill.tray.core.designsystem.surface3
 import dev.skillbill.tray.core.domain.model.Detail
+import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
@@ -114,7 +119,13 @@ fun DetailContent(
 ) {
   when (val load = state.load) {
     DetailLoad.Loading -> DetailMessage("Loading work detail", "Fetching phases, subtasks, and history.", null, null, modifier)
-    is DetailLoad.Failed -> DetailMessage("Work detail unavailable", load.problem.summary, { onAction(DetailAction.Refresh) }, onBackToList, modifier)
+    is DetailLoad.Failed -> {
+      val unavailable = load.problem.runtimeBuild?.takeIf { it.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE }
+      if (unavailable != null) IncidentDetailUnavailablePanel(unavailable, { onAction(DetailAction.Refresh) }, modifier)
+      else DetailMessage(
+        "Work detail unavailable", load.problem.summary, { onAction(DetailAction.Refresh) }, onBackToList, modifier,
+      )
+    }
     is DetailLoad.Loaded -> LoadedDetail(state, load, now, onAction, modifier)
   }
 }
@@ -160,6 +171,8 @@ private fun LoadedDetail(
   val executionScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "executions", executionKeys)
   val validationScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "validation", validationKeys)
   val copy = rememberCopyToClipboard()
+  val recoveryStatusFocus = remember { FocusRequester() }
+  var recoveryStatusAttached by remember { mutableStateOf(false) }
   val fresh = effectiveFreshness(item, false, load.readError != null) == Freshness.FRESH
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val frozen = !fresh
@@ -178,7 +191,10 @@ private fun LoadedDetail(
     Column(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
       Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          StatusChip(item.outcomeLabel(), item.statusColor(), item.lifecycle, stalled = item.stalled())
+          StatusChip(
+            item.outcomeLabel(), item.statusColor(), item.lifecycle, stalled = item.stalled(),
+            modifier = Modifier.focusRequester(recoveryStatusFocus).focusable().onGloballyPositioned { recoveryStatusAttached = true },
+          )
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
           StatusChip(if (operation) "operation" else if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
@@ -214,7 +230,20 @@ private fun LoadedDetail(
           }
         }
       }
-      RunActionButtons(detail, state.control is ControlState.InProgress, state.controllable && load.readError == null, onAction)
+      RunActionButtons(
+        detail,
+        state.control is ControlState.InProgress,
+        state.controllable && load.readError == null,
+        state.recoveryConfirmation,
+        state.recoveryPreviewLoading,
+        state.recoveryPreview,
+        state.confirmedPrerequisites,
+        (state.control as? ControlState.Refused)?.problem?.summary,
+        (state.control as? ControlState.InProgress)?.kind == ControlKind.RECOVER,
+        recoveryStatusFocus,
+        recoveryStatusAttached,
+        onAction,
+      )
     }
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -320,14 +349,25 @@ private fun LoadedDetail(
         if (!operation) PageFooter(state.append(DetailList.PHASES)) { onAction(DetailAction.LoadMore(DetailList.PHASES)) }
         val event = detail.latestActivity.event
         val edit = detail.latestActivity.edit
+        val hasIncident = detail.incident != null || detail.incidentHistory.incidents.isNotEmpty()
         val activity = buildList {
           item.lastAgentActivityLabel?.let { add("Agent activity" to "$it${item.lastAgentActivityAt?.let { at -> " · ${age((now - at).coerceNonNegative())} ago" }.orEmpty()}") }
           edit?.let { add("Last edit" to "${it.paths.joinToString { path -> "…/" + path.substringAfterLast('/') }} +${it.insertions ?: 0} −${it.deletions ?: 0}${it.recordedAt?.let { at -> " · ${age((now - at).coerceNonNegative())} ago" }.orEmpty()}") }
           event?.let { add("Event" to listOfNotNull(it.workflowPhase, it.workerRole, it.summary).joinToString(" · ")) }
           item.activity?.let { add((if (operation) "Operation event" else "Phase event") to it) }
         }
-        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked || detail.phaseResults.isNotEmpty() || detail.goalQa != null) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked || detail.phaseResults.isNotEmpty() || detail.goalQa != null || hasIncident) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           DesignLabel(if (operation) "Operation activity" else if (standalone) "Phase activity" else "Goal activity")
+          if (hasIncident) {
+            IncidentPanel(
+              detail.incident,
+              detail.incidentHistory.incidents,
+              state.confirmedPrerequisites,
+              state.recovery is RecoveryState.Idle && state.control !is ControlState.InProgress,
+              onAction,
+              copy,
+            )
+          }
           goalBlockReason?.let { reason ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
               Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -416,9 +456,9 @@ private fun DetailMetric(label: String, value: String, hint: String, modifier: M
 private fun MetricDivider() = Box(Modifier.width(1.dp).fillMaxHeight().background(dev.skillbill.tray.core.designsystem.border))
 
 @Composable
-private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null, stalled: Boolean = false) {
+private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null, stalled: Boolean = false, modifier: Modifier = Modifier) {
   Row(
-    Modifier.background(if (lifecycle == Lifecycle.ACTIVE) green.copy(alpha = .12f) else Color.Transparent, RoundedCornerShape(50))
+    modifier.background(if (lifecycle == Lifecycle.ACTIVE) green.copy(alpha = .12f) else Color.Transparent, RoundedCornerShape(50))
       .border(1.dp, if (color == muted) strongBorder else color.copy(alpha = .45f), RoundedCornerShape(50))
       .padding(horizontal = 8.dp, vertical = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),

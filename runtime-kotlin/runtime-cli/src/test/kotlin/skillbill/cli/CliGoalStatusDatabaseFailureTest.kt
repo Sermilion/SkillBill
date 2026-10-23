@@ -60,7 +60,7 @@ class CliGoalStatusDatabaseFailureTest {
     assertTrue(reason.length <= MAX_BOUNDED_REASON_CHARS, "reason length was ${reason.length}")
     assertEquals(1, reason.lines().size, reason)
     assertEquals(
-      setOf("status", "issue_key", "resumable_state", "reason"),
+      setOf("status", "issue_key", "resumable_state", "reason", "incident_details"),
       failure.payload.keys,
       failure.stdout,
     )

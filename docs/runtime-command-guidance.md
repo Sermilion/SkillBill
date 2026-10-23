@@ -68,6 +68,12 @@ does not promote its reason to a run mandate.
 
 ## Block incident recovery
 
+Work detail includes the runtime-built `incident` projection and `incident_history`. Status and run output use that same projection for the diagnosis, next action, report, and telemetry lines. The detail JSON adds `recover_command` only when recovery is available or prerequisites need confirmation; it includes the incident revision and one `--confirm-prerequisite` flag for each unmet prerequisite.
+
+`skill-bill goal status` and `skill-bill goal watch` accept `--verbose` to include saved incident
+evidence references. The flag affects terminal rendering only; it does not change incident data or
+recovery policy. It also works with the one-snapshot `--monitor` status mode.
+
 When a block incident has a settled diagnosis with a supported action, preview it with
 `skill-bill work recover <work-id> --incident <token> --preview`. The JSON names the
 action, its effects, the exact target workflow or invocation, the phase, and the

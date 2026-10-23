@@ -89,7 +89,10 @@ internal fun FeatureTaskRuntimeRunReport.runtimeRunExitCode(): Int =
     -> 1
   }
 
-internal fun runtimeRunText(report: FeatureTaskRuntimeRunReport): String =
+internal fun runtimeRunText(
+  report: FeatureTaskRuntimeRunReport,
+  incidentLines: List<String> = emptyList(),
+): String =
   buildString {
     appendLine("feature-task-runtime: ${report.issueKey}")
     appendLine("workflow_id: ${report.workflowId}")
@@ -120,6 +123,7 @@ internal fun runtimeRunText(report: FeatureTaskRuntimeRunReport): String =
         report.subtaskOutcome?.let { appendSubtaskOutcome(it) }
       }
     }
+    incidentLines.forEach(::appendLine)
   }
 
 private fun FeatureTaskRuntimeRunReport.statusWireValue(): String =

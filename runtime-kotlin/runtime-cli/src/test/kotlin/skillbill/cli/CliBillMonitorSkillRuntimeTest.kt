@@ -39,6 +39,7 @@ class CliBillMonitorSkillRuntimeTest {
         "current_step",
         "execution_liveness",
         "resumable_state",
+        "incident_details",
       ),
       result.payload!!.keys,
     )
@@ -141,7 +142,7 @@ class CliBillMonitorSkillRuntimeTest {
       )
 
     assertEquals(1, result.exitCode)
-    assertEquals(setOf("status", "issue_key", "resumable_state"), result.payload!!.keys)
+    assertEquals(setOf("status", "issue_key", "resumable_state", "incident_details"), result.payload!!.keys)
     assertContains(result.stdout, "status: not_found")
     assertContains(result.stdout, "resumable_state: not_found")
     assertTrue(launcher.childLaunches.isEmpty())

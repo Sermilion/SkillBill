@@ -13,7 +13,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.config.ConfigResolutionService
 import skillbill.application.system.RuntimeProvenanceService
-import skillbill.application.telemetry.service.TelemetryService
 import skillbill.cli.goal.control.GoalAcceptCommand
 import skillbill.cli.goal.control.GoalOperatorDecisionCommand
 import skillbill.cli.goal.control.GoalPauseCommand
@@ -36,22 +35,24 @@ import skillbill.cli.goal.run.RUNTIME_EXECUTABLE_ENV
 import skillbill.cli.goal.run.RUNTIME_PATH_SEPARATOR_ENV
 import skillbill.cli.goal.run.goalArchivedSpecText
 import skillbill.cli.goal.run.goalIntakeRequestText
-import skillbill.cli.goal.run.goalRunText
 import skillbill.cli.goal.run.parseCodeReviewMode
 import skillbill.cli.goal.run.resolveInvokedAgentId
-import skillbill.cli.goal.run.toGoalRunCliMap
 import skillbill.cli.goal.status.GoalStatusCommand
 import skillbill.cli.goal.status.GoalWatchCommand
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.resolveRequestedQaSelection
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
-import skillbill.cli.kernel.cli.drainTelemetryOnCompletion
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.cli.runtimeRunEventSink
 import skillbill.cli.kernel.plan.StandalonePlanLauncher
 import skillbill.cli.kernel.plan.StandalonePlanOptions
 import skillbill.cli.kernel.plan.planReportText
+import skillbill.cli.kernel.work.GoalIncidentPresentationKeys
+import skillbill.cli.kernel.work.incidentPayload
+import skillbill.cli.kernel.work.incidentText
+import skillbill.cli.kernel.work.incidentTextLines
+import skillbill.cli.kernel.work.readGoalIncidentDetails
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
@@ -61,8 +62,9 @@ import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
+import skillbill.engine.work.IdeStatusService
 import skillbill.idestatus.model.IdeStatusLaunchScope
-import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -116,11 +118,11 @@ class GoalRunCommand(
   private val planLauncher: StandalonePlanLauncher,
   private val runtimeProvenanceService: RuntimeProvenanceService,
   private val inputPreparation: GoalRunInputPreparation,
-  private val telemetryService: TelemetryService,
-  private val diagnostics: RuntimeDiagnostics,
+  private val reportPresentation: GoalRunReportPresentation,
   private val configResolutionService: ConfigResolutionService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
+  private val ideStatusService: IdeStatusService,
   private val hostPlatform: HostPlatformPort,
   goalRunSubcommands: GoalRunSubcommands,
 ) : DocumentedCliCommand(
@@ -271,9 +273,7 @@ class GoalRunCommand(
       runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
         .copy(intake = intake, qaSelection = qaSelection)
     val report = goalRunner.run(request)
-    val payload = report.toGoalRunCliMap()
-    state.completeText(goalRunText(report), payload, exitCode = report.goalRunExitCode())
-    drainTelemetryOnCompletion(telemetryService, diagnostics)
+    reportPresentation.complete(report)
   }
 
   private fun planFirstWhenNoGoal(
@@ -302,14 +302,34 @@ class GoalRunCommand(
         StandalonePlanOptions(
           timeout = planTimeout(),
           agentAddonSelection = hydratedSelection,
-          eventSink = runtimeRunEventSink(inputs, monitor = !noLiveOutput),
+          eventSink =
+            runtimeRunEventSink(inputs, monitor = !noLiveOutput) { workflowId ->
+              ideStatusService.detail(WorkDetailRequest(workflowId)).item
+                ?.let { incidentTextLines(it, false) }
+                .orEmpty()
+            },
           launchScope = IdeStatusLaunchScope.GOAL,
         ),
       )
     if (planned is StandalonePlanResult.Completed) {
       return true
     }
-    state.completeText(planned.planReportText(runIssueKey), emptyMap(), exitCode = 1)
+    val planWorkflowId =
+      when (planned) {
+        is StandalonePlanResult.Completed -> planned.workflowId
+        is StandalonePlanResult.Blocked -> planned.workflowId
+        is StandalonePlanResult.Refused -> planned.workflowId
+      }
+    val detail =
+      planWorkflowId?.let {
+        readGoalIncidentDetails(ideStatusService, listOf("parent" to it), retainFailures = true)
+      }
+        .orEmpty()
+    state.completeText(
+      planned.planReportText(runIssueKey, detail.incidentText(false)),
+      mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to detail.incidentPayload()),
+      exitCode = 1,
+    )
     return false
   }
 
@@ -335,7 +355,13 @@ class GoalRunCommand(
       progressIdleTimeout = progressIdleTimeoutMinutes.takeIf { it > 0 }?.minutes,
       planningBudget = planningBudgetMinutes.takeIf { it > 0 }?.minutes,
       outputSink = presenter.outputSink(includeRawChildOutput = debugChildOutput),
-      eventSink = presenter.eventSink(),
+      eventSink =
+        presenter.eventSink { event ->
+          readGoalIncidentDetails(
+            ideStatusService,
+            listOf("parent" to event.parentWorkflowId, "child" to event.workflowId),
+          ).incidentText(false)
+        },
       codeReviewMode = parseCodeReviewMode(codeReviewMode),
       agentAddonSelection = hydratedSelection,
       stopAfterSubtaskId = stopAfterSubtask,

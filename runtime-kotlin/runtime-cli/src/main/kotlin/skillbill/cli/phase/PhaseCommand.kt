@@ -20,6 +20,11 @@ import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.kernel.plan.StandalonePlanLauncher
 import skillbill.cli.kernel.plan.StandalonePlanOptions
 import skillbill.cli.kernel.plan.planReportText
+import skillbill.cli.kernel.work.GoalIncidentDetail
+import skillbill.cli.kernel.work.GoalIncidentPresentationKeys
+import skillbill.cli.kernel.work.incidentPayload
+import skillbill.cli.kernel.work.incidentText
+import skillbill.cli.kernel.work.readGoalIncidentDetails
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
@@ -30,6 +35,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
+import skillbill.engine.work.IdeStatusService
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
@@ -48,6 +54,7 @@ class PhaseCommand(
   private val configResolution: ConfigResolutionService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
+  private val ideStatusService: IdeStatusService,
 ) : DocumentedCliCommand(
     "phase",
     "Run one standalone phase (${PhaseInvocationParser.phaseNames().joinToString(", ")}) over the working tree. " +
@@ -119,7 +126,19 @@ class PhaseCommand(
           ),
         )
       } ?: return
-    writePhaseResult(state, invocation.definitionId, result)
+    val details =
+      readGoalIncidentDetails(
+        ideStatusService,
+        listOf("invocation" to result.invocationId),
+        retainFailures = true,
+      )
+    writePhaseResult(
+      state,
+      invocation.definitionId,
+      result,
+      details.incidentText(false),
+      details,
+    )
   }
 
   private fun runDurablePlan(
@@ -133,6 +152,17 @@ class PhaseCommand(
       val stdoutSink =
         FeatureTaskRuntimeRunEventSink { event ->
           event.phaseProgressLine()?.let(inputs.liveStdout)
+          val workflowId =
+            when (event) {
+              is FeatureTaskRuntimeRunEvent.PhaseBlocked -> event.workflowId
+              is FeatureTaskRuntimeRunEvent.BranchSetupBlocked -> event.workflowId
+              else -> null
+            }
+          workflowId?.let { id ->
+            val details = readGoalIncidentDetails(ideStatusService, listOf("work" to id), retainFailures = true)
+            details.incidentText(false).takeIf { it.isNotEmpty() }
+              ?.joinToString("\n", prefix = "\n")?.let(inputs.liveStdout)
+          }
         }
       val result =
         planLauncher.run(
@@ -145,9 +175,19 @@ class PhaseCommand(
               eventSink = stdoutSink,
             ),
         )
+      val planWorkflowId =
+        when (result) {
+          is StandalonePlanResult.Completed -> result.workflowId
+          is StandalonePlanResult.Blocked -> result.workflowId
+          is StandalonePlanResult.Refused -> result.workflowId
+        }
+      val details =
+        planWorkflowId?.let {
+          readGoalIncidentDetails(ideStatusService, listOf("plan" to it), retainFailures = true)
+        }.orEmpty()
       state.completeText(
-        result.planReportText(issueKey),
-        emptyMap(),
+        result.planReportText(issueKey, details.incidentText(false)),
+        mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to details.incidentPayload()),
         exitCode = if (result is StandalonePlanResult.Completed) 0 else 1,
       )
     } catch (error: SkillBillRuntimeException) {
@@ -297,6 +337,8 @@ internal fun writePhaseResult(
   state: CliRunState,
   definitionId: String,
   result: PhaseRunResult,
+  incidentLines: List<String> = emptyList(),
+  incidentDetails: List<GoalIncidentDetail> = emptyList(),
 ) {
   val review = result.reviewResult
   val register =
@@ -317,8 +359,9 @@ internal fun writePhaseResult(
           },
           result.targetReport.takeIf { it.isNotEmpty() }?.joinToString("\n"),
           "Phase invocation ID: ${result.invocationId}",
+          incidentLines.takeIf { it.isNotEmpty() }?.joinToString("\n"),
         ).joinToString("\n"),
-        emptyMap(),
+        mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to incidentDetails.incidentPayload()),
         exitCode = 0,
       )
     is PhaseRunResult.Blocked ->
@@ -331,8 +374,9 @@ internal fun writePhaseResult(
           review?.let(::blockedReviewDetails)?.takeIf(String::isNotBlank),
           result.targetReport.takeIf { it.isNotEmpty() }?.joinToString("\n"),
           "Phase invocation ID: ${result.invocationId}",
+          incidentLines.takeIf { it.isNotEmpty() }?.joinToString("\n"),
         ).joinToString("\n"),
-        emptyMap(),
+        mapOf(GoalIncidentPresentationKeys.INCIDENT_DETAILS to incidentDetails.incidentPayload()),
         exitCode = 1,
       )
   }

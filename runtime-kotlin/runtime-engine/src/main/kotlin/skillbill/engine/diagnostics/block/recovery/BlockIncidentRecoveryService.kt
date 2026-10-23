@@ -3,7 +3,6 @@ package skillbill.engine.diagnostics.block.recovery
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.diagnostics.block.BlockIncidentAliases
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
@@ -52,10 +51,24 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryF
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPrerequisiteInstruction
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryUnavailableReason
+import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CancellationException
+
+internal sealed interface BlockIncidentProjectionAssessment {
+  data class Evaluated(
+    val eligibility: BlockIncidentRecoveryEligibilityResult,
+    val preview: BlockIncidentRecoveryPreview?,
+  ) : BlockIncidentProjectionAssessment
+
+  data object NotDiagnosed : BlockIncidentProjectionAssessment
+
+  data class TargetUnavailable(val failure: BlockIncidentRecoveryTargetFailure) : BlockIncidentProjectionAssessment
+
+  data class FactsUnavailable(val reason: String) : BlockIncidentProjectionAssessment
+}
 
 @Inject
 class BlockIncidentRecoveryService(
@@ -70,6 +83,48 @@ class BlockIncidentRecoveryService(
   private val telemetry: BlockIncidentTelemetryPort?,
   private val reportDelivery: ProductReportDelivery?,
 ) {
+  internal fun eligibilityForProjection(
+    unit: UnitOfWork,
+    incident: BlockIncident,
+  ): BlockIncidentProjectionAssessment {
+    val diagnosis =
+      unit.blockIncidents.diagnoses(incident.occurrence.occurrenceToken).lastOrNull()
+        ?: return BlockIncidentProjectionAssessment.NotDiagnosed
+    val target =
+      when (val resolution = BlockIncidentRecoveryTargetResolver.resolve(unit, incident, executionPlanValidator)) {
+        is BlockIncidentRecoveryTargetResolution.Resolved -> resolution.target
+        is BlockIncidentRecoveryTargetResolution.Unavailable ->
+          return BlockIncidentProjectionAssessment.TargetUnavailable(resolution.failure)
+      }
+    val facts =
+      when (val result = BlockIncidentRecoveryFactsReader.read(unit, incident, target, emptySet())) {
+        is BlockIncidentRecoveryFactsRead.Read -> result.facts
+        is BlockIncidentRecoveryFactsRead.Unavailable ->
+          return BlockIncidentProjectionAssessment.FactsUnavailable(result.reason)
+      }
+    val eligibility = BlockIncidentRecoveryEligibility.evaluate(incident, diagnosis, facts)
+    val plannedPreview =
+      when (eligibility) {
+        is BlockIncidentRecoveryEligibilityResult.Available -> eligibility.preview
+        is BlockIncidentRecoveryEligibilityResult.NeedsPrerequisites -> {
+          val confirmed =
+            diagnosis.prerequisites
+              .filter { it.check == BlockIncidentPrerequisiteCheck.USER_CONFIRMED }
+              .map { it.kind }
+              .toSet()
+          (
+            BlockIncidentRecoveryEligibility.evaluate(
+              incident,
+              diagnosis,
+              facts.copy(confirmedPrerequisites = confirmed),
+            ) as? BlockIncidentRecoveryEligibilityResult.Available
+          )?.preview
+        }
+        is BlockIncidentRecoveryEligibilityResult.Unavailable -> null
+      }
+    return BlockIncidentProjectionAssessment.Evaluated(eligibility, plannedPreview)
+  }
+
   private val engine = WorkflowEngine()
   private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
   private val resume = BlockIncidentRecoveryResume(database, clock, identifiers, diagnostics)
@@ -339,7 +394,7 @@ class BlockIncidentRecoveryService(
   ): Boolean {
     val phaseId = occurrence.phaseId ?: return false
     val invocation = unit.standalonePhaseStatuses.readByInvocation(requested) ?: return false
-    val alias = BlockIncidentAliases.standalonePhase(requested, phaseId)
+    val alias = StandalonePhaseIncidentAlias.create(requested, phaseId)
     return invocation.workflowId == occurrence.workflowId && invocation.phaseId == phaseId &&
       unit.blockIncidents.findByAlias(alias)?.occurrence?.occurrenceToken == occurrence.occurrenceToken
   }

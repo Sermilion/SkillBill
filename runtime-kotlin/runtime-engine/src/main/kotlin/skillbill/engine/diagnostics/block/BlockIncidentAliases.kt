@@ -14,11 +14,6 @@ internal object BlockIncidentAliases {
     attempt: Int,
   ) = BlockIncidentAlias(BlockIncidentAliasKind.PHASE_TRANSITION, "$workflowId:$phaseId:$invocationId:$attempt")
 
-  fun standalonePhase(
-    invocationId: String,
-    stepId: String,
-  ) = BlockIncidentAlias(BlockIncidentAliasKind.PHASE_TRANSITION, "$invocationId:$stepId")
-
   fun goal(
     workflowId: String,
     stepId: String,

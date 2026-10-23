@@ -76,4 +76,3 @@ vscode-extension/*.vsix
 __pycache__/
 *.pyc
 /.idea/
-/build-identity/

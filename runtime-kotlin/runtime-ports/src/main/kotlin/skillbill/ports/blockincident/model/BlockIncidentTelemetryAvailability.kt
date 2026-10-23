@@ -1,11 +1,11 @@
 package skillbill.ports.blockincident.model
 
-enum class BlockIncidentTelemetryState {
-  DISABLED,
-  PENDING,
-  SYNCED,
-  FAILED,
-  UNAVAILABLE,
+enum class BlockIncidentTelemetryState(val wireValue: String) {
+  DISABLED("disabled"),
+  PENDING("pending"),
+  SYNCED("synced"),
+  FAILED("failed"),
+  UNAVAILABLE("unavailable"),
 }
 
 data class BlockIncidentTelemetryAvailability(

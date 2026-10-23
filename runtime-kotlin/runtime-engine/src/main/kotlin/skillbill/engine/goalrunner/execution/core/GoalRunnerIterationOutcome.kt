@@ -114,7 +114,13 @@ class GoalRunnerIterationOutcome(
     }
     val saved = persistStoppedBoundary(blockedState, control)
     emitStoppedObservability(saved, knownWorkflowId, subtaskId, stoppedOutcome, observability)
-    request.emitStoppedSubtaskEvent(saved.manifest.issueKey, subtaskId, stoppedOutcome)
+    request.emitStoppedSubtaskEvent(
+      saved.manifest.issueKey,
+      subtaskId,
+      stoppedOutcome,
+      saved.parentWorkflowId,
+      knownWorkflowId,
+    )
     return stoppedIterationResult(
       StoppedIterationResultArgs(
         saved = saved,

@@ -130,6 +130,8 @@ class GoalRunnerSubtaskLaunchPrepare(
         reason = GoalRunnerStopReason.BLOCKED.name.lowercase(),
         blockedReason = blockedReason,
         currentStepId = "preplan",
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = saved.manifest.workflowIdFor(subtaskId),
       ),
     )
     return GoalRunnerIterationResult(
@@ -373,6 +375,8 @@ class GoalRunnerSubtaskLaunchPrepare(
         reason = GoalRunnerStopReason.BLOCKED.name.lowercase(),
         blockedReason = reason,
         currentStepId = "create_branch",
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = saved.manifest.workflowIdFor(subtaskId),
       ),
     )
     return GoalRunnerIterationResult(

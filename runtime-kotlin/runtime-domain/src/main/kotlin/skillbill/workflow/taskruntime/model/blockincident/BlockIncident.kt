@@ -647,3 +647,26 @@ enum class BlockIncidentReport(val wireValue: String) {
   DELIVERED("delivered"),
   FAILED("failed"),
 }
+
+object StandalonePhaseIncidentAlias {
+  fun create(
+    invocationId: String,
+    stepId: String,
+  ): BlockIncidentAlias = BlockIncidentAlias(BlockIncidentAliasKind.PHASE_TRANSITION, "$invocationId:$stepId")
+
+  fun invocationPrefix(invocationId: String): String = "$invocationId:"
+
+  fun belongsToInvocation(
+    alias: BlockIncidentAlias,
+    invocationId: String,
+  ): Boolean = alias.kind == BlockIncidentAliasKind.PHASE_TRANSITION && belongsToInvocation(alias.value, invocationId)
+
+  fun belongsToInvocation(
+    aliasValue: String,
+    invocationId: String,
+  ): Boolean {
+    val prefix = invocationPrefix(invocationId)
+    val stepId = aliasValue.takeIf { it.startsWith(prefix) }?.removePrefix(prefix) ?: return false
+    return stepId.isNotBlank() && ':' !in stepId
+  }
+}

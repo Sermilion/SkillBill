@@ -1,13 +1,18 @@
 package dev.skillbill.tray.feature.detail
 
 import dev.skillbill.tray.core.domain.model.Detail
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
+import dev.skillbill.tray.core.domain.model.Incident
+import dev.skillbill.tray.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.tray.core.domain.model.IncidentPrerequisite
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.WorkIdentity
+import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.ui.AppendState
 import dev.skillbill.tray.core.ui.Feedback
 
-enum class ControlKind { PAUSE, STOP, CANCEL, LAUNCH }
+enum class ControlKind { PAUSE, STOP, CANCEL, LAUNCH, RECOVER }
 
 /** The one control request that may be in flight for a work item; a second request waits until this one settles. */
 sealed interface ControlState {
@@ -40,7 +45,14 @@ data class DetailUiState(
   /** Whether the item is live or finished recently enough for run controls to be offered; false until the detail lands. */
   val controllable: Boolean = false,
   val pendingFeedback: List<Feedback> = emptyList(),
+  val recovery: RecoveryState = RecoveryState.Idle,
+  val prerequisiteIdentity: RecoveryIdentity? = null,
+  val confirmedPrerequisites: Set<String> = emptySet(),
 ) {
+  val recoveryConfirmation: Boolean get() = recovery is RecoveryState.Confirming
+  val recoveryPreviewLoading: Boolean get() = recovery is RecoveryState.Loading
+  val recoveryPreview: IncidentRecoveryPreview? get() = (recovery as? RecoveryState.Confirming)?.snapshot?.preview
+
   /** Where the next page of [list] stands. */
   fun append(list: DetailList): AppendState {
     appends[list]?.let { return it }
@@ -49,12 +61,49 @@ data class DetailUiState(
   }
 }
 
+data class RecoveryIdentity(
+  val workIdentity: WorkIdentity,
+  val workflowId: String?,
+  val invocationId: String?,
+  val databaseGeneration: Long,
+  val databaseFile: DatabaseFileIdentity?,
+  val databaseStoreId: String?,
+  val incidentToken: String,
+  val incidentRevision: Long,
+  val prerequisites: List<IncidentPrerequisite>,
+) {
+  fun matches(item: WorkItem, incident: Incident): Boolean =
+    workIdentity == item.identity && workflowId == item.workflowId && invocationId == item.invocationId &&
+      databaseGeneration == item.databaseGeneration &&
+      databaseFile == item.databaseFile && databaseStoreId == item.databaseStoreId &&
+      incidentToken == incident.incidentToken && incidentRevision == incident.revision && prerequisites == incident.prerequisites
+}
+
+data class RecoveryRequest(
+  val item: WorkItem,
+  val identity: RecoveryIdentity,
+  val confirmedPrerequisites: Set<String>,
+)
+
+data class RecoverySnapshot(val request: RecoveryRequest, val preview: IncidentRecoveryPreview)
+
+sealed interface RecoveryState {
+  data object Idle : RecoveryState
+  data class Loading(val request: RecoveryRequest) : RecoveryState
+  data class Confirming(val snapshot: RecoverySnapshot) : RecoveryState
+  data class Applying(val snapshot: RecoverySnapshot) : RecoveryState
+}
+
 sealed interface DetailAction {
   data class LoadMore(val list: DetailList) : DetailAction
   data object Pause : DetailAction
   data object Stop : DetailAction
   data object Cancel : DetailAction
   data class Launch(val agentId: String?) : DetailAction
+  data object Recover : DetailAction
+  data class ConfirmPrerequisite(val kind: String, val checked: Boolean) : DetailAction
+  data object ConfirmRecovery : DetailAction
+  data object CancelRecovery : DetailAction
   data object Refresh : DetailAction
   data class AcknowledgeFeedback(val id: Long) : DetailAction
 }

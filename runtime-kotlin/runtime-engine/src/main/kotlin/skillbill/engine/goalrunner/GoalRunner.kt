@@ -146,8 +146,9 @@ class GoalRunner(
     executionGeneration: Long,
     executionOwnerToken: String?,
   ): GoalRunnerRunReport {
-    val stop = (report as? GoalRunnerRunReport.Stopped)?.stop ?: return report
-    if (stop.reason !in ACCEPTED_GOAL_BLOCK_REASONS) return report
+    val attributedReport = report.withParentWorkflowId(state.parentWorkflowId)
+    val stop = (attributedReport as? GoalRunnerRunReport.Stopped)?.stop ?: return attributedReport
+    if (stop.reason !in ACCEPTED_GOAL_BLOCK_REASONS) return attributedReport
     val acceptedChildReference =
       (stop.acceptedBlockReference ?: stop.historicalBlockReference)?.takeIf {
         it.sourceWorkflowId == stop.workflowId && it.sourceWorkflowId != state.parentWorkflowId
@@ -170,7 +171,7 @@ class GoalRunner(
         executionOwnerToken = executionOwnerToken,
       ),
     )
-    return report
+    return attributedReport
   }
 
   private fun alreadyCompleteReport(state: GoalRunnerManifestState): GoalRunnerRunReport.AlreadyComplete? {
@@ -230,7 +231,7 @@ class GoalRunner(
             .orEmpty()
             .ifBlank { "plan" },
       ),
-    )
+    ).withParentWorkflowId(loadedState.parentWorkflowId)
 
   private fun reconcileStateBeforeRun(state: GoalRunnerManifestState): GoalRunnerManifestState {
     val reconciled =
@@ -331,6 +332,8 @@ class GoalRunner(
         reason = sweepOutcome.reason.name.lowercase(),
         blockedReason = sweepOutcome.blockedReason,
         currentStepId = sweepOutcome.lastResumableStep,
+        parentWorkflowId = state.parentWorkflowId,
+        workflowId = null,
       ),
     )
     closeGoalTelemetrySegment(telemetryEmitter, state, planningStop, attempted)

@@ -12,6 +12,9 @@ import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkDetailItem
+import skillbill.ports.idestatus.model.WorkIncidentProjection
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryEligibilityResult
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
 import java.nio.file.Path
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
@@ -190,5 +193,47 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     observedAt = observedAt,
     nextCursor = cursor,
     pageOffset = pageOffset,
+    incident = incident?.toDomain(),
+    incidentHistory = IncidentHistory(incidentHistory.map(WorkIncidentProjection::toDomain)),
   )
 }
+
+private fun WorkIncidentProjection.toDomain(): Incident = Incident(
+  incidentToken, revision, IncidentProgress.valueOf(progress.name), summary, cause, certainty.wireValue,
+  responsibleCategory.wireValue, nextAction, noWorkaroundKnown,
+  prerequisites.map { IncidentPrerequisite(it.kind, it.instruction) },
+  evidence.map { IncidentEvidence(it.kind.wireValue, it.referenceId, it.summary, it.trusted) },
+  degradations.map { it.wireValue }.toSet(),
+  IncidentRecovery(
+    when (val value = recovery.eligibility) {
+      is BlockIncidentRecoveryEligibilityResult.Available ->
+        IncidentRecoveryEligibility.Available(value.preview.toDomain())
+      is BlockIncidentRecoveryEligibilityResult.NeedsPrerequisites -> IncidentRecoveryEligibility.NeedsPrerequisites(
+        value.instructions.map { IncidentPrerequisite(it.kind.wireValue, it.instruction) },
+      )
+      is BlockIncidentRecoveryEligibilityResult.Unavailable ->
+        IncidentRecoveryEligibility.Unavailable(IncidentRecoveryUnavailableReason.valueOf(value.reason.name))
+      null -> null
+    },
+    recovery.previewLabel, recovery.effects, recovery.targetWorkflowId, recovery.targetInvocationId,
+    recovery.latestAttemptId, recovery.latestAttemptStatus?.wireValue, recovery.failure?.wireValue,
+  ),
+  IncidentReport(report.status.wireValue, report.failureReason?.wireValue, report.issueUrl),
+  IncidentTelemetry(
+    telemetry.availability,
+    mapOfNotNullValues(
+      "install_id" to telemetry.installId,
+      "incident_token" to telemetry.incidentToken,
+      "workflow_id" to telemetry.workflowId,
+      "invocation_id" to telemetry.invocationId,
+    ),
+  ),
+  observedAt.toKotlinInstant(), settledAt?.toKotlinInstant(),
+)
+
+private fun BlockIncidentRecoveryPreview.toDomain() = IncidentRecoveryPreview(
+  action, label, effects, targetWorkflowId, targetInvocationId, phaseId, incidentToken, incidentRevision,
+)
+
+private fun mapOfNotNullValues(vararg entries: Pair<String, String?>): Map<String, String> =
+  entries.mapNotNull { (key, value) -> value?.let { key to it } }.toMap()

@@ -61,3 +61,11 @@ tasks.named("check") {
 runtimeImage {
   imageBaseName.set("runtime-cli")
 }
+
+tasks.named<dev.skillbill.buildidentity.WriteBuildIdentityTask>("writeBuildIdentity") {
+  capabilityDeclaration.set(
+    rootProject.layout.projectDirectory.file(
+      "runtime-contracts/src/main/kotlin/skillbill/contracts/persistence/DesktopReadSchema.kt",
+    ),
+  )
+}

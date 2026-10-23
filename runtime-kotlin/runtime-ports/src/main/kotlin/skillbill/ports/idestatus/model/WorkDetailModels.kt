@@ -50,6 +50,7 @@ data class WorkDetailProblem(
 
 data class WorkDetailItem(
   val snapshot: IdeStatusSnapshot,
+  val recoveryWorkId: String,
   val repositoryRoot: String,
   val stepPipeline: List<String>,
   val finishedAt: Instant? = null,
@@ -76,6 +77,8 @@ data class WorkDetailItem(
   val pauseEligible: Boolean = false,
   val listAnchors: Map<WorkDetailList, String> = emptyMap(),
   val controlLease: GoalRunnerExecutionLease? = null,
+  val incident: WorkIncidentProjection? = null,
+  val incidentHistory: List<WorkIncidentProjection> = emptyList(),
 )
 
 data class WorkDetailRuntimeStatus(

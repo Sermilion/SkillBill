@@ -8,6 +8,7 @@ import dev.skillbill.tray.core.data.port.ControlResult
 import dev.skillbill.tray.core.data.session.DatabaseSession
 import dev.skillbill.tray.core.data.session.staleCursor
 import dev.skillbill.tray.core.domain.model.ControlConfirmation
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.StorageFailure
@@ -31,6 +32,32 @@ class RuntimeWorkControlRepository(
   override suspend fun cancel(item: WorkItem): Outcome<Unit> = runAction(item, ControlAction.CANCEL, null)
 
   override suspend fun launch(item: WorkItem, agentId: String?): Outcome<Unit> = runAction(item, ControlAction.LAUNCH, agentId)
+
+  override suspend fun recover(
+    item: WorkItem,
+    incidentToken: String,
+    revision: Long,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<Unit> = runAction(item, ControlAction.Recover(incidentToken, revision, confirmedPrerequisites), null)
+
+  override suspend fun recoveryPreview(
+    item: WorkItem,
+    incidentToken: String,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<IncidentRecoveryPreviewResult> = session.read { _ ->
+    val generation = session.generation
+    if (!session.currentFileMatches() || item.databaseGeneration != generation) return@read staleCursor()
+    val result = session.gateway.recoveryPreview(item, incidentToken, confirmedPrerequisites)
+    when (result) {
+      is IncidentRecoveryPreviewResult.Unrecognized ->
+        diagnostics.record("recovery_preview_unrecognized_${result.reason}")
+      is IncidentRecoveryPreviewResult.Rejected -> diagnostics.record("recovery_preview_rejected_${result.reason}")
+      is IncidentRecoveryPreviewResult.ExistingAttempt ->
+        diagnostics.record("recovery_preview_existing_${result.status}")
+      is IncidentRecoveryPreviewResult.Available, is IncidentRecoveryPreviewResult.NeedsPrerequisites -> Unit
+    }
+    Outcome.Value(result)
+  }
 
   private suspend fun goalControl(item: WorkItem, action: ControlAction): Outcome<ControlConfirmation> =
     request(item, action, null) { result ->
@@ -125,6 +152,10 @@ class RuntimeWorkControlRepository(
     ControlRefusal.PID_REUSED -> "The runner PID was reused by a different process. Refresh before retrying cancellation."
     ControlRefusal.UNINSPECTABLE -> "The runner process could not be inspected. Refresh before retrying cancellation."
     ControlRefusal.IDENTITY_MISMATCH -> "The runner identity no longer matches this run. Refresh before retrying cancellation."
+    ControlRefusal.STALE_INCIDENT -> "The incident changed. Refresh before trying recovery again."
+    ControlRefusal.RECOVERY_UNAVAILABLE -> "Recovery is no longer available. Refresh the incident details."
+    ControlRefusal.PREREQUISITE_UNMET -> "Confirm the listed prerequisites before applying recovery."
+    ControlRefusal.RECOVERY_IN_PROGRESS -> "Recovery is already in progress. Refresh the incident details."
     ControlRefusal.OTHER -> "This run changed or cannot accept this action. Refresh before retrying."
   }
 }

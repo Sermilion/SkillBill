@@ -71,6 +71,8 @@ sealed interface GoalRunnerRunEvent {
     val reason: String,
     val blockedReason: String,
     val currentStepId: String? = null,
+    val parentWorkflowId: String? = null,
+    val workflowId: String? = null,
   ) : GoalRunnerRunEvent
 
   data class SubtaskReviewSummary(

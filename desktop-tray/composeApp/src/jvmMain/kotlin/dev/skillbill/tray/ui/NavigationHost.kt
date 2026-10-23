@@ -46,6 +46,7 @@ import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.domain.model.Problem
+import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.ui.navigation.AppRoute
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import dev.skillbill.tray.core.ui.navigation.EntryArgsOutcome
@@ -55,6 +56,7 @@ import dev.skillbill.tray.core.ui.startOfToday
 import dev.skillbill.tray.feature.detail.DetailArgs
 import dev.skillbill.tray.feature.detail.DetailEffect
 import dev.skillbill.tray.feature.detail.DetailRoute
+import dev.skillbill.tray.feature.detail.IncidentDetailUnavailablePanel
 import dev.skillbill.tray.feature.detail.HistoryDetailRoute
 import dev.skillbill.tray.feature.detail.WorkDetailRoute
 import dev.skillbill.tray.feature.history.HistoryAction
@@ -116,7 +118,17 @@ fun SkillBillNavHost(
       // state collected here can trail the navigator reset by a frame, so only an exact match renders.
       val renderable = session is SessionState.Active &&
         routes.all { it.generation == session.ref || navigator.section == null && it.generation == null }
-      if (!renderable) {
+      if (session is SessionState.Refused && session.problem.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE) {
+        IncidentDetailUnavailablePanel(session.problem, onRefreshShell, modifier.fillMaxSize())
+      } else if (session is SessionState.Refused) {
+        MessagePane(
+          "Skill Bill runtime unavailable",
+          "Install a matched runtime and desktop pair with ${session.problem.reinstallCommand}, then retry.",
+          "Retry",
+          modifier.fillMaxSize(),
+          onRefreshShell,
+        )
+      } else if (!renderable) {
         MessagePane("Opening your database", "Skill Bill is switching to the selected database.", null, modifier.fillMaxSize())
       } else if (navigator.section == null) {
         NavigationPane(routes, onBack = onCloseWindow, window, modifier.fillMaxSize())

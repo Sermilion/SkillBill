@@ -8,6 +8,7 @@ import dev.skillbill.tray.core.domain.model.ControlConfirmation
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.HistoryFilter
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.Retention
@@ -131,6 +132,13 @@ class FakeWorkControlRepository : WorkControlRepository {
   var onStop: suspend (WorkItem) -> Outcome<ControlConfirmation> = { Outcome.Value(ControlConfirmation.EXIT_CONFIRMED) }
   var onCancel: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) }
   var onLaunch: suspend (WorkItem, String?) -> Outcome<Unit> = { _, _ -> Outcome.Value(Unit) }
+  var onRecover: suspend (WorkItem, String, Long, Set<String>) -> Outcome<Unit> = { _, _, _, _ ->
+    Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Recovery is unavailable."))
+  }
+  var onRecoveryPreview: suspend (WorkItem, String, Set<String>) -> Outcome<IncidentRecoveryPreviewResult> = {
+    _, _, _ ->
+    Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Recovery preview is unavailable."))
+  }
 
   override suspend fun pause(item: WorkItem): Outcome<ControlConfirmation> {
     calls += "pause:${item.identity.id}"
@@ -150,6 +158,25 @@ class FakeWorkControlRepository : WorkControlRepository {
   override suspend fun launch(item: WorkItem, agentId: String?): Outcome<Unit> {
     calls += "launch:${item.identity.id}:${agentId.orEmpty()}"
     return onLaunch(item, agentId)
+  }
+
+  override suspend fun recover(
+    item: WorkItem,
+    incidentToken: String,
+    revision: Long,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<Unit> {
+    calls += "recover:${item.identity.id}:$incidentToken:$revision"
+    return onRecover(item, incidentToken, revision, confirmedPrerequisites)
+  }
+
+  override suspend fun recoveryPreview(
+    item: WorkItem,
+    incidentToken: String,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<IncidentRecoveryPreviewResult> {
+    calls += "recoveryPreview:${item.identity.id}:$incidentToken"
+    return onRecoveryPreview(item, incidentToken, confirmedPrerequisites)
   }
 }
 
