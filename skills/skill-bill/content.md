@@ -155,13 +155,17 @@ Stop without running any CLI command when:
 ## Issue resolution
 
 For a tracker link or issue key, check local specs and persisted workflow state
-before contacting the tracker. Search active bundles directly under `.feature-specs/`
-in the current repository, including ignored and untracked files. Exclude
-`.feature-specs/done/`; archived bundles never supply intake or resume work,
-even when their issue key matches. Use
-`rg --files --hidden --no-ignore -g '!.feature-specs/done/**' .feature-specs` or inspect the directory directly.
-Match the issue key and read the matching `spec.md`. A filename search that
-honors ignore rules does not prove that a spec is absent. If several bundles match, ask for the intended spec path.
+before contacting the tracker. Get the project store with `skill-bill project path`
+and search active bundles directly under `<store>/specs/`. Exclude
+`<store>/specs/done/`; archived bundles never supply intake or resume work,
+even when their issue key matches. Then search active bundles directly under the
+legacy `./.feature-specs/` in the current repository, including ignored and
+untracked files, for in-flight legacy goals, and exclude `./.feature-specs/done/`.
+Use `rg --files --hidden --no-ignore -g '!done/**' <directory>` or inspect the
+directory directly. `skill-bill project path <issue-key>` prints the matching
+bundle directory when one exists. Match the issue key and read the matching
+`spec.md`. A filename search that honors ignore rules does not prove that a spec
+is absent. If several bundles match, ask for the intended spec path.
 
 A readable local spec launches directly through the full runtime. Do not run
 `work status` or `work list` during intake. The runtime looks up only workflows
@@ -236,10 +240,11 @@ full runtime once with the resolved intake.
 
 ## Local key allocation
 
-For new requirements without a key, inspect `.feature-specs/` in the current
+For new requirements without a key, inspect `<store>/specs/` (the project store
+from `skill-bill project path`) and the legacy `./.feature-specs/` in the current
 repository, including ignored and untracked files and archived folders such as
-`done/`. Use `rg --files --hidden --no-ignore .feature-specs` or inspect the
-directory directly. Read bundle directory names, parent `spec.md` identities,
+`done/` in both places. Use `rg --files --hidden --no-ignore <directory>` or inspect
+each directory directly. Read bundle directory names, parent `spec.md` identities,
 and `decomposition-manifest.yaml` issue keys. Count bundle identities, not keys
 mentioned as dependencies or examples inside requirements.
 
@@ -248,7 +253,8 @@ prefix found in those local identities, excluding generated `LOCAL-` hash keys.
 If several project prefixes exist, ask only which prefix to use. If no project
 prefix exists, ask for a local prefix or key, without requiring a tracker.
 
-For the selected prefix, take the highest integer issue number and add one.
+For the selected prefix, take the highest integer issue number across both
+locations and add one, so a key used in either place is never reissued.
 Include completed and archived bundles, and treat a decimal suffix such as
 `NEWS-144.1` as occupying integer number 144. Do not fill gaps or use timestamps
 or hashes. For example, local bundles through `NEWS-151` select `NEWS-152`.
@@ -385,7 +391,9 @@ phase form.
 detached, protected, or base branch before staging. It commits staged, unstaged, and
 untracked changes, excluding ignored and runtime-private files, then pushes. The PR
 step creates or updates the branch's open PR, and monitor then watches its CI as in
-Phase Monitor. A clean retry reuses the existing commit. The phase creates no
+Phase Monitor. Specs are no longer committed, so the PR description carries a short
+spec summary: the intended outcome and the acceptance criteria titles from the
+bundle's parent spec. A clean retry reuses the existing commit. The phase creates no
 workflow row, branch, or checkpoint commit.
 
 ## Phase Monitor

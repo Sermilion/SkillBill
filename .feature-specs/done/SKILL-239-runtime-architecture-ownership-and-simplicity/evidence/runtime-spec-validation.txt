@@ -1,2 +1,0 @@
-runtime_manifest_schema_and_coherence=passed
-issue_key=SKILL-239

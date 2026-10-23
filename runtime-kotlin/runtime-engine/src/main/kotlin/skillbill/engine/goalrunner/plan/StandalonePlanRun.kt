@@ -12,11 +12,8 @@ import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
-import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.idestatus.model.StandalonePlanReport
-import skillbill.ports.idestatus.model.StandalonePlanSubtask
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -71,7 +68,6 @@ data class StandalonePlanLaunch(
 @Inject
 class StandalonePlanRun(
   private val intakePreparation: GoalIntakePreparation,
-  private val manifestStore: GoalRunnerManifestStore,
   private val planLookup: PlanWorkflowLookup,
   private val entry: FeatureTaskRuntimeRunEntry,
   private val database: DatabaseSessionFactory,
@@ -81,6 +77,7 @@ class StandalonePlanRun(
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
   private val reopening: PlanSubtasksReopening,
+  private val planReports: StandalonePlanReportBuilder,
 ) {
   fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
 
@@ -168,7 +165,7 @@ class StandalonePlanRun(
     val intake = suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) }
     val identity = repositories.repositoryIdentity(repoRoot)
     val found = planLookup.lookupAfterCrashRecovery(issueKey, identity).forLaunchedSpec(issueKey, intake, repoRoot)
-    if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
+    if (planReports.manifestExists(issueKey, repoRoot)) {
       if (found is FeatureTaskContinuationLookupResult.Resumable) {
         return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
       }
@@ -220,7 +217,7 @@ class StandalonePlanRun(
           terminal.decompositionManifestPath,
           terminal.subtaskSpecPaths,
         )
-      statusPublisher.settlePlan("completed", result.workflowId, planReport(issueKey, repoRoot))
+      statusPublisher.settlePlan("completed", result.workflowId, planReports.build(issueKey, repoRoot))
       return result
     }
     return refused(
@@ -351,7 +348,7 @@ class StandalonePlanRun(
       }
     when (result) {
       is StandalonePlanResult.Completed ->
-        statusSink?.settlePlan("completed", result.workflowId, planReport(report.issueKey, repoRoot))
+        statusSink?.settlePlan("completed", result.workflowId, planReports.build(report.issueKey, repoRoot))
       is StandalonePlanResult.Blocked -> statusSink?.settleBlocked(result.reason, result.workflowId)
       is StandalonePlanResult.Refused -> statusSink?.settleBlocked(result.reason, result.workflowId)
     }
@@ -399,20 +396,6 @@ class StandalonePlanRun(
     repoRoot: Path,
     specPath: Path,
   ): Path = decompositionPlanner.bundlePath(repoRoot, specPath.toString())
-
-  private fun planReport(
-    issueKey: String,
-    repoRoot: Path,
-  ): StandalonePlanReport? =
-    manifestStore.readByIssueKeyIfPresent(issueKey, repoRoot)?.manifest?.let { manifest ->
-      StandalonePlanReport(
-        manifest.featureName,
-        manifest.parentSpecPath,
-        manifest.subtasks.map { subtask ->
-          StandalonePlanSubtask(subtask.id, subtask.name, subtask.specPath, subtask.dependencies.map { it.subtaskId })
-        },
-      )
-    }
 
   private fun specHash(specPath: Path): String = sha256HexUtf8(fileStore.readText(specPath))
 }

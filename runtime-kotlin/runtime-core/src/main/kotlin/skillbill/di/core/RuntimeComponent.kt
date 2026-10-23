@@ -77,7 +77,9 @@ import skillbill.infrastructure.host.blockincident.FileProductReportDeliveryOwne
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.host.process.EnvironmentGhProductIssueCredential
 import skillbill.infrastructure.host.projectstore.ProjectStoreResolver
+import skillbill.infrastructure.host.system.FileSystemProjectConfigFile
 import skillbill.infrastructure.host.system.PackagedRuntimeBuildIdentity
+import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
 import skillbill.infrastructure.http.productissue.GitHubProductIssueAdapter
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
@@ -93,9 +95,11 @@ import skillbill.ports.blockincident.ProductIssueCredentialPort
 import skillbill.ports.blockincident.ProductIssueTrackerPort
 import skillbill.ports.blockincident.ProductReportDeliveryOwnershipPort
 import skillbill.ports.concurrency.InterruptSignalPort
+import skillbill.ports.config.ProjectConfigFilePort
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.editor.FileEditorLauncherPort
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
@@ -217,6 +221,12 @@ abstract class RuntimeComponent(
   @Provides @RuntimeSingleton
   fun projectStorePort(resolver: ProjectStoreResolver): ProjectStorePort = resolver
 
+  @Provides
+  fun projectConfigFilePort(adapter: FileSystemProjectConfigFile): ProjectConfigFilePort = adapter
+
+  @Provides
+  fun fileEditorLauncherPort(adapter: ProcessFileEditorLauncher): FileEditorLauncherPort = adapter
+
   @Provides @RuntimeSingleton
   fun databaseSessionFactory(
     context: EnvironmentContext,
@@ -254,6 +264,8 @@ abstract class RuntimeComponent(
 
   abstract val repositoryEnclosingRootPort: RepositoryEnclosingRootPort
   abstract val projectStorePort: ProjectStorePort
+  abstract val projectConfigFilePort: ProjectConfigFilePort
+  abstract val fileEditorLauncherPort: FileEditorLauncherPort
   abstract val checkedOutBranchSource: CheckedOutBranchSource
 
   abstract val featureTaskContinuationLookupService: FeatureTaskContinuationLookupService

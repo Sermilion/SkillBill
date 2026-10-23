@@ -5,17 +5,12 @@
 .env.*
 docs/cloudflare-telemetry-proxy/.wrangler/
 _migration_backup/
-# Runtime state under .skill-bill/; keep shared project config and phase instructions trackable.
-.skill-bill/**
-!.skill-bill/config.yaml
-!.skill-bill/phases/
-!.skill-bill/phases/**
+# Project state lives in the project store; legacy in-checkout copies stay local.
+/.skill-bill/
+/.feature-specs/
 
 # Kotlin 2.x compiler-daemon session markers.
 .kotlin/
-
-# SKILL-98 specs describe a private external app — keep local, not public
-.feature-specs/SKILL-98-ios-platform-pack/
 
 # Generated governed skill output; source stays in content.md and manifests.
 skills/*/SKILL.md

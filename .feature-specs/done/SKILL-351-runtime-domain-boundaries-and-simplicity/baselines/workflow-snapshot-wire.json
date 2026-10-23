@@ -1,1 +1,0 @@
-{"workflow_id":"wf-1","session_id":"sess","workflow_name":"bill-feature","contract_version":"0.1","workflow_status":"running","current_step_id":"implement","steps":[{"step_id":"implement","status":"running","attempt_count":1}],"artifacts":{},"started_at":"1970-01-01T00:00:00Z","updated_at":"1970-01-01T00:00:00Z","finished_at":""}

@@ -2,8 +2,7 @@
 
 These files record the runtime's behaviour before the SKILL-380 phase-slot
 refactor. Later subtasks diff against them. Every difference must match an
-entry in the
-[fixture ledger](../../../../../../../.feature-specs/done/SKILL-380-phase-slot-strategies/spec.md#fixture-ledger).
+entry in the SKILL-380 fixture ledger.
 
 Harness sources live in
 `runtime-engine/src/test/kotlin/skillbill/engine/featuretask/slotbaseline/`.

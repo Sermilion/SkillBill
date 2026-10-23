@@ -16,6 +16,7 @@ internal object SqliteStandalonePlanReportKeys {
   const val FEATURE_NAME: String = "feature_name"
   const val PARENT_SPEC_PATH: String = "parent_spec_path"
   const val SUBTASKS: String = "subtasks"
+  const val BUNDLE_FILES: String = "bundle_files"
   const val ID: String = "id"
   const val NAME: String = "name"
   const val SPEC_PATH: String = "spec_path"
@@ -47,6 +48,7 @@ internal fun encodeStandalonePlanReport(report: StandalonePlanReport): String =
             SqliteStandalonePlanReportKeys.DEPENDS_ON to it.dependsOn,
           )
         },
+      SqliteStandalonePlanReportKeys.BUNDLE_FILES to report.bundleFiles,
     ),
   )
 
@@ -71,6 +73,8 @@ internal fun decodeStandalonePlanReport(
             },
         )
       },
+    bundleFiles =
+      (report[SqliteStandalonePlanReportKeys.BUNDLE_FILES] as? List<*>).orEmpty().filterIsInstance<String>(),
   )
 }
 

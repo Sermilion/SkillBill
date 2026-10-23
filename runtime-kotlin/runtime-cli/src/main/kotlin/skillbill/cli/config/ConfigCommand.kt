@@ -26,6 +26,7 @@ class ConfigCommand(
   resolveExternalPlatformPacksCommand: ConfigResolveExternalPlatformPacksCommand,
   registerExternalPlatformPackCommand: ConfigRegisterExternalPlatformPackCommand,
   unregisterExternalPlatformPackCommand: ConfigUnregisterExternalPlatformPackCommand,
+  editCommand: ConfigEditCommand,
 ) : DocumentedNoOpCliCommand(
     "config",
     "Inspect resolved project configuration (project store config.yaml; see skill-bill project path).",
@@ -38,6 +39,7 @@ class ConfigCommand(
       resolveExternalPlatformPacksCommand,
       registerExternalPlatformPackCommand,
       unregisterExternalPlatformPackCommand,
+      editCommand,
     )
   }
 }

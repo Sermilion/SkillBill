@@ -1,3 +1,14 @@
+## [2026-10-23] SKILL-441 subtask 6: project-store discoverability, CLI, skill text and repo hygiene
+Areas: runtime-ports (idestatus model, editor); runtime-engine (goalrunner plan); runtime-infra (sqlite idestatus migration, host system); runtime-cli (project, config); runtime-core (RuntimeComponent, PrincipleEnforcementInventory); skills/skill-bill; PR description directive; .gitignore
+- MEDIUM feature. `StandalonePlanReport` gains `bundleFiles`: absolute, sorted paths of every regular file under the parent spec's directory, built by the new `StandalonePlanReportBuilder` (reusable) for both standalone and goal plan phases, since both settle through `StandalonePlanRun`. A missing or unreadable directory yields an empty list plus one best-effort warning. Stored rows without `bundle_files` decode to empty, so no migration was needed.
+- New `skill-bill project path [ISSUE]` prints the store root or the matched bundle directory (exit 1 on no match or ambiguity). New `skill-bill config edit` runs the legacy-copy read first, seeds `{}` when the store config is absent, then opens it in the editor.
+- New `FileEditorLauncherPort` and `ProcessFileEditorLauncher` (reusable): `$VISUAL`, then `$EDITOR`, then the OS opener, with inherited IO. runtime-cli reaches it and `FileSystemProjectConfigFile` through `RuntimeComponent` accessors, listed in the pinned inbound-API inventory.
+- `skills/skill-bill` content resolves issues and allocates keys across the store `specs/` tree and the legacy `.feature-specs/`; the PR directive asks for a short spec summary in the description.
+- `.gitignore` ignores `/.skill-bill/` and `/.feature-specs/`; about 1522 tracked paths are staged as index deletions with the working tree untouched.
+- Limits: `packagedDataSmoke` could not run locally (needs the install run id) and is left to PR CI; commit must keep the staged `.feature-specs` deletions, which an explicit pathspec commit or reset would drop.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented (validate passed)
+
 ## [2026-10-23] SKILL-440 subtask 1: retire the IntelliJ plugin and VS Code extension trees
 Areas: intellij-plugin and vscode-extension (deleted); .github/workflows; README.md, CONTRIBUTING.md, RELEASING.md, AGENTS.md, docs; orchestration/shell-content-contract; scripts; runtime-kotlin/runtime-core repoTest architecture guards; runtime-infra/contracts readiness schema test
 - MEDIUM feature. The top-level `intellij-plugin/` and `vscode-extension/` projects (with their own agent history and decisions files) and the `plugin-ci`, `plugin-release` and `extension-release` workflows are removed, along with their `.gitignore` entries. The desktop app replaces both.
