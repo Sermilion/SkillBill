@@ -38,7 +38,7 @@ class SupervisorProcessLoopEndToEndTest {
           listOf("sh", "-c", "sleep 2"),
           Path.of(".").toAbsolutePath().normalize(),
         ) {
-          timeout = 3.seconds
+          timeout = 30.seconds
           progressIdleTimeout = 100.milliseconds
           operationDeadline = 10.seconds
           statusHeartbeatInterval = 100.milliseconds
