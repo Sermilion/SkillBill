@@ -3,6 +3,7 @@ package skillbill.goalrunner.model
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
+import skillbill.contracts.workflow.identity.blockincident.GoalRunnerAcceptedBlockReferenceKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -17,6 +18,7 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
   val lastResumableStep: String,
   val finalizingAgentId: String? = null,
   val participatingAgentIds: List<String> = emptyList(),
+  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
 ) {
   constructor(
     issueKey: String,
@@ -28,6 +30,7 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
     lastResumableStep: String,
     finalizingAgentId: String? = null,
     participatingAgentIds: List<String> = emptyList(),
+    acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   ) : this(
     issueKey = issueKey,
     subtaskId = subtaskId,
@@ -41,11 +44,13 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
     lastResumableStep = lastResumableStep,
     finalizingAgentId = finalizingAgentId,
     participatingAgentIds = participatingAgentIds,
+    acceptedBlockReference = acceptedBlockReference,
   )
 
   init {
     val reason = violation(issueKey, subtaskId, workflowId, lastResumableStep)
     require(reason == null) { reason.orEmpty() }
+    require(status == GoalRunnerTerminalStatus.BLOCKED || acceptedBlockReference == null)
   }
 
   fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
@@ -63,6 +68,7 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
       commitSha?.let { put("commit_sha", it) }
       blockedReason?.let { put("blocked_reason", it) }
       finalizingAgentId?.let { put("finalizing_agent_id", it) }
+      acceptedBlockReference?.let { put(GoalRunnerAcceptedBlockReferenceKeys.OUTCOME_REFERENCE, it.toArtifactMap()) }
     }
 
   companion object {
@@ -85,17 +91,22 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
       val issueKey = reader.requiredString("issue_key")
       val subtaskId = reader.requiredInt("subtask_id")
       val statusWire = reader.requiredString("status")
-      val status =
-        GoalRunnerTerminalStatus.fromWire(statusWire)
-          ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime goal-continuation outcome is invalid.")
+      val status = GoalRunnerTerminalStatus.fromWire(statusWire)
       val workflowId = reader.requiredString(SharedPayloadKeys.WORKFLOW_ID)
       val commitSha = reader.optionalString(DecompositionManifestPayloadKeys.COMMIT_SHA)
       val blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON)
       val step = reader.requiredString(DecompositionManifestPayloadKeys.LAST_RESUMABLE_STEP)
       val finalizingAgentId = reader.optionalString(DecompositionManifestPayloadKeys.FINALIZING_AGENT_ID)
       val participatingAgentIds = reader.optionalStringList(DecompositionManifestPayloadKeys.PARTICIPATING_AGENT_IDS)
-      if (violation(issueKey, subtaskId, workflowId, step) != null) {
+      val acceptedBlockReference =
+        GoalRunnerAcceptedBlockReference.fromArtifactMap(
+          raw[GoalRunnerAcceptedBlockReferenceKeys.OUTCOME_REFERENCE],
+        )
+      if (status == null || violation(issueKey, subtaskId, workflowId, step) != null) {
         throw invalidWorkflowStateSchemaError("Feature-task-runtime goal-continuation outcome is invalid.")
+      }
+      if (acceptedBlockReference != null && status != GoalRunnerTerminalStatus.BLOCKED) {
+        throw invalidWorkflowStateSchemaError("Only blocked goal-continuation outcomes may carry a block reference.")
       }
       return FeatureTaskRuntimeGoalContinuationOutcome(
         issueKey = issueKey,
@@ -107,6 +118,7 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
         lastResumableStep = step,
         finalizingAgentId = finalizingAgentId,
         participatingAgentIds = participatingAgentIds,
+        acceptedBlockReference = acceptedBlockReference,
       )
     }
   }

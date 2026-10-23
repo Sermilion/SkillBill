@@ -1,7 +1,10 @@
 package skillbill.goalrunner.model
 
+import skillbill.contracts.workflow.identity.blockincident.GoalRunnerAcceptedBlockReferenceKeys
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 enum class GoalRunnerTerminalStatus(val wireValue: String) {
   COMPLETE("complete"),
@@ -60,7 +63,90 @@ data class GoalRunnerStoredOutcome(
   val lastResumableStep: String? = null,
   val suppressPr: Boolean,
   val noChangePause: FeatureTaskRuntimeNoChangePause? = null,
+  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )
+
+data class GoalRunnerAcceptedBlockReference(
+  val sourceWorkflowId: String,
+  val blockedStepId: String,
+  val attempt: Int?,
+  val executionGeneration: Long?,
+  val aliasKind: String,
+  val aliasValue: String,
+  val incidentToken: String,
+  val childIncidentToken: String?,
+  val sourceAliasKind: String? = null,
+  val sourceAliasValue: String? = null,
+) {
+  init {
+    require(sourceWorkflowId.isNotBlank() && blockedStepId.isNotBlank() && (attempt == null || attempt > 0))
+    require(aliasKind.isNotBlank() && aliasValue.isNotBlank())
+    require(incidentToken.isNotBlank())
+    require((sourceAliasKind == null) == (sourceAliasValue == null))
+  }
+
+  fun toArtifactMap(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      linkedMapOf(
+        GoalRunnerAcceptedBlockReferenceKeys.WORKFLOW_ID to sourceWorkflowId,
+        GoalRunnerAcceptedBlockReferenceKeys.STEP_ID to blockedStepId,
+        GoalRunnerAcceptedBlockReferenceKeys.ATTEMPT to attempt,
+        GoalRunnerAcceptedBlockReferenceKeys.EXECUTION_GENERATION to executionGeneration,
+        GoalRunnerAcceptedBlockReferenceKeys.ALIAS_KIND to aliasKind,
+        GoalRunnerAcceptedBlockReferenceKeys.ALIAS_VALUE to aliasValue,
+        GoalRunnerAcceptedBlockReferenceKeys.INCIDENT_TOKEN to incidentToken,
+        GoalRunnerAcceptedBlockReferenceKeys.CHILD_INCIDENT_TOKEN to childIncidentToken,
+        GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_KIND to sourceAliasKind,
+        GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_VALUE to sourceAliasValue,
+      ),
+    )
+
+  fun matchesIdentity(
+    workflowId: String,
+    stepId: String,
+    acceptedAttempt: Int?,
+    generation: Long?,
+  ): Boolean =
+    sourceWorkflowId == workflowId && blockedStepId == stepId && attempt == acceptedAttempt &&
+      executionGeneration == generation
+
+  companion object {
+    fun fromArtifactMap(raw: Any?): GoalRunnerAcceptedBlockReference? {
+      if (raw == null) return null
+      val value = raw as? Map<*, *> ?: invalid()
+      val attempt = value.optionalNumber(GoalRunnerAcceptedBlockReferenceKeys.ATTEMPT)?.toInt()
+      val generation = value.optionalNumber(GoalRunnerAcceptedBlockReferenceKeys.EXECUTION_GENERATION)?.toLong()
+      if (attempt?.let { it <= 0 } == true || generation?.let { it < 0 } == true) invalid()
+      return GoalRunnerAcceptedBlockReference(
+        sourceWorkflowId = value.requiredString(GoalRunnerAcceptedBlockReferenceKeys.WORKFLOW_ID),
+        blockedStepId = value.requiredString(GoalRunnerAcceptedBlockReferenceKeys.STEP_ID),
+        attempt = attempt,
+        executionGeneration = generation,
+        aliasKind = value.requiredString(GoalRunnerAcceptedBlockReferenceKeys.ALIAS_KIND),
+        aliasValue = value.requiredString(GoalRunnerAcceptedBlockReferenceKeys.ALIAS_VALUE),
+        incidentToken = value.requiredString(GoalRunnerAcceptedBlockReferenceKeys.INCIDENT_TOKEN),
+        childIncidentToken = value.optionalString(GoalRunnerAcceptedBlockReferenceKeys.CHILD_INCIDENT_TOKEN),
+        sourceAliasKind = value.optionalString(GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_KIND),
+        sourceAliasValue = value.optionalString(GoalRunnerAcceptedBlockReferenceKeys.SOURCE_ALIAS_VALUE),
+      )
+    }
+
+    private fun Map<*, *>.requiredString(key: String): String =
+      (this[key] as? String)?.takeIf(String::isNotBlank) ?: invalid()
+
+    private fun Map<*, *>.optionalString(key: String): String? =
+      when (val item = this[key]) {
+        null -> null
+        is String -> item.takeIf(String::isNotBlank) ?: invalid()
+        else -> invalid()
+      }
+
+    private fun Map<*, *>.optionalNumber(key: String): Number? = this[key]?.let { it as? Number ?: invalid() }
+
+    private fun invalid(): Nothing =
+      throw invalidWorkflowStateSchemaError("Goal continuation accepted block reference is invalid.")
+  }
+}
 
 sealed interface GoalRunnerReconciledOutcome {
   data class Complete(
@@ -77,6 +163,8 @@ sealed interface GoalRunnerReconciledOutcome {
     val lastResumableStep: String,
     val liveness: GoalRunnerLivenessSnapshot? = null,
     val noChangeReason: String? = null,
+    val incidentToken: String? = null,
+    val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
   ) : GoalRunnerReconciledOutcome
 }
 
@@ -106,6 +194,9 @@ data class GoalRunnerStopReport(
   val workflowId: String?,
   val lastResumableStep: String,
   val noChangeReason: String? = null,
+  val incidentToken: String? = null,
+  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )
 
 enum class GoalPullRequestStatus(val wireValue: String) {

@@ -10,6 +10,9 @@ data class BuildIdentityRecord(
   val dirty: Boolean,
   val releaseTag: String,
   val installRunId: String,
+  val readSchema: Int? = null,
+  val incidentDetailVersion: Int? = null,
+  val minimumIncidentReadSchema: Int? = null,
 ) {
   /**
    * A dirty record names no exact source, so it matches only another dirty record of the same commit from the same install
@@ -39,6 +42,9 @@ data class BuildIdentityRecord(
     private const val DIRTY = "dirty"
     private const val RELEASE_TAG = "release_tag"
     private const val INSTALL_RUN_ID = "install_run_id"
+    private const val READ_SCHEMA = "read_schema"
+    private const val INCIDENT_DETAIL_VERSION = "incident_detail_version"
+    private const val MIN_INCIDENT_DETAIL_READ_SCHEMA = "min_incident_detail_read_schema"
     private const val DISPLAYED_COMMIT_LENGTH = 12
 
     /** The record in [text], or null when it names no commit or its dirty flag is not `true` or `false`. */
@@ -49,7 +55,22 @@ data class BuildIdentityRecord(
       }.toMap()
       val commit = values[COMMIT]?.takeIf(String::isNotEmpty) ?: return null
       val dirty = values[DIRTY]?.toBooleanStrictOrNull() ?: return null
-      return BuildIdentityRecord(commit, dirty, values[RELEASE_TAG].orEmpty(), values[INSTALL_RUN_ID].orEmpty())
+      val readSchemaText = values[READ_SCHEMA]
+      val incidentVersionText = values[INCIDENT_DETAIL_VERSION]
+      val minimumIncidentReadSchemaText = values[MIN_INCIDENT_DETAIL_READ_SCHEMA]
+      val declarationCount = listOf(readSchemaText, incidentVersionText, minimumIncidentReadSchemaText)
+        .count { it != null }
+      if (declarationCount != 0 && declarationCount != 3) return null
+      val readSchema = readSchemaText?.toIntOrNull()?.takeIf { it > 0 }
+      val incidentVersion = incidentVersionText?.toIntOrNull()?.takeIf { it > 0 }
+      val minimumIncidentReadSchema = minimumIncidentReadSchemaText?.toIntOrNull()?.takeIf { it > 0 }
+      if (declarationCount == 3 &&
+        (readSchema == null || incidentVersion == null || minimumIncidentReadSchema == null)
+      ) return null
+      return BuildIdentityRecord(
+        commit, dirty, values[RELEASE_TAG].orEmpty(), values[INSTALL_RUN_ID].orEmpty(), readSchema, incidentVersion,
+        minimumIncidentReadSchema,
+      )
     }
 
     /**
@@ -62,4 +83,20 @@ data class BuildIdentityRecord(
       return if (bothReleases) "./install.sh --release v${tag.removePrefix("v")}" else "./install.sh --from-source"
     }
   }
+}
+
+enum class BuildCompatibility { SUPPORTED, INCIDENT_DETAIL_UNAVAILABLE, MISMATCH }
+
+fun assessBuildCompatibility(
+  installed: BuildIdentityRecord,
+  desktop: BuildIdentityRecord,
+): BuildCompatibility {
+  val capabilityVersion = desktop.incidentDetailVersion
+  val minimumReadSchema = desktop.minimumIncidentReadSchema
+  val installedSupports = capabilityVersion != null && minimumReadSchema != null &&
+    installed.incidentDetailVersion == capabilityVersion && (installed.readSchema ?: 0) >= minimumReadSchema
+  val desktopSupports = capabilityVersion != null && minimumReadSchema != null &&
+    (desktop.readSchema ?: 0) >= minimumReadSchema
+  if (!installedSupports || !desktopSupports) return BuildCompatibility.INCIDENT_DETAIL_UNAVAILABLE
+  return if (installed.sameBuildAs(desktop)) BuildCompatibility.SUPPORTED else BuildCompatibility.MISMATCH
 }

@@ -43,7 +43,9 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
+import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
@@ -2249,6 +2251,17 @@ class GoalRunnerPauseLaunchBoundaryTest {
     val reason = "Goal parent 'parent' cannot start: another goal runner process is live"
     val alreadyRunning =
       object : GoalRunnerExecutionCoordinator {
+        override fun <T> runOwnedWithLease(
+          parentWorkflowId: String,
+          block: (Long, String?) -> T,
+        ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId) { block(1, null) }
+
+        override fun <T> runOwnedWithChildAdmissionLease(
+          parentWorkflowId: String,
+          childAdmission: GoalRunnerChildExecutionPlanAdmission,
+          block: (Long, String?) -> T,
+        ): GoalRunnerOwnedRun<T> = runOwnedWithChildAdmission(parentWorkflowId, childAdmission) { block(1, null) }
+
         override fun <T> runOwned(
           parentWorkflowId: String,
           block: () -> T,
@@ -5236,14 +5249,15 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     return outcomes[workflowId]
   }
 
-  override fun markBlocked(
-    workflowId: String,
-    blockedReason: String,
-    lastResumableStep: String,
-    supervisionEvent: GoalRunnerSupervisionEvent?,
-  ): String {
-    blockedWorkflows += BlockedWorkflow(workflowId, blockedReason, lastResumableStep, supervisionEvent)
-    return "implement"
+  override fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock {
+    blockedWorkflows +=
+      BlockedWorkflow(
+        request.workflowId,
+        request.blockedReason,
+        request.lastResumableStep,
+        request.supervisionEvent,
+      )
+    return GoalRunnerAcceptedBlock("implement", "bi_test")
   }
 
   override fun reopenBlockedPhaseForOperatorResume(

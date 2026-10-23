@@ -9,9 +9,13 @@ import dev.skillbill.tray.core.domain.model.ControlConfirmation
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.HistoryFilter
+import dev.skillbill.tray.core.domain.model.IncidentDetailUnavailable
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.Retention
+import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
+import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.StorageFailure
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
@@ -25,6 +29,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -37,6 +42,15 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
 private fun <T> noDatabase(): Outcome<T> =
   Outcome.Failure(Problem(ProblemCode.DATABASE_ACCESS, "No database is selected.", StorageFailure.ACCESS))
+
+private fun runtimeRefusal(problem: RuntimeBuildProblem): Outcome.Failure = Outcome.Failure(
+  Problem(
+    ProblemCode.RUNTIME_BUILD_MISMATCH,
+    if (problem.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE) IncidentDetailUnavailable.MESSAGE
+    else "The installed Skill Bill runtime is not the build this app was packaged with.",
+    runtimeBuild = problem,
+  ),
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @Inject
@@ -81,11 +95,23 @@ class SessionWorkBoardRepository(private val manager: WorkStoreSessionManager) :
 @ContributesBinding(AppScope::class)
 class SessionWorkDetailRepository(private val manager: WorkStoreSessionManager) : WorkDetailRepository {
   override fun observeDetail(identity: WorkIdentity): Flow<Outcome<Detail>> = manager.slot.flatMapLatest { slot ->
-    if (slot is SessionSlot.Active) slot.parts.detail.observeDetail(identity) else emptyFlow()
+    when (slot) {
+      is SessionSlot.Active -> slot.parts.detail.observeDetail(identity)
+      is SessionSlot.Refused -> flowOf(runtimeRefusal(slot.problem))
+      SessionSlot.Idle, SessionSlot.Switching -> emptyFlow()
+    }
   }
 
-  override suspend fun detail(identity: WorkIdentity, cursor: String?, list: DetailList?, anchor: String?): Outcome<Detail> =
-    manager.settledParts()?.detail?.detail(identity, cursor, list, anchor) ?: noDatabase()
+  override suspend fun detail(
+    identity: WorkIdentity,
+    cursor: String?,
+    list: DetailList?,
+    anchor: String?,
+  ): Outcome<Detail> {
+    val parts = manager.settledParts()
+    if (parts != null) return parts.detail.detail(identity, cursor, list, anchor)
+    return manager.settledRefusal()?.let(::runtimeRefusal) ?: noDatabase()
+  }
 }
 
 @Inject
@@ -111,4 +137,23 @@ class SessionWorkControlRepository(private val manager: WorkStoreSessionManager)
 
   override suspend fun launch(item: WorkItem, agentId: String?): Outcome<Unit> =
     manager.settledParts()?.control?.launch(item, agentId) ?: noDatabase()
+
+  override suspend fun recover(
+    item: WorkItem,
+    incidentToken: String,
+    revision: Long,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<Unit> {
+    val parts = manager.settledParts() ?: return noDatabase()
+    return parts.control.recover(item, incidentToken, revision, confirmedPrerequisites)
+  }
+
+  override suspend fun recoveryPreview(
+    item: WorkItem,
+    incidentToken: String,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<IncidentRecoveryPreviewResult> {
+    val parts = manager.settledParts() ?: return noDatabase()
+    return parts.control.recoveryPreview(item, incidentToken, confirmedPrerequisites)
+  }
 }

@@ -8,6 +8,9 @@ import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
+import dev.skillbill.tray.core.domain.model.IncidentProgress
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
@@ -68,6 +71,13 @@ class DetailViewModel(
   private val boards: WorkBoardRepository,
   private val clock: Clock,
 ) : ViewModel() {
+  private enum class OrdinaryControl(val kind: ControlKind) {
+    PAUSE(ControlKind.PAUSE),
+    STOP(ControlKind.STOP),
+    CANCEL(ControlKind.CANCEL),
+    LAUNCH(ControlKind.LAUNCH),
+  }
+
   private val mutable = MutableStateFlow(DetailUiState(identity))
   private val feedbackIds = FeedbackIds()
   private val navigation = NavigationEffects<DetailEffect>()
@@ -91,10 +101,14 @@ class DetailViewModel(
   fun onAction(action: DetailAction) {
     when (action) {
       is DetailAction.LoadMore -> loadMore(action.list)
-      DetailAction.Pause -> perform(ControlKind.PAUSE)
-      DetailAction.Stop -> perform(ControlKind.STOP)
-      DetailAction.Cancel -> perform(ControlKind.CANCEL)
-      is DetailAction.Launch -> perform(ControlKind.LAUNCH, action.agentId)
+      DetailAction.Pause -> perform(OrdinaryControl.PAUSE)
+      DetailAction.Stop -> perform(OrdinaryControl.STOP)
+      DetailAction.Cancel -> perform(OrdinaryControl.CANCEL)
+      is DetailAction.Launch -> perform(OrdinaryControl.LAUNCH, action.agentId)
+      DetailAction.Recover -> loadRecoveryPreview()
+      is DetailAction.ConfirmPrerequisite -> confirmPrerequisite(action)
+      DetailAction.ConfirmRecovery -> confirmRecovery()
+      DetailAction.CancelRecovery -> cancelRecovery()
       DetailAction.Refresh -> viewModelScope.launch { boards.refresh() }
       is DetailAction.AcknowledgeFeedback -> mutable.update { state ->
         val control = state.control
@@ -130,7 +144,7 @@ class DetailViewModel(
             // An append still waiting for this lock keeps its Loading entry; it re-reads the fresh detail when it runs.
             val pending = appendJob?.isActive == true
             mutable.update {
-              it.copy(
+              reconcileRecovery(it, refreshed.detail).copy(
                 load = DetailLoad.Loaded(refreshed.detail),
                 readHealth = DetailReadHealth.Healthy,
                 appends = if (pending) it.appends.filterValues { append -> append == AppendState.Loading } else emptyMap(),
@@ -190,11 +204,14 @@ class DetailViewModel(
       return
     }
     mutable.update { state ->
-      if (current == null) {
-        state.copy(load = DetailLoad.Failed(problem))
-      } else {
-        state.copy(load = current.copy(refreshing = false), readHealth = DetailReadHealth.Failed(problem))
-      }
+      if (current == null) state.copy(load = DetailLoad.Failed(problem))
+      else state.copy(
+        load = current.copy(refreshing = false),
+        readHealth = DetailReadHealth.Failed(problem),
+        recovery = state.recovery.takeIf { it is RecoveryState.Applying } ?: RecoveryState.Idle,
+        prerequisiteIdentity = null,
+        confirmedPrerequisites = emptySet(),
+      )
     }
   }
 
@@ -219,26 +236,29 @@ class DetailViewModel(
         }
         when (result) {
           is Outcome.Failure -> mutable.update { it.copy(appends = it.appends + (list to AppendState.Failed(result.problem))) }
-          is Outcome.Value -> mutable.update { it.copy(load = DetailLoad.Loaded(result.value), appends = it.appends - list) }
+          is Outcome.Value -> mutable.update {
+            reconcileRecovery(it, result.value).copy(load = DetailLoad.Loaded(result.value), appends = it.appends - list)
+          }
         }
       }
     }
   }
 
-  private fun perform(kind: ControlKind, agentId: String? = null) {
+  private fun perform(control: OrdinaryControl, agentId: String? = null) {
+    val kind = control.kind
     val current = loaded() ?: return
-    if (mutable.value.control is ControlState.InProgress) return
+    if (mutable.value.control is ControlState.InProgress || mutable.value.recovery !is RecoveryState.Idle || controlJob?.isActive == true) return
     if (mutable.value.readHealth.blocksControls) {
       refuse(kind, Problem(ProblemCode.STALE_TARGET, "Refresh the detail before using run controls."))
       return
     }
     val item = current.detail.item
     val options = current.detail.runOptions
-    val eligible = when (kind) {
-      ControlKind.CANCEL -> options?.canCancel == true
-      ControlKind.LAUNCH -> options?.canLaunch == true
-      ControlKind.PAUSE -> item.pauseEligible
-      ControlKind.STOP -> item.eligibleForControl()
+    val eligible = when (control) {
+      OrdinaryControl.CANCEL -> options?.canCancel == true
+      OrdinaryControl.LAUNCH -> options?.canLaunch == true
+      OrdinaryControl.PAUSE -> item.pauseEligible
+      OrdinaryControl.STOP -> item.eligibleForControl()
     }
     if (!eligible) {
       refuse(kind, Problem(ProblemCode.UNKNOWN_WORK_ITEM, "${kind.name.lowercase().replaceFirstChar { it.uppercase() }} is not available for this item right now."))
@@ -250,16 +270,16 @@ class DetailViewModel(
     controlJob = viewModelScope.launch {
       try {
         // Attempts that exist before the request, so the one it registers can be told apart; nothing arriving in time means none.
-        val knownAttempts = if (kind == ControlKind.LAUNCH) {
+        val knownAttempts = if (control == OrdinaryControl.LAUNCH) {
           withTimeoutOrNull(KNOWN_ATTEMPTS_TIMEOUT) { launchCandidates().first() }.orEmpty().map { it.identity }.toSet()
         } else {
           emptySet()
         }
-        val result: Outcome<*> = when (kind) {
-          ControlKind.PAUSE -> controls.pause(item)
-          ControlKind.STOP -> controls.stop(item)
-          ControlKind.CANCEL -> controls.cancel(item)
-          ControlKind.LAUNCH -> controls.launch(item, agentId)
+        val result: Outcome<*> = when (control) {
+          OrdinaryControl.PAUSE -> controls.pause(item)
+          OrdinaryControl.STOP -> controls.stop(item)
+          OrdinaryControl.CANCEL -> controls.cancel(item)
+          OrdinaryControl.LAUNCH -> controls.launch(item, agentId)
         }
         // The store was replaced while the request ran: its answer belongs to a work item that no longer exists.
         if (loaded()?.detail?.item?.databaseGeneration != generation) return@launch
@@ -268,11 +288,180 @@ class DetailViewModel(
           is Outcome.Value<*> -> (result.value as? ControlConfirmation)?.let { addFeedback(FeedbackTone.CONFIRMATION, confirmationNotice(it)) }
         }
         boards.refresh()
-        if (result is Outcome.Value<*> && kind == ControlKind.LAUNCH) followLaunch(item, knownAttempts, requestedAt)
+        if (result is Outcome.Value<*> && control == OrdinaryControl.LAUNCH) followLaunch(item, knownAttempts, requestedAt)
       } finally {
         mutable.update { if (it.control is ControlState.InProgress) it.copy(control = ControlState.Idle) else it }
       }
     }
+  }
+
+  private fun confirmPrerequisite(action: DetailAction.ConfirmPrerequisite) {
+    val current = loaded() ?: return
+    val detail = current.detail
+    val incident = detail.incident ?: return
+    if (mutable.value.readHealth.blocksControls || mutable.value.recovery !is RecoveryState.Idle || controlJob?.isActive == true ||
+      incident.progress != IncidentProgress.NEEDS_PREREQUISITES || incident.prerequisites.none { it.kind == action.kind }
+    ) return
+    val identity = recoveryIdentity(detail)
+    mutable.update { state ->
+      val checked = if (state.prerequisiteIdentity == identity) state.confirmedPrerequisites else emptySet()
+      state.copy(prerequisiteIdentity = identity,
+        confirmedPrerequisites = if (action.checked) checked + action.kind else checked - action.kind)
+    }
+  }
+
+  private fun cancelRecovery() {
+    mutable.update { state ->
+      if (state.recovery !is RecoveryState.Confirming) state else state.copy(recovery = RecoveryState.Idle)
+    }
+  }
+
+  private fun loadRecoveryPreview() {
+    val current = loaded() ?: return
+    val detail = current.detail
+    val incident = detail.incident ?: return
+    val state = mutable.value
+    val item = detail.item
+    if (state.readHealth.blocksControls || state.control is ControlState.InProgress || state.recovery !is RecoveryState.Idle ||
+      controlJob?.isActive == true || incident.progress !in setOf(IncidentProgress.RECOVERY_AVAILABLE, IncidentProgress.NEEDS_PREREQUISITES)
+    ) return
+    val identity = recoveryIdentity(detail)
+    val checked = state.confirmedPrerequisites.takeIf { state.prerequisiteIdentity == identity }.orEmpty()
+    val required = incident.prerequisites.map { it.kind }.toSet()
+    if (incident.progress == IncidentProgress.NEEDS_PREREQUISITES && !checked.containsAll(required)) return
+    val request = RecoveryRequest(item, identity, checked.toSet())
+    val loading = RecoveryState.Loading(request)
+    mutable.update { it.copy(recovery = loading, prerequisiteIdentity = identity, confirmedPrerequisites = checked) }
+    controlJob = viewModelScope.launch {
+      try {
+        val result = controls.recoveryPreview(request.item, identity.incidentToken, request.confirmedPrerequisites)
+        if (!ownsPreview(loading)) return@launch
+        val refresh = when (result) {
+          is Outcome.Failure -> { refuse(ControlKind.RECOVER, result.problem); true }
+          is Outcome.Value -> when (val previewResult = result.value) {
+            is IncidentRecoveryPreviewResult.Available -> {
+              if (previewMatches(previewResult.preview, request)) {
+                mutable.update { it.copy(recovery = RecoveryState.Confirming(RecoverySnapshot(request, previewResult.preview))) }
+                controlJob = null
+                false
+              } else { refuse(ControlKind.RECOVER, stalePreviewProblem()); true }
+            }
+            is IncidentRecoveryPreviewResult.NeedsPrerequisites -> {
+              val planned = previewResult.plannedPreview
+              val instructions = previewResult.instructions.joinToString(" ") { "${it.kind}: ${it.instruction}" }
+              val message = when {
+                planned == null -> "Recovery needs prerequisites, but the runtime did not provide a preview: $instructions Refresh the incident details."
+                !previewMatches(planned, request) -> "Recovery preview belongs to a different incident revision. Remaining prerequisites: $instructions Refresh the incident details."
+                else -> "Recovery still needs prerequisites: $instructions Refresh the incident details."
+              }
+              refuse(ControlKind.RECOVER, Problem(ProblemCode.STALE_TARGET, message)); true
+            }
+            is IncidentRecoveryPreviewResult.ExistingAttempt -> {
+              val failure = previewResult.failure?.let { " It ended with $it." }.orEmpty()
+              refuse(ControlKind.RECOVER, Problem(ProblemCode.STALE_TARGET,
+                "Recovery attempt ${previewResult.attemptId} is ${previewResult.status}.$failure Refresh the incident details.")); true
+            }
+            is IncidentRecoveryPreviewResult.Rejected -> {
+              refuse(ControlKind.RECOVER, Problem(ProblemCode.STALE_TARGET,
+                "Recovery preview was refused: ${previewResult.reason}${previewResult.detail?.let { ": $it" }.orEmpty()}")); true
+            }
+            is IncidentRecoveryPreviewResult.Unrecognized -> {
+              refuse(ControlKind.RECOVER, Problem(ProblemCode.STALE_TARGET,
+                "Recovery preview returned an unrecognized result. Refresh the incident details.")); true
+            }
+          }
+        }
+        if (refresh) boards.refresh()
+      } finally {
+        mutable.update { if (it.recovery === loading) it.copy(recovery = RecoveryState.Idle) else it }
+      }
+    }
+  }
+
+  private fun confirmRecovery() {
+    val confirmation = mutable.value.recovery as? RecoveryState.Confirming ?: return
+    val snapshot = confirmation.snapshot
+    val current = loaded()
+    val detail = current?.detail
+    val incident = detail?.incident
+    val valid = current != null && mutable.value.readHealth == DetailReadHealth.Healthy && detail != null && incident != null &&
+      snapshot.request.identity.matches(detail.item, incident) && previewMatches(snapshot.preview, snapshot.request) &&
+      snapshot.request.confirmedPrerequisites == mutable.value.confirmedPrerequisites &&
+      mutable.value.prerequisiteIdentity == snapshot.request.identity &&
+      incident.progress in setOf(IncidentProgress.RECOVERY_AVAILABLE, IncidentProgress.NEEDS_PREREQUISITES) &&
+      (incident.progress != IncidentProgress.NEEDS_PREREQUISITES ||
+        snapshot.request.confirmedPrerequisites.containsAll(incident.prerequisites.map { it.kind }))
+    if (!valid || mutable.value.control is ControlState.InProgress || controlJob?.isActive == true) {
+      mutable.update { it.copy(recovery = RecoveryState.Idle) }
+      refuse(ControlKind.RECOVER, stalePreviewProblem())
+      return
+    }
+    val applying = RecoveryState.Applying(snapshot)
+    mutable.update { it.copy(recovery = applying, control = ControlState.InProgress(ControlKind.RECOVER)) }
+    controlJob = viewModelScope.launch {
+      try {
+        val result = controls.recover(snapshot.request.item, snapshot.preview.incidentToken,
+          snapshot.preview.incidentRevision, snapshot.request.confirmedPrerequisites)
+        val ownerStillSelected = loaded()?.detail?.let { value ->
+          value.incident?.let { snapshot.request.identity.matches(value.item, it) } == true
+        } == true
+        if (mutable.value.recovery === applying && ownerStillSelected) when (result) {
+          is Outcome.Failure -> refuse(ControlKind.RECOVER, result.problem)
+          is Outcome.Value -> addFeedback(FeedbackTone.CONFIRMATION, "Recovery request finished. Incident details were refreshed.")
+        }
+        boards.refresh()
+      } finally {
+        mutable.update { state ->
+          val ownsRequest = state.recovery === applying
+          state.copy(
+            recovery = if (ownsRequest) RecoveryState.Idle else state.recovery,
+            prerequisiteIdentity = null,
+            confirmedPrerequisites = emptySet(),
+            control = if (ownsRequest && (state.control as? ControlState.InProgress)?.kind == ControlKind.RECOVER) {
+              ControlState.Idle
+            } else state.control,
+          )
+        }
+      }
+    }
+  }
+
+  private fun ownsPreview(loading: RecoveryState.Loading): Boolean {
+    if (mutable.value.recovery !== loading) return false
+    val current = loaded() ?: return false
+    val incident = current.detail.incident ?: return false
+    return mutable.value.readHealth == DetailReadHealth.Healthy && loading.request.identity.matches(current.detail.item, incident) &&
+      mutable.value.prerequisiteIdentity == loading.request.identity &&
+      mutable.value.confirmedPrerequisites == loading.request.confirmedPrerequisites
+  }
+
+  private fun recoveryIdentity(detail: Detail): RecoveryIdentity {
+    val incident = requireNotNull(detail.incident)
+    val item = detail.item
+    return RecoveryIdentity(item.identity, item.workflowId, item.invocationId, item.databaseGeneration, item.databaseFile, item.databaseStoreId,
+      incident.incidentToken, incident.revision, incident.prerequisites.toList())
+  }
+
+  private fun previewMatches(preview: IncidentRecoveryPreview, request: RecoveryRequest): Boolean =
+    preview.incidentToken == request.identity.incidentToken && preview.incidentRevision == request.identity.incidentRevision
+
+  private fun stalePreviewProblem() = Problem(ProblemCode.STALE_TARGET,
+    "The incident changed. Refresh it and review a new recovery preview.")
+
+  private fun reconcileRecovery(state: DetailUiState, detail: Detail): DetailUiState {
+    val incident = detail.incident
+    val identity = incident?.let { recoveryIdentity(detail) }
+    val actionable = incident != null && incident.progress in setOf(IncidentProgress.RECOVERY_AVAILABLE, IncidentProgress.NEEDS_PREREQUISITES)
+    val keepChecks = actionable && identity != null && state.prerequisiteIdentity == identity
+    val recovery = when (val current = state.recovery) {
+      is RecoveryState.Applying -> current
+      is RecoveryState.Confirming -> current.takeIf { actionable && identity == it.snapshot.request.identity } ?: RecoveryState.Idle
+      is RecoveryState.Loading -> current.takeIf { actionable && identity == it.request.identity } ?: RecoveryState.Idle
+      RecoveryState.Idle -> RecoveryState.Idle
+    }
+    return state.copy(recovery = recovery,
+      prerequisiteIdentity = if (keepChecks) state.prerequisiteIdentity else null,
+      confirmedPrerequisites = if (keepChecks) state.confirmedPrerequisites else emptySet())
   }
 
   /** The live board's items, which is where a launched attempt registers; finished attempts are included so a fast one is not missed. */

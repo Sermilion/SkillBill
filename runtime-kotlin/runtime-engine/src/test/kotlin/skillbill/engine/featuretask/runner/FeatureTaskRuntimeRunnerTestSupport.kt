@@ -46,6 +46,7 @@ import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.core.settleScriptedEnvelope
+import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -124,6 +125,8 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.diagnostics.model.ExactOutputRead
+import skillbill.ports.diagnostics.model.ExactOutputReadRequest
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
@@ -135,6 +138,7 @@ import skillbill.ports.diff.DiffResolverPortDefaults
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -929,7 +933,7 @@ private fun harnessCrashReconciler(
 }
 
 internal fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
-  FeatureTaskPhaseSettlementService(
+  testPhaseSettlementService(
     InMemoryFeatureTaskPhaseSettlementRepository(),
     testHarnessClock,
   )
@@ -2230,6 +2234,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
               .maxWithOrNull(compareBy({ it.key.generation }, { it.key.repairTurn }))
               ?.value
           }
+
+          override fun readProducerOutputExact(request: ExactOutputReadRequest): ExactOutputRead =
+            ExactOutputRead.Unavailable("Exact retained output is unavailable.")
         }
       override val unaddressedFindings =
         object : UnaddressedFindingsRepository {
@@ -2305,6 +2312,7 @@ private fun FeatureTaskRuntimeWorkerOwnership.matchesActiveOwnership(
 
 internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
   private val workerOwnership = mutableMapOf<String, FeatureTaskRuntimeWorkerOwnership>()
+  private val workerGenerations = mutableMapOf<String, FeatureTaskRuntimeWorkerGenerationObservation>()
   private val goalChildWorkflowIds = mutableMapOf<String, List<String>>()
 
   fun seedGoalChildWorkflowIds(
@@ -2319,10 +2327,28 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
 
   fun seedWorkerOwnership(ownership: FeatureTaskRuntimeWorkerOwnership) {
     workerOwnership[ownership.workflowId] = ownership
+    recordWorkerGeneration(ownership)
   }
 
   override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String) =
     synchronized(this) { workerOwnership[workflowId] }
+
+  override fun getLatestFeatureTaskRuntimeWorkerGeneration(workflowId: String) =
+    synchronized(this) { workerGenerations[workflowId] }
+
+  private fun recordWorkerGeneration(ownership: FeatureTaskRuntimeWorkerOwnership) {
+    val latest = workerGenerations[ownership.workflowId]
+    if (latest == null || latest.generation < ownership.generation) {
+      workerGenerations[ownership.workflowId] =
+        FeatureTaskRuntimeWorkerGenerationObservation(
+          ownership.workflowId,
+          ownership.generation,
+          ownership.phaseId,
+          ownership.phaseAttempt,
+          ownership.heartbeatAt,
+        )
+    }
+  }
 
   override fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -2335,6 +2361,7 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
         return false
       }
       workerOwnership[ownership.workflowId] = ownership
+      recordWorkerGeneration(ownership)
       true
     }
 
@@ -2370,6 +2397,7 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
         return false
       }
       workerOwnership[ownership.workflowId] = ownership
+      recordWorkerGeneration(ownership)
       true
     }
 
@@ -2394,6 +2422,9 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
       if (!current.matchesActiveOwnership(workflowId, ownerToken, generation)) return false
       if (WorkflowStatus.fromWire(row.workflowStatus) in WorkflowStatus.terminalStatuses) return false
       workerOwnership[workflowId] = current.copy(phaseId = phaseId, phaseAttempt = phaseAttempt)
+      workerGenerations[workflowId]?.takeIf { it.generation == generation }?.let {
+        workerGenerations[workflowId] = it.copy(phaseId = phaseId, phaseAttempt = phaseAttempt)
+      }
       true
     }
 

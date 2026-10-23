@@ -68,4 +68,38 @@ data class ProducerOutputEvidence(
       "generation=$generation, attempt=$attempt, repairTurn=$repairTurn, payload=<hidden>)"
 }
 
+sealed interface ExactOutputReadRequest {
+  val expectedDigest: String?
+  val expectedByteSize: Long?
+
+  data class Producer(
+    val workflowId: String?,
+    val phaseId: String?,
+    val attempt: Int?,
+    val agentId: String?,
+    val generation: Long?,
+    val repairTurn: Int?,
+    override val expectedDigest: String?,
+    override val expectedByteSize: Long?,
+    val retainedIdentity: String?,
+  ) : ExactOutputReadRequest
+
+  data class Rejected(
+    val diagnosticIdentity: String?,
+    val workflowId: String?,
+    val phaseId: String?,
+    val attempt: Int?,
+    val sourceIdentity: String?,
+    val repairTurn: Int?,
+    override val expectedDigest: String?,
+    override val expectedByteSize: Long?,
+  ) : ExactOutputReadRequest
+}
+
+sealed interface ExactOutputRead {
+  data class Found(val payload: ByteArray, val sourceIdentity: String) : ExactOutputRead
+
+  data class Unavailable(val reason: String) : ExactOutputRead
+}
+
 fun ProducerOutputEvidence.evidenceKey(): String = "$workflowId:$phaseId:$generation:$attempt:$repairTurn:$agentId"

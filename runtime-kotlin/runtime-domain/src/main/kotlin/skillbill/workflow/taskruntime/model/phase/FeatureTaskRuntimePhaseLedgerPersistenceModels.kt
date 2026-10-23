@@ -73,6 +73,8 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
   val blockedReason: String? = null,
   val loopId: String? = null,
   val edgeIteration: Int? = null,
+  val recoveryAttemptId: String? = null,
+  val preserveBudget: Boolean = false,
 ) {
   constructor(
     action: FeatureTaskRuntimePhaseLedgerAction,
@@ -86,6 +88,8 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
     blockedReason: String? = null,
     loopId: String? = null,
     edgeIteration: Int? = null,
+    recoveryAttemptId: String? = null,
+    preserveBudget: Boolean = false,
   ) : this(
     action,
     sequenceNumber,
@@ -98,11 +102,19 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
     blockedReason,
     loopId,
     edgeIteration,
+    recoveryAttemptId,
+    preserveBudget,
   )
 
   init {
     val reason = violation(sequenceNumber, phaseId, attemptCount, fixLoopIteration, edgeIteration)
     require(reason == null) { reason.orEmpty() }
+    require((recoveryAttemptId != null) == preserveBudget) {
+      "Recovery ledger entries require an attempt id and budget preservation together."
+    }
+    require(recoveryAttemptId == null || recoveryAttemptId.isNotBlank()) {
+      "Recovery ledger attempt id must be non-blank."
+    }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -119,6 +131,8 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
       blockedReason?.let { put(DecompositionManifestPayloadKeys.BLOCKED_REASON, it) }
       loopId?.let { put("loop_id", it) }
       edgeIteration?.let { put("edge_iteration", it) }
+      recoveryAttemptId?.let { put(FeatureTaskRuntimePhasePayloadKeys.RECOVERY_ATTEMPT_ID, it) }
+      if (preserveBudget) put(FeatureTaskRuntimePhasePayloadKeys.PRESERVE_BUDGET, true)
     }
 
   companion object {
@@ -169,12 +183,14 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
       val blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON)
       val loopId = reader.optionalString("loop_id")
       val edgeIteration = reader.optionalInt("edge_iteration")
+      val recoveryAttemptId = reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.RECOVERY_ATTEMPT_ID)
+      val preserveBudget = reader.optionalBoolean(FeatureTaskRuntimePhasePayloadKeys.PRESERVE_BUDGET) ?: false
       violation(sequenceNumber, phaseId, attemptCount, fixLoopIteration, edgeIteration)?.let {
         invalidLedgerEntry()
       }
       return FeatureTaskRuntimePhaseLedgerEntry(
         action, sequenceNumber, timestamp, phaseId, attemptCount, resolvedAgentId, executionOrigin,
-        fixLoopIteration, blockedReason, loopId, edgeIteration,
+        fixLoopIteration, blockedReason, loopId, edgeIteration, recoveryAttemptId, preserveBudget,
       )
     }
   }

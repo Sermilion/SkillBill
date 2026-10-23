@@ -316,14 +316,16 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
-  fun `plan works only from the preplan digest and preplan carries the evidence for it`() {
+  fun `planning preserves digest evidence while permitting targeted implementability verification`() {
     listOf("plan", "plan_subtasks").forEach { step ->
       val plan = composePromptForPhase(step)
-      assertContains(plan, "The preplan digest is this phase's only repository knowledge")
-      assertContains(plan, "do not re-verify the digest")
+      assertContains(plan, "Use the preplan digest as the starting evidence")
+      assertContains(plan, "targeted read-only source or authoritative contract lookup")
+      assertFalse(plan.contains("only repository knowledge"))
+      assertFalse(plan.contains("assumption in the affected spec or plan step for implement to confirm"))
     }
     val preplan = composePromptForPhase("preplan")
-    assertContains(preplan, "never reads the repository")
+    assertContains(preplan, "may verify missing implementability facts through targeted read-only lookups")
     assertContains(preplan, "The digest must carry every fact the plan needs to specify this task")
     assertContains(preplan, "Decide that scope before you look anything up")
     assertContains(preplan, "A lookup is in scope only when the plan cannot write this task without that fact")
@@ -345,6 +347,11 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplan, "a content match returns the body")
     assertContains(preplan, "Do not read the body of a heading you judged irrelevant")
     assertFalse(preplan.contains("Settle every question the repository can answer"))
+    val feasibility =
+      javaClass.getResource("/skillbill/engine/featuretask/slot/plan/planning-feasibility.md")!!.readText().trimEnd()
+    listOf("preplan", "plan", "plan_subtasks").forEach { step ->
+      assertContains(composePromptForPhase(step), feasibility)
+    }
   }
 
   @Test

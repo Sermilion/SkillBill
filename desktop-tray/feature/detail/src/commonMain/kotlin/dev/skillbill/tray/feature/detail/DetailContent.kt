@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,6 +37,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +66,7 @@ import dev.skillbill.tray.core.designsystem.red
 import dev.skillbill.tray.core.designsystem.strongBorder
 import dev.skillbill.tray.core.designsystem.surface3
 import dev.skillbill.tray.core.domain.model.Detail
+import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
@@ -81,7 +86,6 @@ import dev.skillbill.tray.core.ui.formatInstant
 import dev.skillbill.tray.core.ui.label
 import dev.skillbill.tray.core.ui.livenessText
 import dev.skillbill.tray.core.ui.outcomeLabel
-import dev.skillbill.tray.core.ui.phaseLabel
 import dev.skillbill.tray.core.ui.phasePipeline
 import dev.skillbill.tray.core.ui.rememberCopyToClipboard
 import dev.skillbill.tray.core.ui.statusColor
@@ -115,7 +119,13 @@ fun DetailContent(
 ) {
   when (val load = state.load) {
     DetailLoad.Loading -> DetailMessage("Loading work detail", "Fetching phases, subtasks, and history.", null, null, modifier)
-    is DetailLoad.Failed -> DetailMessage("Work detail unavailable", load.problem.summary, { onAction(DetailAction.Refresh) }, onBackToList, modifier)
+    is DetailLoad.Failed -> {
+      val unavailable = load.problem.runtimeBuild?.takeIf { it.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE }
+      if (unavailable != null) IncidentDetailUnavailablePanel(unavailable, { onAction(DetailAction.Refresh) }, modifier)
+      else DetailMessage(
+        "Work detail unavailable", load.problem.summary, { onAction(DetailAction.Refresh) }, onBackToList, modifier,
+      )
+    }
     is DetailLoad.Loaded -> LoadedDetail(state, load, now, onAction, modifier)
   }
 }
@@ -161,8 +171,9 @@ private fun LoadedDetail(
   val executionScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "executions", executionKeys)
   val validationScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "validation", validationKeys)
   val copy = rememberCopyToClipboard()
-  val readError = state.readHealth.reportedProblem
-  val fresh = effectiveFreshness(item, false, readError != null) == Freshness.FRESH
+  val recoveryStatusFocus = remember { FocusRequester() }
+  var recoveryStatusAttached by remember { mutableStateOf(false) }
+  val fresh = effectiveFreshness(item, false, state.readHealth.reportedProblem != null) == Freshness.FRESH
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val frozen = !fresh
   val operation = item.family == WorkFamily.FEATURE_VERIFY
@@ -180,14 +191,17 @@ private fun LoadedDetail(
     Column(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
       Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          StatusChip(item.outcomeLabel(), item.statusColor(), item.lifecycle, stalled = item.stalled())
+          StatusChip(
+            item.outcomeLabel(), item.statusColor(), item.lifecycle, stalled = item.stalled(),
+            modifier = Modifier.focusRequester(recoveryStatusFocus).focusable().onGloballyPositioned { recoveryStatusAttached = true },
+          )
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
           StatusChip(if (operation) "operation" else if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         RepositoryLocationLinks(item)
-        readError?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
+        state.readHealth.reportedProblem?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
         state.pendingFeedback.forEach { feedback ->
           Text(
             feedback.message,
@@ -216,7 +230,20 @@ private fun LoadedDetail(
           }
         }
       }
-      RunActionButtons(detail, state.control is ControlState.InProgress, state.controllable && !state.readHealth.blocksControls, onAction)
+      RunActionButtons(
+        detail,
+        state.control is ControlState.InProgress,
+        state.controllable && !state.readHealth.blocksControls,
+        state.recoveryConfirmation,
+        state.recoveryPreviewLoading,
+        state.recoveryPreview,
+        state.confirmedPrerequisites,
+        (state.control as? ControlState.Refused)?.problem?.summary,
+        (state.control as? ControlState.InProgress)?.kind == ControlKind.RECOVER,
+        recoveryStatusFocus,
+        recoveryStatusAttached,
+        onAction,
+      )
     }
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -226,7 +253,7 @@ private fun LoadedDetail(
       }
       DetailMetric(
         if (standalone || operation) "Step" else "Phase",
-        if (operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.phaseExecution?.phaseLabel() ?: item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
+        if (operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
         if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else item.phaseExecution?.label() ?: "",
         Modifier.weight(1f),
       )
@@ -263,7 +290,7 @@ private fun LoadedDetail(
                   Text(
                     listOfNotNull(
                       task.status, task.commitSha?.take(7),
-                      if (active) item.phaseExecution?.phaseLabel() else null,
+                      if (active) item.phaseExecution?.let { "${it.phaseId} ${it.label()}" } else null,
                       if (active) item.currentModel else null,
                       if (active) item.currentEffort else null,
                       validation?.passed?.let { if (it) "validation passed" else "validation failed" },
@@ -273,7 +300,7 @@ private fun LoadedDetail(
                   )
                   task.blockedReason?.let { SelectionContainer { Text(it, color = orange, fontSize = 12.sp, lineHeight = 18.sp) } }
                   if (active && pipeline.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), item.phaseExecution?.takeIf { it.phaseId == phase.id }) }
+                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), phase.attemptCount, item.phaseExecution?.takeIf { it.phaseId == phase.id }) }
                   }
                 }
                 if (active) Text(subtaskTime, color = blue, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
@@ -290,7 +317,7 @@ private fun LoadedDetail(
                 Column(Modifier.weight(1f)) {
                   Text("Goal finish", color = ink.copy(alpha = if (finishActive || finishDone) 1f else .55f), fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                   FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    finishSteps.forEach { PhaseChip(it.id, it.state == GoalFinishStepState.COMPLETE, it.state == GoalFinishStepState.ACTIVE) }
+                    finishSteps.forEach { PhaseChip(it.id, it.state == GoalFinishStepState.COMPLETE, it.state == GoalFinishStepState.ACTIVE, 0) }
                   }
                 }
               }
@@ -300,7 +327,7 @@ private fun LoadedDetail(
         } else if (!operation && detail.stepPipeline.isNotEmpty()) {
           DesignLabel("Phase pipeline")
           FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            detail.stepPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, item.phaseExecution?.takeIf { execution -> execution.phaseId == it }) }
+            detail.stepPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, 0) }
           }
         }
         if (detail.dependencies.isNotEmpty() || detail.cursors[DetailList.DEPENDENCIES] != null) {
@@ -322,14 +349,25 @@ private fun LoadedDetail(
         if (!operation) PageFooter(state.append(DetailList.PHASES)) { onAction(DetailAction.LoadMore(DetailList.PHASES)) }
         val event = detail.latestActivity.event
         val edit = detail.latestActivity.edit
+        val hasIncident = detail.incident != null || detail.incidentHistory.incidents.isNotEmpty()
         val activity = buildList {
           item.lastAgentActivityLabel?.let { add("Agent activity" to "$it${item.lastAgentActivityAt?.let { at -> " · ${age((now - at).coerceNonNegative())} ago" }.orEmpty()}") }
           edit?.let { add("Last edit" to "${it.paths.joinToString { path -> "…/" + path.substringAfterLast('/') }} +${it.insertions ?: 0} −${it.deletions ?: 0}${it.recordedAt?.let { at -> " · ${age((now - at).coerceNonNegative())} ago" }.orEmpty()}") }
           event?.let { add("Event" to listOfNotNull(it.workflowPhase, it.workerRole, it.summary).joinToString(" · ")) }
           item.activity?.let { add((if (operation) "Operation event" else "Phase event") to it) }
         }
-        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked || detail.phaseResults.isNotEmpty() || detail.goalQa != null) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked || detail.phaseResults.isNotEmpty() || detail.goalQa != null || hasIncident) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           DesignLabel(if (operation) "Operation activity" else if (standalone) "Phase activity" else "Goal activity")
+          if (hasIncident) {
+            IncidentPanel(
+              detail.incident,
+              detail.incidentHistory.incidents,
+              state.confirmedPrerequisites,
+              state.recovery is RecoveryState.Idle && state.control !is ControlState.InProgress,
+              onAction,
+              copy,
+            )
+          }
           goalBlockReason?.let { reason ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
               Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -368,7 +406,7 @@ private fun LoadedDetail(
           "Execution",
           listOfNotNull(
             item.workflowId?.let { "Workflow" to it }, item.invocationId?.let { "Invocation" to it },
-            detail.activeAgent?.let { "Agent" to it }, "Model" to (item.currentModel?.let { "$it${item.currentEffort?.let { effort -> " · $effort" }.orEmpty()}" } ?: "Not reported"),
+            detail.activeAgent?.let { "Agent" to it }, item.currentModel?.let { "Model" to "$it${item.currentEffort?.let { effort -> " · $effort" }.orEmpty()}" },
             detail.executionLiveness?.let { "Liveness" to livenessText(it, item, now) }, item.startedAt?.let { "Started" to formatInstant(it, "d MMM HH:mm") },
             "Last update" to formatInstant(item.updatedAt, "HH:mm:ss"),
           ),
@@ -377,7 +415,7 @@ private fun LoadedDetail(
           detail.attempts.phaseAttempts.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Phase runs" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           detail.attempts.fixIterations.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Fix iterations" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           detail.attempts.findingsInScope?.let { add("Findings in scope" to it.toString()) }
-          detail.attempts.reAttemptCauses.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Re-attempts" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
+          detail.attempts.reAttemptCauses.filterValues { it > 0 }.takeIf { it.isNotEmpty() }?.let { add("Relaunch causes" to it.entries.joinToString(" · ") { entry -> "${entry.key} ${entry.value}" }) }
           if (detail.attempts.supervisorKills > 0) add("Supervisor kills" to detail.attempts.supervisorKills.toString())
         }
         MetadataPanel("Runs and fixes", attempts)
@@ -419,9 +457,9 @@ private fun DetailMetric(label: String, value: String, hint: String, modifier: M
 private fun MetricDivider() = Box(Modifier.width(1.dp).fillMaxHeight().background(dev.skillbill.tray.core.designsystem.border))
 
 @Composable
-private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null, stalled: Boolean = false) {
+private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null, stalled: Boolean = false, modifier: Modifier = Modifier) {
   Row(
-    Modifier.background(if (lifecycle == Lifecycle.ACTIVE) green.copy(alpha = .12f) else Color.Transparent, RoundedCornerShape(50))
+    modifier.background(if (lifecycle == Lifecycle.ACTIVE) green.copy(alpha = .12f) else Color.Transparent, RoundedCornerShape(50))
       .border(1.dp, if (color == muted) strongBorder else color.copy(alpha = .45f), RoundedCornerShape(50))
       .padding(horizontal = 8.dp, vertical = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -433,10 +471,11 @@ private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null
 }
 
 @Composable
-private fun PhaseChip(id: String, complete: Boolean, active: Boolean, execution: PhaseExecution? = null) {
+private fun PhaseChip(id: String, complete: Boolean, active: Boolean, attempts: Int, execution: PhaseExecution? = null) {
   val color = if (active) Color(0xFF14100A) else if (complete) green else dim
+  val progress = if (active) execution?.label() ?: attempts.takeIf { it > 1 }?.let { "$it runs" } else null
   Text(
-    if (active) execution?.phaseLabel() ?: id else id,
+    id + progress?.let { " · $it" }.orEmpty(),
     Modifier.background(if (active) green else Color.Transparent, RoundedCornerShape(5.dp))
       .border(1.dp, if (complete) green.copy(alpha = .35f) else dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(5.dp))
       .padding(horizontal = 7.dp, vertical = 4.dp),

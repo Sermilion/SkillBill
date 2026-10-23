@@ -15,6 +15,10 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.work.WorkIncidentRecoveryCommands
+import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
+import skillbill.ports.work.model.WorkRecoveryPreviewResult
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
 import java.nio.file.Path
 
 @Inject
@@ -24,7 +28,23 @@ class WorkControlService(
   private val controls: GoalRunnerStatusService,
   private val cancellation: WorkCancellation,
   private val runs: WorkRunActions,
-) {
+  private val recovery: WorkControlRecovery,
+) : WorkIncidentRecoveryCommands {
+  override fun preview(
+    workId: String,
+    incidentToken: String,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+  ): WorkRecoveryPreviewResult = recovery.preview(workId, incidentToken, confirmedPrerequisites)
+
+  override fun recover(
+    workId: String,
+    incidentToken: String,
+    incidentRevision: Long,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+    agentId: String?,
+  ): WorkIncidentRecoveryOutcome =
+    recovery.recover(workId, incidentToken, incidentRevision, confirmedPrerequisites, agentId)
+
   fun options(target: WorkRunTarget): WorkRunOptions? =
     database.read { unit ->
       matchingRun(status, target)?.let { runs.options(it, unit) }
@@ -38,11 +58,25 @@ class WorkControlService(
     when (action) {
       WorkControlAction.CANCEL -> cancellation.cancel(target)
       WorkControlAction.LAUNCH -> runs.launch(target, agentId)
-      WorkControlAction.PAUSE, WorkControlAction.STOP ->
+      WorkControlAction.PAUSE, WorkControlAction.STOP, WorkControlAction.RECOVER ->
         WorkControlResult.Rejected(
           WorkControlRejection.INELIGIBLE_TARGET,
         )
     }
+
+  fun recoveryPreview(
+    target: WorkRunTarget,
+    incidentToken: String,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind> = emptySet(),
+  ): WorkRecoveryPreviewResult = recovery.preview(target, incidentToken, confirmedPrerequisites)
+
+  fun recover(
+    target: WorkRunTarget,
+    incidentToken: String,
+    incidentRevision: Long,
+    confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
+    agentId: String? = null,
+  ): WorkControlResult = recovery.recover(target, incidentToken, incidentRevision, confirmedPrerequisites, agentId)
 
   fun request(
     target: WorkControlTarget,

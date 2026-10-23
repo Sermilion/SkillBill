@@ -1,5 +1,7 @@
 package skillbill.ports.diagnostics
 
+import skillbill.ports.diagnostics.model.ExactOutputRead
+import skillbill.ports.diagnostics.model.ExactOutputReadRequest
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
@@ -28,6 +30,8 @@ interface RejectedOutputDiagnosticRepository {
     agentId: String,
     generation: Int = 0,
   ): ProducerOutputEvidence?
+
+  fun readProducerOutputExact(request: ExactOutputReadRequest): ExactOutputRead
 
   fun deleteProducerOutputsBefore(before: Instant): Int
 }

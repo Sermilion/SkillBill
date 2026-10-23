@@ -42,12 +42,10 @@ class DetailPhaseResultsTest {
       ),
     )
 
-    onNodeWithText("approved").assertExists()
-    onNodeWithText("pass 1", substring = true).assertDoesNotExist()
+    onNodeWithText("pass 1 · approved").assertExists()
     onNodeWithText("No production-blocking findings; the retained field values survive a restart.").assertExists()
     onNodeWithText("Reviewed pause-state persistence and the detail query.").assertExists()
-    onNodeWithText("satisfied").assertExists()
-    onNodeWithText("2 attempts", substring = true).assertDoesNotExist()
+    onNodeWithText("satisfied · 2 runs").assertExists()
     onNodeWithText("All criteria met.").assertExists()
   }
 
@@ -80,8 +78,7 @@ class DetailPhaseResultsTest {
       ),
     )
 
-    onNodeWithText("changes requested · 1 unresolved").assertExists()
-    onNodeWithText("pass 1", substring = true).assertDoesNotExist()
+    onNodeWithText("pass 1 · changes requested · 1 unresolved").assertExists()
     onNodeWithText("blocker · Pause is lost on restart").assertExists()
     onNodeWithText("The pause flag lives only in memory.").assertExists()
     onNodeWithText("BLOCKER").assertDoesNotExist()
@@ -103,23 +100,21 @@ class DetailPhaseResultsTest {
   }
 
   @Test
-  fun `goal QA shows its outcome and stored report text without a bare reason token`() = runComposeUiTest {
+  fun `goal QA shows its stored prose report`() = runComposeUiTest {
     showPhaseResults(
       qa =
         GoalQaResult(
           "incomplete",
           "other",
-          3,
+          0,
           fixtureInstant,
-          reportText = "incomplete\n\nThe restart flow could not be completed.",
+          reportText = "AC-001 failed. Retained field values are empty after restart.",
         ),
     )
 
     onNodeWithText("Goal QA").assertExists()
-    onNodeWithText("incomplete ·", substring = true).assertExists()
-    onNodeWithText("other").assertDoesNotExist()
-    onNodeWithText("fix attempts", substring = true).assertDoesNotExist()
-    onNodeWithText("The restart flow could not be completed.", substring = true).assertExists()
+    onNodeWithText("incomplete", substring = true).assertExists()
+    onNodeWithText("AC-001 failed. Retained field values are empty after restart.").assertExists()
   }
 
   private fun ComposeUiTest.showPhaseResults(vararg results: SubtaskPhaseResults, qa: GoalQaResult? = null) {

@@ -152,7 +152,8 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       listOf(
         resume == PhaseBlockResume.RELAUNCH_WITH_FRESH_BUDGET,
         reenterableRecordRejection,
-        FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, phaseId),
+        FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, phaseId) &&
+          session.operatorBlockRetry?.let { it.phaseId == phaseId && !it.preserveBudget } == true,
       ).any { it }
     if (restartsBudget) {
       context.coupledRunTransitions.restartAttemptBudgetForRelaunch(phaseId)

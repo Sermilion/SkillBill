@@ -48,6 +48,7 @@ internal class AgentValidateGateCycle(
       else ->
         ValidationGateAgentRepairResult.Blocked(
           settled.blockedReason ?: "Validation phase did not complete.",
+          failureCode = settled.failureCode,
         )
     }
   }
@@ -74,7 +75,7 @@ internal class AgentValidateGateCycle(
                 ?: iteration,
               terminal.reason,
               terminal.failureDisposition ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-              context.observability,
+              terminal.failureCode,
             )
         }
     }

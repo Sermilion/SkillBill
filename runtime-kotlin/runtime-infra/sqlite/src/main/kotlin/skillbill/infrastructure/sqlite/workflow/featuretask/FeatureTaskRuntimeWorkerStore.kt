@@ -5,6 +5,7 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.featuretask.model.parseFeatureTaskRuntimeWorkerLeaseInstant
@@ -19,6 +20,32 @@ internal class FeatureTaskRuntimeWorkerStore(
 ) : FeatureTaskRuntimeWorkerRepository {
   override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
     connection.featureTaskRuntimeWorkerOwnership(workflowId, diagnostics)
+
+  override fun getLatestFeatureTaskRuntimeWorkerGeneration(
+    workflowId: String,
+  ): FeatureTaskRuntimeWorkerGenerationObservation? =
+    connection.prepareStatement(
+      """
+      SELECT generation, phase_id, phase_attempt, admitted_at
+      FROM feature_task_runtime_worker_generations
+      WHERE workflow_id = ?
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(workflowId)
+      statement.executeQuery().use { rows ->
+        if (!rows.next()) {
+          null
+        } else {
+          FeatureTaskRuntimeWorkerGenerationObservation(
+            workflowId = workflowId,
+            generation = rows.getLong("generation"),
+            phaseId = rows.getString("phase_id"),
+            phaseAttempt = rows.getInt("phase_attempt"),
+            admittedAt = rows.getString("admitted_at"),
+          )
+        }
+      }
+    }
 
   override fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -52,7 +79,10 @@ internal class FeatureTaskRuntimeWorkerStore(
         statement.bindAll(ownership.workflowId, expectedUpdatedAt, expectedUpdatedAt)
         statement.executeUpdate() == 1
       }
-    if (claimed) connection.insertWorkerOwnership(ownership)
+    if (claimed) {
+      connection.insertWorkerOwnership(ownership)
+      connection.recordWorkerGeneration(ownership)
+    }
     return claimed
   }
 
@@ -96,6 +126,11 @@ internal class FeatureTaskRuntimeWorkerStore(
             AND workflow.mode = 'runtime'
             AND workflow.workflow_status NOT IN ('completed', 'failed', 'abandoned')
         )
+        AND EXISTS (
+          SELECT 1 FROM feature_task_runtime_worker_generations observation
+          WHERE observation.workflow_id = feature_task_runtime_worker_leases.workflow_id
+            AND observation.generation = ?
+        )
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -114,8 +149,22 @@ internal class FeatureTaskRuntimeWorkerStore(
         ownership.workflowId,
         expectedOwnerToken,
         expectedGeneration,
+        expectedGeneration,
       )
-      statement.executeUpdate() == 1
+      val transferred = statement.executeUpdate() == 1
+      if (transferred) {
+        if (ownership.generation == expectedGeneration) {
+          connection.updateWorkerGenerationCoordinates(
+            ownership.workflowId,
+            ownership.generation,
+            ownership.phaseId,
+            ownership.phaseAttempt,
+          )
+        } else {
+          connection.recordWorkerGeneration(ownership)
+        }
+      }
+      transferred
     }
 
   override fun bindFeatureTaskRuntimeWorkerPhaseCoordinates(
@@ -139,7 +188,9 @@ internal class FeatureTaskRuntimeWorkerStore(
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(phaseId, phaseAttempt, workflowId, ownerToken, generation)
-      statement.executeUpdate() == 1
+      val bound = statement.executeUpdate() == 1
+      if (bound) connection.updateWorkerGenerationCoordinates(workflowId, generation, phaseId, phaseAttempt)
+      bound
     }
 
   override fun heartbeatFeatureTaskRuntimeWorker(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean =
@@ -333,6 +384,46 @@ internal class FeatureTaskRuntimeWorkerStore(
       error("Crashed worker workflow '$workflowId' changed during lease reconciliation.")
     }
     return true
+  }
+}
+
+private fun Connection.recordWorkerGeneration(ownership: FeatureTaskRuntimeWorkerOwnership) {
+  prepareStatement(
+    """
+    INSERT INTO feature_task_runtime_worker_generations
+      (workflow_id, generation, phase_id, phase_attempt, admitted_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(workflow_id) DO UPDATE SET generation = excluded.generation,
+      phase_id = excluded.phase_id, phase_attempt = excluded.phase_attempt, admitted_at = excluded.admitted_at
+    WHERE feature_task_runtime_worker_generations.generation < excluded.generation
+    """.trimIndent(),
+  ).use { statement ->
+    statement.bindAll(
+      ownership.workflowId,
+      ownership.generation,
+      ownership.phaseId,
+      ownership.phaseAttempt,
+      ownership.heartbeatAt,
+    )
+    check(statement.executeUpdate() == 1)
+  }
+}
+
+private fun Connection.updateWorkerGenerationCoordinates(
+  workflowId: String,
+  generation: Long,
+  phaseId: String,
+  phaseAttempt: Int,
+) {
+  prepareStatement(
+    """
+    UPDATE feature_task_runtime_worker_generations
+    SET phase_id = ?, phase_attempt = ?
+    WHERE workflow_id = ? AND generation = ?
+    """.trimIndent(),
+  ).use { statement ->
+    statement.bindAll(phaseId, phaseAttempt, workflowId, generation)
+    check(statement.executeUpdate() == 1)
   }
 }
 

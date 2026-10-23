@@ -20,6 +20,7 @@ data class FeatureTaskRuntimePhaseStateRequest(
   val repositoryFingerprint: String? = null,
   val blockedReason: String? = null,
   val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+  val failureCode: String? = null,
   val fileManifestBefore: List<String> = emptyList(),
   val fileManifestAfter: List<String> = emptyList(),
   val fileManifestIntroduced: List<String> = emptyList(),

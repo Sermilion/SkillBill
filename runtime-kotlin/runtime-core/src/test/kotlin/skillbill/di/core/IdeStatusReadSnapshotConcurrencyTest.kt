@@ -1,6 +1,7 @@
 package skillbill.di.core
 
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -214,11 +215,11 @@ private class SnapshotFixture(
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },
       clock = Clock.fixed(observedAt, ZoneOffset.UTC),
       repositoryEnclosingRootPort = CanonicalRepositoryRoot,
-      manifestStore = EmptyManifestStore,
       featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
       goalRunnerStatusService = component.goalRunnerStatusService,
       workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
       diagnostics = NoopRuntimeDiagnostics,
+      incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),
     )
   }
 }

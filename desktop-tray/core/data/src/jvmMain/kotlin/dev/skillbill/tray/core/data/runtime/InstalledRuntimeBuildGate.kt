@@ -3,9 +3,12 @@ package dev.skillbill.tray.core.data.runtime
 import dev.skillbill.tray.core.common.HostEnvironment
 import dev.skillbill.tray.core.common.di.AppScope
 import dev.skillbill.tray.core.data.identity.BuildIdentityRecord
+import dev.skillbill.tray.core.data.identity.BuildCompatibility
+import dev.skillbill.tray.core.data.identity.assessBuildCompatibility
 import dev.skillbill.tray.core.data.session.RuntimeBuildGate
 import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
+import dev.skillbill.tray.core.domain.model.IncidentDetailCapabilityState
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -36,11 +39,15 @@ class InstalledRuntimeBuildGate(private val host: HostEnvironment) : RuntimeBuil
     val runtime = runtimeInstallRoot(host.variables, host.userHome).resolve("runtime-cli")
     val installed = if (Files.isDirectory(runtime)) read(runtime.resolve(BuildIdentityRecord.FILE_NAME)) else null
     val installedRecord = (installed as? RecordRead.Found)?.record
+    val compatibility = if (installedRecord != null && desktop != null) {
+      assessBuildCompatibility(installedRecord, desktop)
+    } else null
     val reason = when {
       installed == null -> RuntimeBuildReason.NOT_INSTALLED
       installed == RecordRead.Missing -> RuntimeBuildReason.MISSING
       installedRecord == null || desktop == null -> RuntimeBuildReason.UNREADABLE
-      installedRecord.sameBuildAs(desktop) -> return null
+      compatibility == BuildCompatibility.INCIDENT_DETAIL_UNAVAILABLE -> RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE
+      compatibility == BuildCompatibility.SUPPORTED -> return null
       else -> RuntimeBuildReason.MISMATCH
     }
     return RuntimeBuildProblem(
@@ -48,7 +55,21 @@ class InstalledRuntimeBuildGate(private val host: HostEnvironment) : RuntimeBuil
       installedIdentity = installedRecord?.display(),
       desktopIdentity = desktop?.display() ?: UNKNOWN_DESKTOP_BUILD,
       reinstallCommand = BuildIdentityRecord.reinstallCommand(installedRecord, desktop),
+      incidentDetailCapability = desktop?.let { record -> installedRecord?.let { capabilityState(it, record) } }
+        ?: IncidentDetailCapabilityState.UNKNOWN,
+      readSchema = installedRecord?.readSchema,
+      incidentDetailVersion = installedRecord?.incidentDetailVersion,
     )
+  }
+
+  private fun capabilityState(record: BuildIdentityRecord, desktop: BuildIdentityRecord) = when {
+    desktop.incidentDetailVersion == null || desktop.minimumIncidentReadSchema == null ||
+      record.incidentDetailVersion == null ->
+      IncidentDetailCapabilityState.UNADVERTISED
+    record.incidentDetailVersion != desktop.incidentDetailVersion -> IncidentDetailCapabilityState.UNADVERTISED
+    record.readSchema == null || record.readSchema < desktop.minimumIncidentReadSchema ->
+      IncidentDetailCapabilityState.INCOMPATIBLE_SCHEMA
+    else -> IncidentDetailCapabilityState.SUPPORTED
   }
 
   private fun read(file: Path): RecordRead = if (!Files.exists(file)) RecordRead.Missing else {

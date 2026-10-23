@@ -20,4 +20,7 @@ enum class TelemetryOutboxEvent(val wireValue: String) {
   REVIEW_STAGE_DEGRADATION("skillbill_review_stage_degradation"),
   PR_DESCRIPTION_GENERATED("skillbill_pr_description_generated"),
   RUNTIME_EXCEPTION("skillbill_runtime_exception"),
+  BLOCK_INCIDENT_DIAGNOSED("skillbill_block_incident_diagnosed"),
+  BLOCK_INCIDENT_RECOVERY("skillbill_block_incident_recovery"),
+  BLOCK_INCIDENT_REPORTED("skillbill_block_incident_reported"),
 }

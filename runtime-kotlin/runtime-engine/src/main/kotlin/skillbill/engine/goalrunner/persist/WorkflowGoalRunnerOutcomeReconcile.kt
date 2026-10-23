@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
 import skillbill.engine.goalrunner.execution.support.selectAuthoritativeCandidate
 import skillbill.engine.goalrunner.execution.support.staleRunningReason
@@ -36,6 +37,11 @@ internal data class GoalOutcomeReconciliationRequest(
   val repoRoot: Path?,
 )
 
+internal data class GoalOutcomeReconciliationResult(
+  val outcomes: Map<Int, GoalRunnerStoredOutcome>,
+  val blockObservations: List<BlockIncidentObservation>,
+)
+
 internal class WorkflowGoalRunnerOutcomeReconcile(
   private val engine: WorkflowEngine,
   private val gitOperations: WorkflowGitOperations,
@@ -46,7 +52,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
   fun reconcileAuthoritativeOutcomesInTransaction(
     unitOfWork: UnitOfWork,
     request: GoalOutcomeReconciliationRequest,
-  ): Map<Int, GoalRunnerStoredOutcome> {
+  ): GoalOutcomeReconciliationResult {
     val normalizedIssueKey = request.issueKey.trim()
     val activeSet = request.activeWorkflowIds.map(String::trim).filter(String::isNotBlank).toSet()
     displaceStaleBlockedOutcomes(unitOfWork, normalizedIssueKey, request.parentWorkflowId)
@@ -59,23 +65,26 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
       )
     persistMeasuredCompletions(unitOfWork, initialCandidates, request.repoRoot)
     val initialAuthoritative = initialCandidates.authoritativeOutcomesBySubtask()
-    blockStaleRunningCandidates(
-      StaleRunningCandidatesBlockRequest(
-        unitOfWork = unitOfWork,
-        normalizedIssueKey = normalizedIssueKey,
-        candidates = initialCandidates,
-        initialAuthoritative = initialAuthoritative,
-        activeSet = activeSet,
-        gate = request.gate,
-      ),
-    )
-    return loadContinuationCandidates(
-      unitOfWork.workflowStates,
-      normalizedIssueKey,
-      request.parentWorkflowId,
-      request.repoRoot,
-    )
-      .authoritativeOutcomesBySubtask()
+    val blockObservations =
+      blockStaleRunningCandidates(
+        StaleRunningCandidatesBlockRequest(
+          unitOfWork = unitOfWork,
+          normalizedIssueKey = normalizedIssueKey,
+          candidates = initialCandidates,
+          initialAuthoritative = initialAuthoritative,
+          activeSet = activeSet,
+          gate = request.gate,
+        ),
+      )
+    val outcomes =
+      loadContinuationCandidates(
+        unitOfWork.workflowStates,
+        normalizedIssueKey,
+        request.parentWorkflowId,
+        request.repoRoot,
+      )
+        .authoritativeOutcomesBySubtask()
+    return GoalOutcomeReconciliationResult(outcomes, blockObservations)
   }
 
   private fun displaceStaleBlockedOutcomes(
@@ -113,12 +122,12 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
       }
   }
 
-  private fun blockStaleRunningCandidates(request: StaleRunningCandidatesBlockRequest) {
+  private fun blockStaleRunningCandidates(request: StaleRunningCandidatesBlockRequest): List<BlockIncidentObservation> =
     request.candidates
       .filter { candidate ->
         isStaleRunningCandidate(candidate, request.initialAuthoritative, request.activeSet, request.gate)
       }
-      .forEach { stale ->
+      .map { stale ->
         val authoritative = request.initialAuthoritative[stale.goalContinuation.subtaskId]
         val blockedReason =
           staleRunningReason(
@@ -133,12 +142,12 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
             record = stale.snapshot,
             blockedReason = blockedReason,
             lastResumableStep = stale.snapshot.currentStepId,
-            workflowStates = request.unitOfWork.workflowStates,
             supervisionEvent = null,
           ),
-        )
+          request.unitOfWork.workflowStates,
+          request.unitOfWork.blockIncidents,
+        ).observation
       }
-  }
 
   private fun isStaleRunningCandidate(
     candidate: GoalContinuationCandidate,
@@ -190,7 +199,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
               outcome =
                 terminalOutcomeFor(snapshot, snapshot.artifacts, continuation) {
                   repoRoot?.let { root -> gitOperations.headCommitSha(root).measuredCommitSha() }
-                },
+                }?.withAcceptedBlockReference(snapshot),
             ),
           )
         }
@@ -223,7 +232,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
             WorkflowFamily.TASK_RUNTIME,
             snapshot,
             continuation,
-            terminalOutcomeFor(snapshot, snapshot.artifacts, continuation),
+            terminalOutcomeFor(snapshot, snapshot.artifacts, continuation)?.withAcceptedBlockReference(snapshot),
           )
         listOfNotNull(winners[continuation.subtaskId], candidate).selectAuthoritativeCandidate()
           ?.let { winners[continuation.subtaskId] = it }

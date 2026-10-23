@@ -1,0 +1,231 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/block-incident-schema.yaml
+title: Block incident
+description: Immutable primary failure facts and independently changing investigation state.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - occurrence
+  - aliases
+  - state
+properties:
+  contract_version:
+    const: "0.2"
+  occurrence:
+    type: object
+    additionalProperties: false
+    required:
+      - occurrence_token
+      - generation
+      - origin
+      - reason
+      - observed_at
+      - evidence_availability
+      - identity_availability
+      - exit_behavior
+      - reason_truncated
+      - original_reason_length
+      - evidence_references
+      - field_availability
+      - reason_retention
+    properties:
+      occurrence_token:
+        type: string
+        pattern: "^bi_[0-9a-f]{64}$"
+      workflow_id: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      parent_workflow_id: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      phase_id: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      phase_run_id: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      invocation_id: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      execution_id: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      repair_turn: { type: [integer, "null"], minimum: 0 }
+      output_generation: { type: [integer, "null"], minimum: 0 }
+      monitor_selector: { type: [string, "null"], minLength: 1, maxLength: 2048 }
+      pull_request_id: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      pull_request_url: { type: [string, "null"], minLength: 1, maxLength: 2048 }
+      head_repository: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      head_branch: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      worktree_path: { type: [string, "null"], minLength: 1, maxLength: 4096 }
+      identity_availability: { enum: [available, partial, unavailable, unknown_historical] }
+      exit_behavior: { enum: [returned_failure, thrown, canceled, interrupted, exited_with_code, exit_code_unavailable, unknown_historical] }
+      evidence_references:
+        type: array
+        maxItems: 16
+        items:
+          type: object
+          additionalProperties: false
+          required: [source, availability, kind, provenance]
+          properties:
+            source: { type: string, minLength: 1, maxLength: 512 }
+            reference: { type: [string, "null"], minLength: 1, maxLength: 2048 }
+            digest: { type: [string, "null"], pattern: "^[0-9a-f]{64}$" }
+            availability: { enum: [available, unavailable] }
+            repair_turn: { type: [integer, "null"], minimum: 0 }
+            output_generation: { type: [integer, "null"], minimum: 0 }
+            kind: { enum: [rejected_output_diagnostic, producer_output, other] }
+            provenance: { enum: [rejected_output, original_producer_output, repaired_producer_output, unknown_historical] }
+            byte_size: { type: [integer, "null"], minimum: 0 }
+            source_identity: { type: [string, "null"], minLength: 1, maxLength: 2048 }
+            retained_reference_id: { type: [string, "null"], minLength: 1, maxLength: 2048 }
+            source_offset: { type: [integer, "null"], minimum: 0 }
+            source_line: { type: [integer, "null"], minimum: 1 }
+            source_column: { type: [integer, "null"], minimum: 1 }
+          allOf:
+            - if:
+                properties:
+                  availability: { const: available }
+                required: [availability]
+              then:
+                required: [reference, digest, byte_size, retained_reference_id, source_identity]
+                properties:
+                  reference: { type: string }
+                  digest: { type: string }
+                  byte_size: { type: integer, maximum: 8192 }
+                  retained_reference_id: { type: string }
+                  source_identity: { type: string }
+                  provenance: { not: { const: unknown_historical } }
+            - dependentRequired:
+                source_line: [source_column]
+                source_column: [source_line]
+            - if:
+                properties:
+                  source_line: { type: "null" }
+                required: [source_line]
+              then:
+                properties:
+                  source_column: { type: "null" }
+            - if:
+                properties:
+                  source_column: { type: "null" }
+                required: [source_column]
+              then:
+                properties:
+                  source_line: { type: "null" }
+      field_availability:
+        type: object
+        additionalProperties: false
+        required: [workflow_id, parent_workflow_id, phase_id, phase_run_id, invocation_id, execution_id, attempt, generation, failure_code, throwable_type, exit_code, reason, repair_turn, output_generation, monitor_selector, pull_request_id, pull_request_url, head_repository, head_branch, worktree_path]
+        properties:
+          workflow_id: { $ref: "#/$defs/field_availability" }
+          parent_workflow_id: { $ref: "#/$defs/field_availability" }
+          phase_id: { $ref: "#/$defs/field_availability" }
+          phase_run_id: { $ref: "#/$defs/field_availability" }
+          invocation_id: { $ref: "#/$defs/field_availability" }
+          execution_id: { $ref: "#/$defs/field_availability" }
+          attempt: { $ref: "#/$defs/field_availability" }
+          generation: { $ref: "#/$defs/field_availability" }
+          failure_code: { $ref: "#/$defs/field_availability" }
+          throwable_type: { $ref: "#/$defs/field_availability" }
+          exit_code: { $ref: "#/$defs/field_availability" }
+          reason: { $ref: "#/$defs/field_availability" }
+          repair_turn: { $ref: "#/$defs/field_availability" }
+          output_generation: { $ref: "#/$defs/field_availability" }
+          monitor_selector: { $ref: "#/$defs/field_availability" }
+          pull_request_id: { $ref: "#/$defs/field_availability" }
+          pull_request_url: { $ref: "#/$defs/field_availability" }
+          head_repository: { $ref: "#/$defs/field_availability" }
+          head_branch: { $ref: "#/$defs/field_availability" }
+          worktree_path: { $ref: "#/$defs/field_availability" }
+      reason_retention: { enum: [complete, prefix_8192_chars_utf8_sha256, unknown_historical] }
+      attempt: { type: [integer, "null"], minimum: 1 }
+      generation: { type: [integer, "null"], minimum: 1 }
+      origin: { enum: [accepted_phase_block, accepted_goal_block, entry_failure, admission_refusal] }
+      reason: { type: string, minLength: 1, maxLength: 8192 }
+      reason_truncated: { type: boolean }
+      original_reason_length: { type: integer, minimum: 1 }
+      original_reason_digest: { type: [string, "null"], pattern: "^[0-9a-f]{64}$" }
+      failure_code: { type: [string, "null"], minLength: 1, maxLength: 256 }
+      failure_disposition: { type: [string, "null"], minLength: 1, maxLength: 256 }
+      throwable_type: { type: [string, "null"], minLength: 1, maxLength: 512 }
+      exit_code: { type: [integer, "null"] }
+      observed_at: { type: string, format: date-time }
+      evidence_availability: { enum: [database, fallback_spool, unsaved] }
+    allOf:
+      - if:
+          properties:
+            reason_truncated: { const: true }
+          required: [reason_truncated]
+        then:
+          required: [original_reason_digest]
+          properties:
+            original_reason_digest: { type: string, pattern: "^[0-9a-f]{64}$" }
+            reason_retention: { enum: [prefix_8192_chars_utf8_sha256, unknown_historical] }
+      - if:
+          properties:
+            reason_truncated: { const: false }
+          required: [reason_truncated]
+        then:
+          properties:
+            original_reason_digest: { type: "null" }
+            reason_retention: { enum: [complete, unknown_historical] }
+      - if:
+          properties:
+            exit_behavior: { const: exited_with_code }
+          required: [exit_behavior]
+        then:
+          required: [exit_code]
+          properties:
+            exit_code: { type: integer }
+      - if:
+          properties:
+            exit_behavior: { enum: [returned_failure, thrown, canceled, interrupted, exit_code_unavailable, unknown_historical] }
+          required: [exit_behavior]
+        then:
+          properties:
+            exit_code: { type: "null" }
+  aliases:
+    type: array
+    minItems: 1
+    maxItems: 32
+    uniqueItems: true
+    items:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties:
+        kind: { enum: [settlement, phase_transition, child_cause, entry_boundary] }
+        value: { type: string, minLength: 1, maxLength: 512 }
+  state:
+    type: object
+    additionalProperties: false
+    required: [diagnosis, recovery, report, revision, deadline, retry_count, next_eligible_at, claim]
+    properties:
+      diagnosis: { enum: [pending, investigating, complete, partial, exhausted, timed_out, canceled, unavailable_agent, persist_failed, crashed] }
+      recovery: { enum: [unavailable, not_started, complete, failed] }
+      report: { enum: [unavailable, not_requested, pending, delivered, failed] }
+      revision: { type: integer, minimum: 1 }
+      deadline: { type: string, format: date-time }
+      retry_count: { type: integer, minimum: 0, maximum: 2 }
+      next_eligible_at: { type: [string, "null"], format: date-time }
+      claim:
+        oneOf:
+          - type: "null"
+          - type: object
+            additionalProperties: false
+            required: [owner_token, owner_generation, host_identity, process_id, expires_at]
+            properties:
+              owner_token: { type: string, minLength: 1, maxLength: 512 }
+              owner_generation: { type: integer, minimum: 1 }
+              host_identity: { type: string, minLength: 1, maxLength: 512 }
+              process_id: { type: integer, minimum: 1 }
+              expires_at: { type: string, format: date-time }
+    allOf:
+      - if:
+          properties:
+            diagnosis: { const: investigating }
+          required: [diagnosis]
+        then:
+          properties:
+            claim: { type: object }
+      - if:
+          properties:
+            diagnosis:
+              enum: [pending, complete, partial, exhausted, timed_out, canceled, unavailable_agent, persist_failed, crashed]
+          required: [diagnosis]
+        then:
+          properties:
+            claim: { type: "null" }
+$defs:
+  field_availability:
+    enum: [available, not_applicable, not_captured, unknown_historical]

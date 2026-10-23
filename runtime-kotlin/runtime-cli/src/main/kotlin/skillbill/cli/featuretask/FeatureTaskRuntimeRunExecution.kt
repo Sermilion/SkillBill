@@ -6,9 +6,14 @@ import skillbill.application.telemetry.service.TelemetryService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.drainTelemetryOnCompletion
 import skillbill.cli.kernel.cli.runtimeRunEventSink
+import skillbill.cli.kernel.work.GoalIncidentPresentationKeys
+import skillbill.cli.kernel.work.incidentPayload
+import skillbill.cli.kernel.work.incidentText
+import skillbill.cli.kernel.work.readGoalIncidentDetails
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
+import skillbill.engine.work.IdeStatusService
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import kotlin.time.Duration.Companion.minutes
 
@@ -19,6 +24,7 @@ class FeatureTaskRuntimeRunExecution(
   private val diagnostics: RuntimeDiagnostics,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
+  private val status: IdeStatusService,
 ) {
   internal fun run(
     options: FeatureTaskRuntimePhaseAgentCommand,
@@ -42,13 +48,23 @@ class FeatureTaskRuntimeRunExecution(
         qaSelection = prepared.qaSelection,
         operatorDecision = prepared.operatorDecision,
         agentAddonSelection = prepared.agentAddonSelection,
-        eventSink = runtimeRunEventSink(inputs, options.monitor),
+        eventSink =
+          runtimeRunEventSink(inputs, options.monitor) { workflowId ->
+            readGoalIncidentDetails(status, listOf("work" to workflowId), retainFailures = true).incidentText(false)
+          },
       )
     val report =
       inputs.featureTaskRuntimeRunOverride?.invoke(input)
         ?: entry.run(input) { throw UsageError("Could not open a feature-task workflow: ${it.error}") }
-    val payload = report.toRuntimeRunCliMap()
-    state.completeText(runtimeRunText(report), payload, exitCode = report.runtimeRunExitCode())
+    val incidentDetails = readGoalIncidentDetails(status, listOf("work" to report.workflowId), retainFailures = true)
+    val payload =
+      report.toRuntimeRunCliMap() +
+        (GoalIncidentPresentationKeys.INCIDENT_DETAILS to incidentDetails.incidentPayload())
+    state.completeText(
+      runtimeRunText(report, incidentDetails.incidentText(false)),
+      payload,
+      exitCode = report.runtimeRunExitCode(),
+    )
     drainTelemetryOnCompletion(telemetryService, diagnostics)
   }
 }

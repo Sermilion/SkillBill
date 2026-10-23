@@ -18,6 +18,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
@@ -861,9 +862,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       name = "record-standalone-plan-report",
       operation = ::recordStandalonePlanReport,
     ),
+  ) + blockIncidentMigrations +
     DatabaseMigration(
-      version = 66,
+      version = 83,
       name = "record-qa-report-text",
       operation = ::recordQaReportText,
-    ),
-  )
+    )

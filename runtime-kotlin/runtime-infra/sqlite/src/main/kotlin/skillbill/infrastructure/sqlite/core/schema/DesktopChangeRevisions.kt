@@ -77,6 +77,34 @@ private fun createRevisionTriggers(
   }
 }
 
+internal fun addBlockIncidentRevisionTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    createRevisionTriggers(statement, "block_incidents", DesktopReadSchema.TOPICS)
+  }
+}
+
+internal fun addBlockIncidentDiagnosisRevisionTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    REVISION_TRIGGER_OPERATIONS.forEach { operation ->
+      statement.execute("DROP TRIGGER IF EXISTS desktop_change_block_incident_diagnoses_${operation.lowercase()}")
+    }
+    createRevisionTriggers(statement, "block_incident_diagnoses", DesktopReadSchema.TOPICS)
+  }
+}
+
+internal fun addBlockIncidentRecoveryRevisionTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    createRevisionTriggers(statement, "block_incident_recovery_attempts", DesktopReadSchema.TOPICS)
+  }
+}
+
+internal fun addProductReportRevisionTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    createRevisionTriggers(statement, "block_incident_reports", DesktopReadSchema.TOPICS)
+    createRevisionTriggers(statement, "block_incident_report_links", DesktopReadSchema.TOPICS)
+  }
+}
+
 private val REVISION_TRIGGER_OPERATIONS = listOf("INSERT", "UPDATE", "DELETE")
 
 private fun installDesktopReadIndexes(connection: Connection) {

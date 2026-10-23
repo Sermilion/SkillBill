@@ -41,6 +41,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
         terminalBlockedResult(
           result.reason,
           failureDisposition = result.failureDisposition,
+          failureCode = result.failureCode,
         )
     }
 
@@ -125,6 +126,7 @@ internal fun terminalBlockedResult(
   remainingFindings: ValidationFindingSetProjection? = null,
   measurements: List<FeatureTaskRuntimeValidationGateRunRecord> = emptyList(),
   failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+  failureCode: String? = null,
 ): ValidationGateCycleResult =
   ValidationGateCycleResult.Terminal(
     ValidationGateCycleTerminalOutcome.Blocked(
@@ -132,5 +134,6 @@ internal fun terminalBlockedResult(
       remainingFindings = remainingFindings,
       measurements = measurements,
       failureDisposition = failureDisposition,
+      failureCode = failureCode,
     ),
   )

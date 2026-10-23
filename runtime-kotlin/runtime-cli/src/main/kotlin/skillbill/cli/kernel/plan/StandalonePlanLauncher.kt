@@ -58,17 +58,22 @@ data class StandalonePlanOptions(
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
-fun StandalonePlanResult.planReportText(issueKey: String): String =
-  when (this) {
-    is StandalonePlanResult.Completed ->
-      (
-        listOf("Parent spec: $parentSpecPath", "Manifest: $decompositionManifestPath") +
-          subtaskSpecPaths.map { path -> "Subtask spec: $path" } +
-          listOf("Plan workflow ID: $workflowId", "Run the goal with: skill-bill $issueKey")
-      ).joinToString("\n")
-    is StandalonePlanResult.Blocked ->
-      "Plan for $issueKey blocked: $reason\nPlan workflow ID: $workflowId\n" +
-        "Resume with: skill-bill phase plan $issueKey (or skill-bill $issueKey)"
-    is StandalonePlanResult.Refused ->
-      listOfNotNull(reason, workflowId?.let { "Plan workflow ID: $it" }).joinToString("\n")
-  }
+fun StandalonePlanResult.planReportText(
+  issueKey: String,
+  incidentLines: List<String> = emptyList(),
+): String =
+  (
+    when (this) {
+      is StandalonePlanResult.Completed ->
+        (
+          listOf("Parent spec: $parentSpecPath", "Manifest: $decompositionManifestPath") +
+            subtaskSpecPaths.map { path -> "Subtask spec: $path" } +
+            listOf("Plan workflow ID: $workflowId", "Run the goal with: skill-bill $issueKey")
+        ).joinToString("\n")
+      is StandalonePlanResult.Blocked ->
+        "Plan for $issueKey blocked: $reason\nPlan workflow ID: $workflowId\n" +
+          "Resume with: skill-bill phase plan $issueKey (or skill-bill $issueKey)"
+      is StandalonePlanResult.Refused ->
+        listOfNotNull(reason, workflowId?.let { "Plan workflow ID: $it" }).joinToString("\n")
+    } + incidentLines.takeIf { it.isNotEmpty() }?.joinToString("\n", prefix = "\n").orEmpty()
+  )

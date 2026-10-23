@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.model
 
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -52,6 +53,7 @@ data class GoalRunnerWedgeFinding(
   val wedgeClass: GoalRunnerWedgeClass,
   val field: String,
   val currentValue: String?,
+  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )
 
 data class GoalRunnerChildWedgeDiagnosis(

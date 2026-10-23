@@ -1,6 +1,8 @@
 package skillbill.infrastructure.workflow.git.standard
 
+import skillbill.infrastructure.workflow.git.scoped.GIT_NUL
 import skillbill.infrastructure.workflow.process.runGitCommand
+import skillbill.infrastructure.workflow.process.runGitCommandWithStdin
 import skillbill.infrastructure.workflow.process.runGitForActivity
 import skillbill.infrastructure.workflow.process.withValue
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -45,7 +47,8 @@ internal fun gitCheckoutPreservingLocalChanges(
   val outcome =
     gitCheckoutCarryingUntracked(repoRoot, targetRef) { gitMergeCheckout(repoRoot, args, existingConflictMarkers) }
   if (previouslyStaged.isEmpty()) return outcome
-  val restaged = runGitCommand(repoRoot, listOf("add", "--all", "--") + previouslyStaged)
+  val stdin = previouslyStaged.joinToString(separator = GIT_NUL.toString(), postfix = GIT_NUL.toString()).toByteArray()
+  val restaged = runGitCommandWithStdin(repoRoot, listOf("update-index", "--add", "--remove", "-z", "--stdin"), stdin)
   return if (restaged is WorkflowGitOperationResult.Ok) outcome else restaged
 }
 

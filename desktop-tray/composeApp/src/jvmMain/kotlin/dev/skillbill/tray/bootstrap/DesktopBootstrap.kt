@@ -1,6 +1,8 @@
 package dev.skillbill.tray.bootstrap
 
 import dev.skillbill.tray.core.data.identity.BuildIdentityRecord
+import dev.skillbill.tray.core.data.identity.BuildCompatibility
+import dev.skillbill.tray.core.data.identity.assessBuildCompatibility
 import dev.skillbill.tray.core.data.runtime.runtimeInstallRoot
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import java.io.File
@@ -35,7 +37,13 @@ fun main(args: Array<String>) {
         launchApplication(outcome.classpath, args)
         return
       }
-      is BootstrapOutcome.Refused -> if (!RuntimeMissingWindow.show(outcome)) return
+      is BootstrapOutcome.Refused -> {
+        val retry = if (outcome.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE) {
+          System.getLogger("dev.skillbill.tray.bootstrap").log(System.Logger.Level.WARNING, "runtime:incident_detail_unavailable")
+          RuntimeIncidentDetailsUnavailableWindow.show(outcome)
+        } else RuntimeMissingWindow.show(outcome)
+        if (!retry) return
+      }
     }
   }
 }
@@ -68,12 +76,16 @@ internal fun resolveBootstrapOutcome(
     emptyList()
   }
   val installedRecord = readIdentity(runtimeRecordPath)
+  val compatibility = if (installedRecord != null && desktopRecord != null) {
+    assessBuildCompatibility(installedRecord, desktopRecord)
+  } else null
   val reason = when {
     runtimeJars.isEmpty() -> RuntimeBuildReason.NOT_INSTALLED
     installedRecord == null && !Files.exists(runtimeRecordPath) -> RuntimeBuildReason.MISSING
     installedRecord == null -> RuntimeBuildReason.UNREADABLE
     desktopRecord == null -> RuntimeBuildReason.UNREADABLE
-    !installedRecord.sameBuildAs(desktopRecord) -> RuntimeBuildReason.MISMATCH
+    compatibility == BuildCompatibility.INCIDENT_DETAIL_UNAVAILABLE -> RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE
+    compatibility != BuildCompatibility.SUPPORTED -> RuntimeBuildReason.MISMATCH
     else -> return BootstrapOutcome.Launch(applicationClasspath(desktopAppDirectory, runtimeJars))
   }
   return BootstrapOutcome.Refused(

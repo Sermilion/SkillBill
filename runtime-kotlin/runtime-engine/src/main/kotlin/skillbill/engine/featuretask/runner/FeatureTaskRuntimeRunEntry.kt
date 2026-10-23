@@ -7,12 +7,13 @@ import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
+import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.lifecycle.execution.expectedFeatureTaskExecutionIdentity
 import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
@@ -27,9 +28,7 @@ import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionP
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
-import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -57,17 +56,25 @@ class FeatureTaskRuntimeRunEntry(
   private val runInvariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val runner: FeatureTaskRuntimeRunner,
   private val repositories: RepositoryEnclosingRootPort,
-  private val strategies: PhaseStrategyLookup,
-  private val agentRunLauncher: AgentRunLauncher,
+  private val stepLaunches: FeatureTaskRuntimeStepLaunchResolver,
   private val diagnostics: RuntimeDiagnostics,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val repairPersistence: AcceptanceCriterionRepairPersistence,
+  private val blockIncidentReconciler: BlockIncidentEntryReconciler,
 ) {
   private companion object {
     const val MAX_DIAGNOSTIC_ID = 128
   }
 
   fun run(
+    input: FeatureTaskRuntimeRunInput,
+    onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
+  ): FeatureTaskRuntimeRunReport =
+    blockIncidentReconciler.guardEntry({ it is FeatureTaskRuntimeRunReport.Blocked }) {
+      runAfterReconciliation(input, onOpenFailure)
+    }
+
+  private fun runAfterReconciliation(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
   ): FeatureTaskRuntimeRunReport {
@@ -311,9 +318,7 @@ class FeatureTaskRuntimeRunEntry(
                 validationDepth = goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
                 timeout = input.timeout,
                 stepLaunchAssignments =
-                  FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
-                    launcher = agentRunLauncher,
-                    lookup = strategies,
+                  stepLaunches.resolve(
                     facts = facts,
                     inputs =
                       StepLaunchAssignmentInputs(
@@ -346,9 +351,7 @@ class FeatureTaskRuntimeRunEntry(
         setOfNotNull(reviewMode, qualityGate, admittedExecution.plan.qaSelection),
       )
     val resolved =
-      FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
-        launcher = agentRunLauncher,
-        lookup = strategies,
+      stepLaunches.resolve(
         facts = facts,
         inputs =
           StepLaunchAssignmentInputs(

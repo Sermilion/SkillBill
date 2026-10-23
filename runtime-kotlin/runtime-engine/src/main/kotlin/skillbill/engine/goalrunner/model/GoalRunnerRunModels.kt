@@ -28,6 +28,7 @@ data class GoalRunnerRunRequest(
   val stopAfterSubtaskId: Int? = null,
   val intake: String? = null,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  internal val executionGeneration: Long? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -70,6 +71,8 @@ sealed interface GoalRunnerRunEvent {
     val reason: String,
     val blockedReason: String,
     val currentStepId: String? = null,
+    val parentWorkflowId: String? = null,
+    val workflowId: String? = null,
   ) : GoalRunnerRunEvent
 
   data class SubtaskReviewSummary(

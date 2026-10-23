@@ -6,6 +6,9 @@ import skillbill.cli.goal.run.toGoalDiffStatCliMap
 import skillbill.cli.goal.run.toGoalSelectedDiffHunksCliMap
 import skillbill.cli.kernel.agent.detectInvokingAgentId
 import skillbill.cli.kernel.payload.CliPayloadStatus
+import skillbill.cli.kernel.work.GoalIncidentDetail
+import skillbill.cli.kernel.work.incidentText
+import skillbill.cli.kernel.work.putIncidentDetails
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
@@ -64,7 +67,10 @@ internal fun CliRunInputs.goalStatusRequest(
     pruneCheckpointRefs = false,
   )
 
-internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(issueKey: String): Map<String, Any?> =
+internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(
+  issueKey: String,
+  incidentDetails: List<GoalIncidentDetail> = emptyList(),
+): Map<String, Any?> =
   this?.let {
     linkedMapOf<String, Any?>(
       SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
@@ -83,8 +89,11 @@ internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(issueKey: String): M
       "pause_requested" to it.pauseRequested,
       "pause_reason" to it.pauseReason,
       "stop_after_subtask" to it.stopAfterSubtaskId,
-    ).apply { putGoalStatusDetails(it) }
-  } ?: linkedMapOf(
+    ).apply {
+      putGoalStatusDetails(it)
+      putIncidentDetails(incidentDetails)
+    }
+  } ?: linkedMapOf<String, Any?>(
     SharedPayloadKeys.STATUS to CliPayloadStatus.NOT_FOUND,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
     "complete_count" to 0,
@@ -99,7 +108,7 @@ internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(issueKey: String): M
     "pause_requested" to false,
     "pause_reason" to null,
     "stop_after_subtask" to null,
-  )
+  ).apply { putIncidentDetails(incidentDetails) }
 
 private fun MutableMap<String, Any?>.putGoalStatusDetails(projection: GoalRunnerStatusProjection) {
   projection.planning?.let { planning ->
@@ -159,7 +168,10 @@ private fun MutableMap<String, Any?>.putGoalStatusDetails(projection: GoalRunner
   }
 }
 
-internal fun GoalRunnerStatusProjection?.toBoundedGoalStatusCliMap(issueKey: String): Map<String, Any?> =
+internal fun GoalRunnerStatusProjection?.toBoundedGoalStatusCliMap(
+  issueKey: String,
+  incidentDetails: List<GoalIncidentDetail> = emptyList(),
+): Map<String, Any?> =
   this?.let {
     linkedMapOf<String, Any?>(
       "complete_count" to it.completeCount,
@@ -188,23 +200,24 @@ internal fun GoalRunnerStatusProjection?.toBoundedGoalStatusCliMap(issueKey: Str
       it.auditAcRetryCount?.let { count ->
         put(WorktreeEditJournalPayloadKeys.AUDIT_AC_RETRY_COUNT, count)
       }
+      putIncidentDetails(incidentDetails)
     }
-  } ?: linkedMapOf(
+  } ?: linkedMapOf<String, Any?>(
     SharedPayloadKeys.STATUS to CliPayloadStatus.NOT_FOUND,
     SharedPayloadKeys.ISSUE_KEY to singleLineBounded(issueKey),
     "resumable_state" to CliPayloadStatus.NOT_FOUND,
-  )
+  ).apply { putIncidentDetails(incidentDetails) }
 
 internal fun databaseUnavailableGoalStatusCliMap(
   issueKey: String,
   reason: String,
 ): Map<String, Any?> =
-  linkedMapOf(
+  linkedMapOf<String, Any?>(
     SharedPayloadKeys.STATUS to GOAL_STATUS_DATABASE_UNAVAILABLE,
     SharedPayloadKeys.ISSUE_KEY to singleLineBounded(issueKey),
     "resumable_state" to GOAL_STATUS_DATABASE_UNAVAILABLE,
     "reason" to singleLineBounded(reason),
-  )
+  ).apply { putIncidentDetails(emptyList()) }
 
 internal fun GoalRunnerStatusProjection.monitorResumableState(): String =
   currentStep.let { step ->
@@ -243,6 +256,8 @@ internal fun List<GoalRunnerAcceptedSubtask>.toGoalAcceptanceCliList(): List<Map
 internal fun goalStatusText(
   issueKey: String,
   projection: GoalRunnerStatusProjection?,
+  incidentDetails: List<GoalIncidentDetail> = emptyList(),
+  verbose: Boolean = false,
 ): String =
   buildString {
     appendGoalStatusSummary(issueKey, projection)
@@ -256,6 +271,7 @@ internal fun goalStatusText(
       appendQaFindingsLines(it)
       appendDiffStatusLines(it)
     }
+    incidentDetails.incidentText(verbose).forEach { line -> appendLine(line) }
   }
 
 private fun StringBuilder.appendGoalStatusSummary(
@@ -345,6 +361,8 @@ internal fun goalMonitorStatusText(
   issueKey: String,
   projection: GoalRunnerStatusProjection?,
   databaseUnavailableReason: String? = null,
+  incidentDetails: List<GoalIncidentDetail> = emptyList(),
+  verbose: Boolean = false,
 ): String =
   if (databaseUnavailableReason != null) {
     buildString {
@@ -370,6 +388,7 @@ internal fun goalMonitorStatusText(
       appendProgressStallLine(projection)
       appendLine("resumable_state: ${projection.monitorResumableState()}")
       appendWorktreeEditLines(projection)
+      incidentDetails.incidentText(verbose).forEach { appendLine(it) }
     }
   }
 

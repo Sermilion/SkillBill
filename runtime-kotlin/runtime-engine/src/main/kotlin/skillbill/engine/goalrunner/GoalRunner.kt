@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunPreparation
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -87,7 +88,12 @@ class GoalRunner(
     manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&
       intakePreparation.prepare(request) == null
 
-  fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
+  fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
+    runPreparation.guardEntry({ it is GoalRunnerRunReport.Stopped && it.stop.reason in ACCEPTED_GOAL_BLOCK_REASONS }) {
+      runAfterReconciliation(request)
+    }
+
+  private fun runAfterReconciliation(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val durableState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
     val admittedState =
@@ -99,27 +105,73 @@ class GoalRunner(
       when (
         val start = runPreparation.prepareStart(admittedState, request, resumesExistingGoal = durableState != null)
       ) {
-        is GoalRunPreparation.PreparationBlocked -> return start.report
+        is GoalRunPreparation.PreparationBlocked ->
+          return when (
+            val ownedStart =
+              executionCoordinator.runOwnedWithLease(admittedState.parentWorkflowId) { generation, ownerToken ->
+                settleAcceptedGoalBlock(admittedState, start.report, generation, ownerToken)
+              }
+          ) {
+            is GoalRunnerOwnedRun.Completed -> ownedStart.value
+            is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(admittedState, ownedStart.reason)
+          }
         is GoalRunPreparation.Prepared -> start.state
       }
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
-    val execute = {
+    val execute: (Long, String?) -> GoalRunnerRunReport = { generation, ownerToken ->
+      val ownedRequest = request.copy(executionGeneration = generation)
       val state = reconcileStateBeforeRun(loadedState)
-      when (val preparation = runPreparation.prepareRun(state, request)) {
-        is GoalRunPreparation.PreparationBlocked -> preparation.report
-        is GoalRunPreparation.Prepared -> runPrepared(preparation)
-      }
+      val report =
+        when (val preparation = runPreparation.prepareRun(state, ownedRequest)) {
+          is GoalRunPreparation.PreparationBlocked -> preparation.report
+          is GoalRunPreparation.Prepared -> runPrepared(preparation)
+        }
+      settleAcceptedGoalBlock(loadedState, report, generation, ownerToken)
     }
     val owned =
       if (childAdmission == null) {
-        executionCoordinator.runOwned(loadedState.parentWorkflowId, execute)
+        executionCoordinator.runOwnedWithLease(loadedState.parentWorkflowId, execute)
       } else {
-        executionCoordinator.runOwnedWithChildAdmission(loadedState.parentWorkflowId, childAdmission, execute)
+        executionCoordinator.runOwnedWithChildAdmissionLease(loadedState.parentWorkflowId, childAdmission, execute)
       }
     return when (owned) {
       is GoalRunnerOwnedRun.Completed -> owned.value
       is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(loadedState, owned.reason)
     }
+  }
+
+  private fun settleAcceptedGoalBlock(
+    state: GoalRunnerManifestState,
+    report: GoalRunnerRunReport,
+    executionGeneration: Long,
+    executionOwnerToken: String?,
+  ): GoalRunnerRunReport {
+    val attributedReport = report.withParentWorkflowId(state.parentWorkflowId)
+    val stop = (attributedReport as? GoalRunnerRunReport.Stopped)?.stop ?: return attributedReport
+    if (stop.reason !in ACCEPTED_GOAL_BLOCK_REASONS) return attributedReport
+    val acceptedChildReference =
+      (stop.acceptedBlockReference ?: stop.historicalBlockReference)?.takeIf {
+        it.sourceWorkflowId == stop.workflowId && it.sourceWorkflowId != state.parentWorkflowId
+      }
+    val childWorkflowId = acceptedChildReference?.sourceWorkflowId
+    val acceptedChildBlockReference =
+      stop.acceptedBlockReference?.takeIf {
+        it.sourceWorkflowId == childWorkflowId
+      }
+    outcomeStore.markBlocked(
+      GoalRunnerBlockRequest(
+        workflowId = state.parentWorkflowId,
+        blockedReason = stop.blockedReason,
+        lastResumableStep = stop.lastResumableStep,
+        causingChildWorkflowId = childWorkflowId,
+        causingAcceptedBlockReference = acceptedChildBlockReference,
+        historicalBlockReference = stop.historicalBlockReference,
+        stopReason = stop.reason,
+        executionGeneration = executionGeneration,
+        executionOwnerToken = executionOwnerToken,
+      ),
+    )
+    return attributedReport
   }
 
   private fun alreadyCompleteReport(state: GoalRunnerManifestState): GoalRunnerRunReport.AlreadyComplete? {
@@ -131,6 +183,15 @@ class GoalRunner(
       pullRequestUrl = state.controlState.goalPullRequestUrl,
       parentWorkflowId = state.parentWorkflowId,
     )
+  }
+
+  private companion object {
+    val ACCEPTED_GOAL_BLOCK_REASONS =
+      setOf(
+        GoalRunnerStopReason.BLOCKED,
+        GoalRunnerStopReason.POLICY_BLOCKED,
+        GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
+      )
   }
 
   private fun recordGoalCompletion(
@@ -170,7 +231,7 @@ class GoalRunner(
             .orEmpty()
             .ifBlank { "plan" },
       ),
-    )
+    ).withParentWorkflowId(loadedState.parentWorkflowId)
 
   private fun reconcileStateBeforeRun(state: GoalRunnerManifestState): GoalRunnerManifestState {
     val reconciled =
@@ -271,6 +332,8 @@ class GoalRunner(
         reason = sweepOutcome.reason.name.lowercase(),
         blockedReason = sweepOutcome.blockedReason,
         currentStepId = sweepOutcome.lastResumableStep,
+        parentWorkflowId = state.parentWorkflowId,
+        workflowId = null,
       ),
     )
     closeGoalTelemetrySegment(telemetryEmitter, state, planningStop, attempted)

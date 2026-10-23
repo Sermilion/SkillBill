@@ -1,6 +1,8 @@
 package dev.skillbill.tray.lifetime
 
 import dev.skillbill.tray.core.domain.repository.WorkStoreSession
+import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
+import dev.skillbill.tray.core.domain.model.RuntimeBuildRefusedException
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +22,8 @@ sealed interface SessionState {
 
   /** The session is being replaced: nothing that names work may render or be opened until the next [Active]. */
   data object Transitioning : SessionState
+
+  data class Refused(val problem: RuntimeBuildProblem) : SessionState
 }
 
 /**
@@ -69,10 +73,14 @@ class SessionTransitionCoordinator(
   suspend fun switchTo(path: String?) {
     lock.withLock {
       withContext(ui) { begin() }
+      var refusal: RuntimeBuildProblem? = null
       try {
         storeSession.selectDatabase(path)
+      } catch (rejected: RuntimeBuildRefusedException) {
+        refusal = rejected.problem
+        throw rejected
       } finally {
-        withContext(ui + NonCancellable) { settle() }
+        withContext(ui + NonCancellable) { settle(refusal) }
       }
     }
   }
@@ -82,9 +90,9 @@ class SessionTransitionCoordinator(
     listeners.forEach { it(null) }
   }
 
-  private fun settle() {
+  private fun settle(refusal: RuntimeBuildProblem? = null) {
     val ref = DatabaseGenerationRef(storeSession.generation.value)
     listeners.forEach { it(ref) }
-    mutable.value = SessionState.Active(ref)
+    mutable.value = refusal?.let { SessionState.Refused(it) } ?: SessionState.Active(ref)
   }
 }

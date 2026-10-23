@@ -2,7 +2,9 @@ package skillbill.infrastructure.sqlite.telemetry.outbox
 
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
+import skillbill.contracts.workflow.identity.blockincident.BlockIncidentReportKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
@@ -164,6 +166,31 @@ internal class TelemetryOutboxStore(
         resultSet.getString(1)
       }
     }
+
+  override fun latestByCorrelation(
+    events: Set<TelemetryOutboxEvent>,
+    incidentToken: String,
+  ): TelemetryCorrelationStatus? {
+    if (events.isEmpty()) return null
+    val placeholders = events.joinToString(",") { "?" }
+    return connection.prepareStatement(
+      "SELECT synced_at, last_error FROM telemetry_outbox " +
+        "WHERE event_name IN ($placeholders) AND json_extract(payload_json, " +
+        "'$.${BlockIncidentReportKeys.INCIDENT_TOKEN}') = ? " +
+        "ORDER BY id DESC LIMIT 1",
+    ).use { statement ->
+      var index = 1
+      events.forEach { event -> statement.setString(index++, event.wireValue) }
+      statement.setString(index, incidentToken)
+      statement.executeQuery().use { rows ->
+        if (!rows.next()) {
+          null
+        } else {
+          TelemetryCorrelationStatus(rows.getString("synced_at") != null, rows.getString("last_error"))
+        }
+      }
+    }
+  }
 
   fun markSynced(
     id: Long,

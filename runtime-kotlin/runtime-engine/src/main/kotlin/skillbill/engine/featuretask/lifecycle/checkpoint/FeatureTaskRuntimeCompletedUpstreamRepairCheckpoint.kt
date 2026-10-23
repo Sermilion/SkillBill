@@ -18,6 +18,7 @@ import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -83,9 +84,8 @@ fun completedUpstreamRepairWorkflowUpdate(
             reopenedRecords.mapValues { (_, record) -> record.asWorkflowArtifactEntry() },
           ),
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(
-            (request.ledger.map { it.asWorkflowArtifactEntry() } + retryEntry.asWorkflowArtifactEntry()).takeLast(
-              FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
-            ),
+            retainPhaseLedgerEvidence(request.ledger + retryEntry, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+              .map { it.asWorkflowArtifactEntry() },
           ),
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY.entry(
             FeatureTaskRuntimeOperatorBlockRetry(

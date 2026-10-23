@@ -6,6 +6,13 @@ import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.HistoryFilter
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.Incident
+import dev.skillbill.tray.core.domain.model.IncidentProgress
+import dev.skillbill.tray.core.domain.model.IncidentRecovery
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryEligibility
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
+import dev.skillbill.tray.core.domain.model.IncidentReport
+import dev.skillbill.tray.core.domain.model.IncidentTelemetry
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.WorkIdentity
@@ -85,3 +92,34 @@ fun observedBoard(
 
 fun detail(item: WorkItem): Detail =
   Detail(item, listOf("implement"), listOf("pr", "monitor"), "Feature title", "implement", 0, 1, 0, null, null, emptyMap())
+
+fun incident(
+  progress: IncidentProgress = IncidentProgress.RECOVERY_AVAILABLE,
+  token: String = "bi_fixture",
+): Incident = Incident(
+  incidentToken = token,
+  revision = 1,
+  progress = progress,
+  summary = "Provider returned 529 overloaded",
+  cause = "Provider returned 529 overloaded",
+  certainty = "suspected",
+  responsibleCategory = "external_service",
+  nextAction = "Reopen blocked phase",
+  noWorkaroundKnown = false,
+  prerequisites = emptyList(),
+  evidence = emptyList(),
+  degradations = emptySet(),
+  recovery = IncidentRecovery(
+    IncidentRecoveryEligibility.Available(
+      IncidentRecoveryPreview(
+        "reopen_blocked_phase", "Reopen blocked phase", "Retry the blocked phase", "workflow", null,
+        "implement", token, 1,
+      ),
+    ),
+    "Reopen blocked phase", "Retry the blocked phase", "workflow", null, null, null, null,
+  ),
+  report = IncidentReport("local_only", null, null),
+  telemetry = IncidentTelemetry("disabled", mapOf("incident_token" to token)),
+  observedAt = fixtureInstant,
+  settledAt = fixtureInstant,
+)

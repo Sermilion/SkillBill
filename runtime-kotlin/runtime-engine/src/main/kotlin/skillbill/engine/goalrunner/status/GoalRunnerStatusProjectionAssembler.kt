@@ -115,7 +115,7 @@ class GoalRunnerStatusProjectionAssembler(
           currentSubtask = currentSubtask,
           acceptances = acceptances,
         ),
-    )
+    ).copy(parentWorkflowId = loadedState.parentWorkflowId)
   }
 
   fun projectWorkflow(
@@ -177,7 +177,7 @@ class GoalRunnerStatusProjectionAssembler(
         subject.counts,
         resolveActiveAgent(subject.current, parentWorkflowId),
         inputs,
-      )
+      ).copy(parentWorkflowId = subject.state.parentWorkflowId)
     }
 
   fun reconcileSubtaskPage(

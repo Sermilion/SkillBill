@@ -80,11 +80,15 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
             "migrated or deleted out of band rather than silently reinterpreted.",
         )
       }
+      val acceptanceCriteria = raw.requireStringListField("acceptance_criteria")
+      if (acceptanceCriteria.isEmpty()) {
+        schemaError("Feature-task-runtime briefing artifact field 'acceptance_criteria' must not be empty.")
+      }
       return FeatureTaskRuntimePhaseLaunchBriefing(
         phaseId = raw.requireStringField(SharedPayloadKeys.PHASE_ID),
         specReference = raw.requireStringField("spec_reference"),
         featureSize = raw.requireStringField("feature_size"),
-        acceptanceCriteria = raw.requireStringListField("acceptance_criteria"),
+        acceptanceCriteria = acceptanceCriteria,
         mandatesAndOverrides = raw.requireStringListField("mandates_and_overrides"),
         handoffEnvelope = raw.requireEnvelopeField("handoff_envelope"),
         derivedContextKeys = raw.requireStringListField("derived_context_keys"),

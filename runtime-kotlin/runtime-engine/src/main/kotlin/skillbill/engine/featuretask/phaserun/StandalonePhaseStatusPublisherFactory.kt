@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
@@ -23,6 +24,7 @@ class StandalonePhaseStatusPublisherFactory(
   private val registrations: StandalonePhaseRegistrationFactory,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
+  private val blockIncidentCapture: BlockIncidentCapture,
 ) {
   fun forPhase(
     repoRoot: Path,
@@ -34,7 +36,7 @@ class StandalonePhaseStatusPublisherFactory(
     val registration =
       registrations.phaseRegistration(repoRoot, phaseId, invocationId, issueKey = null)
         .copy(launchAgentId = agentId, launchArguments = launchArguments)
-    return StandalonePhaseStatusEventSink(database, { registration }, clock, diagnostics)
+    return StandalonePhaseStatusEventSink(database, { registration }, clock, diagnostics, blockIncidentCapture)
   }
 
   internal fun forMonitor(
@@ -47,7 +49,13 @@ class StandalonePhaseStatusPublisherFactory(
     val registration =
       registrations.monitorRegistration(attempt, phaseId, invocationId)
         .copy(launchAgentId = agentId, launchArguments = launchArguments)
-    return StandalonePhaseStatusEventSink(database, { registration }, clock, diagnostics)
+    return StandalonePhaseStatusEventSink(
+      database,
+      { registration },
+      clock,
+      diagnostics,
+      blockIncidentCapture,
+    )
   }
 
   fun forPlan(
@@ -65,6 +73,7 @@ class StandalonePhaseStatusPublisherFactory(
       { workflowId -> base.copy(workflowId = workflowId) },
       clock,
       diagnostics,
+      blockIncidentCapture,
     )
   }
 

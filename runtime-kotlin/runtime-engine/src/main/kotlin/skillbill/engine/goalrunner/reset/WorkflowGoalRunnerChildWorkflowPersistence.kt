@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.manifest.mergeConcurrentGoalProgress
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationResult
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.persist.OperatorBlockedPhaseReopenRequest
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Conflicted
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Hydrated
@@ -53,7 +54,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
   private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
   private val clock: Clock,
 ) {
-  private val blockWrites = WorkflowGoalRunnerBlockWrites(engine, clock)
+  private val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
 
   fun saveInTransaction(
     unitOfWork: UnitOfWork,
@@ -74,8 +75,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
         check(
           blockWrites.reopenBlockedPhaseForOperatorResume(
             unitOfWork,
-            phaseId,
-            requireNotNull(setup.operatorResumeReason),
+            OperatorBlockedPhaseReopenRequest(phaseId, requireNotNull(setup.operatorResumeReason)),
             expectedIdentity,
             requireNotNull(setup.executionPlan),
           ),

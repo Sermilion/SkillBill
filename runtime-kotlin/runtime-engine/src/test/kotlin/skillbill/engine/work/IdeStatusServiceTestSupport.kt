@@ -7,6 +7,7 @@ import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
@@ -22,7 +23,9 @@ import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
@@ -39,7 +42,6 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
-import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.db.DatabaseSessionFactory
@@ -327,11 +329,11 @@ internal fun ideStatusService(
     branchSource = CheckedOutBranchSource(::fixtureCheckedOutBranch),
     clock = ideStatusClock,
     repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
-    manifestStore = manifestStore,
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
     workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
     diagnostics = NoopRuntimeDiagnostics,
+    incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
 
@@ -849,12 +851,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     repoRoot: Path?,
   ): Map<Int, GoalRunnerStoredOutcome> = emptyMap()
 
-  override fun markBlocked(
-    workflowId: String,
-    blockedReason: String,
-    lastResumableStep: String,
-    supervisionEvent: GoalRunnerSupervisionEvent?,
-  ): String? = null
+  override fun markBlocked(request: GoalRunnerBlockRequest): GoalRunnerAcceptedBlock? = null
 
   override fun progress(workflowId: String): GoalRunnerWorkflowProgress? = null
 

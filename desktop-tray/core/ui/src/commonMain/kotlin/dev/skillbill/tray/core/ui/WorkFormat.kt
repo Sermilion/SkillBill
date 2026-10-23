@@ -36,8 +36,6 @@ fun PhaseExecution.label(): String = when (kind) {
   PhaseExecutionKind.ATTEMPT -> if (phaseId in acceptanceAuditPhases) "repair attempt $count" else "run $count"
 }
 
-fun PhaseExecution.phaseLabel(): String = criterionRef?.let { "$phaseId · AC-${it.removePrefix("AC-").toInt()}" } ?: phaseId
-
 private val acceptanceAuditPhases = setOf("audit", "audit_plan_fix", "audit_implement_fix")
 
 /** A running clock that ticks forward from its last fresh reading and never runs backwards; a stale clock is frozen. */
@@ -69,6 +67,9 @@ fun WorkItem.repositoryTitle(): String = repositoryName ?: fileName(repositoryRo
 fun WorkItem.progressLabel(): String? = progressTotal?.let { total ->
   "${currentSubtaskId ?: progressCompleted ?: 0}/$total"
 }
+
+fun PhaseExecution.phaseLabel(): String =
+  criterionRef?.let { "$phaseId · AC-${it.removePrefix("AC-").toInt()}" } ?: phaseId
 
 /** Stale if the surrounding read is stale, the detail's extras failed to refresh, or the runtime itself judged it stale. */
 fun effectiveFreshness(item: WorkItem, readStale: Boolean, detailExtrasStale: Boolean = false): Freshness =

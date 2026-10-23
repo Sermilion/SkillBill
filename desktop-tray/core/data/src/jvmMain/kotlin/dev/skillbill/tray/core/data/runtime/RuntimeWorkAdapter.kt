@@ -19,6 +19,10 @@ import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.RunOptions
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
+import dev.skillbill.tray.core.domain.model.IncidentPrerequisite
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryRefusal
 import me.tatarka.inject.annotations.Inject
 import skillbill.di.core.RuntimeComponent
 import skillbill.engine.work.control.model.WorkControlAction
@@ -33,6 +37,10 @@ import skillbill.ports.idestatus.model.WorkBoardWindow
 import skillbill.ports.idestatus.model.WorkDetailList
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkStoreObservation
+import skillbill.ports.work.model.WorkRecoveryPreviewResult
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentPrerequisiteKind
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryPreview
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.InvalidPathException
@@ -92,6 +100,14 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
         val target = item.runTarget() ?: return ControlResult.Stale
         runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId)
       }
+      is ControlAction.Recover -> {
+        val target = item.runTarget() ?: return ControlResult.Stale
+        val prerequisites = action.confirmedPrerequisites.map { value ->
+          BlockIncidentPrerequisiteKind.entries.firstOrNull { it.wireValue == value }
+            ?: return ControlResult.Rejected("unknown_prerequisite:$value", ControlRefusal.RECOVERY_UNAVAILABLE)
+        }.toSet()
+        runtime.workControlService.recover(target, action.incidentToken, action.revision, prerequisites)
+      }
     }
     return when (result) {
       WorkControlResult.Accepted -> ControlResult.Accepted
@@ -99,9 +115,55 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
       WorkControlResult.ExitConfirmed -> ControlResult.ExitConfirmed
       WorkControlResult.TerminationAttempted -> ControlResult.TerminationAttempted
       is WorkControlResult.LaunchFailed -> ControlResult.LaunchFailed(result.reason)
-      is WorkControlResult.Rejected -> ControlResult.Rejected(result.reason.name.lowercase(), result.reason.toRefusal())
+      is WorkControlResult.Recovered -> if (result.status == BlockIncidentRecoveryAttemptStatus.FAILED) {
+        ControlResult.Rejected(result.failure?.wireValue ?: "recovery_failed", ControlRefusal.RECOVERY_UNAVAILABLE)
+      } else ControlResult.Accepted
+      is WorkControlResult.Rejected -> ControlResult.Rejected(
+        result.reason.name.lowercase(),
+        if (action is ControlAction.Recover) result.reason.toRecoveryRefusal() else result.reason.toRefusal(),
+      )
     }
   }
+
+  override fun recoveryPreview(
+    item: WorkItem,
+    incidentToken: String,
+    confirmedPrerequisites: Set<String>,
+  ): IncidentRecoveryPreviewResult {
+    val target = item.runTarget() ?: return IncidentRecoveryPreviewResult.Rejected(
+      "unknown_target", null, IncidentRecoveryRefusal.OTHER,
+    )
+    val prerequisites = confirmedPrerequisites.map { value ->
+      BlockIncidentPrerequisiteKind.entries.firstOrNull { it.wireValue == value }
+        ?: return IncidentRecoveryPreviewResult.Rejected(
+          "unknown_prerequisite:$value", null, IncidentRecoveryRefusal.RECOVERY_UNAVAILABLE,
+        )
+    }.toSet()
+    val preview = runtime.workControlService.recoveryPreview(target, incidentToken, prerequisites)
+    return when (preview) {
+      is WorkRecoveryPreviewResult.Available -> IncidentRecoveryPreviewResult.Available(preview.preview.toDomain())
+      is WorkRecoveryPreviewResult.NeedsPrerequisites -> IncidentRecoveryPreviewResult.NeedsPrerequisites(
+        preview.instructions.map { IncidentPrerequisite(it.kind.wireValue, it.instruction) },
+        preview.plannedPreview?.toDomain(),
+      )
+      is WorkRecoveryPreviewResult.ExistingAttempt -> IncidentRecoveryPreviewResult.ExistingAttempt(
+        preview.attemptId, preview.status.wireValue, preview.failure?.wireValue,
+      )
+      is WorkRecoveryPreviewResult.Rejected -> {
+        val rejection = WorkControlRejection.entries.firstOrNull { it.name.lowercase() == preview.reason }
+        if (rejection == null) {
+          IncidentRecoveryPreviewResult.Unrecognized(preview.reason, preview.detail)
+        } else IncidentRecoveryPreviewResult.Rejected(
+          preview.reason, preview.detail, rejection.toRecoveryRefusal().toIncidentRefusal(),
+        )
+      }
+    }
+  }
+
+  private fun BlockIncidentRecoveryPreview.toDomain() =
+    IncidentRecoveryPreview(
+      action, label, effects, targetWorkflowId, targetInvocationId, phaseId, incidentToken, incidentRevision,
+    )
 
   private fun WorkControlRejection.toRefusal(): ControlRefusal = when (this) {
     WorkControlRejection.AGENT_REQUIRED -> ControlRefusal.AGENT_REQUIRED
@@ -113,7 +175,27 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
     WorkControlRejection.PID_REUSED -> ControlRefusal.PID_REUSED
     WorkControlRejection.UNINSPECTABLE -> ControlRefusal.UNINSPECTABLE
     WorkControlRejection.IDENTITY_MISMATCH -> ControlRefusal.IDENTITY_MISMATCH
+    WorkControlRejection.STALE_INCIDENT -> ControlRefusal.STALE_INCIDENT
+    WorkControlRejection.RECOVERY_UNAVAILABLE -> ControlRefusal.RECOVERY_UNAVAILABLE
+    WorkControlRejection.PREREQUISITE_UNMET -> ControlRefusal.PREREQUISITE_UNMET
+    WorkControlRejection.RECOVERY_IN_PROGRESS -> ControlRefusal.RECOVERY_IN_PROGRESS
     else -> ControlRefusal.OTHER
+  }
+
+  private fun WorkControlRejection.toRecoveryRefusal(): ControlRefusal = when (this) {
+    WorkControlRejection.STALE_INCIDENT, WorkControlRejection.CHANGED_TARGET -> ControlRefusal.STALE_INCIDENT
+    WorkControlRejection.RECOVERY_UNAVAILABLE, WorkControlRejection.INELIGIBLE_TARGET -> ControlRefusal.RECOVERY_UNAVAILABLE
+    WorkControlRejection.PREREQUISITE_UNMET -> ControlRefusal.PREREQUISITE_UNMET
+    WorkControlRejection.RECOVERY_IN_PROGRESS -> ControlRefusal.RECOVERY_IN_PROGRESS
+    else -> toRefusal()
+  }
+
+  private fun ControlRefusal.toIncidentRefusal(): IncidentRecoveryRefusal = when (this) {
+    ControlRefusal.STALE_INCIDENT -> IncidentRecoveryRefusal.STALE_INCIDENT
+    ControlRefusal.RECOVERY_UNAVAILABLE -> IncidentRecoveryRefusal.RECOVERY_UNAVAILABLE
+    ControlRefusal.PREREQUISITE_UNMET -> IncidentRecoveryRefusal.PREREQUISITE_UNMET
+    ControlRefusal.RECOVERY_IN_PROGRESS -> IncidentRecoveryRefusal.RECOVERY_IN_PROGRESS
+    else -> IncidentRecoveryRefusal.OTHER
   }
 
   private fun WorkItem.goalTarget(): WorkControlTarget? {

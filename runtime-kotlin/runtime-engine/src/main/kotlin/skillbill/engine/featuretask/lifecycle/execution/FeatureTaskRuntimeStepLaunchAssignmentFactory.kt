@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
@@ -18,6 +19,23 @@ data class StepLaunchAssignmentInputs(
   val modelAssignment: FeatureTaskRuntimeModelAssignment,
   val environmentKind: LaunchEnvironmentKind = LaunchEnvironmentKind.INHERITED,
 )
+
+@Inject
+class FeatureTaskRuntimeStepLaunchResolver(
+  private val launcher: AgentRunLauncher,
+  private val lookup: PhaseStrategyLookup,
+) {
+  fun resolve(
+    facts: PhaseStrategySelectionFacts,
+    inputs: StepLaunchAssignmentInputs,
+  ): Map<String, StepLaunchAssignment> =
+    FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+      launcher,
+      lookup,
+      facts,
+      inputs,
+    )
+}
 
 object FeatureTaskRuntimeStepLaunchAssignmentFactory {
   fun resolve(

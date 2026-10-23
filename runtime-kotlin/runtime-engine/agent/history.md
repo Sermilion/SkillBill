@@ -1,45 +1,14 @@
-## [2026-10-22] SKILL-437 subtask 5: optional strategy behavior moves to capability interfaces
-Areas: runtime-engine featuretask slot, slot/attempt, slot/audit, slot/codereview, slot/implementation, slot/monitor, slot/plan, slot/qa, slot/qualitygate, slot/standalonereview, runloop/core, runloop/state, runner, lifecycle/execution; runtime-core architecture repoTest
-- PhaseStrategy is down to 11 open or abstract members. Loop, resume, verdict, status, acceptance repair, monitor repair, prepared run and recorded-plan mapping are internal capability interfaces declared in PhaseStrategy.kt. Consumers discover them with safe as? checks. reusable
-- Strategies implement only the capabilities they use, each through a private delegate object, because public strategies cannot implement internal interfaces directly. InlineReviewStrategy delegates to CodeReviewSlot.
-- PhaseStrategyStatusProjection and acceptsAttemptStrategy are gone. Attempt admission compares owner.strategyId with the call strategy id, since owners already resolve through registry alias canonicalization.
-- Policy and resume identity are final internal PhaseStrategy members, so a strategy cannot override them. A selected owner without the resume capability yields no resume rules; the historical interpreter applies only when no owner is selected.
-- Recorded-plan mapping takes the owner strategy as a parameter, because audit mapping needs the registered instance.
-- New guard in StrategyCapabilityBoundaryArchitectureTest caps open PhaseStrategy members at 12. The capability file was merged into PhaseStrategy.kt to keep the slot package under its sibling-file ceiling.
-- Limits: the status capability has no main-code consumer yet. No fan-out capability exists; fan-out stays on the planning binding family descriptor.
-Feature flag: N/A
-Acceptance criteria: implemented per spec_subtask_5 (validate ran full Gradle check and agnix green)
-
-## [2026-10-22] SKILL-437 subtask 2: model supplements replace opus-5-5 strategy variants
-Areas: runtime-engine featuretask slot, slot/skeleton, slot/state, slot/attempt, slot/codereview, slot/standalonereview, runloop, phaserun, lifecycle/execution; runtime-core di/featuretask; runtime-domain skeleton model; runtime-contracts failure codes; runtime-infra/contracts plan coherence
-- The 15 *Opus55Strategy classes, ByProfile, withOpus and the opus suffix helper are deleted. Skeleton bindings register canonical strategies only; launch assignments and the profile-sensitive plan cache key stay.
-- ModelDirectiveSupplements (in PhaseStrategyLookup.kt) appends the old opus-5-5 resource after taskDirective, a non-blank retryFocus and a non-null outputContract, only for a recorded OPUS_5_5 profile. Monitor phases never get one. It travels through PhaseRunState, the attempt host, settlement scope and step binding, and the direct review launches. reusable
-- Core DI reads SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS (default on, strict true/false). Anything else refuses with INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING. Off drops only the text; identities and launch evidence stay.
-- A slot-scoped table of 15 historical opus-5-5 aliases lives in PhaseStrategyRegistry.kt. Registry lookup, selection matching and the compatibility check accept recorded alias ids; policy and resume identities are computed under the recorded id; descriptors are not rewritten.
-- The plan coherence check is one-directional: historical suffix ids still require an opus step, canonical ids with opus steps pass.
-- Limits: a canonical-id plan with an OPUS profile now matches and gets supplements. Alias tests build recorded plans in code, not from archived 0.2 bytes. The slot package sits at its 12-file ceiling, so new files there need another home. docs/model-specific-phase-strategies.md is left to subtask 6.
-Feature flag: SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS (env, default on)
-Acceptance criteria: implemented per spec_subtask_2 (validate ran full check green)
-
-## [2026-10-22] SKILL-437 subtask 1: opus-5-5 monitor wrapper forwards step hooks
-Areas: runtime-engine featuretask slot/monitor; runtime-engine test phaserun and slot
-- MonitorOpus55Strategy now overrides stepHooks and forwards to the composed canonical MonitorStrategy. Before, the wrapper inherited default hooks, so a recorded opus-5-5 monitor_fix never reached PhaseMonitorStepBinding.publishRepair and the repair was never committed or pushed.
-- PhaseRunEntryFixture takes an injectable launchModelResolver (default pass-through), so a test can record an OPUS_5_5 launch assignment through real accepted execution. reusable
-- Regression: an opus 5_5 monitor repair is committed and pushed to the bare origin before CI is rechecked, added beside the canonical scenario.
-- Temporary proof: PhaseStrategyCompositionTest reflects over open PhaseStrategy members with an explicit classification table, so an unclassified or unforwarded member fails. Subtask 2 deletes it with the wrappers.
-- Limits: archived execution-plan 0.2 fixtures for inline, acceptance-audit and monitor opus-5-5 are not authored. They need a capture producer run against the old wrappers before subtask 2 removes them.
-Feature flag: N/A
-Acceptance criteria: 1/1 implemented (validate ran full check green)
-
-## [2026-10-22] SKILL-439: inline review keeps pre-#471 behavior with an additive code-quality lane
-Areas: runtime-engine featuretask slot/codereview, slot/codereview/opus, slot/standalonereview, slot/state, runloop/state, operation/verify; runtime-core di/featuretask
-- Inline review prompts are the pre-#471 text plus one appended code-quality lane section. The section says the agent still owns every review area, Routing/Ignore lines apply only to delegated review, and findings use the exact specialist identity. The rubric follows verbatim.
-- New narrow InlineCodeQualityRubricResolver (fun interface) replaces the ParallelCodeReviewRunner dependency on inline strategies. CodeQualityLaneSection renders the lane for the full-run, standalone and verify inline paths. Both live in InlineReviewPromptSections.kt. reusable
-- A Failed rubric resolution no longer blocks inline review: it logs a runtime diagnostics warning, omits the lane and the review proceeds. The delegated standalone path keeps its blocking behavior and its old text unchanged.
-- InlineReviewResultDecoder returns the agent stdout as-is (blank becomes "Review completed."). The register-normalizing helpers are gone, so finding attribution comes from the specialist identity in the stdout.
-- PhaseReviewExecutionContext now carries RuntimeDiagnostics, passed from the run-loop environment, so the review binding can warn without touching the prompt.
-- Pattern: StandaloneReviewStrategy derives its resolver from reviewRunner by default, so delegated strategies and their DI stayed untouched.
-- Limits: no test pins that delegated standalone review still blocks on a planning failure. The slot/codereview package sits at its sibling-file ceiling (12), so new files there need another home.
+## [2026-10-22] SKILL-435 subtask 1: block capture and investigation lifecycle
+Areas: runtime-engine diagnostics/block, goalrunner persist and execution, featuretask phase core/record, acceptance repair, phaserun, runner; runtime-domain blockincident; runtime-ports blockincident; runtime-infra sqlite and host; runtime-contracts blockincident keys; runtime-core DI; desktop-tray detail
+- Every goal block (WorkflowGoalRunnerBlockWrites.markBlocked) and standalone phase block (StandalonePhaseStatusEventSink.settleBlocked) creates or links one incident after the BLOCKED write commits. Feature-task settlement, phase-state recorder and serial repair producers do the same.
+- BlockIncidentAliases is the only alias derivation; producers for one attempt get one token. Goal aliases carry accepted generation, attempt and causal child token as separate parts (unavailable/none when not recoverable). Child-propagated blocks link through CHILD_CAUSE. reusable
+- The accepted block reference persists and rides through replay, terminal reads and stale displacement. Legacy aliases stay attached when a historical identity is normalized.
+- BlockIncidentCapture.capture is the one entry point. It runs in its own transaction and swallows failures. When the DB is unwritable it writes to the BlockIncidentSpool port (file adapter, 64 records x 16 KiB); the next entry imports with FALLBACK_SPOOL. reusable
+- BlockIncidentInvestigationWorker claims with a 90s lease, renews every 30s and settles through the BlockIncidentInvestigator seam (default PARTIAL; subtask 2 replaces it). It runs at entry in GoalRunner, FeatureTaskRuntimeRunEntry and PhaseRunEntry, after orphan recovery, under one shared deadline. reusable
+- Pickup window is observedAt + 24h; claim sets a 5-minute run deadline. Expired takeovers bump retryCount, and past MAX_RETRIES the incident settles CRASHED.
+- Migration 76 adds block_incident_rollout (activated_at). Older incidents and BLOCKED workflows are never investigated. blockedWithoutIncident recovers up to 16 post-activation orphans per entry.
+- FeatureTaskPhaseSettlementService now requires DatabaseSessionFactory; the ERROR downgrade for unavailable capture is gone.
+- Limits: no diagnosis content, recovery, reports or presentation yet (subtasks 2-5). Port models live in ports.blockincident.model to respect package ceilings.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented (validate ran full check green)
 

@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeRepairReceipt
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
@@ -72,6 +73,8 @@ fun operatorBlockRetryFromWorkflowArtifacts(artifacts: Any?): FeatureTaskRuntime
 fun FeatureTaskRuntimeOperatorBlockRetry.asWorkflowArtifactEntry(
   previousBlockedReason: String,
   reopenedPhaseIds: List<String>,
+  recoveryAttemptId: String? = this.recoveryAttemptId,
+  preserveBudget: Boolean = this.preserveBudget,
 ): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(
     mapOf(
@@ -80,7 +83,15 @@ fun FeatureTaskRuntimeOperatorBlockRetry.asWorkflowArtifactEntry(
       FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY to retriedAt,
       FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_REASON_KEY to previousBlockedReason,
       FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY to reopenedPhaseIds,
-    ),
+    ) +
+      if (preserveBudget) {
+        mapOf(
+          FeatureTaskRuntimePhasePayloadKeys.RECOVERY_ATTEMPT_ID to recoveryAttemptId,
+          FeatureTaskRuntimePhasePayloadKeys.PRESERVE_BUDGET to preserveBudget,
+        )
+      } else {
+        emptyMap()
+      },
   )
 
 fun goalContinuationFieldAdoptionFromWorkflowArtifacts(

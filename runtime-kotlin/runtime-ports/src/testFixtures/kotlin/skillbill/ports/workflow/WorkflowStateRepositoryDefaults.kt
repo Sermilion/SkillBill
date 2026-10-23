@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.goalrunner.model.GoalAttemptLedgerStatusEntry
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
 import skillbill.ports.workflow.model.FeatureTaskRuntimeWorkflowHeader
@@ -168,6 +169,10 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
   ): Int = 0
 
   open override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? = null
+
+  open override fun getLatestFeatureTaskRuntimeWorkerGeneration(
+    workflowId: String,
+  ): FeatureTaskRuntimeWorkerGenerationObservation? = null
 
   open override fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,

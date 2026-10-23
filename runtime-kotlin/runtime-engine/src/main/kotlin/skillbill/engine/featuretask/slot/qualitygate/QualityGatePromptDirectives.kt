@@ -158,6 +158,8 @@ internal fun buildGateFindingsDirective(
       findings.findings.forEachIndexed { index, finding ->
         add(
           "${index + 1}. module=${finding.module} id=${finding.ruleOrTestId} " +
+            "failure_subject=${finding.failureSubject.wireValue} " +
+            "(unknown means attribution is not established) " +
             "location=${finding.location ?: "<unknown>"} message=${finding.message}",
         )
       }

@@ -52,7 +52,15 @@ make_plugin_jar() {
   tmp="$(mktemp -d)"
   mkdir -p "$tmp/META-INF" "$(dirname "$jar")"
   printf '<idea-plugin><id>%s</id></idea-plugin>\n' "$plugin_id" >"$tmp/META-INF/plugin.xml"
-  (cd "$tmp" && zip -q -r "$jar" META-INF)
+  python3 - "$tmp" "$jar" <<'PY'
+import os, sys, zipfile
+root, archive = sys.argv[1:]
+with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
+    for directory, _, files in os.walk(os.path.join(root, 'META-INF')):
+        for name in files:
+            path = os.path.join(directory, name)
+            output.write(path, os.path.relpath(path, root))
+PY
   rm -rf "$tmp"
 }
 

@@ -127,7 +127,71 @@ data class Detail(
   val dependencies: List<SubtaskDependency> = emptyList(),
   val freshnessDeadline: Instant? = null,
   val runOptions: RunOptions? = null,
+  val incident: Incident? = null,
+  val incidentHistory: IncidentHistory = IncidentHistory(emptyList()),
 )
+
+enum class IncidentProgress {
+  INVESTIGATION_PENDING, INVESTIGATING, DIAGNOSIS_COMPLETE, DIAGNOSIS_PARTIAL, DIAGNOSIS_FAILED,
+  NEEDS_PREREQUISITES, RECOVERY_AVAILABLE, RECOVERING, RECOVERY_FAILED, RESUMED,
+}
+
+data class IncidentPrerequisite(val kind: String, val instruction: String)
+data class IncidentEvidence(val kind: String, val referenceId: String, val summary: String, val trusted: Boolean)
+sealed interface IncidentRecoveryEligibility {
+  data class Available(val preview: IncidentRecoveryPreview) : IncidentRecoveryEligibility
+  data class NeedsPrerequisites(val instructions: List<IncidentPrerequisite>) : IncidentRecoveryEligibility
+  data class Unavailable(val reason: IncidentRecoveryUnavailableReason) : IncidentRecoveryEligibility
+}
+
+enum class IncidentRecoveryUnavailableReason {
+  NO_SUPPORTED_ACTION, INVESTIGATION_NOT_SETTLED, NOT_BLOCKED, GENERATION_CHANGED,
+  ATTEMPT_LIMIT_REACHED, OPERATOR_DECISION, QUALITY_GATE,
+}
+
+data class IncidentRecovery(
+  val eligibility: IncidentRecoveryEligibility?, val previewLabel: String?, val effects: String?,
+  val targetWorkflowId: String?,
+  val targetInvocationId: String?, val latestAttemptId: String?, val latestAttemptStatus: String?, val failure: String?,
+)
+data class IncidentRecoveryPreview(
+  val action: String,
+  val label: String,
+  val effects: String?,
+  val targetWorkflowId: String?,
+  val targetInvocationId: String?,
+  val phaseId: String?,
+  val incidentToken: String,
+  val incidentRevision: Long,
+)
+
+sealed interface IncidentRecoveryPreviewResult {
+  data class Available(val preview: IncidentRecoveryPreview) : IncidentRecoveryPreviewResult
+  data class NeedsPrerequisites(
+    val instructions: List<IncidentPrerequisite>,
+    val plannedPreview: IncidentRecoveryPreview?,
+  ) : IncidentRecoveryPreviewResult
+  data class ExistingAttempt(val attemptId: String, val status: String, val failure: String?) :
+    IncidentRecoveryPreviewResult
+  data class Rejected(val reason: String, val detail: String?, val refusal: IncidentRecoveryRefusal) :
+    IncidentRecoveryPreviewResult
+  data class Unrecognized(val reason: String, val detail: String?) : IncidentRecoveryPreviewResult
+}
+
+enum class IncidentRecoveryRefusal {
+  STALE_INCIDENT, RECOVERY_UNAVAILABLE, PREREQUISITE_UNMET, RECOVERY_IN_PROGRESS, OTHER,
+}
+data class IncidentReport(val status: String, val failureReason: String?, val issueUrl: String?)
+data class IncidentTelemetry(val availability: String, val searchIdentifiers: Map<String, String>)
+data class Incident(
+  val incidentToken: String, val revision: Long, val progress: IncidentProgress, val summary: String, val cause: String?,
+  val certainty: String, val responsibleCategory: String, val nextAction: String, val noWorkaroundKnown: Boolean,
+  val prerequisites: List<IncidentPrerequisite>, val evidence: List<IncidentEvidence>, val degradations: Set<String>,
+  val recovery: IncidentRecovery, val report: IncidentReport, val telemetry: IncidentTelemetry,
+  val observedAt: Instant, val settledAt: Instant?,
+)
+
+data class IncidentHistory(val incidents: List<Incident>)
 
 data class DetailAttempts(
   val phaseAttempts: Map<String, Int> = emptyMap(),
@@ -282,7 +346,13 @@ data class Problem(
 )
 
 /** Why the installed runtime was refused: no runtime, no record, a record that cannot be read, or another build's record. */
-enum class RuntimeBuildReason { MISMATCH, MISSING, UNREADABLE, NOT_INSTALLED }
+enum class RuntimeBuildReason { MISMATCH, MISSING, UNREADABLE, NOT_INSTALLED, INCIDENT_DETAIL_UNAVAILABLE }
+
+enum class IncidentDetailCapabilityState { SUPPORTED, UNADVERTISED, INCOMPATIBLE_SCHEMA, UNKNOWN }
+
+object IncidentDetailUnavailable {
+  const val MESSAGE = "Incident details need a newer Skill Bill runtime."
+}
 
 /** The desktop refused the installed runtime. Both builds are display text; [installedIdentity] is null when there is none. */
 data class RuntimeBuildProblem(
@@ -290,6 +360,9 @@ data class RuntimeBuildProblem(
   val installedIdentity: String?,
   val desktopIdentity: String,
   val reinstallCommand: String,
+  val incidentDetailCapability: IncidentDetailCapabilityState = IncidentDetailCapabilityState.UNKNOWN,
+  val readSchema: Int? = null,
+  val incidentDetailVersion: Int? = null,
 )
 
 /** Selecting a database was refused before anything opened it, because the installed runtime is not this desktop's build. */

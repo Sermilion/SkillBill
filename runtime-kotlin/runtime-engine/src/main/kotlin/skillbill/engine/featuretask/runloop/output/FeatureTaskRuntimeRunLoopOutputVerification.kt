@@ -34,6 +34,7 @@ import skillbill.engine.featuretask.runloop.core.isFeatureSpecPathForIssue
 import skillbill.engine.featuretask.runloop.core.reconcileCheckpointPathInventory
 import skillbill.engine.featuretask.runloop.observability.completedEvent
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
@@ -236,6 +237,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
           observability = observability,
           payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
           failureDisposition = disposition,
+          failureCode =
+            FeatureTaskRuntimeAttemptBudgets.ATTEMPT_BUDGET_FAILURE_CODE.takeIf { disposition.retryOnResume },
         ),
       ),
     )

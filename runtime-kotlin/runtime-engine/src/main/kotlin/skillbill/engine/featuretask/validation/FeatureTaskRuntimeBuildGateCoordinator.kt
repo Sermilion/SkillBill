@@ -7,6 +7,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationGateFindingPayloadKeys
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
@@ -21,7 +22,9 @@ import skillbill.engine.featuretask.validation.model.ValidationGateProgressWrite
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.model.requiresUnparseableGateTriage
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -35,6 +38,7 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationFailureSubject
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase
@@ -77,10 +81,12 @@ class FeatureTaskRuntimeBuildGateCoordinator(
           "Required ${cycle.commandFamily.name.lowercase()} gate declaration is absent" +
             (resolution.routedPackSlug?.let { " from dominant pack '${it.take(PACK_LABEL_LIMIT)}'." } ?: "."),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+          failureCode = failureLabel(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION),
         )
       is ValidationGateResolution.Incompatible ->
         terminalBlockedResult(
           resolution.reason.take(GATE_FAILURE_DETAIL_LIMIT),
+          failureCode = failureLabel(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION),
         )
       is ValidationGateResolution.Declared -> {
         val declaration = resolution.declaration
@@ -90,6 +96,7 @@ class FeatureTaskRuntimeBuildGateCoordinator(
               PACK_LABEL_LIMIT,
             )}' is missing a required ${cycle.commandFamily.name.lowercase()} command.",
             failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+            failureCode = failureLabel(FeatureTaskRuntimeFailureCode.INVALID_QUALITY_GATE_CONFIGURATION),
           )
         } else {
           checkAndRepair(cycle, declaration, onGateRunCount)
@@ -207,6 +214,7 @@ class FeatureTaskRuntimeBuildGateCoordinator(
             "turns; remaining findings are recorded for the operator.",
           remainingFindings = projection,
           measurements = measurements,
+          failureCode = projectFailureCode(currentFindings),
         )
       }
       persistProgress(
@@ -237,6 +245,7 @@ class FeatureTaskRuntimeBuildGateCoordinator(
               remainingFindings = projection,
               measurements = measurements,
               failureDisposition = repair.failureDisposition,
+              failureCode = repair.failureCode,
             )
           is ValidationGateAgentRepairResult.Completed -> null
         }
@@ -248,6 +257,15 @@ class FeatureTaskRuntimeBuildGateCoordinator(
         )
     }
   }
+
+  private fun projectFailureCode(findings: List<ValidationGateFinding>): String? =
+    if (findings.any { it.failureSubject == FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE }) {
+      failureLabel(FeatureTaskRuntimeFailureCode.PROJECT_QUALITY_GATE_FAILED)
+    } else {
+      null
+    }
+
+  private fun failureLabel(code: FeatureTaskRuntimeFailureCode): String = "${code::class.simpleName}.${code.name}"
 
   private fun verifyAfterRepair(
     state: BuildGateCycleState,
@@ -481,6 +499,7 @@ private fun buildFindingsForRepairFromResult(result: ValidationGateRunResult): L
               stdout = result.stdout,
             ),
           location = null,
+          failureSubject = FeatureTaskRuntimeValidationFailureSubject.UNKNOWN,
         ),
       )
     }
@@ -488,11 +507,22 @@ private fun buildFindingsForRepairFromResult(result: ValidationGateRunResult): L
 
 private fun decodeBuildPersistedFindings(raw: List<Map<String, String?>>): List<ValidationGateFinding> =
   raw.map { map ->
+    val failureSubject =
+      if (!map.containsKey(ValidationEvidencePayloadKeys.FAILURE_SUBJECT)) {
+        FeatureTaskRuntimeValidationFailureSubject.UNKNOWN
+      } else {
+        val wire =
+          map[ValidationEvidencePayloadKeys.FAILURE_SUBJECT]
+            ?: throw invalidWorkflowStateSchemaError("Persisted validation finding failure_subject must be a string.")
+        FeatureTaskRuntimeValidationFailureSubject.fromWire(wire)
+          ?: throw invalidWorkflowStateSchemaError("Persisted validation finding failure_subject is unsupported.")
+      }
     ValidationGateFinding(
-      module = map["module"] ?: "",
-      ruleOrTestId = map["rule_or_test_id"] ?: "",
-      message = map["message"] ?: "",
-      location = map["location"],
+      module = map[ValidationGateFindingPayloadKeys.MODULE] ?: "",
+      ruleOrTestId = map[ValidationGateFindingPayloadKeys.RULE_OR_TEST_ID] ?: "",
+      message = map[ValidationGateFindingPayloadKeys.MESSAGE] ?: "",
+      location = map[ValidationGateFindingPayloadKeys.LOCATION],
+      failureSubject = failureSubject,
     )
   }
 

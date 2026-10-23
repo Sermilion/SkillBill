@@ -63,6 +63,7 @@ import skillbill.ports.review.repository.ReviewRunCompletenessRepository
 import skillbill.ports.review.repository.UnavailableReviewRunCompletenessRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
@@ -628,6 +629,11 @@ internal object NoopTelemetryOutboxRepository : TelemetryOutboxRepository {
 
   override fun lastSyncedAt(): String? = null
 
+  override fun latestByCorrelation(
+    events: Set<TelemetryOutboxEvent>,
+    incidentToken: String,
+  ): TelemetryCorrelationStatus? = null
+
   override fun markSynced(
     eventIds: List<Long>,
     claimToken: String,
@@ -692,6 +698,11 @@ internal class InMemoryTelemetryOutboxRepository(
   override fun latestError(): String? = rows.lastOrNull { it.syncedAt == null && it.lastError.isNotBlank() }?.lastError
 
   override fun lastSyncedAt(): String? = rows.mapNotNull { it.syncedAt }.maxOrNull()
+
+  override fun latestByCorrelation(
+    events: Set<TelemetryOutboxEvent>,
+    incidentToken: String,
+  ): TelemetryCorrelationStatus? = null
 
   override fun markSynced(
     eventIds: List<Long>,

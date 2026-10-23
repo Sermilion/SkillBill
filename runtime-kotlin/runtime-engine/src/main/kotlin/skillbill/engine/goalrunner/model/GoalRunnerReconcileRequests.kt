@@ -3,7 +3,7 @@ package skillbill.engine.goalrunner.model
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -18,7 +18,7 @@ data class CrashReconcileExpiredWorkerRequest(
 )
 
 data class StaleRunningCandidatesBlockRequest(
-  val unitOfWork: GoalRunnerPersistenceSession,
+  val unitOfWork: UnitOfWork,
   val normalizedIssueKey: String,
   val candidates: List<GoalContinuationCandidate>,
   val initialAuthoritative: Map<Int, GoalRunnerStoredOutcome>,

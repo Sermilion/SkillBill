@@ -970,7 +970,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         "audit" -> {
           audit++
           if (audit <= 4) assertContains(prompt, "AC-1")
-          if (audit == 7) assertContains(prompt, "AC-2")
+          if (audit == 6) assertContains(prompt, "AC-2")
           val state = currentState()
           if (audit == 1) {
             facts(serialDiscoveryOutput())

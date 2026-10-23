@@ -15,6 +15,8 @@ import skillbill.application.work.model.WorkListResult
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.DocumentedNoOpCliCommand
+import skillbill.cli.kernel.work.workBoardDiagnosticWireMap
+import skillbill.cli.kernel.work.workDetailItemWireMap
 import skillbill.cli.model.CliFormat
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
@@ -39,10 +41,11 @@ class WorkTopLevelCommands(
   status: WorkStatusCommand,
   board: WorkBoardCommand,
   detail: WorkDetailCommand,
+  recover: WorkRecoverCommand,
 ) {
   val command: DocumentedNoOpCliCommand =
     object : DocumentedNoOpCliCommand("work", "Inspect all persisted feature work.") {}
-      .subcommands(list, status, board, detail)
+      .subcommands(list, status, board, detail, recover)
 }
 
 @Inject

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -27,6 +28,7 @@ fun sqliteDatabaseSessionFactory(
     diagnostics,
     SqliteTestWorkflowSnapshotValidator,
     runtimeVersion,
+    BlockIncidentSchemaValidator(),
   )
 
 object SqliteTestWorkflowSnapshotValidator : WorkflowSnapshotValidator {

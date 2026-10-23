@@ -187,6 +187,8 @@ internal class GoalRunnerGoalLoop(
         reason = GoalRunnerStopReason.DEPENDENCIES_BLOCKED.name.lowercase(),
         blockedReason = selection.reason,
         currentStepId = selection.subtask.lastResumableStep?.takeIf(String::isNotBlank),
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = saved.manifest.workflowIdFor(selection.subtask.id),
       ),
     )
     return GoalRunnerIterationResult(
@@ -199,7 +201,7 @@ internal class GoalRunnerGoalLoop(
             subtaskId = selection.subtask.id,
             reason = GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
             blockedReason = selection.reason,
-            workflowId = selection.subtask.workflowId,
+            workflowId = null,
             lastResumableStep = selection.subtask.lastResumableStep.orEmpty().ifBlank { "preplan" },
           ),
         ),
@@ -254,17 +256,17 @@ internal class GoalRunnerGoalLoop(
         stopReason = GoalRunnerStopReason.POLICY_BLOCKED.name.lowercase(),
       ),
     )
-    if (subtaskId > 0) {
-      request.eventSink.emit(
-        GoalRunnerRunEvent.SubtaskStopped(
-          issueKey = saved.manifest.issueKey,
-          subtaskId = subtaskId,
-          reason = GoalRunnerStopReason.POLICY_BLOCKED.name.lowercase(),
-          blockedReason = violation,
-          currentStepId = "create_branch",
-        ),
-      )
-    }
+    request.eventSink.emit(
+      GoalRunnerRunEvent.SubtaskStopped(
+        issueKey = saved.manifest.issueKey,
+        subtaskId = subtaskId,
+        reason = GoalRunnerStopReason.POLICY_BLOCKED.name.lowercase(),
+        blockedReason = violation,
+        currentStepId = if (subtaskId > 0) "create_branch" else null,
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = if (subtaskId > 0) saved.manifest.workflowIdFor(subtaskId) else null,
+      ),
+    )
     return stopped(
       StoppedReportArgs(
         issueKey = saved.manifest.issueKey,

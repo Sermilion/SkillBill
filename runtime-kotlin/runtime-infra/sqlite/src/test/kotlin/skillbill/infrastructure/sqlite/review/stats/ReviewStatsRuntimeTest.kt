@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.review.stats
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
+import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.infrastructure.sqlite.SAMPLE_REVIEW
 import skillbill.infrastructure.sqlite.SQLiteLearningStore
 import skillbill.infrastructure.sqlite.SQLiteUnitOfWork
@@ -455,6 +456,7 @@ class ReviewStatsRuntimeTest {
           diagnostics = SqliteTestDiagnostics,
           workflowSnapshotValidator = SqliteTestWorkflowSnapshotValidator,
           runtimeVersion = "test-runtime-version",
+          blockIncidentContractValidator = BlockIncidentSchemaValidator(),
         ).reviews
 
       reviews.featureTaskRuntimeStats()

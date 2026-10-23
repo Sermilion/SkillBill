@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.plan.planningFeasibilityDirective
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -48,7 +49,7 @@ class AgentPreplanStrategy : PhaseStrategy() {
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).preplanCeremony.promptLabel}. Keep the gate real: identify " +
           "concrete scope, affected boundaries, risks, and unknowns at the requested depth.",
-      stepContext = featureSpecIntake,
+      stepContext = "$featureSpecIntake\n\n$planningFeasibilityDirective",
     )
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
@@ -68,8 +69,9 @@ class AgentPreplanStrategy : PhaseStrategy() {
 
     private const val DIRECTIVE: String =
       "Produce the scaled pre-planning digest for the resolved feature size, as prose. Do not modify repository " +
-        "files during this phase. This is the feature's only discovery: the plan phase plans every subtask " +
-        "from this digest and never reads the repository. Write what the plan phase needs: the boundaries the " +
+        "files during this phase. This is the feature's shared discovery: the plan phase plans every subtask " +
+        "from this digest and may verify missing implementability facts through targeted read-only lookups. " +
+        "Write what the plan phase needs: the boundaries the " +
         "change touches, the patterns and decisions that apply, concrete risks, and rollout and validation " +
         "considerations. The digest must carry every fact the plan needs to specify this task: exact paths, " +
         "symbols, and signatures of the code this task changes, the tests that exercise that code, and the " +

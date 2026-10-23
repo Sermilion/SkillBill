@@ -10,6 +10,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
+import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
@@ -130,4 +131,7 @@ internal data class StoppedReportArgs(
   val workflowId: String?,
   val lastResumableStep: String,
   val noChangeReason: String? = null,
+  val incidentToken: String? = null,
+  val acceptedBlockReference: GoalRunnerAcceptedBlockReference? = null,
+  val historicalBlockReference: GoalRunnerAcceptedBlockReference? = null,
 )

@@ -37,7 +37,9 @@ data class WorkflowStateSnapshot(
   val updatedAt: Instant?,
   val finishedAt: Instant?,
   val mode: FeatureTaskWorkflowMode? = null,
-)
+) {
+  fun step(stepId: String): WorkflowStepState? = steps.firstOrNull { it.stepId == stepId }
+}
 
 data class WorkflowContinueDecision(
   val view: WorkflowContinueView,

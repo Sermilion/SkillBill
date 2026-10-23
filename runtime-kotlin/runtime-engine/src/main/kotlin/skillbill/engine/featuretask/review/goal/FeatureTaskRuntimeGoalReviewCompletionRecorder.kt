@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.review.goal
 
-import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
@@ -8,8 +7,6 @@ import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistenc
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.engine.featuretask.persist.stepUpdatesFrom
-import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
-import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.persist.workflowStatusFor
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
@@ -34,7 +31,6 @@ import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewRevision
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.unionRefutedBlockerDispositions
-import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -44,6 +40,7 @@ import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifac
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import java.time.Clock
 
 class FeatureTaskRuntimeGoalReviewCompletionRecorder(
@@ -249,11 +246,8 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
         loopId = request.loopId,
         edgeIteration = request.edgeIteration,
       )
-    return appendBoundedHistoryBySequence(
-      workflowArtifactEntryMaps(ledger.map { it.asWorkflowArtifactEntry() }),
-      workflowArtifactEntryMap(completionEntry.asWorkflowArtifactEntry()),
-      FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
-    ).mapNotNull { entry -> JsonCodec.anyToStringAnyMap(entry) }
+    return retainPhaseLedgerEvidence(ledger + completionEntry, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+      .map { it.asWorkflowArtifactEntry() }
   }
 
   private fun persistUnaddressedFindings(

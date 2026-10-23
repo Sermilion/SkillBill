@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.phaseartifacts
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY
@@ -93,10 +94,26 @@ internal fun operatorBlockRetryFrom(artifacts: Map<String, Any?>): FeatureTaskRu
       ?: schemaError(
         "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY' must decode to a map.",
       )
+  val recoveryAttemptId =
+    entryMap[FeatureTaskRuntimePhasePayloadKeys.RECOVERY_ATTEMPT_ID]?.let {
+      it as? String ?: schemaError(
+        "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY' field " +
+          "'${FeatureTaskRuntimePhasePayloadKeys.RECOVERY_ATTEMPT_ID}' must decode to a string.",
+      )
+    }
+  val preserveBudget =
+    entryMap[FeatureTaskRuntimePhasePayloadKeys.PRESERVE_BUDGET]?.let {
+      it as? Boolean ?: schemaError(
+        "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY' field " +
+          "'${FeatureTaskRuntimePhasePayloadKeys.PRESERVE_BUDGET}' must decode to a boolean.",
+      )
+    } ?: false
   return FeatureTaskRuntimeOperatorBlockRetry(
     phaseId = entryMap.requiredOperatorRetryString(SharedPayloadKeys.PHASE_ID),
     reason = entryMap.requiredOperatorRetryString(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY),
     retriedAt = entryMap.requiredOperatorRetryString(FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY),
+    recoveryAttemptId = recoveryAttemptId,
+    preserveBudget = preserveBudget,
   )
 }
 

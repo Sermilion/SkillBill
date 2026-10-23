@@ -33,6 +33,8 @@ class AcquiredFeatureTaskRuntimeWorker internal constructor(
   internal val normalizedIssueKey: String get() = execution.identity.normalizedIssueKey
   internal val repositoryIdentity: String get() = execution.identity.repositoryIdentity
   internal val goalChild: Boolean get() = execution.identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD
+  internal val admittedExecution: AdmittedFeatureTaskRuntimeExecution
+    get() = execution.withWorkerOwnership(ownership)
 
   internal fun ownsAuditStep(phaseId: String): Boolean =
     execution.plan.dispatchStrategyByStep[phaseId]?.slot == PhaseSlot.AUDIT

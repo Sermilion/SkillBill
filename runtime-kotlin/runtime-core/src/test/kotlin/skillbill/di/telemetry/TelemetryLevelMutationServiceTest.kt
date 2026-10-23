@@ -21,6 +21,7 @@ import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
@@ -373,6 +374,11 @@ private class MutationTelemetryOutboxRepository(
   override fun latestError(): String? = null
 
   override fun lastSyncedAt(): String? = rows.mapNotNull(TelemetryOutboxRecord::syncedAt).maxOrNull()
+
+  override fun latestByCorrelation(
+    events: Set<TelemetryOutboxEvent>,
+    incidentToken: String,
+  ): TelemetryCorrelationStatus? = null
 
   override fun markSynced(
     eventIds: List<Long>,

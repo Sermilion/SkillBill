@@ -15,6 +15,8 @@ import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
 import dev.skillbill.tray.core.domain.model.WorkSection
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +44,17 @@ interface WorkControlRepository {
   suspend fun stop(item: WorkItem): Outcome<ControlConfirmation>
   suspend fun cancel(item: WorkItem): Outcome<Unit> = Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Cancellation is unavailable."))
   suspend fun launch(item: WorkItem, agentId: String?): Outcome<Unit> = Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Launching is unavailable."))
+  suspend fun recover(
+    item: WorkItem,
+    incidentToken: String,
+    revision: Long,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<Unit>
+  suspend fun recoveryPreview(
+    item: WorkItem,
+    incidentToken: String,
+    confirmedPrerequisites: Set<String>,
+  ): Outcome<IncidentRecoveryPreviewResult>
 }
 
 interface WorkStoreSession {

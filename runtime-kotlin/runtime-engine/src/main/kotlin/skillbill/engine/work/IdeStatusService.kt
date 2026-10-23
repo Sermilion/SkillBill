@@ -3,7 +3,6 @@ package skillbill.engine.work
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
-import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.work.control.workControlEligible
@@ -106,11 +105,11 @@ class IdeStatusService(
   private val branchSource: CheckedOutBranchSource,
   private val clock: Clock,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-  private val manifestStore: GoalRunnerManifestStore,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
   private val goalRunnerStatusService: GoalRunnerStatusService,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
+  private val incidentProjectionBuilder: WorkIncidentProjectionBuilder,
 ) {
   fun status(request: IdeStatusRequest): IdeStatusResult {
     val observedAt = request.observedAt ?: clock.instant()
@@ -572,6 +571,7 @@ class IdeStatusService(
     val pageSize = request.pageSize
     val projection = projector.project(candidate, context)
     val snapshot = projection.snapshot
+    val incidentSet = detailIncidents(candidate, context, snapshot)
     ideStatusValidator.validate(snapshot, "work-detail:${candidate.workflowId}")
     val standalone = candidate.standaloneStatus
     val completion =
@@ -588,12 +588,7 @@ class IdeStatusService(
     val runtimeRead =
       runtimeWorkflowId?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
     val runtimeStatus = runtimeRead?.status
-    val history =
-      if (request.includesDetailList(WorkDetailList.EXECUTIONS)) {
-        workExecutionHistory(context.unitOfWork, standalone, candidate.workflowId, position, pageSize + 1)
-      } else {
-        emptyList()
-      }
+    val history = detailExecutionHistory(candidate, context, request, position)
     val moreLists =
       detailContinuationLists(
         history.size > pageSize,
@@ -606,6 +601,7 @@ class IdeStatusService(
     val detailItem =
       WorkDetailItem(
         snapshot = snapshot,
+        recoveryWorkId = standalone?.invocationId ?: candidate.workflowId,
         executionHistory = shownHistory,
         repositoryRoot = context.repoRoot.toString(),
         stepPipeline = standalone?.let { standaloneStepPipeline(it.phaseId) } ?: runtimeStatus?.phaseIds.orEmpty(),
@@ -631,12 +627,42 @@ class IdeStatusService(
         exactPauseReason = projection.exactPauseReason,
         databaseFileObservation = context.unitOfWork.databaseFileObservation,
         controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
+        incident = incidentSet.incident,
+        incidentHistory = incidentSet.incidentHistory,
       )
     return ProjectedDetailItem(
       detailItem,
       detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead),
     )
   }
+
+  private fun detailExecutionHistory(
+    candidate: IdeStatusCandidate,
+    context: IdeStatusProjectionContext,
+    request: WorkDetailRequest,
+    position: WorkDetailPagePosition,
+  ) = if (request.includesDetailList(WorkDetailList.EXECUTIONS)) {
+    workExecutionHistory(
+      context.unitOfWork,
+      candidate.standaloneStatus,
+      candidate.workflowId,
+      position,
+      request.pageSize + 1,
+    )
+  } else {
+    emptyList()
+  }
+
+  private fun detailIncidents(
+    candidate: IdeStatusCandidate,
+    context: IdeStatusProjectionContext,
+    snapshot: IdeStatusSnapshot,
+  ) = incidentProjectionBuilder.build(
+    context.unitOfWork,
+    candidate.workflowId.takeIf { candidate.standaloneStatus == null },
+    candidate.standaloneStatus?.invocationId,
+    snapshot.lifecycleState == IdeStatusLifecycleState.BLOCKED,
+  )
 
   private fun detailDependencies(
     goal: WorkItem?,
@@ -1051,7 +1077,7 @@ class IdeStatusService(
         unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId)
       }
     val branchCorrelation =
-      goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repository.repoRoot)
+      projector.goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repository.repoRoot)
     val execution =
       workflowExecution
         ?.takeIf {
@@ -1082,28 +1108,6 @@ class IdeStatusService(
       execution = execution,
       branchCorrelation = branchCorrelation,
     )
-  }
-
-  private fun goalBranchCorrelation(
-    item: WorkItem,
-    family: IdeStatusWorkflowFamily,
-    registeredBranch: String?,
-    currentBranch: String?,
-    repoRoot: Path,
-  ): String? {
-    if (family != IdeStatusWorkflowFamily.FEATURE_GOAL || registeredBranch == null || currentBranch == null) {
-      return registeredBranch
-    }
-    if (registeredBranch == currentBranch || registeredBranch == "HEAD") return registeredBranch
-    val state = item.issueKey?.let { manifestStore.loadDurableByIssueKey(it, repoRoot) }
-    val manifest =
-      state?.manifest?.takeIf {
-        state.parentWorkflowId == item.workflowId
-      }
-    val ownsBranch =
-      manifest != null &&
-        (manifest.featureBranch == currentBranch || manifest.stackBranches.any { it.branch == currentBranch })
-    return if (ownsBranch) currentBranch else registeredBranch
   }
 
   private fun routeScopeFor(

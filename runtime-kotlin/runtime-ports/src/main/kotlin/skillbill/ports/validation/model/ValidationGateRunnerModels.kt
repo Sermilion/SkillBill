@@ -1,6 +1,7 @@
 package skillbill.ports.validation.model
 
 import skillbill.scaffold.model.ValidationGateDeclaration
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationFailureSubject
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import java.nio.file.Path
@@ -10,6 +11,7 @@ data class ValidationGateFinding(
   val ruleOrTestId: String,
   val message: String,
   val location: String?,
+  val failureSubject: FeatureTaskRuntimeValidationFailureSubject = FeatureTaskRuntimeValidationFailureSubject.UNKNOWN,
 ) {
   fun identity(): String = "$module|$ruleOrTestId|$message|${location.orEmpty()}"
 }

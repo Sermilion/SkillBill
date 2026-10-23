@@ -32,6 +32,9 @@ internal fun stopped(args: StoppedReportArgs): GoalRunnerRunReport.Stopped =
         workflowId = args.workflowId,
         lastResumableStep = args.lastResumableStep,
         noChangeReason = args.noChangeReason,
+        incidentToken = args.incidentToken,
+        acceptedBlockReference = args.acceptedBlockReference,
+        historicalBlockReference = args.historicalBlockReference,
       ),
   )
 

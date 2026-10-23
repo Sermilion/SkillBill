@@ -63,3 +63,11 @@ governedResources {
 runtimeImage {
   imageBaseName.set("runtime-mcp")
 }
+
+tasks.named<dev.skillbill.buildidentity.WriteBuildIdentityTask>("writeBuildIdentity") {
+  capabilityDeclaration.set(
+    rootProject.layout.projectDirectory.file(
+      "runtime-contracts/src/main/kotlin/skillbill/contracts/persistence/DesktopReadSchema.kt",
+    ),
+  )
+}

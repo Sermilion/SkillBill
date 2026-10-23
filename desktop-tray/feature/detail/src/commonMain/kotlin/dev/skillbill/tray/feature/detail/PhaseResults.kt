@@ -65,7 +65,7 @@ private fun ReviewPassRow(pass: ReviewPass, conclusion: PhaseConclusion?) {
   val unresolved = if (pass.unresolvedFindingCount > 0) "${pass.unresolvedFindingCount} unresolved" else null
   PhaseHeading(
     "Review",
-    listOfNotNull(wireLabel(pass.verdict), unresolved).joinToString(" · "),
+    listOfNotNull("pass ${pass.passNumber}", wireLabel(pass.verdict), unresolved).joinToString(" · "),
     verdictColor(pass.verdict),
   )
   if (pass.findings.isNotEmpty()) {
@@ -86,9 +86,10 @@ private fun FindingRow(finding: ReviewFinding) {
 
 @Composable
 private fun ConclusionRow(phase: String, conclusion: PhaseConclusion) {
+  val attempts = if (conclusion.attemptCount > 1) "${conclusion.attemptCount} runs" else null
   PhaseHeading(
     phase,
-    conclusion.verdict?.let(::wireLabel).orEmpty().ifEmpty { "completed" },
+    listOfNotNull(conclusion.verdict?.let(::wireLabel), attempts).joinToString(" · ").ifEmpty { "completed" },
     verdictColor(conclusion.verdict),
   )
   PhaseBody(phase, conclusion.summary, conclusion.detail)

@@ -28,6 +28,8 @@ import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
+import skillbill.ports.agentrun.model.AgentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.workflow.decomposition.intentFor
@@ -414,6 +416,13 @@ class GoalRunnerSelectedSubtaskLoop(
             reconciled = reconciled,
             session = session,
             launchDiagnostics = args.launchReconciliation.diagnostics,
+            failureExitCode =
+              if (reconciled.reason == GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME) {
+                val termination = (args.launchReconciliation.launchOutcome as? AgentRunLaunchFacts)?.termination
+                (termination as? AgentRunTermination.Exited)?.code
+              } else {
+                null
+              },
           ),
           pendingState,
         )

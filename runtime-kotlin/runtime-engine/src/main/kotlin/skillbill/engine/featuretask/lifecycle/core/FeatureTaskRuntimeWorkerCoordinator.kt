@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.runtime.RuntimeSingleton
+import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
@@ -144,15 +145,22 @@ class FeatureTaskRuntimeWorkerCoordinator(
             ?: throw invalidWorkflowStateSchemaError(
               "Feature-task runtime worker workflow '$workflowId' disappeared during admission.",
             )
+        val admittedSnapshot = admittedRow.toSnapshot()
+        val priorGeneration =
+          maxOf(
+            unitOfWork.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.generation ?: 0L,
+            BlockIncidentIdentity.fromArtifacts(admittedSnapshot.artifacts)?.generation ?: 0L,
+          )
+        val currentPhaseAttempt = currentPhaseAttempt(admittedSnapshot)
         val ownership =
           newOwnership(
             workflowId,
-            generation = 1,
+            generation = Math.addExact(priorGeneration, 1L),
             phaseId = admittedRow.currentStepId,
-            phaseAttempt = 1,
+            phaseAttempt = currentPhaseAttempt,
           )
         if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, admittedRow.updatedAt)) {
-          UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedRow.toSnapshot()))
+          UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedSnapshot))
         } else {
           UnownedClaim.Lost(execution)
         }
@@ -163,6 +171,12 @@ class FeatureTaskRuntimeWorkerCoordinator(
       receipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
     }
   }
+
+  private fun currentPhaseAttempt(snapshot: WorkflowStateSnapshot): Int =
+    snapshot.step(snapshot.currentStepId)?.attemptCount?.coerceAtLeast(1)
+      ?: throw invalidWorkflowStateSchemaError(
+        "Feature-task runtime worker workflow '${snapshot.workflowId}' has no current phase attempt.",
+      )
 
   private fun recoverOwned(
     existing: FeatureTaskRuntimeWorkerOwnership,
@@ -191,14 +205,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
     original: WorkflowStateSnapshot,
     previousOwnerStopped: Boolean,
   ): AcquiredWorker {
-    val replacement =
-      newOwnership(
-        existing.workflowId,
-        existing.generation + 1,
-        existing.phaseId,
-        existing.phaseAttempt + 1,
-      )
-    val (transferred, admittedSnapshot) = admitWithOwnershipTransfer(existing, admitted, replacement)
+    val (transferred, admittedSnapshot, replacement) = admitWithOwnershipTransfer(existing, admitted)
     return AcquiredWorker(
       replacement,
       transferred,
@@ -234,6 +241,11 @@ class FeatureTaskRuntimeWorkerCoordinator(
             reviewSelection,
           )
         admissionReceipt = execution.migrationReceipt
+        val retainedGeneration =
+          it.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(existing.workflowId)?.generation
+        if (retainedGeneration != existing.generation) {
+          error("Worker generation observation changed for workflow '${existing.workflowId}'.")
+        }
         val reserved =
           it.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
             existing.workflowId,
@@ -269,8 +281,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
   private fun admitWithOwnershipTransfer(
     existing: FeatureTaskRuntimeWorkerOwnership,
     admitted: AdmittedFeatureTaskRuntimeExecution,
-    replacement: FeatureTaskRuntimeWorkerOwnership,
-  ): Pair<AdmittedFeatureTaskRuntimeExecution, WorkflowStateSnapshot> {
+  ): Triple<AdmittedFeatureTaskRuntimeExecution, WorkflowStateSnapshot, FeatureTaskRuntimeWorkerOwnership> {
     var transferReceipt: RuntimeMigrationReceipt? = null
     return runCatching {
       database.transaction {
@@ -284,6 +295,20 @@ class FeatureTaskRuntimeWorkerCoordinator(
           )
         transferReceipt = execution.migrationReceipt
         val admittedSnapshot = requireNotNull(it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, existing.workflowId))
+        val currentPhaseAttempt =
+          admittedSnapshot.step(admittedSnapshot.currentStepId)
+            ?.attemptCount
+            ?.coerceAtLeast(1)
+            ?: throw invalidWorkflowStateSchemaError(
+              "Feature-task runtime worker workflow '${existing.workflowId}' has no current phase attempt.",
+            )
+        val replacement =
+          newOwnership(
+            existing.workflowId,
+            Math.addExact(existing.generation, 1L),
+            admittedSnapshot.currentStepId,
+            currentPhaseAttempt,
+          )
         if (!it.workflowStates.transferFeatureTaskRuntimeWorker(
             replacement,
             existing.ownerToken,
@@ -292,7 +317,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
         ) {
           error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
         }
-        execution to admittedSnapshot
+        Triple(execution, admittedSnapshot, replacement)
       }
     }.onFailure {
       transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }

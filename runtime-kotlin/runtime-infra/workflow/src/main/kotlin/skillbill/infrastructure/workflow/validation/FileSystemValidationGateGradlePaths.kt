@@ -30,6 +30,17 @@ internal object FileSystemValidationGateGradlePaths {
     return rawPath.replace('\\', '/').removePrefix("/")
   }
 
+  fun isProjectOwnedPath(
+    repo: Path,
+    rawPath: String,
+  ): Boolean {
+    val normalizedRepo = repo.toAbsolutePath().normalize()
+    val canonicalRepo = canonicalizeExisting(normalizedRepo)
+    val parsed = Path.of(rawPath.removePrefix("file://"))
+    val absolute = if (parsed.isAbsolute) parsed.normalize() else normalizedRepo.resolve(parsed).normalize()
+    return canonicalizeMaybeMissing(absolute).startsWith(canonicalRepo)
+  }
+
   fun canonicalizeExisting(path: Path): Path = runCatching { path.toRealPath() }.getOrDefault(path)
 
   fun parseGradleTaskPath(taskPath: String): Pair<String, String> {

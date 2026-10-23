@@ -1,11 +1,14 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerGenerationObservation
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -13,6 +16,14 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCorrelatedField
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentExitBehavior
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvailability
+import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
+import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CancellationException
@@ -22,6 +33,8 @@ class StandalonePhaseStatusEventSink(
   private val registrationForWorkflow: (String?) -> StandalonePhaseStatusRegistration,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
+  private val blockIncidentCapture: BlockIncidentCapture,
+  private val monitorSelector: String? = null,
 ) : FeatureTaskRuntimeRunEventSink {
   private var registered: StandalonePhaseStatusRecord? = null
   private var revision: String? = null
@@ -87,12 +100,14 @@ class StandalonePhaseStatusEventSink(
             acceptedResult = result.acceptedOutput ?: result.value,
           )
         }
-        is PhaseRunResult.Blocked ->
+        is PhaseRunResult.Blocked -> {
           persist(
             state = "blocked",
             finishedAt = null,
             terminalResult = result.reason,
           )
+          observeBlocked(result.reason, null, result.stepId)
+        }
       }
     }.onFailure { error ->
       if (error is CancellationException) throw error
@@ -122,15 +137,81 @@ class StandalonePhaseStatusEventSink(
   fun settleBlocked(
     reason: String,
     workflowId: String? = null,
+    stepId: String? = null,
   ) {
     runCatching {
       ensureRegistered(workflowId)
+      currentStep = stepId ?: currentStep
       persist(state = "blocked", finishedAt = null, terminalResult = reason)
     }.onFailure { error ->
       if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status blocked settlement failed", error)
     }
+    observeBlocked(reason, workflowId, stepId)
   }
+
+  private fun observeBlocked(
+    reason: String,
+    workflowId: String?,
+    stepId: String?,
+  ) {
+    val observation =
+      runCatching {
+        val registration = registrationForWorkflow(workflowId)
+        val target = registered?.monitorTarget ?: registration.monitorTarget
+        val blockedWorkflowId = (registered?.workflowId ?: registration.workflowId)?.takeIf(String::isNotBlank)
+        val blockedStepId = stepId ?: registered?.phaseId ?: registration.phaseId
+        val invocationId = registered?.invocationId ?: registration.invocationId
+        val workerCoordinates = blockedWorkflowId?.let { workerCoordinates(it, blockedStepId) }
+        BlockIncidentObservation(
+          workflowId = blockedWorkflowId,
+          phaseId = blockedStepId,
+          invocationId = invocationId,
+          executionId = registered?.executionId ?: registration.executionId,
+          reason = reason,
+          alias = StandalonePhaseIncidentAlias.create(invocationId, blockedStepId),
+          linkAcceptedFeatureTaskPhase = blockedWorkflowId != null,
+          attempt = workerCoordinates?.phaseAttempt,
+          generation = workerCoordinates?.generation,
+          origin = BlockIncidentOrigin.ACCEPTED_PHASE_BLOCK,
+          exitBehavior = BlockIncidentExitBehavior.RETURNED_FAILURE,
+          monitorSelector = monitorSelector?.takeIf { it.isNotBlank() && it.length <= MAX_MONITOR_SELECTOR_CHARS },
+          pullRequestId = target?.pullRequestKey,
+          pullRequestUrl = target?.pullRequestUrl,
+          headRepository = target?.headRepository,
+          headBranch = target?.headRef,
+          worktreePath = target?.worktreePath,
+          unavailableFields =
+            mapOf(
+              BlockIncidentCorrelatedField.PHASE_RUN_ID to BlockIncidentFieldAvailability.NOT_APPLICABLE,
+              BlockIncidentCorrelatedField.ATTEMPT to
+                if (workerCoordinates == null) {
+                  BlockIncidentFieldAvailability.NOT_CAPTURED
+                } else {
+                  BlockIncidentFieldAvailability.AVAILABLE
+                },
+            ),
+        )
+      }.onFailure { error ->
+        if (error is CancellationException) throw error
+        RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Standalone block incident observation failed", error)
+      }.getOrNull() ?: return
+    blockIncidentCapture.capture(observation)
+  }
+
+  private fun workerCoordinates(
+    workflowId: String,
+    blockedStepId: String,
+  ): FeatureTaskRuntimeWorkerGenerationObservation? =
+    database.read { unit ->
+      val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+      val step = workflow.step(blockedStepId) ?: return@read null
+      unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.takeIf {
+        workflow.currentStepId == blockedStepId && workflow.workflowStatus == WorkflowStatus.BLOCKED &&
+          step.status == WorkflowStepStatus.BLOCKED && step.attemptCount == it.phaseAttempt &&
+          it.phaseId == blockedStepId
+      }
+    }
 
   fun settleFailure(
     error: Throwable,
@@ -266,5 +347,6 @@ class StandalonePhaseStatusEventSink(
     const val MAX_VISIBLE_NAME_TEXT = 28
     const val MAX_VISIBLE_TRANSITIONS = 2
     const val MAX_VISIBLE_PENDING_NAMES = 2
+    const val MAX_MONITOR_SELECTOR_CHARS = 2048
   }
 }

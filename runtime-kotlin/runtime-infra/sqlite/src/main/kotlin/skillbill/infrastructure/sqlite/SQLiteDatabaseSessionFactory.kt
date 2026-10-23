@@ -16,6 +16,7 @@ import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.core.schema.fileObservation
 import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentContext
 import skillbill.model.EnvironmentContext
+import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.db.model.OwningTransactionResult
@@ -37,6 +38,7 @@ class SQLiteDatabaseSessionFactory(
   private val diagnostics: RuntimeDiagnostics,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
+  private val blockIncidentContractValidator: BlockIncidentContractValidator,
 ) : DatabaseSessionFactory {
   private val activeRead = ThreadLocal<UnitOfWork>()
   private val activeWrite = ThreadLocal<UnitOfWork>()
@@ -234,6 +236,7 @@ class SQLiteDatabaseSessionFactory(
       diagnostics,
       workflowSnapshotValidator,
       runtimeVersion,
+      blockIncidentContractValidator,
       transactionActive,
       openDb.fileObservation,
     )

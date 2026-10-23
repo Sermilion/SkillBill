@@ -301,7 +301,11 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "pack-declared build command")
     assertContains(prompt, "collect_all_full_gate_command")
     assertContains(prompt, "Do not spawn delegated subagents")
-    assertContains(prompt, "module=m id=t location=loc message=broken")
+    assertContains(
+      prompt,
+      "module=m id=t failure_subject=unknown (unknown means attribution is not established) " +
+        "location=loc message=broken",
+    )
     assertContains(prompt, "Gate repair — prose only")
     assertContains(prompt, "blast radius")
     assertFalse(prompt.contains("Required final output (validated schema gate)"))

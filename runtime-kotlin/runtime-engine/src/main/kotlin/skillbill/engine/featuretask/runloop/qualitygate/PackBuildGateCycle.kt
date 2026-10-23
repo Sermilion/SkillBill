@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.runloop.qualitygate
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationGateFindingPayloadKeys
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -35,8 +36,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
-
-private const val RULE_OR_TEST_ID_KEY = "rule_or_test_id"
 
 internal class PackBuildGateCycle(
   private val context: PhaseQualityGateCycleContext,
@@ -75,7 +74,8 @@ internal class PackBuildGateCycle(
     context.qualityCheckFinished(
       run.phaseId,
       finalFailureCount = if (outcome.completedOutput != null) 0 else finalFindings.size.coerceAtLeast(1),
-      failingCheckNames = finalFindings.mapNotNull { it[RULE_OR_TEST_ID_KEY] }.distinct().sorted(),
+      failingCheckNames =
+        finalFindings.mapNotNull { it[ValidationGateFindingPayloadKeys.RULE_OR_TEST_ID] }.distinct().sorted(),
       iterations = gateRuns,
     )
     return outcome
@@ -166,6 +166,7 @@ internal class PackBuildGateCycle(
       outcome.pausedReason?.let { ValidationGateCycleTerminalOutcome.Paused(it) }
         ?: ValidationGateCycleTerminalOutcome.Blocked(
           outcome.blockedReason ?: "Gate triage did not complete.",
+          failureCode = outcome.failureCode,
         ),
     )
   }
@@ -198,6 +199,7 @@ internal class PackBuildGateCycle(
           settled.blockedReason
             ?: settled.pausedReason
             ?: "Validation repair attempt persistence.session.blocked.",
+          failureCode = settled.failureCode,
         )
       else -> ValidationGateAgentRepairResult.Completed(repairSegmentOutput(run, iteration))
     }
@@ -219,7 +221,7 @@ internal class PackBuildGateCycle(
               iteration,
               terminal.reason,
               terminal.failureDisposition ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-              context.observability,
+              terminal.failureCode,
             )
         }
     }

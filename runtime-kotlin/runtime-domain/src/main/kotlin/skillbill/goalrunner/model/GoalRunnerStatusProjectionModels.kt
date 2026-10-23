@@ -128,6 +128,7 @@ data class GoalRunnerStatusProjection(
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
   val goalCompletedAt: String? = null,
+  val parentWorkflowId: String? = null,
 ) {
   fun admittedParentComplete(): Boolean =
     !goalCompletedAt.isNullOrBlank() ||

@@ -16,6 +16,7 @@ import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.model.TELEMETRY_DELIVERY_ATTEMPT_BUDGET
+import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
@@ -256,6 +257,12 @@ private fun sessionTelemetryOutboxRepository(database: DatabaseSessionFactory): 
     override fun latestError(): String? = database.read { unitOfWork -> unitOfWork.telemetryOutbox.latestError() }
 
     override fun lastSyncedAt(): String? = database.read { unitOfWork -> unitOfWork.telemetryOutbox.lastSyncedAt() }
+
+    override fun latestByCorrelation(
+      events: Set<TelemetryOutboxEvent>,
+      incidentToken: String,
+    ): TelemetryCorrelationStatus? =
+      database.read { unitOfWork -> unitOfWork.telemetryOutbox.latestByCorrelation(events, incidentToken) }
 
     override fun markSynced(
       eventIds: List<Long>,

@@ -98,6 +98,11 @@ governedResources {
     "SKILL-134: canonical rejected-output diagnostic schema",
   )
   copy(
+    "copyBlockIncidentSchema",
+    "block-incident-schema.yaml",
+    "SKILL-435: canonical block-incident schema",
+  )
+  copy(
     "copyProducerOutputEvidenceSchema",
     "producer-output-evidence-schema.yaml",
     "SKILL-152: canonical producer output evidence schema",

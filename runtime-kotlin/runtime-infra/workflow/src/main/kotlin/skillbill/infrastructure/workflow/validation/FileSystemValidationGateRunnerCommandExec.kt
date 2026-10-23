@@ -7,6 +7,7 @@ import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsFormat
 import skillbill.scaffold.model.ValidationGateExecutedWorkFormat
 import skillbill.scaffold.model.ValidationGateFindingsFormat
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationFailureSubject
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.validation.unparseableGateFailureMessage
 import java.nio.file.Path
@@ -67,7 +68,7 @@ internal fun FileSystemValidationGateRunner.parseFindings(
     FileSystemValidationGateGradleStdoutParsers.parseGradleTaskFailureHeaders(stdout, coveredTaskKeys)
   return FileSystemValidationGateGradleSpotlessStdoutParsers.enrichSpotlessTaskHeaderFindings(
     (finerFindings + projectHealth + architectureCheck + taskHeaders)
-      .distinctBy { FileSystemValidationGateRunner.findingIdentity(it) },
+      .distinctBy { FileSystemValidationGateRunner.findingIdentity(it) to it.failureSubject },
     stdout,
   )
 }
@@ -96,6 +97,7 @@ internal fun FileSystemValidationGateRunner.finalizeFindings(
             stdout = stdout,
           ),
         location = null,
+        failureSubject = FeatureTaskRuntimeValidationFailureSubject.UNKNOWN,
       ),
     )
   }
@@ -112,7 +114,7 @@ internal fun FileSystemValidationGateRunner.parseArtifactFindings(
         .flatMap { glob -> fileSystemValidationGateExpandGlob(request.repoRoot, glob) }
         .filter { FileSystemValidationGateRunner.producedByThisRun(it, artifactFloor) }
         .flatMap { path -> parseArtifactFile(request.repoRoot, path) }
-        .distinctBy { FileSystemValidationGateRunner.findingIdentity(it) }
+        .distinctBy { FileSystemValidationGateRunner.findingIdentity(it) to it.failureSubject }
   }
 
 internal fun FileSystemValidationGateRunner.parseArtifactFile(
@@ -169,6 +171,14 @@ internal fun FileSystemValidationGateRunner.parseDetektXmlFile(
               ruleOrTestId = rule,
               message = message,
               location = listOf(relativeFile, line).filter(String::isNotBlank).joinToString(":").ifBlank { null },
+              failureSubject =
+                if (
+                  rule != "detekt" && FileSystemValidationGateGradlePaths.isProjectOwnedPath(repo, rawFileName)
+                ) {
+                  FeatureTaskRuntimeValidationFailureSubject.PROJECT_SOURCE
+                } else {
+                  FeatureTaskRuntimeValidationFailureSubject.UNKNOWN
+                },
             ),
           )
         }
@@ -200,6 +210,7 @@ internal fun FileSystemValidationGateRunner.parseJUnitXmlFile(path: Path): List<
             ruleOrTestId = name,
             message = junitFailureMessage(failure),
             location = junitFailureLocation(testcase, failureBody),
+            failureSubject = FeatureTaskRuntimeValidationFailureSubject.UNKNOWN,
           ),
         )
       }
@@ -219,4 +230,5 @@ internal fun FileSystemValidationGateRunner.unparseableArtifactFinding(
     ruleOrTestId = "unparseable_gate_artifact",
     message = "Validation gate $format XML at '$path' could not be parsed.",
     location = path.toString(),
+    failureSubject = FeatureTaskRuntimeValidationFailureSubject.UNKNOWN,
   )

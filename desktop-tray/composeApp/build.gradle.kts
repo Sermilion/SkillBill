@@ -10,6 +10,12 @@ version = "0.1.0"
 
 val runtimeRoot = rootDir.parentFile.resolve("runtime-kotlin")
 
+tasks.named<dev.skillbill.buildidentity.WriteBuildIdentityTask>("writeBuildIdentity") {
+  capabilityDeclaration.set(
+    runtimeRoot.resolve("runtime-contracts/src/main/kotlin/skillbill/contracts/persistence/DesktopReadSchema.kt"),
+  )
+}
+
 kotlin {
   // The merged application component is generated from the contributions of every module it depends on.
   sourceSets.commonMain.dependencies {

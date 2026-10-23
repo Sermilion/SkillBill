@@ -5,21 +5,13 @@ import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
 
-interface TelemetryOutboxRepository {
+interface TelemetryOutboxRepository : TelemetryOutboxStatusReader {
   fun enqueue(
     event: TelemetryOutboxEvent,
     payloadJson: String,
   ): Long
 
   fun claimPending(request: TelemetryOutboxClaimRequest): List<TelemetryOutboxRecord>
-
-  fun pendingCount(): Int
-
-  fun blockedCount(attemptBudget: Int): Int
-
-  fun latestError(): String?
-
-  fun lastSyncedAt(): String?
 
   fun markSynced(
     eventIds: List<Long>,

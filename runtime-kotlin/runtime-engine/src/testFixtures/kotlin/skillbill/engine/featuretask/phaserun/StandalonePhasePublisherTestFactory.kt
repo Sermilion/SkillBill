@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -26,4 +27,5 @@ fun testStandalonePhasePublisher(
     ),
     clock,
     diagnostics,
+    testBlockIncidentCapture(database, clock, diagnostics),
   )

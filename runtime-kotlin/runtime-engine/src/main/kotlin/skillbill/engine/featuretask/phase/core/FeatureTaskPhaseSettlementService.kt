@@ -5,12 +5,16 @@ import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentCapture
+import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckStatus
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknowledgment
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
@@ -29,6 +33,8 @@ import java.time.Clock
 class FeatureTaskPhaseSettlementService(
   private val repository: FeatureTaskPhaseSettlementRepository,
   private val clock: Clock,
+  private val database: DatabaseSessionFactory,
+  private val blockIncidentCapture: BlockIncidentCapture,
 ) {
   fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment =
     complete(request, repository)
@@ -66,6 +72,12 @@ class FeatureTaskPhaseSettlementService(
     require(request.failureDisposition.any { !it.isWhitespace() }) {
       "feature_task_phase_block requires a non-blank failure_disposition."
     }
+    val validationEvidence =
+      request.validationEvidence?.let { decodeValidationEvidenceFromArtifact(it, "${request.phaseId} block") }
+    val failureCode =
+      validationEvidence?.takeIf { it.hasProjectSourceFailure }
+        ?.let { FeatureTaskRuntimeFailureCode.PROJECT_QUALITY_GATE_FAILED }
+        ?.let { "${it::class.simpleName}.${it.name}" }
     val envelope =
       NormalizedFeatureTaskRuntimePhaseOutput(
         phaseId = request.phaseId,
@@ -75,16 +87,45 @@ class FeatureTaskPhaseSettlementService(
         verdict = request.verdict?.takeIf(String::isNotBlank),
         failureDisposition = request.failureDisposition,
       ).envelopeWireMap()
-    return persist(
+    val persistRequest =
       PersistRequest(
         workflowId = request.workflowId,
         phaseId = request.phaseId,
         attempt = request.attempt,
         kind = KIND_BLOCK,
         envelope = envelope,
-      ),
-      repository,
-    )
+      )
+    val (acknowledgment, observation) =
+      database.transaction { unitOfWork ->
+        val acknowledgment = persist(persistRequest, unitOfWork.featureTaskPhaseSettlements)
+        val observation =
+          if (acknowledgment.status == FeatureTaskPhaseSettlementAckStatus.OK) {
+            val phaseObservation =
+              BlockIncidentFeatureTaskCorrelation.resolve(
+                unitOfWork.workflowStates,
+                request.workflowId,
+                request.phaseId,
+                admitted = null,
+              ).acceptedPhaseBlock(
+                attempt = request.attempt,
+                blockedReason = request.reason,
+                failureDisposition = request.failureDisposition,
+                failureCode = failureCode,
+              )
+            phaseObservation.copy(
+              alias =
+                phaseObservation.invocationId?.let {
+                  BlockIncidentAliases.featureTaskPhase(request.workflowId, request.phaseId, it, request.attempt)
+                },
+            )
+          } else {
+            null
+          }
+        observation?.let { BlockIncidentFeatureTaskCorrelation.persistAcceptedIdentity(unitOfWork.workflowStates, it) }
+        acknowledgment to observation
+      }
+    observation?.let(blockIncidentCapture::capture)
+    return acknowledgment
   }
 
   fun findEnvelope(

@@ -278,7 +278,9 @@ class CliGoalIntakeTest {
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
       assertEquals(0, parentCount(db))
-      prompts += request.skillRunRequest.promptOverride.orEmpty()
+      if (!request.skillRunRequest.issueKey.startsWith("bi_")) {
+        prompts += request.skillRunRequest.promptOverride.orEmpty()
+      }
       return agentRunLaunchFacts(
         SupportedAgent.CODEX,
         termination = AgentRunTermination.SpawnFailed,

@@ -189,7 +189,8 @@ object RuntimeModuleCatalog {
       "runtime-infra:launcher" to emptySet(),
       "runtime-infra:workflow" to emptySet(),
       "runtime-infra:http" to emptySet(),
-      "runtime-infra:sqlite" to setOf("runtime-contracts", "runtime-domain", "runtime-ports"),
+      "runtime-infra:sqlite" to
+        setOf("runtime-contracts", "runtime-domain", "runtime-infra:contracts", "runtime-ports"),
       "runtime-cli" to emptySet(),
       "runtime-mcp" to emptySet(),
       "runtime-ports" to emptySet(),

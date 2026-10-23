@@ -165,6 +165,7 @@ internal sealed interface PhaseOutcome {
 
   data class Blocked(
     val reason: String,
+    override val failureCode: String? = null,
   ) : PhaseOutcome
 
   data class Paused(
@@ -179,6 +180,8 @@ internal sealed interface PhaseOutcome {
 
   val blockedReason: String? get() = (this as? Blocked)?.reason
 
+  val failureCode: String? get() = (this as? Blocked)?.failureCode
+
   val pausedReason: String? get() = (this as? Paused)?.reason
 
   val regenerationTargetPhaseId: String? get() = (this as? RegenerateProducer)?.producerPhaseId
@@ -186,7 +189,10 @@ internal sealed interface PhaseOutcome {
   companion object {
     fun completed(output: FeatureTaskRuntimePhaseOutput): PhaseOutcome = Completed(output)
 
-    fun blocked(reason: String): PhaseOutcome = Blocked(reason)
+    fun blocked(
+      reason: String,
+      failureCode: String? = null,
+    ): PhaseOutcome = Blocked(reason, failureCode)
 
     fun paused(reason: String): PhaseOutcome = Paused(reason)
 

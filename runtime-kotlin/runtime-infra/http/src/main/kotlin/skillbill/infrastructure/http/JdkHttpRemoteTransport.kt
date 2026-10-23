@@ -29,7 +29,11 @@ class JdkHttpRemoteTransport(
         .method(method, bodyPublisher(bodyJson))
     headers.forEach(requestBuilder::header)
     val response = httpClient.send(requestBuilder.build(), BodyHandlers.ofString())
-    return RemoteTransportResponse(statusCode = response.statusCode(), body = response.body().orEmpty())
+    return RemoteTransportResponse(
+      statusCode = response.statusCode(),
+      body = response.body().orEmpty(),
+      headers = response.headers().map().mapValues { (_, values) -> values.joinToString(", ") },
+    )
   }
 
   companion object {

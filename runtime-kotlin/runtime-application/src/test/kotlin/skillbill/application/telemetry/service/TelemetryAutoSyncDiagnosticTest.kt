@@ -14,6 +14,7 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
@@ -317,6 +318,11 @@ private class PendingOutbox(
   override fun latestError(): String? = null
 
   override fun lastSyncedAt(): String? = null
+
+  override fun latestByCorrelation(
+    events: Set<TelemetryOutboxEvent>,
+    incidentToken: String,
+  ): TelemetryCorrelationStatus? = null
 
   override fun markSynced(
     eventIds: List<Long>,

@@ -216,6 +216,79 @@ no agent output.
 This event is enqueued regardless of level, once per legacy `skillbill_review_finished` outbox row
 the review-health materializer regenerates. It records the migration, not the review.
 
+### `skillbill_block_incident_diagnosed`
+
+| Field | off | anonymous | full | Source |
+|-------|-----|-----------|------|--------|
+| `incident_token`, `workflow_id`, `parent_workflow_id`, `phase_id`, `invocation_id`, `attempt`, `diagnosis_status`, `failure_code` | — | ✓ when present | ✓ when present | committed incident occurrence and settlement |
+| `diagnosis_revision`, `responsible_category`, `certainty` | — | ✓ when a diagnosis record was committed | ✓ when a diagnosis record was committed | committed diagnosis record |
+| `report_id`, `issue_url` | — | — | ✓ when an actual linked report exists | linked product report |
+
+The event follows every accepted diagnosis settlement, including `crashed` and
+`persist_failed` settlements that produced no diagnosis record. The status and incident failure
+code come from the committed occurrence. Diagnosis fields are omitted when no record was
+committed. The event carries no diagnosis text, evidence body, prompt, briefing, filesystem path,
+or environment value.
+
+### `skillbill_block_incident_recovery`
+
+| Field | off | anonymous | full | Source |
+|-------|-----|-----------|------|--------|
+| `incident_token`, `workflow_id`, `parent_workflow_id`, `phase_id`, `invocation_id`, `attempt`, `recovery_attempt_id`, `recovery_status`, `failure_code` | — | ✓ when present | ✓ when present | incident and terminal recovery attempt records |
+| `diagnosis_revision`, `responsible_category`, `certainty` | — | ✓ when a persisted diagnosis is available | ✓ when a persisted diagnosis is available | latest diagnosis read for this occurrence at emission |
+| `report_id`, `issue_url` | — | — | ✓ when an actual linked report exists | linked product report |
+
+The event is emitted after ordinary `failed` and `resumed` recovery settlements and after
+interrupted reconciliation commits either terminal status. An `applied` reconciliation is not
+terminal and emits no event. `failure_code` comes from the terminal attempt and is absent on
+success. Diagnosis context describes the persisted diagnosis seen at emission. The attempt does
+not store a diagnosis revision association, so the event does not claim a historical one. The
+occurrence `attempt` and `recovery_attempt_id` are separate identities. No recovery prompt or
+process output is included.
+
+### `skillbill_block_incident_reported`
+
+| Field | off | anonymous | full | Source |
+|-------|-----|-----------|------|--------|
+| `incident_token`, `workflow_id`, `parent_workflow_id`, `phase_id`, `invocation_id`, `attempt`, `report_status`, `failure_code` | — | ✓ when present | ✓ when present | incident and committed report records |
+| `diagnosis_revision`, `responsible_category`, `certainty` | — | ✓ when a persisted diagnosis is available | ✓ when a persisted diagnosis is available | latest diagnosis read for this linked occurrence at emission |
+| `report_id`, `issue_url` | — | — | ✓ | committed product report |
+
+Events follow committed `local_only`, `delivered`, `linked_existing`, and `failed` report
+outcomes. This includes scheduler-created local-only reports after residual-secret rejection and
+missing-auth delivery transitions. A deduplicated report emits for a newly inserted incident link
+only when that stored report is already terminal. Failed compare-and-set transitions emit
+nothing. `failure_code` comes from the report outcome and is absent on success. Diagnosis context
+is the persisted diagnosis seen for that linked occurrence at emission; no diagnosis association
+at report creation or delivery-attempt count is inferred. The report delivery attempt count is not
+the occurrence `attempt`. Report bodies and issue titles never enter telemetry.
+
+All three events are skipped before enqueue at `off`. At `anonymous`, `report_id` and `issue_url`
+are omitted, including when a report link is available. At `full`, they are included only when an
+actual linked report supplies them. Missing records and inapplicable fields are omitted. The
+outbox envelope supplies `install_id` as the PostHog distinct id; the event payload does not
+duplicate it.
+
+### Block incident telemetry availability
+
+`BlockIncidentTelemetry.availability(incidentToken)` reports the latest retained outbox evidence
+for the three block-incident events:
+
+| State | Meaning |
+|-------|---------|
+| `DISABLED` | The settings snapshot says level `off`; an incident read may add stored search identifiers but cannot change this state. |
+| `PENDING` | A matching outbox row exists and has neither a sync timestamp nor an error. |
+| `SYNCED` | The latest matching outbox row has a sync timestamp. |
+| `FAILED` | The latest matching outbox row has an error. |
+| `UNAVAILABLE` | Settings or outbox evidence could not be read, or no matching row remains. No row does not prove that an event was never queued. |
+
+The returned search identifiers are the settings `install_id`, requested incident token, and
+stored workflow and invocation ids when the incident can be read. Missing values stay absent.
+No deployment host or project configuration exists for a PostHog URL, so availability does not
+produce one. An event whose enqueue fails is warning-only and does not alter diagnosis, recovery,
+report, or workflow state. Enrichment uses the records available at emission; missing historical
+records are omitted rather than reconstructed.
+
 ### `skillbill_quality_check_started` / `skillbill_quality_check_finished`
 
 | Field | off | anonymous | full | Source |

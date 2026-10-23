@@ -5,6 +5,8 @@ import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildRefusedException
+import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
+import dev.skillbill.tray.core.domain.model.IncidentDetailUnavailable
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import kotlinx.coroutines.CancellationException
@@ -91,7 +93,8 @@ class StoreSessionCoordinator(
       logger.log(System.Logger.Level.WARNING, "desktop:runtime_build_refused", refused)
       mutableProblem.value = Problem(
         ProblemCode.RUNTIME_BUILD_MISMATCH,
-        "The installed Skill Bill runtime is not the build this app was packaged with.",
+        if (refused.problem.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE) IncidentDetailUnavailable.MESSAGE
+        else "The installed Skill Bill runtime is not the build this app was packaged with.",
         runtimeBuild = refused.problem,
       )
     } catch (failure: Exception) {

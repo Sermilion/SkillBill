@@ -6,6 +6,8 @@ import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.RunOptions
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
 import kotlin.time.Instant
 
 /** Revision of the runtime store; two equal observations bracket a coherent snapshot. */
@@ -53,7 +55,13 @@ interface OwnerRegistration : AutoCloseable {
   val nextLeaseExpiry: Instant?
 }
 
-enum class ControlAction { PAUSE, STOP, CANCEL, LAUNCH }
+sealed interface ControlAction {
+  data object PAUSE : ControlAction
+  data object STOP : ControlAction
+  data object CANCEL : ControlAction
+  data object LAUNCH : ControlAction
+  data class Recover(val incidentToken: String, val revision: Long, val confirmedPrerequisites: Set<String>) : ControlAction
+}
 
 /** Why the runtime refused a control request, reduced to what the user-facing message distinguishes. */
 enum class ControlRefusal {
@@ -66,6 +74,10 @@ enum class ControlRefusal {
   PID_REUSED,
   UNINSPECTABLE,
   IDENTITY_MISMATCH,
+  STALE_INCIDENT,
+  RECOVERY_UNAVAILABLE,
+  PREREQUISITE_UNMET,
+  RECOVERY_IN_PROGRESS,
   OTHER,
 }
 
@@ -113,4 +125,10 @@ interface RuntimeWorkGateway {
   fun observeOwners(ids: List<String>, observedAt: Instant, onExit: () -> Unit): OwnerRegistration
 
   fun request(item: WorkItem, action: ControlAction, agentId: String?, stillCurrent: () -> Boolean): ControlResult
+
+  fun recoveryPreview(
+    item: WorkItem,
+    incidentToken: String,
+    confirmedPrerequisites: Set<String>,
+  ): IncidentRecoveryPreviewResult
 }

@@ -12,6 +12,8 @@ data class FeatureTaskRuntimeOperatorBlockRetry(
   val phaseId: String,
   val reason: String,
   val retriedAt: String,
+  val recoveryAttemptId: String? = null,
+  val preserveBudget: Boolean = false,
 ) {
   init {
     require(phaseId.isNotBlank()) { "FeatureTaskRuntimeOperatorBlockRetry.phaseId must be non-blank." }
@@ -20,5 +22,11 @@ data class FeatureTaskRuntimeOperatorBlockRetry(
         "1..$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH characters."
     }
     require(retriedAt.isNotBlank()) { "FeatureTaskRuntimeOperatorBlockRetry.retriedAt must be non-blank." }
+    require((recoveryAttemptId != null) == preserveBudget) {
+      "Incident recovery retries require an attempt id and budget preservation together."
+    }
+    require(recoveryAttemptId == null || recoveryAttemptId.isNotBlank()) {
+      "Incident recovery retry attempt id must be non-blank."
+    }
   }
 }

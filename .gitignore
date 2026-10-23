@@ -70,4 +70,3 @@ local.properties
 __pycache__/
 *.pyc
 /.idea/
-/build-identity/

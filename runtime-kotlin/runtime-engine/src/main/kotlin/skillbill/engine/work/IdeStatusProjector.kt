@@ -35,6 +35,7 @@ import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.work.model.WorkItem
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
@@ -85,6 +86,28 @@ class IdeStatusProjector(
   private val qaCapabilities: QaCapabilityResolver,
 ) {
   private val workflowEngine = WorkflowEngine()
+
+  internal fun goalBranchCorrelation(
+    item: WorkItem,
+    family: IdeStatusWorkflowFamily,
+    registeredBranch: String?,
+    currentBranch: String?,
+    repoRoot: Path,
+  ): String? {
+    if (family != IdeStatusWorkflowFamily.FEATURE_GOAL || registeredBranch == null || currentBranch == null) {
+      return registeredBranch
+    }
+    if (registeredBranch == currentBranch || registeredBranch == "HEAD") return registeredBranch
+    val state = item.issueKey?.let { manifestStore.loadDurableByIssueKey(it, repoRoot) }
+    val manifest =
+      state?.manifest?.takeIf {
+        state.parentWorkflowId == item.workflowId
+      }
+    val ownsBranch =
+      manifest != null &&
+        (manifest.featureBranch == currentBranch || manifest.stackBranches.any { it.branch == currentBranch })
+    return if (ownsBranch) currentBranch else registeredBranch
+  }
 
   internal fun goalFinishPipeline(repoRoot: Path): List<String> =
     when (val capability = qaCapabilities.resolve(repoRoot)) {

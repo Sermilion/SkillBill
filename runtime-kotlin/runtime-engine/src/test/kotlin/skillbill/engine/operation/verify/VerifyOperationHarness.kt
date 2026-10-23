@@ -47,6 +47,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
@@ -123,6 +124,7 @@ internal class VerifyOperationHarness : AutoCloseable {
       NoopRuntimeDiagnostics,
       WorkflowStateSchemaValidator(),
       "test-runtime-version",
+      BlockIncidentContractValidator { },
     )
   private val executor: OperationExecutor
   private val workflows: WorkflowService

@@ -2,6 +2,7 @@ package skillbill.mcp.featuretask
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.system.UpdateCheckPayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckStatus
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknowledgment
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
@@ -44,6 +45,7 @@ internal fun featureTaskPhaseBlock(
         arguments.optionalString(SharedPayloadKeys.FAILURE_DISPOSITION)
           ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION.wireValue,
       verdict = arguments.optionalString(SharedPayloadKeys.VERDICT),
+      validationEvidence = arguments.optionalMap(ValidationEvidencePayloadKeys.VALIDATION_EVIDENCE),
     ),
   ).toWireMap()
 

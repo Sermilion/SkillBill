@@ -49,5 +49,7 @@ internal object RuntimeMissingWindow {
     dev.skillbill.tray.core.domain.model.RuntimeBuildReason.MISSING -> "The installed runtime has no build identity record."
     dev.skillbill.tray.core.domain.model.RuntimeBuildReason.UNREADABLE -> "The runtime or desktop build identity could not be read."
     dev.skillbill.tray.core.domain.model.RuntimeBuildReason.MISMATCH -> "The installed runtime belongs to a different desktop build."
+    dev.skillbill.tray.core.domain.model.RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE ->
+      dev.skillbill.tray.core.domain.model.IncidentDetailUnavailable.MESSAGE
   }
 }

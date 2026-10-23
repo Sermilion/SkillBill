@@ -1,5 +1,7 @@
 package skillbill.engine.goalrunner.execution.support
 
+import skillbill.engine.diagnostics.block.BlockIncidentIdentity
+import skillbill.engine.diagnostics.block.boundTo
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding
 import skillbill.engine.goalrunner.repair.PASSED_CONTINUATION_OUTCOME
@@ -16,7 +18,19 @@ internal data class GoalRunnerStaleBlockedOutcomeContext(
   val artifacts: Map<String, Any?>,
   val issueKey: String,
   val subtaskId: Int,
-)
+) {
+  val acceptedBlockReference =
+    run {
+      val continuation =
+        DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()
+          ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
+      val stored =
+        continuation?.let { goalContinuationOutcome(artifacts, issueKey, subtaskId, it.suppressPr) }
+          ?.takeIf { it.status == GoalRunnerTerminalStatus.BLOCKED }
+      stored?.acceptedBlockReference?.boundTo(record.workflowId, stored.lastResumableStep)
+        ?: BlockIncidentIdentity.acceptedFor(artifacts, record.steps, stored?.lastResumableStep, record.workflowId)
+    }
+}
 
 internal fun diagnoseStaleBlockedOutcome(
   context: GoalRunnerStaleBlockedOutcomeContext,
@@ -52,6 +66,7 @@ internal fun diagnoseStaleBlockedOutcome(
         wedgeClass = GoalRunnerWedgeClass.STALE_BLOCKED_CONTINUATION_OUTCOME,
         field = GoalRunnerWedgeClass.STALE_BLOCKED_CONTINUATION_OUTCOME.durableField,
         currentValue = stored.blockedReason,
+        acceptedBlockReference = context.acceptedBlockReference,
       )
   }
 }

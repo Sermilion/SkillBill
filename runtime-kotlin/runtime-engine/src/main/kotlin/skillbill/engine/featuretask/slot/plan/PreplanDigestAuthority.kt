@@ -1,11 +1,18 @@
 package skillbill.engine.featuretask.slot.plan
 
+import skillbill.engine.directive.directiveResource
+
+internal val planningFeasibilityDirective: String by lazy {
+  directiveResource("/skillbill/engine/featuretask/slot/plan/planning-feasibility.md").trimEnd()
+}
+
 internal const val PREPLAN_DIGEST_AUTHORITY: String =
-  "The preplan digest is this phase's only repository knowledge: preplan discovers once for every " +
-    "subtask so planning never repeats it. Do not read, search, grep, or list repository source, tests, " +
-    "build files, or git history, and do not re-verify the digest. Settle every open question from the " +
-    "digest's evidence. When the digest lacks a fact, decide from what it does say and record that " +
-    "assumption in the affected spec or plan step for implement to confirm."
+  "Use the preplan digest as the starting evidence; do not repeat completed discovery. " +
+    "When a missing or contradictory fact determines implementability, perform only the targeted " +
+    "read-only source or authoritative contract lookup needed to resolve it and record the evidence. " +
+    "Do not search unrelated files or other spec bundles. Never replace a missing external capability " +
+    "with an assumption for implement to confirm. Non-critical implementation choices may remain " +
+    "explicit assumptions. Preserve assigned-file write boundaries."
 
 internal const val PLANNING_INSTALL_PROHIBITION: String =
   "Never include installer, uninstall, or install-sync commands in a spec or plan: do not plan to run " +

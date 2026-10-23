@@ -1,5 +1,8 @@
 package skillbill.ports.persistence
 
+import skillbill.ports.blockincident.BlockIncidentRecoveryRepository
+import skillbill.ports.blockincident.BlockIncidentRepository
+import skillbill.ports.blockincident.ProductReportRepository
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
@@ -45,6 +48,9 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository
   val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository
   val operationProposals: OperationProposalRepository
+  val blockIncidents: BlockIncidentRepository
+  val blockIncidentRecoveries: BlockIncidentRecoveryRepository
+  val productReports: ProductReportRepository
 
   fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
 

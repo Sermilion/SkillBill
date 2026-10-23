@@ -41,6 +41,8 @@ internal sealed interface SessionSlot {
 
   data object Switching : SessionSlot
 
+  data class Refused(val problem: RuntimeBuildProblem) : SessionSlot
+
   class Active(val parts: SessionParts) : SessionSlot
 }
 
@@ -75,14 +77,21 @@ class WorkStoreSessionManager(
   internal suspend fun settledParts(): SessionParts? =
     (mutableSlot.first { it !is SessionSlot.Switching } as? SessionSlot.Active)?.parts
 
+  internal suspend fun settledRefusal(): RuntimeBuildProblem? =
+    (mutableSlot.first { it !is SessionSlot.Switching } as? SessionSlot.Refused)?.problem
+
   override suspend fun selectDatabase(path: String?): Unit = lock.withLock {
     check(!closed.value) { "The work store session is closed." }
     val previous = (mutableSlot.value as? SessionSlot.Active)?.parts
     mutableSlot.value = SessionSlot.Switching
     var published = false
+    var refusal: RuntimeBuildProblem? = null
     try {
       previous?.session?.closeAndJoin()
-      gate.check()?.let { refusal -> throw RuntimeBuildRefusedException(refusal) }
+      gate.check()?.let { problem ->
+        refusal = problem
+        throw RuntimeBuildRefusedException(problem)
+      }
       val parts = factory.create(path)
       try {
         parts.session.open()
@@ -94,7 +103,7 @@ class WorkStoreSessionManager(
       published = true
       if (closed.value) parts.session.close()
     } finally {
-      if (!published) mutableSlot.value = SessionSlot.Idle
+      if (!published) mutableSlot.value = refusal?.let { SessionSlot.Refused(it) } ?: SessionSlot.Idle
       // The previous database is gone whether or not the new one opened, so everything bound to it is out of date.
       generations.publishReplacement()
     }

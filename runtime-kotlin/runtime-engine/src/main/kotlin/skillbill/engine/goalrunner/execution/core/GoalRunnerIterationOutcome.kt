@@ -17,6 +17,7 @@ import skillbill.engine.goalrunner.execution.support.recoverySafeAction
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
@@ -76,7 +77,12 @@ class GoalRunnerIterationOutcome(
     val launchDiagnostics = args.launchDiagnostics
     val attemptStartMillis = session.attemptStartMillis
     val knownWorkflowId = state.manifest.knownWorkflowId(subtaskId, reconciled)
-    val stoppedOutcome = markChildWorkflowBlockedIfNeeded(reconciled, knownWorkflowId)
+    val stoppedOutcome =
+      markChildWorkflowBlockedIfNeeded(
+        reconciled,
+        knownWorkflowId,
+        args.failureExitCode,
+      )
     val attemptDurationMillis = attemptStartMillis?.let { clock.millis() - it }
     knownWorkflowId?.let { workflowId ->
       recordStoppedLedgerEntries(
@@ -108,7 +114,13 @@ class GoalRunnerIterationOutcome(
     }
     val saved = persistStoppedBoundary(blockedState, control)
     emitStoppedObservability(saved, knownWorkflowId, subtaskId, stoppedOutcome, observability)
-    request.emitStoppedSubtaskEvent(saved.manifest.issueKey, subtaskId, stoppedOutcome)
+    request.emitStoppedSubtaskEvent(
+      saved.manifest.issueKey,
+      subtaskId,
+      stoppedOutcome,
+      saved.parentWorkflowId,
+      knownWorkflowId,
+    )
     return stoppedIterationResult(
       StoppedIterationResultArgs(
         saved = saved,
@@ -187,6 +199,8 @@ class GoalRunnerIterationOutcome(
             workflowId = knownWorkflowId,
             lastResumableStep = stoppedOutcome.lastResumableStep,
             noChangeReason = stoppedOutcome.noChangeReason,
+            incidentToken = stoppedOutcome.incidentToken,
+            acceptedBlockReference = stoppedOutcome.acceptedBlockReference,
           ),
         ),
     )
@@ -362,26 +376,39 @@ class GoalRunnerIterationOutcome(
   private fun markChildWorkflowBlockedIfNeeded(
     reconciled: GoalRunnerReconciledOutcome.Stop,
     knownWorkflowId: String?,
+    failureExitCode: Int?,
   ): GoalRunnerReconciledOutcome.Stop {
     if (knownWorkflowId == null || reconciled.reason !in CHILD_WORKFLOW_BLOCK_REASONS) {
       return reconciled
     }
     val progress = progressReader.safeProgress(knownWorkflowId)
-    val blockedStepId =
+    val acceptedBlock =
       outcomeStore.markBlocked(
-        workflowId = knownWorkflowId,
-        blockedReason = reconciled.blockedReason.withStopDiagnostics(knownWorkflowId, progress, reconciled.liveness),
-        lastResumableStep = reconciled.lastResumableStep,
-        supervisionEvent =
-          supervisionEvent(
-            reason = reconciled.reason,
-            knownWorkflowId = knownWorkflowId,
-            progress = progress,
-            liveness = reconciled.liveness,
-          ),
+        GoalRunnerBlockRequest(
+          workflowId = knownWorkflowId,
+          blockedReason = reconciled.blockedReason.withStopDiagnostics(knownWorkflowId, progress, reconciled.liveness),
+          lastResumableStep = reconciled.lastResumableStep,
+          failureExitCode = failureExitCode,
+          historicalBlockReference =
+            reconciled.acceptedBlockReference?.takeIf {
+              it.sourceWorkflowId == knownWorkflowId && it.blockedStepId == reconciled.lastResumableStep
+            },
+          supervisionEvent =
+            supervisionEvent(
+              reason = reconciled.reason,
+              knownWorkflowId = knownWorkflowId,
+              progress = progress,
+              liveness = reconciled.liveness,
+            ),
+          stopReason = reconciled.reason,
+        ),
       )
-    return blockedStepId?.takeIf(String::isNotBlank)?.let { stepId ->
-      reconciled.copy(lastResumableStep = stepId)
+    return acceptedBlock?.let { block ->
+      reconciled.copy(
+        lastResumableStep = block.stepId,
+        incidentToken = block.incidentToken,
+        acceptedBlockReference = block.acceptedBlockReference,
+      )
     } ?: reconciled
   }
 

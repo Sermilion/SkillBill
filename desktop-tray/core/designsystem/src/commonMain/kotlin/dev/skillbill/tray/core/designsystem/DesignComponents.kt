@@ -16,8 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun DesignLabel(text: String, modifier: Modifier = Modifier) {
-  Text(text.uppercase(), modifier, color = dim, fontFamily = mono, fontWeight = FontWeight.SemiBold, fontSize = 9.5.sp, lineHeight = 9.5.sp, letterSpacing = 1.33.sp)
+fun DesignLabel(text: String, modifier: Modifier = Modifier, color: Color = dim) {
+  Text(text.uppercase(), modifier, color = color, fontFamily = mono, fontWeight = FontWeight.SemiBold, fontSize = 9.5.sp, lineHeight = 9.5.sp, letterSpacing = 1.33.sp)
 }
 
 @Composable

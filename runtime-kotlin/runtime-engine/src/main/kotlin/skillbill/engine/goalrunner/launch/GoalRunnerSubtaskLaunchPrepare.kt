@@ -18,6 +18,8 @@ import skillbill.engine.goalrunner.execution.support.RUNTIME_WORKFLOW_ID_PREFIX
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
+import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
@@ -29,7 +31,6 @@ import skillbill.engine.goalrunner.planning.recovery.goalPlanningChildImportConf
 import skillbill.engine.goalrunner.reset.reviewBaselineBlockedReason
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.status.stopped
-import skillbill.engine.goalrunner.status.supervisionEvent
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
@@ -117,6 +118,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     subtaskId: Int,
     reason: String,
     request: GoalRunnerRunRequest,
+    acceptedBlock: GoalRunnerAcceptedBlock? = null,
   ): GoalRunnerIterationResult {
     val blockedReason = reviewBaselineBlockedReason(state.manifest, subtaskId, reason)
     val blocked = state.manifest.withBranchSetupBlockedSubtask(subtaskId, blockedReason)
@@ -128,6 +130,8 @@ class GoalRunnerSubtaskLaunchPrepare(
         reason = GoalRunnerStopReason.BLOCKED.name.lowercase(),
         blockedReason = blockedReason,
         currentStepId = "preplan",
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = saved.manifest.workflowIdFor(subtaskId),
       ),
     )
     return GoalRunnerIterationResult(
@@ -142,6 +146,8 @@ class GoalRunnerSubtaskLaunchPrepare(
             blockedReason = blockedReason,
             workflowId = state.manifest.workflowIdFor(subtaskId),
             lastResumableStep = "preplan",
+            incidentToken = acceptedBlock?.incidentToken,
+            acceptedBlockReference = acceptedBlock?.acceptedBlockReference,
           ),
         ),
     )
@@ -154,17 +160,21 @@ class GoalRunnerSubtaskLaunchPrepare(
   ): GoalRunnerIterationResult {
     val targetSubtaskId = conflict.subtaskId
     val reason = goalPlanningChildImportConflictBlockedReason(state.manifest.issueKey, targetSubtaskId, conflict)
-    state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
-      runCatching {
-        outcomeStore.markBlocked(
-          workflowId = workflowId,
-          blockedReason = reason,
-          lastResumableStep = "preplan",
-          supervisionEvent = null,
-        )
+    val acceptedBlock =
+      state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
+        runCatching {
+          outcomeStore.markBlocked(
+            GoalRunnerBlockRequest(workflowId = workflowId, blockedReason = reason, lastResumableStep = "preplan"),
+          )
+        }.getOrNull()
       }
-    }
-    return blockedReviewBaselineIteration(state, targetSubtaskId, reason, request)
+    return blockedReviewBaselineIteration(
+      state,
+      targetSubtaskId,
+      reason,
+      request,
+      acceptedBlock,
+    )
   }
 
   fun emitGoalReviewSummaries(
@@ -365,6 +375,8 @@ class GoalRunnerSubtaskLaunchPrepare(
         reason = GoalRunnerStopReason.BLOCKED.name.lowercase(),
         blockedReason = reason,
         currentStepId = "create_branch",
+        parentWorkflowId = saved.parentWorkflowId,
+        workflowId = saved.manifest.workflowIdFor(subtaskId),
       ),
     )
     return GoalRunnerIterationResult(
