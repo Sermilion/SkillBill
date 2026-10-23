@@ -84,7 +84,7 @@ internal fun RunActionButtons(
     }
     focusRestoration = state
   }
-  val resumable = item.lifecycle == Lifecycle.CANCELED || item.lifecycle == Lifecycle.PAUSED
+  val resumable = item.lifecycle in setOf(Lifecycle.CANCELED, Lifecycle.PAUSED, Lifecycle.IDLE)
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     FlowRow(
       horizontalArrangement = Arrangement.spacedBy(8.dp),
