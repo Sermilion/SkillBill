@@ -21,6 +21,7 @@ internal data class ProjectStoreRecord(
   val remoteUrl: String?,
   val lastSeen: String,
   val linkedTo: String? = null,
+  val legacyStateNoticeAt: String? = null,
 )
 
 internal data class StoredProject(
@@ -43,6 +44,7 @@ internal object ProjectStoreRecordCodec {
       remoteUrl = payload[ProjectStoreRecordKeys.REMOTE_URL] as? String,
       lastSeen = payload.requiredString(ProjectStoreRecordKeys.LAST_SEEN),
       linkedTo = payload[ProjectStoreRecordKeys.LINKED_TO] as? String,
+      legacyStateNoticeAt = payload[ProjectStoreRecordKeys.LEGACY_STATE_NOTICE_AT] as? String,
     )
   }
 
@@ -56,6 +58,7 @@ internal object ProjectStoreRecordCodec {
     payload[ProjectStoreRecordKeys.REMOTE_URL] = record.remoteUrl
     payload[ProjectStoreRecordKeys.LAST_SEEN] = record.lastSeen
     record.linkedTo?.let { payload[ProjectStoreRecordKeys.LINKED_TO] = it }
+    record.legacyStateNoticeAt?.let { payload[ProjectStoreRecordKeys.LEGACY_STATE_NOTICE_AT] = it }
     return JsonCodec.mapToJsonString(payload) + "\n"
   }
 

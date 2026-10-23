@@ -97,6 +97,20 @@ class ProjectStoreResolverTest {
   }
 
   @Test
+  fun `a legacy skill-bill directory is warned about once per project and never touched`() {
+    val repo = gitCheckout("main").also { lineages.set(it, LINEAGE_A) }
+    val legacyFile = Files.createDirectories(repo.resolve(".skill-bill")).resolve("config.yaml")
+    Files.writeString(legacyFile, "legacy")
+
+    resolver().resolve(repo)
+    assertEquals(1, warnings.count { "seam=project_store_legacy_state" in it })
+    resolver().resolve(repo)
+
+    assertEquals(1, warnings.count { "seam=project_store_legacy_state" in it })
+    assertEquals("legacy", Files.readString(legacyFile))
+  }
+
+  @Test
   fun `link moves the exact match to the target store and the old store stops matching`() {
     val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
     val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A) }

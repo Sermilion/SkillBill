@@ -1,5 +1,16 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-10-23] SKILL-441 subtask 2: legacy path owner and legacy state notice
+Areas: runtime-infra/host (projectstore), runtime-infra/workflow (scoped staging), runtime-infra/contracts repoTest, runtime-contracts, runtime-domain, runtime-engine, orchestration/contracts
+- LegacyProjectStatePaths (runtime-contracts projectstore) is now the single owner of the `.skill-bill` and `.feature-specs` directory names and their slash prefixes. Planning exclusions, checkpoint scope, worktree edit journal, goal tick progress, run loop, PR review fix and scoped staging read it instead of private literals.
+- Reusable: the shared path object; later subtasks that move state out of the checkout should reference it rather than add literals.
+- The `.skill-bill` staging exclusion stays in checkpoint scope and the journal writer; scoped staging only owns the feature-specs check.
+- The resolver warns once per store when a checkout still has a `.skill-bill` directory. It emits a project_store_legacy_state diagnostic and persists a stamp in the store record, then never touches the legacy directory. Stamp write failure warns and does not block resolve.
+- Record schema gains optional `legacy_state_notice_at` (contract_version stays 0.1; the codec writes it only when set). Touch, adopt and rekey keep the stamp.
+- Limits: link and fresh stores start without a stamp, so they may warn once more. The per-common-dir cache means one process checks only the first checkout resolved for a project. No legacy config copy yet (subtask 3).
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-23] SKILL-441 subtask 1: project store resolver and identity
 Areas: runtime-infra/host (projectstore), runtime-infra/workflow (git lineage), runtime-ports, runtime-contracts, runtime-core DI, runtime-cli, runtime-application uninstall, uninstall.sh, orchestration/contracts
 - ProjectStoreResolver (host/projectstore) maps a checkout to a store under the state dir's projects/ directory. Linked worktrees of one repo share a store through the real path of the primary git common dir; a moved checkout is adopted by root-commit lineage; a second clone gets a suffixed id; a repo with no commits is re-keyed to lineage once it has one; a non-git directory uses a path-hash key.

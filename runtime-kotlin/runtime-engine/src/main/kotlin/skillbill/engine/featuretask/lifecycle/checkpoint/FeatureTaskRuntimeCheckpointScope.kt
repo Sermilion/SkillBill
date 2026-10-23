@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.checkpoint
 
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointDecision
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointScopeInput
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
@@ -7,9 +8,8 @@ import skillbill.engine.featuretask.runloop.core.isFeatureSpecPathForIssue
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
 import java.util.Locale
 
-private const val RUNTIME_PRIVATE_ROOT = ".skill-bill/"
-private const val RUNTIME_TRACKABLE_CONFIG = ".skill-bill/config.yaml"
-private const val RUNTIME_TRACKABLE_PHASES = ".skill-bill/phases"
+private const val RUNTIME_TRACKABLE_CONFIG = "${LegacyProjectStatePaths.RUNTIME_STATE_PREFIX}config.yaml"
+private const val RUNTIME_TRACKABLE_PHASES = "${LegacyProjectStatePaths.RUNTIME_STATE_PREFIX}phases"
 private const val MAX_REPORTED_PATHS = 10
 
 object FeatureTaskRuntimeCheckpointScope {
@@ -71,8 +71,8 @@ fun isRuntimePrivatePath(path: String): Boolean {
   if (normalized == RUNTIME_TRACKABLE_CONFIG) return false
   if (normalized == RUNTIME_TRACKABLE_PHASES || normalized.startsWith("$RUNTIME_TRACKABLE_PHASES/")) return false
   if (FeatureTaskRuntimeRunEvidenceOwnership.isRunEvidencePath(normalized)) return false
-  return normalized == RUNTIME_PRIVATE_ROOT.trimEnd('/') ||
-    normalized.startsWith(RUNTIME_PRIVATE_ROOT)
+  return normalized == LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY ||
+    normalized.startsWith(LegacyProjectStatePaths.RUNTIME_STATE_PREFIX)
 }
 
 fun goalScopedBaselinePaths(

@@ -43,3 +43,6 @@ properties:
     type: string
     minLength: 1
     description: Project id of the store that took over this checkout through skill-bill project link.
+  legacy_state_notice_at:
+    type: string
+    description: ISO-8601 UTC instant at which the resolver warned that the checkout's old .skill-bill directory is no longer used and can be deleted.

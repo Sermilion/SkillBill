@@ -1,6 +1,7 @@
 package skillbill.infrastructure.host.projectstore
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.projectstore.PROJECT_STORE_RECORD_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
@@ -44,8 +45,12 @@ class ProjectStoreResolver(
       }
     cache[checkout.commonDir]?.let { return it }
     return synchronized(lock) {
-      cache[checkout.commonDir] ?: runCatching { bind(checkout).also { cache[checkout.commonDir] = it } }
-        .getOrElse { failure -> gitUnavailable(workingDirectory, failure.rethrowIfCancellation()) }
+      cache[checkout.commonDir] ?: runCatching {
+        bind(checkout).also {
+          noteLegacyState(checkout, it)
+          cache[checkout.commonDir] = it
+        }
+      }.getOrElse { failure -> gitUnavailable(workingDirectory, failure.rethrowIfCancellation()) }
     }
   }
 
@@ -56,7 +61,7 @@ class ProjectStoreResolver(
     synchronized(lock) {
       val checkout = locate(workingDirectory)
       val targetDir = storeParent.resolve(projectId)
-      readTarget(projectId, targetDir)
+      val target = readTarget(projectId, targetDir)
       val lineage = checkout.gitRoot?.let(lineages::lineage)
       val commonDir = checkout.commonDir.toString()
       scan().filter { it.id != projectId && it.record.commonDir == commonDir && it.record.linkedTo != projectId }
@@ -70,6 +75,7 @@ class ProjectStoreResolver(
           rootCommits = lineage?.rootCommits.orEmpty(),
           remoteUrl = lineage?.remoteUrl,
           lastSeen = now(),
+          legacyStateNoticeAt = target.legacyStateNoticeAt,
         ),
       )
       cache.clear()
@@ -228,6 +234,29 @@ class ProjectStoreResolver(
     }
     outcome?.let(::identityWarning)
     return location(id)
+  }
+
+  private fun noteLegacyState(
+    checkout: Checkout,
+    location: ProjectStoreLocation,
+  ) {
+    val checkoutRoot = checkout.gitRoot ?: checkout.commonDir
+    val legacyDirectory = checkoutRoot.resolve(LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY)
+    if (!Files.isDirectory(legacyDirectory)) return
+    val stored = readStore(location.root)?.takeIf { it.record.legacyStateNoticeAt == null } ?: return
+    diagnostics.warning(
+      "seam=project_store_legacy_state value_expected=${location.root} value_used=$legacyDirectory " +
+        "cause=legacy_state_not_migrated run-evidence, feature-task-tracking and acceptance-repair were not " +
+        "migrated and the project store starts fresh; the old directory can be deleted",
+    )
+    try {
+      writeRecord(stored.dir, stored.record.copy(legacyStateNoticeAt = now()))
+    } catch (failure: IOException) {
+      diagnostics.warning(
+        "seam=project_store_legacy_state value_expected=notice_stamped value_used=write_failed " +
+          "cause=${failure.causeLabel()}",
+      )
+    }
   }
 
   private fun keyKindFor(

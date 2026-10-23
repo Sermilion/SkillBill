@@ -1,5 +1,6 @@
 package skillbill.engine.operation.prreviewfix
 
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
@@ -154,7 +155,11 @@ internal class PrReviewFixExecution(
         addAll(changed.filter { path -> path.endsWith(HISTORY_FILE) }.map { "- $it" }.ifEmpty { listOf("(none)") })
         add("")
         add("Follow-up specs created:")
-        addAll(changed.filter { path -> path.startsWith(SPEC_ROOT) }.map { "- $it" }.ifEmpty { listOf("(none)") })
+        addAll(
+          changed.filter { path -> path.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX) }
+            .map { "- $it" }
+            .ifEmpty { listOf("(none)") },
+        )
         add("")
         add(gate)
         add("")
@@ -184,4 +189,3 @@ internal class PrReviewFixExecution(
 
 private const val VALIDATION_DEFINITION = "validation"
 private const val HISTORY_FILE = "agent/history.md"
-private const val SPEC_ROOT = ".feature-specs/"

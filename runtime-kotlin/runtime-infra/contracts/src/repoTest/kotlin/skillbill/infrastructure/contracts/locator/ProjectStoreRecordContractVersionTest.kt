@@ -30,6 +30,7 @@ class ProjectStoreRecordContractVersionTest {
         ProjectStoreRecordKeys.REMOTE_URL,
         ProjectStoreRecordKeys.LAST_SEEN,
         ProjectStoreRecordKeys.LINKED_TO,
+        ProjectStoreRecordKeys.LEGACY_STATE_NOTICE_AT,
       ),
       properties.fieldNames().asSequence().toSet(),
     )

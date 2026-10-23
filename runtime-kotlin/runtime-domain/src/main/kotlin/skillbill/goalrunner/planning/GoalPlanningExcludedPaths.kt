@@ -1,5 +1,7 @@
 package skillbill.goalrunner.planning
 
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
+
 object GoalPlanningExcludedPaths {
   val EXCLUDED_ROOTS: List<String> = listOf("platform-packs/")
 
@@ -10,7 +12,7 @@ object GoalPlanningExcludedPaths {
       ".gradle",
       ".idea",
       ".next",
-      ".skill-bill",
+      LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY,
       ".tox",
       ".venv",
       "DerivedData",

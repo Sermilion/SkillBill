@@ -3,6 +3,7 @@ package skillbill.engine.worktreeedit
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.getOrElseUnlessCooperative
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
@@ -129,7 +130,8 @@ class WorktreeEditJournalWriter(
 
   private fun isRuntimePrivatePath(entry: GoalObservabilityFileDiffStat): Boolean {
     val path = entry.path
-    return path == RUNTIME_PRIVATE_ROOT || path.startsWith(RUNTIME_PRIVATE_PREFIX)
+    return path == LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY ||
+      path.startsWith(LegacyProjectStatePaths.RUNTIME_STATE_PREFIX)
   }
 
   private val memoState =
@@ -147,7 +149,5 @@ class WorktreeEditJournalWriter(
     const val MAX_DIAGNOSTIC_CAUSE_LENGTH: Int = 256
     const val INITIAL_TRACKED_WORKFLOWS: Int = 16
     const val ACCESS_ORDER_LOAD_FACTOR: Float = 0.75f
-    const val RUNTIME_PRIVATE_ROOT: String = ".skill-bill"
-    const val RUNTIME_PRIVATE_PREFIX: String = ".skill-bill/"
   }
 }

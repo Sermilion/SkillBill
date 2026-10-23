@@ -11,4 +11,5 @@ object ProjectStoreRecordKeys {
   const val REMOTE_URL: String = "remote_url"
   const val LAST_SEEN: String = "last_seen"
   const val LINKED_TO: String = "linked_to"
+  const val LEGACY_STATE_NOTICE_AT: String = "legacy_state_notice_at"
 }

@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Single legacy path owner and legacy state notice"
   spec_path: ".feature-specs/SKILL-441-move-skill-bill-project-state-out-of-user-projects-into-a-project-associated-store/spec_subtask_2_legacy-path-owner-and-notice.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261023-144832-mn3o"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

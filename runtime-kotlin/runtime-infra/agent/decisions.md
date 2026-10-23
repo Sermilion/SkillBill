@@ -1,5 +1,11 @@
 # Boundary decisions
 
+## [2026-10-23] Legacy state notice stamped in the store record, not the checkout
+Context: SKILL-441 moves project state into a project store, so a checkout's old `.skill-bill` content is no longer read. Users need one notice about it without the runtime touching their project.
+Decision: After binding a store, the resolver warns once and records a notice timestamp as an optional field of the store's own record. It never modifies or deletes anything under the checkout's legacy directory.
+Reason: The store is runtime-owned and written atomically, so the stamp survives across processes while the user's tree stays untouched. The stamp is a second record write after bind because bind has many write paths. The field is optional and the contract version stays 0.1.
+Alternatives considered: A marker file inside the checkout, rejected because it writes into user projects.
+
 ## [2026-10-16] Acceptance evidence references have no character limit
 Context: SKILL-428 stopped while saving a focused source audit because the runtime copies audit prose into criterion, closure, and transition evidence references. The schema rejected each reference above 512 characters.
 Decision: At the operator's request, remove character limits from evidence references in acceptance audit, repair state, handoff, and adoption schemas. Keep required nonempty values, coherence checks, and aggregate UTF-8 capacity checks. Keep contract version 0.1 because this accepts additional values without changing wire shape or invalidating retained state.

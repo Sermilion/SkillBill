@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.runloop.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.spec.SpecIntentProjectionResolver
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -172,16 +173,14 @@ internal fun resolveLaunchRejectionAttribution(
   )
 }
 
-private const val FEATURE_SPEC_ROOT = ".feature-specs"
-
 fun isFeatureSpecPathForIssue(
   path: String,
   issueKey: String,
 ): Boolean {
   val normalized = path.trim().trimEnd('/')
-  if (normalized == FEATURE_SPEC_ROOT) return true
-  if (!normalized.startsWith("$FEATURE_SPEC_ROOT/")) return false
-  val issueDirectory = normalized.removePrefix("$FEATURE_SPEC_ROOT/").substringBefore('/')
+  if (normalized == LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY) return true
+  if (!normalized.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)) return false
+  val issueDirectory = normalized.removePrefix(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX).substringBefore('/')
   val key = issueKey.trim()
   return issueDirectory == key || issueDirectory.startsWith("$key-")
 }
