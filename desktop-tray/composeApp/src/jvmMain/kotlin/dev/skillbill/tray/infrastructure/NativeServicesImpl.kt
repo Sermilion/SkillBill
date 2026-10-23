@@ -35,6 +35,24 @@ class NativeServicesImpl : NativeServices, RepositoryNavigation {
     openLocation(directory.toUri(), directory = true)
   }
 
+  override suspend fun openFile(path: String): Outcome<Unit> = navigate("Could not open the file. Check that it still exists.") {
+    val file = Path.of(path).toFile()
+    require(file.isAbsolute && file.isFile)
+    if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+      Desktop.getDesktop().open(file)
+    } else {
+      val os = os()
+      val target = file.path
+      runCommand(
+        when {
+          os.contains("linux") -> listOf("xdg-open", target)
+          os.contains("mac") -> listOf("open", target)
+          else -> listOf("cmd", "/c", "start", "", target)
+        },
+      )
+    }
+  }
+
   private suspend fun navigate(failure: String, action: () -> Unit): Outcome<Unit> = try {
     runInterruptible(Dispatchers.IO) { action() }
     Outcome.Value(Unit)

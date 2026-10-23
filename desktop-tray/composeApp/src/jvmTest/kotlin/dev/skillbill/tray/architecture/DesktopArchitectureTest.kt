@@ -22,7 +22,7 @@ class DesktopArchitectureTest {
     assertTrue(domain.all { !referencesAny(it.text, forbiddenStorageImports) })
     assertTrue(presentation.all { !referencesAny(it.text, forbiddenStorageImports) })
     assertTrue(application.all { !referencesAny(it.text, forbiddenApplicationImports) })
-    assertTrue(presentation.all { source -> forbiddenPresentationTokens.none { it in source.text } })
+    assertTrue(presentation.all { source -> forbiddenPresentationTokens.none { it in source.text } && !fileConstruction.containsMatchIn(source.text) })
     assertTrue((domain + application).all { source -> forbiddenCoreTokens.none { it in source.text } })
   }
 
@@ -147,8 +147,10 @@ class DesktopArchitectureTest {
       "JsonElement",
       "java.io.File",
       "java.nio.file",
-      "File(",
     )
+
+    // A whole-word match, so navigation calls such as openFile(path) stay allowed while File(path) does not.
+    val fileConstruction = Regex("""\bFile\(""")
     val forbiddenCoreTokens = listOf("java.awt", "javax.swing", "androidx.compose", "ComposeWindow")
   }
 }

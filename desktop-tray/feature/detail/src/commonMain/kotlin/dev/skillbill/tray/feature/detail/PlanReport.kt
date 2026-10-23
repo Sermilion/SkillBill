@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.core.designsystem.body
-import dev.skillbill.tray.core.designsystem.dim
 import dev.skillbill.tray.core.designsystem.green
 import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.mono
@@ -28,11 +27,9 @@ internal fun PlanReportSection(report: PlanRunReport) {
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Text(planSummary(report), color = green, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp)
     SelectionContainer {
-      Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(report.featureName, color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp)
-        Text(report.parentSpecPath, color = dim, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.sp)
-      }
+      Text(report.featureName, color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp)
     }
+    SpecBundleFileList(specBundlePaths(report))
     report.subtasks.forEach { PlannedSubtaskRow(it) }
   }
 }

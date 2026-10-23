@@ -22,6 +22,7 @@ class DetailPhaseTest {
   private val navigation = object : RepositoryNavigation {
     override suspend fun openRepository(root: String, branch: String?) = Outcome.Value(Unit)
     override suspend fun openDirectory(root: String) = Outcome.Value(Unit)
+    override suspend fun openFile(path: String) = Outcome.Value(Unit)
   }
 
   @Test

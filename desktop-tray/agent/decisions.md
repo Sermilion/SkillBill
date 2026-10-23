@@ -1,3 +1,15 @@
+## [2026-10-23] Open spec bundle files through suspend openFile returning Outcome
+Context: The spec asked for a plain openFile(path) on RepositoryNavigation, but opening a file can fail and must not reach the compose thread.
+Decision: openFile is suspend and returns Outcome<Unit>, like openRepository and openDirectory, and runs through the existing navigate failure path on the IO dispatcher.
+Reason: Failures reach the UI through the same Outcome path as other navigation links, and the click handler launches it in a coroutine.
+Alternatives considered: A fire-and-forget function would hide a missing file or failed launch.
+
+## [2026-10-23] Match File( as a whole word in the presentation guard
+Context: The architecture guard banned the raw substring File(, which also matches the openFile( call the spec requires in presentation code.
+Decision: DesktopArchitectureTest uses a whole-word pattern for File(, leaving the other storage tokens unchanged.
+Reason: It still rejects File(path) and java.io.File(path) but accepts openFile(path), so the guard keeps its intent without renaming the required API.
+Alternatives considered: Renaming openFile would contradict the spec; dropping the token would weaken the guard.
+
 ## [2026-10-21] Identify packaged Skill Bill runtime by modules and classes
 Context: The single-runtime packaging guard rejected Compose and Lifecycle jars because their filenames also start with runtime-. Renaming a Skill Bill jar could bypass a filename-only guard.
 Decision: The image verifier checks declared Skill Bill runtime module names and skillbill/ class entries. Packaged smoke and release archive checks inspect class entries. Module discovery includes composite project components.

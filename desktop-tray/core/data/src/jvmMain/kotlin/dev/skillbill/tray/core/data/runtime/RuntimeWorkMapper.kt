@@ -36,7 +36,7 @@ internal fun StandaloneQaOutcome.toDomain(): QaVerdict = when (this) {
 }
 
 internal fun StandalonePlanReport.toDomain(): PlanRunReport =
-  PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) })
+  PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)
 
 internal fun DatabaseFileObservation.toDomain(): DatabaseFileIdentity = DatabaseFileIdentity(path.toString(), fileKey)
 
