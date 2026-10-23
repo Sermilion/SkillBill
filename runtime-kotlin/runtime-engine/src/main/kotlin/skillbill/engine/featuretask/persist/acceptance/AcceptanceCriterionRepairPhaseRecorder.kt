@@ -32,7 +32,9 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.audit.REPAIR_ADMISSION_CLARIFICATION_PREFIX
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
+import skillbill.workflow.taskruntime.model.audit.auditNeedsClarification
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
 import skillbill.workflow.taskruntime.model.audit.qaReauditRefs
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -194,9 +196,9 @@ class AcceptanceCriterionRepairPhaseRecorder(
         setOf(
           FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
           FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
-        ) || phase.phaseId == session.steps.repair && phase.failureDisposition == null &&
+        ) || phase.phaseId == session.steps.repair &&
         (conclusion == null || conclusion == FeatureTaskRuntimeVerdict.COMPLETED.wireValue)
-    val clarification = needsClarification(conclusion)
+    val clarification = auditNeedsClarification(conclusion)
     val evidence =
       CompletionEvidence(
         ref,
@@ -224,15 +226,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
       )
     } ?: rejected(phase, "The audit result does not match the active repair stage.")
   }
-
-  private fun needsClarification(conclusion: String?): Boolean =
-    conclusion !in
-      setOf(
-        FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
-        FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
-        FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED.wireValue,
-        FeatureTaskRuntimeVerdict.ADVANCE.wireValue,
-      )
 
   private data class CompletionEvidence(
     val ref: String,
@@ -314,7 +307,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
         AcceptanceCriterionRepairMutation.RepairCompleted(live.reservationId, prose, tree, checkpoint)
       } else {
         AcceptanceCriterionRepairMutation.Clarification(
-          "Read-only repair-report admission. Inspect the report and current source for this criterion. " +
+          "$REPAIR_ADMISSION_CLARIFICATION_PREFIX Inspect the report and current source for this criterion. " +
             "Report progress when production work remains and can continue, " +
             "including an agent stopping after a partial edit. " +
             "Report satisfied only when the repair is complete. Report advance only for a concrete external " +

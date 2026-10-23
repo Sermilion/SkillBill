@@ -11,8 +11,6 @@ sealed interface FeatureTaskContinuationLookupResult {
 
   data class AlreadyRunning(val candidate: FeatureTaskContinuationCandidate) : FeatureTaskContinuationLookupResult
 
-  data class Ambiguous(val candidates: List<FeatureTaskContinuationCandidate>) : FeatureTaskContinuationLookupResult
-
   data class TerminalOnly(val candidates: List<FeatureTaskContinuationCandidate>) : FeatureTaskContinuationLookupResult
 
   /**

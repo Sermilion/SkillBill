@@ -84,21 +84,30 @@ class FeatureTaskContinuationLookupServiceTest {
   }
 
   @Test
-  fun `lookup reports every ambiguous eligible workflow without selecting newest`() {
+  fun `lookup selects the latest workflow among several for one key`() {
     val fixture = fixture()
     val terminal = fixture.open(REPOSITORY_A)
     fixture.service.abandonFeatureTaskRuntime(terminal.workflowId, "Terminal lookup fixture.")
-    val first = fixture.open(REPOSITORY_A)
-    val second = fixture.open(REPOSITORY_A)
+    fixture.open(REPOSITORY_A)
+    val latest = fixture.open(REPOSITORY_A)
 
-    val ambiguous =
-      assertIs<FeatureTaskContinuationLookupResult.Ambiguous>(
+    val running =
+      assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
         fixture.lookup.lookup("SKILL-120", REPOSITORY_A),
       )
 
-    assertEquals(
-      listOf(terminal.workflowId, first.workflowId, second.workflowId),
-      ambiguous.candidates.map { it.workflowId },
+    assertEquals(latest.workflowId, running.candidate.workflowId)
+  }
+
+  @Test
+  fun `a terminal latest workflow supersedes an earlier unfinished one`() {
+    val fixture = fixture()
+    fixture.open(REPOSITORY_A)
+    val latest = fixture.open(REPOSITORY_A)
+    fixture.service.abandonFeatureTaskRuntime(latest.workflowId, "Terminal lookup fixture.")
+
+    assertIs<FeatureTaskContinuationLookupResult.TerminalOnly>(
+      fixture.lookup.lookup("SKILL-120", REPOSITORY_A),
     )
   }
 

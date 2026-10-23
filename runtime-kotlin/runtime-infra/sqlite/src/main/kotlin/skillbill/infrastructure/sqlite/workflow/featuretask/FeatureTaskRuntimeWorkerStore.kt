@@ -446,7 +446,7 @@ private fun FeatureTaskRuntimeWorkerOwnership.heartbeatIsStale(
   proposedHeartbeat: Instant,
 ): Boolean {
   val identityMismatch = heartbeatIdentityMismatch(current)
-  val expiryStale = heartbeatExpiryStale(current, proposedHeartbeat)
+  val expiryStale = expiresAtInstant <= proposedHeartbeat
   val orderingStale = heartbeatOrderingStale(current)
   return identityMismatch || expiryStale || orderingStale
 }
@@ -457,11 +457,6 @@ private fun FeatureTaskRuntimeWorkerOwnership.heartbeatIdentityMismatch(
   current.ownerToken != ownerToken ||
     current.generation != generation ||
     current.leaseState != FeatureTaskRuntimeWorkerLeaseState.ACTIVE
-
-private fun FeatureTaskRuntimeWorkerOwnership.heartbeatExpiryStale(
-  current: FeatureTaskRuntimeWorkerOwnership,
-  proposedHeartbeat: Instant,
-): Boolean = current.expiresAtInstant <= proposedHeartbeat || expiresAtInstant <= proposedHeartbeat
 
 private fun FeatureTaskRuntimeWorkerOwnership.heartbeatOrderingStale(
   current: FeatureTaskRuntimeWorkerOwnership,

@@ -152,7 +152,6 @@ private fun resumableRuntimeCandidate(
   is FeatureTaskContinuationLookupResult.TerminalOnly ->
     throw UsageError("Workflow '$workflowId' is terminal and cannot be resumed; no phase was launched.")
   FeatureTaskContinuationLookupResult.NoMatch,
-  is FeatureTaskContinuationLookupResult.Ambiguous,
   is FeatureTaskContinuationLookupResult.GoalContinuation,
   is FeatureTaskContinuationLookupResult.NeedsIdentityRepair,
   -> throw UsageError("Workflow '$workflowId' is not a resumable runtime workflow.")

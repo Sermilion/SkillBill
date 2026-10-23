@@ -93,7 +93,7 @@ data class WorkItem(
   val qaVerdict: QaVerdict? = null,
 )
 
-data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?)
+data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?, val criterionRef: String? = null)
 enum class PhaseExecutionKind { PASS, SEMANTIC_LOOP, GATE_RUN, BOUNDED_EDGE, ATTEMPT }
 
 enum class DetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES }
@@ -224,7 +224,7 @@ data class GoalQaResult(
   val fixAttempts: Int,
   val recordedAt: Instant,
   val findings: List<GoalQaFinding> = emptyList(),
-  val criteria: List<QaCriterionResult> = emptyList(),
+  val reportText: String? = null,
 )
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
 data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
@@ -449,7 +449,7 @@ data class ExecutionInstance(
   val result: String?,
   val restoration: ReasonRestoration? = null,
   val qaVerdict: QaVerdict? = null,
-  val qaReport: QaRunReport? = null,
+  val qaReportText: String? = null,
   val planReport: PlanRunReport? = null,
 )
 

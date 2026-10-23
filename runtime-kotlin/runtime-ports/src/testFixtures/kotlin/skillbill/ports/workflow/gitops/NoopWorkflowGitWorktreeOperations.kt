@@ -2,6 +2,7 @@ package skillbill.ports.workflow.gitops
 
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
+import skillbill.ports.workflow.gitops.model.WorkflowIgnoredFilesCopyResult
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeActivityResult
@@ -51,16 +52,22 @@ internal object NoopWorkflowGitWorktreeOperations : WorkflowGitWorktreeOperation
   override fun worktreeNumstat(repoRoot: Path): WorkflowWorktreeNumstatResult =
     WorkflowWorktreeNumstatResult(status = WorkflowGitOperationStatus.OK, files = emptyList())
 
-  override fun linkedWorktreePath(
-    repoRoot: Path,
-    commonDirRelativePath: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Failed(error = "No linked worktree was supplied.")
-
   override fun addDetachedWorktree(
     repoRoot: Path,
-    commonDirRelativePath: String,
+    worktree: Path,
     revision: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Failed(error = "No linked worktree was supplied.")
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = worktree.toString())
+
+  override fun copyWorkingState(
+    repoRoot: Path,
+    worktree: Path,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = worktree.toString())
+
+  override fun copyIgnoredFiles(
+    repoRoot: Path,
+    worktree: Path,
+    maxFileBytes: Long,
+  ): WorkflowIgnoredFilesCopyResult = WorkflowIgnoredFilesCopyResult.Copied(emptyList(), emptyList())
 
   override fun removeWorktree(
     repoRoot: Path,

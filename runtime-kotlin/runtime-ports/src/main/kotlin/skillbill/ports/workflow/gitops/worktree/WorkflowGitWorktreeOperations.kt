@@ -1,6 +1,7 @@
 package skillbill.ports.workflow.gitops.worktree
 
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowIgnoredFilesCopyResult
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeActivityResult
@@ -26,23 +27,34 @@ interface WorkflowGitWorktreeOperations {
   fun worktreeNumstat(repoRoot: Path): WorkflowWorktreeNumstatResult
 
   /**
-   * Resolves [commonDirRelativePath] under the Git common directory; the result value is the absolute, normalized
-   * path. Creates nothing.
-   */
-  fun linkedWorktreePath(
-    repoRoot: Path,
-    commonDirRelativePath: String,
-  ): WorkflowGitOperationResult
-
-  /**
-   * Checks [revision] out detached at [commonDirRelativePath] under the Git common directory, first removing a stale
-   * worktree left at that path. The result value is the absolute worktree path.
+   * Checks [revision] out detached at the absolute [worktree] path, first removing a stale worktree left there. The
+   * result value is the absolute worktree path.
    */
   fun addDetachedWorktree(
     repoRoot: Path,
-    commonDirRelativePath: String,
+    worktree: Path,
     revision: String,
   ): WorkflowGitOperationResult
+
+  /**
+   * Gives the linked [worktree], checked out at the HEAD of [repoRoot], the same staged, unstaged, and untracked
+   * state as [repoRoot]. Fails when the copy does not report the same repository tree identity.
+   */
+  fun copyWorkingState(
+    repoRoot: Path,
+    worktree: Path,
+  ): WorkflowGitOperationResult
+
+  /**
+   * Copies the ignored files of [repoRoot] that sit outside ignored directories into the same relative paths of
+   * [worktree]. A file larger than [maxFileBytes], or one that is neither a regular file nor a symbolic link, is
+   * skipped and named in the result.
+   */
+  fun copyIgnoredFiles(
+    repoRoot: Path,
+    worktree: Path,
+    maxFileBytes: Long,
+  ): WorkflowIgnoredFilesCopyResult
 
   /** Force-removes the linked worktree at [worktree] and prunes its registration; a missing path is a no-op. */
   fun removeWorktree(

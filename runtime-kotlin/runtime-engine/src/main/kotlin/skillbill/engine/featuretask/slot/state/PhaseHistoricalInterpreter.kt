@@ -107,7 +107,7 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
     if (context.phases.none { it.phaseId == stepId }) return null
     return when (stepId) {
       PHASE_REVIEW, PHASE_VERIFY_FINDINGS, PHASE_IMPLEMENT_FIX -> CodeReviewHistory.currentExecution(stepId, context)
-      PHASE_AUDIT -> auditCurrentExecution(stepId, context)
+      PHASE_AUDIT, PHASE_AUDIT_PLAN_FIX, PHASE_AUDIT_IMPLEMENT_FIX -> auditCurrentExecution(stepId, context)
       PHASE_BUILD, PHASE_VALIDATE -> gateCurrentExecution(stepId, context)
       else -> if (stepId in rules) defaultPhaseExecution(stepId, context) else attemptPhaseExecution(stepId, context)
     }

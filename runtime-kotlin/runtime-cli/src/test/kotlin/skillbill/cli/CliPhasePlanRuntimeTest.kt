@@ -217,6 +217,54 @@ class CliPhasePlanRuntimeTest {
   }
 
   @Test
+  fun `full run on a reused key plans the new spec instead of resuming the earlier spec's plan`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
+    val launcher = PlanThenGoalLauncher(planner, GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1))
+    assertEquals(1, runFull(launcher).exitCode)
+    val earlierPlan = planWorkflowId()
+    val specs = tempDir.resolve(".feature-specs")
+    val earlierBundle = specs.resolve(planner.bundleNames().single())
+    Files.move(earlierBundle, specs.resolve(earlierBundle.fileName.toString().replace(ISSUE_KEY, "SKILL-905")))
+
+    val result = runFull(launcher, "$ISSUE_KEY Unrelated work in two parts.")
+
+    assertEquals(3, result.exitCode, result.stdout + result.stderr)
+    assertEquals(listOf("preplan", "plan") + PLAN_LAUNCHES, planner.phaseIds)
+    val plans = planWorkflowIds()
+    assertEquals(2, plans.size, plans.toString())
+    assertTrue(earlierPlan in plans, plans.toString())
+    assertEquals(listOf("$ISSUE_KEY-unrelated-work-in-two-parts"), planner.bundleNames())
+  }
+
+  @Test
+  fun `full run on a reused key with an authored bundle plans it instead of reopening the earlier spec's plan`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir)
+    val planned =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, PLAN_INTAKE, "--agent", "codex"),
+        fixture.context(launcher = planner).copy(repositoryRoot = tempDir),
+      )
+    assertEquals(0, planned.exitCode, planned.stdout + planned.stderr)
+    val earlierPlan = planWorkflowId()
+    val specs = tempDir.resolve(".feature-specs")
+    val earlierBundle = specs.resolve(planner.bundleNames().single())
+    Files.move(earlierBundle, specs.resolve(earlierBundle.fileName.toString().replace(ISSUE_KEY, "SKILL-905")))
+    val reusedBundle = Files.createDirectories(specs.resolve("$ISSUE_KEY-unrelated-work"))
+    planner.authorBundle()
+
+    val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+    val result = runFull(PlanThenGoalLauncher(planner, goal), reusedBundle.toString())
+
+    assertEquals(3, result.exitCode, result.stdout + result.stderr)
+    val plans = planWorkflowIds()
+    assertEquals(2, plans.size, plans.toString())
+    assertTrue(earlierPlan in plans, plans.toString())
+    assertEquals(1, goal.childLaunches.size)
+  }
+
+  @Test
   fun `full run resumes an unfinished standalone plan without replacing its unbounded timeout`() {
     installGoalBuildPack(tempDir)
     val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
@@ -325,21 +373,25 @@ class CliPhasePlanRuntimeTest {
     assertEquals(planWorkflow, planWorkflowId())
   }
 
-  private fun runFull(launcher: AgentRunLauncher) =
-    CliRuntime.run(
-      listOf(
-        "--db",
-        fixture.dbPath.toString(),
-        "$ISSUE_KEY Split the work into two parts.",
-        "--agent",
-        "codex",
-        "--repo-root",
-        tempDir.toString(),
-      ),
-      fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
-    )
+  private fun runFull(
+    launcher: AgentRunLauncher,
+    intake: String = "$ISSUE_KEY Split the work into two parts.",
+  ) = CliRuntime.run(
+    listOf(
+      "--db",
+      fixture.dbPath.toString(),
+      intake,
+      "--agent",
+      "codex",
+      "--repo-root",
+      tempDir.toString(),
+    ),
+    fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
+  )
 
-  private fun planWorkflowId(): String =
+  private fun planWorkflowId(): String = planWorkflowIds().single()
+
+  private fun planWorkflowIds(): List<String> =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       connection.createStatement().use { statement ->
         statement.executeQuery("SELECT workflow_id, artifacts_json FROM feature_task_workflows").use { rows ->
@@ -350,7 +402,7 @@ class CliPhasePlanRuntimeTest {
                 add(rows.getString(1))
               }
             }
-          }.single()
+          }
         }
       }
     }
@@ -539,7 +591,7 @@ class CliPhasePlanRuntimeTest {
       return agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = "")
     }
 
-    private fun authorBundle(): String {
+    fun authorBundle(): String {
       if (authorNothingFirst && phaseIds.count { it == "plan" } == 1) return "Authored nothing yet."
       val bundle = seededBundle()
       Files.writeString(
@@ -558,9 +610,11 @@ class CliPhasePlanRuntimeTest {
       return "Split the work into two ordered subtasks."
     }
 
-    private fun seededBundle(): Path =
+    private fun seededBundle(): Path = repoRoot.resolve(".feature-specs").resolve(bundleNames().single())
+
+    fun bundleNames(): List<String> =
       Files.list(repoRoot.resolve(".feature-specs")).use { directories ->
-        directories.toList().single { directory -> directory.fileName.toString().startsWith("$ISSUE_KEY-") }
+        directories.toList().map { it.fileName.toString() }.filter { it.startsWith("$ISSUE_KEY-") }
       }
 
     private fun specText(

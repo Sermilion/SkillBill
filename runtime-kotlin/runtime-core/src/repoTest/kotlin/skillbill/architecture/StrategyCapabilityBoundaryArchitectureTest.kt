@@ -36,6 +36,18 @@ class StrategyCapabilityBoundaryArchitectureTest {
   }
 
   @Test
+  fun `the strategy base class declares at most twelve open members`() {
+    val strategy =
+      ArchitectureScanSupport.runtimeRoot
+        .resolve("runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/PhaseStrategy.kt")
+        .readText()
+    val body = strategy.substringAfter("abstract class PhaseStrategy {").substringBefore("\n}\n")
+    val openMember = Regex("""^ {2}(internal |protected )?(abstract|open) """)
+    val openMembers = body.lines().filter { line -> openMember.containsMatchIn(line) }
+    assertTrue(openMembers.size in 1..MAX_OPEN_STRATEGY_MEMBERS, openMembers.joinToString("\n"))
+  }
+
+  @Test
   fun `an audit cannot mutate progress through a helper in the attempt directory`() {
     val consumer =
       CapabilitySource(
@@ -74,11 +86,13 @@ class StrategyCapabilityBoundaryArchitectureTest {
         internal fun leak(progress: FeatureTaskRuntimeRunState) {
           val alias = progress
           alias.restartAttemptBudget("audit")
+          alias.recordAcknowledgedPhaseStart("review", 2)
         }
         """.trimIndent(),
       )
     val findings = StrategyCapabilityTransitiveGraph.violations(listOf(helper), emptySet())
     assertTrue(findings.any { "restartAttemptBudget" in it && "outside its transition owner" in it })
+    assertTrue(findings.any { "recordAcknowledgedPhaseStart" in it && "outside its transition owner" in it })
   }
 
   @Test
@@ -231,5 +245,9 @@ class StrategyCapabilityBoundaryArchitectureTest {
         setOf(consumer.path, review.path),
       )
     assertEquals(emptyList(), findings, findings.joinToString("\n"))
+  }
+
+  private companion object {
+    const val MAX_OPEN_STRATEGY_MEMBERS = 12
   }
 }

@@ -6,12 +6,13 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPoli
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.featuretask.validation.repairSegmentOutput
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 
-internal object PackBuildStepHooks : PhaseStepHooks {
+internal object PackBuildStepHooks : PhaseStepHooks<PhaseQualityGateStepBinding> {
   override val carriesPackBuildCommand: Boolean = true
 
   override fun earlyOutput(

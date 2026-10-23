@@ -1,20 +1,18 @@
 package skillbill.engine.featuretask.phaserun.qa
 
-import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
-import skillbill.engine.featuretask.qa.receipt.QaVerdict
-import skillbill.engine.featuretask.qa.receipt.qaTestExpected
-import skillbill.engine.featuretask.qa.receipt.qaTestFlow
-import skillbill.engine.featuretask.qa.receipt.qaTestJson
-import skillbill.engine.featuretask.qa.receipt.qaTestReceipt
+import skillbill.engine.featuretask.qa.report.QA_TEST_HEAD
+import skillbill.engine.featuretask.qa.report.QA_TEST_TREE
+import skillbill.engine.featuretask.qa.report.QaVerdict
+import skillbill.engine.featuretask.qa.report.qaTestExpected
+import skillbill.engine.featuretask.qa.report.qaTestReport
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.QaCapabilityDeclaration
 import skillbill.scaffold.model.QaPlatform
@@ -41,12 +39,15 @@ class QaStandalonePhaseRunTest {
   private val launched = mutableListOf<QaExecutionContext?>()
 
   @Test
-  fun `a findings receipt completes, reports the findings, and releases the invocation's leases`() {
-    val result =
-      assertIs<PhaseRunResult.Completed>(runQa { qaTestJson(qaTestReceipt(QaVerdict.FINDINGS_OPEN, it.expected)) })
+  fun `a findings report completes with its text verbatim and releases the invocation's leases`() {
+    val text = qaTestReport(QaVerdict.FINDINGS_OPEN, qaTestExpected(INVOCATION))
+
+    val result = assertIs<PhaseRunResult.Completed>(runQa { text })
 
     assertEquals(StandaloneQaOutcome.FINDINGS, result.qaOutcome)
-    assertContains(result.targetReport, "Findings: F-1")
+    assertEquals(text, result.qaReportText)
+    assertEquals("QA verdict: findings_open", result.value)
+    assertEquals(listOf("Verdict: findings_open", text), result.targetReport)
     assertEquals(listOf(INVOCATION), leases.releasedInvocations)
     val qa = requireNotNull(launched.single())
     assertEquals(qaTestExpected(INVOCATION), qa.expected)
@@ -54,94 +55,66 @@ class QaStandalonePhaseRunTest {
   }
 
   @Test
-  fun `a finding fails its criterion even when every check on that criterion passed`() {
-    val result =
-      assertIs<PhaseRunResult.Completed>(
-        runQa {
-          fun check(criterion: String) =
-            mapOf(
-              "flow_id" to "login",
-              "description" to "$criterion holds.",
-              "outcome" to "pass",
-              "criteria" to listOf(criterion),
-            )
-          val receipt = qaTestReceipt(QaVerdict.FINDINGS_OPEN, it.expected)
-          val finding =
-            JsonCodec.anyToStringAnyMapList(receipt["findings"]).orEmpty().single() +
-              ("affected_criteria" to listOf("AC-2"))
-          val checks = listOf(check("AC-10"), check("AC-2"), check("AC-1"))
-          qaTestJson(receipt + mapOf("assertions" to checks, "findings" to listOf(finding)))
-        },
-      )
+  fun `a report that names no verdict completes as incomplete and keeps the agent's text`() {
+    val text = "I could not decide whether the login flow works."
 
-    val report = requireNotNull(result.qaReport)
-    assertEquals(listOf("AC-1", "AC-2", "AC-10"), report.criteria.map { it.id })
-    assertEquals(listOf("AC-2"), report.failed.map { it.id })
-    val failure = report.failed.single().findings.single()
-    assertEquals("The home screen shows the user name.", failure.expected)
-    assertEquals("The home screen stays blank.", failure.observed)
-    assertContains(result.targetReport, "Criteria: 2 passed, 1 failed")
-    assertContains(result.targetReport, "      Observed: The home screen stays blank.")
+    val result = assertIs<PhaseRunResult.Completed>(runQa { text })
+
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
+    assertEquals(text, result.qaReportText)
+    assertEquals(listOf("Verdict: incomplete", text), result.targetReport)
   }
 
   @Test
-  fun `a malformed receipt completes as incomplete with a warning and releases the invocation`() {
-    val result = assertIs<PhaseRunResult.Completed>(runQa { "{\"verdict\": \"passed\"}" })
+  fun `no report completes as incomplete with a warning and releases the invocation`() {
+    val result = assertIs<PhaseRunResult.Completed>(runQa { null })
 
     assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
-    assertTrue(
-      result.targetReport.first().startsWith("Warning: QA recorded incomplete"),
-      result.targetReport.toString(),
+    assertNull(result.qaReportText)
+    assertEquals(
+      listOf(
+        "Warning: QA agent wrote no report.md",
+        "Verdict: incomplete: QA agent wrote no report.md",
+      ),
+      result.targetReport,
     )
-    assertContains(result.targetReport.first(), "schema validation")
     assertEquals(listOf(INVOCATION), leases.releasedInvocations)
   }
 
   @Test
-  fun `a passed receipt with an untested flow completes as incomplete and says why`() {
-    val result =
-      assertIs<PhaseRunResult.Completed>(
-        runQa {
-          val untested =
-            mapOf(
-              "id" to "logout",
-              "name" to "Log out",
-              "status" to "untested",
-              "hardware_only" to false,
-              "untested_reason" to "The build has no logout entry.",
-            )
-          qaTestJson(qaTestReceipt(QaVerdict.PASSED, it.expected) + ("flows" to listOf(qaTestFlow(), untested)))
-        },
-      )
+  fun `a passed report that lists a finding heading stays passed and warns`() {
+    val text = qaTestReport(QaVerdict.PASSED, qaTestExpected(INVOCATION), listOf("F-1"))
 
-    assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
-    assertContains(
-      result.targetReport,
-      "Warning: The QA receipt claimed passed but left 'Log out' untested; recorded incomplete.",
+    val result = assertIs<PhaseRunResult.Completed>(runQa { text })
+
+    assertEquals(StandaloneQaOutcome.PASSED, result.qaOutcome)
+    assertEquals(
+      "Warning: QA report states passed but lists findings F-1; no repair opened",
+      result.targetReport.first(),
     )
-    assertContains(result.targetReport, "Verdict: incomplete")
-    assertContains(result.targetReport, "Untested flows: Log out (The build has no logout entry.)")
+    assertEquals(text, result.qaReportText)
   }
 
   @Test
-  fun `a production-only skip completes with a warning`() {
-    val result =
-      assertIs<PhaseRunResult.Completed>(
-        runQa {
-          qaTestJson(
-            qaTestReceipt(QaVerdict.SKIPPED, it.expected) +
-              mapOf("skip_reason" to "production_only", "reason_detail" to "Only the prod flavor is installed."),
-          )
-        },
-      )
+  fun `an agent reported skip completes as skipped`() {
+    val text = qaTestReport(QaVerdict.SKIPPED, qaTestExpected(INVOCATION))
+
+    val result = assertIs<PhaseRunResult.Completed>(runQa { text })
 
     assertEquals(StandaloneQaOutcome.SKIPPED, result.qaOutcome)
-    assertContains(
-      result.targetReport,
-      "Warning: QA refused to run because the app offers only a production environment: " +
-        "Only the prod flavor is installed.",
-    )
-    assertContains(result.targetReport, "Skip reason: production_only - Only the prod flavor is installed.")
+    assertEquals(listOf("Verdict: skipped", text), result.targetReport)
+  }
+
+  @Test
+  fun `a retained device lease adds a cleanup note to the report`() {
+    val retained = RecordingQaLeases(listOf(QaLeaseReleaseOutcome.Failed("device-1", "adb offline")))
+    val text = qaTestReport(QaVerdict.PASSED, qaTestExpected(INVOCATION))
+
+    val result = assertIs<PhaseRunResult.Completed>(runQa(leaseSet = retained) { text })
+
+    val cleanup = result.targetReport.last()
+    assertContains(cleanup, "Cleanup: retained device_lease device-1.")
+    assertContains(cleanup, "qa lease release --invocation")
   }
 
   @Test
@@ -155,18 +128,19 @@ class QaStandalonePhaseRunTest {
       )
 
     assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
+    assertNull(result.qaReportText)
+    assertTrue(result.targetReport.first().startsWith("Warning:"), result.targetReport.toString())
     assertContains(result.targetReport.first(), "agent timed out")
-    assertTrue(
-      result.targetReport.any { it.startsWith("Incomplete reason: interrupted") },
-      result.targetReport.toString(),
-    )
   }
 
   @Test
-  fun `a tracked file edited during QA is accepted and a valid receipt settles the run`() {
+  fun `a tracked file edited during QA is accepted and the report settles the run`() {
     git.worktreeStatusSequence += listOf("", " M src/Foo.kt")
+    val text = qaTestReport(QaVerdict.PASSED, qaTestExpected(INVOCATION))
 
-    assertIs<PhaseRunResult.Completed>(runQa { qaTestJson(qaTestReceipt(QaVerdict.PASSED, it.expected)) })
+    val result = assertIs<PhaseRunResult.Completed>(runQa { text })
+
+    assertEquals(StandaloneQaOutcome.PASSED, result.qaOutcome)
   }
 
   @Test
@@ -177,25 +151,27 @@ class QaStandalonePhaseRunTest {
       )
 
     assertEquals(StandaloneQaOutcome.SKIPPED, result.qaOutcome)
-    assertContains(
-      result.targetReport,
-      "Skip reason: unsupported_target - no installed pack declares qa_capability for kotlin",
+    assertContains(result.targetReport, "Verdict: skipped: unsupported_target")
+    assertTrue(
+      result.targetReport.any { it.contains("no installed pack declares qa_capability for kotlin") },
+      result.targetReport.toString(),
     )
     assertEquals(emptyList(), launched)
-    assertNull(workspaces.receipt)
+    assertNull(workspaces.report)
   }
 
   private fun runQa(
     manifests: List<PlatformManifest> = listOf(androidPack),
-    agent: (QaExecutionContext) -> String,
+    leaseSet: RecordingQaLeases = leases,
+    agent: (QaExecutionContext) -> String?,
   ): PhaseRunResult =
-    qaStandalonePhaseRun(git, manifests, workspaces, leases).run(
+    qaStandalonePhaseRun(git, manifests, workspaces, leaseSet).run(
       PhaseRunRequest(SkeletonDefinition.QA.id, Path.of("/tmp/qa-repo"), "claude"),
       INVOCATION,
     ) { request ->
       launched += request.qaExecution
       val qa = requireNotNull(request.qaExecution)
-      workspaces.receipt = agent(qa)
+      workspaces.report = agent(qa)
       PhaseRunResult.Completed(INVOCATION, listOf(SkeletonDefinition.QA.id), null, value = "done")
     }
 

@@ -135,6 +135,31 @@ class AcceptanceCriterionRepairRunState internal constructor(
     invocation = snapshot?.let { AcceptanceCriterionRepairInvocation(phase.phaseId, phase.attemptCount, it) }
   }
 
+  internal val priorRepairFailures: String?
+    get() {
+      val state = snapshot ?: return null
+      val current = state.currentCriterionRef ?: return null
+      val failures = state.outcomes.filter { it.criterionRef == current && !it.successful }
+      if (failures.isEmpty()) return null
+      val recent = failures.takeLast(AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES)
+      return buildString {
+        appendLine("Earlier unsuccessful repair evidence for $current")
+        appendLine(
+          "Showing the latest ${recent.size} of ${failures.size} unsuccessful outcomes for this criterion, " +
+            "including outcomes retained across operator resume. The complete history remains in durable accounting.",
+        )
+        appendLine(
+          "Use these reports as counterexamples to check against current source. They do not establish that " +
+            "a gap is still open, and they do not reopen another criterion. Preserve fixes that already hold.",
+        )
+        recent.forEach { outcome ->
+          appendLine()
+          appendLine("Outcome ${outcome.outcomeId}, ${outcome.kind.wireValue}:")
+          appendLine(outcome.evidenceRef)
+        }
+      }.trimEnd()
+    }
+
   val currentCriterionContext: String?
     get() {
       val state = snapshot ?: return null

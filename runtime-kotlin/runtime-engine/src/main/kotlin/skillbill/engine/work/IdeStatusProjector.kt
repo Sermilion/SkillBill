@@ -298,7 +298,12 @@ class IdeStatusProjector(
         progress = projection?.toIdeStatusProgress(),
         startedAt = candidate.startedAt,
         currentSubtask = goalCurrentSubtask(projection, context),
-        currentModel = childContext.currentModel,
+        currentModel =
+          if (planningStep != null || liveFinalization || openCiMonitor) {
+            goalStepModel(context.unitOfWork, candidate.workflowId, step.id, planningStep != null, lifecycle)
+          } else {
+            childContext.currentModel
+          },
         planning = planning,
         currentPhaseExecution = childContext.currentPhaseExecution.takeIf { planningStep == null },
         pauseRequested = goalPauseRequested(projection),

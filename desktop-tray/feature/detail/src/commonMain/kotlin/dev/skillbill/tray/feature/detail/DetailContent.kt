@@ -173,7 +173,7 @@ private fun LoadedDetail(
   val copy = rememberCopyToClipboard()
   val recoveryStatusFocus = remember { FocusRequester() }
   var recoveryStatusAttached by remember { mutableStateOf(false) }
-  val fresh = effectiveFreshness(item, false, load.readError != null) == Freshness.FRESH
+  val fresh = effectiveFreshness(item, false, state.readHealth.reportedProblem != null) == Freshness.FRESH
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val frozen = !fresh
   val operation = item.family == WorkFamily.FEATURE_VERIFY
@@ -201,7 +201,7 @@ private fun LoadedDetail(
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         RepositoryLocationLinks(item)
-        load.readError?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
+        state.readHealth.reportedProblem?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
         state.pendingFeedback.forEach { feedback ->
           Text(
             feedback.message,
@@ -233,7 +233,7 @@ private fun LoadedDetail(
       RunActionButtons(
         detail,
         state.control is ControlState.InProgress,
-        state.controllable && load.readError == null,
+        state.controllable && !state.readHealth.blocksControls,
         state.recoveryConfirmation,
         state.recoveryPreviewLoading,
         state.recoveryPreview,
@@ -381,6 +381,7 @@ private fun LoadedDetail(
           activity.forEach { (label, value) -> DesignKv(label, value) }
           PhaseResultsSection(detail.phaseResults, detail.goalQa) { id -> detail.subtasks.firstOrNull { it.id == id }?.name }
           QaFindingsSection(detail.goalQa)
+          detail.goalQa?.reportText?.let { QaReportSection(it) }
           LazyColumn(state = executionScroll, modifier = Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(detail.executionHistory, key = { detail.key("execution", "${it.invocationId}:${it.executionId}") }) { instance ->
               val index = detail.executionHistory.indexOf(instance)
@@ -391,7 +392,7 @@ private fun LoadedDetail(
                 SelectionContainer { Text("Execution ${instance.executionId}", color = dim, fontFamily = mono, fontSize = 11.sp) }
                 Text("${if (instance.finishedAt != null) "Finished" else "Last update"} ${formatInstant(instance.finishedAt ?: instance.updatedAt, "d MMM HH:mm:ss")}", color = muted, fontSize = 11.sp)
                 instance.result?.let { reason -> ReasonTooltip(reason) }
-                instance.qaReport?.let { QaCriteriaSection(it) }
+                instance.qaReportText?.let { QaReportSection(it) }
                 instance.planReport?.let { PlanReportSection(it) }
               }
             }

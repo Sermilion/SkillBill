@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.runner
 
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
@@ -21,8 +23,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
-  @Test
-  fun `verify_findings heading selection continues for body delivery without burning the output-gate cap`() {
+  @ParameterizedTest
+  @ValueSource(booleans = [false, true])
+  fun `body delivery settles and changed heading selections continue to repair`(changeSelection: Boolean) {
     val repoRoot = Files.createTempDirectory("skillbill-verify-findings-body-delivery")
     val findingPath = "runtime-kotlin/runtime-application/src/Foo.kt"
     val sourcePath = "runtime-kotlin/runtime-application/agent/history.md"
@@ -57,28 +60,35 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
                   assertTrue(prompt.contains("selected body sentence"), "second pass includes selected body")
                   assertFalse(prompt.contains("REJECTED by the schema gate"), "continuation is not a schema rejection")
                 }
-                facts(verifyFindingsSelectingBoundary(headingId, sourcePath))
+                facts(
+                  if (changeSelection && verifyLaunches > 1) {
+                    verifyFindingsCensusOnlyOutput(listOf(REVIEW_FIX_BLOCKER_FINDING_ID))
+                  } else {
+                    verifyFindingsSelectingBoundary(headingId, sourcePath)
+                  },
+                )
               } else {
                 facts(validJsonOutput(phaseId))
               }
             },
         ),
       )
-    harness.seedPhase("preplan", "completed", 1, INVOKED_AGENT, validJsonOutput("preplan"))
-    harness.seedPhase("plan", "completed", 1, INVOKED_AGENT, validJsonOutput("plan"))
-    harness.seedPhase("implement", "completed", 1, INVOKED_AGENT, IMPLEMENT_OUTPUT)
-    harness.seedPhase("simplify", "completed", 1, INVOKED_AGENT, SIMPLIFY_OUTPUT)
-    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, settledAuditSatisfiedRecord())
-    harness.seedReviewPhase("completed", 1, reviewFindingWithLocation(findingPath), 1)
-    harnessPendingVerifyFindingIds = listOf(REVIEW_FIX_BLOCKER_FINDING_ID)
+    harness.seedVerificationReview(findingPath)
 
     val report = harness.runner.run(harness.request())
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     assertEquals(2, verifyLaunches, "heading selection must continue once for body delivery")
+    assertEquals(
+      changeSelection,
+      harness.io.database.rejectedDiagnostics().any { it.metadata.phaseId == "verify_findings" },
+      "only a changed selection records a diagnostic",
+    )
+    assertContains(harness.launchedPromptPhaseOrder(), "implement_fix")
     assertTrue(
-      harness.io.database.rejectedDiagnostics().none { it.metadata.phaseId == "verify_findings" },
-      "body delivery must not record a rejected-output diagnostic",
+      harness.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty().none {
+        it.phaseId == "verify_findings" && it.action == FeatureTaskRuntimePhaseLedgerAction.BLOCKED
+      },
     )
     val bodyDeliveryContinuations =
       harness.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty()
@@ -109,13 +119,7 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
             },
         ),
       )
-    harness.seedPhase("preplan", "completed", 1, INVOKED_AGENT, validJsonOutput("preplan"))
-    harness.seedPhase("plan", "completed", 1, INVOKED_AGENT, validJsonOutput("plan"))
-    harness.seedPhase("implement", "completed", 1, INVOKED_AGENT, IMPLEMENT_OUTPUT)
-    harness.seedPhase("simplify", "completed", 1, INVOKED_AGENT, SIMPLIFY_OUTPUT)
-    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, settledAuditSatisfiedRecord())
-    harness.seedReviewPhase("completed", 1, reviewFindingWithLocation(findingPath), 1)
-    harnessPendingVerifyFindingIds = listOf(REVIEW_FIX_BLOCKER_FINDING_ID)
+    harness.seedVerificationReview(findingPath)
 
     val report = harness.runner.run(harness.request())
 
@@ -194,4 +198,14 @@ private fun verifyFindingsCensusOnlyOutput(verifiedFindingIds: List<String>): St
       "produced_outputs": {"finding_dispositions": [$dispositions]}
     }
     """.trimIndent()
+}
+
+private fun RunnerHarness.seedVerificationReview(findingPath: String) {
+  this.seedPhase("preplan", "completed", 1, INVOKED_AGENT, validJsonOutput("preplan"))
+  this.seedPhase("plan", "completed", 1, INVOKED_AGENT, validJsonOutput("plan"))
+  this.seedPhase("implement", "completed", 1, INVOKED_AGENT, IMPLEMENT_OUTPUT)
+  this.seedPhase("simplify", "completed", 1, INVOKED_AGENT, SIMPLIFY_OUTPUT)
+  this.seedPhase("audit", "completed", 1, INVOKED_AGENT, settledAuditSatisfiedRecord())
+  this.seedReviewPhase("completed", 1, reviewFindingWithLocation(findingPath), 1)
+  harnessPendingVerifyFindingIds = listOf(REVIEW_FIX_BLOCKER_FINDING_ID)
 }

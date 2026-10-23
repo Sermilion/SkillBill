@@ -8,19 +8,10 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import java.nio.file.Path
 import java.time.Clock
 import java.util.UUID
 import java.util.concurrent.CancellationException
-
-data class StandalonePhaseStatusLaunch(
-  val phaseId: String,
-  val invocationId: String,
-  val agentId: String? = null,
-  val launchArguments: List<String>? = null,
-  val monitorSelector: String? = null,
-)
 
 data class StandalonePhaseLaunch(
   val agentId: String? = null,
@@ -37,28 +28,33 @@ class StandalonePhaseStatusPublisherFactory(
 ) {
   fun forPhase(
     repoRoot: Path,
-    launch: StandalonePhaseStatusLaunch,
-  ): StandalonePhaseStatusEventSink =
-    sink(registrations.phaseRegistration(repoRoot, launch.phaseId, launch.invocationId, issueKey = null), launch)
+    phaseId: String,
+    invocationId: String,
+    agentId: String? = null,
+    launchArguments: List<String>? = null,
+  ): StandalonePhaseStatusEventSink {
+    val registration =
+      registrations.phaseRegistration(repoRoot, phaseId, invocationId, issueKey = null)
+        .copy(launchAgentId = agentId, launchArguments = launchArguments)
+    return StandalonePhaseStatusEventSink(database, { registration }, clock, diagnostics, blockIncidentCapture)
+  }
 
   internal fun forMonitor(
     attempt: MonitorAttemptTarget,
-    launch: StandalonePhaseStatusLaunch,
-  ): StandalonePhaseStatusEventSink =
-    sink(registrations.monitorRegistration(attempt, launch.phaseId, launch.invocationId), launch)
-
-  private fun sink(
-    base: StandalonePhaseStatusRegistration,
-    launch: StandalonePhaseStatusLaunch,
+    phaseId: String,
+    invocationId: String,
+    agentId: String? = null,
+    launchArguments: List<String>? = null,
   ): StandalonePhaseStatusEventSink {
-    val registration = base.copy(launchAgentId = launch.agentId, launchArguments = launch.launchArguments)
+    val registration =
+      registrations.monitorRegistration(attempt, phaseId, invocationId)
+        .copy(launchAgentId = agentId, launchArguments = launchArguments)
     return StandalonePhaseStatusEventSink(
       database,
       { registration },
       clock,
       diagnostics,
       blockIncidentCapture,
-      launch.monitorSelector,
     )
   }
 

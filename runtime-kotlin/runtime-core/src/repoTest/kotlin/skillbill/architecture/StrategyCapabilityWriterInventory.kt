@@ -16,6 +16,7 @@ internal object StrategyCapabilityWriterInventory {
       "recordCompleted",
       "restartAttemptBudget",
       "recordPhaseLaunched",
+      "recordAcknowledgedPhaseStart",
       "reserveReviewPass",
       "clearPersistedBlock",
       "discardStaleReentry",

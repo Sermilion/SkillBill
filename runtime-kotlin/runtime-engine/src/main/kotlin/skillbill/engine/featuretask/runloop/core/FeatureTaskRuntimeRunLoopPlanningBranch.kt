@@ -4,15 +4,21 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolv
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeNonBlockingFailure
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
+import skillbill.engine.featuretask.runloop.phase.PhaseFailureContinuationRequest
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
-import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseBoundLoopRules
+import skillbill.engine.featuretask.slot.PhasePreparedRunCapability
+import skillbill.engine.featuretask.slot.PhaseStepCapture
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -58,7 +64,6 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
         loopId = transition.loopId,
         edgeIteration = transition.edgeIteration,
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-        failureCode = FeatureTaskRuntimeAttemptBudgets.LOOP_EDGE_CAP_FAILURE_CODE,
         payload = BlockAndPersistPayload(outputArtifact = state.phase(phaseId).output?.payload),
       ),
     )
@@ -136,83 +141,60 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       policy = context.acceptedStepPolicy(phaseId),
       launchAssignment = FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
       reentry = reentry,
+      failureContinuationOutput =
+        context.runState.strategyFor(phaseId).stepHooks(phaseId).failureContinuationOutput(context.state.outputs()),
     )
   }
 
   internal fun runPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
-  ): PhaseOutcome =
-    context.runState.strategyFor(run.phaseId).withPreparedRun(run) { prepared ->
-      dispatchPreparedPhase(context, prepared)
-    }
+  ): PhaseOutcome {
+    val strategy = context.runState.strategyFor(run.phaseId)
+    val dispatch = { prepared: PhaseRun -> dispatchPreparedPhase(context, prepared) }
+    return (strategy as? PhasePreparedRunCapability)?.withPreparedRun(run, dispatch) ?: dispatch(run)
+  }
 
   private fun dispatchPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
   ): PhaseOutcome {
     context.runState.stepBinding.authorizeCoordinatorDispatch(run)
-    val state = context.acceptedStep(run)
-    return try {
-      context.runState.strategyFor(run.phaseId).runStep(run, state)
-    } finally {
-      state.finishStepExecution()
-      context.runState.stepBinding.releaseCoordinatorDispatch()
-    }
+    return context.runState
+      .strategyFor(run.phaseId)
+      .stepDescriptor(run.phaseId)
+      .capture(PreparedPhaseDispatch(context, run))
   }
 
   internal fun <T : Any> decideByStep(
     context: FeatureTaskRuntimeRunLoopContext,
     stepId: String,
-    decide: (PhaseLoopRules, PhaseAcceptedStepExecution) -> T?,
+    decide: (PhaseBoundLoopRules) -> T?,
   ): T? =
-    withLoopRuleBinding(context, stepId) { state ->
-      context.runState
-        .strategyFor(stepId)
-        .loopRules
-        ?.let { rules -> decide(rules, state) }
-    }
+    context.runState
+      .strategyFor(stepId)
+      .stepDescriptor(stepId)
+      .capture(LoopRuleDispatch(context, stepId, decide))
 
   internal fun <T : Any> decideByLoop(
     context: FeatureTaskRuntimeRunLoopContext,
     loopId: String,
-    decide: (PhaseLoopRules, PhaseAcceptedStepExecution) -> T?,
+    decide: (PhaseBoundLoopRules) -> T?,
   ): T? =
     context.transitions.backwardEdges
       .firstOrNull { it.loopId == loopId }
-      ?.let { edge -> decideByStep(context, edge.destinationPhaseId, decide) }
+      ?.let { edge ->
+        decideByStep(context, context.runState.strategyFor(edge.destinationPhaseId).entryStep, decide)
+      }
 
   internal fun forEachSlotRules(
     context: FeatureTaskRuntimeRunLoopContext,
-    act: (PhaseLoopRules, PhaseAcceptedStepExecution) -> Unit,
+    act: (PhaseBoundLoopRules) -> Unit,
   ) {
     context.transitions.forwardPhaseIds.map(context.runState::strategyFor).distinct().forEach { strategy ->
-      strategy.loopRules?.let { rules ->
-        withLoopRuleBinding(context, strategy.entryStep) { state -> act(rules, state) }
-      }
-    }
-  }
-
-  private fun <T> withLoopRuleBinding(
-    context: FeatureTaskRuntimeRunLoopContext,
-    stepId: String,
-    use: (PhaseAcceptedStepExecution) -> T,
-  ): T {
-    val run =
-      buildPhaseRun(
-        context = context,
-        phaseId = stepId,
-        request = context.request,
-        specSource = context.specSource,
-        reentry = null,
-      )
-    context.runState.stepBinding.authorizeCoordinatorDispatch(run)
-    val state = context.acceptedStep(run)
-    return try {
-      use(state)
-    } finally {
-      state.finishStepExecution()
-      context.runState.stepBinding.releaseCoordinatorDispatch()
+      strategy
+        .stepDescriptor(strategy.entryStep)
+        .capture(LoopRuleDispatch(context, strategy.entryStep, act))
     }
   }
 
@@ -268,6 +250,66 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     return "Backward-edge loop '$loopId' exhausted its per-edge cap after $edgeIteration iteration(s) with the " +
       "verdict '${verdict.wireValue}' still unresolved; the run blocks rather than re-entering past the cap." +
       findingsSuffix
+  }
+
+  private class LoopRuleDispatch<T>(
+    private val context: FeatureTaskRuntimeRunLoopContext,
+    private val stepId: String,
+    private val decide: (PhaseBoundLoopRules) -> T?,
+  ) : PhaseStepCapture<T?> {
+    override fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): T? {
+      val rules = descriptor.loopRules ?: return null
+      val run =
+        buildPhaseRun(
+          context = context,
+          phaseId = stepId,
+          request = context.request,
+          specSource = context.specSource,
+          reentry = null,
+        )
+      context.runState.stepBinding.authorizeCoordinatorDispatch(run)
+      val state = descriptor.bind(context.bindingFactory(run))
+      return try {
+        decide(PhaseBoundLoopRules.of(rules, state))
+      } finally {
+        state.finishStepExecution()
+        context.runState.stepBinding.releaseCoordinatorDispatch()
+      }
+    }
+  }
+
+  private class PreparedPhaseDispatch(
+    private val context: FeatureTaskRuntimeRunLoopContext,
+    private val run: PhaseRun,
+  ) : PhaseStepCapture<PhaseOutcome> {
+    override fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): PhaseOutcome {
+      val state = descriptor.bind(context.bindingFactory(run))
+      return try {
+        execute(descriptor, state)
+      } finally {
+        state.finishStepExecution()
+        context.runState.stepBinding.releaseCoordinatorDispatch()
+      }
+    }
+
+    private fun <B : PhaseAcceptedStepExecution> execute(
+      descriptor: PhaseStepDescriptor<B>,
+      state: B,
+    ): PhaseOutcome =
+      try {
+        descriptor.execute(run, state)
+      } catch (error: SkillBillRuntimeException) {
+        FeatureTaskRuntimeNonBlockingFailure.settle(
+          context.recorder,
+          context.runState.coupledRunTransitions,
+          context.observability,
+          PhaseFailureContinuationRequest(
+            run,
+            context.state.phase(run.phaseId).nextIteration,
+            "Phase execution could not finish: ${error.code}",
+          ),
+        ) ?: throw error
+      }
   }
 }
 

@@ -10,7 +10,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.goalrunner.model.GoalProgressEventDraft
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -193,7 +193,15 @@ class DefaultGoalRunnerQaGate(
       }
       else -> return
     }
-    recordProgress(state, request, progressDraft(state, request, phaseId, kind, outcome))
+    val started = event as? FeatureTaskRuntimeRunEvent.PhaseStarted
+    recordProgress(
+      state,
+      request,
+      progressDraft(state, request, phaseId, kind, outcome).copy(
+        launchedModel = started?.model,
+        effort = started?.effort,
+      ),
+    )
     request.outputSink.write(AgentRunOutputStream.STDERR, "$phaseId: ${kind.wireValue}\n")
   }
 

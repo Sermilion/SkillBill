@@ -27,8 +27,6 @@ import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
-import dev.skillbill.tray.core.domain.model.QaCriterionResult
-import dev.skillbill.tray.core.domain.model.QaRunReport
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
@@ -99,23 +97,14 @@ private fun ConclusionRow(phase: String, conclusion: PhaseConclusion) {
 
 @Composable
 private fun QaRow(qa: GoalQaResult) {
-  val fixes = when (qa.fixAttempts) { 0 -> null; 1 -> "1 fix attempt"; else -> "${qa.fixAttempts} fix attempts" }
   Column(Modifier.fillMaxWidth().padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Text("Goal QA", color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp)
     PhaseHeading(
       "QA",
-      listOfNotNull(wireLabel(qa.outcome), fixes, formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
+      listOf(wireLabel(qa.outcome), formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
       verdictColor(qa.outcome),
     )
-    if (qa.criteria.isNotEmpty()) {
-      val report = QaRunReport(qa.criteria)
-      PhaseBody("Goal QA", qaCriteriaSummary(report), qa.reason.takeUnless(::isBareQaReasonToken))
-      qa.criteria.forEach { criterion ->
-        PhaseBody("Goal QA criterion", qaCriterionHeading(criterion), qaCriterionDetail(criterion))
-      }
-    } else {
-      PhaseBody("Goal QA", qa.reason, null)
-    }
+    PhaseBody("Goal QA", qa.reason.takeUnless { qa.reportText != null && isBareQaReasonToken(it) }, null)
   }
 }
 
@@ -151,21 +140,6 @@ private fun wireLabel(value: String): String = value.replace('_', ' ')
 private val BARE_QA_REASON_TOKEN = Regex("^[a-z]+(?:_[a-z]+)*$")
 
 private fun isBareQaReasonToken(reason: String?): Boolean = reason != null && BARE_QA_REASON_TOKEN.matches(reason)
-
-private fun qaCriterionHeading(criterion: QaCriterionResult): String =
-  "${criterion.id ?: "Unlinked"} · ${if (criterion.passed) "passed" else "failed"}"
-
-private fun qaCriterionDetail(criterion: QaCriterionResult): String? {
-  val checks = criterion.checks.filter { it.passed == criterion.passed }.map { it.description }
-  val findings =
-    criterion.findings.map { finding ->
-      listOfNotNull(
-        finding.expected.takeIf(String::isNotBlank)?.let { "Expected: $it" },
-        finding.observed.takeIf(String::isNotBlank)?.let { "Observed: $it" },
-      ).joinToString("\n")
-    }
-  return (checks + findings).filter { it.isNotBlank() }.joinToString("\n").takeIf(String::isNotBlank)
-}
 
 private fun verdictColor(verdict: String?): Color = when (verdict) {
   "approved", "satisfied", "passed", "no_findings_verified" -> green

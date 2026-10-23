@@ -7,25 +7,28 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
+import skillbill.engine.featuretask.slot.FindingVerificationBindingFamily
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseRunner
-import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStatusCapability
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.PhaseVerdictCapability
+import skillbill.engine.featuretask.slot.RepairReceiptBindingFamily
+import skillbill.engine.featuretask.slot.ReviewBindingFamily
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.promptSource
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.codereview.history.CodeReviewHistory
 import skillbill.engine.featuretask.slot.codereview.verify.VerifyFindingsStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
-import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.error.featuretask.UnknownPhaseStepError
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -60,10 +63,28 @@ internal interface CodeReviewPass {
 internal class CodeReviewSlot(
   runner: PhaseRunner,
   private val pass: CodeReviewPass,
-) {
+) : PhaseLoopCapability,
+  PhaseResumeCapability,
+  PhaseStatusCapability,
+  PhaseVerdictCapability {
   private val review = CodeReviewStep(runner, pass)
   private val verifyFindings = VerifyFindingsStep()
   private val implementFix = ImplementFixStep()
+  private val reviewDescriptor =
+    PhaseStepDescriptor(ReviewBindingFamily, review, InlineReviewLoopRules) { run, state ->
+      review.run(
+        run,
+        state.reviewExecutionContext(),
+        state,
+        state.acceptedOwner.promptSource(run.phaseId, state.modelDirectiveSupplements),
+      )
+    }
+  private val verifyFindingsDescriptor =
+    PhaseStepDescriptor(FindingVerificationBindingFamily, verifyFindings) { run, state ->
+      runAgentStep(run, state)
+    }
+  private val implementFixDescriptor =
+    PhaseStepDescriptor(RepairReceiptBindingFamily, implementFix) { run, state -> runAgentStep(run, state) }
   private val policies: Map<String, PhaseStepPolicy> =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to pass.policy,
@@ -73,15 +94,7 @@ internal class CodeReviewSlot(
 
   val steps: List<String> = policies.keys.toList()
   val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
-  val loopRules: PhaseLoopRules = InlineReviewLoopRules
-
-  fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
-    when (stepId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> PhaseExecutionBindingKind.REVIEW
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> PhaseExecutionBindingKind.FINDING_VERIFICATION
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> PhaseExecutionBindingKind.REPAIR_RECEIPT
-      else -> throw UnknownPhaseStepError(stepId)
-    }
+  override val loopRules: PhaseLoopRules = InlineReviewLoopRules
 
   fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
@@ -119,46 +132,18 @@ internal class CodeReviewSlot(
     }
   }
 
-  fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome =
-    when (run.phaseId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> {
-        val reviewBinding =
-          state as? PhaseReviewStepBinding
-            ?: error("Review step requires a review execution binding.")
-        review.run(
-          run,
-          reviewBinding.reviewExecutionContext(),
-          reviewBinding,
-          state.acceptedOwner.promptSource(run.phaseId),
-        )
-      }
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> {
-        check(state is PhaseVerifyFindingsStepBinding) {
-          "Verify findings step requires a finding-verification binding."
-        }
-        runAgentStep(run, state)
-      }
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> {
-        check(state is PhaseImplementFixStepBinding) {
-          "Implement fix step requires an implement-fix binding."
-        }
-        runAgentStep(run, state)
-      }
-      else -> throw UnknownPhaseStepError(run.phaseId)
-    }
-
-  fun stepHooks(stepId: String): PhaseStepHooks =
+  fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> =
     when (stepId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> review
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> verifyFindings
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> implementFix
-      else -> PhaseStepHooks.None
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> reviewDescriptor
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> verifyFindingsDescriptor
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> implementFixDescriptor
+      else -> throw UnknownPhaseStepError(stepId)
     }
 
-  fun verdictRule(stepId: String): FeatureTaskRuntimeStepVerdictRule? =
+  override fun verdictRule(
+    stepId: String,
+    diagnostics: RuntimeDiagnostics,
+  ): FeatureTaskRuntimeStepVerdictRule? =
     when (stepId) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> FeatureTaskRuntimeOutputVerification.reviewVerdictRule
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
@@ -166,14 +151,14 @@ internal class CodeReviewSlot(
       else -> null
     }
 
-  fun resumeRules(stepId: String): PhaseResumeRules =
+  override fun resumeRules(stepId: String): PhaseResumeRules =
     if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
       CodeReviewResumeRules
     } else {
       PhaseResumeRules.None
     }
 
-  fun currentExecution(
+  override fun currentExecution(
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? = CodeReviewHistory.currentExecution(stepId, context)

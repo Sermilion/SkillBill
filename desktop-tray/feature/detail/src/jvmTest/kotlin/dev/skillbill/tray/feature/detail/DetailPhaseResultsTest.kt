@@ -8,9 +8,6 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import dev.skillbill.tray.core.designsystem.DesignSystemTheme
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
-import dev.skillbill.tray.core.domain.model.QaCheckResult
-import dev.skillbill.tray.core.domain.model.QaCriterionFinding
-import dev.skillbill.tray.core.domain.model.QaCriterionResult
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
@@ -103,7 +100,7 @@ class DetailPhaseResultsTest {
   }
 
   @Test
-  fun `goal QA lists each criterion as compact pass or fail rows`() = runComposeUiTest {
+  fun `goal QA shows its stored prose report`() = runComposeUiTest {
     showPhaseResults(
       qa =
         GoalQaResult(
@@ -111,34 +108,13 @@ class DetailPhaseResultsTest {
           "other",
           0,
           fixtureInstant,
-          criteria =
-            listOf(
-              QaCriterionResult(
-                "AC-001",
-                false,
-                listOf(QaCheckResult("Retained field values survive a restart.", false)),
-                listOf(
-                  QaCriterionFinding("F-1", emptyList(), "Values are still there.", "Values are empty."),
-                ),
-              ),
-              QaCriterionResult(
-                "AC-002",
-                true,
-                listOf(QaCheckResult("The pause flag is written with run state.", true)),
-                emptyList(),
-              ),
-            ),
+          reportText = "AC-001 failed. Retained field values are empty after restart.",
         ),
     )
 
     onNodeWithText("Goal QA").assertExists()
     onNodeWithText("incomplete", substring = true).assertExists()
-    onNodeWithText("AC-001 failed; 1 of 2 criteria passed.").assertExists()
-    onNodeWithText("other").assertDoesNotExist()
-    onNodeWithText("AC-001 · failed").assertExists()
-    onNodeWithText("AC-002 · passed").assertExists()
-    onNodeWithText("Retained field values survive a restart.", substring = true).assertExists()
-    onNodeWithText("The pause flag is written with run state.", substring = true).assertExists()
+    onNodeWithText("AC-001 failed. Retained field values are empty after restart.").assertExists()
   }
 
   private fun ComposeUiTest.showPhaseResults(vararg results: SubtaskPhaseResults, qa: GoalQaResult? = null) {

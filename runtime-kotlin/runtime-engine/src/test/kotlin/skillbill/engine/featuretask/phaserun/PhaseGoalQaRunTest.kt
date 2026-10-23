@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.phaserun
 import org.junit.jupiter.api.io.TempDir
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.idestatus.model.StandaloneQaOutcome

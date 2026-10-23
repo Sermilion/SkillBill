@@ -33,7 +33,7 @@ class FeatureTaskRuntimeGoalContinuationStateRecorder(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
           ?: return@transaction false
       if (admitted != null &&
-        !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)
       ) {
         return@transaction false
       }

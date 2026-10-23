@@ -1,6 +1,7 @@
 package skillbill.engine.operation.verify
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import java.nio.file.Path
@@ -14,6 +15,8 @@ internal object VerifyPromptSections {
   const val VERDICT_STEP: String = "operation.verify.verdict"
 
   const val SKIPPED_PREFIX: String = "SKIPPED:"
+
+  private const val UNKNOWN_QA_VERDICT: String = "unknown"
 
   private const val VERIFY_DIRECTIVE_RESOURCE: String = "/skillbill/engine/operation/verify/verify-directive.md"
 
@@ -114,16 +117,17 @@ internal object VerifyPromptSections {
     ).joinToString("\n\n")
 
   fun qaDirective(
-    worktree: Path,
+    checkout: Path,
     headRevision: String,
   ): String =
     "# Operation: verify (mobile QA)\n\n" +
-      "Run report-only mobile QA for the verify target `$headRevision`. The runtime checked it out into the " +
-      "temporary detached worktree `$worktree`; build, install, and test only from there. Never touch the " +
-      "operator's checkout, and never edit tracked files, commit, push, or open a pull request. Settle by writing " +
-      "the QA receipt; the runtime records a receipt bound to any other tree as incomplete with a warning."
+      "Run mobile QA for the verify target `$headRevision`. The runtime checked it out into the temporary QA " +
+      "checkout `$checkout`; build, install, and test only from there. You may edit any file in that checkout to " +
+      "reach a state the criteria need; the runtime deletes it afterwards. Never touch the operator's checkout, " +
+      "and never commit, push, or open a pull request. Settle by writing the QA report at the path the runtime " +
+      "names."
 
-  fun verdictDirective(qaReceipt: Map<String, Any?>? = null): String =
+  fun verdictDirective(qaReport: Map<String, Any?>? = null): String =
     listOfNotNull(
       "# Operation: verify (consolidated verdict)\n\n" +
         "Merge the evaluator receipts in the prior values into one report with the rubric below. The " +
@@ -131,11 +135,29 @@ internal object VerifyPromptSections {
         "This operation is report-only: do not offer to fix issues or to post a PR comment, and run no " +
         "follow-up. The operator decides what to fix.",
       CONSOLIDATED_VERDICT,
-      qaReceipt?.let { receipt ->
-        QA_VERDICT_RULES + "\n\nQA receipt:\n\n```json\n" + JsonCodec.valueToJsonString(receipt) + "\n```"
-      },
+      qaReport?.let { report -> QA_VERDICT_RULES + "\n\n" + qaReportBlock(report) },
       VERIFICATION_INPUT_BOUNDARY,
     ).joinToString("\n\n")
+
+  private fun qaReportBlock(report: Map<String, Any?>): String {
+    val verdict = report[VerifyWorkflow.VERDICT_FIELD] as? String ?: UNKNOWN_QA_VERDICT
+    val text = report[QaOutcomePayloadKeys.REPORT_TEXT] as? String
+    val warnings = VerifyWorkflow.strings(report, VerifyWorkflow.WARNINGS)
+    val cleanup = report[QaOutcomePayloadKeys.CLEANUP] as? String
+    return listOfNotNull(
+      "QA report (verdict: $verdict):",
+      text ?: legacyReceiptBlock(report),
+      warnings.takeIf(List<String>::isNotEmpty)?.joinToString("\n", prefix = "QA warnings:\n") { "- $it" },
+      cleanup,
+    ).joinToString("\n\n")
+  }
+
+  private fun legacyReceiptBlock(report: Map<String, Any?>): String =
+    if (report.containsKey(VerifyWorkflow.FINDINGS)) {
+      "```json\n" + JsonCodec.valueToJsonString(report) + "\n```"
+    } else {
+      "No QA report text was recorded."
+    }
 
   private fun section(heading: String): String {
     val level = heading.takeWhile { it == '#' }.length

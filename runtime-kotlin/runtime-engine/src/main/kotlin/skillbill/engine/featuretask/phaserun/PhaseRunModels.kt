@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.config.model.CompactionSettings
-import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
@@ -21,7 +20,6 @@ import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -78,8 +76,7 @@ sealed interface PhaseRunResult {
     val acceptedOutput: String? = null,
     override val targetReport: List<String> = emptyList(),
     val qaOutcome: StandaloneQaOutcome? = null,
-    val qaReport: StandaloneQaReport? = null,
-    val agentBlock: PhaseRunBlockedStep? = null,
+    val qaReportText: String? = null,
   ) : PhaseRunResult
 
   data class Blocked(
@@ -93,22 +90,11 @@ sealed interface PhaseRunResult {
   ) : PhaseRunResult
 }
 
-data class PhaseRunBlockedStep(
-  val stepId: String,
-  val reason: String,
-)
-
 @Inject
 class StandalonePhaseRunners(
   private val monitor: StandaloneMonitorExecutionPreparer,
   private val qa: QaStandalonePhaseRun,
-  private val blockIncidents: BlockIncidentEntryReconciler,
 ) {
-  internal fun guardEntry(run: () -> PhaseRunResult): PhaseRunResult =
-    blockIncidents.guardEntry({
-      it is PhaseRunResult.Blocked || (it as? PhaseRunResult.Completed)?.agentBlock != null
-    }, run)
-
   internal fun prepareMonitor(request: MonitorPreparationRequest): MonitorPreparation = monitor.prepare(request)
 
   fun runQa(

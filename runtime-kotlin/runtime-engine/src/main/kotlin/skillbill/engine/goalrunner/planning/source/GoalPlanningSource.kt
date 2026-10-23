@@ -19,7 +19,9 @@ import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompositionHash
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
+import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
+import skillbill.engine.goalrunner.telemetry.GoalPlanningProgressRecorder
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.idestatus.model.IdeStatusLaunchScope
@@ -60,6 +62,7 @@ class PlanWorkflowGoalPlanningSource(
   planner: FeatureTaskRuntimeDecompositionPlanner,
   private val legacyPreparations: GoalPlanningPreparationCheckpoint,
   private val replannedChildren: GoalReplannedChildCleanup,
+  private val progressRecorder: GoalPlanningProgressRecorder,
 ) : GoalPlanningSource {
   private val snapshots = PlanBundleSnapshots(planner)
 
@@ -150,7 +153,8 @@ class PlanWorkflowGoalPlanningSource(
     val request = scope.request
     val issueKey = scope.state.manifest.issueKey
     val agentId = request.configuredAgentOverrideId ?: request.invokedAgentId
-    val inputFor = { specPath: String -> planInput(request, agentId, specPath) }
+    val progress = progressRecorder.sink(scope.state.parentWorkflowId, issueKey, agentId)
+    val inputFor = { specPath: String -> planInput(request, agentId, specPath).copy(eventSink = progress) }
     val linked = linkedPlan(scope)
     val replanned =
       if (linked == null) {
@@ -270,10 +274,19 @@ class PlanWorkflowGoalPlanningSource(
 
   private fun linkedPlan(scope: PlanningScope): LinkedPlan? =
     database.read { unitOfWork ->
-      unitOfWork.workflowStates.findLinkedSubtaskPlanWorkflowId(scope.identity, scope.pending)?.let { workflowId ->
-        linkedPlanOf(workflowId, unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId))
+      val states = unitOfWork.workflowStates
+      states.findLinkedSubtaskPlanWorkflowId(scope.identity, scope.pending) { workflowId ->
+        states.getFeatureTaskExecutionIdentity(
+          workflowId,
+        )?.governedSpecPath?.let { scope.governsParentSpec(it) } ?: true
+      }?.let { workflowId ->
+        linkedPlanOf(workflowId, states.get(WorkflowFamily.TASK_RUNTIME, workflowId))
       }
     }
+
+  private fun PlanningScope.governsParentSpec(governedSpecPath: String): Boolean =
+    resolvedGovernedPath(canonicalRepository, governedSpecPath, repositories) ==
+      resolvedGovernedPath(canonicalRepository, state.manifest.parentSpecPath, repositories)
 
   private fun loadPlan(workflowId: String): LinkedPlan? =
     database.read { unitOfWork ->

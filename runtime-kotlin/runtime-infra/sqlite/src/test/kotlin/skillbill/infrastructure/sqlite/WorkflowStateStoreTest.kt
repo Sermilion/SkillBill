@@ -34,6 +34,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -402,6 +403,37 @@ class WorkflowStateStoreTest {
       )
       assertTrue(store.releaseFeatureTaskRuntimeWorker(row.workflowId, replacement.ownerToken, 2))
       assertEquals(null, store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId))
+    }
+  }
+
+  @Test
+  fun `an expired worker lease renews while its owner is unchanged and stays fenced after a takeover`() {
+    val dbPath = Files.createTempDirectory("runtime-worker-expired-renewal").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val row =
+        workflowRow(
+          workflowId = "wftr-expired-renewal",
+          sessionId = "ftr-expired-renewal",
+          workflowName = "bill-feature-task",
+          currentStepId = "audit",
+          mode = RUNTIME,
+        ).copy(workflowStatus = WorkflowStatus.RUNNING.wireValue)
+      store.saveFeatureTaskWorkflow(row, RUNTIME)
+      val updatedAt = assertNotNull(store.getFeatureTaskWorkflowAsMode(row.workflowId, RUNTIME)).updatedAt
+      val ownership = workerOwnership(row.workflowId, generation = 1, ownerToken = "owner-token-0007")
+      assertTrue(store.acquireFeatureTaskRuntimeWorker(ownership, updatedAt))
+
+      val afterSleep = ownership.copy(heartbeatAt = "2026-07-14T10:05:45Z", expiresAt = "2026-07-14T10:06:15Z")
+      assertTrue(store.heartbeatFeatureTaskRuntimeWorker(afterSleep))
+      assertEquals(afterSleep, store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId))
+
+      assertTrue(store.reserveFeatureTaskRuntimeWorkerTakeover(row.workflowId, ownership.ownerToken, 1))
+      assertFalse(
+        store.heartbeatFeatureTaskRuntimeWorker(
+          afterSleep.copy(heartbeatAt = "2026-07-14T10:07:00Z", expiresAt = "2026-07-14T10:07:30Z"),
+        ),
+      )
     }
   }
 

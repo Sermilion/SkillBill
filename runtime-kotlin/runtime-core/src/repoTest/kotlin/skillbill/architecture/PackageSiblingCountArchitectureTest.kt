@@ -145,20 +145,6 @@ class PackageSiblingCountArchitectureTest {
   }
 
   @Test
-  fun `intellij plugin retains its layer package roots`() {
-    val pluginRoot =
-      ArchitectureScanSupport.runtimeRoot.resolve(
-        "intellij-plugin/src/main/kotlin/dev/skillbill/intellij",
-      )
-    val requiredLayers = setOf("domain", "application", "presentation", "ui", "infrastructure")
-    val missingLayers =
-      requiredLayers.filterNot { layer ->
-        pluginRoot.resolve(layer).toFile().isDirectory
-      }
-    assertEquals(emptyList(), missingLayers)
-  }
-
-  @Test
   fun `task-runtime and application review models stay data-only below their parent boundaries`() {
     val modelAreas =
       listOf(

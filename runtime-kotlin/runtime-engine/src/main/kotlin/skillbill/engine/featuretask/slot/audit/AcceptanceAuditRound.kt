@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.audit
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -12,24 +13,30 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseAuditOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeClaimValidation
+import skillbill.workflow.taskruntime.model.audit.auditNeedsClarification
+import skillbill.workflow.taskruntime.model.audit.awaitsAuditClarification
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
-internal object AcceptanceAuditRound : PhaseStepHooks {
+internal object AcceptanceAuditRound : PhaseStepHooks<PhaseQaStepBinding> {
   override val contextKind = PhaseStepHookContextKind.AUDIT
 
   override fun launchPromptSupplement(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseStepBinding,
+    state: PhaseQaStepBinding,
   ): String = AcceptanceQaReaudit.promptSupplement(state)
+
+  private const val REPEATED_VERDICTLESS_AUDIT_REASON =
+    "runtime: audit completed two rounds in a row without a verdict. The audit agent most likely could not reach " +
+      "the skill-bill settlement tools (feature_task_phase_complete). Make the skill-bill MCP server available " +
+      "to the agent, then resume the goal."
 
   private val NO_CHANGE_WORDS: Set<String> =
     setOf(
@@ -40,7 +47,7 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
   override fun completionRejection(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseQaStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
     val claimed = auditsClaim(context)
@@ -66,8 +73,18 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
       capture,
       attested,
       outputMap,
-      null,
+      repeatedVerdictlessRejection(capture, outputMap),
     )
+  }
+
+  private fun repeatedVerdictlessRejection(
+    capture: ValidatedOutputCapture,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    if (!auditNeedsClarification(outputMap[SharedPayloadKeys.VERDICT] as? String)) return null
+    val repair = (capture.run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.snapshot
+    if (repair?.awaitsAuditClarification() != true) return null
+    return REPEATED_VERDICTLESS_AUDIT_REASON
   }
 
   private fun noChangeRoundRejection(

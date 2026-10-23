@@ -13,9 +13,20 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
-import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseMonitorStepBinding
+import skillbill.engine.featuretask.slot.state.PhasePlanningAgentStepBinding
+import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
+import skillbill.engine.featuretask.slot.state.PhasePlanningUnitBinding
+import skillbill.engine.featuretask.slot.state.PhasePullRequestStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
@@ -31,7 +42,7 @@ import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
  * preparation and output gate ask the strategy of the running step for its hooks, so step-specific evidence,
  * prompt sections, and output checks live with the step instead of in the shared code.
  */
-internal interface PhaseStepHooks : PhaseStepLaunchHooks {
+internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
   val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
 
   /** Whether the accepted step owns one serial acceptance-repair mutation attempt. */
@@ -41,7 +52,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   fun beforeAgentLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseStepBinding,
+    state: B,
   ): String? = null
 
   /** Whether the output gate fingerprints the repository when this step completes. */
@@ -70,7 +81,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   fun checkValidatedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: B,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
@@ -78,7 +89,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   fun completionRejection(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: B,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? = null
 
@@ -86,7 +97,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   fun settleCompletedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: B,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
@@ -115,7 +126,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   fun interpretedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: B,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): NormalizedFeatureTaskRuntimePhaseOutput = output
 
@@ -123,7 +134,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   fun recordAcceptedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseStepBinding,
+    state: B,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ) = Unit
 
@@ -137,12 +148,16 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   ): String? = null
 
   companion object {
-    val None: PhaseStepHooks = object : PhaseStepHooks {}
+    val None: PhaseStepHooks<PhaseAcceptedStepExecution> = object : PhaseStepHooks<PhaseAcceptedStepExecution> {}
   }
 }
 
 /** The launch behaviour one strategy step adds to the shared launch preparation and pre-launch checks. */
-internal interface PhaseStepLaunchHooks {
+internal interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
+  fun failureContinuationOutput(
+    upstream: List<FeatureTaskRuntimePhaseOutput>,
+  ): NormalizedFeatureTaskRuntimePhaseOutput? = null
+
   /** Whether the launch prompt of this step carries the build command the validation gate declares. */
   val carriesPackBuildCommand: Boolean
     get() = false
@@ -151,7 +166,7 @@ internal interface PhaseStepLaunchHooks {
   fun launchPromptSupplement(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseStepBinding,
+    state: B,
   ): String = ""
 
   /** The repository checkpoint the launch handoff of [run] expects, given the [current] checkpoint fingerprint. */
@@ -163,7 +178,7 @@ internal interface PhaseStepLaunchHooks {
   /** The review pass and review tier the launch prompt of [run] carries. */
   fun launchReviewTier(
     run: PhaseRun,
-    state: PhaseReviewPassState,
+    state: B,
   ): PhaseLaunchReviewTier =
     PhaseLaunchReviewTier(
       passNumber = null,
@@ -172,7 +187,7 @@ internal interface PhaseStepLaunchHooks {
     )
 
   /** The recorded finding verdicts the launch handoff of this step carries. */
-  fun handoffFindingVerdicts(state: PhaseImplementFixStepBinding): List<ReviewFindingVerdict> = emptyList()
+  fun handoffFindingVerdicts(state: B): List<ReviewFindingVerdict> = emptyList()
 
   /** Resets the step state a launch of [run] must not carry over from a prior process. */
   fun onLaunch(
@@ -193,7 +208,7 @@ internal interface PhaseStepLaunchHooks {
   fun admitLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseAcceptedStepExecution,
+    state: B,
     iteration: Int,
   ): PhaseLaunchAdmission = PhaseLaunchAdmission.Launch
 
@@ -275,4 +290,281 @@ internal enum class PhaseStepHookContextKind {
   IMPLEMENTATION,
   PULL_REQUEST,
   PLANNING,
+}
+
+internal sealed interface PhaseBindingFamily<B : PhaseAcceptedStepExecution> {
+  fun <R> construct(
+    factory: PhaseBindingFactory,
+    hooks: PhaseStepHooks<B>,
+    use: (B) -> R,
+  ): R
+
+  data object Agent : PhaseBindingFamily<PhaseAgentStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhaseAgentStepBinding>,
+      use: (PhaseAgentStepBinding) -> R,
+    ): R = factory.agent(hooks, use)
+  }
+
+  data object PlanningAgent : PhaseBindingFamily<PhasePlanningAgentStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhasePlanningAgentStepBinding>,
+      use: (PhasePlanningAgentStepBinding) -> R,
+    ): R = factory.planningAgent(hooks, use)
+  }
+
+  data object PlanningFanOut : PhaseBindingFamily<PhasePlanningStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhasePlanningStepBinding>,
+      use: (PhasePlanningStepBinding) -> R,
+    ): R = factory.planningFanOut(hooks, use)
+  }
+
+  data object PlanningUnit : PhaseBindingFamily<PhasePlanningUnitBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhasePlanningUnitBinding>,
+      use: (PhasePlanningUnitBinding) -> R,
+    ): R = factory.planningUnit(hooks, use)
+  }
+
+  data object QaFindings : PhaseBindingFamily<PhaseQaStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhaseQaStepBinding>,
+      use: (PhaseQaStepBinding) -> R,
+    ): R = factory.qaFindings(hooks, use)
+  }
+
+  data class QualityGate(val operation: PhaseQualityGateOperation) : PhaseBindingFamily<PhaseQualityGateStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhaseQualityGateStepBinding>,
+      use: (PhaseQualityGateStepBinding) -> R,
+    ): R = factory.qualityGate(operation, hooks, use)
+  }
+
+  data object Commit : PhaseBindingFamily<PhaseCommitStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhaseCommitStepBinding>,
+      use: (PhaseCommitStepBinding) -> R,
+    ): R = factory.commit(hooks, use)
+  }
+
+  data object Monitor : PhaseBindingFamily<PhaseMonitorStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhaseMonitorStepBinding>,
+      use: (PhaseMonitorStepBinding) -> R,
+    ): R = factory.monitor(hooks, use)
+  }
+
+  data object StandaloneMonitor : PhaseBindingFamily<PhaseStandaloneMonitorStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhaseStandaloneMonitorStepBinding>,
+      use: (PhaseStandaloneMonitorStepBinding) -> R,
+    ): R = factory.standaloneMonitor(hooks, use)
+  }
+
+  data object StandalonePublication : PhaseBindingFamily<PhaseStandalonePublicationStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhaseStandalonePublicationStepBinding>,
+      use: (PhaseStandalonePublicationStepBinding) -> R,
+    ): R = factory.standalonePublication(hooks, use)
+  }
+
+  data object PullRequest : PhaseBindingFamily<PhasePullRequestStepBinding> {
+    override fun <R> construct(
+      factory: PhaseBindingFactory,
+      hooks: PhaseStepHooks<PhasePullRequestStepBinding>,
+      use: (PhasePullRequestStepBinding) -> R,
+    ): R = factory.pullRequest(hooks, use)
+  }
+}
+
+internal data object ReviewBindingFamily : PhaseBindingFamily<PhaseReviewStepBinding> {
+  override fun <R> construct(
+    factory: PhaseBindingFactory,
+    hooks: PhaseStepHooks<PhaseReviewStepBinding>,
+    use: (PhaseReviewStepBinding) -> R,
+  ): R = factory.review(hooks, use)
+}
+
+internal data object FindingVerificationBindingFamily : PhaseBindingFamily<PhaseVerifyFindingsStepBinding> {
+  override fun <R> construct(
+    factory: PhaseBindingFactory,
+    hooks: PhaseStepHooks<PhaseVerifyFindingsStepBinding>,
+    use: (PhaseVerifyFindingsStepBinding) -> R,
+  ): R = factory.findingVerification(hooks, use)
+}
+
+internal data object RepairReceiptBindingFamily : PhaseBindingFamily<PhaseImplementFixStepBinding> {
+  override fun <R> construct(
+    factory: PhaseBindingFactory,
+    hooks: PhaseStepHooks<PhaseImplementFixStepBinding>,
+    use: (PhaseImplementFixStepBinding) -> R,
+  ): R = factory.repairReceipt(hooks, use)
+}
+
+internal interface PhaseBindingFactory :
+  PhaseAgentBindingFactory,
+  PhaseReviewBindingFactory,
+  PhaseSideEffectBindingFactory
+
+internal interface PhaseAgentBindingFactory {
+  fun <R> agent(
+    hooks: PhaseStepHooks<PhaseAgentStepBinding>,
+    use: (PhaseAgentStepBinding) -> R,
+  ): R
+
+  fun <R> planningAgent(
+    hooks: PhaseStepHooks<PhasePlanningAgentStepBinding>,
+    use: (PhasePlanningAgentStepBinding) -> R,
+  ): R
+
+  fun <R> planningFanOut(
+    hooks: PhaseStepHooks<PhasePlanningStepBinding>,
+    use: (PhasePlanningStepBinding) -> R,
+  ): R
+
+  fun <R> planningUnit(
+    hooks: PhaseStepHooks<PhasePlanningUnitBinding>,
+    use: (PhasePlanningUnitBinding) -> R,
+  ): R
+
+  fun <R> qaFindings(
+    hooks: PhaseStepHooks<PhaseQaStepBinding>,
+    use: (PhaseQaStepBinding) -> R,
+  ): R
+}
+
+internal interface PhaseReviewBindingFactory {
+  fun <R> review(
+    hooks: PhaseStepHooks<PhaseReviewStepBinding>,
+    use: (PhaseReviewStepBinding) -> R,
+  ): R
+
+  fun <R> findingVerification(
+    hooks: PhaseStepHooks<PhaseVerifyFindingsStepBinding>,
+    use: (PhaseVerifyFindingsStepBinding) -> R,
+  ): R
+
+  fun <R> repairReceipt(
+    hooks: PhaseStepHooks<PhaseImplementFixStepBinding>,
+    use: (PhaseImplementFixStepBinding) -> R,
+  ): R
+}
+
+internal interface PhaseSideEffectBindingFactory {
+  fun <R> qualityGate(
+    operation: PhaseQualityGateOperation,
+    hooks: PhaseStepHooks<PhaseQualityGateStepBinding>,
+    use: (PhaseQualityGateStepBinding) -> R,
+  ): R
+
+  fun <R> commit(
+    hooks: PhaseStepHooks<PhaseCommitStepBinding>,
+    use: (PhaseCommitStepBinding) -> R,
+  ): R
+
+  fun <R> monitor(
+    hooks: PhaseStepHooks<PhaseMonitorStepBinding>,
+    use: (PhaseMonitorStepBinding) -> R,
+  ): R
+
+  fun <R> standaloneMonitor(
+    hooks: PhaseStepHooks<PhaseStandaloneMonitorStepBinding>,
+    use: (PhaseStandaloneMonitorStepBinding) -> R,
+  ): R
+
+  fun <R> standalonePublication(
+    hooks: PhaseStepHooks<PhaseStandalonePublicationStepBinding>,
+    use: (PhaseStandalonePublicationStepBinding) -> R,
+  ): R
+
+  fun <R> pullRequest(
+    hooks: PhaseStepHooks<PhasePullRequestStepBinding>,
+    use: (PhasePullRequestStepBinding) -> R,
+  ): R
+}
+
+internal class PhaseStepDescriptor<B : PhaseAcceptedStepExecution>(
+  val family: PhaseBindingFamily<B>,
+  val hooks: PhaseStepHooks<B>,
+  val loopRules: PhaseStepLoopRules<B>? = null,
+  private val execution: (PhaseRun, B) -> PhaseOutcome,
+) {
+  fun bind(factory: PhaseBindingFactory): B = family.construct(factory, hooks) { binding -> binding }
+
+  fun execute(
+    run: PhaseRun,
+    binding: B,
+  ): PhaseOutcome = execution(run, binding)
+
+  fun <R> capture(visitor: PhaseStepCapture<R>): R = visitor.capture(this)
+}
+
+internal interface PhaseStepCapture<R> {
+  fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): R
+}
+
+internal class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution>(
+  private val hooks: PhaseStepHooks<B>,
+  private val binding: B,
+) {
+  fun beforeAgentLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+  ): String? = hooks.beforeAgentLaunch(run, context, binding)
+
+  fun launchPromptSupplement(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+  ): String = hooks.launchPromptSupplement(run, context, binding)
+
+  fun launchReviewTier(run: PhaseRun): PhaseLaunchReviewTier = hooks.launchReviewTier(run, binding)
+
+  fun handoffFindingVerdicts(): List<ReviewFindingVerdict> = hooks.handoffFindingVerdicts(binding)
+
+  fun admitLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    iteration: Int,
+  ): PhaseLaunchAdmission = hooks.admitLaunch(run, context, binding, iteration)
+
+  fun checkValidatedOutput(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): PhaseStepOutputCheck = hooks.checkValidatedOutput(run, context, binding, outputMap)
+
+  fun completionRejection(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? = hooks.completionRejection(run, context, binding, outputMap)
+
+  fun settleCompletedOutput(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): PhaseStepOutputCheck = hooks.settleCompletedOutput(run, context, binding, outputMap)
+
+  fun interpretedOutput(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): NormalizedFeatureTaskRuntimePhaseOutput = hooks.interpretedOutput(run, context, binding, output)
+
+  fun recordAcceptedOutput(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ) = hooks.recordAcceptedOutput(run, context, binding, outputMap)
 }

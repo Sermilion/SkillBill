@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.phase.record
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeRejectedOutputRecorder
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
@@ -75,7 +74,6 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
     diagnostics: RuntimeDiagnostics,
     phaseSettlementService: FeatureTaskPhaseSettlementService,
     clock: Clock,
-    blockIncidentCapture: BlockIncidentCapture,
   ) : this(
     phaseRecorderParts(
       FeatureTaskRuntimePhaseRecorderInjected(
@@ -88,7 +86,6 @@ class FeatureTaskRuntimePhaseRecorder private constructor(
         phaseSettlementService,
         clock,
       ),
-      blockIncidentCapture,
     ),
   )
 
@@ -280,7 +277,6 @@ private data class FeatureTaskRuntimePhaseRecorderParts(
 
 private fun phaseRecorderParts(
   injected: FeatureTaskRuntimePhaseRecorderInjected,
-  blockIncidentCapture: BlockIncidentCapture,
 ): FeatureTaskRuntimePhaseRecorderParts {
   val workflowPersistence =
     FeatureTaskRuntimeWorkflowPersistence(
@@ -315,14 +311,12 @@ private fun phaseRecorderParts(
         injected.wireArtifactValidator,
         injected.phaseSettlementService,
         injected.clock,
-        blockIncidentCapture,
       ),
     reviewCheckpoint =
       FeatureTaskRuntimeReviewCheckpointRecorder(
         injected.database,
         workflowPersistence,
         runtimeOwnedPersistence,
-        injected.clock,
       ),
     goalReviewCompletion =
       FeatureTaskRuntimeGoalReviewCompletionRecorder(
@@ -337,9 +331,8 @@ private fun phaseRecorderParts(
         injected.database,
         workflowPersistence,
         injected.wireArtifactValidator,
-        injected.clock,
       ),
-    gateProgress = FeatureTaskRuntimeGateProgressRecorder(injected.database, workflowPersistence, injected.clock),
+    gateProgress = FeatureTaskRuntimeGateProgressRecorder(injected.database, workflowPersistence),
   )
 }
 

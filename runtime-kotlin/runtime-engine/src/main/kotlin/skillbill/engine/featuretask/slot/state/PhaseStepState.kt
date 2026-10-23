@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
@@ -89,8 +90,8 @@ internal interface PhaseReviewSettlementState {
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): String?
 
-  /** Amends the review's worktree edits into the remediation checkpoint. Returns whether it was established. */
-  fun amendReviewRemediationCheckpoint(): Boolean
+  /** Amends the review's worktree edits into the remediation checkpoint. Returns why it failed, or null. */
+  fun amendReviewRemediationCheckpoint(): String?
 
   /** Retains the assembled review output as producer-output evidence for [iteration]. */
   fun retainReviewOutput(
@@ -193,4 +194,5 @@ internal interface PhaseReviewGenerationState {
 internal data class PhaseReviewExecutionContext(
   val gitOperations: PhaseRepositoryObservations,
   val clock: Clock,
+  val diagnostics: RuntimeDiagnostics,
 )

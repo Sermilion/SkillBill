@@ -34,7 +34,7 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.persistHealedRemediatio
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
         ?: return@transaction null
     if (request.admitted != null &&
-      !requireCurrentWorker(request.admitted, unitOfWork.workflowStates, request.workflowId, clock)
+      !requireCurrentWorker(request.admitted, unitOfWork.workflowStates, request.workflowId)
     ) {
       return@transaction null
     }

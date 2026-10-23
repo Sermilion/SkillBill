@@ -16,7 +16,6 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
-import skillbill.ports.idestatus.model.StandaloneQaReport
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
@@ -44,7 +43,7 @@ class StandalonePhaseStatusEventSink(
   private var lastCiObservedPendingSampleNames: Set<String>? = null
   private var monitorCleanup: StandaloneMonitorCleanup? = null
   private var qaOutcome: StandaloneQaOutcome? = null
-  private var qaReport: StandaloneQaReport? = null
+  private var qaReportText: String? = null
   private var planReport: StandalonePlanReport? = null
 
   fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
@@ -88,25 +87,31 @@ class StandalonePhaseStatusEventSink(
   }
 
   fun settle(result: PhaseRunResult) {
-    when (result) {
-      is PhaseRunResult.Completed -> {
-        runCatching {
-          ensureRegistered(null)
+    runCatching {
+      ensureRegistered(null)
+      when (result) {
+        is PhaseRunResult.Completed -> {
           result.qaOutcome?.let(::recordQaOutcome)
-          qaReport = result.qaReport
+          qaReportText = result.qaReportText
           persist(
             state = "terminal",
             finishedAt = clock.instant(),
             terminalResult = result.value,
             acceptedResult = result.acceptedOutput ?: result.value,
           )
-        }.onFailure { error ->
-          if (error is CancellationException) throw error
-          RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status settlement failed", error)
         }
-        result.agentBlock?.let { observeBlocked(it.reason, null, it.stepId) }
+        is PhaseRunResult.Blocked -> {
+          persist(
+            state = "blocked",
+            finishedAt = null,
+            terminalResult = result.reason,
+          )
+          observeBlocked(result.reason, null, result.stepId)
+        }
       }
-      is PhaseRunResult.Blocked -> settleBlocked(result.reason, stepId = result.stepId)
+    }.onFailure { error ->
+      if (error is CancellationException) throw error
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status settlement failed", error)
     }
   }
 
@@ -134,45 +139,16 @@ class StandalonePhaseStatusEventSink(
     workflowId: String? = null,
     stepId: String? = null,
   ) {
-    var blockedStepId: String? = null
     runCatching {
       ensureRegistered(workflowId)
-      blockedStepId = stepId ?: currentStep
-      currentStep = requireNotNull(blockedStepId)
+      currentStep = stepId ?: currentStep
       persist(state = "blocked", finishedAt = null, terminalResult = reason)
     }.onFailure { error ->
       if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status blocked settlement failed", error)
     }
-    observeBlocked(reason, workflowId, blockedStepId ?: stepId)
+    observeBlocked(reason, workflowId, stepId)
   }
-
-  fun settleRefused(
-    reason: String,
-    workflowId: String? = null,
-  ) {
-    runCatching {
-      ensureRegistered(workflowId)
-      persist(state = "blocked", finishedAt = null, terminalResult = reason)
-    }.onFailure { error ->
-      if (error is CancellationException) throw error
-      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status blocked settlement failed", error)
-    }
-  }
-
-  private fun workerCoordinates(
-    workflowId: String,
-    blockedStepId: String,
-  ): FeatureTaskRuntimeWorkerGenerationObservation? =
-    database.read { unit ->
-      val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
-      val step = workflow.step(blockedStepId) ?: return@read null
-      unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.takeIf {
-        workflow.currentStepId == blockedStepId && workflow.workflowStatus == WorkflowStatus.BLOCKED &&
-          step.status == WorkflowStepStatus.BLOCKED &&
-          step.attemptCount == it.phaseAttempt && it.phaseId == blockedStepId
-      }
-    }
 
   private fun observeBlocked(
     reason: String,
@@ -190,7 +166,6 @@ class StandalonePhaseStatusEventSink(
         BlockIncidentObservation(
           workflowId = blockedWorkflowId,
           phaseId = blockedStepId,
-          phaseRunId = null,
           invocationId = invocationId,
           executionId = registered?.executionId ?: registration.executionId,
           reason = reason,
@@ -223,6 +198,20 @@ class StandalonePhaseStatusEventSink(
       }.getOrNull() ?: return
     blockIncidentCapture.capture(observation)
   }
+
+  private fun workerCoordinates(
+    workflowId: String,
+    blockedStepId: String,
+  ): FeatureTaskRuntimeWorkerGenerationObservation? =
+    database.read { unit ->
+      val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+      val step = workflow.step(blockedStepId) ?: return@read null
+      unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(workflowId)?.takeIf {
+        workflow.currentStepId == blockedStepId && workflow.workflowStatus == WorkflowStatus.BLOCKED &&
+          step.status == WorkflowStepStatus.BLOCKED && step.attemptCount == it.phaseAttempt &&
+          it.phaseId == blockedStepId
+      }
+    }
 
   fun settleFailure(
     error: Throwable,
@@ -265,7 +254,7 @@ class StandalonePhaseStatusEventSink(
             acceptedResult = acceptedResult?.takeIf(String::isNotBlank),
             monitorCleanup = monitorCleanup,
             qaOutcome = qaOutcome,
-            qaReport = qaReport,
+            qaReportText = qaReportText,
             planReport = planReport,
           ),
         )
@@ -289,7 +278,7 @@ class StandalonePhaseStatusEventSink(
     val record = database.transaction { it.standalonePhaseStatuses.register(registrationForWorkflow(workflowId)) }
     registered = record
     revision = record.statusRevision
-    currentStep = record.currentStep
+    currentStep = record.phaseId
   }
 
   private fun activityFor(event: FeatureTaskRuntimeRunEvent): String =

@@ -1,20 +1,14 @@
 package dev.skillbill.tray.core.domain.model
 
-/** The verdict of a standalone QA run: [ATTEMPTED] until the run settles a receipt, then the receipt's verdict. */
+/** The verdict of a standalone QA run: [ATTEMPTED] until the run settles a report, then the report's verdict. */
 enum class QaVerdict { ATTEMPTED, PASSED, FINDINGS, SKIPPED, INCOMPLETE }
-
-/** Acceptance criteria one standalone QA run checked; a criterion with a null id groups checks QA linked to none. */
-data class QaRunReport(val criteria: List<QaCriterionResult>)
-data class QaCriterionResult(val id: String?, val passed: Boolean, val checks: List<QaCheckResult>, val findings: List<QaCriterionFinding>)
-data class QaCheckResult(val description: String, val passed: Boolean)
-data class QaCriterionFinding(val id: String, val steps: List<String>, val expected: String, val observed: String)
 
 /** What a run is doing now or how it ended, the one status every surface names. */
 enum class RunOutcome { ACTIVE, STALLED, PAUSED, BLOCKED, IDLE, COMPLETE, PASSED, FINDINGS, SKIPPED, INCOMPLETE, FAILED, CANCELLED }
 
 /**
  * The run's outcome from its lifecycle and, for a finished QA phase, its recorded verdict. A finished QA run that never
- * settled a receipt verdict reads as incomplete.
+ * settled a report verdict reads as incomplete.
  */
 fun WorkItem.outcome(): RunOutcome = when (lifecycle) {
   Lifecycle.ACTIVE -> if (stalled()) RunOutcome.STALLED else RunOutcome.ACTIVE

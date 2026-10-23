@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.model.execution
 import skillbill.model.FileLocation
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.scaffold.model.QaPlatform
+import java.nio.file.Path
 
 data class QaExecutionContext(
   val workspace: QaWorkspace,
@@ -10,11 +11,15 @@ data class QaExecutionContext(
   val target: QaExecutionTarget,
   val policy: QaPolicy = QaPolicy.STANDALONE,
   val preparationWarnings: List<String> = emptyList(),
-  val baselineStatus: String? = null,
+  val callerBaseline: QaCallerBaseline? = null,
 )
 
 sealed interface QaExecutionTarget {
-  data class Supported(val guidancePath: FileLocation, val platforms: Set<QaPlatform>) : QaExecutionTarget
+  data class Supported(
+    val guidancePath: FileLocation,
+    val platforms: Set<QaPlatform>,
+    val checkout: Path,
+  ) : QaExecutionTarget
 
   data class Skipped(val reason: QaSkipReason, val detail: String) : QaExecutionTarget
 }
@@ -23,5 +28,10 @@ data class QaExpectedIdentity(
   val headRevision: String,
   val treeIdentity: String,
   val evidencePrefix: String,
-  val acceptanceCriteria: Set<String> = emptySet(),
+)
+
+data class QaCallerBaseline(
+  val head: String,
+  val treeIdentity: String,
+  val status: String,
 )

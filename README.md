@@ -233,7 +233,7 @@ Goal activity for another run. Each subtask lists its review verdict, audit resu
 | `skill-bill goal APP-123 --agent claude` | Launch or continue the goal with a given agent |
 | `skill-bill work status --format json` | Repository work snapshot for integrations |
 
-**IDE plugins.** The [IntelliJ plugin](intellij-plugin/README.md) and [VS Code extension](vscode-extension/README.md) show work status, planning progress, the active phase, and elapsed time, with stop and pause controls. They ship separately as `plugin-v*` and `extension-v*` releases.
+**IDE plugins retired.** The Skill Bill desktop app replaces the former IntelliJ plugin and VS Code extension. They are retired and no longer supported or released; running the installer removes previously installed copies.
 
 ## Platform packs
 
@@ -357,9 +357,28 @@ Every directive needs a non-blank `model`. Omit `effort` to leave it unset; `""`
 
 </details>
 
+### Add project instructions per phase
+
+Put a Markdown file named after a phase in `.skill-bill/phases/` to add project-specific instructions to that phase's prompt. Every agent launched for that phase in this repository gets the text.
+
+```text
+.skill-bill/phases/
+├── implement.md   # e.g. "Use the existing Result type; never throw from use cases."
+├── review.md      # e.g. "Flag any new public API without KDoc."
+└── validate.md    # e.g. "Run ./gradlew detekt before the full check."
+```
+
+Name the file after the phase step, not the stage: `implement.md`, not `implementation.md`. Valid names are `intake`, `preplan`, `plan`, `plan_subtasks`, `implement`, `simplify`, `audit`, `audit_plan_fix`, `audit_implement_fix`, `review`, `verify_findings`, `implement_fix`, `build`, `validate`, `qa`, `qa_fix`, `write_history`, `commit_push`, `pr`, `monitor`, `monitor_fix`, and `present_findings`. `code_review.md` is an alias for `review.md`; if both exist, `review.md` wins.
+
+The runtime reads the file at each launch and adds it as a "Project instructions for this phase" section after the briefing and before the required output. The text can steer how the agent works. It cannot change the phase's output or settlement contract. The launch briefing records the file path and its sha256, not its content.
+
+A bad file never blocks a run. Files over 16 KiB, blank files, invalid UTF-8, and unknown phase names are skipped with a warning, and the phase runs without them. Phases the runtime runs itself without launching an agent ignore their file.
+
+`./install.sh` adds `!.skill-bill/phases/` and `!.skill-bill/phases/**` to `.gitignore`, so the files are tracked and shared with the team. In an existing repository, re-run the installer or add those two lines by hand.
+
 ### Customize and extend
 
-- **Repository instructions** go in `AGENTS.md`. Skill-specific guidance goes in `.agents/skill-overrides.md` ([example](.agents/skill-overrides.example.md)).
+- **Repository instructions** go in `AGENTS.md`. Instructions for a single phase go in [`.skill-bill/phases/<phase>.md`](#add-project-instructions-per-phase). Skill-specific guidance goes in `.agents/skill-overrides.md` ([example](.agents/skill-overrides.example.md)).
 - **Boundary history and decisions** live next to the code in `agent/history.md` and `agent/decisions.md`.
 - **Platform-pack add-ons** add stack-specific guidance after routing. [External add-on sources](docs/external-addons.md) keep private guidance outside the shared repo.
 - **Agent add-ons** are opt-in. The shipped `execution-budget` add-on keeps Codex runs inside your stopping boundary: `/skill-bill APP-123 agent-addon:execution-budget`. See [agent add-on authoring](docs/skill-source-generation.md#agent-add-on-authored-sources).
@@ -448,7 +467,7 @@ Telemetry and stored workflow rows still use some retired names, such as `bill-c
 
 ## Contributing
 
-See [Contributing](CONTRIBUTING.md), the [source-generation guide](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing contracts. The runtime, desktop app, IntelliJ plugin, and VS Code extension build separately.
+See [Contributing](CONTRIBUTING.md), the [source-generation guide](docs/skill-source-generation.md), and the [scaffold payload contract](orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md) before changing contracts. The runtime and desktop app build separately.
 
 ## License
 

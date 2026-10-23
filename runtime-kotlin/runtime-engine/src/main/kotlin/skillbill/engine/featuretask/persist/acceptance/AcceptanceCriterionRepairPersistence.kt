@@ -3,8 +3,6 @@ package skillbill.engine.featuretask.persist.acceptance
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
-import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAdoptionResult
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
@@ -39,7 +37,6 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -69,7 +66,6 @@ class AcceptanceCriterionRepairPersistence(
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
   private val adoption: AcceptanceCriterionRepairLegacyAdoption,
-  private val blockIncidentCapture: BlockIncidentCapture,
 ) {
   fun inspectExisting(
     worker: AcquiredFeatureTaskRuntimeWorker,
@@ -153,7 +149,7 @@ class AcceptanceCriterionRepairPersistence(
   ): AcceptanceCriterionRepairAdoptionResult {
     val preflightRefusal =
       when {
-        !worker.admits(work.workflowStates, clock.instant()) || binding.executionId != worker.workflowId ->
+        !worker.admits(work.workflowStates) || binding.executionId != worker.workflowId ->
           AcceptanceCriterionRepairRefusal.OWNER_CHANGED
         !adoption.sourceMatches(worker, root, binding) -> AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED
         else -> null
@@ -168,7 +164,7 @@ class AcceptanceCriterionRepairPersistence(
       return refuseAdoption(worker, AcceptanceCriterionRepairRefusal.HISTORICAL_EVIDENCE_UNPROVABLE)
     }
     val receipt = original?.let { admitLegacy(worker, it, binding, proof, root) }
-    val stillOwned = worker.admits(work.workflowStates, clock.instant())
+    val stillOwned = worker.admits(work.workflowStates)
     return if (receipt == null || !stillOwned) {
       val refusal =
         if (receipt == null) {
@@ -284,12 +280,9 @@ class AcceptanceCriterionRepairPersistence(
       }
     val committed =
       when (result) {
-        is OwningTransactionResult.Committed -> result.value.result
+        is OwningTransactionResult.Committed -> result.value
         is OwningTransactionResult.Refused -> AcceptanceCriterionRepairWriteResult.Refused(owningRefusal(result.reason))
       }
-    if (committed is AcceptanceCriterionRepairWriteResult.Committed && result is OwningTransactionResult.Committed) {
-      result.value.blockObservation?.let(blockIncidentCapture::capture)
-    }
     if (committed !is AcceptanceCriterionRepairWriteResult.Committed) {
       if (result is OwningTransactionResult.Refused) {
         signalExpected(worker, request.expected, "owning_session_refused")
@@ -315,18 +308,15 @@ class AcceptanceCriterionRepairPersistence(
     binding: AcceptanceCriterionRepairBinding,
     request: AcceptanceCriterionRepairCommit,
     repositoryRoot: Path,
-  ): SerialRepairWrite {
+  ): AcceptanceCriterionRepairWriteResult {
     val states = work.workflowStates
-    if (!worker.admits(
-        states,
-        clock.instant(),
-      )
+    if (!worker.admits(states)
     ) {
-      return SerialRepairWrite(refuse(worker, null, AcceptanceCriterionRepairRefusal.OWNER_CHANGED))
+      return refuse(worker, null, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
     }
     val identity = phaseIdentityMatches(worker, binding, request.phase)
     if (!identity) {
-      return SerialRepairWrite(refuse(worker, null, AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED))
+      return refuse(worker, null, AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED)
     }
     if (!adoption.sourceMatches(
         worker,
@@ -334,7 +324,7 @@ class AcceptanceCriterionRepairPersistence(
         binding,
       )
     ) {
-      return SerialRepairWrite(refuse(worker, null, AcceptanceCriterionRepairRefusal.SPEC_SOURCE_CHANGED))
+      return refuse(worker, null, AcceptanceCriterionRepairRefusal.SPEC_SOURCE_CHANGED)
     }
     val record =
       states.get(WorkflowFamily.TASK_RUNTIME, worker.workflowId)
@@ -343,9 +333,9 @@ class AcceptanceCriterionRepairPersistence(
     val previous = decode(record.artifacts, binding)
     return when {
       previous != null && sameCommittedStart(record.artifacts, request) ->
-        SerialRepairWrite(AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true))
+        AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true)
       previous != null && supersededStart(record.artifacts, request) ->
-        SerialRepairWrite(refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED))
+        refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
       else -> {
         val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
         val next = transition(previous, request.mutation, digest, request.expected.revision)
@@ -353,7 +343,7 @@ class AcceptanceCriterionRepairPersistence(
           previous != null || mayAdopt(record, request, binding, worker, repositoryRoot)
         val refusal = candidateRefusal(previous, next, request, binding, legacySafe)
         if (refusal != null) {
-          SerialRepairWrite(refuse(worker, previous, refusal))
+          refuse(worker, previous, refusal)
         } else {
           commitCandidate(work, worker, record, requireNotNull(next), request)
         }
@@ -484,13 +474,10 @@ class AcceptanceCriterionRepairPersistence(
     record: WorkflowStateSnapshot,
     next: AcceptanceCriterionRepairState,
     request: AcceptanceCriterionRepairCommit,
-  ): SerialRepairWrite {
-    if (!worker.admits(
-        work.workflowStates,
-        clock.instant(),
-      )
+  ): AcceptanceCriterionRepairWriteResult {
+    if (!worker.admits(work.workflowStates)
     ) {
-      return SerialRepairWrite(refuse(worker, next, AcceptanceCriterionRepairRefusal.OWNER_CHANGED))
+      return refuse(worker, next, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
     }
     val replay =
       decode(
@@ -504,30 +491,28 @@ class AcceptanceCriterionRepairPersistence(
           },
         ),
       ) == next
-    if (replay) return SerialRepairWrite(AcceptanceCriterionRepairWriteResult.Committed(detach(next), true))
-    val patch =
-      settlementPatch(worker.workflowId, record.artifacts, request)
-        ?: return SerialRepairWrite(refuse(worker, next, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED))
-    workflowPersistence.persistAcquiredRepairState(
-      work.workflowStates,
-      record,
-      next,
-      patch,
-      WorkflowRowAdvance(
-        if (request.phase.finished) request.nextSteps[next.stage] ?: request.phase.phaseId else request.phase.phaseId,
-        if (next.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
-          WorkflowStatus.BLOCKED.wireValue
-        } else {
-          workflowStatusFor(request.phase)
-        },
-        stepUpdatesFrom(decodePhaseRecords(record.artifacts + patch)),
-        clock.instant(),
-      ),
-    )
-    return SerialRepairWrite(
-      AcceptanceCriterionRepairWriteResult.Committed(detach(next), false),
-      phases.observeSerialBlock(work, worker, next, request.phase),
-    )
+    if (!replay) {
+      val patch =
+        settlementPatch(worker.workflowId, record.artifacts, request)
+          ?: return refuse(worker, next, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
+      workflowPersistence.persistAcquiredRepairState(
+        work.workflowStates,
+        record,
+        next,
+        patch,
+        WorkflowRowAdvance(
+          if (request.phase.finished) request.nextSteps[next.stage] ?: request.phase.phaseId else request.phase.phaseId,
+          if (next.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+            WorkflowStatus.BLOCKED.wireValue
+          } else {
+            workflowStatusFor(request.phase)
+          },
+          stepUpdatesFrom(decodePhaseRecords(record.artifacts + patch)),
+          clock.instant(),
+        ),
+      )
+    }
+    return AcceptanceCriterionRepairWriteResult.Committed(detach(next), replay)
   }
 
   private fun settlementPatch(
@@ -902,34 +887,8 @@ class AcceptanceCriterionRepairPersistence(
     )
   }
 
-  private data class SerialRepairWrite(
-    val result: AcceptanceCriterionRepairWriteResult,
-    val blockObservation: BlockIncidentObservation? = null,
-  )
-
   private companion object {
     const val MAX_DIAGNOSTIC_ID = 128
     const val MAX_CRITERION_ID = 32
   }
 }
-
-private fun FeatureTaskRuntimePhaseStateRecorder.observeSerialBlock(
-  work: UnitOfWork,
-  worker: AcquiredFeatureTaskRuntimeWorker,
-  next: AcceptanceCriterionRepairState,
-  phase: FeatureTaskRuntimePhaseStateRequest,
-): BlockIncidentObservation? =
-  if (next.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
-    val criterion = next.currentCriterionRef ?: next.reservation?.criterionRef ?: "unknown"
-    observeAcceptedBlock(
-      work,
-      phase,
-      worker.admittedExecution,
-      blockedReason = "Acceptance criterion $criterion exhausted its unsuccessful repair budget.",
-      failureCode = AcceptanceCriterionRepairStage.BUDGET_BLOCKED.wireValue,
-    )
-  } else if (phase.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
-    observeAcceptedBlock(work, phase, worker.admittedExecution)
-  } else {
-    null
-  }

@@ -8,7 +8,7 @@ class ProductionFileLineCeilingArchitectureTest {
   fun `production Kotlin files stay within the line ceiling`() {
     val violations =
       ArchitectureScanSupport.productionLineCeilingViolations(
-        productionRoots = listOf("runtime-kotlin", "intellij-plugin"),
+        productionRoots = listOf("runtime-kotlin"),
         ceiling = PrincipleEnforcementInventory.PRODUCTION_LINE_CEILING,
         exemptions = PrincipleEnforcementInventory.productionLineCeilingExemptions,
       )

@@ -5,15 +5,15 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
 import skillbill.engine.featuretask.slot.PhaseLoopContext
-import skillbill.engine.featuretask.slot.PhaseLoopRules
+import skillbill.engine.featuretask.slot.PhaseStepLoopRules
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object ImplementThenSimplifyLoopRules : PhaseLoopRules {
+internal object ImplementThenSimplifyLoopRules : PhaseStepLoopRules<PhaseAgentStepBinding> {
   private const val IMPLEMENT = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
   private const val SIMPLIFY = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY
   private const val SKIP_PROSE =
@@ -22,7 +22,7 @@ internal object ImplementThenSimplifyLoopRules : PhaseLoopRules {
   override fun settleWithoutLaunch(
     stepId: String,
     context: PhaseLoopContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseAgentStepBinding,
   ): PhaseEntrySettlement? {
     if (stepId != SIMPLIFY || !implementClaimsNoChange(state)) return null
     return runCatching { state.settleRuntimeAuthoredCompletion(SIMPLIFY, skipEnvelope()) }.fold(
@@ -35,7 +35,7 @@ internal object ImplementThenSimplifyLoopRules : PhaseLoopRules {
     )
   }
 
-  private fun implementClaimsNoChange(state: PhaseAcceptedStepExecution): Boolean =
+  private fun implementClaimsNoChange(state: PhaseAgentStepBinding): Boolean =
     NoChangeClaimResolution.claimOf(
       state.completedStepEnvelope(IMPLEMENT)?.get(SharedPayloadKeys.PRODUCED_OUTPUTS),
     ) != null

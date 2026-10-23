@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.persist.acceptance
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
@@ -212,7 +211,6 @@ internal class SerialRepairSqliteFixture(
         validator,
         testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), clock),
         clock,
-        testBlockIncidentCapture(db, clock, diagnostics),
       ),
       validator,
       projection,
@@ -225,7 +223,6 @@ internal class SerialRepairSqliteFixture(
         gitOperations,
         source,
       ),
-      testBlockIncidentCapture(db, clock, diagnostics),
     )
   }
 

@@ -1,5 +1,6 @@
 package skillbill.workflow.model.goalobservability
 
+import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -218,8 +219,10 @@ class GoalObservabilityModelsTest {
         timestamp = "2026-06-01T00:00:00Z",
         operationName = "monitor_fix",
         agentId = "claude",
+        launchedModel = "claude-opus-4-8",
+        effort = "high",
       )
-    val legacy = withAgent.copy(agentId = null)
+    val legacy = withAgent.copy(agentId = null, launchedModel = null, effort = null)
 
     val decoded =
       DurableWorkflowArtifacts.fromMap(
@@ -231,8 +234,13 @@ class GoalObservabilityModelsTest {
       ).goalProgressLatestEvent()
 
     assertEquals("claude", decoded?.agentId)
+    assertEquals("claude-opus-4-8", decoded?.launchedModel)
+    assertEquals("high", decoded?.effort)
     assertEquals(null, decodedLegacy?.agentId)
+    assertEquals(null, decodedLegacy?.launchedModel)
+    assertEquals(null, decodedLegacy?.effort)
     assertFalse("agent_id" in legacy.toArtifactMap())
+    assertFalse(WorkDetailPayloadKeys.LAUNCHED_MODEL in legacy.toArtifactMap())
   }
 
   private fun event(

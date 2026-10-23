@@ -2,6 +2,7 @@ package skillbill.goalrunner.ledger
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
+import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowTimestampPayloadKeys
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.goalrunner.model.GoalRunnerProgressEvent
@@ -81,6 +82,8 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
     expectedLong = expectedLong,
     outcome = outcome,
     agentId = agentId,
+    launchedModel = reader.optionalString(WorkDetailPayloadKeys.LAUNCHED_MODEL),
+    effort = reader.optionalString(WorkDetailPayloadKeys.EFFORT),
   )
 }
 

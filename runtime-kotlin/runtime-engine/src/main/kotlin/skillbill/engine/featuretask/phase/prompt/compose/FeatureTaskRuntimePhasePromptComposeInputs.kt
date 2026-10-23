@@ -27,6 +27,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val priorFindingCoverage: String? = null,
   val priorAcceptanceAudit: String? = null,
   val currentAcceptanceCriterion: String? = null,
+  val priorAcceptanceRepairFailures: String? = null,
   val noChangeClaim: String? = null,
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry? = null,
   val implementationContinuation: FeatureTaskRuntimeImplementationContinuation? = null,
@@ -46,4 +47,5 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val repoRoot: Path? = null,
   val stepProfile: PhaseModelProfile = PhaseModelProfile.CANONICAL,
   val implementationChecklistAddress: String? = null,
+  val projectInstructions: PhaseProjectInstructionsResolution.Injected? = null,
 )

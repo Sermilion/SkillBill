@@ -1,20 +1,79 @@
+## [2026-10-23] SKILL-440: delete the plugin trees and their architecture-guard coverage in one commit
+Context: The IntelliJ plugin and VS Code extension are retired in favour of the desktop app, but a runtime-core architecture test asserts the plugin's layer package roots exist and the line-ceiling guards scan `intellij-plugin` as a production root.
+Decision: Remove both trees, their workflows, and the guard roots and the plugin-specific guard case together, and leave installer and release-tag cleanup to a separate subtask.
+Reason: The `intellij plugin retains its layer package roots` case fails the moment the tree is gone, so neither the deletion nor the guard edit can land alone. The spec assigns `install.sh`, `uninstall.sh` and the install smoke script to subtask 2.
+
+## [2026-10-22] SKILL-437: select canonical strategies and supplement prompts by recorded model profile
+Context: SKILL-403 gave every slot a second strategy per model: twelve `-opus-5-5` classes that forwarded to a canonical instance and appended one directive, registered and bound through `withOpus`. The variants duplicated policy and hook forwarding, multiplied registrations and runners, and a new model would have added another full set.
+Decision: Selection is canonical. `SkeletonStrategyBindings` picks a strategy from the definition and selection facts only, and a model never changes it. `ModelDirectiveSupplements` appends the model's directive resource when a step prompt is composed, keyed by the step's recorded `PhaseModelProfile` and the canonical `(slot, strategy id)`; canonical-profile and unmapped steps are unsupplemented, and alias identity alone enables nothing. Adding a model is one `PhaseModelProfileClassifier` case plus resources registered with that owner. `SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS` is on when omitted and `false` turns every supplement off; it enters through injected immutable settings, reaches durable, in-memory and direct-review launches, and is not persisted. The registry keeps explicit aliases for the historical `<canonical-id>-opus-5-5` strategy, policy and resume identities, so a recorded plan still resolves, keeps its revision and policy checks, is not reselected from current configuration, and has no workflow row rewritten. Execution-plan contract `0.2` is unchanged because no durable field was added. This supersedes the model-specific strategy shape of the 2026-10-05 SKILL-403 decision "Select Opus 5.5 from the resolved model"; its profile rules (exact identities, per-step profile, no operator strategy toggle) stand, and the toggle it rejected was a strategy toggle, not this prompt switch. The 2026-10-22 decision "Keep seventeen reachable strategy registrations and one shared phase runner" stands, including that delegated full-run review is not planned and was deleted. Delegated standalone review is a different owner, is live in `REVIEW` delegated mode, and takes its supplement like inline review.
+Reason: A forwarding wrapper adds an identity and a registration per model without changing authority, while a prompt supplement changes only the text that differs. Aliases are the smallest way to keep recorded plans valid without a migration or contract bump.
+Alternatives considered: keep wrappers and generate them (rejected: the identities stay and the registry still grows per model); drop the aliases and bump the contract (rejected: in-flight workflows would need migration); infer the supplement from the strategy id (rejected: aliases would then change behaviour).
+Revisit when: a model needs behaviour that prompt text cannot carry, such as a different step list or policy.
+
+## [2026-10-22] SKILL-437: correlate strategy, family, binding and hooks per step instead of downcasting
+Context: Strategies picked an untyped binding kind and downcast the accepted binding inside hooks, so a mismatched binding failed only at runtime, and the runtime factory selected over slot, kind, gate operation and fan-out flag.
+Decision: Each step declares a typed descriptor naming its binding family; the runtime builds bindings through one factory with one method per family, and the accepted writer is checked against the owner's step family. The strategy interface stays non-generic and exposes a per-step descriptor.
+Reason: A generic strategy would not type a strategy that runs steps with different families. Per-step descriptors correlate every pair at compile time, and capture opens one binding type at a time.
+Alternatives considered: one family per strategy (rejected: audit and code review mix agent, QA findings and review steps); review families under the sealed hierarchy (rejected: it would expose review authority to every strategy).
+Revisit when: a strategy needs a step whose binding is chosen at runtime, or the slot package file ceiling is lifted.
+
+## [2026-10-22] Keep seventeen reachable strategy registrations and one shared phase runner
+
+Context: SKILL-437 subtask 3 found that the production registry still held strategies no skeleton definition and fact combination could select. `DelegatedReviewStrategy` (code_review `delegated`) was registered with its own runner and unselected since SKILL-380 subtask 6. `AgentPlanStrategy` was registered while every plan binding selects `PlanFanOutStrategy`. The intake asked for twelve registrations, but live selection reaches seventeen.
+
+Decision: Delegated full-run review is not planned. `DelegatedReviewStrategy`, its registration, its dedicated runner and its resource are deleted, and `delegatedReviewRequest` moved to `DelegatedReviewRequest.kt` because standalone review, inline review and verify still build requests with it. Delegated standalone review (standalone_review `delegated`, selected by the `REVIEW` definition in delegated mode) stays supported and is a different owner. The `AgentPlanStrategy` class stays as the helper `PlanFanOutStrategy` composes for its policies, prompts, hooks and resume rules, but it is no longer registered because no binding selects it. The registry holds seventeen canonical registrations: intake, preplan, plan fan-out, implement-then-simplify, acceptance audit, inline review, inline and delegated standalone review, pack build, agent validate, boundary history, runtime commit, PR description, monitor, standalone monitor, standalone monitor publication and QA. The count comes from real selection over every definition and its supported review, gate and QA facts, not from declared strategy ids, so it is seventeen, not twelve. Historical `-opus-5-5` aliases are lookup entries outside that count; the alias targeting the removed delegated owner was dropped with it, and so was the one targeting the unregistered plan helper. `RuntimeFeatureTaskSlotProvides` holds one registration list with one injected `DefaultPhaseRunner` for every entry, and `InjectedPhaseStrategies` is gone. The two PLAN-skeleton strategies (intake and fan-out) travel together in `PlanningPhaseStrategies`, mirroring `PullRequestPhaseStrategies`, so the registry provider stays under the detekt parameter limit without a suppression. The runner keeps only its launcher and git operations, and each call creates or receives its own session and launch state. The lazy `planIntake` provider is unchanged.
+
+Evidence: `RuntimeFeatureTaskSlotProvidesTest` compares the production registrations with the pairs live selection reaches and asserts one runner across all of them. `PhaseStrategyRegistryTest` does the same for the fixture registry. `DefaultPhaseRunnerTest` runs one runner through a failed and then a successful invocation and checks the second sees none of the first's state.
+
+## [2026-10-22] SKILL-439: QA runs and edits in its own temporary worktree
+Context: QA had to stay report-only in the caller checkout, so it could not inject a fault, force an error response, or add a debug hook. Goal WE-5165 left an incomplete-answer and a retry criterion untested because the staging backend could not produce the state and QA was barred from editing tracked files. Verify QA already used a detached worktree, but under `.git/`, where agent hosts in default permission mode refuse writes.
+Decision: QaExecutionLifecycle owns one checkout per QA invocation at `<invocation dir>/checkout` through QaCheckouts, for goal QA, standalone `phase qa`, and `operation verify qa:on`. It is created only when a pack declares QA for the caller's tracked paths. Goal and standalone QA check out the caller's HEAD and copy its staged, unstaged, and untracked state through `copyWorkingState`, which fails unless the copy reports the caller's tree identity, so the tested tree stays the caller tree. Verify checks out the target head and binds to its revision tree identity. `copyIgnoredFiles` then copies every ignored file outside an ignored directory, up to 1 MiB, so local configuration such as `local.properties` reaches the build while build output and caches do not; skipped files are recorded in diagnostics and a copy failure becomes a preparation warning. A checkout that cannot be created or copied settles `skipped` with `isolation_unavailable`. The QA agent launches with the checkout as its working directory through `PhaseStepFacts.agentWorkingDirectory`, while the phase file manifest and the change check still read the caller checkout, so qa_fix and every later step keep running on the caller tree. The briefing and pack guidance let QA edit anything in the checkout and ask the report to list each edit under `## Temporary edits`. The checkout is removed when the invocation ends, or kept and reported as a retained `worktree` resource. The verify-only `skill-bill/verify-qa` worktree, `linkedWorktreePath`, and the common-dir-relative `addDetachedWorktree` are deleted. This supersedes the 2026-10-19 SKILL-419 decision that verify QA runs in a detached worktree under the git common dir.
+Reason: The owner wants QA to reach states the environment cannot produce without ever touching the operator's tree. One owned checkout for every entry point replaces the verify-only worktree instead of adding a second mechanism. Temporary edits are described in the prose report, so no report structure is added. Copying git objects through a scratch index, not a text patch, keeps binary and non-UTF-8 content exact.
+Revisit when: a build needs an ignored file that lives inside an ignored directory, or QA should report its temporary edits as a runtime-captured diff.
+
+## [2026-10-22] Let the QA agent own free-target selection
+Context: Mobile QA had to preserve named targets while removing the ambiguous skip when several authorized targets were available.
+Decision: For unnamed runs, the QA agent leases a free authorized target, releases it when unusable, tries another candidate, and reports the selected target and rationale. Named serials, AVDs, and UDIDs remain authoritative; device-contended is used only when every candidate is leased.
+Reason: The lease mechanism is outside this subtask, and target choice stays with the agent so it can react to target-specific contention and usability while preserving the existing lease contract.
+Alternatives considered: Retaining the ambiguous skip or moving target selection and leasing into the runtime would violate the subtask boundary and lose usable-device runs.
+
+## [2026-10-22] SKILL-438: keep agent QA as prose
+Context: A real device run was discarded because a JSON receipt exceeded a length cap and used an unsupported fallback enum; the schema path was also not available in the target repository.
+Decision: Agent QA writes `report.md` prose. The runtime extracts only the verdict, finding ids, sections, and evidence paths, stores and prints the full text, and authors text only for missing or stopped runs. `qa_receipt` is read-only compatibility.
+Reason: Device output varies beyond a strict schema, and rejecting it loses the evidence operators need. Lenient extraction preserves that evidence while keeping the runtime control surface small.
+Alternatives considered: Downgrading rejected reports to incomplete or expanding the JSON schema were rejected because format failures could still erase findings.
+Revisit when: QA needs a stable machine-readable contract beyond the small extracted fields.
+
+## [2026-10-22] SKILL-438: close findings by conclusive report ids
+Context: Prose reports may contain extra sections or a passed verdict alongside finding headings, but the repair loop still needs deterministic finding state.
+Decision: A passed or findings report closes previously open ids absent from its finding headings. Incomplete and skipped reports carry open findings forward; findings under passed remain display-only with a warning.
+Reason: Only a conclusive QA run can show that a finding disappeared, while incomplete or skipped output cannot prove repair. The report's stated verdict must remain authoritative.
+Alternatives considered: Evidence-based closure and rewriting contradictory verdicts were rejected because evidence can be missing and the runtime must not alter the agent's verdict.
+Revisit when: QA supplies a stronger independently verifiable closure signal.
+
+## [2026-10-22] SKILL-438: add report text without dropping legacy state
+Context: New runtime ports and desktop consumers need the full report, while existing workflow rows, SQLite records, and verify artifacts use receipt-era names.
+Decision: Add migration 66 with `qa_report_text` and report-named outputs; retain legacy columns, persisted keys, and `qa_receipt` readers without writing new receipt data.
+Reason: New runs expose the complete report without destructive migration, and in-flight workflows and old rows remain readable through the rollout.
+Alternatives considered: Replacing old columns and keys or rewriting existing state was rejected because rollout must preserve stored runs.
+Revisit when: All supported stores and in-flight workflows no longer need legacy reads.
+## [2026-10-22] Finding verification failures continue with original review findings
+
+`verify_findings` is advisory. An output, execution, or evidence failure records an
+error and completes with the original review finding census carried into repair.
+The fallback describes verification as unavailable. It never treats failed
+verification as clearance and never persists a new verification block. Resuming
+an existing verification block uses the same continuation.
+
+The selected step hook supplies the fallback output as a run fact. Shared failure
+settlement persists that output without branching on phase names. Other steps keep
+their blocking behavior. Rejected agent output stays in private diagnostics.
+
 ## [2026-10-20] Standalone plan records the subtasks it planned
 Context: `phase plan` settled its status with the bare result `completed`. The desktop phase activity panel showed that word under the run and nothing about what the plan decided, although the plan had just written a decomposition manifest naming the feature and every subtask.
 Decision: When a standalone plan settles as completed, StandalonePlanRun reads the manifest back with `readByIssueKeyIfPresent` and passes a StandalonePlanReport (feature name, parent spec path, and each subtask's id, name, spec path, and dependency ids) to `settlePlan`. StandalonePhaseStatusEventSink persists it in the new nullable `standalone_phase_status.plan_report` JSON column (migration 65, DesktopReadSchema.VERSION 65), and WorkExecutionInstance exposes it to the desktop, which renders it under the run in phase activity. Second consumers of the ports model: runtime-infra/sqlite and the desktop data mapper. Plan runs settled before migration 65 keep a null report. The work-detail JSON contract is unchanged.
 Reason: The owner wants plan runs to show what the plan is, the same way review, audit, and QA show their results.
 Revisit when: the plan should also surface per-subtask acceptance criteria, which live only in the subtask spec files.
-
-## [2026-10-20] Standalone QA records a pass or fail result for each acceptance criterion
-Context: `phase qa` stored only `QA verdict: <verdict>.` as its result, and the CLI report named finding ids only. The receipt already maps every assertion and finding to acceptance criteria and carries assertion descriptions and finding steps, expected, and observed text, but the runtime dropped all of it. The desktop phase activity panel could not say which criteria passed, which failed, or how.
-Decision: The receipt decoder keeps assertion `description` and finding `steps`, `expected`, and `observed`. `QaReceipt.qaReport()` builds a StandaloneQaReport with one entry per criterion id named by an assertion or finding, in natural order (AC-2 before AC-10), plus one entry with a null id when a check or finding names no criterion. A criterion fails when one of its checks failed or a finding names it. The standalone phase result carries the report, StandalonePhaseStatusEventSink persists it in the new nullable `standalone_phase_status.qa_report` JSON column (migration 63, DesktopReadSchema.VERSION 63), and WorkExecutionInstance exposes it to the desktop, which renders it under the run in phase activity. The CLI report gains a `Criteria:` block. The work-detail JSON contract is unchanged.
-Reason: The owner wants every QA run to show all criteria, which failed and how, and which passed. Receipts hold criterion ids, not criterion text, so the report shows ids with the check descriptions that explain them.
-Revisit when: QA receipts carry criterion text.
-
-## [2026-10-20] Goal QA lists which acceptance criteria passed and which failed
-Context: Goal Activity showed Goal QA as `incomplete · other` with no per-criterion rows, while Audit showed a compact summary and truncated detail. Standalone QA already stored a `StandaloneQaReport`; goal QA discarded it at settlement, so the operator could not see which steps passed or failed.
-Decision: `feature_task_qa_outcomes` gains a nullable `criteria_summary` JSON column (migration 64; DesktopReadSchema.VERSION 64). Settlement stores `QaReceipt.qaReport()` and keeps the previous report when the receipt has no assertions or findings. The goal status projection maps it to `GoalRunnerQaResult.criteria`. The desktop Goal QA block lists `qaCriteriaSummary` and one compact `id · passed|failed` row per criterion, hiding a bare incomplete-reason token when those rows exist. Incomplete reasons join `reason_detail` when present. `goal status` adds a `qa_criteria:` line. The work-detail JSON is unchanged.
-Reason: The operator needs to see which QA steps passed and which failed, the same way Audit shows its conclusion.
-Revisit when: existing incomplete rows need a receipt-path backfill, or receipts carry criterion text.
 
 ## [2026-10-20] Goal QA records which findings it fixed and which it left open
 Context: When goal QA gave up after three qa_fix attempts, only the outcome reason named the open finding ids. The desktop goal activity panel, `skill-bill goal status`, and the PR body could not show what QA caught, what qa_fix repaired, or what the operator still has to look at.
@@ -61,6 +120,7 @@ Reason: Only revision-3 goal children and the retired standalone definition comp
 Context: QA is optional and runs on a test account, but receipt validation, the incomplete verdict, the qa_fix cap, the goal QA gate, and verify all stopped runs on QA problems.
 Decision: The validator downgrades a self-contradicting receipt to its honest verdict with a warning instead of rejecting it. Settlement turns a missing or unusable receipt into a runtime-written incomplete receipt, and the receipt schema lets incomplete omit artifact and target for that. A stopped QA agent step settles incomplete through a runtime-authored completion. Repair exhaustion is a produced-output flag that makes QaVerdictRule advance, not a traversal change. The goal gate returns Warned and finalization continues to commit_push.
 Reason: Changing the qa_fix edge's cap behavior would change the recorded traversal and make every in-flight plan incompatible, so exhaustion is decided by the verdict rule. A runtime-written incomplete receipt keeps the QA outcome, telemetry, and repair state paths unchanged.
+Superseded by: SKILL-438: keep agent QA as prose (2026-10-22)
 
 ## [2026-10-20] Goal finalization commits an unfinished merge
 Context: An interrupted monitor repair can leave a merge in progress when goal finalization reaches commit-all.
@@ -81,6 +141,7 @@ Reason: The monitor's owned-worktree helper is fenced and branch-based, so two s
 Context: The workflow definition supports only static required artifacts, but the verdict needs qa_receipt only when a QA selection is stored.
 Decision: The verdict's static requirements and projection stay unchanged. The runtime passes the receipt and Mobile QA rules into the directive only for qa:on. An unqualified APPROVE against open findings is recorded as APPROVE WITH FIXES with a warning, because no malformed-verdict retry path exists and QA must not fail verify.
 Reason: Pre-QA workflows keep resolving, and qa:off reaches its verdict with unchanged rules.
+Superseded by: SKILL-438: add report text without dropping legacy state (2026-10-22)
 
 ## [2026-10-19] SKILL-419: the verify QA selection enum lives in runtime-domain
 Context: runtime-mcp needed the on/off selection, but RuntimeEngineInboundApiTest forbids MCP from referencing engine-internal types, including QaPolicy.
@@ -325,6 +386,7 @@ Context: SKILL-403 needed a second strategy per slot for Opus 5.5. The slot skel
 Decision: A participating step whose resolved profile is opus-5-5 selects that slot's Opus variant. Only steps with that recorded profile receive the Opus directive. An unselected step, including validate on a goal-child build plan, leaves the slot canonical.
 Reason: A manual strategy flag would diverge from the launched model. Specializing every step in the selected slot would change non-Opus repairs in the same plan.
 Alternatives considered: An operator toggle stays rejected, as in the 2026-09-26 slot-skeleton decision. Substring and agent-name matching were rejected because they are not the launched model.
+Superseded in part by: SKILL-437: select canonical strategies and supplement prompts by recorded model profile (2026-10-22). The Opus variant strategies are gone; the profile rules remain.
 
 ## [2026-10-17] Resume with a different agent uses that agent's launch assignment
 Context: Selecting Cursor on tray resume still launched Codex's recorded `gpt-6.1-sol[effort=high]`. SKILL-403 kept recorded models so a config edit could not change an admitted profile. The selected `--agent` already changed the CLI.
@@ -581,6 +643,7 @@ Reason: the hang came from the missing bound, not from delegation. Bounding the 
 Alternatives considered: a wall-clock pass timeout (rejected: it stops slow lanes that are still working); `readOnlyPhase = true` (rejected: the heartbeat extends the lane forever); streaming output for liveness (rejected: it changes the provider transport for every review lane).
 Consequence: a silent governed lane that reads no evidence for 30 minutes times out with "agent timed out" and fails its lane, where it used to hang. `ReviewLaneSilentUntilExitTest` pins both halves at the launcher.
 Revisit when: a provider streams review output, or a lane needs a bound other than the read-only phase default.
+Superseded by: Keep seventeen reachable strategy registrations and one shared phase runner (2026-10-22), for item (4) only: `DelegatedReviewStrategy` was deleted; the bounded-lane decisions (1)-(3) stand.
 
 ## [2026-09-26] SKILL-380: a fixed slot skeleton with in-process strategies
 Context: The run loop chose how to launch each phase by branching on phase ids, and launch policy lived in phase-id sets on the workflow definition and runner policies (`MUTATING_PHASES`, `OUTPUT_RETRY_PHASES`, `singleAgentSessionOnly`, `GENERATION_SCOPED_PHASE_IDS`, `NON_FILE_MUTATING_PHASES`). Every new way to run a stage meant another branch and another set.

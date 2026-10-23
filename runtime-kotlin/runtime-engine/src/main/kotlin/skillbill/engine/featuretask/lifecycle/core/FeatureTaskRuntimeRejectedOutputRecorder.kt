@@ -96,7 +96,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
       val outcome =
         degradeDiagnosticFailure(degradeRequest, admitted) {
           database.transaction { unitOfWork ->
-            if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+            if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId)) {
               return@transaction null
             }
             val service = diagnosticService(unitOfWork)
@@ -223,7 +223,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
       admitted,
     ) {
       database.transaction { unitOfWork ->
-        if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, evidence.workflowId, clock)) {
+        if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, evidence.workflowId)) {
           return@transaction
         }
         diagnosticService(unitOfWork).retainProducerOutput(evidence)
@@ -377,7 +377,7 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
       database.transaction { unitOfWork ->
         if (
           admitted != null &&
-          !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+          !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId)
         ) {
           return@transaction
         }

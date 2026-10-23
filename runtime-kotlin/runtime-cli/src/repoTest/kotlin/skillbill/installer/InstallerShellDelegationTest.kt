@@ -93,7 +93,7 @@ class InstallerShellDelegationTest {
       )
     val appState =
       listOf(
-        fixtures.stateDir.resolve("qa/App-0123456789abcdef/qa-run/receipt.json"),
+        fixtures.stateDir.resolve("qa/App-0123456789abcdef/qa-run/report.md"),
         fixtures.stateDir.resolve("desktop-settings.json"),
       )
     val nativeLinkInventory = fixtures.stateDir.resolve("native-agent-link-inventory.json")

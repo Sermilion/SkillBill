@@ -54,6 +54,160 @@ if [[ "${SKILL_BILL_GOAL_CONTINUATION:-}" == "1" ]]; then
   exit 64
 fi
 
+# >>> retired IDE plugin cleanup (keep identical in install.sh and uninstall.sh)
+# Removes copies of the retired Skill Bill IntelliJ plugin (id dev.skillbill.status) and
+# VS Code extension (id skill-bill.skill-bill-status) from the user's IDEs. The helpers
+# update the retired_* counters that cleanup_retired_ide_plugins declares local, through
+# bash dynamic scoping. Never fails the caller.
+retired_ide_plugin_jar_has_id() {
+  local jar="$1" xml
+  [[ -f "$jar" ]] || return 1
+  # Capture first: piping into `grep -q` would SIGPIPE unzip under pipefail.
+  xml="$(unzip -p "$jar" META-INF/plugin.xml 2>/dev/null || true)"
+  [[ "$xml" == *"<id>dev.skillbill.status</id>"* ]]
+}
+
+retired_ide_plugin_dir_has_id() {
+  local dir="$1" jar
+  for jar in "$dir"/lib/*.jar; do
+    [[ -f "$jar" ]] || continue
+    if retired_ide_plugin_jar_has_id "$jar"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+retired_ide_plugin_note_removal() {
+  local label="$1" seen
+  retired_removed=$((retired_removed + 1))
+  for seen in ${retired_labels[@]+"${retired_labels[@]}"}; do
+    if [[ "$seen" == "$label" ]]; then
+      return 0
+    fi
+  done
+  retired_labels+=("$label")
+}
+
+retired_ide_plugin_remove() {
+  local kind="$1" label="$2" path="$3"
+  retired_found=$((retired_found + 1))
+  if [[ -d "$path" ]]; then
+    rm -rf -- "$path" 2>/dev/null || true
+  else
+    rm -f -- "$path" 2>/dev/null || true
+  fi
+  if [[ ! -e "$path" ]]; then
+    ok "  removed ${kind} (${label}): ${path}"
+    retired_ide_plugin_note_removal "$label"
+  else
+    warn "Could not remove ${path}"
+  fi
+  return 0
+}
+
+retired_ide_plugin_scan_root() {
+  local root="$1" label="$2" candidate is_match
+  for candidate in "$root"/*; do
+    [[ -e "$candidate" ]] || continue
+    [[ "$(dirname "$candidate")" == "$root" ]] || continue
+    is_match=0
+    if [[ -d "$candidate" ]]; then
+      if retired_ide_plugin_dir_has_id "$candidate"; then
+        is_match=1
+      fi
+    elif [[ -f "$candidate" && "$candidate" == *.jar ]]; then
+      if retired_ide_plugin_jar_has_id "$candidate"; then
+        is_match=1
+      fi
+    fi
+    if [[ "$is_match" -eq 1 ]]; then
+      retired_ide_plugin_remove "IntelliJ plugin" "$label" "$candidate"
+    fi
+  done
+}
+
+retired_ide_plugin_scan_vscode() {
+  local root="$1" label="$2" cli="$3" entry
+  local -a matches=()
+  [[ -d "$root" ]] || return 0
+  for entry in "$root"/skill-bill.skill-bill-status-*; do
+    [[ -d "$entry" ]] || continue
+    matches+=("$entry")
+  done
+  if [[ "${#matches[@]}" -eq 0 ]]; then
+    return 0
+  fi
+  if command -v "$cli" >/dev/null 2>&1; then
+    # </dev/null stops a headless CLI from waiting on stdin.
+    "$cli" --uninstall-extension skill-bill.skill-bill-status >/dev/null 2>&1 </dev/null || true
+  fi
+  for entry in ${matches[@]+"${matches[@]}"}; do
+    retired_ide_plugin_remove "VS Code extension" "$label" "$entry"
+  done
+}
+
+cleanup_retired_ide_plugins() {
+  local retired_found=0 retired_removed=0
+  local -a retired_labels=()
+  local -a intellij_roots=() intellij_labels=()
+  local os data_home root label i
+  os="$(uname -s 2>/dev/null || true)"
+  case "$os" in
+    Darwin|Linux) ;;
+    *) return 0 ;;
+  esac
+  data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+  if [[ "$os" == "Darwin" ]]; then
+    for root in \
+      "$HOME/Library/Application Support/JetBrains/"*/plugins \
+      "$HOME/Library/Application Support/Google/"AndroidStudio*/plugins; do
+      [[ -d "$root" ]] || continue
+      intellij_roots+=("$root")
+      intellij_labels+=("$(basename "$(dirname "$root")")")
+    done
+  else
+    # Modern layout: the product directory itself holds the plugin directories.
+    for root in "$data_home/JetBrains/"* "$data_home/Google/"AndroidStudio*; do
+      [[ -d "$root" ]] || continue
+      intellij_roots+=("$root")
+      intellij_labels+=("$(basename "$root")")
+    done
+    # Legacy layout: a plugins directory under the config product directory.
+    for root in \
+      "$HOME/.config/JetBrains/"*/plugins \
+      "$HOME/.config/Google/"AndroidStudio*/plugins; do
+      [[ -d "$root" ]] || continue
+      intellij_roots+=("$root")
+      intellij_labels+=("$(basename "$(dirname "$root")")")
+    done
+  fi
+  if [[ "${#intellij_roots[@]}" -gt 0 ]]; then
+    if command -v unzip >/dev/null 2>&1; then
+      for i in "${!intellij_roots[@]}"; do
+        retired_ide_plugin_scan_root "${intellij_roots[$i]}" "${intellij_labels[$i]}"
+      done
+    else
+      warn "Skipped IntelliJ plugin cleanup: unzip is not installed."
+    fi
+  fi
+  retired_ide_plugin_scan_vscode "$HOME/.vscode/extensions" "VS Code" code
+  retired_ide_plugin_scan_vscode "$HOME/.vscode-insiders/extensions" "VS Code Insiders" code-insiders
+  retired_ide_plugin_scan_vscode "$HOME/.vscode-oss/extensions" "VSCodium" codium
+  retired_ide_plugin_scan_vscode "$HOME/.cursor/extensions" "Cursor" cursor
+  if [[ "$retired_found" -eq 0 ]]; then
+    info "No retired Skill Bill IDE plugins found."
+  fi
+  if [[ "$retired_removed" -gt 0 ]]; then
+    for label in ${retired_labels[@]+"${retired_labels[@]}"}; do
+      info "Restart ${label} if it is running to finish removing the Skill Bill plugin."
+    done
+    info "The Skill Bill desktop app replaces the IntelliJ plugin and VS Code extension; they are no longer supported."
+  fi
+  return 0
+}
+# <<< retired IDE plugin cleanup
+
 trim_string() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"
@@ -823,6 +977,10 @@ remove_install_state() {
 }
 
 remove_install_state
+
+if [[ "${SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" != "1" ]]; then
+  cleanup_retired_ide_plugins
+fi
 
 echo ""
 printf "${GREEN}━━━ Uninstall complete ━━━${NC}\n"

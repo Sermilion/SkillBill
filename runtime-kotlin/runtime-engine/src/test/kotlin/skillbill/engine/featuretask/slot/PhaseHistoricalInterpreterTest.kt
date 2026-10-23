@@ -47,6 +47,7 @@ class PhaseHistoricalInterpreterTest {
               ),
           ),
         ),
+        ModelDirectiveSupplements(enabled = true),
       )
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
     assertEquals(setOf(PHASE_VALIDATE), plan.selectedStepIds)

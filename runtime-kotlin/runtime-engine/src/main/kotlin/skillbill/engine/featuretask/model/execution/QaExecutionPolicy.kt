@@ -17,7 +17,6 @@ enum class QaSkipReason(val wireValue: String) {
   UNSUPPORTED_TARGET("unsupported_target"),
   DISABLED_POLICY("disabled_policy"),
   ISOLATION_UNAVAILABLE("isolation_unavailable"),
-  AMBIGUOUS_TARGET("ambiguous_target"),
   UNAUTHORIZED_TARGET("unauthorized_target"),
   OFFLINE_TARGET("offline_target"),
   DEVICE_CONTENDED("device_contended"),

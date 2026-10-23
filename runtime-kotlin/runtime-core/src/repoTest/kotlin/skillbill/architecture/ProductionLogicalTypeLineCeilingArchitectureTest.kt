@@ -12,7 +12,7 @@ class ProductionLogicalTypeLineCeilingArchitectureTest {
       )
     val violations =
       ArchitectureScanSupport.logicalTypeLineCeilingViolations(
-        productionRoots = listOf("runtime-kotlin", "intellij-plugin"),
+        productionRoots = listOf("runtime-kotlin"),
         ceiling = PrincipleEnforcementInventory.PRODUCTION_LINE_CEILING,
         baseline = baseline,
       )

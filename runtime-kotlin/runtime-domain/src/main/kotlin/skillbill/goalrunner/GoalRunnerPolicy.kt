@@ -206,15 +206,16 @@ object GoalRunnerOutcomeReconciler {
           storedOutcome = storedOutcome,
           liveness = launchFacts.liveness,
         )
-      else -> reconcileStoredOutcome(subtaskId, storedOutcome, launchFacts.liveness)
+      else -> reconcileStoredOutcome(subtaskId, storedOutcome, launchFacts)
     }
 
   private fun reconcileStoredOutcome(
     subtaskId: Int,
     storedOutcome: GoalRunnerStoredOutcome,
-    liveness: GoalRunnerLivenessSnapshot?,
-  ): GoalRunnerReconciledOutcome =
-    when (storedOutcome.status) {
+    launchFacts: GoalRunnerLaunchFacts,
+  ): GoalRunnerReconciledOutcome {
+    val liveness = launchFacts.liveness
+    return when (storedOutcome.status) {
       GoalRunnerTerminalStatus.COMPLETE -> completeOutcome(subtaskId, storedOutcome)
       GoalRunnerTerminalStatus.FAILED ->
         stop(
@@ -226,7 +227,11 @@ object GoalRunnerOutcomeReconciler {
       GoalRunnerTerminalStatus.BLOCKED ->
         stop(
           reason = GoalRunnerStopReason.BLOCKED,
-          blockedReason = storedOutcome.blockedReason.orEmpty().ifBlank { "Subtask $subtaskId is blocked." },
+          blockedReason =
+            withLatestChildFailure(
+              storedOutcome.blockedReason.orEmpty().ifBlank { "Subtask $subtaskId is blocked." },
+              launchFacts,
+            ),
           storedOutcome = storedOutcome,
           liveness = liveness,
         )
@@ -272,6 +277,7 @@ object GoalRunnerOutcomeReconciler {
 
       GoalRunnerTerminalStatus.PAUSED -> pausedOutcome(subtaskId, storedOutcome, liveness)
     }
+  }
 
   private fun pausedOutcome(
     subtaskId: Int,
@@ -320,6 +326,16 @@ object GoalRunnerOutcomeReconciler {
         lastResumableStep = storedOutcome.lastResumableStep.orEmpty().ifBlank { "commit_push" },
       )
     }
+  }
+
+  private fun withLatestChildFailure(
+    reason: String,
+    launchFacts: GoalRunnerLaunchFacts,
+  ): String {
+    val exitStatus = launchFacts.exitStatus?.takeIf { it != 0 } ?: return reason
+    val excerpt =
+      launchFacts.stderrExcerpt?.takeIf(String::isNotBlank)?.takeUnless { it in reason } ?: return reason
+    return "$reason\nLatest child run exited with status $exitStatus. Child stderr (head+tail):\n$excerpt"
   }
 
   private fun noTerminalStoreOutcomeReason(

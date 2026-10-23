@@ -9,11 +9,14 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -85,13 +88,18 @@ internal interface PhaseRunState :
   /** The selected strategy that declares [stepId] among its steps, or null when no selected strategy does. */
   fun selectedOwnerOf(stepId: String): PhaseStrategy?
 
+  val modelDirectiveSupplements: ModelDirectiveSupplements
+
+  /** Reads the repository's committed `.skill-bill/phases` instruction files at launch. */
+  val phaseInstructionSource: PhaseInstructionFileSource
+
   /** The steps of the definition no strategy selected for this run owns. */
   fun unselectedStepIds(): Set<String>
 
   fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? = null
 
-  /** The state [run] reads and writes for one call of its step. */
-  fun step(run: PhaseRun): PhaseAcceptedStepExecution
+  /** The factory that builds the state [run] reads and writes for one call of its step. */
+  fun bindings(run: PhaseRun): PhaseBindingFactory
 
   /** Resolves, checks out, and records the feature branch file-mutating steps run on, reported under [guardPhase]. */
   fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome

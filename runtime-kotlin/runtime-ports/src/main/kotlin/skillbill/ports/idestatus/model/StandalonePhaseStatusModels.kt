@@ -127,7 +127,7 @@ data class StandalonePhaseStatusUpdate(
   val acceptedResult: String? = null,
   val monitorCleanup: StandaloneMonitorCleanup? = null,
   val qaOutcome: StandaloneQaOutcome? = null,
-  val qaReport: StandaloneQaReport? = null,
+  val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
 )
 
@@ -172,7 +172,7 @@ data class StandalonePhaseStatusRecord(
   val monitorTarget: StandaloneMonitorTarget? = null,
   val monitorCleanup: StandaloneMonitorCleanup? = null,
   val qaOutcome: StandaloneQaOutcome? = null,
-  val qaReport: StandaloneQaReport? = null,
+  val qaReportText: String? = null,
   val planReport: StandalonePlanReport? = null,
 )
 

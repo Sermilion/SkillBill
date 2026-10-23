@@ -1,3 +1,59 @@
+## [2026-10-22] Project phase instructions skip with a warning and never touch the output contract
+Context: SKILL-434 lets a repo add `.skill-bill/phases/<phase>.md` text to a phase prompt, and that file is untrusted, user-edited input.
+Decision: The resolver never throws; an unreadable, oversized, malformed or unknown-phase file is skipped with a warning and the run continues. The prompt section says the text cannot change the output or settlement contract, and the launch briefing records only path and sha256.
+Reason: A bad repo file must not block or derail a phase, and settlement stays owned by the runtime. The hash makes each launch auditable without storing the content.
+
+## [2026-10-22] Merge-conflict repair leaves the merge for the runtime to commit
+
+Context: Goal monitor repair told the agent to merge the base branch and also
+not to commit. SKILL-438's agent merged, then ran `git reset --mixed` to undo
+the merge commit. The runtime committed the merged tree with one parent, so the
+pull request still conflicted, and merge-conflict repairs are uncharged, so the
+loop had no bound.
+
+Decision: The conflict brief has the agent fetch the base, run
+`git merge --no-commit --no-ff origin/<base>`, resolve and stage conflicts, and
+leave the merge in progress. The runtime's ordinary commit then records both
+parents. Before publishing a conflict repair, the runtime blocks unless HEAD or
+`MERGE_HEAD` contains `origin/<base>`.
+
+Reason: The runtime owns commits, so the agent cannot finish a merge itself.
+An unfinished merge lets the runtime's commit keep the base as a parent. The
+ancestry check turns a flattened merge into a block instead of an uncharged
+repair loop.
+
+## [2026-10-22] Reject fabricated evidence in acceptance repair plans
+
+Context: SKILL-438 repeatedly synthesized legacy QA finding text after source
+audits rejected it for failing to preserve the original section verbatim.
+
+Decision: Planning and repair use the existing criterion-local failure context
+and explicitly explain how their next approach resolves earlier rejections.
+They name unavailable historical data rather than fabricating a replacement
+for an original artifact required by the criterion. Current source remains the
+authority, and independent audit still decides acceptance.
+
+Reason: Retaining failure history helps only when the proposed repair addresses
+why the previous approach was rejected.
+
+## [2026-10-22] Retain rejected repair evidence in later repair prompts
+
+Context: Durable accounting retained failed repairs, but planning and repair prompts included only the latest gap. A later rejection displaced earlier counterexamples, so agents could propose local fixes without checking whether the paths still agreed after replay or state advancement.
+
+Decision: Derive the selected criterion's latest three unsuccessful outcomes from existing accounting and pass them to planning and repair. State the included and total counts, retain outcomes across operator resume, and treat the reports as counterexamples to inspect against current source. Require planning to identify the invariant and its owner and trace applicable execution sequences. Require repair to perform a separate read-only source closure pass before reporting completion.
+
+Reason: This repairs the context handoff without new persisted state or output fields. Independent audit remains the acceptance authority. Budgets, progress admission, phase routing, and execution semantics are unchanged, so the wording and prompt delivery change does not require a semantic revision bump.
+
+## [2026-10-22] Block repeated verdict-less audits
+
+Context: An audit completion without a verdict is a clarification request, which
+re-runs audit. Nothing counted those requests, so an audit agent that could not
+reach the settlement tools relaunched 100 times on one subtask.
+
+Decision: `AcceptanceAuditRound` blocks the step with a `runtime:` reason when a
+verdict-less audit follows a pending audit clarification. Repair-admission
+clarifications do not count. The check needs no new repair-state field.
+
 ## [2026-10-21] Continue partial acceptance repairs without spending failure budget
 
 Context: Direct `progress` repair reports took the same incomplete-work path as

@@ -53,8 +53,7 @@ class FeatureTaskLookupCommand(
         repositoryEnclosingRootPort.repositoryIdentity(resolveCliRepositoryRoot(repoRoot, inputs)),
         workflowId,
       )
-    val payload = result.toCliPayload()
-    state.complete(payload, format, if (result is FeatureTaskContinuationLookupResult.Ambiguous) 2 else 0)
+    state.complete(result.toCliPayload(), format)
   }
 }
 
@@ -65,8 +64,6 @@ private fun FeatureTaskContinuationLookupResult.toCliPayload(): Map<String, Any?
       mapOf("result" to "resumable", "candidate" to candidate.toFeatureTaskContinuationCliMap())
     is FeatureTaskContinuationLookupResult.AlreadyRunning ->
       mapOf("result" to "already_running", "candidate" to candidate.toFeatureTaskContinuationCliMap())
-    is FeatureTaskContinuationLookupResult.Ambiguous ->
-      mapOf("result" to "ambiguous", "candidates" to candidates.map { it.toFeatureTaskContinuationCliMap() })
     is FeatureTaskContinuationLookupResult.TerminalOnly ->
       mapOf("result" to "terminal_only", "candidates" to candidates.map { it.toFeatureTaskContinuationCliMap() })
     is FeatureTaskContinuationLookupResult.GoalContinuation ->

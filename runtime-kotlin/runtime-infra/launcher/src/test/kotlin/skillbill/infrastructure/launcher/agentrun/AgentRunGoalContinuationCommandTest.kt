@@ -205,7 +205,7 @@ class AgentRunGoalContinuationCommandTest {
     headlessAgentRunAdapters(
       runner,
       ALL_EXECUTABLES_AVAILABLE,
-      Path.of("/tmp/skillbill-agent-run/metrics.db"),
+      AgentRunWorkerBinding(databasePath = Path.of("/tmp/skillbill-agent-run/metrics.db")),
       diagnostics = NoopRuntimeDiagnostics,
     )
 

@@ -101,6 +101,7 @@ internal class FeatureTaskRuntimeRunState(
     priorRecords.replaceFrom(source.priorRecords)
     phasesLaunchedThisProcess.replaceFrom(source.phasesLaunchedThisProcess)
     persistedAttemptCounts.replaceFrom(source.persistedAttemptCounts)
+    acknowledgedAttemptCounts.replaceFrom(source.acknowledgedAttemptCounts)
     blockedRecords.replaceFrom(source.blockedRecords)
     branchSetupBlockedPhases.replaceFrom(source.branchSetupBlockedPhases)
     edgeIterationByLoop.replaceFrom(source.edgeIterationByLoop)
@@ -310,6 +311,8 @@ internal class FeatureTaskRuntimeRunState(
   private val persistedAttemptCounts: MutableMap<String, Int> =
     this.initialRecords.mapValues { (_, record) -> record.attemptCount }.toMutableMap()
 
+  private val acknowledgedAttemptCounts: MutableMap<String, Int> = mutableMapOf()
+
   private val blockedRecords: MutableMap<String, String> =
     this.initialRecords
       .filterValues { record ->
@@ -372,6 +375,7 @@ internal class FeatureTaskRuntimeRunState(
       record = detachedInitialRecords[phaseId]?.let(::detachedRecord),
       output = outputBuffer.filter { it.phaseId == phaseId }.maxByOrNull { it.iteration }?.let(::detachedOutput),
       nextIteration = nextIteration(phaseId),
+      acknowledgedAttemptCount = acknowledgedAttemptCounts[phaseId],
     )
 
   override fun outputs(requiredPhaseIds: Collection<String>): List<FeatureTaskRuntimePhaseOutput> {
@@ -414,6 +418,8 @@ internal class FeatureTaskRuntimeRunState(
     fixLoopBudgetBaseByPhase.remove(reviewStepId)
     fixStepId?.let(persistedAttemptCounts::remove)
     persistedAttemptCounts.remove(reviewStepId)
+    fixStepId?.let(acknowledgedAttemptCounts::remove)
+    acknowledgedAttemptCounts.remove(reviewStepId)
     priorRecords.remove(reviewStepId)
     blockedRecords.remove(reviewStepId)
     currentReviewPassNumber = null
@@ -426,12 +432,13 @@ internal class FeatureTaskRuntimeRunState(
   }
 
   override fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart {
+    val plannedPhaseId = plannedResumePhase(requestedPhaseId)
     val phaseId =
-      if (requestedPhaseId in completedPhases) {
-        requestedPhaseId
+      if (plannedPhaseId in completedPhases) {
+        plannedPhaseId
       } else {
-        transitions.entryGateViolation(requestedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
-          ?: requestedPhaseId
+        transitions.entryGateViolation(plannedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
+          ?: plannedPhaseId
       }
     if (phaseId !in completedPhases) return ExplicitResumeStart(phaseId, reopen = true)
     if (openRepairReentry(phaseId)) return ExplicitResumeStart(phaseId, reopen = false)
@@ -540,6 +547,13 @@ internal class FeatureTaskRuntimeRunState(
     phasesLaunchedThisProcess += phaseId
   }
 
+  internal fun recordAcknowledgedPhaseStart(
+    phaseId: String,
+    attemptCount: Int,
+  ) {
+    acknowledgedAttemptCounts[phaseId] = maxOf(acknowledgedAttemptCounts[phaseId] ?: 0, attemptCount)
+  }
+
   internal fun clearPersistedBlock(phaseId: String) {
     blockedRecords.remove(phaseId)
   }
@@ -547,6 +561,7 @@ internal class FeatureTaskRuntimeRunState(
   internal fun clearBranchSetupBlock(phaseId: String) {
     branchSetupBlockedPhases.remove(phaseId)
     persistedAttemptCounts.remove(phaseId)
+    acknowledgedAttemptCounts.remove(phaseId)
   }
 
   override fun loop(loopId: String): LoopProgressObservation =
@@ -645,6 +660,15 @@ internal class FeatureTaskRuntimeRunState(
     val record = initialRecords[phaseId] ?: return verdictFor(phaseId)
     val output = validatedRecordToOutput(record) ?: return verdictFor(phaseId)
     return FeatureTaskRuntimeOutputVerification.verdictFor(parsedOutput(output), stepVerdictRuleFor(phaseId))
+  }
+
+  private fun plannedResumePhase(requestedPhaseId: String): String {
+    if (requestedPhaseId in transitions.forwardPhaseIds) return requestedPhaseId
+    val canonicalStepIds = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
+    val canonicalIndex = canonicalStepIds.indexOf(requestedPhaseId)
+    if (canonicalIndex < 0) return requestedPhaseId
+    return canonicalStepIds.drop(canonicalIndex + 1).firstOrNull { it in transitions.forwardPhaseIds }
+      ?: requestedPhaseId
   }
 
   private fun completedResumePast(requestedPhaseId: String): ExplicitResumeStart? {

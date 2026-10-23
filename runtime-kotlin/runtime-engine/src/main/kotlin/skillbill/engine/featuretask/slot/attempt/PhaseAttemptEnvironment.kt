@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -36,6 +37,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -254,13 +256,15 @@ internal interface PhaseAttemptLaunchPreparationContext :
   PhaseAttemptPlanAuthorization {
   val qualityGateCycles: RuntimeQualityGateCycles
 
-  fun stepHooks(run: PhaseRun): PhaseStepHooks
+  fun stepHooks(run: PhaseRun): PhaseStepHooks<*>
 
   fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField>
 
   fun phaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget?
 
   val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
+
+  val phaseInstructionSource: PhaseInstructionFileSource
 }
 
 /** Run-loop and attempt helpers that resolve strategies for arbitrary selected steps. */
@@ -312,6 +316,9 @@ internal open class PhaseAttemptSettlementScope(
 
   val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = boundHost.implementationChecklistStore
+
+  val phaseInstructionSource: PhaseInstructionFileSource
+    get() = boundHost.phaseInstructionSource
 
   override val progress: FeatureTaskRuntimeProgressSnapshotAccess
     get() = boundHost.progress
@@ -374,6 +381,9 @@ internal open class PhaseAttemptSettlementScope(
 
   internal fun selectedOwnerOf(stepId: String): PhaseStrategy? = boundHost.selectedOwnerOf(stepId)
 
+  internal val modelDirectiveSupplements: ModelDirectiveSupplements
+    get() = boundHost.modelDirectiveSupplements
+
   internal fun resolveStrategyFor(stepId: String): PhaseStrategy = boundHost.strategyFor(stepId)
 
   internal open val qualityGateCycles: RuntimeQualityGateCycles
@@ -426,7 +436,7 @@ internal open class PhaseAttemptLaunchCollaborationScope(
   override val qualityGateCycles: RuntimeQualityGateCycles
     get() = super.qualityGateCycles
 
-  override fun stepHooks(run: PhaseRun): PhaseStepHooks {
+  override fun stepHooks(run: PhaseRun): PhaseStepHooks<*> {
     requireAcceptedBoundStep(run.phaseId)
     return resolveStrategyFor(run.phaseId).stepHooks(run.phaseId)
   }

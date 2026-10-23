@@ -1,3 +1,9 @@
+## [2026-10-23] Retired-plugin cleanup is a duplicated block, not a shared file
+Context: install.sh and uninstall.sh both need the retired IDE plugin cleanup, and the intake suggested a shared helper.
+Decision: One self-contained cleanup block, byte-identical in both scripts, delimited by markers and checked by a smoke-test parity assertion.
+Reason: The release skills bundle ships only uninstall.sh beside the skills, scripts/ is not shipped, and install.sh must work when piped from stdin before any bundle exists, so a sourced file would be missing.
+Alternatives considered: A sourced shared helper was rejected for those shipping reasons.
+
 ## [2026-10-21] Install runtime and desktop as a matched pair or not at all
 Context: A desktop and runtime from different builds share one database, and a half-updated pair caused the SKILL-430 regression.
 Decision: install.sh stages both halves, compares their build-identity records, and activates only on a match. A desktop that cannot be staged fails the whole install before the runtime is replaced (preplan U5).

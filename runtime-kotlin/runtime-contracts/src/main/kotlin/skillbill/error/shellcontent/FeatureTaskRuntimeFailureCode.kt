@@ -45,7 +45,17 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   UNKNOWN_QA_SELECTION,
   PHASE_ATTEMPT_BUDGET_EXHAUSTED,
   LOOP_EDGE_CAP_EXHAUSTED,
+  INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING,
 }
+
+fun invalidModelDirectiveSupplementsSetting(
+  key: String,
+  value: String,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_MODEL_DIRECTIVE_SUPPLEMENTS_SETTING,
+    "Setting $key must be 'true' or 'false', got '$value'.",
+  )
 
 fun invalidFeatureTaskRuntimeRepairReceipt(
   fieldPath: String,

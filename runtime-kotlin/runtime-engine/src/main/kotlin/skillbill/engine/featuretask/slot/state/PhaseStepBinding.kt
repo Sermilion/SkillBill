@@ -6,6 +6,8 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.PhaseBoundStepHooks
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
@@ -31,6 +33,8 @@ internal interface PhaseStepBinding {
    * policy, and strategy id from it, so a wrapper that delegates execution keeps its own identity.
    */
   val acceptedOwner: PhaseStrategy
+
+  val modelDirectiveSupplements: ModelDirectiveSupplements
 
   val launchState: PhaseLaunchState
 
@@ -75,6 +79,8 @@ internal interface PhaseAcceptedStepExecution :
     stepId: String,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   )
+
+  val boundHooks: PhaseBoundStepHooks<*>
 }
 
 /** Agent and side-effect steps execute through the accepted attempt owner only. */
@@ -114,10 +120,13 @@ internal interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
   fun runCommitPush(run: PhaseRun): PhaseOutcome
 }
 
-internal interface PhaseMonitorStepBinding : PhaseAcceptedStepExecution {
+internal interface PhaseMonitorStepBinding :
+  PhaseAcceptedStepExecution,
+  PhaseAgentExecution {
   fun publishRepair(
     run: PhaseRun,
     pullRequests: PullRequestIdentityLookup,
+    conflictBaseBranch: String?,
   ): String?
 
   fun runMonitor(
@@ -154,7 +163,9 @@ internal interface PhaseCiObservation {
 }
 
 /** The accepted standalone monitor and monitor-repair steps; both act only on the invocation's own ledger. */
-internal interface PhaseStandaloneMonitorStepBinding : PhaseAcceptedStepExecution {
+internal interface PhaseStandaloneMonitorStepBinding :
+  PhaseAcceptedStepExecution,
+  PhaseAgentExecution {
   fun runStandaloneMonitor(
     run: PhaseRun,
     operations: PhaseStandaloneMonitorOperations,
@@ -275,7 +286,11 @@ internal interface PhasePullRequestStepBinding : PhaseAgentStepBinding {
   fun pullRequestContext(): PhasePullRequestContext
 }
 
-internal interface PhasePlanningStepBinding : PhaseAgentStepBinding {
+internal interface PhasePlanningAgentStepBinding :
+  PhaseAgentStepBinding,
+  PhasePlanningBriefingBinding
+
+internal interface PhasePlanningStepBinding : PhasePlanningAgentStepBinding {
   /**
    * Completes the accepted plan step from the spec bundle already on disk without launching an agent, recording its
    * snapshot. Subtasks that already carry their plan are recorded as settled units of [unitStepId]. Returns null
@@ -294,7 +309,7 @@ internal interface PhasePlanningStepBinding : PhaseAgentStepBinding {
 }
 
 /** Planning fan-out unit execution; not a general run-loop step binding. */
-internal interface PhasePlanningUnitBinding : PhaseAgentStepBinding
+internal interface PhasePlanningUnitBinding : PhasePlanningAgentStepBinding
 
 /**
  * Review and remediation steps combine accepted-step execution with review-owned persistence.

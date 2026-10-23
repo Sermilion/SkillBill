@@ -25,21 +25,6 @@ checks generated agent-config manifests for drift. See the
 [Validation Gate section in Getting Started](docs/getting-started.md#validation-gate)
 for the full description.
 
-### IntelliJ plugin
-
-The IntelliJ status plugin lives in top-level `intellij-plugin/` with its own
-Gradle project (IntelliJ Platform Gradle Plugin 2.x, JDK 21). It is not part of
-`runtime-kotlin`. Before proposing plugin changes:
-
-```bash
-(cd intellij-plugin && ./gradlew check)
-```
-
-Use `./gradlew buildPlugin`, `runIde`, and `verifyPlugin` as described in
-[`intellij-plugin/README.md`](intellij-plugin/README.md). Architecture,
-persistence policy, source-of-truth, and the future tool-window extension path
-are documented in [`intellij-plugin/ARCHITECTURE.md`](intellij-plugin/ARCHITECTURE.md).
-
 ## Extension Point: Platform Packs
 
 The documented extension surface is **platform packs** under

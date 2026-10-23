@@ -110,8 +110,8 @@ verbatim: a Linear issue key or URL, the requirements as raw text, or a
 `spec:<path>` token. If it has no intake, stop and ask for it. Forward
 `target:`, `mode:`, and `qa:` verbatim; without `target:`, the runtime verifies
 HEAD against `origin/HEAD`, without `mode:`, it reviews inline, and without
-`qa:`, QA is `off`. `qa:on` adds report-only mobile QA in a temporary worktree
-at the target head after the completeness audit.
+`qa:`, QA is `off`. `qa:on` adds mobile QA in a temporary worktree at the target
+head after the completeness audit.
 
 ## Token Forwarding
 
@@ -358,19 +358,26 @@ it finished; report it and exit non-zero.
 the installed packs, not the dispatcher: the routed pack's `qa_capability` names
 its guidance, and a repository with no declaring pack completes as a skipped
 `unsupported_target` run without launching an agent. The QA agent drives one
-device or simulator and writes its receipt and evidence under
+device or simulator and writes a prose `report.md` and its evidence under
 `qa/<repo-key>/<invocation>/` in the skill-bill state directory
 (`SKILL_BILL_STATE_DIR` when set), never in the working tree or `.git/`. It runs on a
 test account, so every in-app action is allowed, and it picks a Local or staging
-environment, never production; a production-only app settles `skipped` with
-`production_only`. It never edits tracked files, commits, pushes, or opens a PR.
-QA never blocks and always exits 0. A self-contradicting receipt is downgraded
-to its honest verdict (for example `passed` with an untested flow becomes
-`incomplete`). A missing or malformed receipt, a receipt for another revision,
-or a stopped QA agent settles `incomplete`; a run that could not start settles
-`skipped`. A repository change made during QA is kept and named in a warning.
-Each case prints a `Warning:` line with the verdict. Relay the printed warnings,
-verdict, flows, findings, per-criterion results, and cleanup as a phase form.
+environment, never production; a production-only app settles `skipped` and
+names the missing environment. It builds and tests in a temporary worktree of the
+tree under test, created by the runtime under the invocation directory with the
+repository's ignored local configuration files, and it may edit any file there
+to reach a state the criteria need, such as an injected fault. The runtime
+deletes that worktree afterwards; QA never edits the working tree, commits,
+pushes, or opens a PR. QA never blocks and always exits 0. The runtime reads the report with
+no schema check: the first line naming `passed`, `findings`, `incomplete`, or
+`skipped` is the verdict, and a report with none settles `incomplete`. Each
+`### <finding-id> <title>` section is a finding. The runtime never rewrites the
+stated verdict. A missing `report.md` or a stopped QA agent settles `incomplete`;
+a run that could not start or whose worktree cannot be created settles
+`skipped`. A change to the working tree made during QA is kept and named in a
+warning. Each case prints a `Warning:` line with the
+verdict. Relay the printed verdict, warnings, report text, and cleanup note as a
+phase form.
 
 ## Phase PR
 

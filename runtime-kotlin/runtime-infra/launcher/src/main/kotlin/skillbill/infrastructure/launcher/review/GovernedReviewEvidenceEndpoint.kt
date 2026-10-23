@@ -8,9 +8,9 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
-import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
+import skillbill.infrastructure.launcher.mcp.runtimeMcpBinCandidate
 import skillbill.model.EnvironmentContext
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointBinder
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
@@ -61,14 +61,7 @@ internal fun bridgeCommand(
   environment: Map<String, String>,
   userHome: Path,
 ): List<String> {
-  val configured = environment["SKILL_BILL_RUNTIME_MCP_BIN"]?.takeIf(String::isNotBlank)
-  val home =
-    userHome.takeUnless { it.toString().isBlank() }
-      ?: environment["HOME"]?.takeIf(String::isNotBlank)?.let(Path::of)
-      ?: resolveUserHome(null)
-  val bin =
-    configured?.let(Path::of)
-      ?: home.resolve(".skill-bill").resolve("runtime").resolve("runtime-mcp").resolve("bin").resolve("runtime-mcp")
+  val bin = runtimeMcpBinCandidate(environment, userHome)
   if (!Files.isExecutable(bin)) {
     throw SkillBillRuntimeException(
       GovernedReviewFailureCode.EVIDENCE_TRANSPORT,

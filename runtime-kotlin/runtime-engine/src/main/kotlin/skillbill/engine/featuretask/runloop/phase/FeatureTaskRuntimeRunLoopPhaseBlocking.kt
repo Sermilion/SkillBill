@@ -178,6 +178,12 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     args: BlockAndPersistArgs,
     transitions: FeatureTaskRuntimeRunTransitionOwner,
   ): PhaseOutcome {
+    FeatureTaskRuntimeNonBlockingFailure.settle(
+      recorder,
+      transitions,
+      args.observability,
+      PhaseFailureContinuationRequest(args.run, args.attemptCount, args.reason, args.payload.fileManifest),
+    )?.let { return it }
     val request = args.run.request
     val run = args.run
     val attemptCount = args.attemptCount
@@ -228,6 +234,12 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   }
 
   internal fun PhaseRunLoopAttemptScope.pauseAndPersistInPhase(args: PauseAndPersistInPhaseArgs): PhaseOutcome {
+    FeatureTaskRuntimeNonBlockingFailure.settle(
+      recorder,
+      coupledRunTransitions,
+      args.observability,
+      PhaseFailureContinuationRequest(args.run, args.attemptCount, args.reason, args.fileManifest),
+    )?.let { return it }
     val run = args.run
     val attemptCount = args.attemptCount
     val reason = args.reason

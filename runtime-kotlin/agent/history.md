@@ -1,3 +1,65 @@
+## [2026-10-23] SKILL-440 subtask 1: retire the IntelliJ plugin and VS Code extension trees
+Areas: intellij-plugin and vscode-extension (deleted); .github/workflows; README.md, CONTRIBUTING.md, RELEASING.md, AGENTS.md, docs; orchestration/shell-content-contract; scripts; runtime-kotlin/runtime-core repoTest architecture guards; runtime-infra/contracts readiness schema test
+- MEDIUM feature. The top-level `intellij-plugin/` and `vscode-extension/` projects (with their own agent history and decisions files) and the `plugin-ci`, `plugin-release` and `extension-release` workflows are removed, along with their `.gitignore` entries. The desktop app replaces both.
+- README "IDE plugins" paragraph is now a retirement note (desktop app replaces them, no longer supported or released, installer removes old copies). The plugin sections of CONTRIBUTING, RELEASING and getting-started are deleted.
+- Authored-Kotlin root lists in AGENTS, code-principles and shell-ceremony now name only `runtime-kotlin` and `runtime-kotlin/build-logic`; the two skill361 helper scripts drop the plugin scan roots.
+- Architecture guards (`ArchitectureBaselineRecorder`, both production line-ceiling tests, `PrincipleEnforcementInventory`) scan only `runtime-kotlin`; the `intellij plugin retains its layer package roots` case in `PackageSiblingCountArchitectureTest` is deleted. The readiness schema test now cites the `desktop-tray` gate command.
+- Limits: `scripts/install_smoke_test.sh` keeps one `skill-bill-intellij-plugin` asset fixture, and `plugin-v*` comments remain in `install.sh` and the smoke script; installer cleanup is subtask 2. History and decision files that mention the plugins stay as records.
+- Validate passed (runtime check, agnix, agent-config validation, desktop-tray check); the install smoke scripts were not runnable headless, so PR CI is authoritative for them.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate passed)
+
+## [2026-10-22] SKILL-437 subtask 6: strategy documentation for the simplified layer
+Areas: docs (model-specific-phase-strategies, runtime-command-guidance); runtime-kotlin/ARCHITECTURE.md; runtime-kotlin/agent/decisions.md
+- MEDIUM feature, documentation only. `docs/model-specific-phase-strategies.md` is rewritten around the landed design: a model is not a strategy, and adding one is a single `PhaseModelProfileClassifier` case plus directive resources registered with `ModelDirectiveSupplements`.
+- Composition appends supplements for the recorded step profile to the task directive, retry focus and output contract; canonical-profile and unmapped steps stay unsupplemented. The doc records the plan versus plan_subtasks resource mapping and the direct standalone review launches.
+- `SKILL_BILL_MODEL_DIRECTIVE_SUPPLEMENTS` is documented: on when omitted, `false` disables, any other value is a typed error; it enters through injected settings and is not persisted. Immutable historical aliases keep recorded runs executable without reselection or row rewrite.
+- `ARCHITECTURE.md` strategy section now covers the non-generic `PhaseStrategy` (twelve-member ceiling, eleven landed), seventeen canonical registrations, typed binding families, optional capability interfaces and one shared `DefaultPhaseRunner`; stale `PhaseStrategy.loopRules` and per-strategy runner text repaired.
+- Decision entry added for canonical strategies plus supplements; the 2026-10-05 SKILL-403 decision is marked superseded in part.
+- Limits: docs name no wrapper class and cite no resource count; twelve opus-5-5 resources remain after subtask 3 removed the delegated full-run one.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented (validate passed)
+
+## [2026-10-22] SKILL-437 subtask 4: typed binding families for phase steps
+Areas: runtime-kotlin/runtime-engine (featuretask slot, slot/attempt, slot strategies, runloop state/core/durable, test fixtures); runtime-kotlin/ARCHITECTURE.md
+- MEDIUM feature. Each phase step now declares a `PhaseStepDescriptor` (family, hooks, execution) in place of `runStep`, `executionBindingKind` and untyped hooks; `PhaseExecutionBindingKind` is deleted and every accepted-binding downcast in strategies is gone.
+- Sealed `PhaseBindingFamily<B>` covers agent, planning agent, fan-out, planning unit, QA findings, quality gate (operation), commit, monitor, standalone monitor, standalone publication and pull request. Review, finding verification and repair receipt are separate top-level family objects so non-review strategies never reach review authority.
+- Runtime bindings are per-family leaf classes built by one private `PhaseBindingFactory` with no selection over slot, binding kind, gate operation or fan-out flag; pack build and agent validation stay distinct quality-gate operations.
+- Reusable: `Family.construct(factory, hooks, use)` correlates strategy, family, binding and hooks without casts; `PhaseRunStateStepFixtures` gives tests `step` and `runStep` helpers.
+- Limits: `PhaseStrategy` is not itself generic (capture opens one binding per step); `stepDescriptor` throws on unknown steps; context-role casts in loop rules and verify evidence remain. Declarations live in the excluded-root `PhaseStepHooks.kt` to keep the slot package at its file ceiling.
+Feature flag: N/A
+Acceptance criteria: implemented per spec_subtask_4_typed-binding-families.md (validate passed)
+
+## [2026-10-22] SKILL-437 subtask 3: live strategy registry with one shared runner
+Areas: runtime-kotlin/runtime-engine (featuretask slot registry, lookup, code_review strategies, test fixtures); runtime-kotlin/runtime-core (di/featuretask registry provider); runtime-kotlin/ARCHITECTURE.md
+- MEDIUM feature. Production registry now holds exactly the 17 strategy registrations live selection reaches; verified by comparing registrations with the pairs selected over every skeleton definition and its review, gate and QA facts.
+- Deleted unreachable `DelegatedReviewStrategy` (code_review `delegated`), its resource and the `delegated-opus-5-5` and `agent-plan-opus-5-5` aliases; `AgentPlanStrategy` stays as the unregistered helper `PlanFanOutStrategy` composes. Delegated standalone review is retained.
+- One `DefaultPhaseRunner` is injected into every registration; `InjectedPhaseStrategies` is removed and a regression test proves a failed run leaks no state into the next.
+- Reusable: `PlanningPhaseStrategies` and `PullRequestPhaseStrategies` group strategies per skeleton; `registeredRunners()` and `reachableStrategyPairs()` test fixtures check registry reachability.
+- Limits: fan-out stays registered for plan and plan_subtasks; a recorded plan naming `delegated` or `agent-plan` now fails as unregistered. Docs sweep is subtask 6, typed strategy families subtask 4.
+Feature flag: N/A
+Acceptance criteria: implemented per spec_subtask_3_live-registry.md (validate passed)
+
+## [2026-10-22] SKILL-438 subtask 2: free device selection without ambiguous_target
+Areas: runtime-kotlin/runtime-engine QA execution and briefing; platform-packs/kmp and ios QA guidance
+- MEDIUM feature. Removed `QaSkipReason.AMBIGUOUS_TARGET` and replaced multi-target skip guidance with free-target leasing and retry rules.
+- Unnamed runs lease an authorized target, release and retry after contention or unusable storage, lock, or install conditions, and report the selected target plus rationale; named serials, AVDs, and UDIDs remain honored.
+- Device-contended remains reserved for the case where every authorized target is leased. The QA briefing carries the same release-and-switch behavior.
+- Reusable: agent-owned target selection with pack-specific guidance and explicit lease cleanup.
+- Limitation: unrelated `MonitorTargetRefusal.AMBIGUOUS_TARGET` pull-request target resolution remains outside this QA change.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented
+
+## [2026-10-22] SKILL-438 subtask 1: prose QA reports across runtime and desktop
+Areas: runtime-kotlin QA settlement, goal/verify/standalone flows, ports and SQLite persistence; desktop-tray QA detail; platform QA guidance; docs, contracts, and skill content
+- MEDIUM feature. Replaced strict agent-authored JSON receipts with lenient `report.md` prose; the runtime extracts verdicts, finding ids, sections, and evidence while preserving full text.
+- Reworked goal repair, fixed/not-fixed tracking, standalone printing, and verify verdict input around reports; legacy `qa_receipt` envelopes and artifacts remain read-compatible.
+- Added migration 66 for `qa_report_text`; legacy columns and persisted finding keys remain readable, while schema validation, claim downgrades, and criteria-matrix rendering were removed.
+- Desktop QA panels now show report text and extracted finding state. Reusable patterns: report parsing/settlement, id-based closure, and report-text persistence.
+- Limits: agent output must be `report.md`; device selection and `ambiguous_target` remain subtask 2, and existing receipts on disk are untouched.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-19] SKILL-431 subtask 3: goal finish pipeline status and docs
 Areas: runtime-kotlin engine work (IdeStatusService, IdeStatusProjectorMapping, IdeStatusServiceGoalProjectionTest); runtime-kotlin/ARCHITECTURE.md; docs/runtime-command-guidance.md; skills/skill-bill
 - MEDIUM feature. GOAL_FINISH_PIPELINE is now qa, qa_fix, validate, pr, monitor, monitor_fix, built from the FeatureTaskRuntimePhaseWorkflowDefinition PHASE_* constants and made internal. commit_push stays out.

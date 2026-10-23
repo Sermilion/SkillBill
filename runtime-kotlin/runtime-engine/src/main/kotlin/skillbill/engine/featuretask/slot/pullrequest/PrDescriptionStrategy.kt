@@ -8,6 +8,8 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -16,10 +18,8 @@ import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookConte
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhasePullRequestContext
 import skillbill.engine.featuretask.slot.state.PhasePullRequestStepBinding
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.withMeasuredFacts
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
@@ -52,13 +52,13 @@ class PrDescriptionStrategy(
   private val templates = ConcurrentHashMap<Path, PullRequestTemplate>()
 
   private val measuredHooks =
-    object : PhaseStepHooks {
+    object : PhaseStepHooks<PhasePullRequestStepBinding> {
       override val contextKind = PhaseStepHookContextKind.PULL_REQUEST
 
       override fun beforeAgentLaunch(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
-        state: PhaseStepBinding,
+        state: PhasePullRequestStepBinding,
       ): String? = (context as PhasePullRequestLaunchHookContext).pushResolvedBranchIfAhead()
 
       override fun acceptedOutput(
@@ -100,16 +100,19 @@ class PrDescriptionStrategy(
       valueContent = VALUE_CONTENT,
     )
 
-  override fun runStep(
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return PhaseStepDescriptor(PhaseBindingFamily.PullRequest, measuredHooks) { run, state ->
+      runPullRequest(run, state)
+    }
+  }
+
+  private fun runPullRequest(
     run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
+    state: PhasePullRequestStepBinding,
   ): PhaseOutcome {
     state.requireAcceptedStep(run, state.acceptedOwner.strategyId)
-    val context =
-      (
-        state as? PhasePullRequestStepBinding
-          ?: error("PR requires its accepted execution binding.")
-      ).pullRequestContext()
+    val context = state.pullRequestContext()
     val resolved = context.resolvedBranch()
     val baseBranch = context.gitOperations.baseBranchOrDefault(context.request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
@@ -137,8 +140,6 @@ class PrDescriptionStrategy(
     }
     return outcome
   }
-
-  override fun stepHooks(stepId: String): PhaseStepHooks = measuredHooks
 
   private fun template(repoRoot: Path?): PullRequestTemplate =
     repoRoot?.let { root -> templates[root] ?: PullRequestTemplateSearch.resolve(root, templateFiles) }

@@ -16,11 +16,13 @@ import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorOperations
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.StandaloneRepairWorktree
+import skillbill.engine.featuretask.slot.state.step
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
@@ -406,7 +408,7 @@ class PhaseStandaloneMonitorExecutionTest {
           assertFails { publication.runStandalonePublication(run.copy(phaseId = MONITOR), operations) }
           val foreignRequest = object : FeatureTaskRuntimeRunFacts by run.request {}
           assertFails { publication.runStandalonePublication(run.copy(request = foreignRequest), operations) }
-          assertFails { context.runState.strategyFor(MONITOR).runStep(run, binding) }
+          assertFails { publication.requireAcceptedStep(run, StandaloneMonitorStrategy.ID) }
           binding.finishStepExecution()
           context.runState.stepBinding.releaseCoordinatorDispatch()
           assertFails { publication.runStandalonePublication(run, operations) }

@@ -1,25 +1,25 @@
 package skillbill.engine.featuretask.runner
 
 import org.junit.jupiter.api.io.TempDir
-import skillbill.contracts.qa.QaReceiptPayloadKeys
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_QA_ROOT
-import skillbill.engine.featuretask.qa.receipt.QA_TEST_TREE
-import skillbill.engine.featuretask.qa.receipt.QaFallbackKind
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
-import skillbill.engine.featuretask.qa.receipt.QaVerdict
-import skillbill.engine.featuretask.qa.receipt.qaTestEvidencePrefix
-import skillbill.engine.featuretask.qa.receipt.qaTestJson
-import skillbill.engine.featuretask.qa.receipt.qaTestReceipt
-import skillbill.infrastructure.contracts.qa.QaReceiptSchemaValidator
+import skillbill.engine.featuretask.qa.report.QA_TEST_HEAD
+import skillbill.engine.featuretask.qa.report.QA_TEST_QA_ROOT
+import skillbill.engine.featuretask.qa.report.QA_TEST_TREE
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
+import skillbill.engine.featuretask.qa.report.QaVerdict
+import skillbill.engine.featuretask.qa.report.qaTestEvidencePrefix
+import skillbill.engine.featuretask.qa.report.qaTestReport
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
@@ -31,6 +31,9 @@ import skillbill.scaffold.model.QaPlatform
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -38,6 +41,7 @@ import java.util.concurrent.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -51,45 +55,7 @@ class FeatureTaskRuntimeQaExecutionTest {
   private var qaOutputOverride: String? = null
 
   @Test
-  fun `full QA records each fallback and policy skip without exposing receipt reasons`() {
-    val fallbacks =
-      fixture(
-        QaVerdict.PASSED,
-        receiptForVisit = { _, expected ->
-          qaTestReceipt(QaVerdict.PASSED, expected) +
-            mapOf(
-              QaReceiptPayloadKeys.FALLBACKS to
-                QaFallbackKind.entries.map { kind ->
-                  mapOf(
-                    QaReceiptPayloadKeys.KIND to kind.wireValue,
-                    QaReceiptPayloadKeys.REASON to "private-device-serial",
-                  )
-                },
-            )
-        },
-      )
-
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(fallbacks.harness.runner.run(fallbacks.harness.request))
-    val messages = fallbacks.diagnostics.messages
-    assertEquals(3, messages.size)
-    QaFallbackKind.entries.forEach { kind ->
-      assertEquals(1, messages.count { it.contains("value_used=${kind.wireValue}") })
-    }
-    assertTrue(messages.none { it.contains("private-device-serial") })
-
-    val disabled = fixture(QaVerdict.PASSED, FeatureTaskRuntimeQaSelection.OFF)
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(disabled.harness.runner.run(disabled.harness.request))
-    assertEquals(1, disabled.diagnostics.messages.size)
-    assertContains(disabled.diagnostics.messages.single(), "value_used=disabled_policy")
-    assertTrue(
-      disabled.launcher.requests.none {
-        phaseIdFromPrompt(it.skillRunRequest.promptOverride.orEmpty()) == "qa"
-      },
-    )
-  }
-
-  @Test
-  fun `full runs prepare QA before launch and advance on valid optional receipts`() {
+  fun `full runs prepare QA before launch and advance on a prose report with any verdict`() {
     for (verdict in listOf(QaVerdict.PASSED, QaVerdict.SKIPPED, QaVerdict.INCOMPLETE)) {
       val fixture = fixture(verdict)
       val report = fixture.harness.runner.run(fixture.harness.request)
@@ -100,11 +66,11 @@ class FeatureTaskRuntimeQaExecutionTest {
           .single { phaseIdFromPrompt(it.promptOverride.orEmpty()) == "qa" }
       val prompt = assertNotNull(qaLaunch.promptOverride)
       assertEquals(listOf(Path.of(QA_TEST_QA_ROOT, "qa-test-invocation")), qaLaunch.additionalWritableDirectories)
-      assertContains(prompt, "`policy` set to `auto`")
+      assertEquals(Path.of(QA_TEST_QA_ROOT, "qa-test-invocation", "checkout"), qaLaunch.repoRoot)
       assertContains(prompt, "qa/android-qa.md")
-      assertContains(prompt, QA_TEST_TREE)
+      assertContains(prompt, "Report path: `${qaTestEvidencePrefix("qa-test-invocation")}report.md`")
       val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
-      assertContains(assertNotNull(qa.outputArtifact), "\"verdict\":\"${verdict.wireValue}\"")
+      assertContains(assertNotNull(qa.outputArtifact), "\"qa_verdict\":\"${verdict.wireValue}\"")
       assertEquals(listOf("qa-test-invocation"), fixture.leases.releasedInvocations)
       assertEquals(listOf("qa-test-invocation"), fixture.workspaces.closedInvocations)
       val stored = assertNotNull(fixture.storedQaOutcome())
@@ -118,19 +84,13 @@ class FeatureTaskRuntimeQaExecutionTest {
       )
       assertEquals(QA_TEST_TREE, stored.testedTreeIdentity)
       assertEquals(0, stored.qaFixAttempts)
-      if (verdict == QaVerdict.INCOMPLETE) assertEquals("device_lost", stored.reason)
-      assertEquals(
-        when (verdict) {
-          QaVerdict.SKIPPED -> emptyList()
-          else -> listOf("AC-001")
-        },
-        stored.report?.criteria?.map { it.id }.orEmpty(),
-      )
+      assertContains(assertNotNull(stored.reportText), "Verdict: ${verdict.wireValue}")
+      assertTrue(stored.findings.isEmpty())
     }
   }
 
   @Test
-  fun `disabled QA records a receipt without discovering capability or launching QA`() {
+  fun `disabled QA records a skipped outcome without discovering capability or launching QA`() {
     val fixture = fixture(QaVerdict.PASSED, FeatureTaskRuntimeQaSelection.OFF)
 
     val report = fixture.harness.runner.run(fixture.harness.request)
@@ -146,6 +106,8 @@ class FeatureTaskRuntimeQaExecutionTest {
     assertEquals("disabled_policy", stored.reason)
     assertEquals(0, fixture.capabilityReads())
     assertEquals(listOf("qa-test-invocation"), fixture.workspaces.closedInvocations)
+    assertEquals(1, fixture.diagnostics.messages.size)
+    assertContains(fixture.diagnostics.messages.single(), "value_used=disabled_policy")
   }
 
   @Test
@@ -154,9 +116,10 @@ class FeatureTaskRuntimeQaExecutionTest {
 
     assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
 
-    assertTrue(
-      fixture.launcher.requests.any { phaseIdFromPrompt(it.skillRunRequest.promptOverride.orEmpty()) == "qa_fix" },
-    )
+    val repair =
+      fixture.launcher.requests.map { it.skillRunRequest }
+        .first { phaseIdFromPrompt(it.promptOverride.orEmpty()) == "qa_fix" }
+    assertEquals(fixture.harness.request.repoRoot, repair.repoRoot)
     assertEquals(listOf("qa-test-invocation"), fixture.leases.releasedInvocations)
     assertEquals(listOf("qa-test-invocation"), fixture.workspaces.closedInvocations)
   }
@@ -171,8 +134,8 @@ class FeatureTaskRuntimeQaExecutionTest {
     fixture =
       fixture(
         QaVerdict.FINDINGS_OPEN,
-        receiptForVisit = { _, expected ->
-          qaTestReceipt(verdicts[qaVisits++], expected)
+        reportForVisit = { _, expected ->
+          qaTestReport(verdicts[qaVisits++], expected)
         },
         onPhase = { phase ->
           if (phase == "qa_fix") {
@@ -189,21 +152,8 @@ class FeatureTaskRuntimeQaExecutionTest {
         identifiers = IdentifierGeneratorPort { "test-invocation-${qaVisits + 1}" },
       )
     repeat(3) {
-      assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
-      val state = assertNotNull(fixture.harness.recorder.loadQaRepairState(WORKFLOW_ID))
-      assertEquals(listOf("F-1"), state.openFindings.map { it.id })
+      assertRepairRelaunch(fixture, it + 1)
       assertEquals(it + 1, fixes)
-      assertEquals((1..it + 1).toList(), state.attempts.map { attempt -> attempt.attemptNumber })
-      assertEquals(listOf("F-1"), state.attempts.last().consumedFindingIds)
-      fixture.harness.database.transaction { unit ->
-        val record = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, WORKFLOW_ID))
-        val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS
-        val records = (family.value(record.artifacts) as Map<*, *>).filterKeys { it != "qa" }
-        unit.workflowStates.save(
-          WorkflowFamily.TASK_RUNTIME,
-          record.copy(artifacts = DurableWorkflowArtifacts.fromMap(record.artifacts + mapOf(family.entry(records)))),
-        )
-      }
       pauseAudit = false
     }
 
@@ -223,12 +173,36 @@ class FeatureTaskRuntimeQaExecutionTest {
         .filter { phaseIdFromPrompt(it) == "qa_fix" }
     assertEquals(3, repairPrompts.size)
     repairPrompts.forEach { assertContains(it, "F-1") }
+    val firstRepair = repairPrompts.first()
+    assertContains(firstRepair, "### F-1 Home screen stays blank")
+    assertContains(firstRepair, "Observed: the home screen stays blank.")
+    assertContains(firstRepair, "Evidence: ${qaTestEvidencePrefix("qa-test-invocation-1")}home-F-1.png")
     val auditPrompts =
       fixture.launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }
         .filter { phaseIdFromPrompt(it) == "audit" }
     assertFalse("Post-QA re-audit scope" in auditPrompts.first())
     assertTrue(auditPrompts.drop(1).isNotEmpty())
-    auditPrompts.drop(1).forEach { assertContains(it, "Post-QA re-audit scope: AC-001.") }
+    auditPrompts.drop(1).forEach { assertContains(it, "Post-QA re-audit scope:") }
+  }
+
+  private fun assertRepairRelaunch(
+    fixture: Fixture,
+    expectedAttempt: Int,
+  ) {
+    assertFailsWith<CancellationException> { fixture.harness.runner.run(fixture.harness.request) }
+    val state = assertNotNull(fixture.harness.recorder.loadQaRepairState(WORKFLOW_ID))
+    assertEquals(listOf("F-1"), state.openFindings.map { it.id })
+    assertEquals((1..expectedAttempt).toList(), state.attempts.map { attempt -> attempt.attemptNumber })
+    assertEquals(listOf("F-1"), state.attempts.last().consumedFindingIds)
+    fixture.harness.database.transaction { unit ->
+      val record = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, WORKFLOW_ID))
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS
+      val records = (family.value(record.artifacts) as Map<*, *>).filterKeys { it != "qa" }
+      unit.workflowStates.save(
+        WorkflowFamily.TASK_RUNTIME,
+        record.copy(artifacts = DurableWorkflowArtifacts.fromMap(record.artifacts + mapOf(family.entry(records)))),
+      )
+    }
   }
 
   @Test
@@ -239,9 +213,9 @@ class FeatureTaskRuntimeQaExecutionTest {
     fixture =
       fixture(
         QaVerdict.FINDINGS_OPEN,
-        receiptForVisit = { _, expected ->
+        reportForVisit = { _, expected ->
           qaVisits++
-          qaTestReceipt(QaVerdict.FINDINGS_OPEN, expected)
+          qaTestReport(QaVerdict.FINDINGS_OPEN, expected)
         },
         onPhase = { phase ->
           if (phase == "qa_fix") {
@@ -268,16 +242,53 @@ class FeatureTaskRuntimeQaExecutionTest {
   }
 
   @Test
-  fun `a malformed receipt is recorded incomplete with a warning and the run continues`() {
-    val fixture = fixture(QaVerdict.PASSED, receiptForVisit = { _, _ -> mapOf("verdict" to "passed") })
+  fun `a report with no verdict word is recorded incomplete with its text and the run continues`() {
+    val freeForm = "I tapped through the login flow and the home screen looked fine to me."
+    val fixture = fixture(QaVerdict.PASSED, reportForVisit = { _, _ -> freeForm })
 
     val report = fixture.harness.runner.run(fixture.harness.request)
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
-    assertContains(assertNotNull(qa.outputArtifact), "\"verdict\":\"incomplete\"")
-    assertContains(assertNotNull(qa.outputArtifact), "QA recorded incomplete because its receipt was unusable")
-    assertEquals(StandaloneQaOutcome.INCOMPLETE, assertNotNull(fixture.storedQaOutcome()).outcome)
+    assertContains(assertNotNull(qa.outputArtifact), "\"qa_verdict\":\"incomplete\"")
+    val stored = assertNotNull(fixture.storedQaOutcome())
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, stored.outcome)
+    assertEquals(freeForm, stored.reportText)
+  }
+
+  @Test
+  fun `a QA agent that writes no report is recorded incomplete with a warning and the run continues`() {
+    val fixture = fixture(QaVerdict.PASSED, reportForVisit = { _, _ -> null })
+
+    val report = fixture.harness.runner.run(fixture.harness.request)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
+    assertContains(assertNotNull(qa.outputArtifact), "\"qa_verdict\":\"incomplete\"")
+    assertContains(assertNotNull(qa.outputArtifact), "QA agent wrote no report.md")
+    val stored = assertNotNull(fixture.storedQaOutcome())
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, stored.outcome)
+    assertContains(assertNotNull(stored.reason), "QA agent wrote no report.md")
+  }
+
+  @Test
+  fun `a passed report that lists findings stays passed with a warning and opens no repair`() {
+    val fixture =
+      fixture(
+        QaVerdict.PASSED,
+        reportForVisit = { _, expected -> qaTestReport(QaVerdict.PASSED, expected, listOf("F-1")) },
+      )
+
+    val report = fixture.harness.runner.run(fixture.harness.request)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    assertTrue(
+      fixture.launcher.requests.none { phaseIdFromPrompt(it.skillRunRequest.promptOverride.orEmpty()) == "qa_fix" },
+    )
+    val stored = assertNotNull(fixture.storedQaOutcome())
+    assertEquals(StandaloneQaOutcome.PASSED, stored.outcome)
+    assertContains(assertNotNull(stored.reason), "no repair opened")
+    assertEquals(0, stored.qaFixAttempts)
   }
 
   @Test
@@ -299,10 +310,12 @@ class FeatureTaskRuntimeQaExecutionTest {
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     val qa = assertNotNull(fixture.harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("qa"))
-    assertContains(assertNotNull(qa.outputArtifact), "\"incomplete_reason\":\"interrupted\"")
+    assertContains(assertNotNull(qa.outputArtifact), "\"qa_verdict\":\"incomplete\"")
     val stored = assertNotNull(fixture.storedQaOutcome())
     assertEquals(StandaloneQaOutcome.INCOMPLETE, stored.outcome)
-    assertTrue(assertNotNull(stored.reason).startsWith("interrupted"))
+    assertTrue(
+      assertNotNull(stored.reason).startsWith("QA recorded incomplete because the QA agent step stopped"),
+    )
   }
 
   @Test
@@ -313,9 +326,9 @@ class FeatureTaskRuntimeQaExecutionTest {
     fixture =
       fixture(
         QaVerdict.PASSED,
-        receiptForVisit = { _, expected ->
+        reportForVisit = { _, expected ->
           qaVisits++
-          qaTestReceipt(QaVerdict.PASSED, expected)
+          qaTestReport(QaVerdict.PASSED, expected)
         },
         onPhase = { phase ->
           if (phase == "qa") assertEquals(StandaloneQaOutcome.ATTEMPTED, fixture.storedQaOutcome()?.outcome)
@@ -347,9 +360,9 @@ class FeatureTaskRuntimeQaExecutionTest {
     fixture =
       fixture(
         QaVerdict.PASSED,
-        receiptForVisit = { _, expected ->
+        reportForVisit = { _, expected ->
           qaVisits++
-          qaTestReceipt(QaVerdict.PASSED, expected)
+          qaTestReport(QaVerdict.PASSED, expected)
         },
         onPhase = { phase ->
           if (phase == "validate") fixture.git.repositoryFingerprintValue = "%064x".format(qaVisits + 10)
@@ -395,10 +408,79 @@ class FeatureTaskRuntimeQaExecutionTest {
     assertContains(assertNotNull(fixture.storedQaOutcome()?.reason), "qa-scratch.txt")
   }
 
+  @Test
+  fun `a stored legacy qa_receipt envelope still loads its repair state and settles its outcome`() {
+    val fixture = fixture(QaVerdict.PASSED)
+    fixture.harness.recorder.openTestWorkflow(WORKFLOW_ID, "legacy-qa-session")
+
+    fixture.harness.recorder.recordPhaseState(legacyQaPhaseState(withRepairState = true))
+
+    val state = assertNotNull(fixture.harness.recorder.loadQaRepairState(WORKFLOW_ID))
+    assertEquals(listOf("F-9"), state.openFindings.map { it.id })
+    val stored = assertNotNull(fixture.storedQaOutcome())
+    assertEquals(StandaloneQaOutcome.FINDINGS, stored.outcome)
+    assertEquals(listOf("F-9"), stored.findings.map { it.id })
+  }
+
+  @Test
+  fun `a stored legacy qa_receipt envelope without repair state is refused rather than read as no QA`() {
+    val fixture = fixture(QaVerdict.PASSED)
+    fixture.harness.recorder.openTestWorkflow(WORKFLOW_ID, "legacy-qa-session")
+    fixture.harness.recorder.recordPhaseState(legacyQaPhaseState(withRepairState = false))
+
+    val failure = assertFails { fixture.harness.recorder.loadQaRepairState(WORKFLOW_ID) }
+
+    assertContains(failure.message.orEmpty(), "no authoritative findings state")
+  }
+
+  private fun legacyQaPhaseState(withRepairState: Boolean): FeatureTaskRuntimePhaseStateRequest {
+    val receipt =
+      mapOf(
+        "verdict" to "findings_open",
+        "findings" to
+          listOf(
+            mapOf(
+              "id" to "F-9",
+              "observed" to "Home blank",
+              "evidence_refs" to listOf(mapOf("path" to "/qa/old/home.png")),
+            ),
+          ),
+      )
+    val envelope =
+      JsonCodec.mapToJsonString(
+        mapOf(
+          SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+          SharedPayloadKeys.PHASE_ID to "qa",
+          SharedPayloadKeys.STATUS to "completed",
+          SharedPayloadKeys.SUMMARY to "QA settled",
+          SharedPayloadKeys.PRODUCED_OUTPUTS to
+            mapOf("qa_receipt" to receipt, "qa_receipt_ref" to "/qa/old/receipt.json"),
+        ),
+      )
+    val repairState =
+      QaRepairState(
+        subtaskId = 1,
+        openFindings = listOf(QaOpenFinding("F-9", emptyList(), listOf("/qa/old/receipt.json"))),
+      )
+    return FeatureTaskRuntimePhaseStateRequest(
+      workflowId = WORKFLOW_ID,
+      phaseId = "qa",
+      status = "completed",
+      attemptCount = 1,
+      resolvedAgentId = "claude",
+      finished = true,
+      outputArtifact = envelope.takeUnless { withRepairState },
+      normalizedOutput =
+        NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(envelope, "test")
+          .copy(qaRepairState = repairState)
+          .takeIf { withRepairState },
+    )
+  }
+
   private fun fixture(
     verdict: QaVerdict,
     selection: FeatureTaskRuntimeQaSelection = FeatureTaskRuntimeQaSelection.AUTO,
-    receiptForVisit: ((Int, QaExpectedIdentity) -> Map<String, Any?>)? = null,
+    reportForVisit: ((Int, QaExpectedIdentity) -> String?)? = null,
     onPhase: (String) -> Unit = { phase ->
       if (phase == "qa_fix") throw CancellationException("stop after proving QA repair routing")
     },
@@ -438,7 +520,7 @@ class FeatureTaskRuntimeQaExecutionTest {
         if (phase == "qa") {
           visit++
           val identity =
-            if (receiptForVisit == null) {
+            if (reportForVisit == null) {
               expected
             } else {
               expected.copy(
@@ -446,8 +528,8 @@ class FeatureTaskRuntimeQaExecutionTest {
                 evidencePrefix = qaTestEvidencePrefix("qa-test-invocation-$visit"),
               )
             }
-          val receipt = receiptForVisit?.invoke(visit, identity) ?: qaTestReceipt(verdict, identity)
-          workspaces.receipt = qaTestJson(receipt).replace("AC-1", "AC-001").replace("\"standalone\"", "\"auto\"")
+          workspaces.report =
+            if (reportForVisit == null) qaTestReport(verdict, identity) else reportForVisit(visit, identity)
         }
         facts(launchOutput(phase, request))
       }
@@ -460,8 +542,7 @@ class FeatureTaskRuntimeQaExecutionTest {
           launcher = launcher,
           goalContinuation = harnessGoalContinuation(branch).copy(qaSelection = selection),
           qaExecution = execution,
-          qaReceipts =
-            QaReceiptSettlement(QaReceiptValidator(QaReceiptSchemaValidator()), workspaces, diagnostics),
+          qaReports = QaReportSettlement(workspaces, diagnostics),
         ),
       )
     return Fixture(harness, launcher, workspaces, leases, git, diagnostics) { capabilityReads }

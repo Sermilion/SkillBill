@@ -482,6 +482,14 @@ class FeatureTaskRuntimeCheckpointScopeTest {
   }
 
   @Test
+  fun `project phase instruction files are trackable while lookalike runtime paths stay private`() {
+    assertFalse(isRuntimePrivatePath(".skill-bill/phases"))
+    assertFalse(isRuntimePrivatePath(".skill-bill/phases/qa.md"))
+    assertTrue(isRuntimePrivatePath(".skill-bill/phasesx"))
+    assertTrue(isRuntimePrivatePath(".skill-bill/state.db"))
+  }
+
+  @Test
   fun `run-evidence ownership follows the active run, not the store prefix`() {
     val runEvidence =
       listOf(

@@ -1,8 +1,5 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -202,6 +199,7 @@ class PhaseStrategyTraversalTest {
           definition to mapOf(strategy.slot to PhaseStrategyBinding.Fixed(strategy.strategyId)),
         ),
       ),
+      ModelDirectiveSupplements(enabled = true),
     )
   }
 }
@@ -219,8 +217,5 @@ internal class CompositionTestStrategy(
 
   override fun directiveFor(stepId: String): String = error("Composition must not request a launch directive")
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = error("Composition must not execute a step")
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> = error("Composition must not execute a step")
 }

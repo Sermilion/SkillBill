@@ -60,8 +60,8 @@ fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Unit) {
           Text(branch, color = dim, fontFamily = mono, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
       }
-      if (item.progressTotal != null) {
-        Text("${item.progressCompleted ?: 0}/${item.progressTotal}", color = if (selected) amber else dim, style = MaterialTheme.typography.labelSmall)
+      item.progressLabel()?.let { progress ->
+        Text(progress, color = if (selected) amber else dim, style = MaterialTheme.typography.labelSmall)
       }
     }
   }

@@ -38,12 +38,11 @@ class FeatureTaskRuntimeGoalContinuationRecorder(
   private val runtimeOwnedPersistence = RuntimeOwnedPersistenceBoundary(database, diagnostics)
   val reviewStateRecorder = FeatureTaskRuntimeGoalContinuationStateRecorder(database, engine, clock)
   val reviewPassRecorder =
-    FeatureTaskRuntimeGoalReviewPassRecorder(database, patcher, runtimeOwnedPersistence, clock)
+    FeatureTaskRuntimeGoalReviewPassRecorder(database, patcher, runtimeOwnedPersistence)
   private val inputBuilder =
     FeatureTaskRuntimeGoalReviewInputBuilder(
       database,
       patcher,
-      clock,
       reviewPassRecorder::persistGoalReviewInput,
     )
   val remediationReconciler = FeatureTaskRuntimeRemediationBaseReconciler(database, patcher, clock)

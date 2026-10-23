@@ -37,8 +37,8 @@ object FeatureTaskRuntimeRunLoopDrive {
       if (state.isValidatedCompletedReturn(loopId, reentry)) listOf(reentry.resumePhaseId) else reentry.span
     if (
       state.spanBlockedByEntryGate(gateAdmissionSpan) ||
-      FeatureTaskRuntimeRunLoopPlanningBranch.decideByLoop(context, loopId) { rules, stepState ->
-        rules.discardsResumedReentry(loopId, stepState)
+      FeatureTaskRuntimeRunLoopPlanningBranch.decideByLoop(context, loopId) { rules ->
+        rules.discardsResumedReentry(loopId)
       } == true
     ) {
       context.runState.coupledRunTransitions.discardStaleResumedReentry(loopId)
@@ -54,24 +54,24 @@ object FeatureTaskRuntimeRunLoopDrive {
       completionDerived = reentry.completionDerived,
       resumeCoveredPhaseIds = reentry.resumeCoveredPhaseIds,
       expectedRepositoryCheckpoint =
-        FeatureTaskRuntimeRunLoopPlanningBranch.decideByLoop(context, loopId) { rules, stepState ->
-          rules.reentryCheckpoint(loopId, stepState)
+        FeatureTaskRuntimeRunLoopPlanningBranch.decideByLoop(context, loopId) { rules ->
+          rules.reentryCheckpoint(loopId)
         },
     )
   }
 
   internal fun reopenStaleSettledSteps(context: FeatureTaskRuntimeRunLoopContext) {
-    FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      if (!context.hasLeftSlot(stepState.acceptedOwner.slot)) {
-        rules.reopenStaleSettledSteps(context.phaseLoopContext(), stepState)
+    FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules ->
+      if (!context.hasLeftSlot(rules.acceptedOwner.slot)) {
+        rules.reopenStaleSettledSteps(context.phaseLoopContext())
       }
     }
   }
 
   internal fun invalidateStaleEvidence(context: FeatureTaskRuntimeRunLoopContext) {
-    FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      if (!context.hasLeftSlot(stepState.acceptedOwner.slot)) {
-        rules.invalidateStaleEvidence(context.phaseLoopContext(), stepState)
+    FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules ->
+      if (!context.hasLeftSlot(rules.acceptedOwner.slot)) {
+        rules.invalidateStaleEvidence(context.phaseLoopContext())
       }
     }
   }
@@ -89,9 +89,9 @@ object FeatureTaskRuntimeRunLoopDrive {
   ): FeatureTaskRuntimeVerdict? {
     val owner = context.runState.selectedOwnerOf(phaseId)?.slot
     var verdict: FeatureTaskRuntimeVerdict? = null
-    FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      if (verdict == null && stepState.acceptedOwner.slot != owner) {
-        verdict = rules.crossSlotSettlement(phaseId, context.phaseLoopContext(), stepState)
+    FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules ->
+      if (verdict == null && rules.acceptedOwner.slot != owner) {
+        verdict = rules.crossSlotSettlement(phaseId, context.phaseLoopContext())
       }
     }
     return verdict
@@ -102,8 +102,8 @@ object FeatureTaskRuntimeRunLoopDrive {
     phaseId: String,
   ): PhaseSettlement? =
     FeatureTaskRuntimeRunLoopPlanningBranch
-      .decideByStep(context, phaseId) { rules, stepState ->
-        rules.settleWithoutLaunch(phaseId, context.phaseLoopContext(), stepState)
+      .decideByStep(context, phaseId) { rules ->
+        rules.settleWithoutLaunch(phaseId, context.phaseLoopContext())
       }?.let { settlement ->
         when (settlement) {
           is PhaseEntrySettlement.Completed -> PhaseSettlement.completed(phaseId, settlement.verdict)
@@ -139,8 +139,8 @@ object FeatureTaskRuntimeRunLoopDrive {
           phaseId,
         )
       }
-      ?: FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules, stepState ->
-        rules.entryBlockReason(phaseId, context.phaseLoopContext(), stepState)
+      ?: FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules ->
+        rules.entryBlockReason(phaseId, context.phaseLoopContext())
       }
 
   internal fun entryGateBlockReason(
@@ -182,8 +182,8 @@ object FeatureTaskRuntimeRunLoopDrive {
     verdict: FeatureTaskRuntimeVerdict,
   ): String? {
     val effectiveVerdict =
-      FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules, stepState ->
-        rules.routedVerdict(phaseId, verdict, stepState)
+      FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules ->
+        rules.routedVerdict(phaseId, verdict)
       } ?: verdict
     val edge = FeatureTaskRuntimeRunLoopCheckpoint.matchingBackwardEdge(traversal(context), phaseId, effectiveVerdict)
     edge?.let { FeatureTaskRuntimeRunLoopBackwardEdge.resumeInFlightReentry(context, it) }?.let { return it }

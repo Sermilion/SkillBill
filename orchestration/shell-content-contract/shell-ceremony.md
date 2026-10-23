@@ -105,7 +105,7 @@ precedence above: a matching `.agents/skill-overrides.md` section or an
 
 ### Comments
 
-Authored Kotlin under `runtime-kotlin`, `intellij-plugin`, and
+Authored Kotlin under `runtime-kotlin` and
 `runtime-kotlin/build-logic` must contain no `//` line comments and no non-KDoc
 `/* */` block comments. `/** */` KDoc is allowed only on `interface` declarations
 and their members, including nested types inside an interface. Prefer clear names and small functions; record irreducible

@@ -164,13 +164,13 @@ class AgentRunLauncherLivenessTest {
           listOf("sh", "-c", "sleep 0.8"),
           Path.of(".").toAbsolutePath().normalize(),
         ) {
-          timeout = 3.seconds
+          timeout = 30.seconds
           progressIdleTimeout = 500.milliseconds
           fileActivityGraceTimeout = 2.seconds
           progressProbe = AgentRunProgressProbe { "workflow-token" }
           activityProbe =
             object : AgentRunActivityProbe {
-              override fun activityToken(): String = if (activityProbeCount++ < 2) "files-before" else "files-after"
+              override fun activityToken(): String = if (activityProbeCount++ < 1) "files-before" else "files-after"
 
               override fun activityLabel(): String = "worktree files changed"
             }

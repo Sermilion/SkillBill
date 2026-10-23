@@ -33,7 +33,7 @@ class ArchitectureBaselineRecorder {
   private fun recordLogicalTypeLineCeilingBaseline(baselineDir: Path) {
     val logicalCounts =
       ArchitectureScanSupport.logicalTypeLineCounts(
-        productionRoots = listOf("runtime-kotlin", "intellij-plugin"),
+        productionRoots = listOf("runtime-kotlin"),
       ).filter { (_, count) -> count > PrincipleEnforcementInventory.PRODUCTION_LINE_CEILING }
     Files.writeString(
       baselineDir.resolve("logical-type-line-ceiling-baseline.txt"),

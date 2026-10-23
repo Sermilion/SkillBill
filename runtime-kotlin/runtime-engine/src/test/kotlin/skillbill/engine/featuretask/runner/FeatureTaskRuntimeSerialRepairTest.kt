@@ -6,7 +6,6 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
-import skillbill.engine.diagnostics.block.testBlockIncidentCapture
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -180,6 +179,43 @@ class FeatureTaskRuntimeSerialRepairTest {
   }
 
   @Test
+  fun `audits that keep completing without a verdict block instead of relaunching indefinitely`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    var audits = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phase = phaseIdFromPrompt(assertNotNull(request.skillRunRequest.promptOverride))
+        facts(
+          when (phase) {
+            "audit" -> {
+              audits++
+              check(audits <= 3) { "Verdict-less audits relaunched without blocking." }
+              if (accounting.get()?.snapshot == null) {
+                serialDiscoveryOutput()
+              } else {
+                "Every criterion is met. The settlement tools are unavailable, so this prose is the phase value."
+              }
+            }
+            else -> defaultPhaseOutput(request)
+          },
+        )
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report")
+      assertTrue(report.blockedReason.startsWith("runtime: audit completed two rounds in a row without a verdict"))
+      assertFalse("review" in harness.launchOrder())
+    }
+  }
+
+  @Test
   fun `a rejected full no-change claim cannot charge another criterion's gap to the focused audit`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     var repaired = false
@@ -341,6 +377,84 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertContains(harness.launchOrder(), "review")
     }
   }
+
+  @Test
+  fun `repair planning and implementation retain earlier rejected counterexamples`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val firstRejection = "The replay reader selects an unrelated historical record."
+    val secondRejection = "The writer uses an invented generation to avoid an identity collision."
+    val repairPrompts = mutableListOf<String>()
+    var repairs = 0
+    var audits = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val prompt = assertNotNull(request.skillRunRequest.promptOverride)
+        val phase = phaseIdFromPrompt(prompt)
+        val state = accounting.get()?.snapshot
+        facts(
+          when (phase) {
+            "audit" -> {
+              audits++
+              repairRejectionAuditOutput(audits, state, repairs, listOf(firstRejection, secondRejection))
+            }
+            "audit_plan_fix", "audit_implement_fix" -> {
+              if (state?.currentCriterionRef == "AC-002") {
+                assertFalse(prompt.contains(firstRejection))
+                assertFalse(prompt.contains(secondRejection))
+              }
+              if (repairs == 2) {
+                assertContains(prompt, firstRejection)
+                assertContains(prompt, secondRejection)
+                repairPrompts += phase
+              }
+              if (phase == "audit_implement_fix") repairs++
+              defaultPhaseOutput(request)
+            }
+            else -> defaultPhaseOutput(request)
+          },
+        )
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+      assertEquals(listOf("audit_plan_fix", "audit_implement_fix"), repairPrompts)
+      assertEquals(4, repairs)
+      assertEquals(2, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
+      assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
+    }
+  }
+
+  private fun repairRejectionAuditOutput(
+    audits: Int,
+    state: AcceptanceCriterionRepairState?,
+    repairs: Int,
+    rejections: List<String>,
+  ): String =
+    when {
+      state == null -> serialDiscoveryOutput()
+      state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION && repairs >= 3 ->
+        serialStructuredAuditOutput(audits, state, "The production paths preserve the accepted identity.")
+      else -> {
+        val finding =
+          rejections.getOrNull(
+            repairs - 1,
+          ) ?: "The selected criterion still has incomplete production paths."
+        auditRemainingAcOutput("$finding Open criteria: ${state.currentCriterionRef}").replace(
+          "\"status\": \"completed\",",
+          "\"status\": \"completed\", \"verdict\": \"advance\",",
+        )
+      }
+    }
 
   @Test
   fun `a failed repair returns to focused planning once and an accepted queue moves to review without another audit`() {
@@ -549,6 +663,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertNotNull(launcher.settlement).clear(WORKFLOW_ID, "audit", attempt)
     }
     val beforeResume = harness.launchedPromptPhaseOrder().size
+    val launchesBeforeResume = launcher.requests.size
 
     runOwnedSerial(harness) { admitted, worker, scope ->
       accounting.set(scope)
@@ -565,6 +680,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         )
       val resumed = assertNotNull(scope.snapshot)
       if (settlementAvailable) {
+        assertResumedRepairEvidence(launcher, launchesBeforeResume, exhausted)
         assertEquals("audit_plan_fix", harness.launchedPromptPhaseOrder().drop(beforeResume).firstOrNull(), "$report")
         assertContains(report.blockedReason, "three unsuccessful repair attempts")
         assertEquals(mapOf("AC-002" to 6), repairs)
@@ -582,6 +698,25 @@ class FeatureTaskRuntimeSerialRepairTest {
       }
       assertEquals(exhausted.outcomes, resumed.outcomes.take(exhausted.outcomes.size))
       assertEquals(exhausted.criteria.first(), resumed.criteria.first())
+    }
+  }
+
+  private fun assertResumedRepairEvidence(
+    launcher: RuntimeRecordingLauncher,
+    launchesBeforeResume: Int,
+    exhausted: AcceptanceCriterionRepairState,
+  ) {
+    val prompts =
+      launcher.requests.drop(launchesBeforeResume).mapNotNull { it.skillRunRequest.promptOverride }.filter {
+        phaseIdFromPrompt(it) in setOf("audit_plan_fix", "audit_implement_fix")
+      }.take(2)
+    assertEquals(2, prompts.size)
+    prompts.forEach { prompt ->
+      assertContains(prompt, "retained failures: 0 of 3")
+      exhausted.outcomes.filter { it.criterionRef == "AC-002" && !it.successful }.forEach { outcome ->
+        assertContains(prompt, outcome.outcomeId)
+        assertContains(prompt, outcome.evidenceRef)
+      }
     }
   }
 
@@ -655,7 +790,7 @@ class FeatureTaskRuntimeSerialRepairTest {
               prompt.contains("Read-only repair-report admission") ->
                 budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
               state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
-                serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
+                budgetVerificationOutput(audit, state, repairsByCriterion, secondCriterionSucceeds)
               else -> {
                 val refs = state.pendingAuditRefs.ifEmpty { state.unresolvedQueue }.joinToString()
                 val prose =
@@ -778,6 +913,23 @@ class FeatureTaskRuntimeSerialRepairTest {
           "\"status\": \"completed\",",
           "\"status\": \"completed\", \"verdict\": \"advance\",",
         )
+    }
+
+  private fun budgetVerificationOutput(
+    audit: Int,
+    state: AcceptanceCriterionRepairState,
+    repairsByCriterion: Map<String, Int>,
+    secondCriterionSucceeds: Boolean,
+  ): String =
+    if (repairAcceptedOnThirdAttempt(
+        state.currentCriterionRef,
+        repairsByCriterion.getOrDefault(state.currentCriterionRef, 0),
+        secondCriterionSucceeds,
+      )
+    ) {
+      serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
+    } else {
+      budgetAdmissionOutput(state.currentCriterionRef, repairsByCriterion, secondCriterionSucceeds)
     }
 
   private fun budgetAdmissionOutput(
@@ -1015,7 +1167,6 @@ class FeatureTaskRuntimeSerialRepairTest {
         validator,
         harnessPhaseSettlement(),
         testHarnessClock,
-        testBlockIncidentCapture(database, testHarnessClock),
       ),
       validator,
       object : AcceptanceCriterionRepairProjection {
@@ -1030,7 +1181,6 @@ class FeatureTaskRuntimeSerialRepairTest {
         harness.gitOperations,
         source,
       ),
-      testBlockIncidentCapture(database, testHarnessClock),
     )
   }
 }

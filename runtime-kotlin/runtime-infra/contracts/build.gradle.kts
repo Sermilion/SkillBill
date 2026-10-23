@@ -118,11 +118,6 @@ governedResources {
     "SKILL-427: canonical standalone monitor ownership schema",
   )
   copy(
-    "copyQaReceiptSchema",
-    "qa-receipt-schema.yaml",
-    "SKILL-419: canonical QA receipt schema",
-  )
-  copy(
     "copyQaRepairStateSchema",
     "qa-repair-state-schema.yaml",
     "SKILL-419: canonical QA repair-state schema",

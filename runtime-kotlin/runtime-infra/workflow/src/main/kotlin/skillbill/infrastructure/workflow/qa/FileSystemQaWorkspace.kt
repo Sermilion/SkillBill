@@ -1,12 +1,12 @@
 package skillbill.infrastructure.workflow.qa
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.error.featuretask.qa.qaDeviceLeaseFailed
+import skillbill.error.featuretask.qa.qaRepositoryUnreadable
 import skillbill.model.EnvironmentContext
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.qa.QaWorkspacePort
-import skillbill.ports.qa.model.QaReceiptSource
+import skillbill.ports.qa.model.QaReportSource
 import skillbill.ports.qa.model.QaWorkspace
 import java.io.IOException
 import java.nio.file.Files
@@ -16,8 +16,8 @@ import java.nio.file.Path
 import java.time.Clock
 import java.util.UUID
 
-private const val MAX_RECEIPT_BYTES = 256L * 1024L
-private const val RECEIPT_FILE = "receipt.json"
+private const val REPORT_FILE = "report.md"
+private const val LEGACY_REPORT_FILE = "receipt.json"
 
 @Inject
 class FileSystemQaWorkspace(
@@ -46,75 +46,101 @@ class FileSystemQaWorkspace(
     return QaWorkspace(
       invocationId = invocationId,
       directory = directory,
-      receiptPath = directory.resolve(RECEIPT_FILE),
+      reportPath = directory.resolve(REPORT_FILE),
       evidencePrefix = QaPaths.evidencePrefix(directory),
     )
   }
 
-  override fun readReceipt(receiptPath: Path): QaReceiptSource? =
+  override fun readReport(reportPath: Path): QaReportSource? =
     try {
-      val file = receiptPath
-      when {
-        !Files.isRegularFile(file) -> null
-        Files.size(file) > MAX_RECEIPT_BYTES ->
-          throw invalidQaReceipt("the receipt is larger than $MAX_RECEIPT_BYTES bytes")
-        else -> {
-          val invocation = file.parent ?: throw invalidQaReceipt("receipt has no invocation directory")
-          QaReceiptSource(Files.readString(file), QaPaths.evidencePrefix(invocation))
-        }
+      if (Files.notExists(reportPath, LinkOption.NOFOLLOW_LINKS)) {
+        null
+      } else if (!Files.isRegularFile(reportPath, LinkOption.NOFOLLOW_LINKS)) {
+        throw qaRepositoryUnreadable("the report path is not a regular file: $reportPath")
+      } else {
+        val invocation = reportPath.parent ?: throw qaRepositoryUnreadable("the report has no invocation directory.")
+        QaReportSource(readText(reportPath), QaPaths.evidencePrefix(invocation))
       }
     } catch (failure: IOException) {
-      throw invalidQaReceipt("the receipt could not be read: ${failure.message}", failure)
+      throw qaRepositoryUnreadable("the report could not be read: ${failure.message}", failure)
     }
 
-  override fun readRetainedReceipt(
+  override fun readRetainedReport(
+    repoRoot: Path,
+    reference: String,
+  ): QaReportSource? {
+    val qaRoot = QaPaths.qaRoot(environment, repoRoot).toAbsolutePath().normalize()
+    if (Files.notExists(qaRoot, LinkOption.NOFOLLOW_LINKS)) return null
+    if (Files.isSymbolicLink(qaRoot)) {
+      throw qaRepositoryUnreadable("the QA root is a symbolic link: $qaRoot")
+    }
+    if (!Files.isDirectory(qaRoot, LinkOption.NOFOLLOW_LINKS)) {
+      throw qaRepositoryUnreadable("the QA root is not a directory: $qaRoot")
+    }
+    val reportPath = retainedReportPath(qaRoot, reference)
+    val invocation =
+      reportPath.parent ?: throw qaRepositoryUnreadable("the retained report has no invocation directory.")
+    if (Files.isSymbolicLink(invocation) || Files.isSymbolicLink(reportPath)) {
+      throw qaRepositoryUnreadable("the retained report path contains a symbolic link: $reportPath")
+    }
+    return try {
+      if (Files.notExists(reportPath, LinkOption.NOFOLLOW_LINKS)) {
+        null
+      } else if (!Files.isRegularFile(reportPath, LinkOption.NOFOLLOW_LINKS)) {
+        throw qaRepositoryUnreadable("the retained report path is not a regular file: $reportPath")
+      } else {
+        QaReportSource(readText(reportPath), QaPaths.evidencePrefix(invocation))
+      }
+    } catch (failure: IOException) {
+      throw qaRepositoryUnreadable("the retained report could not be read: ${failure.message}", failure)
+    }
+  }
+
+  private fun retainedReportPath(
     qaRoot: Path,
-    receiptReference: String,
-  ): QaReceiptSource? {
-    val reference = absoluteReference(receiptReference)
-    val normalizedQaRoot = qaRoot.toAbsolutePath().normalize()
-    val invocationDirectory =
-      reference.parent
-        ?: throw invalidQaReceipt("the retained receipt reference has no invocation directory.")
-    val invocationId =
-      invocationDirectory.fileName?.toString()
-        ?: throw invalidQaReceipt("the retained receipt reference has no invocation id.")
-    val expected = QaPaths.invocationDirectory(normalizedQaRoot, invocationId).resolve(RECEIPT_FILE).normalize()
-    val linked = listOf(normalizedQaRoot, invocationDirectory, reference).any(Files::isSymbolicLink)
-    if (reference != expected || linked) {
-      throw invalidQaReceipt("the retained receipt reference is outside its repository QA directory.")
-    }
-    if (!Files.exists(reference, LinkOption.NOFOLLOW_LINKS)) return null
-    try {
-      val realRoot = normalizedQaRoot.toRealPath()
-      val realFile = reference.toRealPath()
-      if (!realFile.startsWith(realRoot) || !Files.isRegularFile(realFile, LinkOption.NOFOLLOW_LINKS)) {
-        throw invalidQaReceipt("the retained receipt is not a regular file under the repository QA directory.")
+    reference: String,
+  ): Path {
+    val persisted =
+      try {
+        Path.of(reference)
+      } catch (failure: InvalidPathException) {
+        unreadable("the retained report reference is not a valid path: $reference: ${failure.message}", failure)
       }
-      val bytes = Files.newInputStream(realFile).use { input -> input.readNBytes(MAX_RECEIPT_BYTES.toInt() + 1) }
-      if (bytes.size > MAX_RECEIPT_BYTES) {
-        throw invalidQaReceipt("the receipt is larger than $MAX_RECEIPT_BYTES bytes")
-      }
-      return QaReceiptSource(
-        String(bytes, Charsets.UTF_8),
-        QaPaths.evidencePrefix(invocationDirectory),
-        reference.toString(),
-      )
-    } catch (failure: IOException) {
-      throw invalidQaReceipt("the retained receipt could not be read: ${failure.message}", failure)
+    if (!persisted.isAbsolute) {
+      unreadable("the retained report reference is not absolute: $reference")
     }
+    val normalized = persisted.toAbsolutePath().normalize()
+    if (!normalized.startsWith(qaRoot)) {
+      unreadable("the retained report reference is outside its QA root: $reference")
+    }
+    val relative = qaRoot.relativize(normalized)
+    retainedReportPathViolation(persisted, normalized, relative)?.let {
+        violation ->
+      unreadable("$violation: $reference")
+    }
+    return normalized
   }
 
-  private fun absoluteReference(receiptReference: String): Path {
-    val parsed =
-      try {
-        Path.of(receiptReference)
-      } catch (failure: InvalidPathException) {
-        throw invalidQaReceipt("the retained receipt reference is invalid.", failure)
-      }
-    if (!parsed.isAbsolute) throw invalidQaReceipt("the retained receipt reference must be absolute.")
-    return parsed.normalize()
-  }
+  private fun retainedReportPathViolation(
+    persisted: Path,
+    normalized: Path,
+    relative: Path,
+  ): String? =
+    when {
+      persisted != normalized -> "the retained report reference is not normalized"
+      relative.nameCount != 2 -> "the retained report reference is outside its invocation report"
+      relative.getName(0).toString() == "leases" -> "the retained report reference points into leases"
+      relative.getName(1).toString() !in setOf(REPORT_FILE, LEGACY_REPORT_FILE) ->
+        "the retained report reference is not a report file"
+      else -> null
+    }
+
+  private fun unreadable(
+    detail: String,
+    cause: Throwable? = null,
+  ): Nothing = throw qaRepositoryUnreadable(detail, cause)
+
+  private fun readText(file: Path): String = String(Files.readAllBytes(file), Charsets.UTF_8)
 
   override fun close(workspace: QaWorkspace) {
     val ownerFile = QaPaths.ownerFile(workspace.directory)

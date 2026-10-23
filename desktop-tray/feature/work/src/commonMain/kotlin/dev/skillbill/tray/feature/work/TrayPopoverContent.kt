@@ -63,9 +63,10 @@ import dev.skillbill.tray.core.ui.age
 import dev.skillbill.tray.core.ui.coerceNonNegative
 import dev.skillbill.tray.core.ui.durationText
 import dev.skillbill.tray.core.ui.effectiveFreshness
-import dev.skillbill.tray.core.ui.label
+import dev.skillbill.tray.core.ui.phaseLabel
 import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.phaseElapsedText
+import dev.skillbill.tray.core.ui.progressLabel
 import dev.skillbill.tray.core.ui.repositoryTitle
 import dev.skillbill.tray.core.ui.statusColor
 import dev.skillbill.tray.core.ui.tickingNow
@@ -199,14 +200,15 @@ internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, sta
         Text(item.issueKey ?: item.phaseId ?: item.currentStepId, Modifier.border(1.dp, color.copy(alpha = .45f), RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 3.dp), color = color, fontFamily = mono, fontSize = 10.5.sp)
       }
       val planning = item.currentStepId == "planning"
-      val phase = if (item.stalled()) "${item.outcomeLabel()} · ${item.currentStepLabel}" else if (item.lifecycle == Lifecycle.ACTIVE) item.currentStepLabel else item.outcomeLabel()
+      val step = item.phaseExecution?.phaseLabel() ?: item.currentStepLabel
+      val phase = if (item.stalled()) "${item.outcomeLabel()} · $step" else if (item.lifecycle == Lifecycle.ACTIVE) step else item.outcomeLabel()
       val duration = if (item.scope == ExecutionScope.STANDALONE_PHASE) phaseElapsedText(item, now, stale) else durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, stale)
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-          listOfNotNull(phase, item.phaseExecution?.label(), if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else duration.takeIf { it != "not available" }).joinToString(" · "),
+          listOfNotNull(phase, if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else duration.takeIf { it != "not available" }).joinToString(" · "),
           Modifier.weight(1f), color = if (attention) color else muted, fontFamily = mono, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        item.progressTotal?.let { Text("${item.progressCompleted ?: 0}/$it", color = ink, fontFamily = mono, fontSize = 11.5.sp) }
+        item.progressLabel()?.let { Text(it, color = ink, fontFamily = mono, fontSize = 11.5.sp) }
       }
       val progressTotal = item.progressTotal
       if (!attention && progressTotal != null && progressTotal > 0) Box(Modifier.fillMaxWidth().height(3.dp).background(surface3, RoundedCornerShape(50))) {

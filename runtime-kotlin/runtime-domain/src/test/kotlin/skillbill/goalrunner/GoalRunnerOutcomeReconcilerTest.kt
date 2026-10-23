@@ -79,6 +79,24 @@ class GoalRunnerOutcomeReconcilerTest {
   }
 
   @Test
+  fun `a resumed child that fails on a still-blocked row reports its own stderr`() {
+    val outcome =
+      GoalRunnerStoredOutcome(
+        status = GoalRunnerTerminalStatus.BLOCKED,
+        workflowId = "wf-blocked",
+        blockedReason = "Worker lost lease fencing mid-phase",
+        suppressPr = true,
+      )
+    val failedResume = GoalRunnerLaunchFacts(exitStatus = 1, stderrExcerpt = "Unknown explicit resume phase 'qa'.")
+
+    val reconciled = GoalRunnerOutcomeReconciler.reconcile(subtaskId = 1, failedResume, outcome)
+
+    val stop = assertIs<GoalRunnerReconciledOutcome.Stop>(reconciled)
+    assertContains(stop.blockedReason, "Worker lost lease fencing mid-phase")
+    assertContains(stop.blockedReason, "Unknown explicit resume phase 'qa'.")
+  }
+
+  @Test
   fun `a reconcilable row that did not suppress per-subtask PRs blocks rather than going resumable`() {
     val outcome =
       GoalRunnerStoredOutcome(

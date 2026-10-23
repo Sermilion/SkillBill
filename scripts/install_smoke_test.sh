@@ -8,7 +8,11 @@ FAKE_HOME=""
 RELEASE_DIR=""
 STUB_TMP=""
 WORK_TMPDIRS=()
+READONLY_ROOT=""
 cleanup() {
+  # The failure-tolerance scenario makes a plugin root read-only; rm -rf cannot
+  # delete the fake home until it is writable again.
+  if [[ -n "$READONLY_ROOT" ]]; then chmod u+w "$READONLY_ROOT" 2>/dev/null || true; fi
   [[ -n "$FAKE_HOME" ]] && rm -rf "$FAKE_HOME"
   [[ -n "$RELEASE_DIR" ]] && rm -rf "$RELEASE_DIR"
   [[ -n "$STUB_TMP" ]] && rm -f "$STUB_TMP"
@@ -40,6 +44,24 @@ host_token() {
     MINGW*|MSYS*|CYGWIN*) printf 'windows-x64' ;;
     *)      printf 'linux-x64' ;;
   esac
+}
+
+# Writes a jar whose META-INF/plugin.xml declares the given IntelliJ plugin id.
+make_plugin_jar() {
+  local jar="$1" plugin_id="$2" tmp
+  tmp="$(mktemp -d)"
+  mkdir -p "$tmp/META-INF" "$(dirname "$jar")"
+  printf '<idea-plugin><id>%s</id></idea-plugin>\n' "$plugin_id" >"$tmp/META-INF/plugin.xml"
+  python3 - "$tmp" "$jar" <<'PY'
+import os, sys, zipfile
+root, archive = sys.argv[1:]
+with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
+    for directory, _, files in os.walk(os.path.join(root, 'META-INF')):
+        for name in files:
+            path = os.path.join(directory, name)
+            output.write(path, os.path.relpath(path, root))
+PY
+  rm -rf "$tmp"
 }
 
 make_stub_runtime_cli() {
@@ -312,7 +334,7 @@ run_install() {
   while [[ $# -gt 0 && "$1" == *=* ]]; do
     extra_env+=("$1"); shift
   done
-  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+  env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$fake_home" \
     XDG_DATA_HOME="$fake_home/.local/share" \
     LOCALAPPDATA="$fake_home/AppData/Local" \
@@ -326,8 +348,9 @@ run_install() {
 
 run_interactive_install_with_blank_defaults() {
   local fake_home="$1"
-  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+  env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$fake_home" \
+    XDG_DATA_HOME="$fake_home/.local/share" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
     SKILL_BILL_BIN_DIR="$fake_home/.local/bin" \
@@ -339,8 +362,9 @@ run_piped_install_with_eof_defaults() {
   local fake_home="$1"
   (
     cd "$REPO_ROOT"
-    env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+    env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
       HOME="$fake_home" \
+      XDG_DATA_HOME="$fake_home/.local/share" \
       SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
       SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
       SKILL_BILL_BIN_DIR="$fake_home/.local/bin" \
@@ -404,7 +428,7 @@ CURL
   chmod +x "$work/curl"
   (
     cd "$REPO_ROOT"
-    env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+    env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
       HOME="$fake_home" \
       PATH="$work:$PATH" \
       bash -c 'cat install.sh | bash -s --' \
@@ -412,8 +436,9 @@ CURL
   )
 }
 
-# Fake curl for the plugin-tag regression: the newest release in the list is a
-# plugin-v* release, so any resolver that trusts list order picks the wrong tag.
+# Fake curl for the plugin-tag regression: a retired plugin-v* release remains on
+# GitHub and is the newest in the list, so any resolver that trusts list order
+# picks the wrong tag.
 # Every requested URL is appended to $SMOKE_CURL_LOG so the scenario can assert
 # which release tag each consumer path resolved.
 make_plugin_tag_curl_shim() {
@@ -588,8 +613,22 @@ FAKE_HOME="$(mktemp -d)"
 mkdir -p "$FAKE_HOME/.claude"
 seed_selection_json "$FAKE_HOME"
 
-run_install "$FAKE_HOME"
+REPLAY_OUTPUT="$(run_install "$FAKE_HOME")"
 pass "install.sh exited 0"
+
+# A machine with no retired IDE plugins gets exactly one "nothing found" line.
+NO_PLUGIN_LINES="$(grep -c 'No retired Skill Bill IDE plugins found\.' <<<"$REPLAY_OUTPUT" || true)"
+if [[ "$NO_PLUGIN_LINES" == "1" ]]; then
+  pass "clean install prints one 'no retired IDE plugins' line"
+else
+  fail "clean install printed $NO_PLUGIN_LINES 'no retired IDE plugins' lines"
+fi
+if [[ "$REPLAY_OUTPUT" == *"removed IntelliJ plugin"* ||
+  "$REPLAY_OUTPUT" == *"removed VS Code extension"* ||
+  "$REPLAY_OUTPUT" == *"desktop app replaces"* ]]; then
+  fail "clean install reported a retired IDE plugin removal"
+fi
+pass "clean install reports no retired IDE plugin removal"
 
 LAUNCHER="$FAKE_HOME/.local/bin/skill-bill"
 assert_file_exists "launcher exists" "$LAUNCHER"
@@ -623,8 +662,76 @@ mkdir -p "$FAKE_AGENT_SKILL"
 printf 'stale' >"$FAKE_AGENT_SKILL/content.md"
 assert_file_exists "stale agent-dir skill planted" "$FAKE_AGENT_SKILL/content.md"
 
-run_install "$FAKE_HOME" --clean
+# Retired IDE plugin seeds. The IntelliJ root layout depends on the host OS.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  INTELLIJ_PRODUCT_ROOT="$FAKE_HOME/Library/Application Support/JetBrains/IntelliJIdea2024.3/plugins"
+  WEBSTORM_PLUGINS_ROOT="$FAKE_HOME/Library/Application Support/JetBrains/WebStorm2024.3/plugins"
+else
+  INTELLIJ_PRODUCT_ROOT="$FAKE_HOME/.local/share/JetBrains/IntelliJIdea2024.3"
+  WEBSTORM_PLUGINS_ROOT="$FAKE_HOME/.local/share/JetBrains/WebStorm2024.3"
+fi
+make_plugin_jar "$INTELLIJ_PRODUCT_ROOT/renamed-root/lib/status.jar" "dev.skillbill.status"
+make_plugin_jar "$INTELLIJ_PRODUCT_ROOT/skill-bill-status/lib/status.jar" "com.example.other"
+make_plugin_jar "$INTELLIJ_PRODUCT_ROOT/unrelated/lib/u.jar" "org.example.unrelated"
+if [[ "$(id -u)" != "0" ]]; then
+  make_plugin_jar "$WEBSTORM_PLUGINS_ROOT/stuck-root/lib/status.jar" "dev.skillbill.status"
+  chmod a-w "$WEBSTORM_PLUGINS_ROOT"
+  READONLY_ROOT="$WEBSTORM_PLUGINS_ROOT"
+fi
+
+mkdir -p "$FAKE_HOME/.vscode/extensions/skill-bill.skill-bill-status-0.1.0" \
+  "$FAKE_HOME/.vscode/extensions/ms-python.python-2024.1.0" \
+  "$FAKE_HOME/.cursor/extensions/skill-bill.skill-bill-status-0.1.0"
+# The shim dir is prepended to the host PATH, so shadow `cursor` too: an
+# unshadowed real CLI would run on a developer machine. A failing CLI and an
+# absent CLI take the same directory-deletion fallback.
+IDE_SHIM_DIR="$(mktemp -d)"
+WORK_TMPDIRS+=("$IDE_SHIM_DIR")
+CODE_CALLS="$IDE_SHIM_DIR/code.calls"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"%s"\n' "$CODE_CALLS" >"$IDE_SHIM_DIR/code"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$IDE_SHIM_DIR/cursor"
+chmod +x "$IDE_SHIM_DIR/code" "$IDE_SHIM_DIR/cursor"
+
+SEEDED_OUTPUT="$(run_install "$FAKE_HOME" "PATH=$IDE_SHIM_DIR:$PATH" --clean)"
 pass "install.sh --clean exited 0"
+if [[ -n "$READONLY_ROOT" ]]; then chmod u+w "$READONLY_ROOT"; READONLY_ROOT=""; fi
+
+assert_file_absent "retired IntelliJ plugin removed by plugin id" "$INTELLIJ_PRODUCT_ROOT/renamed-root"
+assert_file_exists "directory named like the plugin but with another id stays" "$INTELLIJ_PRODUCT_ROOT/skill-bill-status"
+assert_file_exists "unrelated IntelliJ plugin stays" "$INTELLIJ_PRODUCT_ROOT/unrelated"
+[[ "$SEEDED_OUTPUT" == *"removed IntelliJ plugin (IntelliJIdea2024.3):"* ]] ||
+  fail "IntelliJ removal line did not name the product directory"
+pass "IntelliJ removal reports the product directory"
+if [[ "$(id -u)" != "0" ]]; then
+  [[ "$SEEDED_OUTPUT" == *"Could not remove"* ]] || fail "failed removal did not warn"
+  pass "failed removal warns and the install still exits 0"
+fi
+
+grep -qF -- "--uninstall-extension skill-bill.skill-bill-status" "$CODE_CALLS" ||
+  fail "code CLI was not asked to uninstall the extension"
+pass "VS Code CLI received the uninstall request"
+assert_file_absent "VS Code extension directory removed" "$FAKE_HOME/.vscode/extensions/skill-bill.skill-bill-status-0.1.0"
+assert_file_absent "Cursor extension directory removed after its CLI failed" "$FAKE_HOME/.cursor/extensions/skill-bill.skill-bill-status-0.1.0"
+assert_file_exists "unrelated VS Code extension stays" "$FAKE_HOME/.vscode/extensions/ms-python.python-2024.1.0"
+[[ "$SEEDED_OUTPUT" == *"removed VS Code extension (VS Code):"* &&
+  "$SEEDED_OUTPUT" == *"removed VS Code extension (Cursor):"* ]] ||
+  fail "VS Code extension removal lines missing"
+pass "VS Code extension removals are reported"
+NOTICE_LINES="$(grep -c 'desktop app replaces' <<<"$SEEDED_OUTPUT" || true)"
+[[ "$NOTICE_LINES" == "1" ]] || fail "expected one 'desktop app replaces' line, got $NOTICE_LINES"
+pass "replacement notice printed once"
+
+# install.sh and uninstall.sh each carry the cleanup block (uninstall.sh cannot
+# source a shared file, because only uninstall.sh ships beside the skills).
+extract_retired_cleanup_block() {
+  sed -n '/^# >>> retired IDE plugin cleanup/,/^# <<< retired IDE plugin cleanup/p' "$1"
+}
+INSTALL_CLEANUP_BLOCK="$(extract_retired_cleanup_block "$INSTALL_SH")"
+UNINSTALL_CLEANUP_BLOCK="$(extract_retired_cleanup_block "$REPO_ROOT/uninstall.sh")"
+[[ -n "$INSTALL_CLEANUP_BLOCK" ]] || fail "install.sh has no retired IDE plugin cleanup block"
+[[ "$INSTALL_CLEANUP_BLOCK" == "$UNINSTALL_CLEANUP_BLOCK" ]] ||
+  fail "retired IDE plugin cleanup block differs between install.sh and uninstall.sh"
+pass "retired IDE plugin cleanup block is identical in install.sh and uninstall.sh"
 
 assert_file_absent "sentinel removed after --clean" "$SENTINEL"
 
@@ -658,7 +765,7 @@ ORIGINAL_CONTENT="$(cat "$CONTENT_FILE")"
 printf '\n# smoke local edit\n' >>"$CONTENT_FILE"
 pass "local edit seeded in $(basename "$CONTENT_FILE") under $(basename "$TARGET_SKILL")"
 
-env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
   HOME="$FAKE_HOME" \
   SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
   SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
@@ -684,7 +791,7 @@ printf 'stray local skill\n' >"$FOREIGN_DIR/skills/__stray__/content.md"
 
 FOREIGN_OUTPUT="$(
   cd "$FOREIGN_DIR"
-  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+  env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
@@ -712,7 +819,7 @@ echo "--- scenario 8: fresh machine footprint gate skips pre-install cleanup (AC
 FAKE_HOME="$(mktemp -d)"
 
 GATE_OUTPUT="$(
-  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+  env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_BIN_DIR="$FAKE_HOME/.local/bin" \
@@ -802,7 +909,7 @@ pass "missing desktop archive fails installation and preserves the existing app"
 
 mkdir -p "$FAKE_HOME/.skill-bill/installed-skills" "$FAKE_HOME/.skill-bill/.stale-cache"
 printf 'stale install state\n' > "$FAKE_HOME/.skill-bill/.stale-cache/entry"
-env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
   HOME="$FAKE_HOME" \
   XDG_DATA_HOME="$FAKE_HOME/.local/share" \
   LOCALAPPDATA="$FAKE_HOME/AppData/Local" \
@@ -836,7 +943,7 @@ PLUGIN_CURL_LOG="$PLUGIN_SHIM_DIR/curl.log"
 FAKE_HOME="$(mktemp -d)"
 PLUGIN_TAG_OUTPUT="$(
   cd "$REPO_ROOT"
-  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+  env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     PATH="$PLUGIN_SHIM_DIR:$PATH" \
     SMOKE_CURL_LOG="$PLUGIN_CURL_LOG" \
@@ -860,7 +967,7 @@ WORK_TMPDIRS+=("$PLUGIN_ASSET_DIR")
 : >"$PLUGIN_CURL_LOG"
 (
   cd "$PLUGIN_ASSET_DIR"
-  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+  env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     PATH="$PLUGIN_SHIM_DIR:$PATH" \
     SMOKE_CURL_LOG="$PLUGIN_CURL_LOG" \

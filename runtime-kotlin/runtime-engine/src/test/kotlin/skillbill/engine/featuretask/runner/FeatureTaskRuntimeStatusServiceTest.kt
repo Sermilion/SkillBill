@@ -1281,7 +1281,6 @@ internal fun statusHarness(): StatusHarness {
         StatusNoopSnapshotValidator,
         featureTaskRuntimeWireArtifactValidatorForTest(),
       ),
-      testHarnessClock,
     )
   return StatusHarness(
     recorder,

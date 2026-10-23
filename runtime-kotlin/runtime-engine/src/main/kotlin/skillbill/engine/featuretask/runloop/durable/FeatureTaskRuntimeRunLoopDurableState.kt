@@ -16,11 +16,13 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.ModelDirectiveSupplements
+import skillbill.engine.featuretask.slot.PhaseBindingFactory
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
@@ -33,6 +35,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.review.model.ImportedFinding
 import skillbill.review.model.ImportedReview
@@ -84,6 +87,10 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
+  override val modelDirectiveSupplements: ModelDirectiveSupplements get() = strategies.modelDirectiveSupplements
+
+  override val phaseInstructionSource: PhaseInstructionFileSource get() = strategies.phaseInstructionSource
+
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
   override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
@@ -122,10 +129,10 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
     reviewResultAssembly.persistReviewPassClaims(reviewRunId, findings, persistEmpty = true)
   }
 
-  override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, run)
+  override fun bindings(run: PhaseRun): PhaseBindingFactory = launch.bindings(facts, this, run)
 
   override fun fanOut(stepId: String): PhaseRunFanOut =
-    if (selectedOwnerOf(stepId)?.plansInFanOut == true) {
+    if (selectedOwnerOf(stepId)?.stepDescriptor(stepId)?.family == PhaseBindingFamily.PlanningFanOut) {
       launch.planSubtasksFanOut(facts, this, stepId)
     } else {
       throw PhaseRunFanOutUnsupportedError(stepId)
@@ -177,11 +184,11 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
   ): PhaseRunFanOut =
     FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(state, facts, stepId, decompositionPlanner, runLoopEntry)
 
-  internal fun step(
+  internal fun bindings(
     facts: FeatureTaskRuntimeRunFacts,
     state: PhaseRunState,
     run: PhaseRun,
-  ): PhaseAcceptedStepExecution = runLoopEntry.context(facts, state).acceptedStep(run)
+  ): PhaseBindingFactory = runLoopEntry.context(facts, state).bindingFactory(run)
 
   internal fun ensureFeatureBranch(
     facts: FeatureTaskRuntimeRunFacts,

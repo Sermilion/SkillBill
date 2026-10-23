@@ -143,7 +143,7 @@ fun WorkflowStateRepository.findLatestPlanWorkflowId(
 ): String? =
   listFeatureTaskWorkflowsForIssue(normalizeRequiredIssueKey(issueKey), repositoryIdentity)
     .filter { it.isPlanWorkflow() && it.hasPlanSubtasksStep() }
-    .maxByOrNull { it.updatedAt.orEmpty() }
+    .maxWithOrNull(compareBy({ it.startedAt.orEmpty() }, { it.workflowId }))
     ?.workflowId
 
 private fun WorkflowStateRecord.hasPlanSubtasksStep(): Boolean =

@@ -5,6 +5,11 @@ acceptance criterion against concrete evidence and its proposed production path.
 Keep this check proportional to the change, but do not defer facts that determine
 whether the behavior can be implemented to an implementation or repair worker.
 
+The preplan digest is starting evidence. A plan may verify a missing implementability
+fact through a targeted read-only source or authoritative contract lookup when the
+task cannot be specified without it. Do not use a lookup to repeat discovery or widen
+the task's file ownership.
+
 - Identify the prerequisite capability and its owner. Distinguish existing behavior,
   a new local change authorized by the task, and an external capability the task
   does not authorize. A new local interface is valid when its implementation and

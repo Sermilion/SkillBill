@@ -4,13 +4,13 @@ import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
+import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.plan.planningFeasibilityDirective
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -52,10 +52,12 @@ class AgentPreplanStrategy : PhaseStrategy() {
       stepContext = "$featureSpecIntake\n\n$planningFeasibilityDirective",
     )
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = runAgentStep(run, state)
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return PhaseStepDescriptor(PhaseBindingFamily.Agent, PhaseStepHooks.None) { run, state ->
+      runAgentStep(run, state)
+    }
+  }
 
   companion object {
     const val ID = "agent-preplan"
@@ -77,8 +79,7 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "scope only when the plan cannot write this task without that fact. Every lookup must answer one " +
         "question this task still has open. If you cannot name that question, do not search or read. A lookup " +
         "that cannot change what the digest says about this task is waste, including a lookup made just in " +
-        "case. Read only files this task directly touches or needs as prerequisite contract evidence. " +
-        "Do not inventory a type hierarchy, a sibling " +
+        "case. Read only files this task directly touches. Do not inventory a type hierarchy, a sibling " +
         "feature, a shared client, a platform wrapper, or a dependency coordinate unless the plan needs that " +
         "fact to specify this task. A wrapper that only forwards a call you have already read is not a new " +
         "question. When the intake names a tracker issue and does not already carry its comments, fetch the " +

@@ -5,9 +5,11 @@
 .env.*
 docs/cloudflare-telemetry-proxy/.wrangler/
 _migration_backup/
-# Runtime state under .skill-bill/; keep shared project config trackable.
+# Runtime state under .skill-bill/; keep shared project config and phase instructions trackable.
 .skill-bill/**
 !.skill-bill/config.yaml
+!.skill-bill/phases/
+!.skill-bill/phases/**
 
 # Kotlin 2.x compiler-daemon session markers.
 .kotlin/
@@ -64,14 +66,6 @@ platform-packs/*/quality-check/*/junie-agents/
 platform-packs/*/quality-check/*/cursor-agents/
 
 local.properties
-
-# IntelliJ plugin local build outputs (isolated Gradle project).
-intellij-plugin/.gradle/
-intellij-plugin/build/
-intellij-plugin/.intellijPlatform/
-vscode-extension/node_modules/
-vscode-extension/out/
-vscode-extension/*.vsix
 
 __pycache__/
 *.pyc

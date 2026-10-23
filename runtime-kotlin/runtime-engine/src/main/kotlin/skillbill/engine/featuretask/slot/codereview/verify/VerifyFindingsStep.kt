@@ -6,14 +6,13 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
-import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
-internal class VerifyFindingsStep : PhaseStepHooks {
+internal class VerifyFindingsStep : PhaseStepHooks<PhaseVerifyFindingsStepBinding> {
   override val contextKind = PhaseStepHookContextKind.FINDING_VERIFICATION
   val policy =
     PhaseStepPolicy(
@@ -24,42 +23,41 @@ internal class VerifyFindingsStep : PhaseStepHooks {
       generationScoped = false,
     )
 
+  override fun failureContinuationOutput(
+    upstream: List<FeatureTaskRuntimePhaseOutput>,
+  ): NormalizedFeatureTaskRuntimePhaseOutput = VerifyFindingsFailureOutput.carryReviewFindings(upstream)
+
   override fun launchPromptSupplement(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
-    state: PhaseStepBinding,
-  ): String = VerifyFindingsEvidence.launchSections(run, context, state.asVerifyFindingsBinding())
+    state: PhaseVerifyFindingsStepBinding,
+  ): String = VerifyFindingsEvidence.launchSections(run, context, state)
 
   override fun checkValidatedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseVerifyFindingsStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): PhaseStepOutputCheck =
-    VerifyFindingsEvidence.boundaryBodyDelivery(run, context, state.asVerifyFindingsBinding(), outputMap)
+  ): PhaseStepOutputCheck = VerifyFindingsEvidence.boundaryBodyDelivery(run, context, state, outputMap)
 
   override fun completionRejection(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseVerifyFindingsStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): String? = VerifyFindingsEvidence.completionRejection(run, context, state.asVerifyFindingsBinding(), outputMap)
+  ): String? = VerifyFindingsEvidence.completionRejection(run, context, state, outputMap)
 
   override fun interpretedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseAcceptedStepExecution,
+    state: PhaseVerifyFindingsStepBinding,
     output: NormalizedFeatureTaskRuntimePhaseOutput,
-  ): NormalizedFeatureTaskRuntimePhaseOutput =
-    VerifyFindingsEvidence.interpretedOutput(run, context, state.asVerifyFindingsBinding(), output)
+  ): NormalizedFeatureTaskRuntimePhaseOutput = VerifyFindingsEvidence.interpretedOutput(run, context, state, output)
 
   override fun recordAcceptedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
-    state: PhaseStepBinding,
+    state: PhaseVerifyFindingsStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ) = VerifyFindingsEvidence.recordRejectedFindings(run, context, state.asVerifyFindingsBinding(), outputMap)
-
-  private fun PhaseStepBinding.asVerifyFindingsBinding(): PhaseVerifyFindingsStepBinding =
-    this as PhaseVerifyFindingsStepBinding
+  ) = VerifyFindingsEvidence.recordRejectedFindings(run, context, state, outputMap)
 }

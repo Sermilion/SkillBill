@@ -9,11 +9,6 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runner.SlotBaselineFullRunCapture
 import skillbill.engine.featuretask.runner.SlotBaselinePaths
 import skillbill.engine.featuretask.runner.SlotBaselineTestResources
-import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
-import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
-import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
-import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -73,35 +68,6 @@ class InlineReviewDirectiveTest {
   }
 
   @Test
-  fun `delegated review prompt carries the review directive`() {
-    val home = Files.createTempDirectory("delegated-review-directive")
-    try {
-      val database =
-        sqliteSessionFactoryForTests(
-          userHome = home,
-          dbPathOverride = home.resolve("metrics.db").toString(),
-          environment = emptyMap(),
-        )
-      val strategy =
-        DelegatedReviewStrategy(
-          DefaultPhaseRunner(
-            GoalRunnerSubtaskLauncher { error("The directive lookup must not launch.") },
-            NoopWorkflowGitOperations,
-          ),
-          scriptedDelegatedReviewRunner(database, home, LaneScript()),
-        )
-
-      val directive = strategy.directiveFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW)
-
-      assertTrue(directive.contains("\n## Review mode argument\n"), directive)
-      assertFalse(directive.contains("## Depth\n"), "the inline worker body stays out of the delegated review")
-      assertFalse(directive.contains("Project authoring discipline"), "delegated review gets no authoring authority")
-    } finally {
-      home.toFile().deleteRecursively()
-    }
-  }
-
-  @Test
   fun `selected add-ons are appended after the review instructions`() {
     val selection =
       HydratedAgentAddonSelection(
@@ -120,14 +86,31 @@ class InlineReviewDirectiveTest {
     assertEquals(compose(ReviewTarget.LastCommit).trimEnd() + "\n\n" + section, prompt)
   }
 
+  @Test
+  fun `a code-quality rubric is added before the evidence record without altering the rest of the prompt`() {
+    val rubric = "Prefer cohesive helpers.\nIgnore: security defects belong to the security specialist."
+    val without = compose(ReviewTarget.LastCommit)
+    val with = compose(ReviewTarget.LastCommit, qualityRubric = rubric)
+
+    val section = CodeQualityLaneSection.render(rubric)
+    val evidenceStart = without.indexOf("Emit the bounded authoring evidence record")
+    assertEquals(without.substring(0, evidenceStart) + section + "\n" + without.substring(evidenceStart), with)
+    assertTrue(rubric in section)
+    assertTrue("adds a code-quality lane" in section)
+    assertTrue("responsible for every review area" in section)
+    assertTrue("apply only to delegated review" in section)
+  }
+
   private fun compose(
     target: ReviewTarget,
     agentAddonsSection: String = "",
+    qualityRubric: String? = null,
   ): String =
     InlineReviewDirective.compose(
       target = target,
       revisions = NORMALIZED_SHA to NORMALIZED_SHA,
       specPath = Path.of(SlotBaselineFullRunCapture.SPEC_REFERENCE),
       agentAddonsSection = agentAddonsSection,
+      qualityRubric = qualityRubric,
     )
 }

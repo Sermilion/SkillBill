@@ -3,46 +3,29 @@ package skillbill.engine.featuretask.slot
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
-import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
-import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
-import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
+import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
-import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
-import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
-import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
-import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
-import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
-import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qa.QaStrategy
-import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
-import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
-import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
-import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
@@ -68,7 +51,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.qa.QaWorkspacePort
-import skillbill.ports.qa.model.QaReceiptSource
+import skillbill.ports.qa.model.QaReportSource
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
@@ -100,99 +83,76 @@ fun testPhaseStrategies(
   planFanOutPort: BoundedWorkFanOutPort = SequentialBoundedWorkFanOutPort,
   planFanOutCap: Int = 1,
   standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
-  qaReceipts: QaReceiptSettlement = unavailableQaReceiptSettlement(),
+  qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
+  inlineRubricResolver: InlineCodeQualityRubricResolver? = null,
 ): PhaseStrategyLookup {
-  val runner = { DefaultPhaseRunner(launcher, gitOperations) }
+  val runner = DefaultPhaseRunner(launcher, gitOperations)
   val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
   val planFanOut = PlanFanOutStrategy(planFanOutPort, planFanOutCap)
-  val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
-  val prCanonical =
-    PrDescriptionStrategy(
-      pullRequestIdentityLookup,
-      LocalPullRequestTemplateFiles,
-    )
-  val prOpus = PrDescriptionOpus55Strategy(prCanonical)
-  val monitorCanonical = MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup)
-  val monitorOpus = MonitorOpus55Strategy(monitorCanonical)
+  val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner) } ?: runner
   val registry =
     PhaseStrategyRegistry(
       listOfNotNull(
         PhaseStrategyRegistration(
           RuntimeIntakeStrategy { error("Test phase strategies do not run plan intake.") },
-          runner(),
+          runner,
         ),
-        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(planFanOut, runner()),
-        PhaseStrategyRegistration(PlanFanOutOpus55Strategy(planFanOut), runner()),
-        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
-        PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
-        PhaseStrategyRegistration(AcceptanceAuditOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner), codeReviewRunner),
-        PhaseStrategyRegistration(InlineReviewOpus55Strategy(codeReviewRunner), codeReviewRunner),
-        PhaseStrategyRegistration(InlineStandaloneReviewStrategy(codeReviewRunner), codeReviewRunner),
-        PhaseStrategyRegistration(InlineStandaloneReviewOpus55Strategy(codeReviewRunner), codeReviewRunner),
-        delegatedReviewRunner?.let {
-          val delegatedRunner = runner()
-          PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(delegatedRunner, it), delegatedRunner)
-        },
-        delegatedReviewRunner?.let {
-          val delegatedRunner = runner()
-          PhaseStrategyRegistration(DelegatedStandaloneReviewOpus55Strategy(delegatedRunner, it), delegatedRunner)
-        },
-        delegatedReviewRunner?.let {
-          val delegatedRunner = runner()
-          PhaseStrategyRegistration(DelegatedReviewStrategy(delegatedRunner, it), delegatedRunner)
-        },
-        delegatedReviewRunner?.let {
-          val delegatedRunner = runner()
-          PhaseStrategyRegistration(DelegatedReviewOpus55Strategy(delegatedRunner, it), delegatedRunner)
-        },
-        PhaseStrategyRegistration(PackBuildStrategy(), runner()),
-        PhaseStrategyRegistration(PackBuildOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
-        PhaseStrategyRegistration(AgentValidateOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
-        PhaseStrategyRegistration(BoundaryHistoryOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
-        PhaseStrategyRegistration(prCanonical, runner()),
-        PhaseStrategyRegistration(prOpus, runner()),
-        PhaseStrategyRegistration(monitorCanonical, runner()),
-        PhaseStrategyRegistration(monitorOpus, runner()),
-        PhaseStrategyRegistration(standaloneMonitor, runner()),
-        PhaseStrategyRegistration(StandaloneMonitorOpus55Strategy(standaloneMonitor), runner()),
-        PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner()),
+        PhaseStrategyRegistration(AgentPreplanStrategy(), runner),
+        PhaseStrategyRegistration(planFanOut, runner),
+        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner),
+        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner),
+        PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner, inlineRubricResolver), codeReviewRunner),
         PhaseStrategyRegistration(
-          QaStrategy(qaReceipts, QaReceiptValidator { null }, qaExecution, qaOutcomes),
-          runner(),
+          InlineStandaloneReviewStrategy(codeReviewRunner, inlineRubricResolver),
+          codeReviewRunner,
+        ),
+        delegatedReviewRunner?.let {
+          PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(runner, it), runner)
+        },
+        PhaseStrategyRegistration(PackBuildStrategy(), runner),
+        PhaseStrategyRegistration(AgentValidateStrategy(), runner),
+        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner),
+        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner),
+        PhaseStrategyRegistration(
+          PrDescriptionStrategy(pullRequestIdentityLookup, LocalPullRequestTemplateFiles),
+          runner,
+        ),
+        PhaseStrategyRegistration(MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup), runner),
+        PhaseStrategyRegistration(standaloneMonitor, runner),
+        PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner),
+        PhaseStrategyRegistration(
+          QaStrategy(qaReports, qaExecution, qaOutcomes),
+          runner,
         ),
       ),
     )
-  val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
-  val bindings = testPhaseStrategyBindings(codeReviewStrategyId)
-  return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
+  val bindings =
+    testPhaseStrategyBindings(
+      if (delegatedReviewRunner == null) InlineStandaloneReviewStrategy.ID else DelegatedStandaloneReviewStrategy.ID,
+    )
+  return PhaseStrategyLookup(
+    registry,
+    PhaseStrategySelection(registry, bindings),
+    ModelDirectiveSupplements(enabled = true),
+  )
 }
 
-fun unavailableQaReceiptSettlement(): QaReceiptSettlement =
-  QaReceiptSettlement(
-    QaReceiptValidator { null },
+fun unavailableQaReportSettlement(): QaReportSettlement =
+  QaReportSettlement(
     object : QaWorkspacePort {
       override fun open(
         repoRoot: Path,
         invocationId: String,
       ): QaWorkspace = error("Test phase strategies do not open a QA workspace.")
 
-      override fun readReceipt(receiptPath: Path): QaReceiptSource? = null
+      override fun readReport(reportPath: Path): QaReportSource? = null
 
-      override fun readRetainedReceipt(
-        qaRoot: Path,
-        receiptReference: String,
-      ): QaReceiptSource? = null
+      override fun readRetainedReport(
+        repoRoot: Path,
+        reference: String,
+      ): QaReportSource? = null
 
       override fun close(workspace: QaWorkspace) = Unit
     },
@@ -291,39 +251,17 @@ object LocalPullRequestTemplateFiles : PullRequestTemplateFiles {
 }
 
 fun testPhaseStrategyBindings(
-  codeReviewStrategyId: String = InlineReviewStrategy.ID,
+  standaloneDelegatedId: String = InlineStandaloneReviewStrategy.ID,
 ): Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> {
-  val codeReviewOpusId =
-    if (codeReviewStrategyId == DelegatedReviewStrategy.ID) {
-      DelegatedReviewOpus55Strategy.ID
-    } else {
-      InlineReviewOpus55Strategy.ID
-    }
-  val standaloneDelegatedId =
-    if (codeReviewStrategyId == DelegatedReviewStrategy.ID) {
-      DelegatedStandaloneReviewStrategy.ID
-    } else {
-      codeReviewStrategyId
-    }
-  val standaloneDelegatedOpusId =
-    if (codeReviewStrategyId == DelegatedReviewStrategy.ID) {
-      DelegatedStandaloneReviewOpus55Strategy.ID
-    } else {
-      InlineStandaloneReviewOpus55Strategy.ID
-    }
   val shared =
     mapOf(
-      PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
-      PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(PlanFanOutStrategy.ID).withOpus(PlanFanOutOpus55Strategy.ID),
-      PhaseSlot.IMPLEMENTATION to
-        PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID).withOpus(ImplementThenSimplifyOpus55Strategy.ID),
-      PhaseSlot.AUDIT to
-        PhaseStrategyBinding.Fixed(AcceptanceAuditStrategy.ID).withOpus(AcceptanceAuditOpus55Strategy.ID),
+      PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
+      PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(PlanFanOutStrategy.ID),
+      PhaseSlot.IMPLEMENTATION to PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID),
+      PhaseSlot.AUDIT to PhaseStrategyBinding.Fixed(AcceptanceAuditStrategy.ID),
       PhaseSlot.CODE_REVIEW to
-        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { codeReviewStrategyId })
-          .withOpus(codeReviewOpusId),
-      PhaseSlot.WRITE_HISTORY to
-        PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID).withOpus(BoundaryHistoryOpus55Strategy.ID),
+        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { InlineReviewStrategy.ID }),
+      PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID),
       PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
       PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
     )
@@ -332,11 +270,9 @@ fun testPhaseStrategyBindings(
       SkeletonDefinition.STANDALONE to
         shared +
         mapOf(
-          PhaseSlot.QUALITY_GATE to
-            PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
-          PhaseSlot.PULL_REQUEST to
-            PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
-          PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
+          PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID),
+          PhaseSlot.PULL_REQUEST to PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID),
+          PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID),
         ),
       SkeletonDefinition.GOAL_CHILD_REVISION_3 to
         shared +
@@ -347,18 +283,10 @@ fun testPhaseStrategyBindings(
                 FeatureTaskRuntimeQualityGateSelection.BUILD to PackBuildStrategy.ID,
                 FeatureTaskRuntimeQualityGateSelection.VALIDATE to AgentValidateStrategy.ID,
               ),
-            ).withOpus(
-              mapOf(
-                PackBuildStrategy.ID to PackBuildOpus55Strategy.ID,
-                AgentValidateStrategy.ID to AgentValidateOpus55Strategy.ID,
-              ),
             ),
         ),
       SkeletonDefinition.REVIEW to
-        mapOf(
-          PhaseSlot.STANDALONE_REVIEW to
-            reviewStandaloneBinding(standaloneDelegatedId, standaloneDelegatedOpusId),
-        ),
+        mapOf(PhaseSlot.STANDALONE_REVIEW to reviewStandaloneBinding(standaloneDelegatedId)),
       SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
       SkeletonDefinition.QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.QA),
       SkeletonDefinition.GOAL_QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_QA),
@@ -377,24 +305,9 @@ fun testPhaseStrategyBindings(
     )
 }
 
-private fun reviewStandaloneBinding(
-  delegatedId: String,
-  delegatedOpusId: String,
-): PhaseStrategyBinding {
-  val facts =
-    PhaseStrategyBinding.ByFact(
-      CodeReviewExecutionMode.entries.associateWith { mode ->
-        if (mode == CodeReviewExecutionMode.DELEGATED) delegatedId else InlineStandaloneReviewStrategy.ID
-      },
-    )
-  return if (delegatedId == InlineStandaloneReviewStrategy.ID) {
-    facts.withOpus(InlineStandaloneReviewOpus55Strategy.ID)
-  } else {
-    facts.withOpus(
-      mapOf(
-        InlineStandaloneReviewStrategy.ID to InlineStandaloneReviewOpus55Strategy.ID,
-        delegatedId to delegatedOpusId,
-      ),
-    )
-  }
-}
+private fun reviewStandaloneBinding(delegatedId: String): PhaseStrategyBinding =
+  PhaseStrategyBinding.ByFact(
+    CodeReviewExecutionMode.entries.associateWith { mode ->
+      if (mode == CodeReviewExecutionMode.DELEGATED) delegatedId else InlineStandaloneReviewStrategy.ID
+    },
+  )

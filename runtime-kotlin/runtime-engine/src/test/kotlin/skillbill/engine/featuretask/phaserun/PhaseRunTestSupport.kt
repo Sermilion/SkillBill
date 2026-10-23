@@ -5,7 +5,6 @@ import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
-import skillbill.engine.diagnostics.block.testBlockIncidentEntryReconciler
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
@@ -26,6 +25,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorAcquireRequest
@@ -46,6 +46,7 @@ import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -89,6 +90,8 @@ internal data class PhaseRunEntryFixture(
   val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer = refusingMonitorPreparer(),
   val qaManifests: List<PlatformManifest> = emptyList(),
+  val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  val launchModelResolver: (AgentRunLaunchModelRequest) -> EffectiveLaunchModel = ::passThroughResolvedLaunchModel,
 )
 
 internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
@@ -112,14 +115,14 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         NoopRuntimeDiagnostics,
         workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
       ),
-    diagnostics = NoopRuntimeDiagnostics,
+    diagnostics = diagnostics,
     clock = clock,
     intakeResolver =
       PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), FileSystemFeatureTaskRuntimeRunInvariantsSource()),
     runLoopEntry = runLoopEntry,
     agentRunLauncher =
       object : AgentRunLauncher {
-        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
+        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
 
         override fun launch(request: AgentRunLaunchRequest) =
           error("A phase run fixture must not resolve launches through the test support launcher.")
@@ -128,7 +131,6 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
       StandalonePhaseRunners(
         standaloneMonitorPreparer,
         qaStandalonePhaseRun(gitOperations, qaManifests),
-        testBlockIncidentEntryReconciler(database, clock, NoopRuntimeDiagnostics),
       ),
   )
 

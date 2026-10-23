@@ -19,9 +19,6 @@ import dev.skillbill.tray.core.designsystem.panel
 import dev.skillbill.tray.core.domain.model.GoalQaFinding
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
-import dev.skillbill.tray.core.domain.model.QaCheckResult
-import dev.skillbill.tray.core.domain.model.QaCriterionFinding
-import dev.skillbill.tray.core.domain.model.QaCriterionResult
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
@@ -63,14 +60,7 @@ private fun PhaseResultsWithFindingsPreview() = PhaseResultsPreviewFrame(
       GoalQaFinding("F-1", "The login button does nothing after a cold start.", "/home/me/.skill-bill/qa/repo/run-1/login.png", fixed = true),
       GoalQaFinding("F-2", "The home screen stays blank after sign-in.", "/home/me/.skill-bill/qa/repo/run-4/home.png", fixed = false),
     ),
-    criteria = listOf(
-      QaCriterionResult(
-        "AC-001", false,
-        listOf(QaCheckResult("The home screen shows the signed-in user.", false)),
-        listOf(QaCriterionFinding("F-2", listOf("Open the app", "Log in"), "The home screen shows the user name.", "The home screen stays blank.")),
-      ),
-      QaCriterionResult("AC-002", true, listOf(QaCheckResult("The pause flag is written with run state.", true)), emptyList()),
-    ),
+    reportText = "findings\n\n### F-2 The home screen stays blank after sign-in\nSteps: open the app, log in.\nExpected: the home screen shows the user name.\nObserved: the home screen stays blank.",
   ),
   subtaskName = mapOf(1 to "Persist pause state", 2 to "Retry flaky store reads")::get,
 )
@@ -107,14 +97,7 @@ private fun PhaseResultsQaOnlyPreview() = PhaseResultsPreviewFrame(
   results = emptyList(),
   qa = GoalQaResult(
     "incomplete", "other", 0, Instant.parse("2026-10-20T16:14:00Z"),
-    criteria = listOf(
-      QaCriterionResult(
-        "AC-001", false,
-        listOf(QaCheckResult("Retained field values survive a restart.", false)),
-        listOf(QaCriterionFinding("F-1", emptyList(), "Values are still there.", "Values are empty.")),
-      ),
-      QaCriterionResult("AC-002", true, listOf(QaCheckResult("The pause flag is written with run state.", true)), emptyList()),
-    ),
+    reportText = "incomplete\n\nThe app launched on the Pixel 8 emulator, but the restart flow could not be completed.\n\n### F-1 Retained field values are empty after a restart\nExpected: the values are still there.\nObserved: the values are empty.",
   ),
   subtaskName = { null },
 )
@@ -132,6 +115,7 @@ private fun PhaseResultsPreviewFrame(results: List<SubtaskPhaseResults>, qa: Goa
         DesignLabel("Goal activity")
         PhaseResultsSection(results, qa, subtaskName)
         QaFindingsSection(qa)
+        qa?.reportText?.let { QaReportSection(it) }
       }
     }
   }

@@ -4,9 +4,9 @@ import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
@@ -62,14 +62,14 @@ class BoundaryHistoryStrategy : PhaseStrategy() {
     return FeatureTaskRuntimeRunInvariantPromptAllowlist.FINALIZATION
   }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = runAgentStep(run, state)
+  override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
+    policies.policyOf(stepId)
+    return PhaseStepDescriptor(PhaseBindingFamily.Agent, MeasuredHistoryHooks) { run, state ->
+      runAgentStep(run, state)
+    }
+  }
 
-  override fun stepHooks(stepId: String): PhaseStepHooks = MeasuredHistoryHooks
-
-  private object MeasuredHistoryHooks : PhaseStepHooks {
+  private object MeasuredHistoryHooks : PhaseStepHooks<PhaseAcceptedStepExecution> {
     override fun acceptedOutput(
       context: PhaseStepOutputContext,
       capture: ValidatedOutputCapture,

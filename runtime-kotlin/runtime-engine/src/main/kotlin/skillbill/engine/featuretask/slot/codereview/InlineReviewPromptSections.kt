@@ -1,9 +1,53 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.model.ParallelCodeReviewPlanned
+import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+
+/** Resolves the local code-quality rubric an inline review adds as its extra lane. */
+fun interface InlineCodeQualityRubricResolver {
+  fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
+}
+
+internal object CodeQualityLaneSection {
+  const val HEADING = "## Selected local code-quality rubric"
+
+  fun render(rubric: String): String =
+    buildString {
+      appendLine(HEADING)
+      appendLine("This section adds a code-quality lane to this review. It does not replace or narrow the review.")
+      appendLine(
+        "You remain responsible for every review area, including correctness, security, persistence, " +
+          "reliability, and accessibility.",
+      )
+      appendLine(
+        "Routing or Ignore lines in the rubric below that hand defects to other lanes or specialists apply only " +
+          "to delegated review. In this inline review, report those defects yourself.",
+      )
+      appendLine("Attribute findings from this rubric with the exact specialist identity.")
+      appendLine(rubric)
+    }
+}
+
+internal fun InlineCodeQualityRubricResolver?.resolveInlineRubric(
+  request: ParallelCodeReviewRequest,
+  diagnostics: RuntimeDiagnostics,
+): String? =
+  when (val resolved = this?.resolve(request)) {
+    null -> null
+    is ParallelCodeReviewPlanned.Ready -> resolved.value
+    is ParallelCodeReviewPlanned.Failed -> {
+      diagnostics.warning(
+        "code-quality rubric unavailable; running inline review without the code-quality lane: " +
+          resolved.failure.message,
+      )
+      null
+    }
+  }
 
 internal object InlineReviewPromptSections {
   const val REVIEW_DIRECTIVE: String =
