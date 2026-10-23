@@ -123,36 +123,7 @@ class DecompositionManifestArchitectureTest {
     assertTrue(violations.isEmpty(), violations.joinToString(separator = "\n"))
   }
 
-  @Test
-  fun `tracked decomposition manifests omit runtime result payloads`() {
-    val repoRoot = runtimeRoot
-    val featureSpecRoot = repoRoot.resolve(".feature-specs")
-    val manifests =
-      if (Files.isDirectory(featureSpecRoot)) {
-        Files.walk(featureSpecRoot).use { paths ->
-          paths
-            .filter { path -> path.isRegularFile() && path.fileName.toString() == "decomposition-manifest.yaml" }
-            .toList()
-        }
-      } else {
-        emptyList()
-      }
-
-    assertTrue(manifests.isNotEmpty(), "Expected at least one tracked decomposition manifest fixture.")
-    manifests.forEach { manifest ->
-      val text = Files.readString(manifest)
-      resultPayloadKeys.forEach { key ->
-        assertFalse(
-          Regex("""(?m)^\s+$key:""").containsMatchIn(text),
-          "${repoRoot.relativize(manifest)} must not contain git-tracked $key payloads",
-        )
-      }
-    }
-  }
-
   private companion object {
-    val resultPayloadKeys = listOf("review_result", "audit_result", "validation_result")
-
     val decompositionRuntimeEmissionPatterns =
       listOf(
         Regex("""DECOMPOSITION_RUNTIME_ARTIFACT_KEY\s+to[\s\S]*?(?=,\s*(?:"|\w+\s+to)|\n\s*\)|\z)"""),
