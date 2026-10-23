@@ -234,7 +234,7 @@ internal object DatabaseRuntime {
           if (ledgerVersion > latestVersion || desktopIdentityInstalled && !hasDesktopReadIdentity(connection)) {
             throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
           }
-          ledger.hasPendingWork(migrationNames)
+          ledger.hasPendingWork(migrations)
         }
       }
     if (pending) establishSchemaReadiness(path, diagnostics)

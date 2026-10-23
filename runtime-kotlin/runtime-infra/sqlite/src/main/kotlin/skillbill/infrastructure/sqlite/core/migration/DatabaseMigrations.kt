@@ -20,7 +20,7 @@ internal object DatabaseMigrations {
     migrationSet: List<DatabaseMigration> = migrations,
   ) {
     val ledger = MigrationLedger.readState(connection)
-    if (!ledger.hasPendingWork(migrationSet.map { migration -> migration.name })) return
+    if (!ledger.hasPendingWork(migrationSet)) return
     val dbPath = connection.databasePath()
 
     connection.inDatabaseTransaction(
@@ -39,6 +39,7 @@ internal object DatabaseMigrations {
           migration.apply(this, diagnostics)
           MigrationLedger.record(this, migration)
         }
+      MigrationLedger.alignVersions(this, migrationSet)
       val appliedAfter = MigrationLedger.appliedNames(this)
       val highestVersion =
         migrationSet.filter { migration -> migration.name in appliedAfter }.maxOfOrNull { migration ->

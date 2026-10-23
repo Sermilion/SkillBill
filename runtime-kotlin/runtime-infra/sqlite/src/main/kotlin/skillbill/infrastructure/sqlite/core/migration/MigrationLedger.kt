@@ -7,14 +7,17 @@ internal object MigrationLedger {
   class State(
     val tableExists: Boolean,
     val versionKeyed: Boolean,
-    val appliedNames: Set<String>,
+    val appliedVersions: Map<String, Int>,
   ) {
-    fun hasPendingWork(migrationNames: List<String>): Boolean =
+    val appliedNames: Set<String> get() = appliedVersions.keys
+
+    fun hasPendingWork(migrations: List<DatabaseMigration>): Boolean =
       when {
         !tableExists -> true
 
         versionKeyed -> true
-        else -> migrationNames.any { name -> name !in appliedNames }
+
+        else -> migrations.any { migration -> appliedVersions[migration.name] != migration.version }
       }
   }
 
@@ -23,7 +26,7 @@ internal object MigrationLedger {
     return State(
       tableExists = exists,
       versionKeyed = exists && versionIsPrimaryKey(connection),
-      appliedNames = if (exists) appliedNames(connection) else emptySet(),
+      appliedVersions = if (exists) appliedVersions(connection) else emptyMap(),
     )
   }
 
@@ -69,6 +72,20 @@ internal object MigrationLedger {
       }
     }
 
+  fun alignVersions(
+    connection: Connection,
+    migrations: List<DatabaseMigration>,
+  ) {
+    connection.prepareStatement(
+      "UPDATE schema_migrations SET version = ? WHERE name = ? AND version <> ?",
+    ).use { statement ->
+      migrations.forEach { migration ->
+        statement.bindAll(migration.version, migration.name, migration.version)
+        statement.executeUpdate()
+      }
+    }
+  }
+
   fun record(
     connection: Connection,
     migration: DatabaseMigration,
@@ -83,6 +100,17 @@ internal object MigrationLedger {
       statement.executeUpdate()
     }
   }
+
+  private fun appliedVersions(connection: Connection): Map<String, Int> =
+    connection.prepareStatement("SELECT name, version FROM schema_migrations").use { statement ->
+      statement.executeQuery().use { resultSet ->
+        buildMap {
+          while (resultSet.next()) {
+            put(resultSet.getString("name"), resultSet.getInt("version"))
+          }
+        }
+      }
+    }
 
   private fun tableExists(connection: Connection): Boolean =
     connection.prepareStatement(

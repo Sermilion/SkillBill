@@ -910,6 +910,35 @@ class DatabaseMigrationsTest {
   }
 
   @Test
+  fun `a migration renumbered after it was applied is realigned to its current version`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-renumbered-migration").resolve("metrics.db")
+    val latest = DatabaseMigrations.migrations.last()
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.prepareStatement("UPDATE schema_migrations SET version = 66 WHERE name = ?").use { statement ->
+        statement.setString(1, latest.name)
+        statement.executeUpdate()
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(
+        DatabaseMigrations.migrations.map { migration -> migration.version to migration.name },
+        migrationRows(connection).map { row -> row.version to row.name },
+        "Every ledger row must carry the version this build assigns to its migration.",
+      )
+      val highest =
+        connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT name FROM schema_migrations ORDER BY version DESC LIMIT 1").use { rows ->
+            rows.next()
+            rows.getString("name")
+          }
+        }
+      assertEquals(latest.name, highest, "The desktop reads the highest ledger row as the schema level.")
+      assertEquals(DesktopReadSchema.VERSION, latest.version)
+    }
+  }
+
+  @Test
   fun `an empty database with no ledger table migrates through the gated path`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-db-gate-empty").resolve("empty.db")
     DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
