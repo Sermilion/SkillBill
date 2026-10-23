@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path("/home/sermilion/StudioProjects/skill-bill")
 SOURCE_KINDS = ("main", "test", "testFixtures", "repoTest")
-SCAN_ROOTS = [REPO / "runtime-kotlin", REPO / "intellij-plugin"]
+SCAN_ROOTS = [REPO / "runtime-kotlin"]
 PKG_RE = re.compile(r"^package\s+([\w.]+)\s*", re.M)
 IMPORT_RE = re.compile(r"^import\s+([\w.]+(?:\.\*)?)\s*$", re.M)
 
@@ -512,14 +512,6 @@ def census_violations() -> list[str]:
                         continue
                     p = Path(dirpath) / f
                     m = PKG_RE.search(p.read_text(encoding="utf-8", errors="replace"))
-                    if m:
-                        counts[m.group(1)] += 1
-    plugin_main = REPO / "intellij-plugin/src/main/kotlin"
-    if plugin_main.is_dir():
-        for dirpath, _, files in os.walk(plugin_main):
-            for f in files:
-                if f.endswith(".kt"):
-                    m = PKG_RE.search((Path(dirpath) / f).read_text(encoding="utf-8", errors="replace"))
                     if m:
                         counts[m.group(1)] += 1
     violations = []

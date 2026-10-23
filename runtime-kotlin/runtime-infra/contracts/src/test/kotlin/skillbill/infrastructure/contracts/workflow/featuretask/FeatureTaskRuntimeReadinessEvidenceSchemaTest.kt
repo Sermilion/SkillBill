@@ -113,7 +113,7 @@ class FeatureTaskRuntimeReadinessEvidenceSchemaTest {
               FeatureTaskRuntimeReadinessCheckStatus.FAILED,
             ).toMutableMap().apply {
               this[ReadinessEvidencePayloadKeys.COMMAND] =
-                "(cd intellij-plugin && ./gradlew clean check --no-build-cache)"
+                "(cd desktop-tray && ./gradlew clean check --no-build-cache)"
             },
           ),
       )
