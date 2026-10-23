@@ -3,22 +3,25 @@ contract_version: "0.5"
 issue_key: "SKILL-434"
 feature_name: "per-project-phase-instruction-injection"
 parent_spec_path: ".feature-specs/SKILL-434-per-project-phase-instruction-injection/spec.md"
-status: "pending"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-434-per-project-phase-instruction-injection"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Phase instruction injection"
   spec_path: ".feature-specs/SKILL-434-per-project-phase-instruction-injection/spec_subtask_1_phase_instruction_injection.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261022-205536-mz9i"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []

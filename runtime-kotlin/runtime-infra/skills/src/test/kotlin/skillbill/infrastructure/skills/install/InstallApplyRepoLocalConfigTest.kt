@@ -27,6 +27,7 @@ class InstallApplyRepoLocalConfigTest : InstallApplyTestSupport() {
     val gitignoreContent = Files.readString(fixture.repoRoot.resolve(".gitignore"))
     assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == ".skill-bill/**" })
     assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == "!.skill-bill/config.yaml" })
+    assertSinglePhasesExceptions(gitignoreContent)
   }
 
   @Test
@@ -54,6 +55,24 @@ class InstallApplyRepoLocalConfigTest : InstallApplyTestSupport() {
       gitignoreContent.lines().count { line -> line.trim() == "!.skill-bill/config.yaml" },
       "re-install must not duplicate the config exception",
     )
+    assertSinglePhasesExceptions(gitignoreContent)
+  }
+
+  @Test
+  fun `apply adds the phases exceptions to a gitignore that only carries the older two lines`() {
+    val fixture = setupApplyFixture()
+    Files.createDirectories(fixture.home.resolve(".codex"))
+    val gitignorePath = fixture.repoRoot.resolve(".gitignore")
+    Files.writeString(gitignorePath, ".skill-bill/**\n!.skill-bill/config.yaml\n")
+    val plan = planInstallForTest(fixture.request(agents = setOf(SupportedAgent.CODEX)))
+
+    val result = applyInstallForTest(plan)
+
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    val gitignoreContent = Files.readString(gitignorePath)
+    assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == ".skill-bill/**" })
+    assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == "!.skill-bill/config.yaml" })
+    assertSinglePhasesExceptions(gitignoreContent)
   }
 
   @Test
@@ -72,5 +91,12 @@ class InstallApplyRepoLocalConfigTest : InstallApplyTestSupport() {
     assertContains(gitignoreContent, "*.log")
     assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == ".skill-bill/**" })
     assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == "!.skill-bill/config.yaml" })
+    assertSinglePhasesExceptions(gitignoreContent)
+  }
+
+  private fun assertSinglePhasesExceptions(gitignoreContent: String) {
+    listOf("!.skill-bill/phases/", "!.skill-bill/phases/**").forEach { exception ->
+      assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == exception }, exception)
+    }
   }
 }

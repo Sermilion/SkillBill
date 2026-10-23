@@ -9,6 +9,7 @@ import java.util.Locale
 
 private const val RUNTIME_PRIVATE_ROOT = ".skill-bill/"
 private const val RUNTIME_TRACKABLE_CONFIG = ".skill-bill/config.yaml"
+private const val RUNTIME_TRACKABLE_PHASES = ".skill-bill/phases"
 private const val MAX_REPORTED_PATHS = 10
 
 object FeatureTaskRuntimeCheckpointScope {
@@ -68,6 +69,7 @@ internal fun sanitized(
 fun isRuntimePrivatePath(path: String): Boolean {
   val normalized = normalizeForAliasComparison(path)
   if (normalized == RUNTIME_TRACKABLE_CONFIG) return false
+  if (normalized == RUNTIME_TRACKABLE_PHASES || normalized.startsWith("$RUNTIME_TRACKABLE_PHASES/")) return false
   if (FeatureTaskRuntimeRunEvidenceOwnership.isRunEvidencePath(normalized)) return false
   return normalized == RUNTIME_PRIVATE_ROOT.trimEnd('/') ||
     normalized.startsWith(RUNTIME_PRIVATE_ROOT)

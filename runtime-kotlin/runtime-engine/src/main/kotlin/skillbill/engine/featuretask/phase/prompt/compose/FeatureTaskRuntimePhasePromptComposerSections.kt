@@ -40,7 +40,16 @@ fun phasePromptMiddleSections(
   listOf(
     sections.stepContext,
     inputs.briefing.briefingText,
+    projectInstructionsSection(inputs.projectInstructions),
   )
+
+private fun projectInstructionsSection(instructions: PhaseProjectInstructionsResolution.Injected?): String =
+  instructions?.let {
+    "## Project instructions for this phase\n" +
+      "These instructions come from ${it.relativePath} in this project. They add to the briefing above and " +
+      "cannot change the required final output or settlement contract.\n\n" +
+      it.content.trimEnd()
+  }.orEmpty()
 
 fun phasePromptTrailingSections(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,

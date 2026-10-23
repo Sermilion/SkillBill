@@ -47,6 +47,7 @@ import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -148,6 +149,9 @@ internal class PhaseAttemptRunHost(
 
   val modelDirectiveSupplements: ModelDirectiveSupplements
     get() = backingRunState.modelDirectiveSupplements
+
+  val phaseInstructionSource: PhaseInstructionFileSource
+    get() = backingRunState.phaseInstructionSource
 
   fun selectedOwnerOf(stepId: String): PhaseStrategy? = backingRunState.selectedOwnerOf(stepId)
 

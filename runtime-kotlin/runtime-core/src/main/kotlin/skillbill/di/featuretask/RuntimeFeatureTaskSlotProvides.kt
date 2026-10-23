@@ -30,8 +30,10 @@ import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneRev
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
+import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
 import skillbill.model.EnvironmentContext
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
@@ -122,10 +124,19 @@ internal interface RuntimeFeatureTaskSlotProvides {
     PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings)
 
   @Provides
+  fun phaseInstructionFileSource(adapter: FileSystemPhaseInstructionFileSource): PhaseInstructionFileSource = adapter
+
+  @Provides
   fun phaseStrategyLookup(
     registry: PhaseStrategyRegistry,
     selection: PhaseStrategySelection,
     environmentContext: EnvironmentContext,
+    phaseInstructionSource: PhaseInstructionFileSource,
   ): PhaseStrategyLookup =
-    PhaseStrategyLookup(registry, selection, ModelDirectiveSupplementsSetting.resolve(environmentContext.environment))
+    PhaseStrategyLookup(
+      registry,
+      selection,
+      ModelDirectiveSupplementsSetting.resolve(environmentContext.environment),
+      phaseInstructionSource,
+    )
 }

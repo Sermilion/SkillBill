@@ -35,6 +35,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.review.model.ImportedFinding
 import skillbill.review.model.ImportedReview
@@ -87,6 +88,8 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
   override val modelDirectiveSupplements: ModelDirectiveSupplements get() = strategies.modelDirectiveSupplements
+
+  override val phaseInstructionSource: PhaseInstructionFileSource get() = strategies.phaseInstructionSource
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 

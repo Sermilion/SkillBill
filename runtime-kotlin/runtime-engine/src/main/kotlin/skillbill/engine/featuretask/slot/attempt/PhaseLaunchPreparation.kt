@@ -1,9 +1,11 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.application.decomposition.baseBranch
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseProjectInstructionsRecord
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
@@ -13,6 +15,8 @@ import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructions
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseProjectInstructionsResolution
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
@@ -288,13 +292,21 @@ object PhaseLaunchPreparation {
           measurementContext,
         )
       }
-      val briefing = (assembly as FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted).briefing
+      val assembledBriefing = (assembly as FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted).briefing
+      val projectInstructions = resolveProjectInstructions(context, run, assembledBriefing.phaseId)
+      val briefing =
+        projectInstructions?.let {
+          assembledBriefing.copy(
+            projectInstructions = FeatureTaskRuntimePhaseProjectInstructionsRecord(it.relativePath, it.sha256),
+          )
+        } ?: assembledBriefing
       recordLaunchBriefing(context, args, briefing, sharedEvidence)?.let { return it }
       val inputs =
         PhaseLaunchPreparation
           .run { context.composeLaunchPromptInputs(args, handoff, briefing) }
           .copy(
             phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
+            projectInstructions = projectInstructions,
           )
       return PreparedLaunchReady(
         PreparedLaunch(
@@ -303,6 +315,27 @@ object PhaseLaunchPreparation {
         ),
       )
     }
+  }
+
+  private fun resolveProjectInstructions(
+    context: PhaseAttemptLaunchPreparationContext,
+    run: PhaseRun,
+    phaseId: String,
+  ): PhaseProjectInstructionsResolution.Injected? {
+    val outcome = PhaseProjectInstructions.resolve(context.phaseInstructionSource, run.request.repoRoot, phaseId)
+    outcome.skipped.forEach { skipped ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        context.diagnostics,
+        "Warning: project phase instructions '${skipped.relativePath}' skipped: ${skipped.reason}; " +
+          "the run continues.",
+      )
+    }
+    outcome.injected?.let { injected ->
+      context.diagnostics.info(
+        "Project phase instructions injected: ${injected.relativePath} sha256=${injected.sha256}",
+      )
+    }
+    return outcome.injected
   }
 
   private fun recordLaunchBriefing(
