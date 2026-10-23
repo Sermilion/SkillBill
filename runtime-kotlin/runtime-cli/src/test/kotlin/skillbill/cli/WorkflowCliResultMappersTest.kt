@@ -26,8 +26,6 @@ import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffH
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Files
-import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -87,12 +85,7 @@ class WorkflowCliResultMappersTest {
         WorkflowWireProjections.updateAcknowledgementMap(acknowledgement).toPayload(),
       ) + "\n"
     val expected =
-      Files.readAllBytes(
-        cliCompatibilityRepositoryRoot().resolve(
-          ".feature-specs/done/SKILL-351-runtime-domain-boundaries-and-simplicity/" +
-            "baselines/workflow-update-ack-wire.json",
-        ),
-      )
+      requireNotNull(javaClass.getResourceAsStream("/baselines/workflow-update-ack-wire.json")).use { it.readBytes() }
 
     assertEquals(expected.toList(), actual.toByteArray().toList())
   }
@@ -400,13 +393,4 @@ class WorkflowCliResultMappersTest {
       goalObservability =
         goalObservabilityLatestEventFromArtifacts(snapshot.artifacts),
     )
-}
-
-private fun cliCompatibilityRepositoryRoot(): Path {
-  var current: Path? = Path.of("").toAbsolutePath().normalize()
-  while (current != null) {
-    if (Files.exists(current.resolve(".git"))) return current
-    current = current.parent
-  }
-  error("Repository root is not available from the test working directory.")
 }
