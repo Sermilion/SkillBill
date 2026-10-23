@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -15,12 +16,14 @@ class InstallApplyRepoLocalConfigTest : InstallApplyTestSupport() {
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".codex"))
     val plan = planInstallForTest(fixture.request(agents = setOf(SupportedAgent.CODEX)))
+    val projectStore = newProjectStore()
 
-    val result = applyInstallForTest(plan)
+    val result = applyInstallForTest(plan, projectStore = projectStore)
 
     assertEquals(InstallApplyStatus.SUCCESS, result.status)
-    val configPath = fixture.repoRoot.resolve(".skill-bill/config.yaml")
-    assertTrue(Files.exists(configPath), "install should scaffold the repo-local config")
+    val configPath = projectStore.resolve(fixture.repoRoot).configPath
+    assertTrue(Files.exists(configPath), "install should scaffold the repo-local config in the project store")
+    assertFalse(Files.exists(fixture.repoRoot.resolve(".skill-bill/config.yaml")))
     val configContent = Files.readString(configPath)
     assertContains(configContent, "spec_type: local")
     assertFalse(configContent.contains("code_review_parallel_agent"))
@@ -35,12 +38,13 @@ class InstallApplyRepoLocalConfigTest : InstallApplyTestSupport() {
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".codex"))
     val plan = planInstallForTest(fixture.request(agents = setOf(SupportedAgent.CODEX)))
-    applyInstallForTest(plan)
-    val configPath = fixture.repoRoot.resolve(".skill-bill/config.yaml")
+    val projectStore = newProjectStore()
+    applyInstallForTest(plan, projectStore = projectStore)
+    val configPath = projectStore.resolve(fixture.repoRoot).configPath
     val userEdited = "spec_type: linear\ncode_review_parallel_agent: claude\n"
     Files.writeString(configPath, userEdited)
 
-    val second = applyInstallForTest(plan)
+    val second = applyInstallForTest(plan, projectStore = projectStore)
 
     assertEquals(InstallApplyStatus.SUCCESS, second.status)
     assertEquals(userEdited, Files.readString(configPath), "re-install must not clobber a user-edited config")
@@ -56,6 +60,27 @@ class InstallApplyRepoLocalConfigTest : InstallApplyTestSupport() {
       "re-install must not duplicate the config exception",
     )
     assertSinglePhasesExceptions(gitignoreContent)
+  }
+
+  @Test
+  fun `apply leaves the store config absent when a legacy checkout config exists`() {
+    val fixture = setupApplyFixture()
+    Files.createDirectories(fixture.home.resolve(".codex"))
+    val legacyConfig = fixture.repoRoot.resolve(".skill-bill/config.yaml")
+    Files.createDirectories(legacyConfig.parent)
+    val legacyContent = "spec_type: linear\n"
+    Files.writeString(legacyConfig, legacyContent)
+    val plan = planInstallForTest(fixture.request(agents = setOf(SupportedAgent.CODEX)))
+    val projectStore = newProjectStore()
+
+    val result = applyInstallForTest(plan, projectStore = projectStore)
+
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    assertFalse(
+      Files.exists(projectStore.resolve(fixture.repoRoot).configPath),
+      "install must not scaffold defaults that would shadow the legacy config's one-time copy",
+    )
+    assertEquals(legacyContent, Files.readString(legacyConfig))
   }
 
   @Test
@@ -93,6 +118,9 @@ class InstallApplyRepoLocalConfigTest : InstallApplyTestSupport() {
     assertEquals(1, gitignoreContent.lines().count { line -> line.trim() == "!.skill-bill/config.yaml" })
     assertSinglePhasesExceptions(gitignoreContent)
   }
+
+  private fun newProjectStore(): FixedProjectStorePort =
+    FixedProjectStorePort(Files.createTempDirectory("skillbill-install-apply-store").also(tempDirs::add))
 
   private fun assertSinglePhasesExceptions(gitignoreContent: String) {
     listOf("!.skill-bill/phases/", "!.skill-bill/phases/**").forEach { exception ->

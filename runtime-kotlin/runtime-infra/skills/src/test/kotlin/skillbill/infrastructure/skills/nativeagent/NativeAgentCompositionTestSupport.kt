@@ -11,13 +11,16 @@ import skillbill.infrastructure.skills.nativeagent.platformpack.InstallNativeAge
 import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoredContentBody
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
+import java.nio.file.Files
 import java.nio.file.Path
 
 internal fun testNativeAgentCompositionContext(repoRoot: Path): NativeAgentCompositionContext {
   val normalizedRoot = repoRoot.toAbsolutePath().normalize()
+  val projectStore = FixedProjectStorePort(Files.createTempDirectory("skillbill-native-agent-store"))
   val budget =
     runCatching {
-      FileSystemRepoLocalConfig(NoopRuntimeDiagnostics)
+      FileSystemRepoLocalConfig(NoopRuntimeDiagnostics, projectStore)
         .readRepoLocalConfig(ReadRepoLocalConfigRequest(normalizedRoot))
         .config
         .reviewContextBudget

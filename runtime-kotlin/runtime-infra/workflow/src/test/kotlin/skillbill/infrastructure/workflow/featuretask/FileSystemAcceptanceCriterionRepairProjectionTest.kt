@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.featuretask
 import org.junit.jupiter.api.io.TempDir
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
@@ -23,9 +24,23 @@ import kotlin.test.assertTrue
 class FileSystemAcceptanceCriterionRepairProjectionTest {
   @TempDir lateinit var root: Path
 
+  @TempDir lateinit var storeRoot: Path
+
+  private val projectStore by lazy { FixedProjectStorePort(storeRoot) }
+
+  @Test
+  fun `projection is written beneath the project store and never into the checkout`() {
+    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics, projectStore)
+
+    projector.write(request(state()))
+
+    assertTrue(target().startsWith(storeRoot.resolve("acceptance-repair")))
+    assertTrue(Files.notExists(root.resolve(".skill-bill")))
+  }
+
   @Test
   fun `older recovery and conflicting same revision cannot replace an accepted projection`() {
-    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics)
+    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics, projectStore)
     val initial = state()
     val newer = assertNotNull(initial.reserve("reservation-1"))
     projector.write(request(newer))
@@ -53,7 +68,7 @@ class FileSystemAcceptanceCriterionRepairProjectionTest {
           warnings += message
         }
       }
-    val projector = FileSystemAcceptanceCriterionRepairProjection(diagnostics)
+    val projector = FileSystemAcceptanceCriterionRepairProjection(diagnostics, projectStore)
     val committed = state()
     projector.write(request(committed))
     val target = target()
@@ -67,7 +82,7 @@ class FileSystemAcceptanceCriterionRepairProjectionTest {
 
   @Test
   fun `local projection lock contention reports recoverable IO failure without leaking a temporary file`() {
-    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics)
+    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics, projectStore)
     val committed = state()
     projector.write(request(committed))
     val target = target()
@@ -113,12 +128,12 @@ class FileSystemAcceptanceCriterionRepairProjectionTest {
     AcceptanceCriterionRepairProjectionRequest(root, "workflow-1", state)
 
   private fun target(): Path =
-    Files.list(root.resolve(".skill-bill/acceptance-repair")).use { files ->
+    Files.list(storeRoot.resolve("acceptance-repair")).use { files ->
       files.filter { it.fileName.toString().endsWith(".json") }.findFirst().orElseThrow()
     }
 
   private fun assertNoTemporaryFiles() =
-    Files.list(root.resolve(".skill-bill/acceptance-repair")).use { files ->
+    Files.list(storeRoot.resolve("acceptance-repair")).use { files ->
       assertEquals(0L, files.filter { it.fileName.toString().endsWith(".tmp") }.count())
     }
 }

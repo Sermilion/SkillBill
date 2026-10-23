@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.artifact
 private const val SAFE_SEGMENT_PUNCTUATION: String = "._-"
 
 object FeatureTaskRuntimeRunEvidenceAddress {
-  const val STORE_ROOT: String = ".skill-bill/run-evidence"
+  const val STORE_ROOT: String = "run-evidence"
 
   fun pathSegment(raw: String): String {
     val sanitized =

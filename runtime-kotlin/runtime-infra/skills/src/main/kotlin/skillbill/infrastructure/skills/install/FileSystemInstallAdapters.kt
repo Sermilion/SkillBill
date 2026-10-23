@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.infrastructure.skills.install.apply.InstallApplyPorts
 import skillbill.infrastructure.skills.install.apply.InstallCleanupOperations
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
@@ -66,6 +67,7 @@ import skillbill.ports.install.reconcile.model.InstallReconcileApplyRequest
 import skillbill.ports.install.reconcile.model.InstallReconcileApplyResult
 import skillbill.ports.install.reconcile.model.InstallReconcileRequest
 import skillbill.ports.install.reconcile.model.InstallReconcileResult
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOverrides as FsNativeAgentLinkOverrides
@@ -196,6 +198,7 @@ class FileSystemInstallReconcileApply(
 class FileSystemInstallApplyExecution(
   private val telemetryConfigStore: TelemetryConfigStore,
   private val installMcpRegistrationPort: InstallMcpRegistrationPort,
+  private val projectStore: ProjectStorePort,
   private val catalogLoader: PlatformPackCatalogLoader,
 ) : InstallApplyExecutionPort {
   override fun applyInstall(request: InstallApplyExecutionRequest): InstallApplyExecutionResult =
@@ -204,9 +207,12 @@ class FileSystemInstallApplyExecution(
         InstallOperations.applyInstall(
           request.plan,
           request.telemetryLevelMutator,
-          telemetryConfigStore,
-          installMcpRegistrationPort,
-          catalogLoader,
+          InstallApplyPorts(
+            mcpRegistrationPort = installMcpRegistrationPort,
+            projectStore = projectStore,
+            telemetryConfigStore = telemetryConfigStore,
+            catalogLoader = catalogLoader,
+          ),
         ),
     )
 }

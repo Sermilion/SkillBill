@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import skillbill.infrastructure.host.FileTelemetryConfigStore
+import skillbill.infrastructure.skills.install.apply.InstallApplyPorts
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.infrastructure.skills.install.runtime.InstallOperations
 import skillbill.install.model.InstallApplyResult
@@ -14,7 +15,10 @@ import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationResult
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
+import java.nio.file.Files
 
 internal val installTestWireValidator: InstallPlanWireValidator = InstallPlanSchemaValidator()
 
@@ -49,6 +53,7 @@ internal fun planInstallForTest(request: InstallPlanRequest): InstallPlan =
 internal fun applyInstallForTest(
   plan: InstallPlan,
   telemetryLevelMutator: TelemetryLevelMutator? = null,
+  projectStore: ProjectStorePort = FixedProjectStorePort(Files.createTempDirectory("skillbill-install-store")),
 ): InstallApplyResult {
   val environment = plan.request.environment.ifEmpty { installTestEnvironment(plan.request.home.toPath()) }
   val environmentContext =
@@ -59,7 +64,10 @@ internal fun applyInstallForTest(
   return InstallOperations.applyInstall(
     plan,
     telemetryLevelMutator,
-    FileTelemetryConfigStore(environmentContext),
-    InstallTestMcpRegistrationPort(environment),
+    InstallApplyPorts(
+      mcpRegistrationPort = InstallTestMcpRegistrationPort(environment),
+      projectStore = projectStore,
+      telemetryConfigStore = FileTelemetryConfigStore(environmentContext),
+    ),
   )
 }

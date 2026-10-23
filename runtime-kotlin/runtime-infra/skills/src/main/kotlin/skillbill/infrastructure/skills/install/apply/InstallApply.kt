@@ -23,6 +23,7 @@ import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.model.toPath
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
@@ -31,11 +32,10 @@ import java.nio.file.Path
 
 internal fun applyInstallPlan(
   plan: InstallPlan,
-  telemetryLevelMutator: TelemetryLevelMutator? = null,
-  telemetryConfigStore: TelemetryConfigStore? = null,
-  mcpRegistrationPort: InstallMcpRegistrationPort,
-  catalogLoader: PlatformPackCatalogLoader? = null,
+  telemetryLevelMutator: TelemetryLevelMutator?,
+  ports: InstallApplyPorts,
 ): InstallApplyResult {
+  val catalogLoader = ports.catalogLoader
   val warnings = mutableListOf<InstallApplyIssue>()
   val failures = mutableListOf<InstallApplyIssue>()
   val windowsOutcome = windowsSymlinkApplyOutcome(plan)
@@ -62,7 +62,7 @@ internal fun applyInstallPlan(
   }
   val nativeAgents =
     if (failures.isEmpty()) {
-      applyRepoLocalConfigScaffold(plan, warnings)
+      applyRepoLocalConfigScaffold(plan, ports.projectStore, warnings)
       applyNativeAgents(plan, failures, catalogLoader)
     } else {
       emptyList()
@@ -70,13 +70,13 @@ internal fun applyInstallPlan(
   val finalWindowsOutcome = windowsOutcome.withSymlinkFailureState(failures)
   val telemetryOutcome =
     if (failures.isEmpty()) {
-      applyTelemetryIntent(plan, warnings, telemetryLevelMutator, telemetryConfigStore)
+      applyTelemetryIntent(plan, warnings, telemetryLevelMutator, ports.telemetryConfigStore)
     } else {
       skippedTelemetryOutcome(plan, "Skipped because install apply failed.")
     }
   val mcpRegistrationOutcomes =
     if (failures.isEmpty()) {
-      applyMcpRegistrationIntent(plan, warnings, mcpRegistrationPort)
+      applyMcpRegistrationIntent(plan, warnings, ports.mcpRegistrationPort)
     } else {
       skippedMcpRegistrationOutcomes(plan, "Skipped because install apply failed.")
     }
@@ -93,6 +93,13 @@ internal fun applyInstallPlan(
     mcpRegistrationIntent = plan.mcpRegistrationIntent,
   )
 }
+
+class InstallApplyPorts(
+  val mcpRegistrationPort: InstallMcpRegistrationPort,
+  val projectStore: ProjectStorePort,
+  val telemetryConfigStore: TelemetryConfigStore? = null,
+  val catalogLoader: PlatformPackCatalogLoader? = null,
+)
 
 private fun collectWindowsSymlinkIssues(
   plan: InstallPlan,

@@ -15,6 +15,7 @@ import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.model.GoalPurgeTarget
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.model.implementationChecklistDirectory
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -37,6 +38,7 @@ class GoalRunnerPurgeCoordinator(
   private val database: DatabaseSessionFactory,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val goalStateFiles: GoalRuntimeStateFileStore,
+  private val projectStore: ProjectStorePort,
 ) {
   private val specBundleReset = GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator)
 
@@ -180,14 +182,14 @@ class GoalRunnerPurgeCoordinator(
     repoRoot: Path,
     target: GoalPurgeTarget,
   ): List<Path> {
-    val root = repoRoot.normalize()
+    val storeRoot = projectStore.resolve(repoRoot).root.toAbsolutePath().normalize()
     return target.workflowIds.sorted().flatMap { workflowId ->
       listOf(
         implementationChecklistDirectory(workflowId),
         FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot(workflowId),
       ).map { relative ->
-        repoRoot.resolve(relative).normalize().also { resolved ->
-          require(resolved.startsWith(root)) { "Owned runtime directory '$relative' escapes the repository root." }
+        storeRoot.resolve(relative).normalize().also { resolved ->
+          require(resolved.startsWith(storeRoot)) { "Owned runtime directory '$relative' escapes the project store." }
         }
       }
     }

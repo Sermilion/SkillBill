@@ -10,7 +10,7 @@
             "aggregate_counters": {
                 "evidence_bytes": 0,
                 "expansions": 0,
-                "launch_bytes": 2247,
+                "launch_bytes": 2235,
                 "model_turns": 1,
                 "result_bytes": 193,
                 "tool_calls": 0
@@ -52,7 +52,7 @@
                     "inclusive_counters": {
                         "evidence_bytes": 0,
                         "expansions": 0,
-                        "launch_bytes": 2247,
+                        "launch_bytes": 2235,
                         "model_turns": 1,
                         "result_bytes": 193,
                         "tool_calls": 0
@@ -65,7 +65,7 @@
                         {
                             "composition_digest": "__NORMALIZED_SHA64__",
                             "entry_count": 1,
-                            "measured_bytes": 10547,
+                            "measured_bytes": 10535,
                             "segment_id": "seg-000"
                         }
                     ],
@@ -80,20 +80,20 @@
                     "inclusive_counters": {
                         "evidence_bytes": 0,
                         "expansions": 0,
-                        "launch_bytes": 2247,
+                        "launch_bytes": 2235,
                         "model_turns": 1,
                         "result_bytes": 193,
                         "tool_calls": 0
                     },
                     "lane": "claude",
-                    "launch_bytes": 2247,
+                    "launch_bytes": 2235,
                     "model_turns": 1,
                     "result_bytes": 193,
                     "segment_accounting": [
                         {
                             "composition_digest": "__NORMALIZED_SHA64__",
                             "entry_count": 1,
-                            "measured_bytes": 10547,
+                            "measured_bytes": 10535,
                             "segment_id": "seg-000"
                         }
                     ],
@@ -109,7 +109,7 @@
                 "inclusive_counters": {
                     "evidence_bytes": 0,
                     "expansions": 0,
-                    "launch_bytes": 2247,
+                    "launch_bytes": 2235,
                     "model_turns": 1,
                     "result_bytes": 193,
                     "tool_calls": 0

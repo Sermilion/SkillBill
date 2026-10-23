@@ -1,12 +1,17 @@
 package skillbill.cli
 
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
+import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
 
 private const val CODEX_HOME_ENV = "CODEX_HOME"
 private const val GOAL_CONTINUATION_ENV = "SKILL_BILL_GOAL_CONTINUATION"
 private val DATABASE_PATH_ENV = RuntimeDatabaseEnvironmentKeys.DATABASE_PATH
+
+internal fun isolatedProjectStoreEnvironment(): Map<String, String> =
+  isolatedCliEnvironment() +
+    (STATE_DIR_ENVIRONMENT_KEY to Files.createTempDirectory("skillbill-cli-state").toString())
 
 internal fun isolatedCliEnvironment(home: Path? = null): Map<String, String> {
   val filtered =

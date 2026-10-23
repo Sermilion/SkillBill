@@ -41,7 +41,7 @@ class CliRunInputsRuntimeTest {
         CliRuntimeContext(
           repositoryRoot = repoRoot,
           userHome = repoRoot,
-          environment = emptyMap(),
+          environment = isolatedProjectStoreEnvironment(),
         ),
       )
 
@@ -65,7 +65,7 @@ class CliRunInputsRuntimeTest {
           CliRuntimeContext(
             repositoryRoot = embeddingRoot,
             userHome = embeddingRoot,
-            environment = emptyMap(),
+            environment = isolatedProjectStoreEnvironment(),
           ),
         )
 

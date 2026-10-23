@@ -5,6 +5,7 @@ import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.infrastructure.skills.install.FileSystemInstalledPlatformPackCatalog
+import skillbill.infrastructure.skills.install.apply.InstallApplyPorts
 import skillbill.infrastructure.skills.install.apply.currentNativeAgentApplyCacheRoot
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.infrastructure.skills.install.runtime.InstallOperations
@@ -32,6 +33,7 @@ import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationResult
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.model.ReviewNativeAgentPreflightRequest
 import skillbill.testing.seedConformingPlatformPack
@@ -233,9 +235,13 @@ class FileSystemReviewNativeAgentPreflightTest {
     val plan = InstallOperations.planInstall(installRequest(fixture, agent, environment), InstallPlanSchemaValidator())
     return InstallOperations.applyInstall(
       plan,
-      telemetryConfigStore =
-        FileTelemetryConfigStore(EnvironmentContext(userHome = fixture.home, environment = environment)),
-      mcpRegistrationPort = TestMcpRegistrationPort(environment),
+      ports =
+        InstallApplyPorts(
+          mcpRegistrationPort = TestMcpRegistrationPort(environment),
+          projectStore = FixedProjectStorePort(Files.createTempDirectory("skillbill-preflight-store")),
+          telemetryConfigStore =
+            FileTelemetryConfigStore(EnvironmentContext(userHome = fixture.home, environment = environment)),
+        ),
     )
   }
 

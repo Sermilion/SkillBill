@@ -1,5 +1,17 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-10-23] SKILL-441 subtask 3: runtime state relocation into the project store
+Areas: runtime-infra/host (repo-local config), runtime-infra/skills (install), runtime-infra/workflow (evidence, checklist, repair), runtime-engine (run evidence, goal purge), runtime-domain, runtime-ports (incl. testFixtures), runtime-cli
+- Repo-local config reads and writes the store `configPath` through ProjectStorePort. A legacy checkout `.skill-bill/config.yaml` is copied once, atomically (LegacyRepoLocalConfigCopy); after that the legacy file is ignored and never modified. A failed copy falls back to the legacy file with a legacy_config_copy_failed diagnostic. Install scaffolds the default config in the store.
+- Run-evidence addresses are store-relative (`run-evidence/...`) and resolve against the store root. References still carrying the legacy `.skill-bill/run-evidence/` prefix stay readable from the checkout, read-only. Both branches are containment-checked. Engine ownership and checkpoint filtering stay anchored on the legacy checkout prefix.
+- Feature-task tracking (`feature-task-tracking`) and acceptance-repair projection live under the store (`acceptanceRepairRoot`). The checklist store exposes `checklistPath` so the agent briefing gets an absolute path. Legacy tracking and repair data are not migrated.
+- GoalRunnerPurgeCoordinator takes ProjectStorePort and deletes only directories under the store root, with a containment check; the checkout `.skill-bill` is never touched.
+- Reusable: FixedProjectStorePort (runtime-ports testFixtures) injects a temp store into tests; InstallApplyPorts parameter object groups install-apply ports (declared in InstallApply.kt because a new file breaks the 12-file sibling ceiling for `install.apply`).
+- Tests that hardcoded `.skill-bill/...` now inject a temp store; CLI tests use an isolated SKILL_BILL_STATE_DIR. Slot-baseline fixtures were regenerated because prompts lost the `.skill-bill/` prefix (12 bytes shorter).
+- Limits: in-flight goals start fresh tracking and repair state in the store. packagedDataSmoke was not run locally (dirty tree) and is left to PR CI.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-23] SKILL-441 subtask 2: legacy path owner and legacy state notice
 Areas: runtime-infra/host (projectstore), runtime-infra/workflow (scoped staging), runtime-infra/contracts repoTest, runtime-contracts, runtime-domain, runtime-engine, orchestration/contracts
 - LegacyProjectStatePaths (runtime-contracts projectstore) is now the single owner of the `.skill-bill` and `.feature-specs` directory names and their slash prefixes. Planning exclusions, checkpoint scope, worktree edit journal, goal tick progress, run loop, PR review fix and scoped staging read it instead of private literals.

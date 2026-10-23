@@ -152,6 +152,7 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
@@ -229,6 +230,7 @@ import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.
 import java.lang.Boolean.TYPE
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
@@ -1555,7 +1557,10 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
   sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort = DERIVING_SHARED_EVIDENCE_RESOLVER,
   diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
   implementationChecklistStore: FeatureTaskImplementationChecklistStore =
-    FileSystemFeatureTaskImplementationChecklistStore(NoopRuntimeDiagnostics),
+    FileSystemFeatureTaskImplementationChecklistStore(
+      NoopRuntimeDiagnostics,
+      FixedProjectStorePort(Files.createTempDirectory("skillbill-runner-store")),
+    ),
   commitPushManifestCompletion: CommitPushManifestCompletion = NoopCommitPushManifestCompletion,
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,

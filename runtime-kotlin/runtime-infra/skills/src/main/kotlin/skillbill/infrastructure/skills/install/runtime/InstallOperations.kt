@@ -1,19 +1,17 @@
 package skillbill.infrastructure.skills.install.runtime
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
+import skillbill.infrastructure.skills.install.apply.InstallApplyPorts
 import skillbill.infrastructure.skills.install.apply.applyInstallPlan
 import skillbill.infrastructure.skills.install.plan.buildInstallPlan
 import skillbill.infrastructure.skills.install.plan.detectAgents
 import skillbill.infrastructure.skills.install.plan.resolveInstallEnvironment
 import skillbill.infrastructure.skills.install.plan.resolveInstallHome
-import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallApplyResult
 import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanRequest
 import skillbill.ports.install.InstallPlanWireValidator
-import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.system.HostPlatformPort
-import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import java.nio.file.Path
 import skillbill.infrastructure.skills.install.plan.codexAgentsPath as planCodexAgentsPath
@@ -27,17 +25,8 @@ object InstallOperations {
   fun applyInstall(
     plan: InstallPlan,
     telemetryLevelMutator: TelemetryLevelMutator? = null,
-    telemetryConfigStore: TelemetryConfigStore? = null,
-    mcpRegistrationPort: InstallMcpRegistrationPort,
-    catalogLoader: PlatformPackCatalogLoader? = null,
-  ): InstallApplyResult =
-    applyInstallPlan(
-      plan,
-      telemetryLevelMutator,
-      telemetryConfigStore,
-      mcpRegistrationPort,
-      catalogLoader,
-    )
+    ports: InstallApplyPorts,
+  ): InstallApplyResult = applyInstallPlan(plan, telemetryLevelMutator, ports)
 
   fun agentPath(
     agent: String,

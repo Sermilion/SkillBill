@@ -48,7 +48,6 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
-import skillbill.ports.taskruntime.model.implementationChecklistRelativePath
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -470,11 +469,14 @@ object PhaseLaunchPreparation {
       singleAgentSession = run.policy.singleAgentSession,
       repoRoot = run.request.repoRoot,
       stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
-      implementationChecklistAddress =
-        implementationChecklistRelativePath(run.request.workflowId)
-          .takeIf { run.request.workflowId.isNotBlank() },
+      implementationChecklistAddress = implementationChecklistAddress(run),
     )
   }
+
+  private fun PhaseAttemptLaunchPreparationContext.implementationChecklistAddress(run: PhaseRun): String? =
+    run.request.workflowId.takeIf(String::isNotBlank)?.let { workflowId ->
+      implementationChecklistStore?.checklistPath(run.request.repoRoot, workflowId)?.toString()
+    }
 
   private fun PhaseAttemptLaunchPreparationContext.launchReviewTierFor(
     run: PhaseRun,

@@ -1,21 +1,24 @@
 package skillbill.infrastructure.skills.install.apply
 
 import skillbill.config.model.RepoLocalConfigKey
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.error.core.failureCodeLabel
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
 import skillbill.model.toPath
+import skillbill.ports.projectstore.ProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 
 internal fun applyRepoLocalConfigScaffold(
   plan: InstallPlan,
+  projectStore: ProjectStorePort,
   warnings: MutableList<InstallApplyIssue>,
 ) {
   val repoRoot = plan.request.repoRoot.toPath().toAbsolutePath().normalize()
   scaffoldStep(InstallApplyIssueKind.REPO_LOCAL_CONFIG_SCAFFOLD_FAILED, warnings) {
-    writeDefaultConfigIfAbsent(repoRoot)
+    writeDefaultConfigIfAbsent(projectStore.resolve(repoRoot).configPath, legacyConfigPath(repoRoot))
   }
   scaffoldStep(InstallApplyIssueKind.REPO_LOCAL_CONFIG_SCAFFOLD_FAILED, warnings) {
     appendGitignoreEntryIfAbsent(repoRoot)
@@ -38,15 +41,20 @@ private inline fun scaffoldStep(
   }
 }
 
-private fun writeDefaultConfigIfAbsent(repoRoot: Path): Path {
-  val configPath = repoRoot.resolve(".skill-bill").resolve("config.yaml")
-  if (Files.exists(configPath)) {
+private fun writeDefaultConfigIfAbsent(
+  configPath: Path,
+  legacyConfigPath: Path,
+): Path {
+  if (Files.exists(configPath) || Files.isRegularFile(legacyConfigPath)) {
     return configPath
   }
   Files.createDirectories(configPath.parent)
   Files.writeString(configPath, defaultConfigContent())
   return configPath
 }
+
+private fun legacyConfigPath(repoRoot: Path): Path =
+  repoRoot.resolve(LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY).resolve(REPO_LOCAL_CONFIG_FILE_NAME)
 
 private fun defaultConfigContent(): String =
   RepoLocalConfigKey.entries
@@ -89,6 +97,7 @@ private fun appendLines(
     }
   }
 
+private const val REPO_LOCAL_CONFIG_FILE_NAME = "config.yaml"
 private const val GITIGNORE_RUNTIME_STATE = ".skill-bill/**"
 private const val GITIGNORE_CONFIG_EXCEPTION = "!.skill-bill/config.yaml"
 private const val GITIGNORE_PHASES_DIR_EXCEPTION = "!.skill-bill/phases/"

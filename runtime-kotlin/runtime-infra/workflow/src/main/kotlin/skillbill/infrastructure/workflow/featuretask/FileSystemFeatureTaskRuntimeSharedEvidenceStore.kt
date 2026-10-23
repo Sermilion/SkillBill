@@ -2,12 +2,14 @@ package skillbill.infrastructure.workflow.featuretask
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorUnreadableError
 import skillbill.infrastructure.host.jvm.deleteRecursively
 import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.host.jvm.replaceDirectory
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceDeriver
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
@@ -42,8 +44,9 @@ internal const val SHARED_EVIDENCE_ENVELOPE_FILE: String = "evidence.json"
 internal const val SHARED_EVIDENCE_PAYLOAD_FILE: String = "diff.patch"
 
 @Inject
-open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
-  FeatureTaskRuntimeSharedEvidenceResolverPort,
+open class FileSystemFeatureTaskRuntimeSharedEvidenceStore(
+  private val projectStore: ProjectStorePort,
+) : FeatureTaskRuntimeSharedEvidenceResolverPort,
   FeatureTaskRuntimeSharedEvidenceLocatorReadPort {
   private val mapper: ObjectMapper by lazy { ObjectMapper() }
 
@@ -52,8 +55,9 @@ open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
     deriver: FeatureTaskRuntimeSharedEvidenceDeriver,
   ): FeatureTaskRuntimeSharedEvidenceResolution? {
     val fingerprint = request.checkpoint.fingerprint
-    val artifactDir = artifactDir(request)
-    val storePath = storePath(request.repoRoot, artifactDir)
+    val storeRoot = projectStore.resolve(request.repoRoot).root
+    val artifactDir = artifactDir(storeRoot, request)
+    val storePath = storePath(storeRoot, artifactDir)
     readStored(mapper, artifactDir, fingerprint, request.workflowId, storePath)?.let {
       return it.copy(storePath = storePath, outcome = FeatureTaskRuntimeSharedEvidenceResolveOutcome.REUSE)
     }
@@ -70,16 +74,15 @@ open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
 
   override fun readDiffPayload(request: FeatureTaskRuntimeSharedEvidenceLocatorReadRequest): String {
     val repoRoot = request.repoRoot.toAbsolutePath().normalize()
-    val artifactDir = repoRoot.resolve(request.storePath).normalize()
-    val storeRoot = repoRoot.resolve(".skill-bill").resolve("run-evidence").normalize()
-    if (!pathContainedIn(artifactDir, storeRoot) || !Files.isDirectory(artifactDir)) {
+    val evidence = resolveEvidencePath(repoRoot, request.storePath)
+    val artifactDir = evidence.artifactDir
+    if (!pathContainedIn(artifactDir, evidence.evidenceRoot) || !Files.isDirectory(artifactDir)) {
       throw reviewHunkEvidenceLocatorMissingError(request.storePath)
     }
     val fingerprint = artifactDir.fileName.toString()
     val workflowId = artifactDir.parent.fileName.toString()
-    val publishedPath = storePath(request.repoRoot, artifactDir)
     val stored =
-      readStored(mapper, artifactDir, fingerprint, workflowId, publishedPath)
+      readStored(mapper, artifactDir, fingerprint, workflowId, request.storePath)
         ?: throw reviewHunkEvidenceLocatorUnreadableError(
           request.storePath,
           "stored artifact is missing, truncated, or unreadable",
@@ -90,6 +93,23 @@ open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
     }
     return stored.diffPayload
   }
+
+  private fun resolveEvidencePath(
+    repoRoot: Path,
+    reference: String,
+  ): EvidenceLocation =
+    if (reference.startsWith(LegacyProjectStatePaths.LEGACY_RUN_EVIDENCE_PREFIX)) {
+      EvidenceLocation(
+        artifactDir = repoRoot.resolve(reference).normalize(),
+        evidenceRoot = repoRoot.resolve(LegacyProjectStatePaths.LEGACY_RUN_EVIDENCE_PREFIX).normalize(),
+      )
+    } else {
+      val storeRoot = projectStore.resolve(repoRoot).root.toAbsolutePath().normalize()
+      EvidenceLocation(
+        artifactDir = storeRoot.resolve(reference).normalize(),
+        evidenceRoot = storeRoot.resolve(FeatureTaskRuntimeRunEvidenceAddress.STORE_ROOT).normalize(),
+      )
+    }
 
   private fun siblingFingerprintsExist(artifactDir: Path): Boolean {
     val parent = artifactDir.parent ?: return false
@@ -177,20 +197,26 @@ open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
   }
 }
 
+private data class EvidenceLocation(
+  val artifactDir: Path,
+  val evidenceRoot: Path,
+)
+
 internal fun storePath(
-  repoRoot: Path,
+  storeRoot: Path,
   artifactDir: Path,
 ): String =
-  runCatching { repoRoot.toAbsolutePath().normalize().relativize(artifactDir).toString() }
+  runCatching { storeRoot.toAbsolutePath().normalize().relativize(artifactDir).toString() }
     .getOrNull()
     ?.takeIf { it.isNotBlank() && !it.startsWith("..") }
     ?: artifactDir.toString()
 
-internal fun artifactDir(request: FeatureTaskRuntimeSharedEvidenceRequest): Path =
-  request.repoRoot
-    .resolve(".skill-bill")
-    .resolve("run-evidence")
-    .resolve(FeatureTaskRuntimeRunEvidenceAddress.pathSegment(request.workflowId))
+internal fun artifactDir(
+  storeRoot: Path,
+  request: FeatureTaskRuntimeSharedEvidenceRequest,
+): Path =
+  storeRoot
+    .resolve(FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot(request.workflowId))
     .resolve(FeatureTaskRuntimeRunEvidenceAddress.pathSegment(request.checkpoint.fingerprint))
     .toAbsolutePath()
     .normalize()
