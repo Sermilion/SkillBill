@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.runloop.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.spec.SpecIntentProjectionResolver
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -32,6 +33,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -54,6 +56,7 @@ internal class FeatureTaskRuntimeRunLoopContext(
   val qualityGateCycles: RuntimeQualityGateCycles,
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
+  val projectStoreRoot: Path,
 ) : PhaseRunLoopAttemptCollaborators {
   val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = runState.commitPushManifestCompletion
@@ -172,16 +175,14 @@ internal fun resolveLaunchRejectionAttribution(
   )
 }
 
-private const val FEATURE_SPEC_ROOT = ".feature-specs"
-
 fun isFeatureSpecPathForIssue(
   path: String,
   issueKey: String,
 ): Boolean {
   val normalized = path.trim().trimEnd('/')
-  if (normalized == FEATURE_SPEC_ROOT) return true
-  if (!normalized.startsWith("$FEATURE_SPEC_ROOT/")) return false
-  val issueDirectory = normalized.removePrefix("$FEATURE_SPEC_ROOT/").substringBefore('/')
+  if (normalized == LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY) return true
+  if (!normalized.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)) return false
+  val issueDirectory = normalized.removePrefix(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX).substringBefore('/')
   val key = issueKey.trim()
   return issueDirectory == key || issueDirectory.startsWith("$key-")
 }
@@ -232,6 +233,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
   private val diffResolver: DiffResolverPort,
   private val implementationChecklistStore: FeatureTaskImplementationChecklistStore,
   private val commitPushManifestCompletion: CommitPushManifestCompletion,
+  private val projectStore: ProjectStorePort,
 ) {
   internal fun context(
     request: FeatureTaskRuntimeRunFacts,
@@ -250,6 +252,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
       qualityGateCycles,
       sharedEvidenceResolver,
       diffResolver,
+      projectStore.resolve(request.repoRoot).root,
     )
   }
 

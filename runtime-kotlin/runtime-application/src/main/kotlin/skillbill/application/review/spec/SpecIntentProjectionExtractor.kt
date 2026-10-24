@@ -1,12 +1,12 @@
 package skillbill.application.review.spec
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.context.ReviewContextWireMap
@@ -30,8 +30,9 @@ class SpecIntentProjectionExtractor(
     specPath: Path,
     budget: ReviewContextBudgetPolicy,
     surrounding: SpecIntentSurroundingContext? = null,
+    store: ProjectStoreLocation,
   ): SpecIntentSourceRead<SpecIntentProjection> {
-    val normalized = resolvedParentSpecPath(repoRoot, specPath)
+    val normalized = resolvedParentSpecPath(repoRoot, specPath, store)
     val bytes =
       when (val read = readSpecBytes(normalized)) {
         is SpecIntentSourceRead.Unavailable -> return read
@@ -59,7 +60,7 @@ class SpecIntentProjectionExtractor(
         deferredItems = GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(DEFERRED_PREFIX) },
         provenance =
           SpecIntentProvenance(
-            specPath = repoRelativePath(repoRoot, normalized),
+            specPath = specProvenancePath(repoRoot, normalized, store),
             contentDigest = sha256Hex(bytes),
           ),
         declaredByteBudget = budget.maxSpecIntentProjectionBytes.toInt().coerceAtLeast(1),
@@ -80,14 +81,15 @@ class SpecIntentProjectionExtractor(
   internal fun surroundingContext(
     repoRoot: Path,
     specPath: Path,
+    store: ProjectStoreLocation,
   ): SpecIntentSourceRead<SpecIntentSurroundingContext> {
-    val normalized = resolvedParentSpecPath(repoRoot, specPath)
+    val normalized = resolvedParentSpecPath(repoRoot, specPath, store)
     return when (val read = readSpecBytes(normalized)) {
       is SpecIntentSourceRead.Unavailable -> read
       is SpecIntentSourceRead.Read ->
         SpecIntentSourceRead.Read(
           SpecIntentSurroundingContext(
-            specPath = repoRelativePath(repoRoot, normalized),
+            specPath = specProvenancePath(repoRoot, normalized, store),
             contentDigest = sha256Hex(read.value),
           ),
         )

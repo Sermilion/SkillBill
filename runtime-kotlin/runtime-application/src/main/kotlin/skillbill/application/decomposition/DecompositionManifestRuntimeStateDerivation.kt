@@ -6,6 +6,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.goalrunner.goalContinuationOutcomeArtifact
+import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -63,11 +64,12 @@ internal fun DecompositionSubtask.withRuntimeFields(
 
 internal fun DecompositionManifest.currentSubtaskIdForUpdate(
   repoRoot: Path,
+  store: ProjectStoreLocation,
   update: DecompositionManifestRuntimeUpdate,
 ): Int? {
   val assessment = mergedArtifacts(update)["assessment"] as? Map<*, *>
   val specPath = assessment?.get(DecompositionPlanningPayloadKeys.SPEC_PATH)?.toString()?.takeIf(String::isNotBlank)
-  val matchedId = specPath?.let { matchingSubtaskId(repoRoot, it) }
+  val matchedId = specPath?.let { matchingSubtaskId(repoRoot, store, it) }
   return if (specPath != null) {
     matchedId
   } else {
@@ -102,11 +104,12 @@ internal fun statusFromUpdate(update: DecompositionManifestRuntimeUpdate): Strin
 
 private fun DecompositionManifest.matchingSubtaskId(
   repoRoot: Path,
+  store: ProjectStoreLocation,
   specPath: String,
 ): Int? {
-  val absoluteSpecPath = resolvedParentSpecPath(repoRoot, Path.of(specPath)).normalize()
+  val absoluteSpecPath = resolvedParentSpecPath(repoRoot, Path.of(specPath), store).normalize()
   return subtasks.firstOrNull { subtask ->
-    resolvedParentSpecPath(repoRoot, Path.of(subtask.specPath)).normalize() == absoluteSpecPath
+    resolvedParentSpecPath(repoRoot, Path.of(subtask.specPath), store).normalize() == absoluteSpecPath
   }?.id
 }
 

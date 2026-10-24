@@ -11,6 +11,8 @@ import skillbill.application.telemetry.model.FeatureVerifyFinishedRequest
 import skillbill.application.telemetry.model.FeatureVerifyStartedRequest
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowGetResult
 import skillbill.application.workflow.model.WorkflowOpenResult
@@ -51,6 +53,7 @@ import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.system.CheckedOutBranchSource
@@ -77,6 +80,7 @@ import kotlin.io.path.writeText
 internal class VerifyOperationHarness : AutoCloseable {
   private val root: Path = Files.createTempDirectory("verify-operation")
   val repo: Path = root.resolve("repo")
+  val projectStoreRoot: Path = root.resolve("project-store")
   private val dbPath: Path = root.resolve("metrics.db")
   val runner = VerifyScriptedRunner()
   val telemetry = RecordingVerifyTelemetry()
@@ -158,7 +162,7 @@ internal class VerifyOperationHarness : AutoCloseable {
         goalObservabilityEventValidator = realPlanningProjectionValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = clock,
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val verify =
       VerifyOperation(
@@ -193,6 +197,7 @@ internal class VerifyOperationHarness : AutoCloseable {
         OperationRegistry(listOf(verify)),
         OperationConfirmationGate(proposals, git, clock),
         OperationStepRunner(runner, git),
+        FixedProjectStorePort(projectStoreRoot),
       )
   }
 
@@ -210,7 +215,9 @@ internal class VerifyOperationHarness : AutoCloseable {
     qa: String? = null,
   ): OperationOutcome = invoke(OperationArguments(confirm = token, target = target, qa = qa))
 
-  val qaWorktree: Path get() = qaRoot.resolve(QA_INVOCATION).resolve("checkout")
+  val qaWorkspaceDirectory: Path get() = qaRoot.resolve(QA_INVOCATION)
+
+  val qaWorktree: Path get() = qaWorkspaceDirectory.resolve("checkout")
 
   fun treeIdentity(path: Path): String =
     (git.repositoryTreeIdentity(path) as WorkflowGitOperationResult.Ok).value.trim()

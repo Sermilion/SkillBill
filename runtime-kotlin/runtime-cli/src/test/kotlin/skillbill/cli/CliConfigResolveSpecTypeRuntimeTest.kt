@@ -25,7 +25,7 @@ class CliConfigResolveSpecTypeRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("config", "resolve-spec-type", "--arg", "linear", "--repo-root", repoRoot.toString()),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(0, result.exitCode, result.stdout)
@@ -39,7 +39,7 @@ class CliConfigResolveSpecTypeRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("config", "resolve-spec-type", "--arg", "local", "--repo-root", repoRoot.toString()),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(0, result.exitCode, result.stdout)
@@ -53,7 +53,7 @@ class CliConfigResolveSpecTypeRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("config", "resolve-spec-type", "--repo-root", repoRoot.toString()),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(0, result.exitCode, result.stdout)
@@ -67,7 +67,7 @@ class CliConfigResolveSpecTypeRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("config", "resolve-spec-type", "--arg", "default", "--repo-root", repoRoot.toString()),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(0, result.exitCode, result.stdout)
@@ -81,7 +81,7 @@ class CliConfigResolveSpecTypeRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("config", "resolve-spec-type", "--repo-root", repoRoot.toString()),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(0, result.exitCode, result.stdout)
@@ -95,7 +95,7 @@ class CliConfigResolveSpecTypeRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("config", "resolve-spec-type", "--repo-root", repoRoot.toString()),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(1, result.exitCode, result.stdout)
@@ -110,7 +110,7 @@ class CliConfigResolveSpecTypeRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("config", "resolve-spec-type", "--arg", "bogus", "--repo-root", repoRoot.toString()),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(1, result.exitCode, result.stdout)

@@ -23,6 +23,7 @@ import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.process.ReleaseCatalogPort
 import skillbill.ports.process.model.ReleaseCatalogEntry
 import skillbill.ports.process.model.ReleaseCatalogResult
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
@@ -123,6 +124,7 @@ class UpdateCheckOperationTest {
           Clock.systemUTC(),
         ),
         OperationStepRunner(UnlaunchablePhaseRunner, NoopWorkflowGitOperations),
+        FixedProjectStorePort(home.resolve("project-store")),
       )
     val result =
       executor.execute(

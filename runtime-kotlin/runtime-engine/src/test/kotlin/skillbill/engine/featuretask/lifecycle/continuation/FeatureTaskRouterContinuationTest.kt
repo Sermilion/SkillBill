@@ -5,8 +5,10 @@ import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
@@ -53,7 +55,7 @@ class FeatureTaskRouterContinuationTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val lookup =
       FeatureTaskContinuationLookupService(

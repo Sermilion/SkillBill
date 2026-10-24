@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.featuretask
 
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceDeriver
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceDerivation
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
@@ -16,7 +17,8 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeSharedEvidenceResolveOutcomeTest {
   private val repoRoot: Path = createTempDirectory("shared-evidence-outcome")
-  private val store = FileSystemFeatureTaskRuntimeSharedEvidenceStore()
+  private val projectStore = FixedProjectStorePort(createTempDirectory("shared-evidence-outcome-store"))
+  private val store = FileSystemFeatureTaskRuntimeSharedEvidenceStore(projectStore)
 
   @Test
   fun `absent artifact derives exactly once and returns the derivation`() {
@@ -27,7 +29,7 @@ class FeatureTaskRuntimeSharedEvidenceResolveOutcomeTest {
     assertEquals(1, deriver.invocations)
     assertEquals("fp-absent", resolution.artifact.fingerprint)
     assertEquals("src/A.kt", resolution.artifact.files.single().path)
-    assertEquals(".skill-bill/run-evidence/wf-1/fp-absent", resolution.storePath)
+    assertEquals("run-evidence/wf-1/fp-absent", resolution.storePath)
   }
 
   @Test
@@ -80,6 +82,9 @@ class FeatureTaskRuntimeSharedEvidenceResolveOutcomeTest {
     assertEquals(1, deriver.invocations)
     assertTrue(Files.isRegularFile(envelope))
   }
+
+  private fun artifactDir(request: FeatureTaskRuntimeSharedEvidenceRequest): Path =
+    artifactDir(projectStore.root, request)
 
   private fun request(fingerprint: String) =
     FeatureTaskRuntimeSharedEvidenceRequest(

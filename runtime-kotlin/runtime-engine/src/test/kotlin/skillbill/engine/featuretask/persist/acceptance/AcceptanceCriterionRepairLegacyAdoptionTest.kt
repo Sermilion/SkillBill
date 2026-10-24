@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.agent.model.PhaseOutput
+import skillbill.application.testProjectStore
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
@@ -131,6 +132,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
             ContractFeatureTaskRuntimePhaseOutputMigration(),
             git,
             f.source,
+            testProjectStore,
           )
         for (revision in 1..3) {
           val bytes = ArchivedAuditExecutionPlanFixture.legacyAuditPlan(execution, revision)

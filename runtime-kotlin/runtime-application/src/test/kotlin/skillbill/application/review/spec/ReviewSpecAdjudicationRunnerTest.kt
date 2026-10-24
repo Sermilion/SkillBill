@@ -369,6 +369,7 @@ class ReviewSpecAdjudicationRunnerTest {
           budget = fixture.budget,
           brokerId = "codex",
           repoRoot = fixture.repoRoot ?: Files.createTempDirectory("adj"),
+          projectStoreRoot = Files.createTempDirectory("adj-project-store"),
           timeout = 1.seconds,
         ),
     )

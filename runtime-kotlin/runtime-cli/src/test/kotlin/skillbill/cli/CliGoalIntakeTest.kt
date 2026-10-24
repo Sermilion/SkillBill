@@ -83,7 +83,7 @@ class CliGoalIntakeTest {
           fixture.context(launcher = GoalFixtureAgentRunLauncher(fixture)),
         )
       assertEquals(0, result.exitCode, result.stderr + result.stdout)
-      assertFalse(Files.exists(fixture.tempDir.resolve(".feature-specs/SKILL-901-intake")))
+      assertFalse(Files.exists(fixture.parentSpec.parent.resolveSibling("SKILL-901-intake")))
     } finally {
       fixture.tempDir.toFile().deleteRecursively()
     }
@@ -94,7 +94,7 @@ class CliGoalIntakeTest {
     for (route in listOf(emptyList(), listOf("phase", "plan"))) {
       val fixture = goalFixture(subtaskCount = 1, seedWorkflow = false)
       val root = fixture.tempDir
-      val archived = root.resolve(".feature-specs/done/SKILL-901-goal")
+      val archived = fixture.parentSpec.parent.resolveSibling("done").resolve("SKILL-901-goal")
       Files.createDirectories(archived.parent)
       Files.move(fixture.parentSpec.parent, archived)
       val archivedSpec = Files.readString(archived.resolve("spec.md"))
@@ -164,7 +164,7 @@ class CliGoalIntakeTest {
           assertEquals(1, result.exitCode, result.stderr + result.stdout)
           assertEquals(original, Files.readString(parent))
           assertEquals("<html>Existing design</html>", Files.readString(design))
-          assertFalse(Files.exists(root.resolve(".feature-specs/SKILL-901-intake")))
+          assertFalse(Files.exists(parent.parent.resolveSibling("SKILL-901-intake")))
           assertFalse(Files.exists(parent.resolveSibling("decomposition-manifest.yaml")))
           assertTrue(bundleEntries(parent).none { it.startsWith("spec_subtask") }, bundleEntries(parent).toString())
           assertEquals(0, parentCount(fixture.dbPath))
@@ -222,8 +222,10 @@ class CliGoalIntakeTest {
     try {
       val first = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
       assertEquals(1, first.exitCode, first.stderr + first.stdout)
+      val specsRoot = fixture.projectStoreRoot().resolve("specs")
+      assertFalse(Files.exists(root.resolve(".feature-specs")))
       val folder =
-        Files.list(root.resolve(".feature-specs")).use { paths ->
+        Files.list(specsRoot).use { paths ->
           paths.findFirst().orElseThrow().fileName.toString()
         }
       val (key, feature) = issueAndFeature(folder)
@@ -233,7 +235,7 @@ class CliGoalIntakeTest {
       assertTrue(launcher.prompts.isNotEmpty())
       assertTrue(launcher.prompts.all { it.contains("Phase: preplan") })
       assertEquals(0, parentCount(db))
-      val spec = root.resolve(".feature-specs/$folder/spec.md")
+      val spec = specsRoot.resolve("$folder/spec.md")
       assertContains(Files.readString(spec), text)
       assertContains(Files.readString(spec), "Supplied requirements are authoritative and need no tracker lookup")
       assertContains(Files.readString(spec), "Locally allocated issue keys do not require a tracker connection")
@@ -262,8 +264,9 @@ class CliGoalIntakeTest {
       assertContains(result.stderr, message)
       assertFalse(result.stderr.contains("invalid", ignoreCase = true), result.stderr)
       assertFalse(result.stdout.contains("launched runtime"), result.stdout)
-      val specs = root.resolve(".feature-specs")
-      assertTrue(!Files.exists(specs) || Files.list(specs).use { it.count() } == 0L)
+      listOf(root.resolve(".feature-specs"), fixture.projectStoreRoot().resolve("specs")).forEach { specs ->
+        assertTrue(!Files.exists(specs) || Files.list(specs).use { it.count() } == 0L)
+      }
       assertTrue(launcher.prompts.isEmpty())
     } finally {
       root.toFile().deleteRecursively()

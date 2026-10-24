@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.git.scoped
 
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.infrastructure.workflow.process.GitProcessResult
 import skillbill.infrastructure.workflow.process.gitTimedOutError
 import skillbill.infrastructure.workflow.process.runGitCommand
@@ -20,8 +21,6 @@ private const val INDEX_REMOVAL_MODE = "0"
 private const val INDEX_REMOVAL_OBJECT = "0000000000000000000000000000000000000000"
 
 private const val PATHSPEC_BATCH_SIZE = 200
-
-private const val FEATURE_SPEC_ROOT = ".feature-specs"
 
 internal object GitScopedStagingOperations : ScopedStagingGitOperations {
   override fun stagePaths(
@@ -223,5 +222,6 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
 private fun isFeatureSpecPath(path: String): Boolean {
   val normalized = path.trim().trimEnd('/').removeSurrounding("\"").removePrefix("./")
   val dotted = if (normalized.startsWith(".")) normalized else ".$normalized"
-  return dotted == FEATURE_SPEC_ROOT || dotted.startsWith("$FEATURE_SPEC_ROOT/")
+  return dotted == LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY ||
+    dotted.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)
 }

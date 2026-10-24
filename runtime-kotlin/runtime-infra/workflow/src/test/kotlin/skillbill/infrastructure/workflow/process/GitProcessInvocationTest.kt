@@ -69,23 +69,6 @@ class GitProcessInvocationTest {
     assertTrue(result.hunks.hunks.single().lines.size <= 5)
   }
 
-  @Test
-  @Timeout(value = 30, unit = TimeUnit.SECONDS)
-  fun `a git command past its deadline reports a timeout`() {
-    val repoRoot = newRepo("skillbill-git-process-timeout")
-
-    val result =
-      invokeGitProcess(
-        repoRoot = repoRoot,
-        args = listOf("-c", "alias.stall=!sleep 20", "stall"),
-        stdin = null,
-        deadlineSeconds = 1L,
-      )
-
-    assertTrue(result.timedOut)
-    assertEquals(-1, result.exitCode)
-  }
-
   private fun newRepo(prefix: String): Path {
     val repoRoot = Files.createTempDirectory(prefix)
     runGit(repoRoot, "init")

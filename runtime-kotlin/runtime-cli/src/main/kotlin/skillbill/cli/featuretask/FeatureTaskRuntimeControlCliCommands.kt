@@ -22,6 +22,7 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.goalrunner.model.GoalContinuation
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import java.nio.file.Path
 
@@ -159,6 +160,7 @@ class FeatureTaskRuntimeRetryBlockedCommand(
 class FeatureTaskRuntimeRepairIdentityCommand(
   private val workflowService: WorkflowService,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val projectStorePort: ProjectStorePort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
@@ -183,7 +185,8 @@ class FeatureTaskRuntimeRepairIdentityCommand(
           workflowId = workflowId,
           issueKey = issueKey,
           repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(root),
-          governedSpecPath = repositoryEnclosingRootPort.governedSpecPathForCli(root, Path.of(specPath)),
+          governedSpecPath =
+            repositoryEnclosingRootPort.governedSpecPathForCli(projectStorePort, root, Path.of(specPath)),
           reason = reason,
         ),
       )

@@ -15,7 +15,7 @@ internal fun PhaseRun.stepFacts(
     issueKey = issueKey,
     repoRoot = request.repoRoot,
     agentWorkingDirectory = (qaExecution?.target as? QaExecutionTarget.Supported)?.checkout,
-    additionalWritableDirectories = listOfNotNull(qaExecution?.workspace?.directory),
+    additionalWritableDirectories = listOfNotNull(projectStoreRoot, qaExecution?.workspace?.directory).distinct(),
     timeout = request.timeout,
     invokedAgentId = resolvedAgent.invokedAgentId,
     configuredAgentOverrideId = resolvedAgent.configuredAgentOverrideId,

@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
@@ -13,6 +14,25 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FileSystemDecompositionManifestFileStoreTest {
+  private val storeRoot = Files.createTempDirectory("decomposition-manifest-project-store")
+  private val projectStore = FixedProjectStorePort(storeRoot)
+
+  @Test
+  fun `manifest discovery lists store bundles before legacy bundles and skips archived store bundles`() {
+    val repoRoot = Files.createTempDirectory("decomposition-manifest-store-first")
+    val stored = storeRoot.resolve("specs/SKILL-902-goal/decomposition-manifest.yaml")
+    val legacy = repoRoot.resolve(".feature-specs/SKILL-903-goal/decomposition-manifest.yaml")
+    val archived = storeRoot.resolve("specs/done/SKILL-904-goal/decomposition-manifest.yaml")
+    listOf(stored, legacy, archived).forEach { manifest ->
+      Files.createDirectories(manifest.parent)
+      Files.writeString(manifest, "manifest")
+    }
+    val store = FileSystemDecompositionManifestFileStore(projectStore)
+
+    assertEquals(listOf(stored, legacy), store.findDecompositionManifestFiles(repoRoot))
+    assertEquals(listOf(stored, legacy), store.findDecompositionManifestFilesWithoutRecovery(repoRoot))
+  }
+
   @Test
   fun `manifest discovery ignores archived bundles and their pending journals`() {
     val repoRoot = Files.createTempDirectory("decomposition-manifest-archived")
@@ -24,7 +44,7 @@ class FileSystemDecompositionManifestFileStoreTest {
     Files.writeString(archived, "invalid archived manifest")
     val marker = archived.resolveSibling(".decomposition-manifest-bundle-pending.commit")
     Files.writeString(marker, "invalid archived journal")
-    val store = FileSystemDecompositionManifestFileStore()
+    val store = FileSystemDecompositionManifestFileStore(projectStore)
 
     assertEquals(listOf(active), store.findDecompositionManifestFiles(repoRoot))
     assertEquals(listOf(active), store.findDecompositionManifestFilesWithoutRecovery(repoRoot))
@@ -40,7 +60,7 @@ class FileSystemDecompositionManifestFileStoreTest {
     Files.createDirectories(requireNotNull(manifest.parent))
     Files.writeString(manifest, "contract_version: '0.5'\n")
 
-    val store: DecompositionManifestStore = FileSystemDecompositionManifestFileStore()
+    val store: DecompositionManifestStore = FileSystemDecompositionManifestFileStore(projectStore)
 
     assertEquals(listOf(manifest), store.findDecompositionManifestFiles(repoRoot))
     assertFalse(
@@ -91,7 +111,7 @@ class FileSystemDecompositionManifestFileStoreTest {
       ),
     )
 
-    val store: DecompositionManifestStore = FileSystemDecompositionManifestFileStore()
+    val store: DecompositionManifestStore = FileSystemDecompositionManifestFileStore(projectStore)
 
     assertEquals("new manifest", store.readText(secondTarget))
     assertEquals("new spec", Files.readString(firstTarget))
@@ -106,7 +126,7 @@ class FileSystemDecompositionManifestFileStoreTest {
     Files.createDirectories(parent)
     val marker = parent.resolve(".decomposition-manifest-bundle-pending.commit")
     Files.writeString(marker, "pending")
-    val store = FileSystemDecompositionManifestFileStore()
+    val store = FileSystemDecompositionManifestFileStore(projectStore)
 
     assertFailsWith<SkillBillRuntimeException> {
       store.findDecompositionManifestFilesWithoutRecovery(repoRoot)
@@ -122,7 +142,7 @@ class FileSystemDecompositionManifestFileStoreTest {
     val secondTarget = parent.resolve("decomposition-manifest.yaml")
     Files.writeString(firstTarget, "old spec")
     Files.writeString(secondTarget, "old manifest")
-    val store: DecompositionManifestStore = FileSystemDecompositionManifestFileStore()
+    val store: DecompositionManifestStore = FileSystemDecompositionManifestFileStore(projectStore)
 
     assertFailsWith<IllegalStateException> {
       store.writeBundleAtomically(

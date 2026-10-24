@@ -1,7 +1,9 @@
 package skillbill.application.workflow.decomposition
 
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.application.decomposition.resolveDecompositionManifest
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.AdvanceCompletedSubtasksRequest
 import skillbill.application.workflow.model.CheckoutAndValidateBranchRequest
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
@@ -23,7 +25,6 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -62,7 +63,7 @@ class DecompositionWorkflowContinuation(
   private val manifestWriter: DecompositionManifestWriter,
   private val clock: Clock,
   private val workflowIdRandom: Random,
-  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val checkout: ProjectCheckout,
 ) {
   private fun repositoryCheckpointIdentity(): String {
     val resolved = gitOperations.repositoryFingerprint(repoRoot)
@@ -106,7 +107,7 @@ class DecompositionWorkflowContinuation(
   private fun findProjectedManifestByIssueKey(issueKey: String): DecompositionManifest? {
     val store = fileStore ?: return null
     return resolveDecompositionManifest(
-      repoRoot = repoRoot,
+      scope = SpecBundleScope(repoRoot, checkout.store(repoRoot)),
       issueKey = issueKey,
       fileStore = store,
       validator = validator,
@@ -137,7 +138,7 @@ class DecompositionWorkflowContinuation(
       if (existing == null) {
         unitOfWork.workflowStates.findCompletedPlanWorkflowId(
           manifest.issueKey,
-          repositoryEnclosingRootPort.repositoryIdentity(repoRoot),
+          checkout.repositoryIdentity(repoRoot),
         )
       } else {
         null

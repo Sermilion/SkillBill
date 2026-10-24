@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.support
 
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -11,7 +12,6 @@ import java.time.Clock
 
 val RUNTIME_WORKFLOW_ID_PREFIX: String = WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix
 
-const val FEATURE_SPEC_ROOT = ".feature-specs"
 const val MAX_VALIDATION_QUALITY_RETRIES = 3
 
 val CHILD_WORKFLOW_BLOCK_REASONS: Set<GoalRunnerStopReason> =
@@ -24,7 +24,8 @@ val CHILD_WORKFLOW_BLOCK_REASONS: Set<GoalRunnerStopReason> =
 fun isFeatureSpecPath(path: String): Boolean {
   val normalized = path.trim().trimEnd('/').removeSurrounding("\"").removePrefix("./")
   val dotted = if (normalized.startsWith(".")) normalized else ".$normalized"
-  return dotted == FEATURE_SPEC_ROOT || dotted.startsWith("$FEATURE_SPEC_ROOT/")
+  return dotted == LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY ||
+    dotted.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)
 }
 
 internal data class GoalRunnerProgressState(

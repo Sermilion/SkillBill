@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecP
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.text.sha256HexUtf8
@@ -33,6 +34,7 @@ class FeatureTaskRuntimePlanIntake(
   private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
   private val fileStore: DecompositionManifestStore,
   private val repositories: RepositoryEnclosingRootPort,
+  private val projectStore: ProjectStorePort,
 ) {
   fun settle(
     workflowId: String,
@@ -110,7 +112,7 @@ class FeatureTaskRuntimePlanIntake(
         } else {
           specPath
         }
-      repositories.governedFeatureTaskSpecPath(workflowId, repoRoot, anchored)
+      repositories.governedFeatureTaskSpecPath(projectStore, workflowId, repoRoot, anchored)
     } catch (_: SkillBillRuntimeException) {
       null
     }

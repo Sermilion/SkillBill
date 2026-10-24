@@ -4,8 +4,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
-import java.nio.file.Files
-import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -46,21 +44,7 @@ class WorkflowStateSchemaWireBaselineTest {
     actual: String,
   ) {
     val expected =
-      Files.readAllBytes(
-        compatibilityRepositoryRoot().resolve(
-          ".feature-specs/done/SKILL-351-runtime-domain-boundaries-and-simplicity/" +
-            "baselines/$name",
-        ),
-      )
+      requireNotNull(javaClass.getResourceAsStream("/baselines/$name")).use { it.readBytes() }
     assertEquals(expected.toList(), actual.toByteArray().toList(), name)
   }
-}
-
-private fun compatibilityRepositoryRoot(): Path {
-  var current: Path? = Path.of("").toAbsolutePath().normalize()
-  while (current != null) {
-    if (Files.exists(current.resolve(".git"))) return current
-    current = current.parent
-  }
-  error("Repository root is not available from the test working directory.")
 }

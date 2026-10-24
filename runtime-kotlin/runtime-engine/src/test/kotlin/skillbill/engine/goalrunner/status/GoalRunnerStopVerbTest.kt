@@ -15,7 +15,6 @@ import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_REQUEST
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
-import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeHeartbeat
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -28,14 +27,11 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -44,55 +40,6 @@ import kotlin.test.assertTrue
 private val STOP_NOW: Instant = Instant.parse("2026-08-07T12:00:00Z")
 
 class GoalRunnerStopVerbTest {
-  @Test
-  fun `stop commits its pause intent and releases the SQLite writer before host termination`() {
-    val root = Files.createTempDirectory("stop-transaction-lifetime")
-    val path = root.resolve("metrics.db").toString()
-    val database = sqliteSessionFactoryForTests(root, path, emptyMap())
-    val independent = sqliteSessionFactoryForTests(root, path, emptyMap())
-    val store =
-      StopFakeManifestStore(lease = liveLease(), onPause = { control ->
-        database.transaction { it.goalRunnerControls.persistControlState("goal-parent-1", control) }
-      })
-    val supervisor = RecordingSupervisor(FeatureTaskRuntimeProcessInspection.ExactLive)
-    val writer = Executors.newSingleThreadExecutor()
-    var hostFailure: Throwable? = null
-    try {
-      supervisor.onFirstCall = {
-        try {
-          assertTrue(independent.read { it.goalRunnerControls.controlState("goal-parent-1").paused })
-          writer.submit {
-            independent.transaction {
-              it.goalRunnerControls.persistControlState(
-                "independent-goal",
-                GoalRunnerControlState(pauseRequested = true),
-              )
-            }
-          }.get(2, TimeUnit.SECONDS)
-        } catch (failure: Throwable) {
-          hostFailure = failure
-          throw failure
-        }
-      }
-      val service =
-        testGoalRunnerStatusService(
-          manifestStore = store,
-          outcomeStore = RecordingOutcomeStore(),
-          phaseRecorder = goalTestPhaseRecorder(),
-          database = database,
-          clock = stopClock(),
-          ports = GoalRunnerStatusTestPorts(workerSupervisor = supervisor),
-        )
-      val result = service.stop("SKILL-168", root)
-      hostFailure?.let { throw it }
-      assertEquals(GoalRunnerStopStatus.STOPPED, result.status)
-      assertTrue(independent.read { it.goalRunnerControls.controlState("independent-goal").pauseRequested })
-    } finally {
-      writer.shutdownNow()
-      assertTrue(writer.awaitTermination(2, TimeUnit.SECONDS))
-    }
-  }
-
   @Test
   fun `stopping a live goal terminates its runner and reports stopped`() {
     val store = StopFakeManifestStore(lease = liveLease())

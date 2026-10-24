@@ -130,7 +130,9 @@ class CliPhasePlanRuntimeTest {
       )
 
     assertEquals(0, plan.exitCode, plan.stdout)
-    assertContains(plan.stdout, "Manifest: .feature-specs/$ISSUE_KEY-")
+    assertContains(plan.stdout, "Manifest: ")
+    assertContains(plan.stdout, "specs/$ISSUE_KEY-")
+    assertTrue(Files.notExists(tempDir.resolve(".feature-specs")))
     assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals(1, rowCount("feature_task_workflows"))
     assertEquals(PLANNED_UNITS, completedPlanUnitIds())
@@ -223,7 +225,7 @@ class CliPhasePlanRuntimeTest {
     val launcher = PlanThenGoalLauncher(planner, GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1))
     assertEquals(1, runFull(launcher).exitCode)
     val earlierPlan = planWorkflowId()
-    val specs = tempDir.resolve(".feature-specs")
+    val specs = storeSpecsRoot(tempDir)
     val earlierBundle = specs.resolve(planner.bundleNames().single())
     Files.move(earlierBundle, specs.resolve(earlierBundle.fileName.toString().replace(ISSUE_KEY, "SKILL-905")))
 
@@ -248,7 +250,7 @@ class CliPhasePlanRuntimeTest {
       )
     assertEquals(0, planned.exitCode, planned.stdout + planned.stderr)
     val earlierPlan = planWorkflowId()
-    val specs = tempDir.resolve(".feature-specs")
+    val specs = storeSpecsRoot(tempDir)
     val earlierBundle = specs.resolve(planner.bundleNames().single())
     Files.move(earlierBundle, specs.resolve(earlierBundle.fileName.toString().replace(ISSUE_KEY, "SKILL-905")))
     val reusedBundle = Files.createDirectories(specs.resolve("$ISSUE_KEY-unrelated-work"))
@@ -329,7 +331,7 @@ class CliPhasePlanRuntimeTest {
         JsonCodec.anyToStringAnyMap(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(before)),
       )
     val subtask =
-      Files.walk(tempDir.resolve(".feature-specs")).use { paths ->
+      Files.walk(storeSpecsRoot(tempDir)).use { paths ->
         paths.toList().single { it.fileName.toString() == SUBTASK_FILES.getValue(1) }
       }
     Files.writeString(
@@ -605,15 +607,15 @@ class CliPhasePlanRuntimeTest {
       }
       Files.writeString(
         bundle.resolve("decomposition-manifest.yaml"),
-        manifestYaml(repoRoot.relativize(bundle).toString(), bundle.fileName.toString().removePrefix("$ISSUE_KEY-")),
+        manifestYaml("specs/${bundle.fileName}", bundle.fileName.toString().removePrefix("$ISSUE_KEY-")),
       )
       return "Split the work into two ordered subtasks."
     }
 
-    private fun seededBundle(): Path = repoRoot.resolve(".feature-specs").resolve(bundleNames().single())
+    private fun seededBundle(): Path = storeSpecsRoot(repoRoot).resolve(bundleNames().single())
 
     fun bundleNames(): List<String> =
-      Files.list(repoRoot.resolve(".feature-specs")).use { directories ->
+      Files.list(storeSpecsRoot(repoRoot)).use { directories ->
         directories.toList().map { it.fileName.toString() }.filter { it.startsWith("$ISSUE_KEY-") }
       }
 
@@ -633,6 +635,14 @@ class CliPhasePlanRuntimeTest {
     val PLAN_LAUNCHES = listOf("preplan", "plan", "plan_subtasks", "plan_subtasks")
     val RESUMED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan_subtasks", "plan_subtasks")
     val PLANNED_UNITS = listOf("plan_subtasks:1", "plan_subtasks:2")
+
+    fun storeSpecsRoot(checkoutHome: Path): Path =
+      Files.walk(checkoutHome).use { paths ->
+        paths
+          .filter { it.fileName?.toString() == "specs" && it.parent?.parent?.fileName?.toString() == "projects" }
+          .toList()
+          .single()
+      }
 
     fun manifestYaml(
       bundleDirectory: String,

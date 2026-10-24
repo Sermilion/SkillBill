@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.slot.plan
 
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.directive.directiveResource
+import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -25,6 +27,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 
 class AgentPlanStrategy :
   PhaseStrategy(),
@@ -40,7 +43,7 @@ class AgentPlanStrategy :
 
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
-    return BUNDLE_DIRECTIVE
+    return bundleDirective(null, null)
   }
 
   override fun promptSections(
@@ -48,12 +51,14 @@ class AgentPlanStrategy :
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections {
     policies.policyOf(stepId)
+    val target = inputs.planBundleTarget
+    val specsRoot = inputs.planSpecsRoot
     return PhaseStepPromptSections(
-      taskDirective = directiveFor(stepId),
+      taskDirective = bundleDirective(target, specsRoot),
       testValueDiscipline = true,
       stepContext =
-        "$featureSpecDirective\n\n${specBundleRequirement(inputs.specRewritable)}\n\n$MANIFEST_TEMPLATE\n\n" +
-          "$PHASE_FEASIBILITY_CONSTRAINT\n\n$planningFeasibilityDirective",
+        "$featureSpecDirective\n\n${specBundleRequirement(inputs.specRewritable, target, specsRoot)}\n\n" +
+          "${manifestTemplate(target)}\n\n$PHASE_FEASIBILITY_CONSTRAINT\n\n$planningFeasibilityDirective",
     )
   }
 
@@ -118,13 +123,39 @@ class AgentPlanStrategy :
 
     private val featureSpecDirective: String by lazy { directiveResource(FEATURE_SPEC_DIRECTIVE).trimEnd() }
 
-    private const val BUNDLE_DIRECTIVE: String =
+    private const val UNRESOLVED_SPECS_ROOT: String =
+      "project store `<issue key>-<slug>/` (`skill-bill project path` prints the project store)"
+
+    private fun bundleLocation(
+      target: PlanBundleTarget?,
+      specsRoot: Path?,
+    ): String =
+      when (target) {
+        null -> specsRoot?.let { "$it/<issue key>-<slug>/" } ?: UNRESOLVED_SPECS_ROOT
+        is PlanBundleTarget.Legacy -> "${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX}<issue key>-<slug>/"
+        is PlanBundleTarget.Store, is PlanBundleTarget.Staged -> "${target.directory}/"
+      }
+
+    private fun otherBundles(
+      target: PlanBundleTarget?,
+      specsRoot: Path?,
+    ): String =
+      if (target is PlanBundleTarget.Legacy) {
+        LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY
+      } else {
+        (target?.directory?.parent ?: specsRoot)?.toString() ?: "project store specs"
+      }
+
+    private fun bundleDirective(
+      target: PlanBundleTarget?,
+      specsRoot: Path?,
+    ): String =
       "Author a governed spec bundle that satisfies every acceptance criterion from the upstream preplan " +
-        "digest. Write files only inside the .feature-specs/<issue key>-<slug>/ directory that already " +
-        "holds the parent spec.md and modify no other repository file. When the bundle is complete, finish " +
-        "with a short prose summary of the plan. " +
-        PREPLAN_DIGEST_AUTHORITY + " Do not read other .feature-specs bundles; inspect this workflow's own " +
-        "bundle on resume. " + PLANNING_INSTALL_PROHIBITION + " The manifest template " +
+        "digest. Write files only inside the ${bundleLocation(target, specsRoot)} directory that already " +
+        "holds the parent spec.md; it is the only writable location, so modify no other file. When the " +
+        "bundle is complete, finish with a short prose summary of the plan. " +
+        PREPLAN_DIGEST_AUTHORITY + " Do not read other ${otherBundles(target, specsRoot)} bundles; inspect this " +
+        "workflow's own bundle on resume. " + PLANNING_INSTALL_PROHIBITION + " The manifest template " +
         "below is the format."
 
     internal val PHASE_FEASIBILITY_CONSTRAINT: String =
@@ -140,18 +171,23 @@ class AgentPlanStrategy :
       constraints; report any conflict with required phase work during planning, before execution.
       """.trimIndent()
 
-    private fun specBundleRequirement(specRewritable: Boolean): String {
-      val parentSpecRule =
+    private fun specBundleRequirement(
+      specRewritable: Boolean,
+      target: PlanBundleTarget?,
+      specsRoot: Path?,
+    ): String {
+      val parentSpecOwnership =
         if (specRewritable) {
           "The runtime seeded that spec.md from the intake; rewrite it as the full parent spec when the plan " +
             "needs more than the seed."
         } else {
           "The operator authored that spec.md; never modify it, the runtime blocks the plan when its bytes change."
         }
+      val parentSpecRule = parentSpecOwnership + stagedManifestRule(target)
       return """
         ## Spec bundle planning requirement
         No later phase consumes this plan: the runtime accepts it as a governed spec bundle that you author on
-        disk. The directory .feature-specs/<issue key>-<slug>/ already holds the parent spec.md. $parentSpecRule
+        disk. The directory ${bundleLocation(target, specsRoot)} already holds the parent spec.md. $parentSpecRule
         Add one spec_subtask_<id>_<slug>.md per subtask (one or more, in ascending dependency order) and
         decomposition-manifest.yaml whose parent spec path names that spec.md and whose
         subtasks list those files in order, each depending only on earlier subtasks. The parent and every subtask
@@ -172,51 +208,67 @@ class AgentPlanStrategy :
         """.trimIndent()
     }
 
-    private val MANIFEST_TEMPLATE: String =
-      """
-      Write decomposition-manifest.yaml in exactly this shape, one subtasks entry per subtask spec. Every
-      field shown is required; dependencies lists only earlier subtask ids:
+    private fun stagedManifestRule(target: PlanBundleTarget?): String =
+      if (target is PlanBundleTarget.Staged) {
+        " That directory is a checkout staging copy that the runtime promotes into ${target.storeDirectory}/; " +
+          "write every manifest parent and subtask spec path in the store form " +
+          "`specs/<issue key>-<slug>/...` shown below, never as a staging path."
+      } else {
+        ""
+      }
 
-      ```yaml
-      ---
-      contract_version: "0.5"
-      issue_key: "<issue key>"
-      feature_name: "<slug>"
-      parent_spec_path: ".feature-specs/<issue key>-<slug>/spec.md"
-      status: "pending"
-      execution_model: "same_branch_commit_per_subtask"
-      base_branch: "<repository default branch>"
-      feature_branch: "feat/<issue key>-<slug>"
-      stack_branches: []
-      current_subtask_intent:
-        subtask_id: 1
-        action: "start"
-      subtasks:
-      - id: 1
-        name: "<subtask name>"
-        spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_1_<subtask slug>.md"
+    private fun manifestTemplate(target: PlanBundleTarget?): String {
+      val bundle =
+        if (target is PlanBundleTarget.Legacy) {
+          "${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX}<issue key>-<slug>"
+        } else {
+          "specs/<issue key>-<slug>"
+        }
+      return """
+        Write decomposition-manifest.yaml in exactly this shape, one subtasks entry per subtask spec. Every
+        field shown is required; dependencies lists only earlier subtask ids:
+
+        ```yaml
+        ---
+        contract_version: "0.5"
+        issue_key: "<issue key>"
+        feature_name: "<slug>"
+        parent_spec_path: "$bundle/spec.md"
         status: "pending"
-        branch: null
-        commit_sha: null
-        workflow_id: null
-        blocked_reason: null
-        last_resumable_step: null
-        dependencies: []
-      - id: 2
-        name: "<subtask name>"
-        spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_2_<subtask slug>.md"
-        status: "pending"
-        branch: null
-        commit_sha: null
-        workflow_id: null
-        blocked_reason: null
-        last_resumable_step: null
-        dependencies:
-        - subtask_id: 1
-          optional: false
-          skipped: false
-      ```
-      """.trimIndent()
+        execution_model: "same_branch_commit_per_subtask"
+        base_branch: "<repository default branch>"
+        feature_branch: "feat/<issue key>-<slug>"
+        stack_branches: []
+        current_subtask_intent:
+          subtask_id: 1
+          action: "start"
+        subtasks:
+        - id: 1
+          name: "<subtask name>"
+          spec_path: "$bundle/spec_subtask_1_<subtask slug>.md"
+          status: "pending"
+          branch: null
+          commit_sha: null
+          workflow_id: null
+          blocked_reason: null
+          last_resumable_step: null
+          dependencies: []
+        - id: 2
+          name: "<subtask name>"
+          spec_path: "$bundle/spec_subtask_2_<subtask slug>.md"
+          status: "pending"
+          branch: null
+          commit_sha: null
+          workflow_id: null
+          blocked_reason: null
+          last_resumable_step: null
+          dependencies:
+          - subtask_id: 1
+            optional: false
+            skipped: false
+        ```
+        """.trimIndent()
+    }
   }
 }
 

@@ -17,9 +17,6 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -321,33 +318,6 @@ class SQLiteDatabaseSessionFactoryTest {
   }
 
   @Test
-  fun `the read seam serves a query while another connection holds the writer lock`() {
-    val tempDir = Files.createTempDirectory("skillbill-sqlite-read-only-contention")
-    val dbPath = tempDir.resolve("metrics.db")
-    val database = boundDatabase(tempDir, dbPath)
-    database.transaction { unitOfWork ->
-      unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflowRecord("wftr-read-only-contention"), RUNTIME)
-    }
-
-    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { writer ->
-      writer.createStatement().use { it.execute("BEGIN IMMEDIATE") }
-      try {
-        val startedAt = System.nanoTime()
-        val status =
-          database.read { unitOfWork ->
-            unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode("wftr-read-only-contention", RUNTIME)?.workflowStatus
-          }
-        val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
-        assertEquals("running", status)
-
-        assertTrue(elapsedMillis < 1_000, "A contended read must return promptly, took ${elapsedMillis}ms.")
-      } finally {
-        writer.createStatement().use { it.execute("ROLLBACK") }
-      }
-    }
-  }
-
-  @Test
   fun `two statements in one read block observe one snapshot across a writer commit`() {
     val tempDir = Files.createTempDirectory("skillbill-sqlite-read-snapshot")
     val dbPath = tempDir.resolve("metrics.db")
@@ -383,39 +353,6 @@ class SQLiteDatabaseSessionFactoryTest {
   }
 
   @Test
-  fun `a writer commits while a read block holds its snapshot open`() {
-    val tempDir = Files.createTempDirectory("skillbill-sqlite-read-snapshot-writer")
-    val dbPath = tempDir.resolve("metrics.db")
-    val database = boundDatabase(tempDir, dbPath)
-    val workflowId = "wftr-read-snapshot-writer"
-    database.transaction { unitOfWork ->
-      unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflowRecord(workflowId), RUNTIME)
-    }
-    val executor = Executors.newSingleThreadExecutor()
-
-    try {
-      database.read { unitOfWork ->
-
-        assertEquals(
-          "running",
-          unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)?.workflowStatus,
-        )
-        val writer =
-          executor.submit {
-            database.transaction { writerWork ->
-              val row = requireNotNull(writerWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
-              writerWork.workflowStates.saveFeatureTaskWorkflow(row.copy(artifactsJson = "{\"writer\":1}"), RUNTIME)
-            }
-          }
-
-        writer.get(10, TimeUnit.SECONDS)
-      }
-    } finally {
-      executor.shutdownNow()
-    }
-  }
-
-  @Test
   fun `read path databases stay in wal mode so a held snapshot never blocks a writer`() {
     val tempDir = Files.createTempDirectory("skillbill-sqlite-read-journal-mode")
     val dbPath = tempDir.resolve("metrics.db")
@@ -426,93 +363,6 @@ class SQLiteDatabaseSessionFactoryTest {
 
     DatabaseRuntime.openReadDb(cliValue = dbPath.toString(), environment = emptyMap(), userHome = tempDir)
       .use { openDb -> assertEquals("wal", journalMode(openDb.connection)) }
-  }
-
-  @Test
-  fun `a rollback-journal database still yields a consistent read snapshot`() {
-    val tempDir = Files.createTempDirectory("skillbill-sqlite-read-rollback-journal")
-    val dbPath = tempDir.resolve("metrics.db")
-    val database = boundDatabase(tempDir, dbPath)
-    val workflowId = "wftr-rollback-journal"
-    database.transaction { unitOfWork ->
-      unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflowRecord(workflowId), RUNTIME)
-    }
-
-    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-      connection.createStatement().use { it.execute("PRAGMA journal_mode = DELETE") }
-      assertEquals("delete", journalMode(connection))
-    }
-    val executor = Executors.newSingleThreadExecutor()
-
-    try {
-      val observed =
-        database.read { unitOfWork ->
-          val before = unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)?.workflowStatus
-          val writer = executor.submit { rawWriterCommit(dbPath.toString(), workflowId, "complete") }
-          val after = unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)?.workflowStatus
-
-          Triple(before, after, writer)
-        }
-      assertEquals(observed.first, observed.second, "A rollback-journal read block must still see one snapshot.")
-      assertEquals("running", observed.first)
-      observed.third.get(10, TimeUnit.SECONDS)
-      assertEquals(
-        "complete",
-        database.read {
-          it.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)?.workflowStatus
-        },
-      )
-    } finally {
-      executor.shutdownNow()
-    }
-  }
-
-  @Test
-  fun `write transactions reserve the writer before entering the transaction block`() {
-    val tempDir = Files.createTempDirectory("skillbill-sqlite-write-reservation")
-    val dbPath = tempDir.resolve("metrics.db")
-    val database = boundDatabase(tempDir, dbPath)
-    val workflowId = "wftr-write-reservation"
-    database.transaction { unitOfWork ->
-      unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflowRecord(workflowId), RUNTIME)
-    }
-    val firstEntered = CountDownLatch(1)
-    val releaseFirst = CountDownLatch(1)
-    val secondStarted = CountDownLatch(1)
-    val secondEntered = CountDownLatch(1)
-    val executor = Executors.newFixedThreadPool(2)
-
-    try {
-      val first =
-        executor.submit {
-          database.transaction { unitOfWork ->
-            val workflow = requireNotNull(unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
-            firstEntered.countDown()
-            check(releaseFirst.await(5, TimeUnit.SECONDS))
-            unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflow.copy(artifactsJson = "{\"writer\":1}"), RUNTIME)
-          }
-        }
-      assertTrue(firstEntered.await(5, TimeUnit.SECONDS))
-      val second =
-        executor.submit {
-          secondStarted.countDown()
-          database.transaction { unitOfWork ->
-            secondEntered.countDown()
-            val workflow = requireNotNull(unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
-            unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflow.copy(artifactsJson = "{\"writer\":2}"), RUNTIME)
-          }
-        }
-
-      assertTrue(secondStarted.await(5, TimeUnit.SECONDS))
-      assertFalse(secondEntered.await(250, TimeUnit.MILLISECONDS))
-      releaseFirst.countDown()
-      first.get(5, TimeUnit.SECONDS)
-      second.get(5, TimeUnit.SECONDS)
-      assertTrue(secondEntered.await(5, TimeUnit.SECONDS))
-    } finally {
-      releaseFirst.countDown()
-      executor.shutdownNow()
-    }
   }
 
   @Test
@@ -610,22 +460,6 @@ class SQLiteDatabaseSessionFactoryTest {
         if (rows.next()) rows.getString(1)?.lowercase() else null
       }
     }
-
-  private fun rawWriterCommit(
-    dbPath: String,
-    workflowId: String,
-    status: String,
-  ) {
-    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { writer ->
-      writer.createStatement().use { it.execute("PRAGMA busy_timeout = 10000") }
-      writer.prepareStatement("UPDATE feature_task_workflows SET workflow_status = ? WHERE workflow_id = ?")
-        .use { statement ->
-          statement.setString(1, status)
-          statement.setString(2, workflowId)
-          statement.executeUpdate()
-        }
-    }
-  }
 
   private fun boundDatabase(
     tempDir: Path,

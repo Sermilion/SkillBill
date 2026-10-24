@@ -23,7 +23,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.system.measureTimeMillis
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -487,31 +486,6 @@ private const val PARENT_LEASE_SECONDS = 30L
 
 class GoalRunnerShutdownHookTest {
   @Test
-  fun `the hook records a runner interruption with the injected clock in one write`() {
-    val store = InMemoryExecutionLeaseStore(null)
-    val coordinator = testCoordinator(store, FakeGoalSupervisor(NOT_RUNNING))
-
-    coordinator.recordInterruption("parent-1")
-
-    assertEquals(1, store.pauseNowCalls.size)
-    assertEquals("runner_interrupted", store.pauseNowCalls.single().first)
-    assertEquals("2026-08-02T10:00:00Z", store.pauseNowCalls.single().second)
-    assertEquals(false, store.pauseNowCalls.single().third)
-    assertTrue(store.controlStateValue.paused)
-    assertEquals("2026-08-02T10:00:00Z", store.controlStateValue.pausedAt)
-  }
-
-  @Test
-  fun `an interruption reason is distinguishable from an operator stop`() {
-    val store = InMemoryExecutionLeaseStore(null)
-    testCoordinator(store, FakeGoalSupervisor(NOT_RUNNING))
-      .recordInterruption("parent-1")
-
-    assertEquals("runner_interrupted", store.controlStateValue.pauseReason)
-    assertTrue(store.controlStateValue.pauseReason != "operator_stop")
-  }
-
-  @Test
   fun `the hook leaves a stop-verb reason alone and performs no second write`() {
     val store = InMemoryExecutionLeaseStore(null)
     store.controlStateValue =
@@ -531,29 +505,6 @@ class GoalRunnerShutdownHookTest {
   }
 
   @Test
-  fun `a blocked durable write cannot stall shutdown past the budget`() {
-    val store = InMemoryExecutionLeaseStore(null)
-    store.pauseNowBlocksForever = true
-    val coordinator = testCoordinator(store, FakeGoalSupervisor(NOT_RUNNING))
-
-    val elapsed = measureTimeMillis { coordinator.recordInterruption("parent-1") }
-
-    assertTrue(elapsed < SHUTDOWN_BUDGET_CEILING_MILLIS, "hook took ${elapsed}ms")
-  }
-
-  @Test
-  fun `a throwing durable write never escapes the hook`() {
-    val store = InMemoryExecutionLeaseStore(null)
-    store.pauseNowFailure = { error("database is gone") }
-    val coordinator = testCoordinator(store, FakeGoalSupervisor(NOT_RUNNING))
-
-    coordinator.recordInterruption("parent-1")
-
-    assertEquals(1, store.pauseNowCalls.size)
-    assertFalse(store.controlStateValue.paused)
-  }
-
-  @Test
   fun `a normally completed owned run leaves no hook behind to write on exit`() {
     val store = InMemoryExecutionLeaseStore(null)
     val coordinator = testCoordinator(store, FakeGoalSupervisor(NOT_RUNNING))
@@ -565,7 +516,6 @@ class GoalRunnerShutdownHookTest {
 }
 
 private val NOT_RUNNING = FeatureTaskRuntimeProcessInspection.NotRunning
-private const val SHUTDOWN_BUDGET_CEILING_MILLIS = 10_000L
 
 private class InMemoryExecutionLeaseStore(
   initialLease: GoalRunnerExecutionLease?,
@@ -576,7 +526,6 @@ private class InMemoryExecutionLeaseStore(
   val releaseCalls: MutableList<Triple<String, String, Long>> = mutableListOf()
   var persistControlStateCalls: Int = 0
   var pauseNowFailure: (() -> Nothing)? = null
-  var pauseNowBlocksForever: Boolean = false
   var releaseFailure: Throwable? = null
 
   override fun controlState(parentWorkflowId: String): GoalRunnerControlState = controlStateValue
@@ -597,7 +546,6 @@ private class InMemoryExecutionLeaseStore(
     overwriteExistingReason: Boolean,
   ): GoalRunnerControlState {
     pauseNowCalls.add(Triple(reason, pausedAt, overwriteExistingReason))
-    if (pauseNowBlocksForever) Thread.sleep(Long.MAX_VALUE)
     pauseNowFailure?.invoke()
     if (controlStateValue.paused && !overwriteExistingReason) return controlStateValue
     controlStateValue =

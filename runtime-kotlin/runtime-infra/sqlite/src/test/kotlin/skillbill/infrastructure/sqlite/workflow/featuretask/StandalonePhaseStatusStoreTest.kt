@@ -397,6 +397,7 @@ class StandalonePhaseStatusStoreTest {
           StandalonePlanSubtask(1, "Persist review runs", ".feature-specs/SKILL-433-review-runs/01.md", emptyList()),
           StandalonePlanSubtask(2, "Show review runs", ".feature-specs/SKILL-433-review-runs/02.md", listOf(1)),
         ),
+        listOf("/store/specs/SKILL-433-review-runs/spec.md", "/store/specs/SKILL-433-review-runs/01.md"),
       )
     val settle =
       StandalonePhaseStatusUpdate(

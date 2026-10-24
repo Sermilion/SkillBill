@@ -219,7 +219,7 @@ usage() {
   cat <<USAGE
 Usage: ./uninstall.sh [--desktop-app-dir PATH]
 
-Databases, SQLite journals, and backups under ~/.skill-bill are preserved.
+Databases, SQLite journals, backups, and projects/ under ~/.skill-bill are preserved.
 
 Options:
   --desktop-app-dir PATH   Remove the desktop app from a custom install root.
@@ -951,9 +951,9 @@ remove_install_state() {
     return 0
   fi
 
-  info "Clearing skill-bill runtime/install state (preserving databases and backups)."
+  info "Clearing skill-bill runtime/install state (preserving databases, backups and projects)."
 
-  local preserved=("backups")
+  local preserved=("backups" "projects")
   local is_preserved entry name keep
   for entry in "$SKILL_BILL_STATE_DIR"/* "$SKILL_BILL_STATE_DIR"/.[!.]* "$SKILL_BILL_STATE_DIR"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
@@ -973,7 +973,7 @@ remove_install_state() {
     fi
     rm -rf "$entry"
   done
-  ok "  cleared runtime/install state under $SKILL_BILL_STATE_DIR (databases and backups preserved)"
+  ok "  cleared runtime/install state under $SKILL_BILL_STATE_DIR (databases, backups and projects preserved)"
 }
 
 remove_install_state

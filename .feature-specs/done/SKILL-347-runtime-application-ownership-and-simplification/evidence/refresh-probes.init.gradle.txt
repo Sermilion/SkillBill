@@ -1,7 +1,0 @@
-allprojects {
-    if (name == 'runtime-application') {
-        afterEvaluate {
-            kotlin.sourceSets.test.kotlin.srcDir('/tmp/skill-bill-347-refresh/probes')
-        }
-    }
-}

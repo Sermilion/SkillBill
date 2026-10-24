@@ -1,5 +1,41 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-10-23] SKILL-441 subtask 3: runtime state relocation into the project store
+Areas: runtime-infra/host (repo-local config), runtime-infra/skills (install), runtime-infra/workflow (evidence, checklist, repair), runtime-engine (run evidence, goal purge), runtime-domain, runtime-ports (incl. testFixtures), runtime-cli
+- Repo-local config reads and writes the store `configPath` through ProjectStorePort. A legacy checkout `.skill-bill/config.yaml` is copied once, atomically (LegacyRepoLocalConfigCopy); after that the legacy file is ignored and never modified. A failed copy falls back to the legacy file with a legacy_config_copy_failed diagnostic. Install scaffolds the default config in the store.
+- Run-evidence addresses are store-relative (`run-evidence/...`) and resolve against the store root. References still carrying the legacy `.skill-bill/run-evidence/` prefix stay readable from the checkout, read-only. Both branches are containment-checked. Engine ownership and checkpoint filtering stay anchored on the legacy checkout prefix.
+- Feature-task tracking (`feature-task-tracking`) and acceptance-repair projection live under the store (`acceptanceRepairRoot`). The checklist store exposes `checklistPath` so the agent briefing gets an absolute path. Legacy tracking and repair data are not migrated.
+- GoalRunnerPurgeCoordinator takes ProjectStorePort and deletes only directories under the store root, with a containment check; the checkout `.skill-bill` is never touched.
+- Reusable: FixedProjectStorePort (runtime-ports testFixtures) injects a temp store into tests; InstallApplyPorts parameter object groups install-apply ports (declared in InstallApply.kt because a new file breaks the 12-file sibling ceiling for `install.apply`).
+- Tests that hardcoded `.skill-bill/...` now inject a temp store; CLI tests use an isolated SKILL_BILL_STATE_DIR. Slot-baseline fixtures were regenerated because prompts lost the `.skill-bill/` prefix (12 bytes shorter).
+- Limits: in-flight goals start fresh tracking and repair state in the store. packagedDataSmoke was not run locally (dirty tree) and is left to PR CI.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
+## [2026-10-23] SKILL-441 subtask 2: legacy path owner and legacy state notice
+Areas: runtime-infra/host (projectstore), runtime-infra/workflow (scoped staging), runtime-infra/contracts repoTest, runtime-contracts, runtime-domain, runtime-engine, orchestration/contracts
+- LegacyProjectStatePaths (runtime-contracts projectstore) is now the single owner of the `.skill-bill` and `.feature-specs` directory names and their slash prefixes. Planning exclusions, checkpoint scope, worktree edit journal, goal tick progress, run loop, PR review fix and scoped staging read it instead of private literals.
+- Reusable: the shared path object; later subtasks that move state out of the checkout should reference it rather than add literals.
+- The `.skill-bill` staging exclusion stays in checkpoint scope and the journal writer; scoped staging only owns the feature-specs check.
+- The resolver warns once per store when a checkout still has a `.skill-bill` directory. It emits a project_store_legacy_state diagnostic and persists a stamp in the store record, then never touches the legacy directory. Stamp write failure warns and does not block resolve.
+- Record schema gains optional `legacy_state_notice_at` (contract_version stays 0.1; the codec writes it only when set). Touch, adopt and rekey keep the stamp.
+- Limits: link and fresh stores start without a stamp, so they may warn once more. The per-common-dir cache means one process checks only the first checkout resolved for a project. No legacy config copy yet (subtask 3).
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
+## [2026-10-23] SKILL-441 subtask 1: project store resolver and identity
+Areas: runtime-infra/host (projectstore), runtime-infra/workflow (git lineage), runtime-ports, runtime-contracts, runtime-core DI, runtime-cli, runtime-application uninstall, uninstall.sh, orchestration/contracts
+- ProjectStoreResolver (host/projectstore) maps a checkout to a store under the state dir's projects/ directory. Linked worktrees of one repo share a store through the real path of the primary git common dir; a moved checkout is adopted by root-commit lineage; a second clone gets a suffixed id (superseded below: a clone with the same remote now shares the store); a repo with no commits is re-keyed to lineage once it has one; a non-git directory uses a path-hash key.
+- Any resolve failure falls back to a working-directory store with a git_unavailable warning. Malformed records are warned about, skipped and never rewritten. The resolver keeps a per-common-dir cache and touches last_seen atomically.
+- `skill-bill project link <id>` rebinds the current repo to an existing store and sets linked_to on the old one. An unknown id fails loudly with PROJECT_STORE_TARGET_UNKNOWN.
+- Record schema orchestration/contracts/project-store-record-schema.yaml (contract_version 0.1, additionalProperties false). A repoTest pins its property keys to ProjectStoreRecordKeys.
+- Uninstall now preserves projects/ in both the shell and the Kotlin path, with test coverage.
+- Pattern: ProjectStorePort and RepositoryLineagePort in runtime-ports; git lineage adapter in the workflow module so host stays free of a workflow dependency. Reusable: ProjectStoreRecordCodec parse seam and l-/p-/d- id helpers.
+- Package-ceiling guard forced subpackages: host/projectstore, workflow git/lineage, error/projectstore. runtimeComponentInboundApi lists projectStorePort because runtime-cli cannot see runtime-infra:host.
+- Limits: no consumer reads the store yet; later subtasks move project state in. Host tests use fake .git layouts, and GitRepositoryLineage has no dedicated test. The packagedDataSmoke check is left to CI.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-08] An unresolved gate JVM no longer blocks non-JVM gates
 Areas: runtime-infra/workflow validation
 - `FileSystemValidationGateRunner` used to throw `GateJvmUnresolvedException` before launching any gate when no Java 21+ was found. That blocked TypeScript, Python, Go, Rust and PHP gates that never run Java.
@@ -560,3 +596,9 @@ Areas: runtime-infra-fs/install, runtime-infra-fs/scaffold, runtime-domain/insta
 - Pattern reusable: any new sidecar or pointer that references an external file should inline the content at render time, not carry a path
 Feature flag: N/A
 Acceptance criteria: 8/8 implemented
+
+## [2026-10-24] SKILL-441 follow-up: shared clone stores and legacy spec import
+Areas: runtime-infra/host (projectstore), runtime-contracts, runtime-engine (goalrunner/intake), runtime-cli (project), orchestration/contracts
+- A clone with the same root commits and remote URL as a store whose checkout still exists now shares that store instead of getting a suffixed one, warning with value_used=lineage_shared. Extra checkouts are recorded in the optional shared_common_dirs record field; exact matching checks common_dir and every shared entry. A clone with a different remote (a fork) still gets its own suffixed store. Adoption by a moved checkout happens only once every recorded checkout is gone.
+- `skill-bill project link <id>` now adds the checkout to the target's shared_common_dirs instead of repointing the target's common_dir, so the original checkout keeps resolving to the target.
+- `skill-bill project import-specs [--from <dir>]` (LegacySpecImport) copies legacy .feature-specs/ bundles, active and done/, into the store's specs/. It never modifies the source, skips bundles already present in the store, and leaves an active bundle in place while its issue has a non-terminal workflow. Copied decomposition manifests have their .feature-specs/ paths rewritten to specs/.

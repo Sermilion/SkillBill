@@ -2,15 +2,19 @@ package skillbill.engine.featuretask.prepare
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml
 import skillbill.application.decomposition.loadDecompositionManifest
 import skillbill.application.decomposition.parentSpecPath
+import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.specSource
+import skillbill.application.storeAwareTestDecompositionManifestStore
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.application.testDecompositionManifestWriter
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.runloop.planning.PlanBundleAuthorization
+import skillbill.engine.featuretask.runloop.planning.PlanBundleListing
 import skillbill.engine.goalrunner.manifest
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.error.core.SkillBillRuntimeException
@@ -19,6 +23,8 @@ import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
 import skillbill.featurespec.model.FeatureSpecWriteRequest
+import skillbill.featurespec.model.FeatureSpecWriteResult
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.decodeManifest
@@ -34,6 +40,8 @@ import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.SpecSource
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -41,11 +49,15 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class FeatureSpecPreparationWriterTest {
+  private val projectStore = FixedProjectStorePort(Files.createTempDirectory("skillbill-feature-spec-store"))
+  private val storeRoot: Path = projectStore.root
+  private val storeFileStore = storeAwareTestDecompositionManifestStore(projectStore)
   private val writer =
     FeatureSpecPreparationWriter(
       decompositionManifestValidator = testDecompositionManifestValidator,
-      fileStore = TestDecompositionManifestStore,
-      decompositionManifestWriter = testDecompositionManifestWriter,
+      fileStore = storeFileStore,
+      decompositionManifestWriter = DecompositionManifestWriter(projectStore),
+      projectStore = projectStore,
     )
 
   @Test
@@ -64,13 +76,13 @@ class FeatureSpecPreparationWriterTest {
           ),
       )
 
-    val parentSpec = repoRoot.resolve(result.parentSpecPath)
+    val parentSpec = storeRoot.resolve(result.parentSpecPath)
     val manifest = parentSpec.parent.resolve("decomposition-manifest.yaml")
     assertEquals(FeatureSpecPreparationMode.SINGLE_SPEC, result.mode)
     assertEquals(result.parentSpecPath, result.featureImplementPath)
-    assertTrue(Files.isRegularFile(repoRoot.resolve(result.decompositionManifestPath)))
+    assertTrue(Files.isRegularFile(storeRoot.resolve(result.decompositionManifestPath)))
     assertEquals(1, result.subtaskSpecPaths.size)
-    assertTrue(Files.isRegularFile(repoRoot.resolve(result.subtaskSpecPaths.single())))
+    assertTrue(Files.isRegularFile(storeRoot.resolve(result.subtaskSpecPaths.single())))
     assertTrue(Files.isRegularFile(parentSpec))
     assertTrue(Files.exists(manifest))
     assertContains(Files.readString(parentSpec), "## Acceptance Criteria")
@@ -108,12 +120,12 @@ class FeatureSpecPreparationWriterTest {
       )
 
     val written = writer.write(repoRoot, request)
-    val verified = writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
+    val verified = writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
 
     assertEquals(written.parentSpecPath, verified.parentSpecPath)
     assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
     (listOf(written.parentSpecPath) + written.subtaskSpecPaths).forEach { path ->
-      val text = Files.readString(repoRoot.resolve(path))
+      val text = Files.readString(storeRoot.resolve(path))
       criteria.forEach { criterion -> assertContains(text, criterion) }
     }
   }
@@ -158,14 +170,14 @@ class FeatureSpecPreparationWriterTest {
           ),
       )
 
-    val parentSpec = repoRoot.resolve(result.parentSpecPath)
-    val manifest = repoRoot.resolve(result.decompositionManifestPath)
+    val parentSpec = storeRoot.resolve(result.parentSpecPath)
+    val manifest = storeRoot.resolve(result.decompositionManifestPath)
     assertEquals(FeatureSpecPreparationMode.DECOMPOSED, result.mode)
     assertTrue(Files.isRegularFile(parentSpec))
     assertTrue(Files.isRegularFile(manifest))
     assertEquals(2, result.subtaskSpecPaths.size)
     result.subtaskSpecPaths.forEach { subtaskPath ->
-      val subtaskSpec = repoRoot.resolve(subtaskPath)
+      val subtaskSpec = storeRoot.resolve(subtaskPath)
       val text = Files.readString(subtaskSpec)
       assertContains(text, "## Scope")
       assertContains(text, "## Acceptance Criteria")
@@ -195,14 +207,14 @@ class FeatureSpecPreparationWriterTest {
 
     val planned = writer.plannedParentSpecPath(repoRoot, request.decision.issueKey, request.featureName)
     val written = writer.write(repoRoot, request)
-    val verified = writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
-    val parentName = repoRoot.resolve(written.parentSpecPath).parent.fileName.toString()
-    val subtaskPaths = written.subtaskSpecPaths.map(repoRoot::resolve)
-    val manifest = loadTestManifest(repoRoot.resolve(written.decompositionManifestPath))
+    val verified = writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
+    val parentName = storeRoot.resolve(written.parentSpecPath).parent.fileName.toString()
+    val subtaskPaths = written.subtaskSpecPaths.map(storeRoot::resolve)
+    val manifest = loadTestManifest(storeRoot.resolve(written.decompositionManifestPath))
     val repeatedRoot = Files.createTempDirectory("skillbill-feature-spec-long-names-repeat")
     val repeated = writer.write(repeatedRoot, request)
 
-    assertEquals(planned, repoRoot.resolve(written.parentSpecPath))
+    assertEquals(planned, storeRoot.resolve(written.parentSpecPath))
     assertTrue(parentName.toByteArray(Charsets.UTF_8).size <= 240)
     assertTrue(subtaskPaths.all { it.fileName.toString().toByteArray(Charsets.UTF_8).size <= 240 })
     assertTrue(
@@ -212,7 +224,7 @@ class FeatureSpecPreparationWriterTest {
     )
     assertEquals(2, subtaskPaths.distinct().size)
     assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
-    assertEquals(subtaskPaths.map { it.toString() }, manifest.subtasks.map { it.specPath })
+    assertEquals(written.subtaskSpecPaths, manifest.subtasks.map { it.specPath })
     assertEquals(
       subtaskPaths.map { it.fileName.toString() },
       repeated.subtaskSpecPaths.map { repeatedRoot.resolve(it).fileName.toString() },
@@ -225,7 +237,7 @@ class FeatureSpecPreparationWriterTest {
     assertEquals(
       request.featureName,
       Regex("(?m)^# SKILL-59 - (.+)$")
-        .find(writer.readText(repoRoot.resolve(written.parentSpecPath)))
+        .find(TestDecompositionManifestStore.readText(storeRoot.resolve(written.parentSpecPath)))
         ?.groupValues?.get(1),
     )
   }
@@ -243,6 +255,7 @@ class FeatureSpecPreparationWriterTest {
 
     assertEquals("feature_name", error.fieldPath)
     assertTrue(!Files.exists(repoRoot.resolve(".feature-specs")))
+    assertTrue(!Files.exists(storeRoot.resolve("specs")))
   }
 
   @Test
@@ -277,7 +290,7 @@ class FeatureSpecPreparationWriterTest {
           ),
       )
     assertEquals(1, result.subtaskSpecPaths.size)
-    assertEquals(1, loadTestManifest(repoRoot.resolve(result.decompositionManifestPath)).subtasks.size)
+    assertEquals(1, loadTestManifest(storeRoot.resolve(result.decompositionManifestPath)).subtasks.size)
   }
 
   @Test
@@ -311,10 +324,10 @@ class FeatureSpecPreparationWriterTest {
           specSource = SpecSource.LINEAR,
         ),
       )
-    val manifest = loadTestManifest(repoRoot.resolve(result.decompositionManifestPath))
+    val manifest = loadTestManifest(storeRoot.resolve(result.decompositionManifestPath))
     assertEquals(SpecSource.LINEAR, manifest.specSource)
     assertEquals("linear-subtask-1", manifest.subtasks.single().linearIssueId)
-    assertContains(Files.readString(repoRoot.resolve(result.decompositionManifestPath)), "spec_source: \"linear\"")
+    assertContains(Files.readString(storeRoot.resolve(result.decompositionManifestPath)), "spec_source: \"linear\"")
   }
 
   @Test
@@ -332,7 +345,7 @@ class FeatureSpecPreparationWriterTest {
         ),
       )
     }
-    val directory = repoRoot.resolve(".feature-specs/SKILL-59-prevalidated-feature")
+    val directory = storeRoot.resolve("specs/SKILL-59-prevalidated-feature")
     assertTrue(!Files.exists(directory) || Files.list(directory).use { it.findAny().isEmpty })
   }
 
@@ -370,7 +383,12 @@ class FeatureSpecPreparationWriterTest {
       }
 
     assertFailsWith<SkillBillRuntimeException> {
-      FeatureSpecPreparationWriter(rejectingValidator, store, testDecompositionManifestWriter).write(
+      FeatureSpecPreparationWriter(
+        rejectingValidator,
+        store,
+        DecompositionManifestWriter(projectStore),
+        projectStore,
+      ).write(
         repoRoot,
         FeatureSpecWriteRequest(
           decision = decomposedDecision(),
@@ -427,8 +445,9 @@ class FeatureSpecPreparationWriterTest {
     assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(
         readbackRejectingValidator,
-        TestDecompositionManifestStore,
-        testDecompositionManifestWriter,
+        storeFileStore,
+        DecompositionManifestWriter(projectStore),
+        projectStore,
       ).write(
         repoRoot,
         FeatureSpecWriteRequest(
@@ -441,7 +460,7 @@ class FeatureSpecPreparationWriterTest {
       )
     }
 
-    val directory = repoRoot.resolve(".feature-specs/SKILL-59-readback-rollback")
+    val directory = storeRoot.resolve("specs/SKILL-59-readback-rollback")
     assertTrue(!Files.exists(directory) || Files.list(directory).use { it.findAny().isEmpty })
   }
 
@@ -459,7 +478,7 @@ class FeatureSpecPreparationWriterTest {
     val initial = writer.write(repoRoot, request)
     val originalFiles =
       (listOf(initial.parentSpecPath, initial.decompositionManifestPath) + initial.subtaskSpecPaths)
-        .associateWith { relativePath -> Files.readString(repoRoot.resolve(relativePath)) }
+        .associateWith { relativePath -> Files.readString(storeRoot.resolve(relativePath)) }
     val readbackRejectingValidator =
       object : DecompositionManifestValidator {
         private var yamlValidationCount = 0
@@ -499,8 +518,9 @@ class FeatureSpecPreparationWriterTest {
     assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(
         readbackRejectingValidator,
-        TestDecompositionManifestStore,
-        testDecompositionManifestWriter,
+        storeFileStore,
+        DecompositionManifestWriter(projectStore),
+        projectStore,
       ).write(
         repoRoot,
         request,
@@ -508,7 +528,7 @@ class FeatureSpecPreparationWriterTest {
     }
 
     originalFiles.forEach { (relativePath, content) ->
-      assertEquals(content, Files.readString(repoRoot.resolve(relativePath)))
+      assertEquals(content, Files.readString(storeRoot.resolve(relativePath)))
     }
   }
 
@@ -567,7 +587,8 @@ class FeatureSpecPreparationWriterTest {
       FeatureSpecPreparationWriter(
         repairingValidator,
         TestDecompositionManifestStore,
-        testDecompositionManifestWriter,
+        DecompositionManifestWriter(projectStore),
+        projectStore,
       ).write(
         repoRoot,
         FeatureSpecWriteRequest(
@@ -640,7 +661,8 @@ class FeatureSpecPreparationWriterTest {
       FeatureSpecPreparationWriter(
         repairingValidator,
         TestDecompositionManifestStore,
-        testDecompositionManifestWriter,
+        DecompositionManifestWriter(projectStore),
+        projectStore,
       ).write(
         repoRoot,
         FeatureSpecWriteRequest(
@@ -653,7 +675,7 @@ class FeatureSpecPreparationWriterTest {
       )
 
     assertEquals(listOf(evidence), result.repairEvidence)
-    val manifestPath = repoRoot.resolve(result.decompositionManifestPath)
+    val manifestPath = storeRoot.resolve(result.decompositionManifestPath)
     assertEquals(repairingValidator.repairedYaml, Files.readString(manifestPath))
     assertEquals("SKILL-59", loadTestManifest(manifestPath).issueKey)
   }
@@ -670,7 +692,7 @@ class FeatureSpecPreparationWriterTest {
         subtasks = listOf(singleSubtask()),
       )
     val first = writer.write(repoRoot, request)
-    val manifestPath = repoRoot.resolve(first.decompositionManifestPath)
+    val manifestPath = storeRoot.resolve(first.decompositionManifestPath)
     val blocked =
       loadTestManifest(manifestPath).copy(
         status = "blocked",
@@ -691,8 +713,8 @@ class FeatureSpecPreparationWriterTest {
 
     val rewritten = writer.write(repoRoot, request)
 
-    assertTrue("status:" !in Files.readString(repoRoot.resolve(rewritten.parentSpecPath)))
-    assertTrue("status:" !in Files.readString(repoRoot.resolve(rewritten.subtaskSpecPaths.single())))
+    assertTrue("status:" !in Files.readString(storeRoot.resolve(rewritten.parentSpecPath)))
+    assertTrue("status:" !in Files.readString(storeRoot.resolve(rewritten.subtaskSpecPaths.single())))
     assertEquals("blocked", loadTestManifest(manifestPath).status)
   }
 
@@ -701,27 +723,24 @@ class FeatureSpecPreparationWriterTest {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authored")
     val written = writer.write(repoRoot, authoredBundleRequest())
 
-    val verified = writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
+    val verified = writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
 
     assertEquals(written.parentSpecPath, verified.parentSpecPath)
     assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
-    assertEquals(2, loadTestManifest(repoRoot.resolve(verified.decompositionManifestPath)).subtasks.size)
-    assertEquals(
-      null,
-      PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf(written.parentSpecPath), writer::listTree),
-    )
+    assertEquals(2, loadTestManifest(storeRoot.resolve(verified.decompositionManifestPath)).subtasks.size)
+    assertEquals(null, violationFor(storeTarget(written)))
   }
 
   @Test
   fun `an authored subtask without an acceptance list is refused with the typed readiness failure`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authored-missing")
     val written = writer.write(repoRoot, authoredBundleRequest())
-    val subtask = repoRoot.resolve(written.subtaskSpecPaths.first())
+    val subtask = storeRoot.resolve(written.subtaskSpecPaths.first())
     Files.writeString(subtask, Files.readString(subtask).substringBefore("## Acceptance Criteria"))
 
     val error =
       assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
-        writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
+        writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
       }
 
     assertEquals("subtasks[0].acceptance_criteria", error.fieldPath)
@@ -732,14 +751,82 @@ class FeatureSpecPreparationWriterTest {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authorization")
     val outside = Files.createTempDirectory("skillbill-feature-spec-outside")
     val written = writer.write(repoRoot, authoredBundleRequest())
-    val bundleDirectory = repoRoot.resolve(written.parentSpecPath).parent
+    val bundleDirectory = storeRoot.resolve(written.parentSpecPath).parent
 
-    assertEquals(null, PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf("src/Main.kt"), writer::listTree))
+    assertEquals(null, violationFor(storeTarget(written)))
     Files.createSymbolicLink(bundleDirectory.resolve("escape.md"), outside.resolve("target.md"))
-    assertTrue(
-      PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf(written.parentSpecPath), writer::listTree) != null,
-    )
+    assertTrue(violationFor(storeTarget(written)) != null)
   }
+
+  @Test
+  fun `store bundle authorization allows the target bundle and refuses a sibling bundle`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-sibling")
+    val written = writer.write(repoRoot, authoredBundleRequest())
+    val target = storeTarget(written)
+
+    assertEquals(null, violationFor(target))
+    Files.createDirectories(target.directory.resolveSibling("SKILL-59-other-bundle"))
+
+    val violation = violationFor(target)
+
+    assertContains(requireNotNull(violation), "more than one SKILL-59-<slug>/ bundle")
+  }
+
+  @Test
+  fun `store bundle authorization ignores a same-key sibling bundle older than the plan`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-stale-sibling")
+    val target = storeTarget(writer.write(repoRoot, authoredBundleRequest()))
+    val stale = Files.createDirectories(target.directory.resolveSibling("SKILL-59-stale-bundle"))
+    Files.setLastModifiedTime(stale, FileTime.from(Instant.parse("2020-01-01T00:00:00Z")))
+
+    assertEquals(null, violationFor(target, authoredSince = Instant.parse("2021-01-01T00:00:00Z")))
+  }
+
+  @Test
+  fun `legacy bundle authorization keeps the git introduced path rule`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-legacy-authorization")
+    val legacyDirectory = repoRoot.resolve(".feature-specs/SKILL-59-legacy-bundle")
+    Files.createDirectories(legacyDirectory)
+    Files.writeString(legacyDirectory.resolve("spec.md"), "# Legacy\n")
+    val target = PlanBundleTarget.Legacy(legacyDirectory)
+
+    val bundleSpec = ".feature-specs/SKILL-59-legacy-bundle/spec.md"
+
+    assertEquals(null, violationFor(target, listOf(bundleSpec, "src/Main.kt")))
+    val violation = violationFor(target, listOf(bundleSpec, ".feature-specs/SKILL-59-second/spec.md"))
+    assertContains(requireNotNull(violation), "more than one")
+  }
+
+  @Test
+  fun `legacy relativize keeps the legacy form and store paths relativize against the store`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-relativize")
+    val store = projectStore.resolve(repoRoot)
+    val legacySpec = repoRoot.resolve(".feature-specs/SKILL-59-legacy/spec.md")
+    val storeSpec = store.specsRoot.resolve("SKILL-59-stored/spec.md")
+
+    assertEquals(".feature-specs/SKILL-59-legacy/spec.md", repoRelativePath(repoRoot, store, legacySpec))
+    assertEquals("specs/SKILL-59-stored/spec.md", repoRelativePath(repoRoot, store, storeSpec))
+  }
+
+  private fun violationFor(
+    target: PlanBundleTarget,
+    introducedPaths: List<String> = emptyList(),
+    authoredSince: Instant = Instant.EPOCH,
+  ): String? =
+    PlanBundleAuthorization.violation(
+      "SKILL-59",
+      target,
+      introducedPaths,
+      PlanBundleListing(
+        TestDecompositionManifestStore::listTree,
+        TestDecompositionManifestStore::listDirectChildDirectories,
+        TestDecompositionManifestStore::lastModified,
+        authoredSince,
+      ),
+    )
+
+  private fun storeTarget(written: FeatureSpecWriteResult) =
+    PlanBundleTarget.Store(storeRoot.resolve(written.parentSpecPath).parent)
 
   private fun authoredBundleRequest() =
     FeatureSpecWriteRequest(

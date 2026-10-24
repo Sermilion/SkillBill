@@ -4,6 +4,7 @@ data class StandalonePlanReport(
   val featureName: String,
   val parentSpecPath: String,
   val subtasks: List<StandalonePlanSubtask>,
+  val bundleFiles: List<String> = emptyList(),
 )
 
 data class StandalonePlanSubtask(

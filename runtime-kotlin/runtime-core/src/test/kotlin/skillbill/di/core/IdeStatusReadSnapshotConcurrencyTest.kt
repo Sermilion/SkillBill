@@ -1,10 +1,12 @@
 package skillbill.di.core
 
+import skillbill.application.TestDecompositionManifestStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.IdeStatusProjector
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.model.IdeStatusRequest
@@ -22,6 +24,7 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.NoopIdeStatusValidator
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkListRepository
@@ -210,6 +213,13 @@ private class SnapshotFixture(
           manifestStore = EmptyManifestStore,
           diagnostics = NoopRuntimeDiagnostics,
           qaCapabilities = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
+          planReports =
+            StandalonePlanReportBuilder(
+              EmptyManifestStore,
+              TestDecompositionManifestStore,
+              FixedProjectStorePort(home.resolve("project-store")),
+              NoopRuntimeDiagnostics,
+            ),
         ),
       ideStatusValidator = NoopIdeStatusValidator,
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },

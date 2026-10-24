@@ -11,6 +11,7 @@ import skillbill.application.decomposition.executionModel
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.application.testHarnessClock
+import skillbill.application.testProjectStore
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
@@ -4960,6 +4961,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
+        projectStore = testProjectStore,
       )
 
     val launchRequest =
@@ -5012,6 +5014,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
+        projectStore = testProjectStore,
       )
 
     val launchRequest =
@@ -5051,6 +5054,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
+        projectStore = testProjectStore,
       )
 
     val launchRequest =
@@ -5088,6 +5092,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
         worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
         clock = testHarnessClock,
         diagnostics = NoopRuntimeDiagnostics,
+        projectStore = testProjectStore,
       )
     val launchRequest =
       reconciler.subtaskLaunchRequest(

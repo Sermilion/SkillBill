@@ -146,6 +146,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       request = request,
       specSource = specSource,
       policy = context.acceptedStepPolicy(phaseId),
+      projectStoreRoot = context.projectStoreRoot,
       launchAssignment = FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
       reentry = reentry,
       failureContinuationOutput =

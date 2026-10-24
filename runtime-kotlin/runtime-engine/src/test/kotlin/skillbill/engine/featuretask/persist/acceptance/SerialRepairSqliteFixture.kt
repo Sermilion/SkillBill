@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.agent.model.PhaseOutput
+import skillbill.application.testProjectStore
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
@@ -222,6 +223,7 @@ internal class SerialRepairSqliteFixture(
         phaseOutputs,
         gitOperations,
         source,
+        testProjectStore,
       ),
     )
   }

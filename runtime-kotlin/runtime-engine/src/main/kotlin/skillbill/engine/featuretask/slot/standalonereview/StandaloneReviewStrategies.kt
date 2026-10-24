@@ -149,7 +149,13 @@ abstract class StandaloneReviewStrategy(
     val invocation = run.request.reviewInvocation
     val reviewRunId = invocation?.reviewRunId ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
     val rubricRequest =
-      delegatedReviewRequest(run.resolvedAgent.resolvedAgentId, run.request.repoRoot, target, reviewInput)
+      delegatedReviewRequest(
+        run.resolvedAgent.resolvedAgentId,
+        run.request.repoRoot,
+        run.projectStoreRoot,
+        target,
+        reviewInput,
+      )
     val qualitySection =
       if (reviewRunner == null) {
         qualityRubricResolver.resolveInlineRubric(rubricRequest, context.diagnostics)
@@ -428,6 +434,7 @@ abstract class StandaloneReviewStrategy(
           delegatedReviewRequest(
             run.resolvedAgent.resolvedAgentId,
             run.request.repoRoot,
+            run.projectStoreRoot,
             delegatedTarget,
             facts.input,
           ).copy(

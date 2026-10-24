@@ -4,6 +4,7 @@ import skillbill.application.RecordingLifecycleTelemetryRepository
 import skillbill.application.RecordingSpecScratchStore
 import skillbill.application.RecordingSpecStatusWriter
 import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
@@ -14,7 +15,6 @@ import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.seedHarnessSpecIntentProjection
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
 import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
@@ -30,6 +30,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconc
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.lifecycle.core.ownership
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskExecutionIdentityResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
@@ -152,6 +153,8 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
@@ -229,6 +232,7 @@ import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.
 import java.lang.Boolean.TYPE
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
@@ -734,7 +738,11 @@ internal data class RuntimeHarnessConfig(
 }
 
 private fun runtimeSpecSourceResolver(): SpecSourceResolver =
-  SpecSourceResolver(TestDecompositionManifestStore, testDecompositionManifestValidator)
+  SpecSourceResolver(
+    TestDecompositionManifestStore,
+    testDecompositionManifestValidator,
+    RUNNER_TEST_PROJECT_STORE,
+  )
 
 private data class RuntimePhaseGatesDeps(
   val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
@@ -800,7 +808,8 @@ private fun defaultRepoLocalConfigPort(): RepoLocalConfigPort =
 private fun testSpecGate(
   specScratchStore: SpecScratchStore = RecordingSpecScratchStore(),
   specStatusWriter: FeatureTaskRuntimeSpecStatusWriter = RecordingSpecStatusWriter(),
-): FeatureTaskRuntimeSpecGate = FeatureTaskRuntimeSpecGate(specScratchStore, specStatusWriter, NoopRuntimeDiagnostics)
+): FeatureTaskRuntimeSpecGate =
+  FeatureTaskRuntimeSpecGate(specScratchStore, specStatusWriter, NoopRuntimeDiagnostics, RUNNER_TEST_PROJECT_STORE)
 
 private fun disabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory): FeatureTaskRuntimeLifecycleTelemetry =
   FeatureTaskRuntimeLifecycleTelemetry(
@@ -1468,6 +1477,7 @@ private fun runnerExecutionEntry(
       fixture.admission,
       resolver,
       repositories,
+      FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
     )
   }
   val facts = runnerSelectionFacts(config)
@@ -1494,7 +1504,13 @@ private fun runnerExecutionEntry(
       )
     }
   }
-  return FeatureTaskRuntimeExecutionEntry(database, fixture.admission, resolver, repositories)
+  return FeatureTaskRuntimeExecutionEntry(
+    database,
+    fixture.admission,
+    resolver,
+    repositories,
+    FeatureTaskExecutionIdentityResolver(repositories, RUNNER_TEST_PROJECT_STORE),
+  )
 }
 
 private fun runnerSelectionFacts(config: RuntimeHarnessConfig): PhaseStrategySelectionFacts =
@@ -1523,6 +1539,10 @@ private fun defaultQualityGateCycles(): RuntimeQualityGateCycles {
   )
 }
 
+internal val RUNNER_TEST_STORE_ROOT: Path = Files.createTempDirectory("skillbill-runner-project-store")
+
+internal val RUNNER_TEST_PROJECT_STORE: ProjectStorePort = FixedProjectStorePort(RUNNER_TEST_STORE_ROOT)
+
 internal open class TestFeatureTaskRuntimeRunLoopEntry(
   gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
   decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner = testDecompositionPlanner(),
@@ -1539,6 +1559,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
         ReviewContextEnvelopeValidator { _, _ -> },
         TestDecompositionManifestStore,
       ),
+      RUNNER_TEST_PROJECT_STORE,
     ),
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry =
     FeatureTaskRuntimeLifecycleTelemetry(
@@ -1555,8 +1576,12 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
   sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort = DERIVING_SHARED_EVIDENCE_RESOLVER,
   diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
   implementationChecklistStore: FeatureTaskImplementationChecklistStore =
-    FileSystemFeatureTaskImplementationChecklistStore(NoopRuntimeDiagnostics),
+    FileSystemFeatureTaskImplementationChecklistStore(
+      NoopRuntimeDiagnostics,
+      FixedProjectStorePort(Files.createTempDirectory("skillbill-runner-store")),
+    ),
   commitPushManifestCompletion: CommitPushManifestCompletion = NoopCommitPushManifestCompletion,
+  projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,
     decompositionPlanner,
@@ -1568,6 +1593,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
     diffResolver,
     implementationChecklistStore,
     commitPushManifestCompletion,
+    projectStore,
   ) {
   private var delegate: FeatureTaskRuntimeRunLoopEntry? = null
 
@@ -1587,9 +1613,12 @@ private fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
       FeatureSpecPreparationWriter(
         decompositionManifestValidator = testDecompositionManifestValidator,
         fileStore = TestDecompositionManifestStore,
-        decompositionManifestWriter = testDecompositionManifestWriter,
+        decompositionManifestWriter = DecompositionManifestWriter(RUNNER_TEST_PROJECT_STORE),
+        projectStore = RUNNER_TEST_PROJECT_STORE,
       ),
-    specPathResolver = FileSystemFeatureSpecPathResolver(),
+    specPathResolver = FileSystemFeatureSpecPathResolver(RUNNER_TEST_PROJECT_STORE),
+    projectStore = RUNNER_TEST_PROJECT_STORE,
+    fileStore = TestDecompositionManifestStore,
   )
 
 internal fun facts(stdout: String): AgentRunLaunchOutcome =
@@ -1910,11 +1939,13 @@ internal const val PLAN_BUNDLE_PROSE: String = "Authored the ordered spec bundle
 internal fun writePlanBundle(
   repoRoot: Path,
   issueKey: String,
+  projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
 ): FeatureSpecWriteResult =
   FeatureSpecPreparationWriter(
     decompositionManifestValidator = testDecompositionManifestValidator,
     fileStore = TestDecompositionManifestStore,
-    decompositionManifestWriter = testDecompositionManifestWriter,
+    decompositionManifestWriter = DecompositionManifestWriter(projectStore),
+    projectStore = projectStore,
   ).write(
     repoRoot = repoRoot,
     request =
@@ -2717,4 +2748,5 @@ internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState)
     qualityGateCycles,
     sharedEvidenceResolver,
     diffResolver,
+    projectStoreRoot,
   )

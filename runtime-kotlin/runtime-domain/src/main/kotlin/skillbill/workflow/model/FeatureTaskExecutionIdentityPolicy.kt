@@ -3,6 +3,8 @@ package skillbill.workflow.model
 import skillbill.contracts.issuekey.MAX_ISSUE_KEY_LENGTH
 import skillbill.contracts.issuekey.isWellFormedIssueKey
 import skillbill.contracts.issuekey.normalizeIssueKey
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_EXECUTION_IDENTITY_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 
@@ -93,8 +95,8 @@ object FeatureTaskExecutionIdentityPolicy {
       "(for example $REPOSITORY_IDENTITY_PREFIX/home/me/projects/app), but received ${echo(value)}"
 
   private fun governedSpecPathFailure(value: String): String =
-    "governed_spec_path is malformed: expected a repository-relative '.feature-specs/<...>.md' path with no " +
-      "empty, '.', or '..' segments, but received ${echo(value)}"
+    "governed_spec_path is malformed: expected a 'specs/<...>.md' project-store path or a repository-relative " +
+      "'.feature-specs/<...>.md' path with no empty, '.', or '..' segments, but received ${echo(value)}"
 
   private fun echo(value: String): String {
     val sanitized = value.replace("\r", "\\r").replace("\n", "\\n")
@@ -114,7 +116,10 @@ object FeatureTaskExecutionIdentityPolicy {
       value.none { it == '\r' || it == '\n' }
 
   private fun validGovernedSpecPath(value: String): Boolean =
-    value.startsWith(".feature-specs/") &&
+    (
+      value.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX) ||
+        value.startsWith(ProjectStoreLayout.SPECS_PREFIX)
+    ) &&
       value.endsWith(".md") &&
       value.none { it == '\r' || it == '\n' } &&
       value.split('/').none { it.isBlank() || it == "." || it == ".." }

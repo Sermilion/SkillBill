@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.runloop.planning
 
 import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.application.testDecompositionManifestWriter
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
@@ -19,6 +19,8 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.core.databaseBusy
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
@@ -37,15 +39,18 @@ import kotlin.test.assertSame
 
 class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
   private val repoRoot: Path = Files.createTempDirectory("skillbill-planning-stop-db-failure")
+  private val storeRoot: Path = Files.createTempDirectory("skillbill-planning-stop-db-failure-store")
+  private val projectStore = FixedProjectStorePort(storeRoot)
 
   @AfterTest
   fun cleanUp() {
     repoRoot.toFile().deleteRecursively()
+    storeRoot.toFile().deleteRecursively()
   }
 
   @Test
   fun `a busy database while persisting the decompose terminal propagates instead of blocking planning`() {
-    val written = writePlanBundle(repoRoot, ISSUE_KEY)
+    val written = writePlanBundle(repoRoot, ISSUE_KEY, projectStore)
     val busy = databaseBusy(IllegalStateException("[SQLITE_BUSY] The database file is locked (database is locked)"))
     val records =
       object : PhaseRunRecords by InMemoryPhaseRunRecords(Clock.systemUTC(), null) {
@@ -55,11 +60,9 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
           planStepId: String,
         ): Boolean = throw busy
       }
-    written.subtaskSpecPaths.forEach { path ->
-      Files.writeString(
-        repoRoot.resolve(path),
-        Files.readString(repoRoot.resolve(path)) + "\n## Implementation Details\n- Planned task.\n",
-      )
+    val store = projectStore.resolve(repoRoot)
+    written.subtaskSpecPaths.map { path -> store.resolveSpecPath(path, repoRoot) }.forEach { spec ->
+      Files.writeString(spec, Files.readString(spec) + "\n## Implementation Details\n- Planned task.\n")
     }
     val bundle =
       PlanBundleSnapshots(
@@ -107,9 +110,12 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
         FeatureSpecPreparationWriter(
           decompositionManifestValidator = testDecompositionManifestValidator,
           fileStore = TestDecompositionManifestStore,
-          decompositionManifestWriter = testDecompositionManifestWriter,
+          decompositionManifestWriter = DecompositionManifestWriter(projectStore),
+          projectStore = projectStore,
         ),
-      specPathResolver = FileSystemFeatureSpecPathResolver(),
+      specPathResolver = FileSystemFeatureSpecPathResolver(projectStore),
+      projectStore = projectStore,
+      fileStore = TestDecompositionManifestStore,
     )
 
   private fun bundleRequest(): FeatureTaskRuntimeRunFacts =

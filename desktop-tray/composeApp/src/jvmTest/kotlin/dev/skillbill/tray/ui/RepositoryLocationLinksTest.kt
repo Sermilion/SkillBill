@@ -39,6 +39,8 @@ class RepositoryLocationLinksTest {
         calls += "directory:$root"
         return Outcome.Failure(Problem(ProblemCode.UNKNOWN, "The checkout no longer exists."))
       }
+
+      override suspend fun openFile(path: String): Outcome<Unit> = Outcome.Value(Unit)
     }
     val item = workItem("links").copy(repositoryName = "ZeroAccount", repositoryRoot = "/tmp/a repo", branch = "fix/links")
     setContent {

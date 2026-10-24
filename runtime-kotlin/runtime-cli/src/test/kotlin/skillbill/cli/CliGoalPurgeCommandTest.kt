@@ -57,7 +57,7 @@ class CliGoalPurgeCommandTest {
 
   @Test
   fun `confirmed goal purge restores a tracked bundle and preflight reports new work`() {
-    val fixture = goalFixture(subtaskCount = 2)
+    val fixture = goalFixture(subtaskCount = 2, legacyBundle = true)
     val manifestPath = fixture.parentSpec.parent.resolve("decomposition-manifest.yaml")
     val seed = we5006Seed(fixture)
     seedGoalOwnedState(fixture, seed)
@@ -67,7 +67,7 @@ class CliGoalPurgeCommandTest {
     assertEquals(0, result.exitCode, result.stdout + result.stderr)
     assertRestoredBundle(fixture, manifestPath)
     assertEquals(0, ownedRowCounts(fixture, seed).values.sum())
-    assertTrue(ownedRuntimeDirectories(fixture.tempDir, seed.workflowIds()).none(Files::exists))
+    assertTrue(ownedRuntimeDirectories(fixture.projectStoreRoot(), seed.workflowIds()).none(Files::exists))
 
     val preflight = runPreflight(fixture)
     assertEquals(0, preflight.exitCode, preflight.stdout)
@@ -88,7 +88,7 @@ class CliGoalPurgeCommandTest {
     val manifestPath = fixture.parentSpec.parent.resolve("decomposition-manifest.yaml")
     val parentSpecBytes = Files.readAllBytes(fixture.parentSpec)
     assertTrue(ownedRowCounts(fixture, seed).values.all { count -> count > 0 }, "every owned table must be seeded")
-    assertTrue(ownedRuntimeDirectories(fixture.tempDir, seed.workflowIds()).all(Files::exists))
+    assertTrue(ownedRuntimeDirectories(fixture.projectStoreRoot(), seed.workflowIds()).all(Files::exists))
 
     val purged = runPurge(fixture, PurgeGitOperations(trackedPrefix = null))
 
@@ -99,7 +99,7 @@ class CliGoalPurgeCommandTest {
     assertEquals(false, payload["nothing_to_remove"])
     assertEquals(2, ((payload["removed_row_counts"] as Map<*, *>)["feature_task_workflows"] as Number).toInt())
     assertEquals(0, ownedRowCounts(fixture, seed).values.sum())
-    assertTrue(ownedRuntimeDirectories(fixture.tempDir, seed.workflowIds()).none(Files::exists))
+    assertTrue(ownedRuntimeDirectories(fixture.projectStoreRoot(), seed.workflowIds()).none(Files::exists))
     assertContentEquals(parentSpecBytes, Files.readAllBytes(fixture.parentSpec))
     assertFalse(Files.exists(manifestPath))
     fixture.subtaskSpecs.forEach { path -> assertFalse(Files.exists(path)) }
@@ -142,7 +142,8 @@ class CliGoalPurgeCommandTest {
     assertEquals(0, ownedRowCounts(fixture, target).values.sum())
     assertEquals(countsBefore, untouched.map { seed -> ownedRowCounts(fixture, seed) })
     untouched.forEach { seed ->
-      assertTrue(ownedRuntimeDirectories(fixture.tempDir, seed.workflowIds()).all(Files::exists), seed.parentId)
+      val directories = ownedRuntimeDirectories(fixture.projectStoreRoot(), seed.workflowIds())
+      assertTrue(directories.all(Files::exists), seed.parentId)
     }
     otherSpecs.forEachIndexed { index, path -> assertContentEquals(otherSpecBytes[index], Files.readAllBytes(path)) }
   }
@@ -181,7 +182,7 @@ class CliGoalPurgeCommandTest {
       goalPurgeExitCode(
         GoalRunnerPurgeResult(
           issueKey = PURGE_ISSUE_KEY,
-          leftovers = listOf(".skill-bill/run-evidence/wf: delete failed"),
+          leftovers = listOf("run-evidence/wf: delete failed"),
         ),
       ),
     )

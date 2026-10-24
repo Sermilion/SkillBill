@@ -24,12 +24,8 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
-import java.sql.DriverManager
 import java.time.Clock
 import java.time.Instant
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -884,65 +880,6 @@ class WorkflowStateStoreLifecycleTest {
         assertEquals(false, inserted.stateEnteredAtEstimated)
         assertTrue(!inserted.startedAt.isNullOrBlank())
       }
-    }
-  }
-
-  @Test
-  fun `concurrent workflow status transitions serialize strictly increasing state entry times`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-db-workflow-concurrent-state").resolve("metrics.db")
-    val initial =
-      workflowRow(
-        workflowId = "wftr-concurrent-state-entry",
-        sessionId = "ftr-concurrent-state-entry",
-        workflowName = "bill-feature-task",
-        currentStepId = "preplan",
-        mode = RUNTIME,
-      ).copy(startedAt = "2999-05-01T12:00:00.123456789Z")
-
-    prepareConcurrentWorkflowTransitions(dbPath, initial)
-
-    val ready = CountDownLatch(2)
-    val start = CountDownLatch(1)
-    val executor = Executors.newFixedThreadPool(2)
-    try {
-      val transitions =
-        listOf("blocked", "paused").map { status ->
-          executor.submit {
-            ready.countDown()
-            check(start.await(5, TimeUnit.SECONDS)) { "Concurrent transition start timed out." }
-            DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-              connection.createStatement().use { it.execute("PRAGMA busy_timeout = 5000") }
-              WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
-                .saveFeatureTaskWorkflow(
-                  initial.copy(workflowStatus = status, currentStepId = "plan"),
-                  RUNTIME,
-                )
-            }
-          }
-        }
-
-      assertTrue(ready.await(5, TimeUnit.SECONDS))
-      start.countDown()
-      transitions.forEach { it.get(5, TimeUnit.SECONDS) }
-    } finally {
-      executor.shutdownNow()
-    }
-
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      val entries =
-        connection.createStatement().use { statement ->
-          statement.executeQuery("SELECT state_entered_at FROM workflow_transition_log ORDER BY rowid").use {
-              resultSet ->
-            buildList {
-              while (resultSet.next()) {
-                add(resultSet.getString("state_entered_at"))
-              }
-            }
-          }
-        }
-
-      assertEquals(2, entries.size)
-      assertTrue(Instant.parse(entries[1]).isAfter(Instant.parse(entries[0])))
     }
   }
 

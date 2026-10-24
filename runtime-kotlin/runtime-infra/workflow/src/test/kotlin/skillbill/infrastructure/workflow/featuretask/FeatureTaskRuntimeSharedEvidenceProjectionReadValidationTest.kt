@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.featuretask
 
 import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceResolveOutcome
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
@@ -14,7 +15,8 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
   private val repoRoot: Path = createTempDirectory("shared-evidence-schema-read")
-  private val store = FileSystemFeatureTaskRuntimeSharedEvidenceStore()
+  private val projectStore = FixedProjectStorePort(createTempDirectory("shared-evidence-schema-read-store"))
+  private val store = FileSystemFeatureTaskRuntimeSharedEvidenceStore(projectStore)
 
   @Test
   fun `a well-formed stored projection passes validation on read and reuses`() {
@@ -82,6 +84,9 @@ class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
     assertEquals(1, deriver.invocations)
     assertEquals(FeatureTaskRuntimeSharedEvidenceResolveOutcome.CHECKPOINT_CHANGE_REDERIVATION, resolution.outcome)
   }
+
+  private fun artifactDir(request: FeatureTaskRuntimeSharedEvidenceRequest): Path =
+    artifactDir(projectStore.root, request)
 
   private fun request(fingerprint: String) =
     FeatureTaskRuntimeSharedEvidenceRequest(

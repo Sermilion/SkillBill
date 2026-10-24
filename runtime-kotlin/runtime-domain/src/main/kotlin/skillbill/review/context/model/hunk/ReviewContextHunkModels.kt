@@ -34,7 +34,7 @@ data class ReviewHunkEvidenceLocator(
       newCount: Int,
     ): ReviewHunkEvidenceLocator =
       ReviewHunkEvidenceLocator(
-        storePath = ".skill-bill/run-evidence/in-process/$contentDigest",
+        storePath = "run-evidence/in-process/$contentDigest",
         hunkHeader = header(oldStart, oldCount, newStart, newCount),
       )
 

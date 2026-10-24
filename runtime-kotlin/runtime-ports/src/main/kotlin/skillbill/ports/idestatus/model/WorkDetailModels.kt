@@ -56,6 +56,7 @@ data class WorkDetailItem(
   val finishedAt: Instant? = null,
   val finishedAtSource: WorkBoardCompletionSource? = null,
   val goalManifest: DecompositionManifest? = null,
+  val goalSpecBundle: StandalonePlanReport? = null,
   val goalFinishPipeline: List<String> = emptyList(),
   val runtimeStatus: WorkDetailRuntimeStatus? = null,
   val goalStatus: GoalRunnerStatusProjection? = null,

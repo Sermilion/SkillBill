@@ -29,6 +29,7 @@ import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.operation.ReleaseBuildGate
 import skillbill.ports.operation.model.ReleaseBuildReadiness
+import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -47,6 +48,7 @@ class ReleaseOperationTest {
   private val repo: Path = root.resolve("repo")
   private val runner = ChangelogRunner(CHANGELOG)
   private val git = GitWorkflowGitOperations()
+  private val projectStore = FixedProjectStorePort(root.resolve("project-store"))
   private var buildReadiness: ReleaseBuildReadiness = ReleaseBuildReadiness.Passed("main")
   private val inspectedCommits = mutableListOf<String>()
   private val buildGate =
@@ -67,12 +69,14 @@ class ReleaseOperationTest {
       OperationRegistry(listOf(ReleaseOperation(git, buildGate))),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
+      projectStore,
     )
   private val executorWithOtherOperation =
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git, buildGate), OtherConfirmableOperation)),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
+      projectStore,
     )
 
   init {

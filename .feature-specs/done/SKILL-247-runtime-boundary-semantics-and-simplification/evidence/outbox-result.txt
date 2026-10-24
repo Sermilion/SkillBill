@@ -1,4 +1,0 @@
-A_claimed=1, B_reclaimed=1
-B_claim_after_stale_A_settlement=null
-last_error=late sender A
-C_claimed_while_B_in_flight=1

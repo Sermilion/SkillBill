@@ -23,6 +23,8 @@ import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
 import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.featurespec.model.FeatureSpecWriteResult
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -37,6 +39,7 @@ class FeatureSpecPreparationWriter(
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val fileStore: DecompositionManifestStore,
   private val decompositionManifestWriter: DecompositionManifestWriter,
+  private val projectStore: ProjectStorePort,
 ) {
   fun write(
     repoRoot: Path,
@@ -48,9 +51,8 @@ class FeatureSpecPreparationWriter(
     if (featureName.isBlank()) {
       invalidRequest(DecompositionManifestPayloadKeys.FEATURE_NAME, "feature name is required.")
     }
-    val parentSpecPath =
-      existingParentSpecPath ?: repoRoot.resolve(".feature-specs/${parentDirectoryName(issueKey, featureName)}/spec.md")
-    val parentSpecRelativePath = repoRelativePath(repoRoot, parentSpecPath)
+    val parentSpecPath = existingParentSpecPath ?: plannedParentSpecPath(repoRoot, issueKey, featureName)
+    val parentSpecRelativePath = repoRelativePath(repoRoot, projectStore.resolve(repoRoot), parentSpecPath)
     return writePreparedFeature(
       repoRoot = repoRoot,
       request = request,
@@ -65,9 +67,7 @@ class FeatureSpecPreparationWriter(
     issueKey: String,
     featureName: String,
   ): Path =
-    repoRoot.resolve(
-      ".feature-specs/${parentDirectoryName(issueKey, featureName)}/spec.md",
-    )
+    projectStore.resolve(repoRoot).specsRoot.resolve(parentDirectoryName(issueKey, featureName)).resolve(SPEC_FILE)
 
   fun writeParentSpecOnly(
     repoRoot: Path,
@@ -101,7 +101,8 @@ class FeatureSpecPreparationWriter(
     repoRoot: Path,
     parentSpecPath: Path,
   ): FeatureSpecWriteResult {
-    val parentRelativePath = repoRelativePath(repoRoot, parentSpecPath)
+    val store = projectStore.resolve(repoRoot)
+    val parentRelativePath = repoRelativePath(repoRoot, store, parentSpecPath)
     requireAcceptanceList("parent_spec.acceptance_criteria", authoredLines("parent_spec", parentSpecPath))
     val manifestPath = parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)
     authoredLines("decomposition_manifest", manifestPath)
@@ -112,7 +113,7 @@ class FeatureSpecPreparationWriter(
     val subtasks = loaded.manifest.subtasks
     validateAuthoredOrder(subtasks)
     subtasks.forEachIndexed { index, subtask ->
-      val subtaskPath = repoRoot.resolve(subtask.specPath).normalize()
+      val subtaskPath = store.resolveSpecPath(subtask.specPath, repoRoot).normalize()
       if (!subtaskPath.startsWith(parentSpecPath.parent)) {
         invalidRequest("subtasks[$index].spec_path", "subtask spec must live in the authored bundle.")
       }
@@ -122,20 +123,15 @@ class FeatureSpecPreparationWriter(
       mode = FeatureSpecPreparationMode.DECOMPOSED,
       parentSpecPath = parentRelativePath,
       featureImplementPath = parentRelativePath,
-      decompositionManifestPath = repoRelativePath(repoRoot, manifestPath),
-      subtaskSpecPaths = subtasks.map { repoRelativePath(repoRoot, repoRoot.resolve(it.specPath).normalize()) },
+      decompositionManifestPath = repoRelativePath(repoRoot, store, manifestPath),
+      subtaskSpecPaths =
+        subtasks.map { repoRelativePath(repoRoot, store, store.resolveSpecPath(it.specPath, repoRoot).normalize()) },
       repairEvidence = listOfNotNull(loaded.repairEvidence),
     )
   }
 
   fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
     loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest.subtasks
-
-  fun listTree(directory: Path): List<Path> = fileStore.listTree(directory)
-
-  fun readText(path: Path): String = fileStore.readText(path)
-
-  fun isRegularFile(path: Path): Boolean = fileStore.isRegularFile(path)
 
   private fun authoredLines(
     fieldPath: String,
@@ -231,7 +227,8 @@ class FeatureSpecPreparationWriter(
       mode = request.decision.mode,
       parentSpecPath = parentSpecRelativePath,
       featureImplementPath = parentSpecRelativePath,
-      decompositionManifestPath = repoRelativePath(repoRoot, preparedManifest.manifestPath),
+      decompositionManifestPath =
+        repoRelativePath(repoRoot, projectStore.resolve(repoRoot), preparedManifest.manifestPath),
       subtaskSpecPaths = subtaskRecords.map(PreparedSubtask::relativePath),
       repairEvidence = preparedManifest.repairEvidence + listOfNotNull(loaded.repairEvidence),
     )
@@ -274,7 +271,7 @@ class FeatureSpecPreparationWriter(
   ): List<PreparedSubtask> =
     request.subtasks.map { subtask ->
       val subtaskPath = parentSpecPath.parent.resolve(subtaskFileName(subtask))
-      val subtaskRelativePath = repoRelativePath(repoRoot, subtaskPath)
+      val subtaskRelativePath = repoRelativePath(repoRoot, projectStore.resolve(repoRoot), subtaskPath)
       PreparedSubtask(
         path = subtaskPath,
         relativePath = subtaskRelativePath,
@@ -340,6 +337,7 @@ class FeatureSpecPreparationWriter(
 }
 
 private const val AUTHORED_MANIFEST_FILE = "decomposition-manifest.yaml"
+private const val SPEC_FILE = "spec.md"
 
 private val ACCEPTANCE_ITEM = Regex("""^\s*(?:\d+[.)]|[-*])\s+\S.*""")
 

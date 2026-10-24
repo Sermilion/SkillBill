@@ -154,10 +154,14 @@ class InstallerShellDelegationTest {
   @Test
   fun `explicit uninstall preserves databases and removes copied source and installed artifacts`() {
     val fixtures = seedStateDirForWipe()
+    val projectRecord = fixtures.stateDir.resolve("projects/l-0123456789abcdef/project.json")
+    Files.createDirectories(projectRecord.parent)
+    Files.writeString(projectRecord, "preserved project record")
     val run = runUninstaller(fixtures, preserveSource = false, goalContinuation = false)
 
     assertEquals(0, run.exitCode, run.output)
     assertEquals("seed\n", Files.readString(fixtures.stateDb))
+    assertEquals("preserved project record", Files.readString(projectRecord), "projects/ must survive uninstall")
     listOf(
       fixtures.skillContent,
       fixtures.packYaml,

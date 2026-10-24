@@ -27,12 +27,14 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeHeartbeat
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.ports.taskruntime.model.implementationChecklistDirectory
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -274,7 +276,8 @@ class GoalRunnerPurgeCoordinatorTest {
   @Test
   fun `failed directory delete reports leftovers and skips the database and spec steps`() {
     val root = Files.createTempDirectory("goal-purge-leftover")
-    val evidenceDir = root.resolve(FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot("wf-parent")).normalize()
+    val storeRoot = Files.createTempDirectory("goal-purge-leftover-store")
+    val evidenceDir = storeRoot.resolve(FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot("wf-parent")).normalize()
     Files.createDirectories(evidenceDir)
     Files.writeString(evidenceDir.resolve("evidence.json"), "{}")
     var purgeCalled = false
@@ -298,6 +301,7 @@ class GoalRunnerPurgeCoordinatorTest {
           GoalRunnerStatusTestPorts(
             gitOperations = TrackedSpecGitOperations(emptyMap()),
             goalStateFiles = LocalGoalRuntimeStateFileStore(failingPaths = setOf(evidenceDir)),
+            projectStore = FixedProjectStorePort(storeRoot),
           ),
         database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
         decompositionManifestStore = TestDecompositionManifestStore,
@@ -307,8 +311,49 @@ class GoalRunnerPurgeCoordinatorTest {
 
     assertNull(result.refusalReason)
     assertFalse(purgeCalled)
-    assertTrue(result.leftovers.any { leftover -> leftover.startsWith(".skill-bill/run-evidence/wf-parent") })
+    assertTrue(result.leftovers.any { leftover -> leftover.startsWith("$evidenceDir: ") }, result.leftovers.toString())
     assertTrue(Files.exists(evidenceDir.resolve("evidence.json")))
+  }
+
+  @Test
+  fun `purge deletes store goal state and leaves the checkout state directory untouched`() {
+    val root = Files.createTempDirectory("goal-purge-store-only")
+    val storeRoot = Files.createTempDirectory("goal-purge-store-only-store")
+    val storeTracking = storeRoot.resolve(implementationChecklistDirectory("wf-parent"))
+    val storeEvidence = storeRoot.resolve(FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot("wf-parent"))
+    val checkoutTracking = root.resolve(".skill-bill").resolve(implementationChecklistDirectory("wf-parent"))
+    listOf(storeTracking, storeEvidence, checkoutTracking).forEach { directory ->
+      Files.createDirectories(directory)
+      Files.writeString(directory.resolve("marker"), "x")
+    }
+    val guardedStore =
+      object : GoalRunnerManifestStore by InMemoryGoalManifestStore(manifest(subtaskCount = 1)) {
+        override fun discoverPurgeOwnership(
+          issueKey: String,
+          repoRoot: Path,
+        ): GoalPurgeOwnership = GoalPurgeOwnership(emptyList(), setOf("wf-parent"))
+
+        override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
+      }
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = guardedStore,
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = TrackedSpecGitOperations(emptyMap()),
+            goalStateFiles = LocalGoalRuntimeStateFileStore(),
+            projectStore = FixedProjectStorePort(storeRoot),
+          ),
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        decompositionManifestStore = TestDecompositionManifestStore,
+      )
+
+    service.purge(GoalRunnerPurgeRequest("SKILL-245", root))
+
+    assertFalse(Files.exists(storeTracking))
+    assertFalse(Files.exists(storeEvidence))
+    assertTrue(Files.exists(checkoutTracking.resolve("marker")))
   }
 }
 

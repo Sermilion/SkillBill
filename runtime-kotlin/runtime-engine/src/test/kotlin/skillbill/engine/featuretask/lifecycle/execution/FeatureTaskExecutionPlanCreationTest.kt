@@ -4,8 +4,10 @@ import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
+import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
@@ -23,7 +25,6 @@ import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
-import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
@@ -589,11 +590,12 @@ class FeatureTaskExecutionPlanCreationTest {
     private val engine = WorkflowEngine()
     private val persistence =
       WorkflowGoalRunnerChildWorkflowPersistence(
-        engine,
         GoalChildPlanningHydratorPortAdapter(testHarnessClock),
-        GoalParentProjectionWriter(engine, testDecompositionManifestValidator),
+        testDecompositionManifestValidator,
         execution.admission,
         testHarnessClock,
+        TestRepositoryEnclosingRoot,
+        testProjectStore,
       )
 
     fun store() =
@@ -699,7 +701,7 @@ class FeatureTaskExecutionPlanCreationTest {
       database, NoopWorkflowGitOperations, UnavailableDecompositionManifestStore, testWorkflowSnapshotValidator,
       testDecompositionManifestValidator, testDecompositionManifestWriter, testRepositoryRoot,
       AcceptingFeatureTaskRuntimeWireArtifactValidator, NoopRuntimeDiagnostics, testHarnessClock,
-      TestRepositoryEnclosingRoot,
+      ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
     )
 
   private fun openArgs(descriptor: ValidatedFeatureTaskRuntimeExecutionPlan?) =

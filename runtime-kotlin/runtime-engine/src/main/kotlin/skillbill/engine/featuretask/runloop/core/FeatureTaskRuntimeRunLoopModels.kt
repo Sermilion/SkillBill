@@ -33,6 +33,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputR
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
+import java.nio.file.Path
 import kotlin.coroutines.cancellation.CancellationException
 
 internal data class RemediationCheckpointCommit(
@@ -294,6 +295,7 @@ internal data class PhaseRun(
   val request: FeatureTaskRuntimeRunFacts,
   val specSource: SpecSource,
   val policy: PhaseStepPolicy,
+  val projectStoreRoot: Path,
   val launchAssignment: StepLaunchAssignment? = null,
   val reentry: PendingReentry? = null,
   val goalReviewInput: GoalSubtaskReviewInput? = null,

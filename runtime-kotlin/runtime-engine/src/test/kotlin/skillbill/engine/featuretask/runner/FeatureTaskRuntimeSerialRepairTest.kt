@@ -1180,6 +1180,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         ContractFeatureTaskRuntimePhaseOutputMigration(),
         harness.gitOperations,
         source,
+        RUNNER_TEST_PROJECT_STORE,
       ),
     )
   }

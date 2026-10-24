@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
+import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
@@ -46,7 +47,7 @@ internal object PlanDecompositionStop {
     val parentSpec =
       context.decompositionPlanner.existingParentSpec(request.repoRoot, request.issueKey)
         ?: return attested
-    val parentPath = request.repoRoot.toAbsolutePath().normalize().relativize(parentSpec).toString()
+    val parentPath = context.decompositionPlanner.bundleLabel(request.repoRoot, parentSpec)
     val envelope = attested.envelopeWireMap().toMutableMap()
     val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
     produced[SharedPayloadKeys.VALUE] = parentPath
@@ -85,14 +86,35 @@ internal object PlanDecompositionStop {
     capture: ValidatedOutputCapture,
   ): String? {
     val request = context.request
+    val planner = context.decompositionPlanner
+    val target = PlanBundleStagingPromotion.targetFor(planner, capture.run)
+    val introduced = capture.fileManifest.introduced
+    val authoredSince = context.progress.phase(capture.run.phaseId).record?.firstStartedAt
+    val listing =
+      PlanBundleListing(
+        planner::bundleTree,
+        planner::bundleChildDirectories,
+        planner::bundleLastModified,
+        authoredSince,
+      )
+    if (target is PlanBundleTarget.Staged) {
+      PlanBundleAuthorization.violation(request.issueKey, target, introduced, listing)
+        ?.let { violation -> return notReadyReason(violation) }
+      PlanBundleStagingPromotion.promote(
+        planner,
+        context.diagnostics,
+        PromotionRequest(
+          target,
+          request.repoRoot,
+          capture.run.resolvedAgent.resolvedAgentId,
+          parentSpecProtected = request.protectedSpecSha256 != null,
+        ),
+      )
+    }
     protectedSpecRejection(context)?.let { return it }
-    PlanBundleAuthorization
-      .violation(
-        request.repoRoot,
-        request.issueKey,
-        capture.fileManifest.introduced,
-        context.decompositionPlanner::bundleTree,
-      )?.let { return notReadyReason(it) }
+    val authorized = if (target is PlanBundleTarget.Staged) PlanBundleTarget.Store(target.storeDirectory) else target
+    PlanBundleAuthorization.violation(request.issueKey, authorized, introduced, listing)
+      ?.let { violation -> return notReadyReason(violation) }
     return recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.AUTHORED, keptUnitStepId = null)
   }
 

@@ -1,7 +1,10 @@
 package skillbill.engine.goalrunner.reset
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
+import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
+import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
@@ -21,6 +24,9 @@ import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
@@ -47,16 +53,20 @@ internal data class SavedGoalChildWorkflow(
   internal val projectionArtifacts: DurableWorkflowArtifacts,
 )
 
-internal class WorkflowGoalRunnerChildWorkflowPersistence(
-  private val engine: WorkflowEngine,
+@Inject
+class WorkflowGoalRunnerChildWorkflowPersistence(
   private val planningHydrator: GoalChildPlanningHydratorPort,
-  private val parentProjection: GoalParentProjectionWriter,
+  decompositionManifestValidator: DecompositionManifestValidator,
   private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
   private val clock: Clock,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val projectStore: ProjectStorePort,
 ) {
+  private val engine = WorkflowEngine()
+  private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
   private val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
 
-  fun saveInTransaction(
+  internal fun saveInTransaction(
     unitOfWork: UnitOfWork,
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
@@ -205,11 +215,13 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
   ): String {
     val repository =
       Path.of(repositoryIdentity.removePrefix(FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX))
-    val lexical =
-      Path.of(specPath).let { if (it.isAbsolute) it else repository.resolve(it) }
-        .toAbsolutePath().normalize()
-    val resolved = runCatching { lexical.toRealPath() }.getOrElse { lexical }
-    return runCatching { repository.relativize(resolved).joinToString("/") }.getOrElse { specPath }
+    return when (
+      val result =
+        resolveFeatureTaskGovernedSpecPath(repositoryEnclosingRootPort, projectStore, repository, Path.of(specPath))
+    ) {
+      is FeatureTaskGovernedSpecPathResult.Ok -> result.relativePath
+      else -> specPath
+    }
   }
 
   private fun requireMatchingGoalContinuation(

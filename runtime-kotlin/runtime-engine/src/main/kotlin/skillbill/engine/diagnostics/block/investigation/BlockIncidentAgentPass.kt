@@ -14,6 +14,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentCertainty
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDegradation
@@ -31,6 +32,7 @@ class BlockIncidentAgentPass(
   private val launcher: AgentRunLauncher,
   private val repositoryRoot: RepositoryRoot,
   private val clock: Clock,
+  private val projectStore: ProjectStorePort,
 ) {
   fun enrich(
     incident: BlockIncident,
@@ -46,7 +48,7 @@ class BlockIncidentAgentPass(
       SkillRunRequest(
         issueKey = incident.occurrence.occurrenceToken,
         repoRoot = repositoryRoot.path,
-        additionalWritableDirectories = emptyList(),
+        additionalWritableDirectories = listOf(projectStore.resolve(repositoryRoot.path).root),
         timeout = remaining.toKotlinDuration(),
         progressIdleTimeout = remaining.toKotlinDuration(),
         promptOverride = prompt(draft),

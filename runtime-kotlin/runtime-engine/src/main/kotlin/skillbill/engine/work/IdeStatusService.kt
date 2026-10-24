@@ -608,6 +608,7 @@ class IdeStatusService(
         finishedAt = completion.first,
         finishedAtSource = completion.second,
         goalManifest = goalRead?.page?.manifest,
+        goalSpecBundle = goalRead?.page?.manifest?.let { projector.goalSpecBundle(it, context.repoRoot) },
         goalFinishPipeline = goalRead?.page?.let { projector.goalFinishPipeline(context.repoRoot) }.orEmpty(),
         runtimeStatus = runtimeStatus,
         goalStatus = goalStatus,

@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
@@ -23,12 +24,13 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 @Inject
 class FileSystemAcceptanceCriterionRepairProjection(
   private val diagnostics: RuntimeDiagnostics,
+  private val projectStore: ProjectStorePort,
 ) : AcceptanceCriterionRepairProjection {
   override fun write(request: AcceptanceCriterionRepairProjectionRequest) {
     val key =
       MessageDigest.getInstance("SHA-256").digest(request.workflowId.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
-    val directory = request.repositoryRoot.resolve(".skill-bill/acceptance-repair")
+    val directory = projectStore.resolve(request.repositoryRoot).acceptanceRepairRoot
     Files.createDirectories(directory)
     val target = directory.resolve("$key.json")
     val temporary = Files.createTempFile(directory, "$key-", ".tmp")

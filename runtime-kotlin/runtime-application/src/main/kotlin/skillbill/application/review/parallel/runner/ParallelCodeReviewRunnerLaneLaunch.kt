@@ -137,6 +137,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
                 reviewFanOut = true,
+                additionalWritableDirectories = listOf(args.request.projectStoreRoot),
               ).boundedReviewLane(args.request.laneProgressIdleTimeout, args.bound.evidenceReads),
           ),
         )

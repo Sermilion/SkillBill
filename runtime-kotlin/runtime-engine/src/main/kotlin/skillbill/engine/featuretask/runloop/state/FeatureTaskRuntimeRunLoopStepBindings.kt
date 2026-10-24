@@ -565,7 +565,7 @@ private class FeatureTaskRuntimeRunLoopPlanningStepBinding(
       PlanDecompositionStop.settledOutput(
         run.phaseId,
         "Kept the existing spec bundle of ${bundle.subtasks.size} subtasks; no agent planned it.",
-        request.repoRoot.toAbsolutePath().normalize().relativize(parentSpec).toString(),
+        planner.bundleLabel(request.repoRoot, parentSpec),
       )
     val iteration = nextStepIteration()
     settleRuntimeAuthoredCompletion(run.phaseId, output)

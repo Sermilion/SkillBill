@@ -28,6 +28,13 @@ Context: A modal feature required exact parent focus restoration while its calle
 Decision: Share one capability-closure directive across preplan, bundle planning, subtask planning and audit repair planning. Trace required input acquisition, caller transport and lifecycle ownership, check proposed signatures against configured project rules, and report a shared contract conflict's complete known impact before requesting an amendment. Permit targeted pinned-dependency reads when public contracts cannot answer that question.
 Reason: A local helper cannot recover facts no caller captured. Read-only impact inspection prevents narrow amendments from leaving known sibling conflicts, while preserving criterion-scoped repair, immutable specs and operator authority. Prompt delivery has a regression check; actual planning decisions require behavioral evaluation.
 
+## [2026-10-23] Spec walk-ups match directory names instead of the store path
+Context: SKILL-441 subtask 4 let spec bundles live in the project store as well as `.feature-specs`. Journal and run-invariant code in modules that cannot depend on the store port must still find a bundle root.
+Decision: Walk up by directory name (SPEC_BUNDLE_ROOT_DIRECTORY_NAMES, covering the store and legacy spec roots and their `done` archives) instead of comparing against a specific store location.
+Reason: The name check needs no store dependency or module-boundary change and serves both layouts. Callers that hold the store still resolve full paths through it.
+Alternatives considered: Passing the store port into those modules, rejected because it widens dependencies for a path-shape question.
+Revisit when: a user directory named like a bundle root causes a false match.
+
 ## [2026-10-22] Goal block aliases carry generation, attempt and child cause separately
 Context: SKILL-435 goal incidents first used a scalar generation-first alias, which made generation 2 / attempt 1 collide with generation 2 / attempt 2.
 Decision: The goal PHASE_TRANSITION alias holds accepted generation, attempt and causal child token as separate components, with the literal unavailable or none instead of invented defaults. Historical tokens and aliases stay immutable; normalization adds a nonconflicting canonical alias.

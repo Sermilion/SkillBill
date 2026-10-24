@@ -1,7 +1,9 @@
 package skillbill.engine.goalrunner.intake
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.issuekey.goalIntakeSpecBundleDirectory
 import skillbill.contracts.issuekey.issueAndFeature
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
@@ -12,8 +14,14 @@ import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.featurespec.model.FeatureSpecOrigin
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.ProjectStoreLocation
+import skillbill.ports.projectstore.model.classifySpecPath
+import skillbill.ports.projectstore.model.resolveSpecPath
+import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
@@ -26,6 +34,8 @@ class GoalIntakePreparation(
   private val specWriter: FeatureSpecPreparationWriter,
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val fileStore: DecompositionManifestStore,
+  private val projectStore: ProjectStorePort,
+  private val legacySpecIntake: LegacySpecIntake,
 ) {
   fun issueKeyForExistingSpec(
     intake: String,
@@ -38,17 +48,24 @@ class GoalIntakePreparation(
   ): GoalIntakeAdmission.ArchivedSpec? {
     val active = activeSpecPath(intake, repoRoot) ?: return null
     val root = repoRoot.toAbsolutePath().normalize()
-    val activeRoot = root.resolve(FEATURE_SPECS)
-    val doneRoot = activeRoot.resolve(ARCHIVE)
-    if (!active.startsWith(activeRoot) || active.startsWith(doneRoot)) return null
-    val archived = doneRoot.resolve(activeRoot.relativize(active))
+    val store = projectStore.resolve(repoRoot)
+    val activeRoot =
+      store.specBundleRoots(root).map { it.toAbsolutePath().normalize() }
+        .firstOrNull { active.startsWith(it) && !active.startsWith(it.resolve(ARCHIVE)) }
+        ?: return null
+    val archived = activeRoot.resolve(ARCHIVE).resolve(activeRoot.relativize(active))
     if (!fileStore.isRegularFile(archived)) return null
     return GoalIntakeAdmission.ArchivedSpec(
       issueKey = GoalIntake.parse(active.toString()).issueKey,
-      activeSpecPath = root.relativize(active).joinToString("/"),
-      archivedSpecPath = root.relativize(archived).joinToString("/"),
+      activeSpecPath = store.specLabel(active, root),
+      archivedSpecPath = store.specLabel(archived, root),
     )
   }
+
+  private fun ProjectStoreLocation.specLabel(
+    path: Path,
+    checkoutRoot: Path,
+  ): String = classifySpecPath(path, checkoutRoot)?.relative ?: checkoutRoot.relativize(path).joinToString("/")
 
   private fun activeSpecPath(
     intake: String,
@@ -85,17 +102,37 @@ class GoalIntakePreparation(
     intake: String?,
     repoRoot: Path,
   ): PlanSpecSeed {
-    val supplied = intake?.takeIf(String::isNotBlank) ?: issueKey
-    val existing = existingSpecPath(supplied, issueKey, repoRoot)
+    val requested = intake?.takeIf(String::isNotBlank) ?: issueKey
+    val route = legacyRoute(requested, issueKey, repoRoot)
+    val supplied = (route as? LegacySpecRoute.Replan)?.intake ?: requested
+    val existing = existingSpecPath(supplied, issueKey, repoRoot, storeOnly = route is LegacySpecRoute.Replan)
     if (existing != null) {
       val kept = keepsOperatorSpec(existing)
       return PlanSpecSeed(
         existing,
         if (kept) FeatureTaskRuntimePlanSpecOrigin.OPERATOR else FeatureTaskRuntimePlanSpecOrigin.SEEDED,
+        supplied,
       )
     }
     val planned = specWriter.plannedParentSpecPath(repoRoot, issueKey, newWorkFeatureName(GoalIntake.parse(supplied)))
-    return PlanSpecSeed(planned, FeatureTaskRuntimePlanSpecOrigin.SEEDED)
+    return PlanSpecSeed(planned, FeatureTaskRuntimePlanSpecOrigin.SEEDED, supplied)
+  }
+
+  private fun legacyRoute(
+    intake: String,
+    issueKey: String,
+    repoRoot: Path,
+  ): LegacySpecRoute =
+    referencedSpecPath(intake, repoRoot)?.let { legacySpecIntake.route(it, issueKey, repoRoot) }
+      ?: if (namesSpecPath(intake)) {
+        LegacySpecRoute.NotLegacy
+      } else {
+        legacySpecIntake.routeIssueKey(issueKey, repoRoot)
+      }
+
+  private fun namesSpecPath(intake: String): Boolean {
+    val firstToken = intake.trim().substringBefore(' ').substringBefore('\n')
+    return firstToken.endsWith(".md") || goalIntakeSpecBundleDirectory(firstToken) != null
   }
 
   fun keepsOperatorSpec(specPath: Path): Boolean =
@@ -108,7 +145,8 @@ class GoalIntakePreparation(
     resolution: PlanSpecSeed,
   ): PlanSpecSeed {
     if (resolution.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR) return resolution
-    val supplied = intake?.takeIf(String::isNotBlank) ?: issueKey
+    val requested = intake?.takeIf(String::isNotBlank) ?: issueKey
+    val supplied = resolution.suppliedIntake ?: requested
     val existing = resolution.specPath.takeIf(fileStore::isRegularFile)
     val existingText = existing?.let(fileStore::readText)
     val featureName =
@@ -151,17 +189,18 @@ class GoalIntakePreparation(
     intake: String,
     issueKey: String,
     repoRoot: Path,
+    storeOnly: Boolean = false,
   ): Path? {
-    referencedSpecPath(intake, repoRoot)?.let { return it }
-    val firstToken = intake.trim().substringBefore(' ').substringBefore('\n')
-    if (firstToken.endsWith(".md") || firstToken.contains(".feature-specs/")) {
+    if (!storeOnly) referencedSpecPath(intake, repoRoot)?.let { return it }
+    if (namesSpecPath(intake)) {
       invalidIntake("parent_spec", "the supplied spec path does not contain a readable spec.md.")
     }
     return when (
       val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(issueKey, null, repoRoot))
     ) {
       is FeatureSpecPathResolveResult.Explicit -> Path.of(resolved.specPath)
-      is FeatureSpecPathResolveResult.SingleMatch -> Path.of(resolved.specPath)
+      is FeatureSpecPathResolveResult.SingleMatch ->
+        Path.of(resolved.specPath).takeUnless { storeOnly && resolved.origin == FeatureSpecOrigin.LEGACY }
       is FeatureSpecPathResolveResult.NoMatch -> null
       is FeatureSpecPathResolveResult.Ambiguous ->
         invalidIntake("parent_spec", "multiple specs match $issueKey; supply the spec path.")
@@ -174,9 +213,15 @@ class GoalIntakePreparation(
   ): Path? {
     val reference = intake.trim()
     val firstToken = reference.substringBefore(' ').substringBefore('\n')
+    val store = projectStore.resolve(repoRoot)
     return listOf(reference, firstToken).distinct().flatMap { token ->
-      val path = repoRoot.resolve(token).toAbsolutePath().normalize()
-      listOf(path, path.resolve("spec.md"), repoRoot.resolve(".feature-specs").resolve(token).resolve("spec.md"))
+      val path = store.resolveSpecPath(token, repoRoot).toAbsolutePath().normalize()
+      listOf(
+        path,
+        path.resolve(SPEC_FILE),
+        store.specsRoot.resolve(token).resolve(SPEC_FILE),
+        repoRoot.resolve(LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY).resolve(token).resolve(SPEC_FILE),
+      )
     }.firstOrNull(fileStore::isRegularFile)
   }
 
@@ -206,8 +251,8 @@ class GoalIntakePreparation(
   }
 
   private companion object {
-    const val FEATURE_SPECS = ".feature-specs"
     const val ARCHIVE = "done"
+    const val SPEC_FILE = "spec.md"
     val ACCEPTANCE_HEADING = Regex("(?i)#{1,6}\\s+acceptance criteria\\s*")
     val ITEM = Regex("\\s*(?:[-*]|[0-9]+[.)])\\s+(?:\\[[ xX]\\]\\s+)?(.+)")
     const val VALIDATION = "Run the repository's required checks and verify every supplied acceptance criterion."

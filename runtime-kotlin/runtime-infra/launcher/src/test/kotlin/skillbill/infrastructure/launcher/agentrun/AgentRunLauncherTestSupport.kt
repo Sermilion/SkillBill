@@ -1,51 +1,15 @@
 package skillbill.infrastructure.launcher.agentrun
 
-import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
-import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
-import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.Collections
 import kotlin.test.assertIs
 import kotlin.time.Duration.Companion.seconds
 
 internal const val AGENT_RUN_LAUNCHER_PHASE_PROMPT =
   "Phase: plan\nTask: produce an ordered plan.\nRequired final output: one raw JSON object."
-
-internal const val WITHHELD_POLLS = 6
-
-internal class SharedDeclaredProgressStore {
-  val recorded: MutableList<AgentRunProgressEmission> = Collections.synchronizedList(mutableListOf())
-  private var sequence = 0
-  private var latest: GoalProgressEvent? = null
-
-  @Synchronized
-  fun record(emission: AgentRunProgressEmission) {
-    recorded += emission
-    latest =
-      GoalProgressEvent(
-        eventKind = emission.eventKind,
-        workflowId = "wfl-child",
-        workflowPhase = "goal_runner_supervision",
-        processAlive = emission.processAlive,
-        sequenceNumber = sequence++,
-        timestamp = "2026-06-02T10:00:00Z",
-        operationName = emission.operationName,
-        operationKind = emission.operationKind,
-        expectedLong = emission.expectedLong,
-        outcome = emission.outcome,
-      )
-  }
-
-  @Synchronized
-  fun snapshot(): AgentRunDeclaredProgressSnapshot? =
-    latest?.let { event ->
-      AgentRunDeclaredProgressSnapshot(latestEvent = event, processAlive = event.processAlive)
-    }
-}
 
 internal fun ProcessAgentRunAdapter.launchFacts(request: SkillRunRequest): AgentRunLaunchFacts =
   assertIs<AgentRunLaunchFacts>(launch(request))

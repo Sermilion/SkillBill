@@ -1,5 +1,10 @@
 # Boundary decisions
 
+## [2026-10-23] Legacy state notice stamped in the store record, not the checkout
+Context: SKILL-441 moves project state into a project store, so a checkout's old `.skill-bill` content is no longer read. Users need one notice about it without the runtime touching their project.
+Decision: After binding a store, the resolver warns once and records a notice timestamp as an optional field of the store's own record. It never modifies or deletes anything under the checkout's legacy directory.
+Reason: The store is runtime-owned and written atomically, so the stamp survives across processes while the user's tree stays untouched. The stamp is a second record write after bind because bind has many write paths. The field is optional and the contract version stays 0.1.
+Alternatives considered: A marker file inside the checkout, rejected because it writes into user projects.
 ## [2026-10-24] QA resource teardown is the innermost lifecycle owner
 Context: SKILL-420 QA runs start processes and compose projects that use files inside the checkout.
 Decision: The owned-resource closer is the innermost AutoCloseable in the QA lifecycle, so it closes before the checkout, lease and workspace owners.

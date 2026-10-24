@@ -12,6 +12,8 @@ import skillbill.application.telemetry.model.GoalStartedRequest
 import skillbill.application.telemetry.model.GoalSubtaskFinishedRequest
 import skillbill.application.telemetry.service.TelemetryLevelMutationService
 import skillbill.application.telemetry.service.TelemetryService
+import skillbill.application.testProjectStore
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
@@ -53,6 +55,7 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewRepositoryStatsSnapshot
@@ -1204,19 +1207,24 @@ internal fun testWorkflowService(
   WorkflowService(
     database = database,
     gitOperations = gitOperations,
-    decompositionManifestStore = FileSystemDecompositionManifestFileStore(),
+    decompositionManifestStore = testDecompositionManifestFileStore(),
     workflowSnapshotValidator = WorkflowStateSchemaValidator(),
     decompositionManifestValidator = DecompositionManifestSchemaValidator(),
-    decompositionManifestWriter = DecompositionManifestWriter(),
+    decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
     repositoryRoot = RepositoryRoot(Path.of("").toAbsolutePath().normalize()),
     goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
-    repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+    projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
+  )
+
+internal fun testDecompositionManifestFileStore() =
+  FileSystemDecompositionManifestFileStore(
+    FixedProjectStorePort(Files.createTempDirectory("skillbill-persistence-project-store")),
   )
 
 internal fun loadTestDecompositionManifest(path: Path) =
-  loadDecompositionManifest(path, FileSystemDecompositionManifestFileStore(), DecompositionManifestSchemaValidator())
+  loadDecompositionManifest(path, testDecompositionManifestFileStore(), DecompositionManifestSchemaValidator())
 
 internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults() {
   private val implementRows = linkedMapOf<String, WorkflowStateRecord>()

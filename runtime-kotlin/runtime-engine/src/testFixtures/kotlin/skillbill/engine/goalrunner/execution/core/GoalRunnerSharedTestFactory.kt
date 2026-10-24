@@ -44,6 +44,8 @@ import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -57,6 +59,7 @@ import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.goalstate.UnavailableGoalRuntimeStateFileStore
 import skillbill.scaffold.model.PlatformManifest
 import java.time.Clock
+import kotlin.io.path.createTempDirectory
 
 internal object NoopGoalRunnerQaGate : GoalRunnerQaGate {
   override fun run(
@@ -78,6 +81,7 @@ data class GoalRunnerStatusTestPorts(
   val attemptLedgerStore: GoalRunnerAttemptLedgerStore = NoopGoalRunnerAttemptLedgerStore,
   val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   val goalStateFiles: GoalRuntimeStateFileStore = UnavailableGoalRuntimeStateFileStore,
+  val projectStore: ProjectStorePort = FixedProjectStorePort(createTempDirectory("goal-runner-project-store")),
   val runtimeStatusService: FeatureTaskRuntimeStatusService? = null,
   val validationGatePlatformManifests: List<PlatformManifest> = emptyList(),
   val repoLocalConfig: RepoLocalConfigPort =
@@ -146,6 +150,7 @@ fun testGoalRunnerStatusService(
         database = database,
         repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
         goalStateFiles = ports.goalStateFiles,
+        projectStore = ports.projectStore,
       ),
   )
 }
@@ -190,7 +195,8 @@ fun testWorkflowGoalRunnerManifestStore(
     decompositionManifestValidator = decompositionManifestValidator,
     decompositionManifestStore = decompositionManifestStore,
     clock = clock,
-    decompositionManifestWriter = DecompositionManifestWriter(),
+    decompositionManifestWriter =
+      DecompositionManifestWriter(FixedProjectStorePort(createTempDirectory("goal-runner-writer-project-store"))),
     repositoryRoot = testRepositoryRoot,
     planningHydrator = testGoalChildPlanningHydratorPort,
   )

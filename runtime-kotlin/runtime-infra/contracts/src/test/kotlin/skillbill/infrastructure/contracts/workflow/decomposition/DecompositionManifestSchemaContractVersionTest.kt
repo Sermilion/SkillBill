@@ -104,6 +104,6 @@ class DecompositionManifestSchemaContractVersionTest {
 
   private companion object {
     const val KNOWN_SCHEMA_CONTENT_HASH: String =
-      "a3b606a62289a670dc1e318b313085e21bd8ab9688115a263011d20abde0ef22"
+      "be63ef35040d4dcb0317ec9968d8121bbe0cdf81e6ff4dcdde35b81da7cef9f0"
   }
 }

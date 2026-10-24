@@ -104,6 +104,28 @@ class VerifyQaOperationTest {
   }
 
   @Test
+  fun `the QA step may write to the store and the QA workspace while other steps get the store only`() {
+    VerifyOperationHarness().use { harness ->
+      harness.qaManifests = listOf(ANDROID_PACK)
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on")).token
+      harness.runner.sideEffects[VerifyPromptSections.QA_STEP] = {
+        harness.qaWorkspaces.report = qaTestReport(QaVerdict.PASSED, expected())
+      }
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      assertEquals(
+        listOf(harness.projectStoreRoot, harness.qaWorkspaceDirectory),
+        harness.runner.input(VerifyPromptSections.QA_STEP).facts.additionalWritableDirectories,
+      )
+      assertEquals(
+        listOf(harness.projectStoreRoot),
+        harness.runner.input(VerifyPromptSections.VERDICT_STEP).facts.additionalWritableDirectories,
+      )
+    }
+  }
+
+  @Test
   fun `open QA findings turn an unqualified APPROVE into APPROVE WITH FIXES with a warning`() {
     VerifyOperationHarness().use { harness ->
       harness.qaManifests = listOf(ANDROID_PACK)

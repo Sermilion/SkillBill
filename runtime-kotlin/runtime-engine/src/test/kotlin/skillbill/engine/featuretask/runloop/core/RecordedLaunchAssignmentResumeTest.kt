@@ -121,6 +121,7 @@ private fun FeatureTaskRuntimeRunLoopContext.resumedAs(
       qualityGateCycles,
       sharedEvidenceResolver,
       diffResolver,
+      projectStoreRoot,
     )
   val delegate = resumed.runState
   val wrapped =

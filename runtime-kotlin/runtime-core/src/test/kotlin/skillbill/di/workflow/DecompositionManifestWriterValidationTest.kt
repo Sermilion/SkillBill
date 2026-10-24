@@ -9,6 +9,7 @@ import skillbill.application.decompositionPlanningPlan
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionManifestFileStore
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -24,8 +25,9 @@ import kotlin.test.assertNotNull
 
 class DecompositionManifestWriterValidationTest {
   private val validator: DecompositionManifestValidator = DecompositionManifestSchemaValidator()
-  private val fileStore = FileSystemDecompositionManifestFileStore()
-  private val writer = DecompositionManifestWriter()
+  private val projectStore = FixedProjectStorePort(Files.createTempDirectory("skillbill-decomposition-project-store"))
+  private val fileStore = FileSystemDecompositionManifestFileStore(projectStore)
+  private val writer = DecompositionManifestWriter(projectStore)
 
   @Test
   fun `workflow update rejects schema invalid durable decomposition runtime`() {

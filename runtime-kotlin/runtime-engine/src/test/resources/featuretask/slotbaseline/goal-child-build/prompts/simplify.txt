@@ -137,7 +137,7 @@ for deferred work. No raw transcripts or diff hunks. If evidence cannot fit, sta
 tests_executed stays empty.
 
 ## Runtime-private checklist
-Read `.skill-bill/feature-task-tracking/wftr-20260602-test-0001/checklist.md` and reconcile ticks with remaining work. Do not treat ticks as completion.
+Read `__NORMALIZED_TEMP_PATH__/feature-task-tracking/wftr-20260602-test-0001/checklist.md` and reconcile ticks with remaining work. Do not treat ticks as completion.
 
 # Feature-task-runtime phase briefing
 phase: simplify

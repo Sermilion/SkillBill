@@ -1,2 +1,0 @@
-auto_sync_result_after_cancellation=null
-cancellation_propagated=false

@@ -49,6 +49,7 @@ import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.RepositoryOriginScopeKeyPort
 import skillbill.ports.repository.toFileLocation
@@ -202,6 +203,8 @@ fun reviewHarness(
   recorder: ReviewRecorder,
 ): ParallelCodeReviewRunner {
   val database = recordingDatabase(recorder, config.learnings)
+  val projectStore = FixedProjectStorePort(Files.createTempDirectory("review-harness-project-store"))
+  val manifestStore = FileSystemDecompositionManifestFileStore(projectStore)
   val launcher =
     GoalRunnerSubtaskLauncher { request ->
       recorder.parentLaunches += request
@@ -232,12 +235,10 @@ fun reviewHarness(
     installedPackCatalog = InstalledPlatformPackCatalogPort { config.manifests },
     specIntentProjectionResolver =
       SpecIntentProjectionResolver(
-        FileSystemDecompositionManifestFileStore(),
+        manifestStore,
         DecompositionManifestSchemaValidator(),
-        SpecIntentProjectionExtractor(
-          AcceptingReviewContextEnvelopeValidator,
-          FileSystemDecompositionManifestFileStore(),
-        ),
+        SpecIntentProjectionExtractor(AcceptingReviewContextEnvelopeValidator, manifestStore),
+        projectStore,
       ),
     parentReviewLauncher = launcher,
     reviewEvidenceBrokerFactory = config.evidenceBrokerFactory,
@@ -628,6 +629,7 @@ fun harnessRequest(
   agent1Id = agent1Id,
   scope = scope,
   repoRoot = repoRoot,
+  projectStoreRoot = repoRoot.resolve("project-store"),
   timeout = timeout,
   codeReviewMode = codeReviewMode,
   reviewRunId = reviewRunId,

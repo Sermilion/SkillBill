@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.featuretask
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
 import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
@@ -20,25 +21,28 @@ import kotlin.test.assertTrue
 
 class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
   private val repoRoot: Path = createTempDirectory("shared-evidence-store")
-  private val store = FileSystemFeatureTaskRuntimeSharedEvidenceStore()
+  private val projectStore = FixedProjectStorePort(createTempDirectory("shared-evidence-store-root"))
+  private val store = FileSystemFeatureTaskRuntimeSharedEvidenceStore(projectStore)
 
   @Test
-  fun `persists under the workflow id and fingerprint address beneath the repo-local store`() {
+  fun `persists under the workflow id and fingerprint address beneath the project store`() {
     store.resolved(request("fp-1"), CountingDeriver())
 
-    val expected = repoRoot.resolve(".skill-bill").resolve("run-evidence").resolve("wf-1").resolve("fp-1")
+    val expected = projectStore.root.resolve("run-evidence").resolve("wf-1").resolve("fp-1")
     assertTrue(Files.isDirectory(expected))
     val envelope = FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME
     val payload = FileSystemFeatureTaskRuntimeSharedEvidenceStore.PAYLOAD_FILE_NAME
     assertTrue(Files.isRegularFile(expected.resolve(envelope)))
     assertTrue(Files.isRegularFile(expected.resolve(payload)))
+    assertFalse(Files.exists(repoRoot.resolve(".skill-bill")))
   }
 
   @Test
-  fun `store root resolves beneath the repo root and never beneath the user home`() {
+  fun `store root resolves beneath the project store and never beneath the checkout or user home`() {
     val resolved = artifactDir(request("fp-1"))
 
-    assertTrue(resolved.startsWith(repoRoot.toAbsolutePath().normalize().resolve(".skill-bill")))
+    assertTrue(resolved.startsWith(projectStore.root.toAbsolutePath().normalize()))
+    assertFalse(resolved.startsWith(repoRoot.toAbsolutePath().normalize()))
     assertFalse(resolved.startsWith(Path.of(System.getProperty("user.home")).toAbsolutePath().normalize()))
   }
 
@@ -47,7 +51,7 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
     store.resolved(request("fp-durable"), CountingDeriver())
 
     val artifact =
-      FileSystemFeatureTaskRuntimeSharedEvidenceStore()
+      FileSystemFeatureTaskRuntimeSharedEvidenceStore(projectStore)
         .resolved(request("fp-durable"), ThrowingDeriver).artifact
 
     assertEquals("fp-durable", artifact.fingerprint)
@@ -69,7 +73,7 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
   @Test
   fun `a failure between the staged writes leaves nothing at the address and a later resolve re-derives`() {
     val failing =
-      object : FileSystemFeatureTaskRuntimeSharedEvidenceStore() {
+      object : FileSystemFeatureTaskRuntimeSharedEvidenceStore(projectStore) {
         override fun writeStaged(
           staging: Path,
           payloadBytes: ByteArray,
@@ -271,6 +275,45 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
       }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_UNREADABLE, it.code) }
     assertTrue("store_path '${resolution.storePath}'" in error.message.orEmpty())
   }
+
+  @Test
+  fun `a legacy checkout evidence reference is read from the checkout while new evidence is written to the store`() {
+    val legacyDir = repoRoot.resolve(".skill-bill/run-evidence/wf-1/fp-legacy")
+    Files.createDirectories(legacyDir)
+    Files.writeString(
+      legacyDir.resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.PAYLOAD_FILE_NAME),
+      "legacy-diff",
+    )
+    Files.writeString(
+      legacyDir.resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME),
+      "{\"fingerprint\":\"fp-legacy\",\"files\":[{\"path\":\"src/A.kt\",\"change_kind\":\"modified\"}]," +
+        "\"hunks\":[{\"path\":\"src/A.kt\",\"header\":\"@@ -1 +1 @@\"}]," +
+        "\"diff_payload\":{\"relative_path\":\"diff.patch\",\"size_bytes\":11}}",
+    )
+
+    val legacyPayload =
+      store.readDiffPayload(
+        FeatureTaskRuntimeSharedEvidenceLocatorReadRequest(repoRoot, ".skill-bill/run-evidence/wf-1/fp-legacy"),
+      )
+    val written = store.resolved(request("fp-new"), CountingDeriver())
+
+    assertEquals("legacy-diff", legacyPayload)
+    assertEquals("run-evidence/wf-1/fp-new", written.storePath)
+    assertTrue(Files.isDirectory(projectStore.root.resolve("run-evidence/wf-1/fp-new")))
+    assertFalse(Files.exists(repoRoot.resolve(".skill-bill/run-evidence/wf-1/fp-new")))
+  }
+
+  @Test
+  fun `a legacy reference escaping the legacy evidence root fails closed`() {
+    assertFailsWith<SkillBillRuntimeException> {
+      store.readDiffPayload(
+        FeatureTaskRuntimeSharedEvidenceLocatorReadRequest(repoRoot, ".skill-bill/run-evidence/../../outside"),
+      )
+    }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_MISSING, it.code) }
+  }
+
+  private fun artifactDir(request: FeatureTaskRuntimeSharedEvidenceRequest): Path =
+    artifactDir(projectStore.root, request)
 
   private fun request(fingerprint: String) =
     FeatureTaskRuntimeSharedEvidenceRequest(

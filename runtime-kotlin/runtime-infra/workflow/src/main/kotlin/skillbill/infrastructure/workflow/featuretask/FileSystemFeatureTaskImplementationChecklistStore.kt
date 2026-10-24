@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.featuretask
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.model.ImplementationChecklistAddress
 import skillbill.ports.taskruntime.model.ImplementationChecklistPrepareResult
@@ -14,19 +15,26 @@ import java.nio.file.StandardOpenOption
 @Inject
 class FileSystemFeatureTaskImplementationChecklistStore(
   private val diagnostics: RuntimeDiagnostics,
+  private val projectStore: ProjectStorePort,
 ) : FeatureTaskImplementationChecklistStore {
+  override fun checklistPath(
+    repoRoot: Path,
+    workflowId: String,
+  ): Path = projectStore.resolve(repoRoot).root.resolve(implementationChecklistRelativePath(workflowId)).normalize()
+
   override fun prepare(
     repoRoot: Path,
     seed: ImplementationChecklistSeed,
   ): ImplementationChecklistPrepareResult {
     val address = ImplementationChecklistAddress(implementationChecklistRelativePath(seed.workflowId))
-    val path = repoRoot.resolve(address.relativePath).normalize()
-    if (!path.startsWith(repoRoot.normalize())) {
+    val storeRoot = projectStore.resolve(repoRoot).root.normalize()
+    val path = storeRoot.resolve(address.relativePath).normalize()
+    if (!path.startsWith(storeRoot)) {
       diagnostics.warning(
         "implementation checklist degraded: seam=implementation_checklist value_expected=contained " +
           "value_used=escaped",
       )
-      return ImplementationChecklistPrepareResult.Degraded(address, "checklist path escaped the repository root")
+      return ImplementationChecklistPrepareResult.Degraded(address, "checklist path escaped the project store root")
     }
     return when (val loaded = loadExisting(path, address, seed)) {
       is LoadedChecklist.Ticks ->

@@ -41,15 +41,18 @@ import kotlin.test.assertTrue
 
 class SkillBillUninstallDestructiveSemanticsTest {
   @Test
-  fun `T3-04 application uninstall removes install state but keeps databases and backups`() {
+  fun `T3-04 application uninstall removes install state but keeps databases, backups and projects`() {
     val home = Files.createTempDirectory("skillbill-app-uninstall-home")
     val stateRoot = home.resolve(".skill-bill")
     val stateDb = stateRoot.resolve("review-metrics.db")
     val runtimeDir = stateRoot.resolve("runtime")
     val backups = stateRoot.resolve("backups")
+    val projectRecord = stateRoot.resolve("projects").resolve("l-0123456789abcdef").resolve("project.json")
     Files.createDirectories(runtimeDir)
     Files.createDirectories(backups)
+    Files.createDirectories(projectRecord.parent)
     Files.writeString(stateDb, "durable\n")
+    Files.writeString(projectRecord, "{}\n")
     val fileSystem = LocalUninstallPathsPort()
     val service =
       SkillBillUninstallService(
@@ -79,6 +82,7 @@ class SkillBillUninstallDestructiveSemanticsTest {
     assertFalse(Files.exists(runtimeDir))
     assertTrue(Files.exists(stateDb))
     assertTrue(Files.exists(backups))
+    assertTrue(Files.exists(projectRecord))
   }
 
   @Test

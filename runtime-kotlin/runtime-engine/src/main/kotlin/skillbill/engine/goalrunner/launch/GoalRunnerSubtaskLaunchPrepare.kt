@@ -6,6 +6,7 @@ import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
+import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
@@ -37,6 +38,7 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -72,6 +74,7 @@ class GoalRunnerSubtaskLaunchPrepare(
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val strategies: PhaseStrategyLookup,
   private val agentRunLauncher: AgentRunLauncher,
+  private val projectStore: ProjectStorePort,
 ) {
   fun goalReviewBaseline(
     state: GoalRunnerManifestState,
@@ -223,7 +226,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
     val canonicalRepository = repositoryEnclosingRootPort.canonicalPath(request.repoRoot)
-    val governedSpecPath = governedChildSpecPath(subtaskId, subtask.specPath, canonicalRepository)
+    val governedSpecPath = governedChildSpecPath(assignedWorkflowId, subtaskId, subtask.specPath, request.repoRoot)
     val attemptedManifest =
       state.manifest.withAttemptedSubtask(subtaskId)
         .let { manifest -> if (firstRun) manifest.withWorkflowId(subtaskId, assignedWorkflowId) else manifest }
@@ -276,23 +279,21 @@ class GoalRunnerSubtaskLaunchPrepare(
     priorWorkflowId?.let { outcomeStore.childQaSelection(it, null) }
 
   private fun governedChildSpecPath(
+    workflowId: String,
     subtaskId: Int,
     specPath: String,
-    canonicalRepository: Path,
+    repoRoot: Path,
   ): String {
     val rawSpecPath =
       requireNotNull(
         specPath.takeIf(String::isNotBlank),
       ) { "Goal subtask '$subtaskId' has no governed spec path." }
-    val lexicalSpecPath =
-      Path.of(rawSpecPath).let { path ->
-        (if (path.isAbsolute) path else canonicalRepository.resolve(path)).toAbsolutePath().normalize()
-      }
-    val resolvedSpecPath = repositoryEnclosingRootPort.optionalRealPath(lexicalSpecPath) ?: lexicalSpecPath
-    check(resolvedSpecPath.startsWith(canonicalRepository)) {
-      "Goal subtask '$subtaskId' governed spec path escapes repository '$canonicalRepository'."
-    }
-    return canonicalRepository.relativize(resolvedSpecPath).joinToString("/")
+    return repositoryEnclosingRootPort.governedFeatureTaskSpecPath(
+      projectStore,
+      workflowId,
+      repoRoot,
+      Path.of(rawSpecPath),
+    )
   }
 
   internal fun goalBranchSetupFailure(

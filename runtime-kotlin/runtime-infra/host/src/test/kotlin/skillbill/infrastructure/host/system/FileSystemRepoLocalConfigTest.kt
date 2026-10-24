@@ -6,6 +6,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import java.nio.file.Files
 import java.nio.file.Path
@@ -16,7 +17,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class FileSystemRepoLocalConfigTest {
-  private val adapter = FileSystemRepoLocalConfig(RecordingDiagnostics())
+  private val store = FixedProjectStorePort(Files.createTempDirectory("skillbill-repo-local-store"))
+  private val adapter = FileSystemRepoLocalConfig(RecordingDiagnostics(), store)
 
   @Test
   fun `reads typed values from a valid config file`() {
@@ -55,7 +57,7 @@ class FileSystemRepoLocalConfigTest {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
       }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
 
-    assertContains(error.message.orEmpty(), repoRoot.fileName.toString())
+    assertContains(error.message.orEmpty(), store.resolve(repoRoot).configPath.toString())
     assertContains(error.message.orEmpty(), "key ")
     assertContains(error.message.orEmpty(), "<root>")
   }
@@ -196,7 +198,7 @@ class FileSystemRepoLocalConfigTest {
       )
 
     val config =
-      FileSystemRepoLocalConfig(diagnostics).readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config
+      FileSystemRepoLocalConfig(diagnostics, store).readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config
 
     assertEquals(SpecType.LINEAR, config.specType)
     assertTrue(diagnostics.warnings.isEmpty())
@@ -229,7 +231,7 @@ class FileSystemRepoLocalConfigTest {
       )
 
     val budget =
-      FileSystemRepoLocalConfig(diagnostics)
+      FileSystemRepoLocalConfig(diagnostics, store)
         .readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config.reviewContextBudget
 
     assertEquals(700_000, budget.maxParentPacketBytes)
@@ -257,7 +259,7 @@ class FileSystemRepoLocalConfigTest {
         """.trimIndent(),
       )
 
-    FileSystemRepoLocalConfig(diagnostics).readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
+    FileSystemRepoLocalConfig(diagnostics, store).readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
 
     assertTrue(diagnostics.warnings.isEmpty())
   }
@@ -383,9 +385,30 @@ class FileSystemRepoLocalConfigTest {
     assertEquals(SpecType.LINEAR, config.specType)
   }
 
+  @Test
+  fun `a legacy checkout config is copied into the store once and later edits to it are ignored`() {
+    val diagnostics = RecordingDiagnostics()
+    val repoRoot = Files.createTempDirectory("skillbill-repo-local-config-legacy")
+    val legacy = repoRoot.resolve(".skill-bill").resolve("config.yaml")
+    Files.createDirectories(legacy.parent)
+    Files.writeString(legacy, "spec_type: linear\n")
+    val legacyAdapter = FileSystemRepoLocalConfig(diagnostics, store)
+
+    val first = legacyAdapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config
+    Files.writeString(legacy, "spec_type: local\n")
+    val second = legacyAdapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot)).config
+
+    assertEquals(SpecType.LINEAR, first.specType)
+    assertEquals(SpecType.LINEAR, second.specType)
+    assertEquals("spec_type: linear\n", Files.readString(store.resolve(repoRoot).configPath))
+    assertEquals("spec_type: local\n", Files.readString(legacy))
+    assertEquals(1, diagnostics.warnings.size)
+    assertContains(diagnostics.warnings.single(), "cause=legacy_config_copied")
+  }
+
   private fun writeConfig(content: String): Path {
     val repoRoot = Files.createTempDirectory("skillbill-repo-local-config")
-    val configPath = repoRoot.resolve(".skill-bill").resolve("config.yaml")
+    val configPath = store.resolve(repoRoot).configPath
     Files.createDirectories(configPath.parent)
     Files.writeString(configPath, content)
     return repoRoot

@@ -1,5 +1,6 @@
 package skillbill.application
 
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
@@ -212,7 +213,7 @@ private fun newService(): WorkflowService =
     goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
-    repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+    projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
   )
 
 private fun newBlockedImplementService(

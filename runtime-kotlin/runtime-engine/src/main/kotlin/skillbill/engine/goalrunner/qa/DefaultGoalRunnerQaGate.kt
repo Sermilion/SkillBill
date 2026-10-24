@@ -26,6 +26,7 @@ import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -50,6 +51,7 @@ class DefaultGoalRunnerQaGate(
   private val activityStampWriter: AgentActivityStampWriter,
   private val qaOutcomes: FeatureTaskQaOutcomeRecorder,
   private val capabilities: QaCapabilityResolver,
+  private val projectStore: ProjectStorePort,
   private val diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerQaGate {
   override fun run(
@@ -122,7 +124,11 @@ class DefaultGoalRunnerQaGate(
       when (
         val read =
           invariantsSource.read(
-            resolvedParentSpecPath(request.repoRoot, Path.of(state.manifest.parentSpecPath)),
+            resolvedParentSpecPath(
+              request.repoRoot,
+              Path.of(state.manifest.parentSpecPath),
+              projectStore.resolve(request.repoRoot),
+            ),
           )
       ) {
         is FeatureTaskRuntimeRunInvariantsRead.Read -> read.invariants

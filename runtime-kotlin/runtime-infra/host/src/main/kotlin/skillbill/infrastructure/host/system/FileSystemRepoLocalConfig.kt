@@ -17,6 +17,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import java.io.IOException
 import java.math.BigInteger
@@ -26,14 +27,14 @@ import java.nio.file.Path
 @Inject
 class FileSystemRepoLocalConfig(
   private val diagnostics: RuntimeDiagnostics,
+  private val projectStore: ProjectStorePort,
 ) : RepoLocalConfigPort {
   private val yamlMapper: YAMLMapper by lazy { YAMLMapper() }
 
   override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest): ReadRepoLocalConfigResult {
-    val configPath = configPath(request.repoRoot)
-    if (!Files.exists(configPath)) {
-      return ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
-    }
+    val configPath =
+      readableRepoLocalConfigPath(diagnostics, request.repoRoot, projectStore.resolve(request.repoRoot).configPath)
+        ?: return ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
     val payload = readConfigPayload(configPath)
     val raw = parseConfigMap(configPath, payload)
     rejectRemovedParallelAgentConfig(configPath, raw)
@@ -276,13 +277,6 @@ private fun malformedBudget(
   value: Any?,
   reason: String,
 ): Nothing = throw malformedRepoLocalConfigError(path.toString(), key, value?.toString() ?: "null", reason)
-
-internal fun configPath(repoRoot: Path): Path =
-  repoRoot
-    .resolve(".skill-bill")
-    .resolve(REPO_LOCAL_CONFIG_FILE_NAME)
-    .toAbsolutePath()
-    .normalize()
 
 internal const val REPO_LOCAL_CONFIG_FILE_NAME: String = "config.yaml"
 

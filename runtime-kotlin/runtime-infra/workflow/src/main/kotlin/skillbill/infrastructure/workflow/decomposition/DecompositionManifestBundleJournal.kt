@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.decomposition.BUNDLE_JOURNAL_CONTRACT_VERSION
+import skillbill.contracts.projectstore.ProjectStoreLayout
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.atomicWriteString
@@ -98,14 +99,13 @@ private fun decompositionManifestLockPath(
 internal fun cleanupValidatedBundleJournal(transaction: DecompositionManifestBundleTransaction) =
   DecompositionManifestBundleJournalIo.cleanupValidated(transaction)
 
-private fun lockOwner(parent: Path): Path {
-  var current = parent
-  while (true) {
-    if (current.fileName?.toString() == FEATURE_SPECS_DIRECTORY_NAME) return current
-    current = current.parent ?: return parent
-  }
-}
+private fun lockOwner(parent: Path): Path =
+  generateSequence(parent) { it.parent }
+    .take(LOCK_OWNER_MAX_ANCESTOR_DEPTH + 1)
+    .firstOrNull { it.fileName?.toString() in ProjectStoreLayout.SPEC_BUNDLE_ROOT_DIRECTORY_NAMES }
+    ?: parent
 
-private const val FEATURE_SPECS_DIRECTORY_NAME = ".feature-specs"
+private const val LOCK_OWNER_MAX_ANCESTOR_DEPTH = 2
+
 private const val LOCK_DIRECTORY_NAME = "skill-bill-decomposition-manifest-locks"
 private const val LOCK_FILE_SUFFIX = ".lock"

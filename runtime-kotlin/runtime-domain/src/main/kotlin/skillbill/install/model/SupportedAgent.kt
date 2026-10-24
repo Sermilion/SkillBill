@@ -11,11 +11,46 @@ enum class SupportedAgent(
   val mcpUsesToml: Boolean,
   val profileDirectoryPrefix: String? = null,
   val mcpProfileFileName: String = mcpConfigRelativePath.substringAfterLast('/'),
+  val honorsAdditionalWritableDirectories: Boolean,
 ) {
-  CLAUDE("claude", "claude-agents", "md", null, ".claude.json", false, ".claude-"),
-  CODEX("codex", "codex-agents", "toml", null, ".codex/config.toml", true, ".codex-"),
-  JUNIE("junie", "junie-agents", "md", ".junie", ".junie/mcp/mcp.json", false),
-  CURSOR("cursor", "cursor-agents", "md", ".cursor", ".cursor/mcp.json", false),
+  CLAUDE(
+    "claude",
+    "claude-agents",
+    "md",
+    null,
+    ".claude.json",
+    false,
+    ".claude-",
+    honorsAdditionalWritableDirectories = true,
+  ),
+  CODEX(
+    "codex",
+    "codex-agents",
+    "toml",
+    null,
+    ".codex/config.toml",
+    true,
+    ".codex-",
+    honorsAdditionalWritableDirectories = true,
+  ),
+  JUNIE(
+    "junie",
+    "junie-agents",
+    "md",
+    ".junie",
+    ".junie/mcp/mcp.json",
+    false,
+    honorsAdditionalWritableDirectories = false,
+  ),
+  CURSOR(
+    "cursor",
+    "cursor-agents",
+    "md",
+    ".cursor",
+    ".cursor/mcp.json",
+    false,
+    honorsAdditionalWritableDirectories = false,
+  ),
   ;
 
   val id: String get() = wireValue
@@ -23,11 +58,14 @@ enum class SupportedAgent(
   companion object {
     val supportedIds: List<String> = entries.map(SupportedAgent::wireValue)
 
-    fun fromWire(id: String): SupportedAgent {
+    fun fromWireOrNull(id: String): SupportedAgent? {
       val normalized = id.trim().lowercase()
       return entries.firstOrNull { agent -> agent.wireValue == normalized }
-        ?: throw IllegalArgumentException("Unknown agent '$id'. Supported agents: ${supportedIds.joinToString(", ")}.")
     }
+
+    fun fromWire(id: String): SupportedAgent =
+      fromWireOrNull(id)
+        ?: throw IllegalArgumentException("Unknown agent '$id'. Supported agents: ${supportedIds.joinToString(", ")}.")
 
     fun fromId(id: String): SupportedAgent = fromWire(id)
 

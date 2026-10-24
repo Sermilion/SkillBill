@@ -7,6 +7,7 @@ import skillbill.application.decomposition.model.DecompositionManifestProjection
 import skillbill.application.decomposition.model.RetryDecompositionManifestProjectionArgs
 import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.application.decomposition.retryDecompositionManifestProjectionFromAuthoritativeState
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.decomposition.DecompositionWorkflowContinuation
 import skillbill.application.workflow.decomposition.PendingDecompositionProjection
 import skillbill.application.workflow.decomposition.continueExistingWorkflow
@@ -45,7 +46,6 @@ import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -80,7 +80,7 @@ class WorkflowService(
   private val goalObservabilityEventValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val runtimeDiagnostics: RuntimeDiagnostics,
   private val clock: Clock,
-  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val projectCheckout: ProjectCheckout,
 ) {
   private val workflowIdRandom = Random.Default
   private val engine = WorkflowEngine()
@@ -473,7 +473,7 @@ class WorkflowService(
               decompositionManifestWriter,
               clock,
               workflowIdRandom,
-              repositoryEnclosingRootPort,
+              projectCheckout,
             ).continueDecomposedParentByIssueKey(workflowId, unitOfWork, subtaskId)
           pendingProjection = mergePendingProjection(pendingProjection, resolved)
           return@transaction resolved.result

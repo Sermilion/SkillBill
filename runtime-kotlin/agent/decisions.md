@@ -1,3 +1,9 @@
+## [2026-10-23] SKILL-441: one plan-report builder serves standalone and goal plan phases
+Context: The spec assumed goal plan phases settle through the feature-task run loop, so bundle files would need a second report path next to the standalone one.
+Decision: `StandalonePlanReportBuilder` is the only producer of `StandalonePlanReport`, including `bundleFiles`. Goal plan phases already run `StandalonePlanRun` with goal scope and publish through the same status sink, so no parallel model exists.
+Reason: A second builder would duplicate the store-relative and legacy `.feature-specs` path resolution and the unreadable-directory fallback. Bundle files are a derived listing, so decoding a missing key as an empty list avoids a column or migration.
+Revisit when: goal plan phases move onto the feature-task run loop.
+
 ## [2026-10-23] SKILL-440: delete the plugin trees and their architecture-guard coverage in one commit
 Context: The IntelliJ plugin and VS Code extension are retired in favour of the desktop app, but a runtime-core architecture test asserts the plugin's layer package roots exist and the line-ceiling guards scan `intellij-plugin` as a production root.
 Decision: Remove both trees, their workflows, and the guard roots and the plugin-specific guard case together, and leave installer and release-tag cleanup to a separate subtask.
@@ -3375,3 +3381,7 @@ Evidence: `WorkRunActionsTest` cancels real SQLite parent and child snapshots, r
 ## [2026-10-21] Clear prior goal failures after accepting a resumed run
 
 A resumed goal clears its retained blocked reason only after it owns execution and enters the prepared run. Refused admission preserves the previous reason. A live finalization step overrides a historically blocked work record in IDE status, board, and detail. Current operator decision pauses still apply. This prevents an earlier push timeout from describing a resumed CI monitor as blocked.
+
+## [2026-10-23] Interactive editor launches are a third process lifetime owned by `ProcessFileEditorLauncher`
+
+`skill-bill config edit` hands the terminal to the user's `$VISUAL`, `$EDITOR`, or the OS default application. `ProcessFileEditorLauncher` in `runtime-infra/host` starts that process with inherited IO and waits for it without a deadline. It is not a one-shot command, so `BoundedExternalProcessRunner` does not fit: its capture and deadline would cut a live editing session. It is not a supervised agent run, so `runtime-infra/launcher` does not fit either. Interactive, inherited-IO launches of user-chosen programs stay in this one adapter. The configured editor runs through `sh -c` so quoted paths and arguments survive, and `sh` exit codes 126 and 127 fall through to the OS default opener.

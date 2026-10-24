@@ -1,3 +1,13 @@
+## [2026-10-23] SKILL-441 subtask 7 desktop bundle file links
+Areas: desktop-tray (core/domain, core/data, core/ui, composeApp infrastructure and architecture test, feature/detail)
+- MEDIUM feature. PlanRunReport carries bundleFiles (default empty, so an older runtime maps to no list). RuntimeWorkMapper passes bundleFiles, parentSpecPath and subtask specPaths through verbatim; the desktop does no repo-root path joining.
+- RepositoryNavigation gains a suspend openFile returning Outcome, matching openRepository and openDirectory. NativeServicesImpl requires an existing file, then uses Desktop.open or the OS opener (xdg-open, open, cmd start); every failure becomes an Outcome.Failure plus a diagnostics record.
+- feature/detail SpecBundleFileList renders a "Spec bundle" list from PlanReportSection. Absolute entries are Role.Button links with an "Open <name>" description and show failures inline; relative entries stay plain selectable text. It falls back to parentSpecPath plus subtask specPaths when bundleFiles is empty. (reusable)
+- The absolute-path check is string-based because commonMain has no JVM file API; it carries a shortcut comment.
+- DesktopArchitectureTest bans File( as a whole word, so the required openFile name no longer trips the presentation storage guard.
+- Limits: goal activity shows a plan report only once the runtime's goal branch in WorkExecutionHistory attaches one (SKILL-441 subtask 6); NativeServicesImpl.openFile has no automated test; packagedDataSmoke was not run locally.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
 ## [2026-10-24] SKILL-443 subtask 3 QA could-not-complete notification and detail
 Areas: desktop-tray core/domain model, core/data runtime mapper, composeApp application (TransitionNotifications), feature/detail (PhaseResults, DetailPresentation, DetailContent)
 - MEDIUM feature. WorkItem.qaOutcome (WorkQaOutcome with derived couldNotComplete) comes from the IdeStatus workflow_qa_outcome field; GoalQaResult gains failureKind. An unparseable recordedAt maps to null, never a board failure.

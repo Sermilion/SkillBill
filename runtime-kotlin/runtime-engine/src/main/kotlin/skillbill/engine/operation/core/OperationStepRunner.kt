@@ -124,7 +124,8 @@ class OperationStepRunner(
           attempt = TRACKED_ATTEMPT,
           observeLaunch = false,
           briefingText = directive,
-          additionalWritableDirectories = context.additionalWritableDirectories,
+          additionalWritableDirectories =
+            (listOf(context.projectStoreRoot) + context.additionalWritableDirectories).distinct(),
         ),
       policy = policy,
     )

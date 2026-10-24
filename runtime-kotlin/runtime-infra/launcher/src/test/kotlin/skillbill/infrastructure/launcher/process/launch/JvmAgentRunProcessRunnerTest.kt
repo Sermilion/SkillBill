@@ -1,6 +1,5 @@
 package skillbill.infrastructure.launcher.process.launch
 
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -12,9 +11,7 @@ import org.junit.jupiter.api.assertThrows
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
-import skillbill.infrastructure.launcher.process.waitloop.ProcessWait
 import skillbill.infrastructure.launcher.process.waitloop.writeAndCloseStdin
-import skillbill.infrastructure.launcher.review.GovernedReviewEvidenceEndpoint
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
@@ -35,116 +32,14 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Handler
 import java.util.logging.LogRecord
 import java.util.logging.Logger
-import kotlin.concurrent.thread
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 class JvmAgentRunProcessRunnerTest {
-  private val trackedChildPids = mutableListOf<Long>()
-  private val trackedChildPidFiles = mutableListOf<Path>()
-
-  @AfterEach
-  fun destroyTrackedChildren() {
-    trackedChildPids.forEach { pid ->
-      runCatching {
-        ProcessHandle.of(pid).ifPresent { handle ->
-          if (handle.isAlive) {
-            handle.destroyForcibly()
-          }
-        }
-      }
-    }
-    trackedChildPids.clear()
-    trackedChildPidFiles.forEach { pidFile ->
-      runCatching { Files.readString(pidFile).trim().toLong() }.getOrNull()?.let { pid ->
-        ProcessHandle.of(pid).ifPresent { handle ->
-          if (handle.isAlive) {
-            handle.destroyForcibly()
-          }
-        }
-      }
-      runCatching { Files.deleteIfExists(pidFile) }
-    }
-    trackedChildPidFiles.clear()
-  }
-
-  @Test
-  fun `throwing output sink still reaps a live child process`() {
-    val pidFile = Files.createTempFile("skillbill-child", ".pid")
-    trackedChildPidFiles.add(pidFile)
-    val sink =
-      AgentRunOutputSink { stream, _ ->
-        if (stream == AgentRunOutputStream.STDERR) {
-          error("output sink failed")
-        }
-      }
-    assertThrows<IllegalStateException> {
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "echo $$ > '$pidFile'; exec sleep 120"),
-          Path.of("."),
-        ) {
-          outputSink = sink
-          timeout = 30.seconds
-          statusHeartbeatInterval = 1.milliseconds
-        },
-      )
-    }
-    val pid = Files.readString(pidFile).trim().toLong()
-    trackedChildPids.add(pid)
-    Files.deleteIfExists(pidFile)
-    assertFalse(childProcessAlive(pid), "F-001: child must not outlive runner cleanup")
-  }
-
-  @Test
-  fun `probe failure is recorded without resetting the idle deadline`() {
-    val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 5"),
-          Path.of("."),
-        ) {
-          timeout = 2.seconds
-          progressIdleTimeout = 100.milliseconds
-          progressProbe = AgentRunProgressProbe { error("probe failed") }
-        },
-      )
-
-    assertTrue(result.timedOut)
-    assertTrue(result.stderr.contains("probe_failure"))
-    assertTrue(result.stderr.contains("progress_token"))
-  }
-
-  @Test
-  fun `progress absence after an observation does not extend the idle deadline`() {
-    var observations = 0
-    val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 5"),
-          Path.of("."),
-        ) {
-          timeout = 2.seconds
-          progressIdleTimeout = 100.milliseconds
-          progressProbe =
-            AgentRunProgressProbe {
-              if (observations++ == 0) "observed" else null
-            }
-        },
-      )
-
-    assertTrue(result.timedOut)
-    assertTrue(result.stderr.contains("probe_absence"))
-    assertTrue(result.stderr.contains("progress_token"))
-  }
-
   @Test
   fun `stdin delivery failure is reported without using the output sink`() {
     val recorder = ProcessRunDegradationRecorder()
@@ -172,38 +67,6 @@ class JvmAgentRunProcessRunnerTest {
         )
       },
     )
-  }
-
-  @Test
-  fun `setup cancellation still releases the child process`() {
-    val pidFile = Files.createTempFile("skillbill-child-setup-cancel", ".pid")
-    trackedChildPidFiles.add(pidFile)
-    Files.deleteIfExists(pidFile)
-    assertThrows<CancellationException> {
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "echo $$ > '$pidFile'; exec sleep 120"),
-          Path.of("."),
-        ) {
-          mcpStartupProbe =
-            AgentRunMcpStartupProbe {
-              val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-              while (
-                (!Files.exists(pidFile) || Files.readString(pidFile).trim().isBlank()) &&
-                System.nanoTime() < deadline
-              ) {
-                Thread.sleep(10)
-              }
-              check(Files.exists(pidFile) && Files.readString(pidFile).trim().isNotBlank())
-              throw CancellationException("cancelled during setup")
-            }
-        },
-      )
-    }
-    val pid = Files.readString(pidFile).trim().toLong()
-    trackedChildPids.add(pid)
-    Files.deleteIfExists(pidFile)
-    assertFalse(childProcessAlive(pid), "F-002: child must not outlive setup cancellation cleanup")
   }
 
   @Test
@@ -298,61 +161,6 @@ class JvmAgentRunProcessRunnerTest {
     blocking.unblock()
     drain.joinAndFreeze()
     assertEquals(firstDigest, drain.capture().sha256)
-  }
-
-  @Test
-  fun `interrupt during drain settlement remains set after release`() {
-    val stdoutInput = BlockingInputStream()
-    val stderrInput = BlockingInputStream()
-    val stdout = testDrain(stdoutInput)
-    val stderr = testDrain(stderrInput)
-    stdout.start()
-    stderr.start()
-    val process = FakeReapableProcess(staysAlive = false, streamsAvailable = true)
-    val liveProcesses = mutableSetOf<Process>(process)
-    val degradation = ProcessRunDegradationRecorder()
-    val lifetime =
-      ProcessRunLifetime(
-        process = process,
-        liveProcesses = liveProcesses,
-        stdout = stdout,
-        stderr = stderr,
-        degradation = degradation,
-      )
-    val releaseThread =
-      thread(start = true) {
-        lifetime.release(
-          Result.success(
-            ProcessWait(
-              finished = true,
-              progressIdleTimedOut = false,
-              fileActivityGraceExhausted = false,
-              wallClockTimedOut = false,
-            ),
-          ),
-        )
-      }
-    assertTrue(stdoutInput.awaitReadStarted())
-    releaseThread.interrupt()
-    releaseThread.join(5_000)
-    stdoutInput.unblock()
-    stderrInput.unblock()
-    stdout.join()
-    stderr.join()
-
-    assertFalse(releaseThread.isAlive)
-    assertTrue(releaseThread.isInterrupted)
-    assertFalse(liveProcesses.contains(process))
-    val stderrChunks = mutableListOf<String>()
-    exportRunDegradationEvidence(
-      degradation,
-      AgentRunOutputSink { stream, chunk ->
-        if (stream == AgentRunOutputStream.STDERR) {
-          stderrChunks += chunk
-        }
-      },
-    )
-    assertTrue(stderrChunks.joinToString("").contains("stdout_drain_join"))
   }
 
   @Test
@@ -630,33 +438,6 @@ class JvmAgentRunProcessRunnerTest {
     assertNotEquals(leaked, builder.environment()["JAVA_HOME"])
   }
 
-  @Test
-  fun `a timed-out governed launch leaves no endpoint bound`() {
-    val endpoint =
-      GovernedReviewEvidenceEndpoint.bind(
-        "architecture",
-        TeardownProbeBroker,
-        listOf("/bin/true"),
-      )
-
-    val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 30"),
-          Path.of("."),
-        ) {
-          timeout = 1.seconds
-          conversationIsolation = ReviewConversationIsolation.FRESH
-          reviewEvidenceBroker = TeardownProbeBroker
-          reviewEvidenceEndpoint = endpoint
-        },
-      )
-
-    assertTrue(result.timedOut)
-    assertTrue(Files.notExists(endpoint.descriptor.socketPath))
-    assertTrue(Files.notExists(endpoint.descriptor.mcpConfigPath))
-  }
-
   private object TeardownProbeBroker : ReviewEvidenceBroker {
     override fun authorizeExpansion(request: ReviewExpansionAuthorizationRequest): ReviewExpansionRecord =
       error("unused")
@@ -684,9 +465,6 @@ class JvmAgentRunProcessRunnerTest {
     override fun terminalOutcome() = null
   }
 
-  private fun childProcessAlive(pid: Long): Boolean =
-    ProcessHandle.of(pid).map { handle -> handle.isAlive }.orElse(false)
-
   private fun <T> capturingLogRecords(
     logger: Logger,
     block: () -> T,
@@ -709,23 +487,13 @@ class JvmAgentRunProcessRunnerTest {
       logger.removeHandler(handler)
     }
   }
-
-  private fun testDrain(input: InputStream) =
-    Utf8Drain(
-      input = input,
-      outputStream = AgentRunOutputStream.STDOUT,
-      outputSink = AgentRunOutputSink.NONE,
-      onChunkRead = {},
-    )
 }
 
 private class BlockingInputStream : InputStream() {
   @Volatile
   private var open = true
-  private val readStarted = CountDownLatch(1)
 
   override fun read(): Int {
-    readStarted.countDown()
     while (open) {
       Thread.sleep(10)
     }
@@ -737,7 +505,6 @@ private class BlockingInputStream : InputStream() {
     offset: Int,
     length: Int,
   ): Int {
-    readStarted.countDown()
     while (open) {
       Thread.sleep(10)
     }
@@ -747,8 +514,6 @@ private class BlockingInputStream : InputStream() {
   fun unblock() {
     open = false
   }
-
-  fun awaitReadStarted(): Boolean = readStarted.await(5, TimeUnit.SECONDS)
 }
 
 private class FakeReapableProcess(

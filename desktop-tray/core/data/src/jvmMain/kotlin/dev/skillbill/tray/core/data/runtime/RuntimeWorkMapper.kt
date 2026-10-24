@@ -41,7 +41,7 @@ internal fun IdeStatusWorkflowQaOutcome.toDomain(): WorkQaOutcome? =
   runCatching { Instant.parse(recordedAt) }.getOrNull()?.let { WorkQaOutcome(outcome.wireValue, reason, failureKind, it) }
 
 internal fun StandalonePlanReport.toDomain(): PlanRunReport =
-  PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) })
+  PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)
 
 internal fun DatabaseFileObservation.toDomain(): DatabaseFileIdentity = DatabaseFileIdentity(path.toString(), fileKey)
 
@@ -184,6 +184,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     pageOffset = pageOffset,
     incident = incident?.toDomain(),
     incidentHistory = IncidentHistory(incidentHistory.map(WorkIncidentProjection::toDomain)),
+    goalSpecBundle = goalSpecBundle?.toDomain(),
   )
 }
 

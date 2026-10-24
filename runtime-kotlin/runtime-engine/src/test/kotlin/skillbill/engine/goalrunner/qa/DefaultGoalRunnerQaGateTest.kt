@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.qa
 
 import org.junit.jupiter.api.io.TempDir
+import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
@@ -153,6 +154,7 @@ class DefaultGoalRunnerQaGateTest {
       testActivityStampWriter(),
       FeatureTaskQaOutcomeRecorder(database, clock),
       QaCapabilityResolver(git) { manifests },
+      testProjectStore,
       diagnostics,
     )
   }

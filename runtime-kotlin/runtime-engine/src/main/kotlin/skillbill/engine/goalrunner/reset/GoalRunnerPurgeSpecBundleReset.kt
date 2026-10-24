@@ -2,9 +2,11 @@ package skillbill.engine.goalrunner.reset
 
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.decomposition.repoRelativePath
+import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecAction
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecActionKind
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -18,6 +20,7 @@ internal class GoalRunnerPurgeSpecBundleReset(
   private val gitOperations: WorkflowGitOperations,
   private val manifestFileStore: DecompositionManifestStore,
   private val manifestValidator: DecompositionManifestValidator,
+  private val projectStore: ProjectStorePort,
 ) {
   fun reset(
     repoRoot: Path,
@@ -108,9 +111,10 @@ internal class GoalRunnerPurgeSpecBundleReset(
     repoRoot: Path,
     manifest: DecompositionManifest,
   ): List<Path> {
-    val parentSpec = repoRoot.resolve(manifest.parentSpecPath).normalize()
+    val store = projectStore.resolve(repoRoot)
+    val parentSpec = resolvedParentSpecPath(repoRoot, Path.of(manifest.parentSpecPath), store)
     return manifest.subtasks
-      .map { subtask -> repoRoot.resolve(subtask.specPath).normalize() }
+      .map { subtask -> resolvedParentSpecPath(repoRoot, Path.of(subtask.specPath), store) }
       .filter { path ->
         path != parentSpec &&
           path.fileName.toString() != DECOMPOSITION_MANIFEST_FILENAME &&

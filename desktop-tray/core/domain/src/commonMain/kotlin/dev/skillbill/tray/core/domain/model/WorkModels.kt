@@ -136,6 +136,8 @@ data class Detail(
   val runOptions: RunOptions? = null,
   val incident: Incident? = null,
   val incidentHistory: IncidentHistory = IncidentHistory(emptyList()),
+  /** The goal's spec bundle with absolute paths; null for anything that is not a goal. */
+  val goalSpecBundle: PlanRunReport? = null,
 )
 
 enum class IncidentProgress {
@@ -462,7 +464,12 @@ data class ExecutionInstance(
 )
 
 /** The feature a standalone plan run settled and the subtasks it split the feature into. */
-data class PlanRunReport(val featureName: String, val parentSpecPath: String, val subtasks: List<PlannedSubtask>)
+data class PlanRunReport(
+  val featureName: String,
+  val parentSpecPath: String,
+  val subtasks: List<PlannedSubtask>,
+  val bundleFiles: List<String> = emptyList(),
+)
 data class PlannedSubtask(val id: Int, val name: String, val specPath: String, val dependsOn: List<Int>)
 
 data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)

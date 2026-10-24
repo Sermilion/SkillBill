@@ -1,8 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.parentSpecPath
-import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
@@ -11,6 +9,7 @@ import skillbill.engine.featuretask.lifecycle.subtask.parseGitPorcelainPaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -45,7 +44,6 @@ import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
@@ -59,7 +57,7 @@ import java.nio.file.Path
 class GoalRunnerFinalization(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val pullRequestPort: GoalPullRequestPort,
-  private val specScratchStore: SpecScratchStore,
+  private val specScratchCleanup: GoalSpecScratchCleanup,
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
@@ -291,22 +289,7 @@ class GoalRunnerFinalization(
     manifest: DecompositionManifest,
     subtaskId: Int,
     request: GoalRunnerRunRequest,
-  ) {
-    if (manifest.specSource != SpecSource.LINEAR) return
-    val specPath =
-      manifest.subtasks.firstOrNull { it.id == subtaskId }?.specPath?.takeIf(String::isNotBlank)
-        ?: return
-    val resolved = resolvedParentSpecPath(request.repoRoot, Path.of(specPath))
-    runCatching { specScratchStore.deleteFileIfExists(resolved) }
-      .onFailure { error ->
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "Goal linear-mode subtask spec scratch deletion at '$resolved' failed; the completed " +
-            "subtask is unaffected and the scratch can be cleaned up manually.",
-          error,
-        )
-      }
-  }
+  ) = specScratchCleanup.deleteCompletedSubtaskSpec(manifest, subtaskId, request.repoRoot)
 
   internal fun pruneCompletedCheckpointRefs(
     completed: GoalRunnerManifestState,
@@ -460,20 +443,7 @@ class GoalRunnerFinalization(
   private fun deleteGoalSpecScratchOnSuccess(
     manifest: DecompositionManifest,
     request: GoalRunnerRunRequest,
-  ) {
-    if (manifest.specSource != SpecSource.LINEAR) return
-    val parentSpec = resolvedParentSpecPath(request.repoRoot, Path.of(manifest.parentSpecPath))
-    val specDir = parentSpec.parent ?: return
-    runCatching { specScratchStore.deleteDirectoryIfExists(specDir) }
-      .onFailure { error ->
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "Goal linear-mode spec scratch deletion at '$specDir' failed; the completed goal is " +
-            "unaffected and the scratch can be cleaned up manually.",
-          error,
-        )
-      }
-  }
+  ) = specScratchCleanup.deleteGoalSpecBundle(manifest, request.repoRoot)
 
   private fun resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
     resolveUnaddressedFindingsLedger(unaddressedFindingsLedgerService, issueKey)

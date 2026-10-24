@@ -4,8 +4,8 @@ import skillbill.ports.workflow.goalstate.model.GoalRuntimeDirectoryDeletion
 import java.nio.file.Path
 
 /**
- * Port for removing repo-local runtime state a goal owns (`.skill-bill/feature-task-tracking/<id>/` and
- * `.skill-bill/run-evidence/<id>/`). Deletion is idempotent: an absent directory reports
+ * Port for removing project-store runtime state a goal owns (`<store>/feature-task-tracking/<id>/` and
+ * `<store>/run-evidence/<id>/`). Deletion is idempotent: an absent directory reports
  * [GoalRuntimeDirectoryDeletion.Absent].
  */
 interface GoalRuntimeStateFileStore {

@@ -10,8 +10,10 @@ import skillbill.application.decomposition.executionModel
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
+import skillbill.application.testProjectStore
 import skillbill.application.testRepositoryRoot
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.decomposition.alignSubtaskResumeStep
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.persistParentDecompositionRuntime
@@ -203,7 +205,7 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     val first =
@@ -253,7 +255,7 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -300,7 +302,7 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val historyArtifact = """{"plan":{"mode":"decompose"},"history_note":"retain-me"}"""
     workflows.saveFeatureTaskWorkflow(
@@ -357,7 +359,7 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -401,7 +403,7 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -462,7 +464,7 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
@@ -667,7 +669,7 @@ class WorkflowServiceTest {
         repositoryRoot = testRepositoryRoot,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     assertFailsWith<SkillBillRuntimeException> {
       service.get(WorkflowFamilyKind.TASK_RUNTIME, "wftr-loud")
@@ -708,7 +710,7 @@ class WorkflowServiceTest {
         repositoryRoot = testRepositoryRoot,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     val result =
@@ -752,7 +754,7 @@ class WorkflowServiceTest {
         goalObservabilityEventValidator = testFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
     val opened = assertIs<WorkflowOpenResult.Ok>(service.openTestRuntime("ftr-001"))
     assertNull(opened.goalObservability)
@@ -886,7 +888,7 @@ class WorkflowServiceTest {
       goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
       runtimeDiagnostics = NoopRuntimeDiagnostics,
       clock = Clock.systemUTC(),
-      repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+      projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
     )
 }
 
@@ -2374,7 +2376,7 @@ class WorkflowUpdateAcknowledgementBudgetTest {
       repositoryRoot = testRepositoryRoot,
       runtimeDiagnostics = NoopRuntimeDiagnostics,
       clock = Clock.systemUTC(),
-      repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+      projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
     )
 }
 
@@ -4316,7 +4318,7 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
-        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
       )
 
     val opened =

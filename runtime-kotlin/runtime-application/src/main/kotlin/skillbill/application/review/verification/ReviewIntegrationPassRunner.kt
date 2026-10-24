@@ -58,6 +58,7 @@ internal class ReviewIntegrationPassRunner(
               timeout = request.launch.timeout,
               promptOverride = prompt,
               modelOverride = request.launch.modelOverride,
+              additionalWritableDirectories = listOf(request.launch.projectStoreRoot),
             ).boundedReviewLane(request.launch.laneProgressIdleTimeout),
         ),
       )

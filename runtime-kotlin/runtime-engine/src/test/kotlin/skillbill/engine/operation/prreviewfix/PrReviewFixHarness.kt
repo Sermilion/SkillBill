@@ -19,6 +19,7 @@ import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalReposito
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.operation.model.OperationProposal
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
@@ -79,6 +80,7 @@ internal class PrReviewFixHarness : AutoCloseable {
       ),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
+      FixedProjectStorePort(root.resolve("project-store")),
     )
 
   init {

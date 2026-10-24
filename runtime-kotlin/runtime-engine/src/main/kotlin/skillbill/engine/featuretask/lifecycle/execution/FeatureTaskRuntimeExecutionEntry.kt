@@ -3,12 +3,14 @@ package skillbill.engine.featuretask.lifecycle.execution
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -25,11 +27,12 @@ class FeatureTaskRuntimeExecutionEntry(
   private val admission: FeatureTaskRuntimeExecutionAdmission,
   private val resolver: FeatureTaskRuntimeExecutionPlanResolver,
   private val repositories: RepositoryEnclosingRootPort,
+  private val identities: FeatureTaskExecutionIdentityResolver,
 ) {
   fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution {
     val root = repositories.canonicalPath(request.repoRoot)
     val expected =
-      repositories.expectedFeatureTaskExecutionIdentity(
+      identities.expected(
         request.workflowId,
         request.issueKey,
         request.repoRoot,
@@ -78,30 +81,55 @@ class FeatureTaskRuntimeExecutionEntry(
 }
 
 internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
+  projectStore: ProjectStorePort,
   workflowId: String,
   repoRoot: Path,
   specPath: Path,
 ): String =
-  when (val result = resolveFeatureTaskGovernedSpecPath(this, repoRoot, specPath)) {
+  when (val result = resolveFeatureTaskGovernedSpecPath(this, projectStore, repoRoot, specPath)) {
     is FeatureTaskGovernedSpecPathResult.Ok -> result.relativePath
     is FeatureTaskGovernedSpecPathResult.OutsideRepository ->
-      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "spec escapes admitted repository")
+      throw invalidFeatureTaskExecutionIdentitySchema(
+        workflowId,
+        "spec is outside the project store specs root ${projectStore.resolve(repoRoot).specsRoot} " +
+          "(`skill-bill project path` prints the project store) and outside a " +
+          "${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} in the checkout",
+      )
     FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
-      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "spec is not Markdown beneath .feature-specs/")
+      throw invalidFeatureTaskExecutionIdentitySchema(
+        workflowId,
+        "spec is not Markdown beneath the project store specs root ${projectStore.resolve(repoRoot).specsRoot} " +
+          "(`skill-bill project path` prints the project store); a ${LegacyProjectStatePaths.FEATURE_SPECS_PREFIX} " +
+          "spec is accepted only as a legacy in-place spec",
+      )
   }
 
-internal fun RepositoryEnclosingRootPort.expectedFeatureTaskExecutionIdentity(
-  workflowId: String,
-  issueKey: String,
-  repoRoot: Path,
-  specPath: Path,
-  routeScope: FeatureTaskRouteScope,
-): FeatureTaskExecutionIdentity =
-  FeatureTaskExecutionIdentity(
-    workflowId,
-    FeatureTaskExecutionIdentityPolicy.normalizeIssueKey(issueKey, workflowId),
-    repositoryIdentity(repoRoot),
-    governedFeatureTaskSpecPath(workflowId, repoRoot, specPath),
-    FeatureTaskWorkflowMode.RUNTIME,
-    routeScope,
-  )
+@Inject
+class FeatureTaskExecutionIdentityResolver(
+  private val repositories: RepositoryEnclosingRootPort,
+  private val projectStore: ProjectStorePort,
+) {
+  fun repositoryIdentity(repoRoot: Path): String = repositories.repositoryIdentity(repoRoot)
+
+  fun governedSpecPath(
+    workflowId: String,
+    repoRoot: Path,
+    specPath: Path,
+  ): String = repositories.governedFeatureTaskSpecPath(projectStore, workflowId, repoRoot, specPath)
+
+  fun expected(
+    workflowId: String,
+    issueKey: String,
+    repoRoot: Path,
+    specPath: Path,
+    routeScope: FeatureTaskRouteScope,
+  ): FeatureTaskExecutionIdentity =
+    FeatureTaskExecutionIdentity(
+      workflowId,
+      FeatureTaskExecutionIdentityPolicy.normalizeIssueKey(issueKey, workflowId),
+      repositoryIdentity(repoRoot),
+      governedSpecPath(workflowId, repoRoot, specPath),
+      FeatureTaskWorkflowMode.RUNTIME,
+      routeScope,
+    )
+}

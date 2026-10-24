@@ -2,7 +2,7 @@ package skillbill.ports.taskruntime.model
 
 import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
 
-const val IMPLEMENTATION_CHECKLIST_STORE_ROOT: String = ".skill-bill/feature-task-tracking"
+const val IMPLEMENTATION_CHECKLIST_STORE_ROOT: String = "feature-task-tracking"
 
 fun implementationChecklistDirectory(workflowId: String): String =
   "$IMPLEMENTATION_CHECKLIST_STORE_ROOT/${FeatureTaskRuntimeRunEvidenceAddress.pathSegment(workflowId)}"

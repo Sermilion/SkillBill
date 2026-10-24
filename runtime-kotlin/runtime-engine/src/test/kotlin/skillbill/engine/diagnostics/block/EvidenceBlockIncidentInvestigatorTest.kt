@@ -25,6 +25,7 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -113,7 +114,7 @@ class EvidenceBlockIncidentInvestigatorTest {
     assertEquals(sha256HexUtf8(payload), producer.sha256)
     val request = launches.single().skillRunRequest
     assertTrue(request.readOnlyPhase)
-    assertTrue(request.additionalWritableDirectories.isEmpty())
+    assertEquals(listOf(STORE_ROOT), request.additionalWritableDirectories)
     assertTrue(assertNotNull(request.promptOverride).contains(producer.reference))
   }
 
@@ -150,7 +151,12 @@ class EvidenceBlockIncidentInvestigatorTest {
     FakeDatabase(outputs),
     CLOCK,
     BlockIncidentEvidenceCollector(RuntimeVersion("9.9.9")),
-    BlockIncidentAgentPass(launcher, RepositoryRoot(Path.of("/tmp/repository")), CLOCK),
+    BlockIncidentAgentPass(
+      launcher,
+      RepositoryRoot(Path.of("/tmp/repository")),
+      CLOCK,
+      FixedProjectStorePort(STORE_ROOT),
+    ),
     launchFactsReader = null,
   )
 
@@ -275,5 +281,6 @@ class EvidenceBlockIncidentInvestigatorTest {
   private companion object {
     val NOW: Instant = Instant.parse("2026-10-22T12:00:00Z")
     val CLOCK: Clock = Clock.fixed(NOW, ZoneOffset.UTC)
+    val STORE_ROOT: Path = Path.of("/tmp/project-store")
   }
 }

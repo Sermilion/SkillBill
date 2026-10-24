@@ -6,7 +6,7 @@ This document defines architecture requirements and enforcement boundaries for `
 
 Apply these principles when designing, implementing, or reviewing runtime changes.
 They are requirements for new and changed code. Existing violations remain tracked
-work, not examples to copy. [SKILL-239](../.feature-specs/done/SKILL-239-runtime-architecture-ownership-and-simplicity/spec.md)
+work, not examples to copy. SKILL-239 (runtime architecture ownership and simplicity)
 owns the implementation gaps identified below; publishing this document does not
 mean those fixes or checks have landed. Kotlin coding patterns remain in
 [Code Principles](../docs/code-principles.md).
@@ -111,8 +111,8 @@ allowed and violating cases prove these boundaries, and runtime binding checks p
 admission. The rule is registered in
 `PrincipleEnforcementInventory.enforceableRules`.
 
-The operation-level inventory and retained runtime collaborator dispositions are in
-`../.feature-specs/done/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership`.
+The operation-level inventory and retained runtime collaborator dispositions were recorded
+under SKILL-384 (workflow skeleton execution contracts and state ownership).
 
 #### Feature-task run-loop helper inputs (SKILL-247 subtask 3)
 

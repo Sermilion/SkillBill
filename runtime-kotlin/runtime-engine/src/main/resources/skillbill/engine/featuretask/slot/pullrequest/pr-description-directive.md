@@ -87,4 +87,5 @@ This template is a fallback. Use it ONLY when no repo-native PR template was fou
 - Do not include a checklist in the generated description.
 - Keep it concise — reviewers appreciate brevity.
 - Always search for a repo-native PR template first — never skip the search step.
-- If invoked from the feature workflow, check `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md` for additional context (this file exists only for prepared feature work).
+- Specs are no longer committed, so put a short spec summary in the description: the intended outcome and the acceptance criteria titles from the bundle's parent spec.
+- If invoked from the feature workflow, check the project store spec `specs/<ISSUE_KEY>-<feature-name>/spec.md` (`skill-bill project path` prints the store) for additional context; a legacy goal keeps it at `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md` (this file exists only for prepared feature work).

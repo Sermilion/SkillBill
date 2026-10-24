@@ -26,9 +26,10 @@ class ConfigCommand(
   resolveExternalPlatformPacksCommand: ConfigResolveExternalPlatformPacksCommand,
   registerExternalPlatformPackCommand: ConfigRegisterExternalPlatformPackCommand,
   unregisterExternalPlatformPackCommand: ConfigUnregisterExternalPlatformPackCommand,
+  editCommand: ConfigEditCommand,
 ) : DocumentedNoOpCliCommand(
     "config",
-    "Inspect resolved repo-local configuration (.skill-bill/config.yaml).",
+    "Inspect resolved project configuration (project store config.yaml; see skill-bill project path).",
   ) {
   init {
     subcommands(
@@ -38,6 +39,7 @@ class ConfigCommand(
       resolveExternalPlatformPacksCommand,
       registerExternalPlatformPackCommand,
       unregisterExternalPlatformPackCommand,
+      editCommand,
     )
   }
 }
@@ -57,7 +59,7 @@ class ConfigResolveSpecTypeCommand(
   ).default("")
   private val repoRoot by option(
     "--repo-root",
-    help = "Repository root whose .skill-bill/config.yaml is read.",
+    help = "Repository root selecting the project whose store config.yaml is read.",
   )
 
   override fun run() {

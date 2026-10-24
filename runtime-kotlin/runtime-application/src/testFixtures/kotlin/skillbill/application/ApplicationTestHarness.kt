@@ -4,6 +4,8 @@ import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.install.model.InstallPlanWireMap
 import skillbill.model.RepositoryRoot
 import skillbill.ports.install.InstallPlanWireValidator
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import java.nio.file.AtomicMoveNotSupportedException
@@ -30,7 +32,9 @@ internal val testInstallPlanWireValidator: InstallPlanWireValidator =
     override fun validate(plan: InstallPlanWireMap) = Unit
   }
 
-val testDecompositionManifestWriter = DecompositionManifestWriter()
+val testProjectStore: ProjectStorePort = FixedProjectStorePort(Files.createTempDirectory("test-project-store"))
+
+val testDecompositionManifestWriter = DecompositionManifestWriter(testProjectStore)
 
 fun seedHarnessSpecIntentProjection(
   repoRoot: Path,

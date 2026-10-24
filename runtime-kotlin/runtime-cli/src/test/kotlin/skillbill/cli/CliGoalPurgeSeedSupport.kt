@@ -1,6 +1,9 @@
 package skillbill.cli
 
+import skillbill.di.core.RuntimeComponent
+import skillbill.di.core.create
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.ports.taskruntime.model.IMPLEMENTATION_CHECKLIST_STORE_ROOT
 import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
 import java.nio.file.Files
 import java.nio.file.Path
@@ -40,23 +43,30 @@ internal data class GoalSeed(
 
 internal fun GoalSeed.workflowIds(): List<String> = listOf(parentId, childId)
 
+internal fun GoalCliFixture.projectStoreRoot(): Path =
+  RuntimeComponent::class
+    .create(context(NoopGoalTestAgentRunLauncher).toRuntimeContext(dbPathOverride = dbPath.toString()))
+    .projectStorePort
+    .resolve(tempDir)
+    .root
+
 internal fun ownedRuntimeDirectories(
-  repoRoot: Path,
+  storeRoot: Path,
   workflowIds: List<String>,
 ): List<Path> =
   workflowIds.flatMap { workflowId ->
     listOf(
-      repoRoot.resolve(".skill-bill/feature-task-tracking").resolve(
+      storeRoot.resolve(IMPLEMENTATION_CHECKLIST_STORE_ROOT).resolve(
         FeatureTaskRuntimeRunEvidenceAddress.pathSegment(workflowId),
       ),
-      repoRoot.resolve(FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot(workflowId)),
+      storeRoot.resolve(FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot(workflowId)),
     )
   }
 
 internal fun seedGoalOwnedState(
   fixture: GoalCliFixture,
   seed: GoalSeed,
-  directoryRoot: Path = fixture.tempDir,
+  directoryRoot: Path = fixture.projectStoreRoot(),
 ) {
   ensureTestDatabase(fixture.dbPath).use { connection ->
     connection.execute("INSERT INTO feature_task_runtime_sessions (session_id) VALUES (?)", seed.sessionId)

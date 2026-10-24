@@ -101,6 +101,7 @@ internal fun ParallelCodeReviewInitialRun.delegatedStageLaunch(): ReviewDelegate
     budget = budget,
     brokerId = agent1Id,
     repoRoot = request.repoRoot,
+    projectStoreRoot = request.projectStoreRoot,
     timeout = request.timeout,
     modelOverride = request.modelOverride,
     promptSuffix =

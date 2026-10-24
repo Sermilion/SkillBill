@@ -12,6 +12,7 @@ import skillbill.cli.install.core.InstallTopLevelCommands
 import skillbill.cli.learning.LearningsCommand
 import skillbill.cli.operation.OperationCommand
 import skillbill.cli.phase.PhaseCommand
+import skillbill.cli.project.ProjectCommand
 import skillbill.cli.qa.QaCommand
 import skillbill.cli.repovalidation.RepoValidationCliCommands
 import skillbill.cli.review.ReviewTopLevelCommands
@@ -92,6 +93,7 @@ class CliMiscCommands(
   phaseCommand: PhaseCommand,
   operationCommand: OperationCommand,
   configCommand: ConfigCommand,
+  projectCommand: ProjectCommand,
   workCommands: WorkTopLevelCommands,
   agentAddonCommand: AgentAddonCommand,
   qaCommand: QaCommand,
@@ -102,6 +104,7 @@ class CliMiscCommands(
       phaseCommand,
       operationCommand,
       configCommand,
+      projectCommand,
       workCommands.command,
       agentAddonCommand,
       qaCommand,

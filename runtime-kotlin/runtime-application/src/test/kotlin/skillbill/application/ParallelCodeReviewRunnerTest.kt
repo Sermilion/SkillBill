@@ -52,6 +52,7 @@ import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointBinder
@@ -1435,6 +1436,7 @@ internal fun createRunner(
             },
             TestDecompositionManifestStore,
           ),
+          FixedProjectStorePort(Files.createTempDirectory("parallel-review-project-store")),
         ),
       parentReviewLauncher = launcher,
       nativeAgentPreflight = config.nativeAgentPreflight,
@@ -1665,6 +1667,7 @@ internal fun baseRequest(
   agent1Id = agent1Id,
   scope = scope,
   repoRoot = repoRoot,
+  projectStoreRoot = repoRoot.resolve("project-store"),
   timeout = timeout,
   codeReviewMode = CodeReviewExecutionMode.DELEGATED,
   reviewRunId = "runner-test-${runnerRequestSequence.incrementAndGet()}",

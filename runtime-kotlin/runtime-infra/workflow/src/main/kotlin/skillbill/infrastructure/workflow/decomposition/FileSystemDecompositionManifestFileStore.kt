@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import me.tatarka.inject.annotations.Inject
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestDiscoveryPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
@@ -9,16 +10,15 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 @Inject
-class FileSystemDecompositionManifestFileStore :
-  DecompositionManifestStore,
-  DecompositionManifestDiscoveryPort by FileSystemDecompositionManifestFileStoreDiscoveryHolder.discovery {
-  private val bundleJournal = FileSystemDecompositionManifestFileStoreDiscoveryHolder.bundleJournal
+class FileSystemDecompositionManifestFileStore(
+  projectStore: ProjectStorePort,
+) : DecompositionManifestStore,
+  DecompositionManifestDiscoveryPort by FileSystemDecompositionManifestFileStoreDiscovery(
+    projectStore,
+    DecompositionManifestBundleJournal(),
+  ) {
+  private val bundleJournal = DecompositionManifestBundleJournal()
   private val yamlMapper: YAMLMapper by lazy { YAMLMapper() }
-
-  private object FileSystemDecompositionManifestFileStoreDiscoveryHolder {
-    val bundleJournal = DecompositionManifestBundleJournal()
-    val discovery = FileSystemDecompositionManifestFileStoreDiscovery(bundleJournal)
-  }
 
   override fun readText(path: Path): String {
     return withDecompositionManifestBundleLock(path.parent, bundleJournal.hostPlatform) {

@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.parentSpecPath
@@ -32,6 +33,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.toStatusWireMap
@@ -64,6 +66,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -270,6 +273,8 @@ internal fun goalManifestState(
     repoRoot = fixture,
   )
 
+internal val ideStatusProjectStoreRoot: Path by lazy { Files.createTempDirectory("ide-status-project-store") }
+
 internal fun ideStatusService(
   database: DatabaseSessionFactory,
   manifestStore: GoalRunnerManifestStore = EmptyManifestStore,
@@ -323,6 +328,13 @@ internal fun ideStatusService(
       manifestStore = manifestStore,
       diagnostics = NoopRuntimeDiagnostics,
       qaCapabilities = qaCapabilities,
+      planReports =
+        StandalonePlanReportBuilder(
+          manifestStore,
+          TestDecompositionManifestStore,
+          FixedProjectStorePort(ideStatusProjectStoreRoot),
+          NoopRuntimeDiagnostics,
+        ),
     )
   return IdeStatusService(
     database = database,

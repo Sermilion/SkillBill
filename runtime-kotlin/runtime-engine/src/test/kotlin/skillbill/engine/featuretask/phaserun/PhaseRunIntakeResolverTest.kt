@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.application.InMemoryWorkflowStates
 import skillbill.error.featuretask.PhaseIntakeRequiredError
-import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
-import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -15,8 +15,8 @@ import kotlin.test.assertFailsWith
 
 class PhaseRunIntakeResolverTest {
   private val repoRoot: Path = Files.createTempDirectory("skillbill-phase-intake-repo")
-  private val resolver =
-    PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), FileSystemFeatureTaskRuntimeRunInvariantsSource())
+  private val database = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
+  private val resolver = testPhaseRunIntakeResolver(database)
 
   @AfterTest
   fun cleanUp() {
@@ -61,7 +61,7 @@ class PhaseRunIntakeResolverTest {
         override fun read(specPath: Path) = FeatureTaskRuntimeRunInvariantsRead.Rejected("spec token is unreadable")
       }
     val intake =
-      PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), source).resolve(
+      testPhaseRunIntakeResolver(database, source).resolve(
         SkeletonDefinition.PLAN,
         PhaseRunRequest(
           definitionId = SkeletonDefinition.PLAN.id,

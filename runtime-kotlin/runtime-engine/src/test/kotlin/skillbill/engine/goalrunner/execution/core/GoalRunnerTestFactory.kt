@@ -7,7 +7,9 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
 import skillbill.application.testDecompositionManifestValidator
+import skillbill.application.testProjectStore
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.ProjectCheckout
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.engine.diagnostics.block.testBlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
@@ -23,8 +25,10 @@ import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
+import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
+import skillbill.engine.goalrunner.intake.LegacySpecIntake
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -214,7 +218,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
     GoalRunnerFinalization(
       wiring.outcomeStore,
       wiring.pullRequestPort,
-      wiring.specScratchStore,
+      GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
       wiring.gitOperations,
       wiring.diagnostics,
       wiring.unaddressedFindingsLedgerService,
@@ -255,17 +259,32 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
-    intakePreparation =
-      GoalIntakePreparation(
-        wiring.manifestStore,
-        FeatureSpecPreparationWriter(
-          testDecompositionManifestValidator,
-          UnavailableDecompositionManifestStore,
-          DecompositionManifestWriter(),
-        ),
-        FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
-        UnavailableDecompositionManifestStore,
-      ),
+    intakePreparation = goalRunnerIntakePreparation(wiring),
+  )
+}
+
+private fun goalRunnerIntakePreparation(wiring: GoalRunnerTestWiring): GoalIntakePreparation {
+  val noMatchResolver =
+    FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) }
+  return GoalIntakePreparation(
+    wiring.manifestStore,
+    FeatureSpecPreparationWriter(
+      testDecompositionManifestValidator,
+      UnavailableDecompositionManifestStore,
+      DecompositionManifestWriter(testProjectStore),
+      testProjectStore,
+    ),
+    noMatchResolver,
+    UnavailableDecompositionManifestStore,
+    testProjectStore,
+    LegacySpecIntake(
+      TestGoalActivityStampDatabase,
+      TestRepositoryEnclosingRoot,
+      testProjectStore,
+      UnavailableDecompositionManifestStore,
+      wiring.diagnostics,
+      noMatchResolver,
+    ),
   )
 }
 
@@ -290,6 +309,7 @@ private fun testGoalRunnerLoopAssembler(
       testWorktreeEditJournalWriter(),
       wiring.clock,
       wiring.diagnostics,
+      testProjectStore,
     )
   val launchPrepare =
     GoalRunnerSubtaskLaunchPrepare(
@@ -302,6 +322,7 @@ private fun testGoalRunnerLoopAssembler(
       executionPlans,
       testPhaseStrategies(wiring.subtaskLauncher, wiring.gitOperations),
       testAgentRunLauncher(),
+      testProjectStore,
     )
   val iterationOutcome =
     GoalRunnerIterationOutcome(
@@ -349,12 +370,12 @@ private fun testNoChangeChildCloser(
       decompositionManifestStore = UnavailableDecompositionManifestStore,
       workflowSnapshotValidator = testWorkflowSnapshotValidator,
       decompositionManifestValidator = testDecompositionManifestValidator,
-      decompositionManifestWriter = DecompositionManifestWriter(),
+      decompositionManifestWriter = DecompositionManifestWriter(testProjectStore),
       repositoryRoot = RepositoryRoot(Path.of("/tmp/skillbill-goal-runner")),
       goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
       runtimeDiagnostics = NoopRuntimeDiagnostics,
       clock = clock,
-      repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+      projectCheckout = ProjectCheckout(TestRepositoryEnclosingRoot, testProjectStore),
     ),
   )
 

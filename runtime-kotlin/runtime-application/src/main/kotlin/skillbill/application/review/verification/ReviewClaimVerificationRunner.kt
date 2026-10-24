@@ -141,6 +141,7 @@ class ReviewClaimVerificationRunner(
               timeout = input.launch.timeout,
               promptOverride = prompt,
               modelOverride = input.launch.modelOverride,
+              additionalWritableDirectories = listOf(input.launch.projectStoreRoot),
             ).boundedReviewLane(input.launch.laneProgressIdleTimeout),
         ),
       )
@@ -236,6 +237,7 @@ class ReviewClaimVerificationRunner(
               timeout = input.launch.timeout,
               promptOverride = prompt,
               modelOverride = input.launch.modelOverride,
+              additionalWritableDirectories = listOf(input.launch.projectStoreRoot),
             ).boundedReviewLane(input.launch.laneProgressIdleTimeout),
         ),
       )
