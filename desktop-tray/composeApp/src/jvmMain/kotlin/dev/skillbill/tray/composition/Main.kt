@@ -212,7 +212,7 @@ private fun MainWindow(
   shellProblem: Problem?,
   repositoryNavigation: RepositoryNavigation,
 ) {
-  val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1060).dp, uiScale.scaledWindowPixels(698).dp))
+  val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1380).dp, uiScale.scaledWindowPixels(698).dp))
   val session by owner.transitions.state.collectAsState()
   val closeRequest = {
     if (owner.windows.windows.count { it.navigator.section != null } > 1) owner.windows.dispose(windowOwner)

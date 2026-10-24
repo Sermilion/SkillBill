@@ -2,6 +2,7 @@ package dev.skillbill.tray.feature.specs
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -50,11 +52,18 @@ internal val SPEC_ROW_HEIGHT = 30.dp
 internal val SPEC_INDENT = 16.dp
 
 /**
- * One tree row. [modifier] carries the list's focus requester and focus tracking. A folder or bundle toggles on activation, a
- * file opens; an open failure shows under the row in orange.
+ * One tree row. [modifier] carries the list's focus requester and focus tracking. Clicking the row selects it, and a file also
+ * opens; the arrow of a folder or bundle expands or collapses it. An open failure shows under the row in orange.
  */
 @Composable
-internal fun SpecRowItem(row: SpecRow, selected: Boolean, openError: String?, onActivate: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SpecRowItem(
+  row: SpecRow,
+  selected: Boolean,
+  openError: String?,
+  onClick: () -> Unit,
+  onToggle: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   val node = row.node
   Column(Modifier.fillMaxWidth()) {
     Row(
@@ -62,21 +71,21 @@ internal fun SpecRowItem(row: SpecRow, selected: Boolean, openError: String?, on
         .fillMaxWidth()
         .height(SPEC_ROW_HEIGHT)
         .background(if (selected) raised else Color.Transparent)
-        .selectable(selected = selected, onClick = onActivate)
+        .selectable(selected = selected, onClick = onClick)
         .semantics {
           when (node) {
             is SpecNode.File -> onClick(label = "Open ${node.name}") {
-              onActivate()
+              onClick()
               true
             }
             else -> stateDescription = if (row.expanded) "Expanded" else "Collapsed"
           }
         }
-        .padding(start = SPEC_INDENT * row.depth + 8.dp, end = 10.dp),
+        .padding(start = SPEC_INDENT * row.depth, end = 10.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      Chevron(row)
+      Chevron(row, onToggle)
       when (node) {
         is SpecNode.Folder -> FolderRow(node)
         is SpecNode.Bundle -> BundleRow(node)
@@ -88,8 +97,14 @@ internal fun SpecRowItem(row: SpecRow, selected: Boolean, openError: String?, on
 }
 
 @Composable
-private fun Chevron(row: SpecRow) {
-  Box(Modifier.size(12.dp), contentAlignment = Alignment.Center) {
+private fun Chevron(row: SpecRow, onToggle: () -> Unit) {
+  val toggle =
+    if (row.hasChildren) {
+      Modifier.clickable(onClickLabel = if (row.expanded) "Collapse" else "Expand", role = Role.Button, onClick = onToggle)
+    } else {
+      Modifier
+    }
+  Box(Modifier.size(20.dp).then(toggle), contentAlignment = Alignment.Center) {
     if (row.hasChildren) Text("▸", Modifier.rotate(if (row.expanded) 90f else 0f), color = dim, fontSize = 10.sp)
   }
 }

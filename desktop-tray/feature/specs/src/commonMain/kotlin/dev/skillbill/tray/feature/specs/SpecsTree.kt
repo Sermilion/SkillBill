@@ -78,10 +78,11 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
         row = row,
         selected = path == state.selectedPath,
         openError = (row.node as? SpecNode.File)?.let { state.openErrors[it.absolutePath] },
-        onActivate = {
+        onClick = {
           requester.requestFocus()
-          onAction(SpecsAction.Activate(path))
+          onAction(SpecsAction.Click(path))
         },
+        onToggle = { onAction(SpecsAction.Toggle(path)) },
         modifier = Modifier.focusRequester(requester).onFocusChanged { if (it.isFocused) focusedPath = path },
       )
     }

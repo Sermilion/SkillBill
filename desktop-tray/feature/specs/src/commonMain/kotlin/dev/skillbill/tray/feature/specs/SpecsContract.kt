@@ -62,8 +62,14 @@ sealed interface SpecsAction {
 
   data class Select(val path: String) : SpecsAction
 
-  /** Click or Enter: a folder or bundle is selected and toggled, a file is selected and opened. */
+  /** Enter: a folder or bundle is selected and toggled, a file is selected and opened. */
   data class Activate(val path: String) : SpecsAction
+
+  /** A row click: a folder or bundle is selected, a file is selected and opened. */
+  data class Click(val path: String) : SpecsAction
+
+  /** The row's arrow: a folder or bundle expands or collapses, and the selection stays where it is. */
+  data class Toggle(val path: String) : SpecsAction
 
   data object CollapseAll : SpecsAction
 

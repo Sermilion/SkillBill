@@ -84,6 +84,24 @@ class SpecsViewModelTest {
   }
 
   @Test
+  fun `a row click selects a folder without expanding it and its arrow expands it without selecting`() = runTest(dispatcher) {
+    val vm = viewModel()
+    specs.emitSnapshot(Outcome.Value(SpecSnapshot(p1, listOf(folder), SpecCounts(1, 0, 0, 1), anyInProgress = false, failure = null)))
+    runCurrent()
+
+    vm.onAction(SpecsAction.Click("done"))
+    runCurrent()
+    assertEquals("done", vm.state.value.selectedPath)
+    assertEquals(listOf("done"), vm.state.value.rows.map { it.node.path })
+
+    vm.onAction(SpecsAction.Toggle("done/SKILL-1-x"))
+    vm.onAction(SpecsAction.Toggle("done"))
+    runCurrent()
+    assertEquals("done", vm.state.value.selectedPath)
+    assertEquals(listOf("done", "done/SKILL-1-x", "done/SKILL-1-x/spec_subtask_1_foo.md"), vm.state.value.rows.map { it.node.path })
+  }
+
+  @Test
   fun `a picked project survives a later sidebar selection and nothing navigates`() = runTest(dispatcher) {
     val vm = viewModel()
     val effects = mutableListOf<SpecsEffect>()

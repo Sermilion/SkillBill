@@ -98,6 +98,8 @@ class SpecsViewModel(
       is SpecsAction.Collapse -> setExpanded(action.path, expand = false)
       is SpecsAction.Select -> select(action.path)
       is SpecsAction.Activate -> activate(action.path)
+      is SpecsAction.Click -> click(action.path)
+      is SpecsAction.Toggle -> setExpanded(action.path, expand = null)
       SpecsAction.CollapseAll -> collapseAll()
       is SpecsAction.FileOpenFailed -> local.update { it.copy(openErrors = it.openErrors + (action.absolutePath to action.message)) }
       SpecsAction.Retry -> retry()
@@ -403,6 +405,11 @@ class SpecsViewModel(
     viewModelScope.launch {
       settings.update { it.copy(specExpandedPaths = it.specExpandedPaths + (projectId to change(it.specExpandedPaths[projectId].orEmpty()))) }
     }
+  }
+
+  private fun click(path: String) {
+    val node = state.value.rows.firstOrNull { it.node.path == path }?.node ?: return
+    if (node is SpecNode.File) activate(path) else select(path)
   }
 
   private fun activate(path: String) {
