@@ -1,3 +1,14 @@
+## [2026-10-24] SKILL-420 subtask 2 backend and web pack QA guidance
+Areas: platform-packs (kotlin, go, rust, python, php, typescript manifests and qa/ guidance)
+- Six packs now declare a block-style qa_capability placed just before validation_gate, matching kmp, with no discovery_hints and no contract_version change. kotlin, go and rust: platforms backend, guidance qa/backend-qa.md. python and php: backend and web, qa/backend-web-qa.md. typescript: web and backend, qa/backend-web-qa.md.
+- The platform token pattern in platform-pack-schema.yaml already allowed backend and web, so no loader or schema edit was needed. generic, kmp and ios are untouched.
+- Backend guidance follows one fixed order per stack: environment discovery, disposable database and migrations, synthetic data, start the app, exercise acceptance endpoints. Each uses stack names (Spring test profiles and Testcontainers, testcontainers-go, testcontainers-rs and sqlx or diesel).
+- Python and php add a Web part: browser driver discovery or naming the missing capability, storage-state authentication, server-rendered journeys with screenshots, and backend reach versus mocks. typescript folds the backend points into one Backend services section, then frontend environment, mocks, authentication, browser journeys, layout and keyboard (reusable shape for new web-capable packs).
+- Guidance holds only placeholders such as localhost and a port, never real URLs, credentials or tokens; guidance paths stay pack-relative.
+- Limit: guidance is prose that QA agents read; PlatformPackComposition and schema repo tests only prove the declarations load and the files exist.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-23] SKILL-440 subtask 2 installer and uninstaller remove retired IDE plugin copies
 Areas: install.sh, uninstall.sh, scripts/install_smoke_test.sh
 - install.sh gains cleanup_retired_ide_plugins, run on every full install after the legacy config migration. It removes copies of the retired IntelliJ plugin (id dev.skillbill.status) and VS Code extension (skill-bill.skill-bill-status) left by the retired IDE plugin trees.

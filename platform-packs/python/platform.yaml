@@ -85,6 +85,9 @@ lane_conditions:
   ui: { content: ["template", "dashboard", "widget", "form"] }
   ux-accessibility: { content: ["aria-", "focus", "keyboard", "localization"] }
   code-quality: { required: true }
+qa_capability:
+  platforms: [backend, web]
+  guidance_file: qa/backend-web-qa.md
 validation_gate:
   full_gate_command:
     - sh
