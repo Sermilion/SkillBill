@@ -56,6 +56,8 @@ data class WorkDetailItem(
   val finishedAt: Instant? = null,
   val finishedAtSource: WorkBoardCompletionSource? = null,
   val goalManifest: DecompositionManifest? = null,
+  /** The goal's spec bundle with absolute paths, resolved from [goalManifest]; null when this is not a goal. */
+  val goalSpecBundle: StandalonePlanReport? = null,
   val goalFinishPipeline: List<String> = emptyList(),
   val runtimeStatus: WorkDetailRuntimeStatus? = null,
   val goalStatus: GoalRunnerStatusProjection? = null,

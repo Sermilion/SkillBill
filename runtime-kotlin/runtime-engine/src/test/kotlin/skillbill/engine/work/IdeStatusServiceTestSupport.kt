@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.parentSpecPath
@@ -32,6 +33,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.toStatusWireMap
@@ -62,6 +64,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.projectstore.FixedProjectStorePort
+import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -274,6 +278,7 @@ internal fun ideStatusService(
   outcomeStore: GoalRunnerWorkflowOutcomeStore = EmptyOutcomeStore,
   snapshotValidator: WorkflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,
   qaCapabilities: QaCapabilityResolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
+  projectStore: ProjectStorePort = FixedProjectStorePort(Path.of(System.getProperty("java.io.tmpdir"), "ide-status-project-store")),
 ): IdeStatusService {
   val phaseRecorder =
     featureTaskRuntimePhaseRecorder(
@@ -334,6 +339,13 @@ internal fun ideStatusService(
     workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
     diagnostics = NoopRuntimeDiagnostics,
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
+    planReports =
+      StandalonePlanReportBuilder(
+        manifestStore,
+        TestDecompositionManifestStore,
+        projectStore,
+        NoopRuntimeDiagnostics,
+      ),
   )
 }
 

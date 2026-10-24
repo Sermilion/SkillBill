@@ -177,6 +177,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     pageOffset = pageOffset,
     incident = incident?.toDomain(),
     incidentHistory = IncidentHistory(incidentHistory.map(WorkIncidentProjection::toDomain)),
+    goalSpecBundle = goalSpecBundle?.toDomain(),
   )
 }
 

@@ -129,6 +129,8 @@ data class Detail(
   val runOptions: RunOptions? = null,
   val incident: Incident? = null,
   val incidentHistory: IncidentHistory = IncidentHistory(emptyList()),
+  /** The goal's spec bundle with absolute paths; null for anything that is not a goal. */
+  val goalSpecBundle: PlanRunReport? = null,
 )
 
 enum class IncidentProgress {

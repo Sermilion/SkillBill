@@ -324,6 +324,7 @@ private fun LoadedDetail(
             }
           }
           PageFooter(state.append(DetailList.SUBTASKS)) { onAction(DetailAction.LoadMore(DetailList.SUBTASKS)) }
+          detail.goalSpecBundle?.let { SpecBundleFileList(specBundlePaths(it)) }
         } else if (!operation && detail.stepPipeline.isNotEmpty()) {
           DesignLabel("Phase pipeline")
           FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {

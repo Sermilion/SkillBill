@@ -13,6 +13,7 @@ import dev.skillbill.tray.core.designsystem.DesignSystemTheme
 import dev.skillbill.tray.core.domain.model.ExecutionInstance
 import dev.skillbill.tray.core.domain.model.PlanRunReport
 import dev.skillbill.tray.core.domain.model.PlannedSubtask
+import dev.skillbill.tray.core.domain.model.WorkSubtask
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.fixtureInstant
@@ -87,5 +88,32 @@ class DetailPlanReportTest {
     waitForIdle()
     assertEquals(listOf("$store/spec.md", "$store/spec_subtask_1_a.md"), openedFiles)
     onNodeWithText("legacy.md").assertHasNoClickAction()
+  }
+
+  @Test
+  fun `a goal lists its spec bundle files the same way a plan run does`() = runComposeUiTest {
+    val store = "/home/user/.skill-bill/projects/p1/specs/SKILL-2-goal"
+    val bundle = PlanRunReport(
+      "Goal", "$store/spec.md", emptyList(),
+      bundleFiles = listOf("$store/decomposition-manifest.yaml", "$store/spec.md", "$store/spec_subtask_1.md"),
+    )
+    val item = workItem("goal")
+    val goal = detail(item).copy(
+      subtasks = listOf(WorkSubtask(1, "First subtask", "pending", null, null, emptyList())),
+      goalSpecBundle = bundle,
+    )
+    setContent {
+      CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
+        DesignSystemTheme {
+          DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(goal)), fixtureInstant, {})
+        }
+      }
+    }
+
+    onNodeWithText("Spec bundle").assertExists()
+    onNodeWithContentDescription("Open decomposition-manifest.yaml").performClick()
+    onNodeWithContentDescription("Open spec_subtask_1.md").performClick()
+    waitForIdle()
+    assertEquals(listOf("$store/decomposition-manifest.yaml", "$store/spec_subtask_1.md"), openedFiles)
   }
 }
