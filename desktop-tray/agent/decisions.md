@@ -1,3 +1,15 @@
+## [2026-10-24] Isolate spec-browser trigger sources so each degrades alone
+Context: The spec snapshot refreshes from two signals, a filesystem watcher over the specs root and goal-store commit signals. Either can fail independently.
+Decision: Each trigger source has its own catch inside observeSnapshot, and a failed read emits Outcome.Failure while the flow keeps observing.
+Reason: A broken watcher (for example a failed registration or a missing root) must not end live updates driven by the store, and the reverse.
+Alternatives considered: One catch around the merged triggers would end the whole flow on the first failing source.
+
+## [2026-10-24] Map a null runtime specsRoot to a blank string
+Context: The runtime's spec project reports specsRoot as a nullable Path, while the domain SpecProject stays free of java.nio types.
+Decision: The adapter maps null to an empty string, documented on SpecProject, and the repository and watcher treat blank as having no directory.
+Reason: It keeps the domain model plain strings without a separate nullable field every consumer must branch on.
+Alternatives considered: A nullable specsRoot in the domain would spread null handling through the UI subtasks.
+
 ## [2026-10-23] Open spec bundle files through suspend openFile returning Outcome
 Context: The spec asked for a plain openFile(path) on RepositoryNavigation, but opening a file can fail and must not reach the compose thread.
 Decision: openFile is suspend and returns Outcome&lt;Unit&gt;, like openRepository and openDirectory, and runs through the existing navigate failure path on the IO dispatcher.

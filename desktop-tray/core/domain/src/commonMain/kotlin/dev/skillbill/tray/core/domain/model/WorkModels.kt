@@ -403,6 +403,9 @@ data class AppSettings(
   val notifications: Map<String, Boolean> = defaultNotifications,
   val startAtLogin: Boolean = true,
   val lastPopoverTab: String = "Goals",
+  val specPaneOpen: Boolean = false,
+  /** Expanded spec node paths per project id; collapsed nodes are never stored. */
+  val specExpandedPaths: Map<String, Set<String>> = emptyMap(),
 ) {
   init {
     require(lastPopoverTab in setOf("Goals", "Phases"))

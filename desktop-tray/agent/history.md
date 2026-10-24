@@ -1,3 +1,16 @@
+## [2026-10-24] SKILL-444 subtask 4 desktop spec data and settings
+Areas: desktop-tray (core/domain, core/data, core/datastore, core/testing)
+- MEDIUM feature. core:domain gains the spec-browser model (SpecProject, SpecSnapshot, SpecNode folder/bundle/file tree, SpecBundleControl carrying a WorkIdentity) and a six-method SpecBrowserRepository. AppSettings and StoredSettings gain specPaneOpen and specExpandedPaths as nullable stored fields with defaults, so old settings files load with no migration; empty path sets are not stored.
+- core:data adds the RuntimeSpecGateway port and a jvmMain RuntimeSpecAdapter that maps runtime spec types to domain one-to-one with exhaustive enum mapping and no sorting. A null runtime specsRoot maps to a blank string; the repository and watcher treat blank as no directory.
+- RuntimeSpecBrowserRepository runs every call through one guarded helper on the IO dispatcher: it rethrows cancellation and maps other exceptions to Failure. startGoal and purgeGoal map runtime outcomes (accepted, launch failed, rejected, purge refusal and leftovers); rejection reuses runRefusalMessage. reusable
+- observeSnapshot is a channelFlow: one read first, then NIO directory triggers and goal-store commit signals, debounced 250ms and conflated. Each trigger source has its own catch so a failing watcher degrades to the other. A failed read emits Failure and keeps observing.
+- NioSpecDirectoryChanges is a WatchService-backed Flow: it skips hidden directories and archived bundles under done, registers new directories as they appear, and closes the watch service on cancel. reusable
+- Session wiring: SessionParts gains specs, DatabaseSessionComponent exposes it, and an app-scope SessionSpecBrowserRepository facade follows SessionWorkDetailRepository. FakeSpecBrowserRepository lives in core:testing.
+- runRefusalMessage and WorkControlRejection.toRefusal became internal for reuse.
+- Limits: no UI, :feature:specs or composeApp wiring yet (subtasks 5 and 6); pause, cancel and run-again are not wired. packagedDataSmoke was not verified locally (dirty tree needs SKILL_BILL_INSTALL_RUN_ID); CI runs it.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-23] SKILL-441 subtask 7 desktop bundle file links
 Areas: desktop-tray (core/domain, core/data, core/ui, composeApp infrastructure and architecture test, feature/detail)
 - MEDIUM feature. PlanRunReport carries bundleFiles (default empty, so an older runtime maps to no list). RuntimeWorkMapper passes bundleFiles, parentSpecPath and subtask specPaths through verbatim; the desktop does no repo-root path joining.

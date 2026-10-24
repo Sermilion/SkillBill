@@ -24,7 +24,7 @@ class DataStoreSettingsRepositoryTest {
   private suspend fun DataStoreSettingsRepository.ready() = (settings.first { it !is SettingsState.Loading } as SettingsState.Ready).settings
 
   @Test
-  fun `the first emission is loading and never default settings`() = runBlocking {
+  fun `the first emission is loading and never default settings`() = runBlocking<Unit> {
     val fixture = SettingsFixture(SettingsFixture.newHome("desktop-settings-loading"))
     try {
       val emissions = fixture.repository.settings.take(2).toList()
@@ -98,6 +98,35 @@ class DataStoreSettingsRepositoryTest {
       assertEquals("/retired/again", legacy.string("cliOverride"))
     } finally {
       second.handle.closeAndJoin()
+    }
+  }
+
+  @Test
+  fun `a settings file from before the spec pane loads and the pane settings survive a restart`() = runBlocking {
+    val home = SettingsFixture.newHome("desktop-settings-spec-pane")
+    val old = SettingsFixture(home)
+    Files.createDirectories(old.file.parent)
+    Files.writeString(old.file, """{"migrated":true,"retention":"7d"}""")
+    val written = try {
+      val loaded = old.repository.ready()
+      assertEquals(Retention.WEEK, loaded.retention)
+      assertFalse(loaded.specPaneOpen)
+      assertEquals(emptyMap(), loaded.specExpandedPaths)
+      old.repository.update {
+        it.copy(specPaneOpen = true, specExpandedPaths = mapOf("p" to setOf("SKILL-1-x"), "empty" to emptySet()))
+      }
+      old.repository.ready()
+    } finally {
+      old.handle.closeAndJoin()
+    }
+    val restarted = SettingsFixture(home)
+    try {
+      val reloaded = restarted.repository.ready()
+      assertTrue(reloaded.specPaneOpen)
+      assertEquals(mapOf("p" to setOf("SKILL-1-x")), reloaded.specExpandedPaths)
+      assertEquals(written, reloaded)
+    } finally {
+      restarted.handle.closeAndJoin()
     }
   }
 

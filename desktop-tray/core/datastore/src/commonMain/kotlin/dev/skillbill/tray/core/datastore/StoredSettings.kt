@@ -17,6 +17,8 @@ internal data class StoredSettings(
   val notifications: Map<String, Boolean>? = null,
   val startAtLogin: Boolean? = null,
   val lastPopoverTab: String? = null,
+  val specPaneOpen: Boolean? = null,
+  val specExpandedPaths: Map<String, List<String>>? = null,
 ) {
   fun toDomain(): AppSettings = AppSettings(
     databasePath = databasePath,
@@ -25,6 +27,8 @@ internal data class StoredSettings(
     notifications = defaultNotifications + notifications.orEmpty(),
     startAtLogin = startAtLogin ?: true,
     lastPopoverTab = lastPopoverTab ?: "Goals",
+    specPaneOpen = specPaneOpen ?: false,
+    specExpandedPaths = specExpandedPaths.orEmpty().mapValues { it.value.toSet() },
   )
 
   fun withSettings(settings: AppSettings): StoredSettings = copy(
@@ -35,6 +39,8 @@ internal data class StoredSettings(
     notifications = settings.notifications,
     startAtLogin = settings.startAtLogin,
     lastPopoverTab = settings.lastPopoverTab,
+    specPaneOpen = settings.specPaneOpen,
+    specExpandedPaths = settings.specExpandedPaths.filterValues { it.isNotEmpty() }.mapValues { it.value.toList() },
   )
 
   /** True when a persisted value is outside the supported vocabulary, so the file must be reported corrupt. */

@@ -17,12 +17,14 @@ import dev.skillbill.tray.core.data.port.WorkStoreAccess
 import dev.skillbill.tray.core.data.port.WorkStoreConnection
 import dev.skillbill.tray.core.data.repository.RoomWorkBoardRepository
 import dev.skillbill.tray.core.data.repository.RoomWorkDetailRepository
+import dev.skillbill.tray.core.data.repository.RuntimeSpecBrowserRepository
 import dev.skillbill.tray.core.data.repository.RuntimeWorkControlRepository
 import dev.skillbill.tray.core.data.repository.SessionWorkBoardRepository
 import dev.skillbill.tray.core.data.repository.SessionWorkControlRepository
 import dev.skillbill.tray.core.data.repository.SessionWorkDetailRepository
 import dev.skillbill.tray.core.data.runtime.JvmFailureClassifier
 import dev.skillbill.tray.core.data.runtime.RuntimeSessionProviders
+import dev.skillbill.tray.core.data.runtime.RuntimeSpecAdapter
 import dev.skillbill.tray.core.data.runtime.RuntimeWorkAdapter
 import dev.skillbill.tray.core.data.session.DatabaseGenerations
 import dev.skillbill.tray.core.data.session.DatabaseSelection
@@ -34,6 +36,7 @@ import dev.skillbill.tray.core.data.session.SessionParts
 import dev.skillbill.tray.core.data.session.TimeSourceMonotonicClock
 import dev.skillbill.tray.core.data.session.WorkStoreSessionManager
 import dev.skillbill.tray.core.data.signal.DesktopCommitSignalSource
+import dev.skillbill.tray.core.data.signal.NioSpecDirectoryChanges
 import dev.skillbill.tray.core.data.store.JvmWorkStoreAccess
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
@@ -128,6 +131,9 @@ fun workStack(
       RoomWorkBoardRepository(session, dispatchers, clock, monotonicClock, diagnostics),
       RoomWorkDetailRepository(session, dispatchers, clock),
       RuntimeWorkControlRepository(session, diagnostics),
+      RuntimeSpecBrowserRepository(
+        RuntimeSpecAdapter(runtime), NioSpecDirectoryChanges(diagnostics), signals, dispatchers, diagnostics,
+      ),
     )
   }
   val manager = WorkStoreSessionManager(sessions, generations, gate)

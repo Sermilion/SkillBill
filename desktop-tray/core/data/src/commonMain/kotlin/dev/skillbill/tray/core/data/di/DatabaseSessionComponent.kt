@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.common.di.AppScope
 import dev.skillbill.tray.core.common.di.DatabaseSessionScope
 import dev.skillbill.tray.core.data.repository.RoomWorkBoardRepository
 import dev.skillbill.tray.core.data.repository.RoomWorkDetailRepository
+import dev.skillbill.tray.core.data.repository.RuntimeSpecBrowserRepository
 import dev.skillbill.tray.core.data.repository.RuntimeWorkControlRepository
 import dev.skillbill.tray.core.data.session.DatabaseSelection
 import dev.skillbill.tray.core.data.session.DatabaseSession
@@ -26,6 +27,7 @@ interface DatabaseSessionComponent {
   val board: RoomWorkBoardRepository
   val detail: RoomWorkDetailRepository
   val control: RuntimeWorkControlRepository
+  val specs: RuntimeSpecBrowserRepository
 
   @ContributesSubcomponent.Factory(AppScope::class)
   interface Factory {
@@ -40,6 +42,6 @@ class ComponentSessionFactory(private val components: DatabaseSessionComponent.F
   override fun create(path: String?): SessionParts {
     val component = components.createDatabaseSessionComponent()
     component.selection.choose(path)
-    return SessionParts(component.session, component.board, component.detail, component.control)
+    return SessionParts(component.session, component.board, component.detail, component.control, component.specs)
   }
 }
