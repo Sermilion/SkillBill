@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.qa
 import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
+import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.ports.qa.model.qaEnvironmentName
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 
@@ -186,16 +187,26 @@ internal object QaPromptSections {
     |  the report. Reference evidence by path under the invocation directory.
     """.trimMargin()
 
+  private val REASON_TOKENS: String = QaSkipReason.entries.joinToString(", ") { "`${it.wireValue}`" }
+
   private val REPORT_RULES: String =
     """
     |Report:
     |
     |- The first line names the verdict: `Verdict: passed`, `Verdict: findings_open`, `Verdict: incomplete`, or
     |  `Verdict: skipped`. Say why when it is `incomplete` or `skipped`.
+    |- For a `skipped` or `incomplete` verdict, the second line is `Reason: <token>`, using one of these tokens:
+    |  $REASON_TOKENS. Add any detail after the token or in the body.
     |- Write each finding under its own `### <id> <title>` heading, for example `### QA-1 Save button stays disabled`.
     |  Under it give the steps, the expected result, the observed result, and evidence paths. Use `#` or `##` for
     |  every other heading so a finding section ends where the next heading starts.
     |- Describe the flows you exercised and the flows you left untested, with the reason, in your own words.
+    |- Under a `## Coverage` heading, write one bullet per target kind listed in the QA run section, in the form
+    |  `- <kind>: <passed|findings_open|skipped|incomplete> [reason: <token>] [backend: real|mocked|none]`. The
+    |  `backend:` field is required on a `web` line.
+    |- Under a `## Assertions` heading, list each exercised assertion with its flow and outcome.
+    |- Under a `## Isolation` heading, state the environment mechanism, the disposable database or its absence,
+    |  the outbound substitutes, and any rejected configuration. Never include secret values.
     |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
     |  the flows the change made possible. Write `None.` when you changed nothing.
     """.trimMargin()

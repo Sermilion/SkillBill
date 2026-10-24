@@ -1,3 +1,9 @@
+## [2026-10-24] An unverified QA pass keeps its verdict but does not close findings
+Context: A QA agent can state passed with no assertions, no isolation evidence, missing target coverage or a mocked web backend.
+Decision: Keep the agent's stated verdict and attach warnings; QaReport.retestsFindings, not the verdict, decides whether findings are retested and closed.
+Reason: The stated verdict is the agent's contract and rewriting it would break the prose report rule. Findings staying NOT_FIXED stops weak evidence from closing real defects without a new verdict class.
+Alternatives considered: downgrading passed to incomplete, rejected because it rewrites the stated verdict and shifts settlement and telemetry vocabulary.
+
 ## [2026-10-24] Backend and web QA isolation rules live in the shared briefing
 Context: Backend and web QA needs environment isolation, setup budgets and mock attribution, but the runtime cannot inspect an agent's effective configuration.
 Decision: State the rules once in the runtime-owned QA supplement so every pack inherits them. Keep QA verdict, strategy, repair and settlement code free of target-kind branches.

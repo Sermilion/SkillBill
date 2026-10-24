@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.qa.report
 
+import skillbill.scaffold.model.QaTargetKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -13,6 +15,11 @@ class QaReportParserTest {
     val text =
       buildString {
         appendLine("Verdict: passed")
+        appendLine()
+        appendLine("## Assertions")
+        appendLine("- login: home shows the user name: passed")
+        appendLine("## Isolation")
+        appendLine("Disposable emulator profile.")
         appendLine()
         appendLine("### Cleanup")
         appendLine("x".repeat(OVERSIZED_REPORT_LENGTH))
@@ -108,6 +115,49 @@ class QaReportParserTest {
     val report = QaReportParser.parse(text, prefix)
 
     assertTrue(report.findings.isEmpty())
+  }
+
+  @Test
+  fun `a skipped report carries only a recognized reason token`() {
+    val recognized = QaReportParser.parse("Verdict: skipped\nReason: docker_unavailable\n\nNo Docker.", prefix)
+    val freeText = QaReportParser.parse("Verdict: skipped\nReason: the laptop was asleep", prefix)
+
+    assertEquals("docker_unavailable", recognized.reason)
+    assertNull(freeText.reason)
+  }
+
+  @Test
+  fun `an unverified or partial pass warns without changing the verdict and does not retest findings`() {
+    val text =
+      """
+      Verdict: passed
+
+      ## Coverage
+      - backend: passed
+      - web: passed backend: mocked
+      - ios: incomplete reason: device_contended
+      - not a coverage line
+      """.trimIndent()
+
+    val declared = setOf(QaTargetKind("backend"), QaTargetKind("android"))
+
+    val report = QaReportParser.parse(text, prefix, declaredKinds = declared)
+
+    assertEquals(QaVerdict.PASSED, report.verdict)
+    assertEquals(listOf("backend", "web", "ios"), report.coverage.map { it.kind.wireValue })
+    assertEquals(QaBackendAttribution.MOCKED, report.coverage[1].backend)
+    assertEquals(
+      listOf(
+        "QA report states passed but lists no assertions; the pass is unverified",
+        "QA report states passed without isolation evidence",
+        "QA report has no coverage for target android",
+        "QA covered target ios only partially: incomplete (device_contended)",
+        "Target web passed against a mocked backend; backend integration is untested",
+      ),
+      report.warnings,
+    )
+    assertEquals(report.warnings, report.coverageWarnings)
+    assertFalse(report.retestsFindings)
   }
 
   private companion object {

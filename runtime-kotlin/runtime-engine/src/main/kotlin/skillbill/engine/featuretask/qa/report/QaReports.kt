@@ -12,7 +12,7 @@ internal object QaReports {
     QaReport(sentence, QaVerdict.INCOMPLETE, null, emptyList(), null, listOf(sentence))
 
   fun missing(sentence: String): QaReport =
-    QaReport(null, QaVerdict.INCOMPLETE, sentence, emptyList(), null, listOf(sentence))
+    QaReport(null, QaVerdict.INCOMPLETE, null, emptyList(), null, listOf(sentence))
 
   fun withRetainedResources(
     report: QaReport,

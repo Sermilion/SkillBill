@@ -303,6 +303,28 @@ The retired skills (`bill-feature`, `bill-feature-spec`, `bill-code-review`, `bi
 
 Bundled skills and packs are defaults, not the framework boundary. Teams may replace them while retaining governed source shape, generated-output boundaries, manifests, install staging, validators, dynamic discovery, and loud-fail.
 
+## QA reason tokens
+
+A skipped or incomplete QA report carries one token from this vocabulary in `qa_reason`. The QA agent names it on a `Reason: <token>` line directly after the verdict line, and the runtime keeps only recognized tokens. Verify adds `partial_coverage` for a `passed` or `findings_open` run that left a declared target skipped or incomplete, or that drew a coverage, assertion or isolation warning.
+
+| Token | Meaning |
+| --- | --- |
+| `capability_absent` | The repository declares no QA capability. |
+| `unsupported_target` | No pack QA target matches this repository. |
+| `disabled_policy` | QA is switched off for this run. |
+| `isolation_unavailable` | The runtime could not create the isolated QA checkout. |
+| `unauthorized_target` | The target device or environment is not authorized for QA. |
+| `offline_target` | The target device or environment is unreachable. |
+| `device_contended` | Every authorized device is leased by another run. |
+| `empty_scope` | The change has no flow to exercise. |
+| `production_only` | Only a production environment exists, so no flow ran. |
+| `docker_unavailable` | The only viable environment needed Docker, and Docker or its daemon was unavailable. |
+| `environment_unavailable` | No usable isolated environment existed at all. |
+| `isolation_rejected` | The effective configuration pointed at a production or shared resource, so nothing was mutated. |
+| `setup_budget_exceeded` | Environment setup overran its 15-minute wall-time cap. |
+| `browser_unavailable` | The web target needed a browser driver and none was usable. |
+| `partial_coverage` | Verify only: the verdict stands, but a declared target was skipped or incomplete, or the report lacked coverage, assertion or isolation evidence. |
+
 ## Runtime Agent Behavior
 
 Agent-specific behavior uses injectable strategies on `AgentRunProcessRequest`, not identity branching in the process runner: `progressProbe`, `declaredProgressProbe`, `activityProbe`, `progressEmitter`, `idlePolicy` (`HEARTBEAT_EXTENDED` | `DB_PROGRESS_ONLY`). `ProcessWaitLoop` calls strategies only; new agents add a strategy constant. Crash reconciliation: `FeatureTaskRuntimeWorkerSupervisor` self-heals expired-lease rows to resumable at startup.

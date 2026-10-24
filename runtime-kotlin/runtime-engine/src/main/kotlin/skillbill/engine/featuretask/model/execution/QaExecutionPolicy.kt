@@ -22,6 +22,11 @@ enum class QaSkipReason(val wireValue: String) {
   DEVICE_CONTENDED("device_contended"),
   EMPTY_SCOPE("empty_scope"),
   PRODUCTION_ONLY("production_only"),
+  DOCKER_UNAVAILABLE("docker_unavailable"),
+  ENVIRONMENT_UNAVAILABLE("environment_unavailable"),
+  ISOLATION_REJECTED("isolation_rejected"),
+  SETUP_BUDGET_EXCEEDED("setup_budget_exceeded"),
+  BROWSER_UNAVAILABLE("browser_unavailable"),
   ;
 
   companion object {

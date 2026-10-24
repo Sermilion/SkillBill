@@ -76,7 +76,7 @@ class FeatureTaskQaOutcomeRecordsTest {
   fun `an incomplete report leaves earlier findings not fixed`() {
     val previous = outcome(listOf(finding("F-1", FeatureTaskQaFindingStatus.NOT_FIXED)))
 
-    val merged = FeatureTaskQaOutcomeRecords.mergedFindings(previous.findings, QaVerdict.INCOMPLETE, emptyList())
+    val merged = FeatureTaskQaOutcomeRecords.mergedFindings(previous.findings, retestsFindings = false, emptyList())
 
     assertEquals(listOf(FeatureTaskQaFindingStatus.NOT_FIXED), merged.map { it.status })
   }
@@ -86,7 +86,7 @@ class FeatureTaskQaOutcomeRecordsTest {
     val previous = outcome(listOf(finding("F-1", FeatureTaskQaFindingStatus.NOT_FIXED)))
     val reported = listOf(finding("F-2", FeatureTaskQaFindingStatus.NOT_FIXED))
 
-    val merged = FeatureTaskQaOutcomeRecords.mergedFindings(previous.findings, QaVerdict.FINDINGS_OPEN, reported)
+    val merged = FeatureTaskQaOutcomeRecords.mergedFindings(previous.findings, retestsFindings = true, reported)
 
     assertEquals(
       listOf("F-1" to FeatureTaskQaFindingStatus.FIXED, "F-2" to FeatureTaskQaFindingStatus.NOT_FIXED),

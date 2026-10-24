@@ -41,13 +41,13 @@ class QaStandalonePhaseRunTest {
 
   @Test
   fun `a findings report completes with its text verbatim and releases the invocation's leases`() {
-    val text = qaTestReport(QaVerdict.FINDINGS_OPEN, qaTestExpected(INVOCATION))
+    val text = androidReport(QaVerdict.FINDINGS_OPEN)
 
     val result = assertIs<PhaseRunResult.Completed>(runQa { text })
 
     assertEquals(StandaloneQaOutcome.FINDINGS, result.qaOutcome)
     assertEquals(text, result.qaReportText)
-    assertEquals("QA verdict: findings_open", result.value)
+    assertEquals("QA verdict: findings_open; coverage: android findings_open", result.value)
     assertEquals(listOf("Verdict: findings_open", text), result.targetReport)
     assertEquals(listOf(INVOCATION), leases.releasedInvocations)
     val qa = requireNotNull(launched.single())
@@ -66,7 +66,10 @@ class QaStandalonePhaseRunTest {
 
     assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
     assertEquals(text, result.qaReportText)
-    assertEquals(listOf("Verdict: incomplete", text), result.targetReport)
+    assertEquals(
+      listOf("Warning: QA report has no coverage for target android", "Verdict: incomplete", text),
+      result.targetReport,
+    )
   }
 
   @Test
@@ -78,7 +81,7 @@ class QaStandalonePhaseRunTest {
     assertEquals(
       listOf(
         "Warning: QA agent wrote no report.md",
-        "Verdict: incomplete: QA agent wrote no report.md",
+        "Verdict: incomplete",
       ),
       result.targetReport,
     )
@@ -101,7 +104,7 @@ class QaStandalonePhaseRunTest {
 
   @Test
   fun `an agent reported skip completes as skipped`() {
-    val text = qaTestReport(QaVerdict.SKIPPED, qaTestExpected(INVOCATION))
+    val text = androidReport(QaVerdict.SKIPPED)
 
     val result = assertIs<PhaseRunResult.Completed>(runQa { text })
 
@@ -163,6 +166,9 @@ class QaStandalonePhaseRunTest {
     assertEquals(emptyList(), launched)
     assertNull(workspaces.report)
   }
+
+  private fun androidReport(verdict: QaVerdict): String =
+    qaTestReport(verdict, qaTestExpected(INVOCATION)) + "\n## Coverage\n- android: ${verdict.wireValue}\n"
 
   private fun runQa(
     manifests: List<PlatformManifest> = listOf(androidPack),

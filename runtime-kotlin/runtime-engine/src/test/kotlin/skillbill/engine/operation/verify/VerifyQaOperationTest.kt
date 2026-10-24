@@ -123,6 +123,24 @@ class VerifyQaOperationTest {
   }
 
   @Test
+  fun `a passed report with a skipped coverage line records partial_coverage as the QA reason`() {
+    VerifyOperationHarness().use { harness ->
+      harness.qaManifests = listOf(ANDROID_PACK)
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on")).token
+      val written =
+        qaTestReport(QaVerdict.PASSED, expected()) +
+          "\n## Coverage\n- android: passed\n- web: skipped reason: browser_unavailable backend: none\n"
+      harness.runner.sideEffects[VerifyPromptSections.QA_STEP] = { harness.qaWorkspaces.report = written }
+
+      val report = assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      assertContains(report.text, "QA outcome: passed (partial_coverage)")
+      val finished = harness.telemetry.finished.single()
+      assertEquals("passed" to "partial_coverage", finished.qaOutcome to finished.qaReason)
+    }
+  }
+
+  @Test
   fun `a report naming no verdict is recorded incomplete with its text kept and verify still completes`() {
     VerifyOperationHarness().use { harness ->
       harness.qaManifests = listOf(ANDROID_PACK)

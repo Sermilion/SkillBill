@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-24] SKILL-420 subtask 5 - Per-target coverage, reason vocabulary and unverified passes in the QA report
+Areas: runtime-engine featuretask qa/report (report model, parser, settlement, outcome records), slot/qa prompt sections, model/execution QaSkipReason, phaserun/qa, operation/verify VerifyQaStep; docs/runtime-command-guidance
+- MEDIUM feature. The prose QA report gains a `## Coverage` section with one line per target kind (verdict, optional reason and backend attribution real, mocked or none), plus `## Assertions` and `## Isolation` sections; the QA briefing's Report block asks for all of them and a `Reason:` token line.
+- QaSkipReason grew five tokens (docker_unavailable, environment_unavailable, isolation_rejected, setup_budget_exceeded, browser_unavailable). The parser reads a reason only for skipped or incomplete verdicts and only when the token is recognized; the prompt token list is generated from the enum. Operator docs got a "QA reason tokens" table.
+- The parser warns, never rewrites the stated verdict, on: passed with findings, no assertions, no isolation evidence, no coverage for a declared kind, partially covered targets, and web passed against a mocked backend. Settlement passes the declared target kinds to the parser.
+- A pass without assertions does not close findings: QaReport.retestsFindings feeds both outcome-record paths, so findings stay NOT_FIXED and retained repair state is unchanged. Legacy-receipt runs with no report fall back to the verdict.
+- QaReport.summary() renders per-target coverage; VerifyQaStep reports partial_coverage for a passed or findings_open run with skipped or incomplete coverage lines or a coverage warning. Telemetry and IDE-status schemas, persistence and migrations are untouched.
+- Reusable: QaReport.coverageWarnings isolates the coverage-class warnings from findings and execution warnings.
+- Limits: QaReports.missing free text still reaches verify qa_reason for incomplete reports. Re-parsed stored reports use no declared kinds, so they add no missing-coverage warnings. Install smoke scripts were left to PR CI.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented for this subtask.
+
 ## [2026-10-24] SKILL-420 subtask 4 - Horizontal backend and web execution rules in the QA briefing
 Areas: runtime-engine featuretask slot/qa prompt sections (QA supplement and qa_fix repair supplement)
 - MEDIUM feature. The QA supplement gained an "Environment and isolation" block: reuse repository QA setups, inspect effective configuration, Compose project named after the invocation environment name, isolation checks before the first write, a 15 minute setup budget, and skip reasons isolation_rejected, setup_budget_exceeded, environment_unavailable and docker_unavailable.
