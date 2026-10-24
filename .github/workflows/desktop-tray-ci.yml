@@ -1,6 +1,8 @@
 name: Desktop tray CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       # Everything but prose, so a reintroduced root source set or a wrapper change still reaches the guards.
@@ -78,6 +80,7 @@ jobs:
       - name: Smoke packaged work data without CLI discovery
         run: (cd desktop-tray && ./gradlew :composeApp:packagedDataSmoke --no-build-cache)
       - name: Upload desktop snapshot
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: desktop-tray-snapshot-${{ matrix.os }}

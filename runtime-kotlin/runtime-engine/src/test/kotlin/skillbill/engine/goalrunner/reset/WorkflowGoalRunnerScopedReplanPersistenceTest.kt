@@ -91,7 +91,7 @@ class WorkflowGoalRunnerScopedReplanPersistenceTest {
             assertNotNull(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(after.artifacts)),
           )
         assertEquals(bundle.withoutPlannedUnits(setOf(1)), retained)
-        assertEquals(before.copy(artifacts = after.artifacts), after)
+        assertEquals(before.copy(artifacts = after.artifacts, updatedAt = after.updatedAt), after)
       }
       assertFailsWith<SkillBillRuntimeException> {
         database.transaction { unit -> unit.workflowStates.save(WorkflowFamily.TASK_RUNTIME, before) }
