@@ -1066,7 +1066,7 @@ class IdeStatusService(
         ) {
           null
         } else {
-          IdeStatusSelectionPolicy.lifecycleFromDurableStateWire(candidateFamily, item.currentState)
+          livenessAnchors.lifecycle(item, candidateFamily)
         }
       }
     if (family == null || lifecycle == null) return null

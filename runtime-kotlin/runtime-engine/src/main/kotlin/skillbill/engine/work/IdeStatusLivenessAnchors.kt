@@ -5,11 +5,25 @@ import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.model.WorkflowStatus
 import java.time.Instant
 
 class IdeStatusLivenessAnchors(
   private val unitOfWork: UnitOfWork,
 ) {
+  fun lifecycle(
+    item: WorkItem,
+    family: IdeStatusWorkflowFamily,
+  ): IdeStatusLifecycleState? =
+    if (family == IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME &&
+      item.currentState == WorkflowStatus.PENDING.wireValue &&
+      unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(item.workflowId) == null
+    ) {
+      IdeStatusLifecycleState.PAUSED
+    } else {
+      IdeStatusSelectionPolicy.lifecycleFromDurableStateWire(family, item.currentState)
+    }
+
   fun authoritativeUpdatedAt(
     item: WorkItem,
     family: IdeStatusWorkflowFamily,

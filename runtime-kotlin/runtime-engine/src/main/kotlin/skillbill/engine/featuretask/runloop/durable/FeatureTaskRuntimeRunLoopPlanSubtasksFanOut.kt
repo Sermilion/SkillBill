@@ -40,9 +40,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
-import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
@@ -65,7 +63,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   private val snapshots = PlanBundleSnapshots(planner)
   private val unitStates = ConcurrentHashMap<Int, FeatureTaskRuntimeRunLoopPlanUnitState>()
 
-  override val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE
+  override val outputSink: AgentRunOutputSink get() = parent.launchOutputSink
 
   override fun pendingUnits(): PhaseFanOutUnits {
     val bundle =
@@ -258,8 +256,7 @@ private class FeatureTaskRuntimeRunLoopPlanUnitState(
 
   override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget? = null
 
-  override fun launchObservation(stepName: String): PhaseLaunchObservation =
-    PhaseLaunchObservation(AgentRunActivityStampSink.NONE, AgentRunWorktreeEditObserver.NONE)
+  override fun launchObservation(stepName: String): PhaseLaunchObservation = parent.launchObservation(stepName)
 
   override fun recordTokenUsage(
     stepName: String,

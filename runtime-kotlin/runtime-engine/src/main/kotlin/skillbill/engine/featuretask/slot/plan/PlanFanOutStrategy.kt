@@ -131,21 +131,11 @@ class PlanFanOutStrategy private constructor(
       val nextWaveFirstId = waves.getOrNull(index + 1)?.first()
       val stopped =
         fanOut.pauseBefore(wave.first())
-          ?: runWave(run, fanOut, wave)
+          ?: runPlanFanOutWave(fanOutPort, planFanOutCap, fanOut, wave) { runUnit(run, fanOut, it) }
           ?: nextWaveFirstId?.let(fanOut::pauseBefore)
       if (stopped != null) return stopped
     }
     return fanOut.completed()
-  }
-
-  private fun runWave(
-    run: PhaseRun,
-    fanOut: PhaseRunFanOut,
-    wave: List<Int>,
-  ): PhaseOutcome? {
-    val units = wave.map { unitId -> { runUnit(run, fanOut, unitId) } }
-    val results = fanOutPort.runBounded(planFanOutCap, units)
-    return wave.indices.firstNotNullOfOrNull { index -> fanOut.settleUnit(wave[index], results[index]) }
   }
 
   private fun runUnit(
