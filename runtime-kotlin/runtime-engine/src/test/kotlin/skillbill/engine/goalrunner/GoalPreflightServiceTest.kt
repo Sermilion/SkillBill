@@ -355,7 +355,7 @@ class GoalPreflightServiceTest {
     )
 }
 
-private class TestManifestStore(
+internal class TestManifestStore(
   private val state: GoalRunnerManifestState?,
   private val persistedReviewPolicy: GoalRunnerReviewPolicy? = null,
 ) : GoalRunnerManifestStoreDefaults() {
@@ -392,13 +392,13 @@ private class TestManifestStore(
     error("Preflight must not save manifest state.")
 }
 
-private object EmptyExternalAgentAddonSourceConfigPort : ExternalAgentAddonSourceConfigPort {
+internal object EmptyExternalAgentAddonSourceConfigPort : ExternalAgentAddonSourceConfigPort {
   override fun readExternalAgentAddonSources(
     request: ExternalAgentAddonSourceConfigRequest,
   ): ExternalAgentAddonSourceConfigResult = ExternalAgentAddonSourceConfigResult()
 }
 
-private object TestAgentAddonSelectionPort : AgentAddonSelectionPort {
+internal object TestAgentAddonSelectionPort : AgentAddonSelectionPort {
   var receivedExternalSourceRoots: List<Path> = emptyList()
 
   override fun resolveInitial(

@@ -16,11 +16,15 @@ import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
+import dev.skillbill.tray.core.domain.model.SpecBundleControl
+import dev.skillbill.tray.core.domain.model.SpecProject
+import dev.skillbill.tray.core.domain.model.SpecSnapshot
 import dev.skillbill.tray.core.domain.model.StorageFailure
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.WorkSection
 import dev.skillbill.tray.core.domain.repository.Outcome
+import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
@@ -156,4 +160,33 @@ class SessionWorkControlRepository(private val manager: WorkStoreSessionManager)
     val parts = manager.settledParts() ?: return noDatabase()
     return parts.control.recoveryPreview(item, incidentToken, confirmedPrerequisites)
   }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@Inject
+@SingleIn(AppScope::class)
+@ContributesBinding(AppScope::class)
+class SessionSpecBrowserRepository(private val manager: WorkStoreSessionManager) : SpecBrowserRepository {
+  override suspend fun projects(): Outcome<List<SpecProject>> = manager.settledParts()?.specs?.projects() ?: noDatabase()
+
+  override suspend fun projectFor(repositoryRoot: String): Outcome<SpecProject> =
+    manager.settledParts()?.specs?.projectFor(repositoryRoot) ?: noDatabase()
+
+  override fun observeSnapshot(projectId: String, preferredRepoRoot: String?): Flow<Outcome<SpecSnapshot>> =
+    manager.slot.flatMapLatest { slot ->
+      when (slot) {
+        is SessionSlot.Active -> slot.parts.specs.observeSnapshot(projectId, preferredRepoRoot)
+        is SessionSlot.Refused -> flowOf(runtimeRefusal(slot.problem))
+        SessionSlot.Idle, SessionSlot.Switching -> emptyFlow()
+      }
+    }
+
+  override suspend fun control(projectId: String, bundlePath: String, preferredRepoRoot: String?): Outcome<SpecBundleControl> =
+    manager.settledParts()?.specs?.control(projectId, bundlePath, preferredRepoRoot) ?: noDatabase()
+
+  override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): Outcome<Unit> =
+    manager.settledParts()?.specs?.startGoal(repoRoot, issueKey, agentId) ?: noDatabase()
+
+  override suspend fun purgeGoal(repoRoot: String, issueKey: String): Outcome<Unit> =
+    manager.settledParts()?.specs?.purgeGoal(repoRoot, issueKey) ?: noDatabase()
 }

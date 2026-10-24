@@ -165,23 +165,6 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
       action, label, effects, targetWorkflowId, targetInvocationId, phaseId, incidentToken, incidentRevision,
     )
 
-  private fun WorkControlRejection.toRefusal(): ControlRefusal = when (this) {
-    WorkControlRejection.AGENT_REQUIRED -> ControlRefusal.AGENT_REQUIRED
-    WorkControlRejection.BRANCH_CHANGED -> ControlRefusal.BRANCH_CHANGED
-    WorkControlRejection.BRANCH_UNAVAILABLE -> ControlRefusal.BRANCH_UNAVAILABLE
-    WorkControlRejection.TERMINATION_INCOMPLETE -> ControlRefusal.TERMINATION_INCOMPLETE
-    WorkControlRejection.OWNERSHIP_MISMATCH -> ControlRefusal.OWNERSHIP_MISMATCH
-    WorkControlRejection.FOREIGN_HOST -> ControlRefusal.FOREIGN_HOST
-    WorkControlRejection.PID_REUSED -> ControlRefusal.PID_REUSED
-    WorkControlRejection.UNINSPECTABLE -> ControlRefusal.UNINSPECTABLE
-    WorkControlRejection.IDENTITY_MISMATCH -> ControlRefusal.IDENTITY_MISMATCH
-    WorkControlRejection.STALE_INCIDENT -> ControlRefusal.STALE_INCIDENT
-    WorkControlRejection.RECOVERY_UNAVAILABLE -> ControlRefusal.RECOVERY_UNAVAILABLE
-    WorkControlRejection.PREREQUISITE_UNMET -> ControlRefusal.PREREQUISITE_UNMET
-    WorkControlRejection.RECOVERY_IN_PROGRESS -> ControlRefusal.RECOVERY_IN_PROGRESS
-    else -> ControlRefusal.OTHER
-  }
-
   private fun WorkControlRejection.toRecoveryRefusal(): ControlRefusal = when (this) {
     WorkControlRejection.STALE_INCIDENT, WorkControlRejection.CHANGED_TARGET -> ControlRefusal.STALE_INCIDENT
     WorkControlRejection.RECOVERY_UNAVAILABLE, WorkControlRejection.INELIGIBLE_TARGET -> ControlRefusal.RECOVERY_UNAVAILABLE
@@ -277,4 +260,21 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
       )
     }
   }
+}
+
+internal fun WorkControlRejection.toRefusal(): ControlRefusal = when (this) {
+  WorkControlRejection.AGENT_REQUIRED -> ControlRefusal.AGENT_REQUIRED
+  WorkControlRejection.BRANCH_CHANGED -> ControlRefusal.BRANCH_CHANGED
+  WorkControlRejection.BRANCH_UNAVAILABLE -> ControlRefusal.BRANCH_UNAVAILABLE
+  WorkControlRejection.TERMINATION_INCOMPLETE -> ControlRefusal.TERMINATION_INCOMPLETE
+  WorkControlRejection.OWNERSHIP_MISMATCH -> ControlRefusal.OWNERSHIP_MISMATCH
+  WorkControlRejection.FOREIGN_HOST -> ControlRefusal.FOREIGN_HOST
+  WorkControlRejection.PID_REUSED -> ControlRefusal.PID_REUSED
+  WorkControlRejection.UNINSPECTABLE -> ControlRefusal.UNINSPECTABLE
+  WorkControlRejection.IDENTITY_MISMATCH -> ControlRefusal.IDENTITY_MISMATCH
+  WorkControlRejection.STALE_INCIDENT -> ControlRefusal.STALE_INCIDENT
+  WorkControlRejection.RECOVERY_UNAVAILABLE -> ControlRefusal.RECOVERY_UNAVAILABLE
+  WorkControlRejection.PREREQUISITE_UNMET -> ControlRefusal.PREREQUISITE_UNMET
+  WorkControlRejection.RECOVERY_IN_PROGRESS -> ControlRefusal.RECOVERY_IN_PROGRESS
+  else -> ControlRefusal.OTHER
 }

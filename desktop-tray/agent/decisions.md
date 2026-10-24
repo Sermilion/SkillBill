@@ -1,3 +1,33 @@
+## [2026-10-24] Filtering expands ancestors for display only
+Context: The spec tree filter must reveal matches inside collapsed bundles, while expansion is persisted in AppSettings.specExpandedPaths.
+Decision: visibleRows shows ancestors of a match expanded without writing the saved set; ClearFilters restores the saved expansion.
+Reason: Writing filter-driven expansion would overwrite what the user chose to keep open.
+Alternatives considered: Persisting expansion on filter would be simpler but loses the user's layout after one search.
+Revisit when: A filtered folder not collapsing on Toggle proves confusing in use.
+
+## [2026-10-24] Specs pane never writes navigator state
+Context: The pane follows the selected work item but sits beside the detail column.
+Decision: The host sends SelectedWorkChanged read-only from navigator.selected; the ViewModel has no navigator and a PickProject action pins the project.
+Reason: Browsing specs must not move the user's work selection, and a picked project must survive later selection changes.
+Alternatives considered: Opening detail from a bundle row would couple the pane to navigation.
+
+## [2026-10-24] Create the Specs ViewModel only while the session is Active
+Context: The facade repository throws noDatabase() when no session database is open, and the ViewModel reads projects() on start.
+Decision: MainWindow calls rememberSpecsViewModel only for SessionState.Active, and the entry store holds it so a database switch discards it. SpecsUiState carries projectsLoaded to separate an empty store from a pending read.
+Reason: Avoids a startup read against a missing database and a stale ViewModel after a switch.
+
+## [2026-10-24] Isolate spec-browser trigger sources so each degrades alone
+Context: The spec snapshot refreshes from two signals, a filesystem watcher over the specs root and goal-store commit signals. Either can fail independently.
+Decision: Each trigger source has its own catch inside observeSnapshot, and a failed read emits Outcome.Failure while the flow keeps observing.
+Reason: A broken watcher (for example a failed registration or a missing root) must not end live updates driven by the store, and the reverse.
+Alternatives considered: One catch around the merged triggers would end the whole flow on the first failing source.
+
+## [2026-10-24] Map a null runtime specsRoot to a blank string
+Context: The runtime's spec project reports specsRoot as a nullable Path, while the domain SpecProject stays free of java.nio types.
+Decision: The adapter maps null to an empty string, documented on SpecProject, and the repository and watcher treat blank as having no directory.
+Reason: It keeps the domain model plain strings without a separate nullable field every consumer must branch on.
+Alternatives considered: A nullable specsRoot in the domain would spread null handling through the UI subtasks.
+
 ## [2026-10-23] Open spec bundle files through suspend openFile returning Outcome
 Context: The spec asked for a plain openFile(path) on RepositoryNavigation, but opening a file can fail and must not reach the compose thread.
 Decision: openFile is suspend and returns Outcome&lt;Unit&gt;, like openRepository and openDirectory, and runs through the existing navigate failure path on the IO dispatcher.

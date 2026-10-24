@@ -1,11 +1,13 @@
 package skillbill.engine.work.control
 
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryActions
 import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
+import skillbill.engine.goalrunner.goalPreflightServiceForTests
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.work.EmptyOutcomeStore
@@ -26,6 +28,7 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -209,6 +212,9 @@ private class GoalControlsFixture : AutoCloseable {
       supervisor,
       launcher,
       ideStatusClock,
+      goalPreflightServiceForTests(database),
+      EnvironmentContext(),
+      TestRepositoryEnclosingRoot,
     )
   private val recovery =
     BlockIncidentRecoveryService(

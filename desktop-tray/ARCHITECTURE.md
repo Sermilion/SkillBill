@@ -8,7 +8,7 @@ loads desktop jars with the jars in `runtime-cli/lib` through an application
 class loader. Work reads and controls run in process. The modules are
 `:core:common`, `:core:domain`, `:core:designsystem`, `:core:ui`, `:core:data`,
 `:core:datastore`, `:core:testing`, the screens `:feature:work`, `:feature:detail`,
-`:feature:history` and `:feature:settings`, and the `:composeApp` shell. There is no
+`:feature:history`, `:feature:settings` and `:feature:specs` (the spec-store browser pane, whose selection is pane-local), and the `:composeApp` shell. There is no
 root source set: the root build is an aggregator whose `check` depends on every child
 project's `check` and on the convention build's `:convention:check`, whose `test` runs
 every module's `jvmTest`, and which aliases the `:composeApp` distribution tasks

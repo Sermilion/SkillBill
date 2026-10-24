@@ -179,7 +179,7 @@ class ModuleGraphRulesTest {
     listOf(
       manifest(
         ":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:data", ":core:datastore", ":core:ui",
-        ":feature:work", ":feature:detail", ":feature:history", ":feature:settings", test = listOf(":core:testing"),
+        ":feature:work", ":feature:detail", ":feature:history", ":feature:settings", ":feature:specs", test = listOf(":core:testing"),
       ),
       manifest(":core:common"),
       manifest(":core:domain", ":core:common"),

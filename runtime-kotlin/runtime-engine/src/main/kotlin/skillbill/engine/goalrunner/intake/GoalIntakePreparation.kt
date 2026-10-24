@@ -6,7 +6,6 @@ import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -18,10 +17,7 @@ import skillbill.ports.featurespec.model.FeatureSpecOrigin
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.projectstore.ProjectStorePort
-import skillbill.ports.projectstore.model.ProjectStoreLocation
-import skillbill.ports.projectstore.model.classifySpecPath
 import skillbill.ports.projectstore.model.resolveSpecPath
-import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
@@ -41,46 +37,6 @@ class GoalIntakePreparation(
     intake: String,
     repoRoot: Path,
   ): String? = referencedSpecPath(intake, repoRoot)?.let { GoalIntake.parse(it.toString()).issueKey }
-
-  fun archivedSpec(
-    intake: String,
-    repoRoot: Path,
-  ): GoalIntakeAdmission.ArchivedSpec? {
-    val active = activeSpecPath(intake, repoRoot) ?: return null
-    val root = repoRoot.toAbsolutePath().normalize()
-    val store = projectStore.resolve(repoRoot)
-    val activeRoot =
-      store.specBundleRoots(root).map { it.toAbsolutePath().normalize() }
-        .firstOrNull { active.startsWith(it) && !active.startsWith(it.resolve(ARCHIVE)) }
-        ?: return null
-    val archived = activeRoot.resolve(ARCHIVE).resolve(activeRoot.relativize(active))
-    if (!fileStore.isRegularFile(archived)) return null
-    return GoalIntakeAdmission.ArchivedSpec(
-      issueKey = GoalIntake.parse(active.toString()).issueKey,
-      activeSpecPath = store.specLabel(active, root),
-      archivedSpecPath = store.specLabel(archived, root),
-    )
-  }
-
-  private fun ProjectStoreLocation.specLabel(
-    path: Path,
-    checkoutRoot: Path,
-  ): String = classifySpecPath(path, checkoutRoot)?.relative ?: checkoutRoot.relativize(path).joinToString("/")
-
-  private fun activeSpecPath(
-    intake: String,
-    repoRoot: Path,
-  ): Path? {
-    referencedSpecPath(intake, repoRoot)?.let { return it.toAbsolutePath().normalize() }
-    val issueKey = GoalIntake.parseOrNull(intake)?.issueKey ?: return null
-    return when (
-      val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(issueKey, null, repoRoot))
-    ) {
-      is FeatureSpecPathResolveResult.Explicit -> repoRoot.resolve(resolved.specPath).toAbsolutePath().normalize()
-      is FeatureSpecPathResolveResult.SingleMatch -> repoRoot.resolve(resolved.specPath).toAbsolutePath().normalize()
-      is FeatureSpecPathResolveResult.NoMatch, is FeatureSpecPathResolveResult.Ambiguous -> null
-    }
-  }
 
   fun issueKeyOf(intake: String): String = GoalIntake.parse(intake).issueKey
 
@@ -251,7 +207,6 @@ class GoalIntakePreparation(
   }
 
   private companion object {
-    const val ARCHIVE = "done"
     const val SPEC_FILE = "spec.md"
     val ACCEPTANCE_HEADING = Regex("(?i)#{1,6}\\s+acceptance criteria\\s*")
     val ITEM = Regex("\\s*(?:[-*]|[0-9]+[.)])\\s+(?:\\[[ xX]\\]\\s+)?(.+)")

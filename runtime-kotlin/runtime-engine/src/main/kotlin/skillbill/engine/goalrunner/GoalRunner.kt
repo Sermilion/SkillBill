@@ -81,8 +81,7 @@ class GoalRunner(
     intake: String,
     repoRoot: Path,
   ): GoalIntakeAdmission? =
-    intakePreparation.archivedSpec(intake, repoRoot)
-      ?: intakePreparation.issueKeyForExistingSpec(intake, repoRoot)?.let(GoalIntakeAdmission::Admitted)
+    intakePreparation.issueKeyForExistingSpec(intake, repoRoot)?.let(GoalIntakeAdmission::Admitted)
 
   fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
     manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&

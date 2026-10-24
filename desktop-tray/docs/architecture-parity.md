@@ -32,6 +32,7 @@ Every project in `settings.gradle.kts` has sources and a build script. Their `ch
 | `:feature:detail` | Detail screen | `DetailViewModel`, `DetailRoutes`, `DetailContent`, `DetailPresentation` | `:composeApp` |
 | `:feature:history` | History screen | `HistoryViewModel`, `HistoryRoute`, `HistoryContent` | `:composeApp` |
 | `:feature:settings` | Settings screen | `SettingsViewModel`, `SettingsRoute`, `SettingsContent` | `:composeApp` |
+| `:feature:specs` | Spec-store browser pane; selection is pane-local and never navigates | `SpecsViewModel`, `SpecsRoute`, `SpecsPane`, `SpecStatusDot` | `:composeApp` |
 | `:composeApp` | The shell: merged application component, per-window and per-entry graphs, navigation, window lifetimes, host intents, tray, notifications, login start, packaging | `ApplicationComponent`, `WindowComponent`, `EntryComponent`, `EntryViewModels`, `ViewModelFactory`, `AppOwner`, `WindowRegistry`, `WindowOwner`, `WindowNavigator`, `HostIntentRouter`, `SessionTransitionCoordinator`, `StoreSessionCoordinator`, `NativeServicesImpl`, `NativeTrayHost`, `MacStatusItemBridge` | none; it is the application |
 
 Distribution tasks live in `:composeApp` and the `skillbill.desktop.application` convention: `createDistributable`,

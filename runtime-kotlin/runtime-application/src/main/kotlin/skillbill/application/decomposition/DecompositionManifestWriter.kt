@@ -39,9 +39,7 @@ class DecompositionManifestWriter(
   fun writeFromWorkflowUpdate(input: DecompositionManifestWorkflowProjectionInput): DecompositionManifestWriteResult? {
     val store = projectStore.resolve(input.repoRoot)
     val manifest =
-      manifestFromWorkflowUpdate(
-        input,
-      )?.atExistingSpecBundle(input.repoRoot, store, input.fileStore) ?: return null
+      manifestFromWorkflowUpdate(input) ?: return null
     return when (
       val outcome =
         writeProjectionOutcome(
@@ -99,8 +97,7 @@ class DecompositionManifestWriter(
   ): DecompositionManifestProjectionOutcome {
     val store = projectStore.resolve(repoRoot)
     val runtime =
-      artifacts.decompositionRuntime()?.atExistingSpecBundle(repoRoot, store, fileStore)
-        ?: return DecompositionManifestProjectionOutcome.Absent
+      artifacts.decompositionRuntime() ?: return DecompositionManifestProjectionOutcome.Absent
     return writeProjectionOutcome(
       WriteProjectionOutcomeArgs(
         repoRoot = repoRoot,
@@ -293,7 +290,6 @@ private fun assertParentSpecIsNotDecomposedSubtask(
   val parentSpecLabel = repoRelativePath(repoRoot, store, parentSpecPath)
   val referringManifests =
     fileStore.findDecompositionManifestFiles(repoRoot)
-      .filterNot { manifestPath -> archivedDecompositionManifest(repoRoot, store, manifestPath) }
       .filter { manifestPath ->
         normalizedParentSpec.startsWith(resolvedParentSpecPath(repoRoot, manifestPath, store).normalize().parent)
       }

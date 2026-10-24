@@ -15,10 +15,3 @@ fun goalIntakeRequestText(request: GoalIntakeAdmission.NeedsInput): String {
     }
   return "$subject, $ask Nothing was started.\n"
 }
-
-fun goalArchivedSpecText(archived: GoalIntakeAdmission.ArchivedSpec): String {
-  val staleBundle = archived.activeSpecPath.substringBeforeLast('/')
-  return "goal ${archived.issueKey}: already complete — its spec is archived at ${archived.archivedSpecPath}; " +
-    "nothing to run.\n" +
-    "${archived.activeSpecPath} is a stale copy. Remove it: git rm -r $staleBundle\n"
-}

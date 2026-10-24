@@ -26,6 +26,7 @@ import dev.skillbill.tray.core.ui.rememberEntryViewModelStoreOwner
 import dev.skillbill.tray.core.ui.rememberViewModel
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import dev.skillbill.tray.core.ui.RepositoryNavigation
+import dev.skillbill.tray.feature.specs.SpecsAction
 import dev.skillbill.tray.feature.work.TrayAction
 import dev.skillbill.tray.feature.work.TrayEffect
 import dev.skillbill.tray.feature.work.trayHover
@@ -36,11 +37,14 @@ import dev.skillbill.tray.infrastructure.trayIconAnchor
 import dev.skillbill.tray.infrastructure.NativeTrayHost
 import dev.skillbill.tray.infrastructure.TrayIconRenderer
 import dev.skillbill.tray.infrastructure.resolveDesktopUiScale
+import dev.skillbill.tray.lifetime.SessionState
 import dev.skillbill.tray.lifetime.WindowOwner
 import dev.skillbill.tray.ui.DesignWindow
 import dev.skillbill.tray.ui.SkillBillNavHost
 import dev.skillbill.tray.ui.SkillBillTheme
+import dev.skillbill.tray.ui.SpecsToggle
 import dev.skillbill.tray.ui.TrayPopover
+import dev.skillbill.tray.ui.rememberSpecsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -208,7 +212,7 @@ private fun MainWindow(
   shellProblem: Problem?,
   repositoryNavigation: RepositoryNavigation,
 ) {
-  val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1060).dp, uiScale.scaledWindowPixels(698).dp))
+  val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1380).dp, uiScale.scaledWindowPixels(698).dp))
   val session by owner.transitions.state.collectAsState()
   val closeRequest = {
     if (owner.windows.windows.count { it.navigator.section != null } > 1) owner.windows.dispose(windowOwner)
@@ -244,7 +248,18 @@ private fun MainWindow(
     FocusOnRequest(windowOwner, window)
     CompositionLocalProvider(LocalRepositoryNavigation provides repositoryNavigation) {
       SkillBillTheme(uiScale) {
-        DesignWindow(mainWindowState, closeRequest) {
+        // The pane's ViewModel starts once a database is open, so its first read never lands before the session is.
+        val specs = if (session is SessionState.Active) rememberSpecsViewModel(windowOwner) else null
+        val specsState = specs?.state?.collectAsState()?.value
+        DesignWindow(
+          mainWindowState,
+          closeRequest,
+          accessory = {
+            if (specs != null && specsState != null) {
+              SpecsToggle(specsState.paneOpen, specsState.anyInProgress) { specs.onAction(SpecsAction.TogglePane) }
+            }
+          },
+        ) {
           SkillBillNavHost(
             window = windowOwner,
             session = session,
@@ -252,6 +267,7 @@ private fun MainWindow(
             onRefreshShell = { owner.router.dispatch(HostIntent.Refresh) },
             onOpenSettings = { owner.router.dispatch(HostIntent.OpenSettings) },
             onCloseWindow = closeRequest,
+            specs = specs,
           )
         }
       }

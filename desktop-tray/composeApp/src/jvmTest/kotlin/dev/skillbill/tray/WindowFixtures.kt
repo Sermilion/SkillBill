@@ -8,6 +8,7 @@ import dev.skillbill.tray.composition.WindowComponent
 import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.testing.FakeSettingsRepository
+import dev.skillbill.tray.core.testing.FakeSpecBrowserRepository
 import dev.skillbill.tray.core.testing.FakeWorkBoardRepository
 import dev.skillbill.tray.core.testing.FakeWorkControlRepository
 import dev.skillbill.tray.core.testing.FakeWorkDetailRepository
@@ -29,6 +30,7 @@ class WindowFakes {
     controls = FakeWorkControlRepository(),
     settings = settings,
     storeStatus = FakeWorkStoreStatusRepository(),
+    specs = FakeSpecBrowserRepository(),
     clock = TestClock(fixtureInstant),
   )
 

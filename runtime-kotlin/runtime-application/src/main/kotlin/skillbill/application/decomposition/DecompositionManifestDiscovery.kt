@@ -52,7 +52,6 @@ fun findMatchingDecompositionManifests(
   return manifestFiles
     .asSequence()
     .sortedBy(Path::toString)
-    .filterNot { path -> archivedDecompositionManifest(repoRoot, store, path) }
     .filter { path -> issueKeyInPath.containsMatchIn(manifestLabel(repoRoot, store, path).uppercase()) }
     .map { path ->
       val manifest =

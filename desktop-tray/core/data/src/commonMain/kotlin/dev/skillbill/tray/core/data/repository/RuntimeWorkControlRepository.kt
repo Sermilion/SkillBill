@@ -141,21 +141,22 @@ class RuntimeWorkControlRepository(
     )
   }
 
-  private fun runRefusalMessage(refusal: ControlRefusal): String = when (refusal) {
-    ControlRefusal.AGENT_REQUIRED -> "Choose an agent to start this run."
-    ControlRefusal.BRANCH_CHANGED -> "Check out this run's recorded branch before starting it again."
-    ControlRefusal.BRANCH_UNAVAILABLE ->
-      "Cannot read this run's checkout branch. Restore its checkout or check out its recorded branch before starting it again."
-    ControlRefusal.TERMINATION_INCOMPLETE -> "The runner has not stopped yet. Refresh and retry cancellation."
-    ControlRefusal.OWNERSHIP_MISMATCH -> "The runner's identity could not be confirmed. Refresh before retrying."
-    ControlRefusal.FOREIGN_HOST -> "The runner process is on another host. Refresh before retrying cancellation."
-    ControlRefusal.PID_REUSED -> "The runner PID was reused by a different process. Refresh before retrying cancellation."
-    ControlRefusal.UNINSPECTABLE -> "The runner process could not be inspected. Refresh before retrying cancellation."
-    ControlRefusal.IDENTITY_MISMATCH -> "The runner identity no longer matches this run. Refresh before retrying cancellation."
-    ControlRefusal.STALE_INCIDENT -> "The incident changed. Refresh before trying recovery again."
-    ControlRefusal.RECOVERY_UNAVAILABLE -> "Recovery is no longer available. Refresh the incident details."
-    ControlRefusal.PREREQUISITE_UNMET -> "Confirm the listed prerequisites before applying recovery."
-    ControlRefusal.RECOVERY_IN_PROGRESS -> "Recovery is already in progress. Refresh the incident details."
-    ControlRefusal.OTHER -> "This run changed or cannot accept this action. Refresh before retrying."
-  }
+}
+
+internal fun runRefusalMessage(refusal: ControlRefusal): String = when (refusal) {
+  ControlRefusal.AGENT_REQUIRED -> "Choose an agent to start this run."
+  ControlRefusal.BRANCH_CHANGED -> "Check out this run's recorded branch before starting it again."
+  ControlRefusal.BRANCH_UNAVAILABLE ->
+    "Cannot read this run's checkout branch. Restore its checkout or check out its recorded branch before starting it again."
+  ControlRefusal.TERMINATION_INCOMPLETE -> "The runner has not stopped yet. Refresh and retry cancellation."
+  ControlRefusal.OWNERSHIP_MISMATCH -> "The runner's identity could not be confirmed. Refresh before retrying."
+  ControlRefusal.FOREIGN_HOST -> "The runner process is on another host. Refresh before retrying cancellation."
+  ControlRefusal.PID_REUSED -> "The runner PID was reused by a different process. Refresh before retrying cancellation."
+  ControlRefusal.UNINSPECTABLE -> "The runner process could not be inspected. Refresh before retrying cancellation."
+  ControlRefusal.IDENTITY_MISMATCH -> "The runner identity no longer matches this run. Refresh before retrying cancellation."
+  ControlRefusal.STALE_INCIDENT -> "The incident changed. Refresh before trying recovery again."
+  ControlRefusal.RECOVERY_UNAVAILABLE -> "Recovery is no longer available. Refresh the incident details."
+  ControlRefusal.PREREQUISITE_UNMET -> "Confirm the listed prerequisites before applying recovery."
+  ControlRefusal.RECOVERY_IN_PROGRESS -> "Recovery is already in progress. Refresh the incident details."
+  ControlRefusal.OTHER -> "This run changed or cannot accept this action. Refresh before retrying."
 }
