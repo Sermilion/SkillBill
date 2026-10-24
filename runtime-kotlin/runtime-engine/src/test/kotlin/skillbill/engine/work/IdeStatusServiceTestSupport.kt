@@ -47,6 +47,8 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
+import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -523,6 +525,7 @@ internal class TrackingDatabase(
   internal val controls: GoalRunnerControlRepository = EmptyGoalRunnerControlRepository,
   internal val statusRepository: StandalonePhaseStatusRepository? = null,
   internal val goalPage: WorkGoalSubtaskPage? = null,
+  internal val qaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository(),
 ) : DatabaseSessionFactory {
   var readCalls: Int = 0
     internal set
@@ -615,6 +618,7 @@ internal class TrackingDatabase(
         }
       override val standalonePhaseStatuses = statusRepository ?: super.standalonePhaseStatuses
       override val goalRunnerControls = controls
+      override val featureTaskQaOutcomes = qaOutcomes
       override val learnings: LearningRepository
         get() = error("Not exercised by IdeStatusServiceTest.")
       override val reviews: ReviewRepository

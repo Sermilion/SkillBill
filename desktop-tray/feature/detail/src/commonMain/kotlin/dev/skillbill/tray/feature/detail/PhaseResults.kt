@@ -30,6 +30,7 @@ import dev.skillbill.tray.core.domain.model.PhaseConclusion
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
+import dev.skillbill.tray.core.domain.model.WorkQaOutcome
 import dev.skillbill.tray.core.ui.ExpandableReason
 import dev.skillbill.tray.core.ui.formatInstant
 
@@ -101,10 +102,26 @@ private fun QaRow(qa: GoalQaResult) {
     Text("Goal QA", color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp)
     PhaseHeading(
       "QA",
-      listOf(wireLabel(qa.outcome), formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
+      listOfNotNull(wireLabel(qa.outcome), qaFailureKindLabel(qa.failureKind), formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
       verdictColor(qa.outcome),
     )
-    PhaseBody("Goal QA", qa.reason.takeUnless { qa.reportText != null && isBareQaReasonToken(it) }, null)
+    // A failure kind marks the reason as the explanation of an error, so it stays visible beside the report.
+    PhaseBody("Goal QA", qa.reason.takeUnless { qa.reportText != null && qa.failureKind == null && isBareQaReasonToken(it) }, null)
+  }
+}
+
+/** The QA row of a standalone feature run, in the style of the goal's QA row. */
+@Composable
+internal fun WorkflowQaSection(qa: WorkQaOutcome) {
+  HorizontalDivider(color = border)
+  DesignLabel("Phase results")
+  Column(Modifier.fillMaxWidth().padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    PhaseHeading(
+      "QA",
+      listOfNotNull(wireLabel(qa.outcome), qaFailureKindLabel(qa.failureKind), formatInstant(qa.recordedAt, "d MMM HH:mm")).joinToString(" · "),
+      verdictColor(qa.outcome),
+    )
+    PhaseBody("QA", qa.reason, null)
   }
 }
 

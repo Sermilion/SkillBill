@@ -16,6 +16,7 @@ import dev.skillbill.tray.core.domain.model.ReasonRestoration
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
+import dev.skillbill.tray.core.domain.model.WorkQaOutcome
 import dev.skillbill.tray.core.domain.model.standaloneExecutionOutcome
 import dev.skillbill.tray.core.ui.age
 import dev.skillbill.tray.core.ui.durationText
@@ -36,6 +37,16 @@ internal fun executionOutcomeLabel(item: WorkItem, instance: ExecutionInstance):
   } else {
     standaloneExecutionOutcome(instance.lifecycleState, instance.qaVerdict).label()
   }
+
+internal fun qaFailureKindLabel(failureKind: String?): String? = when (failureKind) {
+  "environment" -> "environment error"
+  "defect" -> "runtime defect"
+  else -> null
+}
+
+/** The recorded QA of a non-goal workflow (a standalone feature run); a goal shows its own QA result instead. */
+internal fun workflowQaOutcome(item: WorkItem): WorkQaOutcome? =
+  item.qaOutcome?.takeIf { item.family != WorkFamily.FEATURE_GOAL }
 
 internal data class DetailDuration(val label: String, val value: String, val note: String)
 

@@ -1,3 +1,14 @@
+## [2026-10-24] SKILL-443 subtask 3: IdeStatus workflow QA outcome and desktop QA could-not-complete notification
+Areas: runtime-engine work (IdeStatusProjector); runtime-ports idestatus model; runtime-infra/contracts IdeStatusSchemaValidator; orchestration/contracts ide-status-schema.yaml; desktop-tray core/domain, core/data, composeApp application, feature/detail
+- IdeStatusSnapshot gains an optional workflowQaOutcome (outcome, reason, failureKind, recordedAt). IdeStatusProjector fills it from the feature-task QA outcome row keyed by the snapshot workflowId, for goals, standalone feature runs and legacy goal children. Problem snapshots, snapshots without a workflowId and standalone-phase snapshots stay null. reusable
+- The wire map emits workflow_qa_outcome only when non-null, with reason and failure_kind omitted when null; the YAML schema declares it as an optional strict object. contract_version stays 0.6, so legacy snapshots validate unchanged.
+- Desktop: WorkItem.qaOutcome and GoalQaResult.failureKind carry the outcome; RuntimeWorkMapper returns a null outcome on an unparseable recordedAt so the board never fails. couldNotComplete means incomplete with a failure kind.
+- New qa_incomplete transition (toggle on by default). TransitionTracker keeps a qaMarker per item, fires once per new recordedAt, replaces the generic blocked and failed notifications for that observation, and keeps first-seen items as a silent baseline. notificationBody now takes the transition.
+- Detail UI: the Goal QA row and a new standalone WorkflowQaSection show a failure-kind label (environment error, runtime defect) and the reason.
+- Limits: IdeStatusProjector is about 640 lines, so a size lint may need a split. Mapper bad-timestamp path and the UI rows have no dedicated tests. Installer and runtime package parity smoke scripts left to PR CI.
+Feature flag: N/A (new qa_incomplete notification toggle defaults to on)
+Acceptance criteria: 5/5 implemented (validate ran runtime and desktop checks green)
+
 ## [2026-10-24] SKILL-443 subtask 2: run-loop QA containment for qa and qa_fix
 Areas: runtime-engine featuretask runloop core/phase/state, slot, slot/qa, slot/attempt, slot/codereview/verify; runtime-domain FeatureTaskRuntimeVerdict and phase workflow transitions
 - New qa_incomplete verdict: a qa or qa_fix completion carrying it routes to review. The qa to qa_fix and write_history to audit edges now ADVANCE on cap exhaustion instead of blocking.

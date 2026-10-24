@@ -1,3 +1,8 @@
+## [2026-10-24] Workflow QA outcome is an optional IdeStatus field with no contract bump
+Context: SKILL-443 subtask 3 must show QA could-not-complete state to the desktop through the IdeStatus contract, which installed desktops and old snapshots already read.
+Decision: workflow_qa_outcome is an optional root property emitted only when a QA outcome row exists, and contract_version stays 0.6. The desktop notification fires on a changed recordedAt, not on a status transition.
+Reason: A snapshot without the property validates exactly as before, so legacy reads need no migration path. Keying on recordedAt gives one notification per QA settlement and suppresses the generic blocked or failed alert for the same observation.
+
 ## [2026-10-24] QA containment lives in the drive loop, not in step cleanup
 Context: SKILL-443 subtask 2 must contain every qa and qa_fix failure, including runtime defects thrown from anywhere in the phase, without disturbing lease and workspace release.
 Decision: The drive loop wraps advance() and asks QaFailureContainment for an incomplete output. Non-QA phases and standalone QA policy get null and the original error propagates. QaExecutionLifecycle, QaPreparedRun and the runStep catch logic gain no new catches.

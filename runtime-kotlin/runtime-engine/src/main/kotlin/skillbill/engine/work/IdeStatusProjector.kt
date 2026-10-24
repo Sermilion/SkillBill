@@ -33,6 +33,7 @@ import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
@@ -129,13 +130,29 @@ class IdeStatusProjector(
         resolveExecutionReason(record, context.unitOfWork).text,
       )
     }
-    return when (candidate.workflowFamily) {
-      IdeStatusWorkflowFamily.FEATURE_GOAL -> projectGoal(candidate, context)
-      IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME ->
-        goalBackedRuntimeSnapshot(candidate, context) ?: projectRuntime(candidate, context)
-      IdeStatusWorkflowFamily.FEATURE_VERIFY ->
-        IdeStatusProjection(projectWorkflowFamily(candidate, context, WorkflowFamily.VERIFY), null)
-    }
+    val projection =
+      when (candidate.workflowFamily) {
+        IdeStatusWorkflowFamily.FEATURE_GOAL -> projectGoal(candidate, context)
+        IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME ->
+          goalBackedRuntimeSnapshot(candidate, context) ?: projectRuntime(candidate, context)
+        IdeStatusWorkflowFamily.FEATURE_VERIFY ->
+          IdeStatusProjection(projectWorkflowFamily(candidate, context, WorkflowFamily.VERIFY), null)
+      }
+    return projection.withWorkflowQaOutcome(context.unitOfWork)
+  }
+
+  private fun IdeStatusProjection.withWorkflowQaOutcome(unitOfWork: UnitOfWork): IdeStatusProjection {
+    val workflowId = snapshot.workflowId
+    if (snapshot.problem != null || workflowId == null) return this
+    val recorded = unitOfWork.featureTaskQaOutcomes.find(workflowId) ?: return this
+    val qaOutcome =
+      IdeStatusWorkflowQaOutcome(
+        outcome = recorded.outcome,
+        reason = recorded.reason,
+        failureKind = recorded.failureKind?.wireValue,
+        recordedAt = recorded.recordedAt,
+      )
+    return copy(snapshot = snapshot.copy(workflowQaOutcome = qaOutcome))
   }
 
   internal fun readableForSelection(

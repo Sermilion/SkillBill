@@ -12,6 +12,8 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -366,6 +368,51 @@ class IdeStatusSchemaValidatorTest {
         IdeStatusSchemaValidator.validate(badWire, "test-malformed-criterion")
       }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     }
+  }
+
+  @Test
+  fun `workflow QA outcome is optional on the wire and rejects malformed values`() {
+    val base =
+      IdeStatusSnapshot(
+        repositoryIdentity = "repo-root-realpath-v1:/repo",
+        lifecycleState = IdeStatusLifecycleState.ACTIVE,
+        currentStep = IdeStatusStep("qa", "QA"),
+        updatedAt = Instant.parse("2026-10-24T12:00:00Z"),
+        freshness = IdeStatusFreshness.FRESH,
+        summary = "QA could not complete.",
+      )
+    val absent = IdeStatusSchemaValidator.wireMap(base)
+    assertFalse("workflow_qa_outcome" in absent)
+    IdeStatusSchemaValidator.validate(absent, "test-qa-outcome-absent")
+
+    val wire =
+      IdeStatusSchemaValidator.wireMap(
+        base.copy(
+          workflowQaOutcome =
+            IdeStatusWorkflowQaOutcome(
+              StandaloneQaOutcome.INCOMPLETE,
+              "device unavailable",
+              "environment",
+              "2026-10-24T11:59:00Z",
+            ),
+        ),
+      )
+    assertEquals(
+      mapOf(
+        "outcome" to "incomplete",
+        "reason" to "device unavailable",
+        "failure_kind" to "environment",
+        "recorded_at" to "2026-10-24T11:59:00Z",
+      ),
+      wire["workflow_qa_outcome"],
+    )
+    IdeStatusSchemaValidator.validate(wire, "test-qa-outcome-present")
+
+    val badQa = mapOf("outcome" to "incomplete", "failure_kind" to "bogus", "recorded_at" to "x")
+    val badKind = wire + ("workflow_qa_outcome" to badQa)
+    assertFailsWith<SkillBillRuntimeException> {
+      IdeStatusSchemaValidator.validate(badKind, "test-qa-outcome-bad-kind")
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
