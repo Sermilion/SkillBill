@@ -79,10 +79,13 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "scope only when the plan cannot write this task without that fact. Every lookup must answer one " +
         "question this task still has open. If you cannot name that question, do not search or read. A lookup " +
         "that cannot change what the digest says about this task is waste, including a lookup made just in " +
-        "case. Read only files this task directly touches. Do not inventory a type hierarchy, a sibling " +
+        "case. Read only files this task directly touches or required producer and consumer paths. Do not " +
+        "inventory a type hierarchy, a sibling " +
         "feature, a shared client, a platform wrapper, or a dependency coordinate unless the plan needs that " +
-        "fact to specify this task. A wrapper that only forwards a call you have already read is not a new " +
-        "question. When the intake names a tracker issue and does not already carry its comments, fetch the " +
+        "fact to specify this task. Follow a wrapper when required information, setup or lifecycle authority " +
+        "must pass through it; a forwarding signature alone does not prove that transport. Otherwise a " +
+        "wrapper that only forwards a call you have already read is not a new question. When the intake " +
+        "names a tracker issue and does not already carry its comments, fetch the " +
         "issue and its comments together: request every tool schema you need in one round, then make every " +
         "tracker call in the next, alongside your first code lookups. Do not fetch the tracker again after " +
         "that. Each tool round resends this whole conversation, so issue every lookup you can name " +
@@ -92,8 +95,11 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "whole. Do not search for a file you have already opened, and do not open it again. Scope each search " +
         "to the module or directory you have already located. Do not search the repository root for a common " +
         "word. When a file is out of scope, stop. Do not open it to confirm. Do " +
-        "not read unrelated modules, docs, or tests, and do not read dependency jars, " +
-        "Gradle caches, generated sources, or library internals. When this briefing includes a boundary " +
+        "not read unrelated modules, docs, or tests. Prefer supported public dependency contracts. If they " +
+        "cannot settle a required capability, a targeted read of its pinned implementation is allowed; " +
+        "record the source and revision, and do not treat internal behavior as a supported public API. " +
+        "Do not inventory dependency jars, Gradle caches, generated sources, or library internals. " +
+        "When this briefing includes a boundary " +
         "heading list, that list is headings only, in walk " +
         "order. Walk it from the start and judge each heading from its heading text alone. Stop when the three " +
         "headings you just read are all irrelevant to this task. Then read the body of each heading you judged " +

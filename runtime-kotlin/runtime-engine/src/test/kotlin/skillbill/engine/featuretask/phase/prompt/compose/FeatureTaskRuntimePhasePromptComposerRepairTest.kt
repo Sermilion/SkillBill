@@ -60,6 +60,25 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
   }
 
   @Test
+  fun `initial and repair planning receive the same capability closure guidance within their existing scope`() {
+    val guidance =
+      javaClass.getResource(
+        "/skillbill/engine/featuretask/slot/plan/planning-capability-closure.md",
+      )!!.readText().trimEnd()
+    listOf("preplan", "plan", "plan_subtasks", "audit_plan_fix").forEach { phase ->
+      assertContains(composePromptForPhase(phase), guidance)
+    }
+    val repair =
+      composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("audit_plan_fix")) {
+        copy(currentAcceptanceCriterion = "AC-002: Preserve the wrapper API and return to the exact opening target.")
+      }
+    assertContains(repair, "AC-002: Preserve the wrapper API and return to the exact opening target.")
+    assertContains(repair, "Keep this plan on this criterion.")
+    assertContains(repair, "Do not edit files, spawn subagents, compile")
+    assertFalse(composePromptForPhase("audit_implement_fix").contains(guidance))
+  }
+
+  @Test
   fun `an incomplete-work retry carries the continuation directive and not the schema-correction directive`() {
     val prompt =
       composePhasePrompt(

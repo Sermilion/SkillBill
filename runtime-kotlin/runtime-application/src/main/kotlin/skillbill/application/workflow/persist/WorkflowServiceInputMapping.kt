@@ -37,6 +37,7 @@ import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import skillbill.workflow.engine.model.isTerminalStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -279,10 +280,11 @@ internal fun launchProjectionIfReady(
   request: ProjectionLaunchRequest,
 ) = definition.inputProjectionsByStep[request.stepId]
   ?.takeIf { declaration ->
-    declaration.requiredArtifactKeys.all { artifactKey ->
-      DurableWorkflowArtifactFamily.RUNTIME_REPOSITORY_EVIDENCE.contains(snapshot.artifacts) ||
-        snapshot.artifacts.containsKey(artifactKey)
-    }
+    !definition.isTerminalStatus(snapshot.workflowStatus) &&
+      declaration.requiredArtifactKeys.all { artifactKey ->
+        DurableWorkflowArtifactFamily.RUNTIME_REPOSITORY_EVIDENCE.contains(snapshot.artifacts) ||
+          snapshot.artifacts.containsKey(artifactKey)
+      }
   }
   ?.let {
     engine.launchProjection(

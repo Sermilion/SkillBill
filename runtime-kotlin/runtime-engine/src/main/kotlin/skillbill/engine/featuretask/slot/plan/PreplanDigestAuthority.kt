@@ -3,7 +3,12 @@ package skillbill.engine.featuretask.slot.plan
 import skillbill.engine.directive.directiveResource
 
 internal val planningFeasibilityDirective: String by lazy {
-  directiveResource("/skillbill/engine/featuretask/slot/plan/planning-feasibility.md").trimEnd()
+  directiveResource("/skillbill/engine/featuretask/slot/plan/planning-feasibility.md").trimEnd() +
+    "\n\n$planningCapabilityClosureDirective"
+}
+
+internal val planningCapabilityClosureDirective: String by lazy {
+  directiveResource("/skillbill/engine/featuretask/slot/plan/planning-capability-closure.md").trimEnd()
 }
 
 internal const val PREPLAN_DIGEST_AUTHORITY: String =

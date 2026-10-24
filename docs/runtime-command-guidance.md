@@ -215,6 +215,20 @@ parent remains unchanged, even when it has more than five criteria; its executab
 obey the limit. This is a planning instruction and sizing rule. It adds no runtime rejection or
 block reason for oversized specs.
 
+Planning traces required capabilities through their real producers, caller/wrapper
+transport and lifetime owners before treating a criterion as executable. It checks
+proposed APIs against configured project rules and covers calls without optional
+setup. Shared prerequisites must be reconciled across the affected criteria before
+subtask boundaries are fixed. Exact signatures and caller integration are separate
+compatibility obligations. If either needs an operator amendment, planning reports
+the complete known affected scope and a supported alternative together.
+
+Audit repair uses the same capability check before requesting an amendment. Its
+read-only impact inspection can identify the shared conflict in sibling criteria,
+but execution and acceptance stay scoped to the runtime-selected criterion. An
+operator retry does not itself amend a contract. Existing decisions apply only to
+the scope they authorize.
+
 An existing `spec.md` without a manifest is preparation intake. The full run reads its requirements and writes the manifest and executable subtask specs in the same folder, preserving the parent file and design assets. File paths, folder paths, bundle keys, and issue keys resolve to that existing bundle. Preparation uses the current branch as its base. Unrelated manifest bundles do not participate in its nested-decomposition check.
 
 Standalone phases and operations are operator tools. Agents may invoke
