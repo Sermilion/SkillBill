@@ -1,3 +1,8 @@
+## [2026-10-24] Check capability acquisition and transport before planning readiness
+Context: A modal feature required exact parent focus restoration while its callers and compatibility wrappers supplied no opening reference. Separate dialog and sheet amendments exposed the same missing integration in successive repairs. Preplan also discouraged wrapper and dependency reads needed to establish feasibility.
+Decision: Share one capability-closure directive across preplan, bundle planning, subtask planning and audit repair planning. Trace required input acquisition, caller transport and lifecycle ownership, check proposed signatures against configured project rules, and report a shared contract conflict's complete known impact before requesting an amendment. Permit targeted pinned-dependency reads when public contracts cannot answer that question.
+Reason: A local helper cannot recover facts no caller captured. Read-only impact inspection prevents narrow amendments from leaving known sibling conflicts, while preserving criterion-scoped repair, immutable specs and operator authority. Prompt delivery has a regression check; actual planning decisions require behavioral evaluation.
+
 ## [2026-10-22] Goal block aliases carry generation, attempt and child cause separately
 Context: SKILL-435 goal incidents first used a scalar generation-first alias, which made generation 2 / attempt 1 collide with generation 2 / attempt 2.
 Decision: The goal PHASE_TRANSITION alias holds accepted generation, attempt and causal child token as separate components, with the literal unavailable or none instead of invented defaults. Historical tokens and aliases stay immutable; normalization adds a nonconflicting canonical alias.

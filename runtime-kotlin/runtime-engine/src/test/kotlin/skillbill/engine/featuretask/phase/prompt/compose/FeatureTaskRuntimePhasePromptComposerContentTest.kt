@@ -331,7 +331,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplan, "A lookup is in scope only when the plan cannot write this task without that fact")
     assertContains(preplan, "including a lookup made just in case")
     assertContains(preplan, "When a file is out of scope, stop. Do not open it to confirm")
-    assertContains(preplan, "Read only files this task directly touches")
+    assertContains(preplan, "Read only files this task directly touches or required producer and consumer paths")
     assertContains(preplan, "fetch the issue and its comments together")
     assertContains(preplan, "Do not fetch the tracker again after that")
     assertContains(preplan, "issue every lookup you can name now in one round")
@@ -339,8 +339,12 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplan, "Open each file once and read every part this task needs in that read")
     assertContains(preplan, "Do not search for a file you have already opened, and do not open it again")
     assertContains(preplan, "Do not search the repository root for a common word")
-    assertContains(preplan, "A wrapper that only forwards a call you have already read is not a new question")
-    assertContains(preplan, "do not read dependency jars, Gradle caches")
+    assertContains(
+      preplan,
+      "Follow a wrapper when required information, setup or lifecycle authority must pass through it",
+    )
+    assertContains(preplan, "a targeted read of its pinned implementation is allowed")
+    assertContains(preplan, "do not treat internal behavior as a supported public API")
     assertContains(preplan, "Stop when the three headings you just read are all irrelevant to this task")
     assertContains(preplan, "The heading list is complete")
     assertContains(preplan, "Do not grep, search, or list a history or decisions file")

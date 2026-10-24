@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.audit.planning
 
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.slot.plan.planningCapabilityClosureDirective
 
 internal object AuditPlanFixPromptSections {
   const val DIRECTIVE: String =
@@ -56,6 +57,7 @@ internal object AuditPlanFixPromptSections {
                 "Do not plan a broad repair; report the missing runtime context."
             )
           ) + priorRepairFailures?.let { "\n\n$it" }.orEmpty(),
+      stepContext = planningCapabilityClosureDirective,
       valueContent =
         "Write the repair plan as prose in execution order. Explain each reported production gap, " +
           "the production paths involved, the changes needed, and any dependencies between fixes. " +
