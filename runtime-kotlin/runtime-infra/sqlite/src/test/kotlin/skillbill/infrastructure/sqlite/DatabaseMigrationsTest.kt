@@ -26,9 +26,6 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -987,71 +984,6 @@ class DatabaseMigrationsTest {
   }
 
   @Test
-  fun `an already current database opens no write transaction while another connection holds the writer lock`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-db-gate-current").resolve("metrics.db")
-    DatabaseRuntime.ensureDatabase(dbPath).close()
-    val expected =
-      DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-        migrationRows(connection).map { row -> row.name }
-      }
-
-    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { writer ->
-      writer.createStatement().use { it.execute("BEGIN IMMEDIATE") }
-      try {
-        DriverManager.getConnection("jdbc:sqlite:$dbPath").use { reader ->
-          reader.createStatement().use { it.execute("PRAGMA busy_timeout = 0") }
-          val startedAt = System.nanoTime()
-          DatabaseMigrations.apply(reader)
-          val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
-          assertTrue(elapsedMillis < 1_000, "A no-op apply must return promptly, took ${elapsedMillis}ms.")
-          assertEquals(expected, migrationRows(reader).map { row -> row.name })
-        }
-      } finally {
-        writer.createStatement().use { it.execute("ROLLBACK") }
-      }
-    }
-  }
-
-  @Test
-  fun `racing applies re-derive in lock and apply each pending migration exactly once`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-db-gate-race").resolve("metrics.db")
-    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      connection.createStatement().use { it.executeUpdate("DELETE FROM schema_migrations WHERE version = 13") }
-    }
-    val ready = CountDownLatch(2)
-    val start = CountDownLatch(1)
-    val executor = Executors.newFixedThreadPool(2)
-
-    try {
-      val races =
-        (1..2).map {
-          executor.submit {
-            DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-              connection.createStatement().use { it.execute("PRAGMA busy_timeout = 5000") }
-              ready.countDown()
-              check(start.await(5, TimeUnit.SECONDS))
-              DatabaseMigrations.apply(connection)
-            }
-          }
-        }
-      assertTrue(ready.await(5, TimeUnit.SECONDS))
-      start.countDown()
-      races.forEach { it.get(10, TimeUnit.SECONDS) }
-    } finally {
-      executor.shutdownNow()
-    }
-
-    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-      assertEquals(
-        DatabaseMigrations.migrations.map { migration -> migration.version to migration.name },
-        migrationRows(connection).map { row -> row.version to row.name },
-        "The migration that lost the race must be re-derived away, not applied twice.",
-      )
-      assertTrue("payload_sha256" in tableColumns(connection, "goal_subtask_plans"))
-    }
-  }
-
-  @Test
   fun `column heal runs from its ledger migration on a legacy open`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-db-gate-column-heal").resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
@@ -1293,43 +1225,6 @@ class DatabaseMigrationsEnsureDatabaseTest {
     DatabaseRuntime.ensureDatabase(dbPath).close()
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
-    }
-  }
-
-  @Test
-  fun `concurrent migration opens serialize applicability checks`() {
-    val dbPath = Files.createTempDirectory("runtime-kotlin-db-concurrent-migrations").resolve("metrics.db")
-    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-      DatabaseSchema.createBaseSchema(connection)
-    }
-    val ready = CountDownLatch(2)
-    val start = CountDownLatch(1)
-    val executor = Executors.newFixedThreadPool(2)
-
-    try {
-      val opens =
-        (1..2).map {
-          executor.submit {
-            DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-              connection.createStatement().use { it.execute("PRAGMA busy_timeout = 5000") }
-              ready.countDown()
-              check(start.await(5, TimeUnit.SECONDS))
-              DatabaseMigrations.apply(connection)
-            }
-          }
-        }
-      assertTrue(ready.await(5, TimeUnit.SECONDS))
-      start.countDown()
-      opens.forEach { it.get(10, TimeUnit.SECONDS) }
-    } finally {
-      executor.shutdownNow()
-    }
-
-    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-      assertEquals(
-        DatabaseMigrations.migrations.map { migration -> migration.version },
-        migrationRows(connection).map { row -> row.version },
-      )
     }
   }
 

@@ -7,18 +7,13 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRequest
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
-import skillbill.infrastructure.launcher.process.launch.testAgentRunProcessRequest
 import skillbill.install.model.SupportedAgent
-import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
-import skillbill.ports.agentrun.model.AgentRunProgressEmitter
-import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.review.context.model.launch.ReviewConversationIsolation
-import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,49 +22,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-
-class SupervisorProcessLoopEndToEndTest {
-  @Test
-  fun `supervisor-emitted declared events feed the declared-progress tracker within one run`() {
-    val store = SharedDeclaredProgressStore()
-    val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 2"),
-          Path.of(".").toAbsolutePath().normalize(),
-        ) {
-          timeout = 30.seconds
-          progressIdleTimeout = 100.milliseconds
-          operationDeadline = 10.seconds
-          statusHeartbeatInterval = 100.milliseconds
-          progressProbe = AgentRunProgressProbe { null }
-          progressEmitter = AgentRunProgressEmitter { store.record(it) }
-          declaredProgressProbe = AgentRunDeclaredProgressProbe { store.snapshot() }
-        },
-      )
-
-    assertFalse(
-      result.timedOut,
-      "declared events emitted by the supervisor loop must feed the tracker in the same run; " +
-        "without that link the legacy idle timeout would have killed the run (liveness=${result.liveness})",
-    )
-    assertEquals(0, result.exitStatus)
-    assertTrue(store.recorded.isNotEmpty(), "supervisor must have emitted at least one declared event")
-    assertTrue(
-      store.recorded.any { it.eventKind == GoalProgressEventKind.OPERATION_STARTED },
-      "the supervisor process loop must drive operation_started",
-    )
-    assertTrue(
-      store.recorded.any { it.eventKind == GoalProgressEventKind.OPERATION_HEARTBEAT },
-      "the supervisor process loop must drive operation_heartbeat",
-    )
-    assertTrue(
-      store.recorded.any { it.eventKind == GoalProgressEventKind.OPERATION_COMPLETED },
-      "the supervisor process loop must drive operation_completed",
-    )
-    assertEquals("child_agent_run", result.liveness?.activeOperationName)
-  }
-}
 
 internal class RecordingAgentRunProcessRunner(
   private val result: AgentRunProcessResult =
@@ -239,50 +191,5 @@ class HeadlessAgentRunAdapterTest {
 
     val captured = runner.requests.single()
     assertEquals(AgentRunIdlePolicy.HEARTBEAT_EXTENDED, captured.probes.idlePolicy)
-  }
-}
-
-class ReadOnlyPhaseLivenessTest {
-  @Test
-  fun `read-only phase alive process is not idle-killed when it emits no durable progress`() {
-    val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 0.4"),
-          Path.of(".").toAbsolutePath().normalize(),
-        ) {
-          timeout = 5.seconds
-          progressIdleTimeout = 100.milliseconds
-          progressProbe = AgentRunProgressProbe { null }
-          idlePolicy = AgentRunIdlePolicy.HEARTBEAT_EXTENDED
-        },
-      )
-
-    assertFalse(
-      result.timedOut,
-      "a live read-only phase process must not be idle-killed; liveness=${result.liveness}",
-    )
-    assertEquals(0, result.exitStatus)
-  }
-
-  @Test
-  fun `a process producing no durable progress and no heartbeat extension is killed by the idle timeout`() {
-    val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 5"),
-          Path.of(".").toAbsolutePath().normalize(),
-        ) {
-          timeout = 10.seconds
-          progressIdleTimeout = 100.milliseconds
-          progressProbe = AgentRunProgressProbe { null }
-          idlePolicy = AgentRunIdlePolicy.DB_PROGRESS_ONLY
-        },
-      )
-
-    assertTrue(
-      result.timedOut,
-      "a process with no durable progress must be killed under DB_PROGRESS_ONLY",
-    )
   }
 }

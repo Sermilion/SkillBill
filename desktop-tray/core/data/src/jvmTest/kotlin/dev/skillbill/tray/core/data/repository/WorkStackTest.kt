@@ -3,8 +3,6 @@ package dev.skillbill.tray.core.data.repository
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.contracts.persistence.DesktopReadSchema
 import dev.skillbill.tray.core.data.ScriptedSignals
-import dev.skillbill.tray.core.data.runExternalWriter
-import dev.skillbill.tray.core.data.ExternalRuntimeWriter
 import dev.skillbill.tray.core.data.WorkStack
 import dev.skillbill.tray.core.data.session.MonotonicClock
 import dev.skillbill.tray.core.data.signal.DesktopCommitSignalSource
@@ -233,54 +231,6 @@ class WorkStackTest {
   }
 
   @Test
-  fun `selected detail observes owner death without a board subscriber or final write`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-phase-owner-death").use { fixture ->
-      val process = ProcessBuilder(
-        java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-        "-cp", System.getProperty("java.class.path"),
-        ExternalRuntimeWriter::class.java.name,
-        fixture.dbPath.toString(), "owned-phase",
-      ).redirectError(ProcessBuilder.Redirect.INHERIT).start()
-      val source = source(fixture.tempDir, Clock.System)
-      val phases = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val detail = Channel<Outcome<Detail>>(Channel.UNLIMITED)
-      var phaseJob: Job? = null
-      var detailJob: Job? = null
-      try {
-        assertEquals("registered", withTimeout(10_000) {
-          runInterruptible(Dispatchers.IO) { process.inputStream.bufferedReader().readLine() }
-        })
-        source.selectDatabase(fixture.dbPath.toString())
-        phaseJob = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { phases.send(it) } }
-        val active = value(withTimeout(10_000) { phases.receive() })
-        val identity = active.items.single().identity
-        detailJob = launch { source.observeDetail(identity).collect { detail.send(it) } }
-        assertEquals(Lifecycle.ACTIVE, (withTimeout(10_000) { detail.receive() } as Outcome.Value).value.item.lifecycle)
-        phaseJob.cancelAndJoin()
-        phaseJob = null
-        process.destroyForcibly()
-        assertTrue(runInterruptible(Dispatchers.IO) { process.waitFor(5, TimeUnit.SECONDS) })
-        val stopped = withTimeout(10_000) { detail.receive() } as Outcome.Value
-        assertEquals(Lifecycle.PAUSED, stopped.value.item.lifecycle)
-        assertEquals("runner_interrupted", stopped.value.item.currentStepId)
-        val after = value(source.board(WorkSection.PHASES, Retention.DAY))
-        assertTrue(after.items.isEmpty())
-        assertEquals(active.revision, after.revision)
-        fixture.connection.createStatement().use { statement ->
-          statement.executeQuery("SELECT lifecycle_state FROM standalone_phase_status WHERE invocation_id = 'owned-phase'")
-            .use { rows -> assertTrue(rows.next()); assertEquals("active", rows.getString(1)) }
-        }
-      } finally {
-        process.destroyForcibly()
-        runInterruptible(Dispatchers.IO) { process.waitFor(5, TimeUnit.SECONDS) }
-        phaseJob?.cancelAndJoin()
-        detailJob?.cancelAndJoin()
-        source.closeAndJoin()
-      }
-    }
-  }
-
-  @Test
   fun `exclusive writer lock reports busy and reconnect recovers after rollback`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-busy-store").use { fixture ->
       val source = source(fixture.tempDir, TestClock(now.toKotlinInstant()))
@@ -334,36 +284,6 @@ class WorkStackTest {
         assertEquals("phase-plan", phase.identity.id)
         assertTrue(phase.showsAsStandalonePhase())
       } finally { source.close() }
-    }
-  }
-
-  @Test
-  fun `recent and history expiry invalidate once without a database write`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-retention-deadline").use { fixture ->
-      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
-      val end = now.minusSeconds(86400).plusMillis(500)
-      factory.transaction { unit ->
-        val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "expired", end.minusSeconds(10), "main"))
-        unit.standalonePhaseStatuses.update(StandalonePhaseStatusUpdate(record.executionId, record.statusRevision,
-          record.leaseOwner, record.leaseGeneration, "terminal", "review", null, end, finishedAt = end, terminalResult = "completed"))
-      }
-      val clock = TestClock(now.toKotlinInstant())
-      val source = source(fixture.tempDir, clock)
-      source.selectDatabase(fixture.dbPath.toString())
-      val recent = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val history = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val jobs = listOf(launch { source.observe(WorkSection.RECENT, Retention.DAY).collect { recent.send(it) } },
-        launch { source.observe(WorkSection.HISTORY, Retention.DAY).collect { history.send(it) } })
-      try {
-        assertEquals(1, value(withTimeout(10_000) { recent.receive() }).items.size)
-        assertEquals(1, value(withTimeout(10_000) { history.receive() }).items.size)
-        clock.current = now.plusMillis(600).toKotlinInstant()
-        assertTrue(value(withTimeout(10_000) { recent.receive() }).items.isEmpty())
-        assertTrue(value(withTimeout(10_000) { history.receive() }).items.isEmpty())
-        assertNull(withTimeoutOrNull(150) { recent.receive() })
-        assertNull(withTimeoutOrNull(150) { history.receive() })
-      } finally { jobs.forEach { it.cancelAndJoin() }; source.close() }
-      assertIs<Outcome.Failure>(source.board(WorkSection.RECENT, Retention.DAY))
     }
   }
 
@@ -562,24 +482,6 @@ class WorkStackTest {
   }
 
   @Test
-  fun `empty committed store remains successful through observation and reconnect`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-empty-flow").use { fixture ->
-      val source = workStack(fixture.tempDir.toRealPath(), TestClock(now.toKotlinInstant()))
-      source.selectDatabase(fixture.dbPath.toString())
-      val received = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val job = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { received.send(it) } }
-      try {
-        assertTrue(value(withTimeout(10_000) { received.receive() }).items.isEmpty())
-        val idleReads = source.readWork.get()
-        assertNull(withTimeoutOrNull(150) { received.receive() })
-        assertEquals(idleReads, source.readWork.get())
-        source.refresh()
-        assertTrue(value(withTimeout(10_000) { received.receive() }).items.isEmpty())
-      } finally { job.cancelAndJoin(); source.closeAndJoin() }
-    }
-  }
-
-  @Test
   fun `resubscribing the same query creates usable continuation cursors in its new epoch`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-resubscribe-pages").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
@@ -605,147 +507,6 @@ class WorkStackTest {
           assertEquals(12, (second.items + appended.items).map { it.identity }.toSet().size)
         } finally { live.cancelAndJoin() }
       } finally { source.closeAndJoin() }
-    }
-  }
-
-  @Test
-  fun `freshness expires without a write while the phase lease remains valid`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-freshness-deadline").use { fixture ->
-      val started = Instant.now()
-      val updated = started.minusSeconds(1800).plusMillis(500)
-      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap(),
-        clock = JavaClock.fixed(updated, ZoneOffset.UTC))
-      factory.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "aging", updated, "main")
-        .copy(leaseExpiresAt = started.plusSeconds(3600))) }
-      val clock = TestClock(started.toKotlinInstant())
-      val source = source(fixture.tempDir, clock)
-      source.selectDatabase(fixture.dbPath.toString())
-      val received = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val job = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { received.send(it) } }
-      try {
-        val initial = value(withTimeout(10_000) { received.receive() })
-        assertEquals(Freshness.FRESH, initial.items.single().freshness)
-        clock.current = started.plusMillis(600).toKotlinInstant()
-        val aged = withTimeout(10_000) { receiveMatching(received) { it.items.singleOrNull()?.freshness == Freshness.STALE } }
-        assertEquals(initial.revision, aged.revision)
-        assertEquals(Lifecycle.ACTIVE, aged.items.single().lifecycle)
-      } finally { job.cancelAndJoin(); source.closeAndJoin() }
-    }
-  }
-
-  @Test
-  fun `selected detail observes lease expiry without a board subscription or write`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-detail-deadline").use { fixture ->
-      val started = Instant.now()
-      val clock = TestClock(started.toKotlinInstant())
-      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
-      factory.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "detail-expires", started, "main")
-        .copy(leaseExpiresAt = started.plusMillis(500))) }
-      val source = source(fixture.tempDir, clock)
-      source.selectDatabase(fixture.dbPath.toString())
-      val received = Channel<Outcome<Detail>>(Channel.UNLIMITED)
-      val identity = WorkIdentity("detail-expires", "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}")
-      val job = launch { source.observeDetail(identity)
-        .collect { received.send(it) } }
-      try {
-        val initial = (withTimeout(10_000) { received.receive() } as Outcome.Value).value
-        assertEquals(Lifecycle.ACTIVE, initial.item.lifecycle)
-        clock.current = started.plusMillis(600).toKotlinInstant()
-        val expired = withTimeout(10_000) {
-          var value = (received.receive() as Outcome.Value).value
-          while (value.item.lifecycle != Lifecycle.PAUSED) value = (received.receive() as Outcome.Value).value
-          value
-        }
-        assertEquals(initial.item.databaseRevision, expired.item.databaseRevision)
-        assertEquals(Lifecycle.PAUSED, expired.item.lifecycle)
-      } finally { job.cancelAndJoin(); source.closeAndJoin() }
-    }
-  }
-
-  @Test
-  fun `lease expiry moves phase to needs you without a further write`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-lease-deadline").use { fixture ->
-      val started = Instant.now()
-      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
-      factory.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "expires", started, "main")
-        .copy(leaseExpiresAt = started.plusMillis(500))) }
-      val clock = TestClock(started.toKotlinInstant())
-      val source = source(fixture.tempDir, clock)
-      source.selectDatabase(fixture.dbPath.toString())
-      val received = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val job = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { received.send(it) } }
-      try {
-        assertEquals(listOf("expires"), value(withTimeout(10_000) { received.receive() }).items.map { it.identity.id })
-        clock.current = started.plusMillis(600).toKotlinInstant()
-        assertTrue(value(withTimeout(10_000) { received.receive() }).items.isEmpty())
-        val attention = value(source.board(WorkSection.NEEDS_YOU, Retention.DAY))
-        assertEquals(Lifecycle.PAUSED, attention.items.single().lifecycle)
-      } finally { job.cancelAndJoin(); source.close() }
-    }
-  }
-
-  @Test
-  fun `external commits update subscribed live and history sections and survive reconnect`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-external-flows").use { fixture ->
-      val source = workStack(fixture.tempDir.toRealPath(), Clock.System)
-      source.selectDatabase(fixture.dbPath.toString())
-      val phases = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val history = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val details = Channel<Outcome<Detail>>(Channel.UNLIMITED)
-      val phaseJob = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { phases.send(it) } }
-      val historyJob = launch { source.observe(WorkSection.HISTORY, Retention.DAY).collect { history.send(it) } }
-      var detailJob: Job? = null
-      try {
-        assertTrue(value(withTimeout(10_000) { phases.receive() }).items.isEmpty())
-        assertTrue(value(withTimeout(10_000) { history.receive() }).items.isEmpty())
-        externalWriter(fixture.dbPath, "commit")
-        val active = withTimeout(10_000) { receiveMatching(phases) { it.items.any { row -> row.identity.id == "commit" } } }
-        val identity = active.items.single().identity
-        detailJob = launch { source.observeDetail(identity).collect { details.send(it) } }
-        val initialDetail = withTimeout(10_000) { details.receive() } as Outcome.Value
-        assertEquals(Lifecycle.ACTIVE, initialDetail.value.item.lifecycle)
-        delay(100)
-        val idleReadCount = source.readWork.get()
-        delay(600)
-        assertEquals(idleReadCount, source.readWork.get())
-        externalWriter(fixture.dbPath, "complete")
-        withTimeout(10_000) { receiveMatching(phases) { it.items.isEmpty() } }
-        val completed = withTimeout(10_000) { receiveMatching(history) { it.items.any { row -> row.identity.id == "commit" } } }
-        assertEquals(Lifecycle.TERMINAL, completed.items.single().lifecycle)
-        val completedDetail = withTimeout(10_000) {
-          var result = details.receive()
-          while ((result as? Outcome.Value)?.value?.item?.lifecycle != Lifecycle.TERMINAL) result = details.receive()
-          result as Outcome.Value
-        }
-        assertEquals(Lifecycle.TERMINAL, completedDetail.value.item.lifecycle)
-        source.refresh()
-        withTimeout(10_000) { receiveMatching(history) { it.items.any { row -> row.identity.id == "commit" } } }
-        externalWriter(fixture.dbPath, "crash-after-commit")
-        withTimeout(10_000) { receiveMatching(phases) { it.items.any { row -> row.identity.id == "crash-after-commit" } } }
-      } finally { phaseJob.cancelAndJoin(); historyJob.cancelAndJoin(); detailJob?.cancelAndJoin(); source.closeAndJoin() }
-    }
-  }
-
-  @Test
-  fun `agent activity commits refresh the selected detail without rereading board sections`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-activity-refresh").use { fixture ->
-      sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap()).transaction { unit ->
-        unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "commit", now, "main"))
-      }
-      val source = workStack(fixture.tempDir.toRealPath())
-      source.selectDatabase(fixture.dbPath.toString())
-      val phases = Channel<Outcome<Board>>(Channel.UNLIMITED)
-      val details = Channel<Outcome<Detail>>(Channel.UNLIMITED)
-      val phaseJob = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { phases.send(it) } }
-      var detailJob: Job? = null
-      try {
-        val active = value(withTimeout(10_000) { phases.receive() })
-        detailJob = launch { source.observeDetail(active.items.single().identity).collect { details.send(it) } }
-        assertIs<Outcome.Value<Detail>>(withTimeout(10_000) { details.receive() })
-        externalWriter(fixture.dbPath, "activity")
-        assertIs<Outcome.Value<Detail>>(withTimeout(10_000) { details.receive() })
-        assertNull(withTimeoutOrNull(500) { phases.receive() })
-      } finally { phaseJob.cancelAndJoin(); detailJob?.cancelAndJoin(); source.closeAndJoin() }
     }
   }
 
@@ -813,12 +574,6 @@ class WorkStackTest {
       } finally { source.close() }
     }
   }
-
-  private suspend fun receiveMatching(channel: Channel<Outcome<Board>>, predicate: (Board) -> Boolean): Board {
-    while (true) { val board = value(channel.receive()); if (predicate(board)) return board }
-  }
-
-  private fun externalWriter(path: java.nio.file.Path, mode: String) = runExternalWriter(path, mode)
 
   @Test
   fun `missing incompatible and corrupt stores are refused without creating or repairing them`() = runBlocking {

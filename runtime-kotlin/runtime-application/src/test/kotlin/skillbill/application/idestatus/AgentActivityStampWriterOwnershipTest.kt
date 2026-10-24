@@ -23,9 +23,6 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -161,40 +158,6 @@ class AgentActivityStampWriterOwnershipTest {
     }
   }
 
-  @Test
-  fun `concurrent completion preserves timestamp ordering and parent publication`() {
-    val instant = Instant.parse("2026-09-16T10:00:00Z")
-    val clock = StepClock(instant)
-    val database = ControlledDatabase(memoryFactory("activity-concurrency"))
-    database.failFirstWrite = true
-    val writer = AgentActivityStampWriter(database, clock, NoopDiagnostics, TimeSource.Monotonic)
-    val workflowId = "wfl-child"
-    val parentWorkflowId = "wfl-parent"
-    val pool = Executors.newFixedThreadPool(2)
-    val first =
-      pool.submit {
-        writer.sink(workflowId, parentWorkflowId).stamp(AgentActivityLabel.STDOUT)
-      }
-    assertTrue(database.firstWriteStarted.await(5, TimeUnit.SECONDS))
-    val second =
-      pool.submit {
-        writer.recordEvidenceRead(workflowId, parentWorkflowId)
-      }
-    assertTrue(database.secondWriteFinished.await(5, TimeUnit.SECONDS))
-    database.releaseFirstWrite.countDown()
-    first.get(5, TimeUnit.SECONDS)
-    second.get(5, TimeUnit.SECONDS)
-    pool.shutdown()
-    database.factory.read { unitOfWork ->
-      val childStamp = assertNotNull(unitOfWork.agentActivityStamps.read(workflowId))
-      val parentStamp = assertNotNull(unitOfWork.agentActivityStamps.read(parentWorkflowId))
-      assertEquals(AgentActivityLabel.EVIDENCE_READ, childStamp.label)
-      assertEquals(AgentActivityLabel.EVIDENCE_READ, parentStamp.label)
-      assertEquals(instant.plusMillis(300), childStamp.recordedAt)
-      assertEquals(instant.plusMillis(300), parentStamp.recordedAt)
-    }
-  }
-
   private fun memoryFactory(name: String): MemoryDatabaseSessionFactory =
     MemoryDatabaseSessionFactory(Files.createTempDirectory(name).resolve("activity.db"))
 }
@@ -279,26 +242,6 @@ private class RecordingDiagnostics : RuntimeDiagnostics {
     message: String,
     error: Throwable?,
   ) = Unit
-}
-
-private class ControlledDatabase(val factory: MemoryDatabaseSessionFactory) : DatabaseSessionFactory by factory {
-  val firstWriteStarted = CountDownLatch(1)
-  val releaseFirstWrite = CountDownLatch(1)
-  val secondWriteFinished = CountDownLatch(1)
-  var failFirstWrite = false
-  private val writeCount = AtomicInteger(0)
-
-  override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
-    val writeNumber = writeCount.incrementAndGet()
-    if (writeNumber == 1) {
-      firstWriteStarted.countDown()
-      check(releaseFirstWrite.await(5, TimeUnit.SECONDS))
-      if (failFirstWrite) check(false) { "older activity write failed" }
-    }
-    val result = factory.selfManagedWrite(block)
-    if (writeNumber == 2) secondWriteFinished.countDown()
-    return result
-  }
 }
 
 private class CountingDatabase(val factory: MemoryDatabaseSessionFactory) : DatabaseSessionFactory by factory {

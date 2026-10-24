@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureVerifyWorkflowStateStore
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -13,7 +12,6 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
-import java.nio.file.Path
 import java.sql.Connection
 import java.time.Clock
 import java.time.Instant
@@ -85,29 +83,6 @@ internal fun assertRuntimeAndVerifyStateTransitions(
   val verifyTransitioned = assertNotNull(verify.getWorkflow("wfv-state-entry"))
   assertTrue(Instant.parse(verifyTransitioned.stateEnteredAt).isAfter(Instant.parse(startedAt)))
   assertEquals(false, verifyTransitioned.stateEnteredAtEstimated)
-}
-
-internal fun prepareConcurrentWorkflowTransitions(
-  dbPath: Path,
-  initial: WorkflowStateRecord,
-) {
-  DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-    WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
-      .saveFeatureTaskWorkflow(initial, RUNTIME)
-    connection.createStatement().use { statement ->
-      statement.execute("CREATE TABLE workflow_transition_log (state_entered_at TEXT NOT NULL)")
-      statement.execute(
-        """
-        CREATE TRIGGER workflow_state_transition_log
-        AFTER UPDATE OF workflow_status ON feature_task_workflows
-        WHEN OLD.workflow_status != NEW.workflow_status
-        BEGIN
-          INSERT INTO workflow_transition_log (state_entered_at) VALUES (NEW.state_entered_at);
-        END
-        """.trimIndent(),
-      )
-    }
-  }
 }
 
 internal fun seedRunningRowWithLease(

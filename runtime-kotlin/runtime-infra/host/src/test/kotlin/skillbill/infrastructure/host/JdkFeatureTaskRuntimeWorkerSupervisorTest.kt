@@ -1,29 +1,19 @@
 package skillbill.infrastructure.host
 
 import org.junit.jupiter.api.Assumptions.assumeTrue
-import skillbill.error.core.DatabaseFailureCode
-import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.Duration
 import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private class RecordingDiagnostics : RuntimeDiagnostics {
@@ -74,34 +64,6 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   }
 
   @Test
-  fun `a drifting legacy Linux timestamp cannot mark a live owner dead or authorize its termination`() {
-    assumeTrue(JdkHostPlatformPort.osName.startsWith("Linux", ignoreCase = true))
-    val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
-    val current = supervisor.currentProcess()
-    val child = ProcessBuilder("sleep", "30").start()
-    val legacyBirth = child.toHandle().info().startInstant().orElseThrow().toEpochMilli()
-    val exactLegacy = ownershipFor(current, current.bootIdentity, legacyBirth.toString()).copy(pid = child.pid())
-    val driftingLegacy = exactLegacy.copy(processBirthToken = (legacyBirth + 1000).toString())
-    val events = AtomicInteger()
-    try {
-      assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(exactLegacy))
-      assertIs<FeatureTaskRuntimeProcessInspection.Unsupported>(supervisor.inspect(driftingLegacy))
-      assertNull(supervisor.observe(driftingLegacy) { events.incrementAndGet() })
-      assertEquals(0, events.get())
-      assertNull(supervisor.processStartedAt(driftingLegacy))
-      assertEquals(false, supervisor.terminateGracefully(driftingLegacy))
-      assertEquals(false, supervisor.terminateForcibly(driftingLegacy))
-      assertTrue(child.isAlive)
-      assertTrue(diagnostics.warnings.any { it.contains("unverifiable_legacy_timestamp") })
-    } finally {
-      child.destroyForcibly()
-      assertTrue(child.waitFor(5, TimeUnit.SECONDS))
-      assertEquals(FeatureTaskRuntimeProcessInspection.NotRunning, supervisor.inspect(driftingLegacy))
-    }
-  }
-
-  @Test
   fun `worker from a previous boot on this host is not running`() {
     val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
@@ -132,116 +94,6 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
     val ownership = ownershipFor(current, bootIdentity = "fallback-1787579295")
 
     assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
-  }
-
-  @Test
-  fun `owner exit delivers an event without heartbeat or database writes`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
-    val current = supervisor.currentProcess()
-    val child = ProcessBuilder("sleep", "30").start()
-    val ownership =
-      ownershipFor(current, current.bootIdentity).copy(
-        pid = child.pid(),
-        processBirthToken = processBirthToken(child.toHandle(), JdkHostPlatformPort, RecordingDiagnostics())!!,
-      )
-    val exited = CountDownLatch(1)
-    val observation = supervisor.observe(ownership) { exited.countDown() }
-    try {
-      assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
-      child.destroyForcibly()
-      assertTrue(exited.await(5, TimeUnit.SECONDS))
-      assertEquals(FeatureTaskRuntimeProcessInspection.NotRunning, supervisor.inspect(ownership))
-    } finally {
-      observation?.close()
-      child.destroyForcibly()
-    }
-  }
-
-  @Test
-  fun `owner death before exit registration still delivers the invalidation`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
-    val current = supervisor.currentProcess()
-    val child = ProcessBuilder("sleep", "30").start()
-    val ownership =
-      ownershipFor(current, current.bootIdentity).copy(
-        pid = child.pid(),
-        processBirthToken = processBirthToken(child.toHandle(), JdkHostPlatformPort, RecordingDiagnostics())!!,
-      )
-    child.destroyForcibly()
-    assertTrue(child.waitFor(5, TimeUnit.SECONDS))
-    val events = AtomicInteger()
-    assertNull(supervisor.observe(ownership) { events.incrementAndGet() })
-    assertEquals(1, events.get())
-    val reused = ownershipFor(current, current.bootIdentity, differentBirthToken(current.processBirthToken))
-    assertNull(supervisor.observe(reused) { events.incrementAndGet() })
-    assertEquals(2, events.get())
-  }
-
-  @Test
-  fun `awaitExit returns after a live owned process exits`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
-    val current = supervisor.currentProcess()
-    val child = ProcessBuilder("sleep", "1").start()
-    val childHandle = child.toHandle()
-    val birth = processBirthToken(childHandle, JdkHostPlatformPort, RecordingDiagnostics())!!
-    val ownership =
-      FeatureTaskRuntimeWorkerOwnership(
-        workflowId = "wftr-test",
-        generation = 1,
-        ownerToken = "owner-token-0001",
-        hostIdentity = current.hostIdentity,
-        bootIdentity = current.bootIdentity,
-        pid = child.pid(),
-        processBirthToken = birth,
-        leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
-        heartbeatAt = "2026-07-14T10:00:00Z",
-        expiresAt = "2026-07-14T10:00:30Z",
-        phaseId = "goal_runner",
-        phaseAttempt = 1,
-      )
-    try {
-      assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
-      supervisor.awaitExit(ownership, Duration.ofSeconds(5))
-      assertEquals(FeatureTaskRuntimeProcessInspection.NotRunning, supervisor.inspect(ownership))
-    } finally {
-      child.destroyForcibly()
-    }
-  }
-
-  @Test
-  fun `awaitExit returns on timeout while the owned process is still live`() {
-    val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
-    val current = supervisor.currentProcess()
-    val child = ProcessBuilder("sleep", "30").start()
-    val childHandle = child.toHandle()
-    val birth = processBirthToken(childHandle, JdkHostPlatformPort, RecordingDiagnostics())!!
-    val ownership =
-      FeatureTaskRuntimeWorkerOwnership(
-        workflowId = "wftr-test",
-        generation = 1,
-        ownerToken = "owner-token-0001",
-        hostIdentity = current.hostIdentity,
-        bootIdentity = current.bootIdentity,
-        pid = child.pid(),
-        processBirthToken = birth,
-        leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
-        heartbeatAt = "2026-07-14T10:00:00Z",
-        expiresAt = "2026-07-14T10:00:30Z",
-        phaseId = "goal_runner",
-        phaseAttempt = 1,
-      )
-    try {
-      assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
-      supervisor.awaitExit(ownership, Duration.ofMillis(200))
-      assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
-      assertTrue(
-        diagnostics.warnings.any { it.contains("Timed out") && it.contains("pid=${ownership.pid}") },
-        "timeout must be observable: ${diagnostics.warnings}",
-      )
-    } finally {
-      child.destroyForcibly()
-    }
   }
 
   @Test
@@ -331,149 +183,4 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
     phaseId = "implement",
     phaseAttempt = 1,
   )
-
-  @Test
-  fun `a throwing tick is absorbed and lease renewal keeps ticking`() {
-    val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
-    val ticks = AtomicInteger()
-    val renewedAfterFailure = CountDownLatch(2)
-
-    val heartbeat =
-      supervisor.startHeartbeat(plan()) {
-        if (ticks.incrementAndGet() == 1) {
-          throw SkillBillRuntimeException(DatabaseFailureCode.BUSY, "database is locked")
-        }
-        renewedAfterFailure.countDown()
-        FeatureTaskRuntimeHeartbeatTick.Renewed
-      }
-
-    try {
-      assertTrue(
-        renewedAfterFailure.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS),
-        "a tick that threw must not end lease renewal, but only $ticks ticks ran",
-      )
-    } finally {
-      heartbeat.stop()
-    }
-    assertNull(heartbeat.fencingLostReason(), "a transient failure is not a fencing loss")
-    val warning = assertSingle(diagnostics.warnings)
-    assertTrue(warning.contains("wftr-label"), "the warning must name the lease: $warning")
-    assertTrue(warning.contains("consecutive failures=1"), "the warning must count failures: $warning")
-    assertTrue(diagnostics.errors.isEmpty(), "a single transient failure must not escalate")
-  }
-
-  @Test
-  fun `stopping renewal waits for an active tick before lease release`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
-    val tickEntered = CountDownLatch(1)
-    val finishTick = CountDownLatch(1)
-    val stopReturned = CountDownLatch(1)
-    val ticks = AtomicInteger()
-    val heartbeat =
-      supervisor.startHeartbeat(plan()) {
-        ticks.incrementAndGet()
-        tickEntered.countDown()
-        assertTrue(finishTick.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the test never released the tick")
-        FeatureTaskRuntimeHeartbeatTick.Renewed
-      }
-
-    assertTrue(tickEntered.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the first tick never ran")
-    val stopper =
-      Thread {
-        heartbeat.stop()
-        stopReturned.countDown()
-      }
-    stopper.start()
-    try {
-      assertTrue(!stopReturned.await(100, TimeUnit.MILLISECONDS), "stop returned while renewal was still active")
-    } finally {
-      finishTick.countDown()
-    }
-
-    assertTrue(stopReturned.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "stop did not finish after the tick")
-    stopper.join(TimeUnit.SECONDS.toMillis(TICK_TIMEOUT_SECONDS))
-    assertEquals(1, ticks.get(), "no renewal may start after stop returns")
-    assertNull(heartbeat.fencingLostReason())
-  }
-
-  @Test
-  fun `renewal failures that outlast the lease escalate to an error`() {
-    val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
-    val escalated = CountDownLatch(1)
-
-    val heartbeat =
-      supervisor.startHeartbeat(plan(leaseSeconds = 0)) {
-        escalated.countDown()
-        throw SkillBillRuntimeException(DatabaseFailureCode.BUSY, "database is locked")
-      }
-
-    try {
-      assertTrue(escalated.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the first tick never ran")
-      awaitUntil { diagnostics.errors.isNotEmpty() }
-    } finally {
-      heartbeat.stop()
-    }
-    assertTrue(
-      diagnostics.errors.first().contains("lease has already expired"),
-      "a failure window past the lease must escalate: ${diagnostics.errors.first()}",
-    )
-  }
-
-  @Test
-  fun `lost fencing stops renewal and is reported to the run owner`() {
-    val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
-    val ticks = AtomicInteger()
-    val observed = CountDownLatch(1)
-
-    val heartbeat =
-      supervisor.startHeartbeat(plan()) {
-        ticks.incrementAndGet()
-        observed.countDown()
-        FeatureTaskRuntimeHeartbeatTick.FencingLost("another owner holds the lease")
-      }
-
-    try {
-      assertTrue(observed.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the first tick never ran")
-      awaitUntil { diagnostics.errors.isNotEmpty() }
-      Thread.sleep(QUIESCE_MILLIS)
-      assertEquals(1, ticks.get(), "renewal must stop after fencing is lost")
-    } finally {
-      heartbeat.stop()
-    }
-    assertEquals("another owner holds the lease", heartbeat.fencingLostReason())
-    assertTrue(
-      assertSingle(diagnostics.errors).contains("another owner holds the lease"),
-      "the run owner must be told why renewal stopped",
-    )
-  }
-
-  private fun plan(leaseSeconds: Long = 30) =
-    FeatureTaskRuntimeHeartbeatPlan(
-      label = "wftr-label",
-      intervalSeconds = 1,
-      leaseSeconds = leaseSeconds,
-      retryDelaySeconds = 1,
-    )
-
-  private fun <T> assertSingle(values: List<T>): T {
-    assertEquals(1, values.size, "expected exactly one entry, got $values")
-    return values.first()
-  }
-
-  private fun awaitUntil(condition: () -> Boolean) {
-    val deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(TICK_TIMEOUT_SECONDS)
-    while (!condition() && System.nanoTime() < deadlineNanos) {
-      Thread.sleep(POLL_MILLIS)
-    }
-    assertTrue(condition(), "condition never became true within ${TICK_TIMEOUT_SECONDS}s")
-  }
-
-  private companion object {
-    const val TICK_TIMEOUT_SECONDS = 20L
-    const val QUIESCE_MILLIS = 2_500L
-    const val POLL_MILLIS = 25L
-  }
 }

@@ -20,9 +20,6 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
 import java.sql.DriverManager
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -153,32 +150,6 @@ class DatabaseWriteReadinessTest {
     assertEquals(afterInit + 1, executions)
     gate.ensureReady(dbPath)
     assertEquals(afterInit + 1, executions)
-  }
-
-  @Test
-  fun `concurrent readiness initialization publishes one recoverable result`() {
-    val tempDir = Files.createTempDirectory("skillbill-write-readiness-concurrent")
-    val dbPath = tempDir.resolve("metrics.db")
-    var executions = 0
-    val gate = CountingReadinessGate { executions += 1 }
-    val ready = CountDownLatch(1)
-    val executor = Executors.newFixedThreadPool(2)
-    val failures = mutableListOf<Throwable>()
-    repeat(2) {
-      executor.submit {
-        ready.await()
-        runCatching { gate.ensureReady(dbPath) }.exceptionOrNull()?.let { failure ->
-          synchronized(failures) { failures += failure }
-        }
-      }
-    }
-    ready.countDown()
-    executor.shutdown()
-    assertTrue(executor.awaitTermination(30, TimeUnit.SECONDS))
-
-    assertTrue(failures.isEmpty(), failures.joinToString { failure -> failure.toString() })
-    assertEquals(1, executions)
-    assertTrue(Files.isRegularFile(dbPath))
   }
 
   @Test

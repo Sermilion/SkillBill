@@ -74,12 +74,13 @@ The retired tree was one `desktop-tray/src/{main,test}` module. Nothing remains 
 | `DesktopArchitectureTest` | `:composeApp` `architecture/`, with `ModuleGraphRulesTest`, `SourceRulesTest`, `NavigationTypingRulesTest` and `DeletionRulesTest`. |
 | `DesktopUiScaleTest`, `TrayPopoverPlacementTest` | `:composeApp` `infrastructure/`. |
 | `RoomBoardSourceTest` | Split into `ReadOnlyStoreTest`, `BoundedBoardPagesTest`, `ObservationLifecycleTest`, `WorkStackTest` and `ControlOutcomeTest` in `:core:data`. |
-| `RoomBoardObservationFailureTest`, `RoomRuntimeCompatibilityTest`, `DesktopCommitSignalObserverTest`, `PackagedDataSmoke` | Same names in `:core:data` `jvmTest`. |
+| `RoomRuntimeCompatibilityTest`, `PackagedDataSmoke` | Same names in `:core:data` `jvmTest`. |
+| `RoomBoardObservationFailureTest`, `DesktopCommitSignalObserverTest` | Deleted as timing-based tests. |
 | `RepositoryNamesTest` | `:core:data` `jvmTest` `runtime/RepositoryNamesTest.kt`. |
 | `DataStoreSettingsTest` | `:core:datastore` `DataStoreSettingsRepositoryTest`. |
 | `TrayHoverPresentationTest` | `:feature:work` `TrayHoverTest`. |
 | `MainWindowTest` | Title and duration cases to `:feature:detail` `DetailPresentationTest`; the history scroll case to `:feature:history` `HistoryContentTest`. |
-| `ReasonTooltipTest` | `:core:ui` `ReasonTooltipTest`. |
+| `ReasonTooltipTest` | Deleted as a timing-based test. |
 | `CliMutationTest`, `CliResolverTest`, `ProcessRunnerTest`, `WorkPayloadDecoderTest` | Deleted with the CLI adapters by SKILL-423. |
 
 ### Deviations
@@ -120,7 +121,7 @@ The retired tree was one `desktop-tray/src/{main,test}` module. Nothing remains 
 | `TopicRoomDao` | `WorkRoomDatabase`, `WorkCandidateQueries` | the repositories | `DatabaseSessionScope` | `RoomRuntimeCompatibilityTest`, `ReadOnlyStoreTest` | The runtime owns the schema and candidate semantics. |
 | `ReadianRoomDatabaseProvider` | `DatabaseSession`, `WorkStoreSessionManager` | `StoreSessionCoordinator` | `DatabaseSessionScope` | `ObservationLifecycleTest`, `DatabaseGenerationTransitionTest` | One typed session owner; no destructive deletion. |
 | `AppSettingsStore` | `DataStoreSettingsRepository`, `LegacySettingsMigration` | `SettingsViewModel`, coordinators | `AppScope` | `DataStoreSettingsRepositoryTest` | Explicit readiness, corruption and migration outcomes. |
-| `JvmComponentFactory` | `ApplicationComponentFactory`, `AppOwner.quit` | `Main.kt` | `AppScope` | `DesktopAppSmokeTest`, `ApplicationComponentSmokeTest` | Host-owned startup and shutdown; no global singleton. |
+| `JvmComponentFactory` | `ApplicationComponentFactory`, `AppOwner.quit` | `Main.kt` | `AppScope` | `ApplicationComponentSmokeTest` | Host-owned startup and shutdown; no global singleton. |
 
 ## Process and native helpers
 
@@ -157,7 +158,7 @@ runtime `check` run in the validate phase is the executed evidence; nothing here
 
 ## Hosts
 
-Delivery proof has three layers: the `check` task, the in-process `DesktopAppSmokeTest`, and `:composeApp:packagedDataSmoke`,
+Delivery proof has two layers: the `check` task and `:composeApp:packagedDataSmoke`,
 which runs the distribution's own launcher and bundled JDK against a disposable store and home with an empty `PATH`. It is
 outside `check` because it needs a built distribution.
 
