@@ -20,6 +20,15 @@ internal interface PhaseLoopRules {
     stepId: String,
     destinationStepId: String,
   ): PhaseForwardCheckpoint? = null
+
+  /**
+   * Whether this slot owns containment of a failure escaping [stepId]. It reads no step binding, so the run loop
+   * can still tell a slot's failure from another phase's when building that binding is what failed.
+   */
+  fun claimsFailure(
+    stepId: String,
+    context: PhaseLoopContext,
+  ): Boolean = false
 }
 
 /**
@@ -82,6 +91,25 @@ internal interface PhaseStepLoopRules<in B : PhaseAcceptedStepExecution> {
     verdict: FeatureTaskRuntimeVerdict,
     state: B,
   ): FeatureTaskRuntimeVerdict = verdict
+
+  /** Notes that the [loopId] re-entry cap of [cap] is exhausted and the run advances past it instead of blocking. */
+  fun onLoopCapExhausted(
+    loopId: String,
+    cap: Int,
+    context: PhaseLoopContext,
+    state: B,
+  ) = Unit
+
+  /**
+   * The completed output this slot continues [stepId] with when [error] escapes its dispatch, so the slot's failure
+   * never blocks the run, or null when the failure is not this slot's to contain.
+   */
+  fun containFailure(
+    stepId: String,
+    error: Exception,
+    context: PhaseLoopContext,
+    state: B,
+  ): PhaseFailureContinuationOutput? = null
 }
 
 /**
@@ -118,6 +146,18 @@ internal interface PhaseBoundLoopRules {
     stepId: String,
     verdict: FeatureTaskRuntimeVerdict,
   ): FeatureTaskRuntimeVerdict
+
+  fun onLoopCapExhausted(
+    loopId: String,
+    cap: Int,
+    context: PhaseLoopContext,
+  )
+
+  fun containFailure(
+    stepId: String,
+    error: Exception,
+    context: PhaseLoopContext,
+  ): PhaseFailureContinuationOutput?
 
   companion object {
     fun <B : PhaseAcceptedStepExecution> of(
@@ -160,6 +200,18 @@ private class BoundLoopRules<B : PhaseAcceptedStepExecution>(
     stepId: String,
     verdict: FeatureTaskRuntimeVerdict,
   ): FeatureTaskRuntimeVerdict = rules.routedVerdict(stepId, verdict, binding)
+
+  override fun onLoopCapExhausted(
+    loopId: String,
+    cap: Int,
+    context: PhaseLoopContext,
+  ) = rules.onLoopCapExhausted(loopId, cap, context, binding)
+
+  override fun containFailure(
+    stepId: String,
+    error: Exception,
+    context: PhaseLoopContext,
+  ): PhaseFailureContinuationOutput? = rules.containFailure(stepId, error, context, binding)
 }
 
 /** How a step settled from durable state without a launch. */

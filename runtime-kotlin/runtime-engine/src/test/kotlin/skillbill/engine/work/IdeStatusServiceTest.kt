@@ -8,10 +8,15 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.idestatus.model.IdeStatusFreshness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
+import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
+import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
+import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
+import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -246,6 +251,47 @@ class IdeStatusServiceTest {
     assertEquals("preplan", result.snapshot.currentStep.id)
     assertEquals(Instant.parse("2026-08-06T08:00:00Z"), result.snapshot.startedAt)
     assertEquals(0, database.writeCalls)
+  }
+
+  @Test
+  fun `workflow snapshot carries the recorded QA outcome and stays null without a row`() {
+    val fixture = gitRepoFixture("ide-status-workflow-qa")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val workflows = IdeStatusWorkflowStates()
+    workflows.saveFeatureTaskWorkflow(runtimeRecord("w-qa", "2026-08-06T10:00:00Z", currentStep = "qa"), PROSE)
+    workflows.saveFeatureTaskExecutionIdentity(identityFor("w-qa", identity))
+    val qaOutcomes = InMemoryFeatureTaskQaOutcomeRepository()
+    val work = listOf(workItem("w-qa", WorkItemKind.FEATURE_TASK_RUNTIME, "running", "2026-08-06T10:00:00Z"))
+    val request = IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt)
+
+    fun recordedQa(): IdeStatusWorkflowQaOutcome? {
+      val service = ideStatusService(TrackingDatabase(work, workflows, qaOutcomes = qaOutcomes))
+      return service.status(request).snapshot.workflowQaOutcome
+    }
+
+    assertNull(recordedQa())
+
+    qaOutcomes.upsert(
+      FeatureTaskQaOutcome(
+        workflowId = "w-qa",
+        outcome = StandaloneQaOutcome.INCOMPLETE,
+        reason = "device unavailable",
+        qaFixAttempts = 0,
+        testedTreeIdentity = null,
+        recordedAt = "2026-08-06T10:30:00Z",
+        failureKind = FeatureTaskQaFailureKind.ENVIRONMENT,
+      ),
+    )
+    val recorded = recordedQa()
+    assertEquals(
+      IdeStatusWorkflowQaOutcome(
+        StandaloneQaOutcome.INCOMPLETE,
+        "device unavailable",
+        FeatureTaskQaFailureKind.ENVIRONMENT.wireValue,
+        "2026-08-06T10:30:00Z",
+      ),
+      recorded,
+    )
   }
 
   @Test

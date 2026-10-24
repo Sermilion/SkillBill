@@ -3,9 +3,11 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.qa.QaOutcomePayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_FAILURE_KIND_COLUMN
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_REPORT_TEXT_COLUMN
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
+import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -20,8 +22,8 @@ internal class SqliteFeatureTaskQaOutcomeStore(
       """
       INSERT INTO feature_task_qa_outcomes (
         workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
-        $QA_REPORT_TEXT_COLUMN
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        $QA_REPORT_TEXT_COLUMN, $QA_FAILURE_KIND_COLUMN
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(workflow_id) DO UPDATE SET
         outcome = excluded.outcome,
         reason = excluded.reason,
@@ -29,7 +31,8 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         tested_tree_identity = excluded.tested_tree_identity,
         recorded_at = excluded.recorded_at,
         findings_summary = excluded.findings_summary,
-        $QA_REPORT_TEXT_COLUMN = excluded.$QA_REPORT_TEXT_COLUMN
+        $QA_REPORT_TEXT_COLUMN = excluded.$QA_REPORT_TEXT_COLUMN,
+        $QA_FAILURE_KIND_COLUMN = excluded.$QA_FAILURE_KIND_COLUMN
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -41,6 +44,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
         outcome.recordedAt,
         outcome.findings.takeIf(List<FeatureTaskQaFinding>::isNotEmpty)?.let(::encodeFindings),
         outcome.reportText,
+        outcome.failureKind?.wireValue,
       )
       statement.executeUpdate()
     }
@@ -50,7 +54,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
     connection.prepareStatement(
       """
       SELECT workflow_id, outcome, reason, qa_fix_attempts, tested_tree_identity, recorded_at, findings_summary,
-             $QA_REPORT_TEXT_COLUMN
+             $QA_REPORT_TEXT_COLUMN, $QA_FAILURE_KIND_COLUMN
       FROM feature_task_qa_outcomes
       WHERE workflow_id = ?
       """.trimIndent(),
@@ -73,6 +77,7 @@ internal class SqliteFeatureTaskQaOutcomeStore(
           recordedAt = rows.getString("recorded_at"),
           findings = decodedFindings,
           reportText = storedReportText,
+          failureKind = FeatureTaskQaFailureKind.fromWire(rows.getString(QA_FAILURE_KIND_COLUMN)),
         )
       }
     }

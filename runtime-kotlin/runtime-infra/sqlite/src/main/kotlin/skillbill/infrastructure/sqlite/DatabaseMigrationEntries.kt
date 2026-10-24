@@ -23,6 +23,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandaloneP
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaOutcomes
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaFailureKind
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaReportText
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandalonePlanReport
@@ -867,4 +868,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 83,
       name = "record-qa-report-text",
       operation = ::recordQaReportText,
+    ) +
+    DatabaseMigration(
+      version = 84,
+      name = "record-qa-failure-kind",
+      operation = ::recordQaFailureKind,
     )

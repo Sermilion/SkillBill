@@ -8,7 +8,11 @@ import skillbill.engine.featuretask.qa.report.QaPhaseOutputKeys
 import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.qa.report.hasQaOutput
 import skillbill.engine.featuretask.qa.report.qaVerdictOf
+import skillbill.engine.featuretask.runloop.core.containableOrThrow
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseLoopContext
+import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseStepLoopRules
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -17,6 +21,37 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 internal class QaLoopRules(
   private val outcomes: FeatureTaskQaOutcomeRecorder,
 ) : PhaseStepLoopRules<PhaseQaStepBinding> {
+  private val containment = QaFailureContainment(outcomes)
+
+  override fun containFailure(
+    stepId: String,
+    error: Exception,
+    context: PhaseLoopContext,
+    state: PhaseQaStepBinding,
+  ): PhaseFailureContinuationOutput? = containment.contain(stepId, error, context, state)
+
+  override fun onLoopCapExhausted(
+    loopId: String,
+    cap: Int,
+    context: PhaseLoopContext,
+    state: PhaseQaStepBinding,
+  ) {
+    val warning =
+      when (loopId) {
+        FeatureTaskRuntimePhaseWorkflowDefinition.QA_FIX_LOOP_ID ->
+          "QA findings remain after $cap qa_fix attempts; the run continues and reports them."
+        FeatureTaskRuntimePhaseWorkflowDefinition.QA_INVALIDATION_LOOP_ID -> STALE_WARNING
+        else -> return
+      }
+    runCatching { recordStaleQa(context, warning) }.onFailure { recordingFailure ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        context.diagnostics,
+        "QA loop cap warning could not be recorded [seam=qa_loop_cap, loop=$loopId].",
+        recordingFailure.containableOrThrow(),
+      )
+    }
+  }
+
   override fun crossSlotSettlement(
     stepId: String,
     context: PhaseLoopContext,
@@ -71,4 +106,13 @@ internal class QaLoopRules(
       "QA results may be stale: the runtime could not read the repository tree to compare it with the last QA " +
         "pass. The run continues to history and commit."
   }
+}
+
+internal object QaLoopCapability : PhaseLoopCapability, PhaseLoopRules {
+  override val loopRules: PhaseLoopRules get() = this
+
+  override fun claimsFailure(
+    stepId: String,
+    context: PhaseLoopContext,
+  ): Boolean = QaFailureContainment.claims(stepId, context)
 }

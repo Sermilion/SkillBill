@@ -165,6 +165,21 @@ data class IdeStatusProblem(
   }
 }
 
+data class IdeStatusWorkflowQaOutcome(
+  val outcome: StandaloneQaOutcome,
+  val reason: String?,
+  val failureKind: String?,
+  val recordedAt: String,
+) {
+  init {
+    require(recordedAt.isNotBlank()) { "workflowQaOutcome.recordedAt must not be blank." }
+    require(reason == null || reason.isNotBlank()) { "workflowQaOutcome.reason must be absent or non-blank." }
+    require(failureKind == null || failureKind.isNotBlank()) {
+      "workflowQaOutcome.failureKind must be absent or non-blank."
+    }
+  }
+}
+
 data class IdeStatusSnapshot(
   val repositoryIdentity: String,
   val lifecycleState: IdeStatusLifecycleState,
@@ -193,6 +208,7 @@ data class IdeStatusSnapshot(
   val execution: IdeStatusExecutionIdentity? = null,
   val currentActivity: String? = null,
   val branchCorrelation: String? = null,
+  val workflowQaOutcome: IdeStatusWorkflowQaOutcome? = null,
   val contractVersion: String = IDE_STATUS_CONTRACT_VERSION,
 ) {
   init {

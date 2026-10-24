@@ -25,6 +25,7 @@ import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusPlanning
 import skillbill.ports.idestatus.model.IdeStatusProblem
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -153,6 +154,15 @@ private fun ideStatusSchemaWireMap(snapshot: IdeStatusSnapshot): Map<String, Any
     put("freshness", snapshot.freshness.wireValue)
     put(SharedPayloadKeys.SUMMARY, snapshot.summary)
     snapshot.problem?.let { put("problem", problemWireMap(it)) }
+    snapshot.workflowQaOutcome?.let { put(IdeStatusPayloadKeys.WORKFLOW_QA_OUTCOME, workflowQaOutcomeWireMap(it)) }
+  }
+
+private fun workflowQaOutcomeWireMap(qa: IdeStatusWorkflowQaOutcome): Map<String, Any?> =
+  buildMap {
+    put(IdeStatusPayloadKeys.OUTCOME, qa.outcome.wireValue)
+    qa.reason?.let { put(IdeStatusPayloadKeys.REASON, it) }
+    qa.failureKind?.let { put(IdeStatusPayloadKeys.FAILURE_KIND, it) }
+    put(IdeStatusPayloadKeys.RECORDED_AT, qa.recordedAt)
   }
 
 private fun MutableMap<String, Any?>.putExecutionFields(execution: IdeStatusExecutionIdentity) {

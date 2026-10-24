@@ -1,3 +1,28 @@
+## [2026-10-24] Workflow QA outcome is an optional IdeStatus field with no contract bump
+Context: SKILL-443 subtask 3 must show QA could-not-complete state to the desktop through the IdeStatus contract, which installed desktops and old snapshots already read.
+Decision: workflow_qa_outcome is an optional root property emitted only when a QA outcome row exists, and contract_version stays 0.6. The desktop notification fires on a changed recordedAt, not on a status transition.
+Reason: A snapshot without the property validates exactly as before, so legacy reads need no migration path. Keying on recordedAt gives one notification per QA settlement and suppresses the generic blocked or failed alert for the same observation.
+
+## [2026-10-24] QA containment lives in the drive loop, not in step cleanup
+Context: SKILL-443 subtask 2 must contain every qa and qa_fix failure, including runtime defects thrown from anywhere in the phase, without disturbing lease and workspace release.
+Decision: The drive loop wraps advance() and asks QaFailureContainment for an incomplete output. Non-QA phases and standalone QA policy get null and the original error propagates. QaExecutionLifecycle, QaPreparedRun and the runStep catch logic gain no new catches.
+Reason: The use-block cleanup has already run by the time the error reaches the drive, so containing there cannot leak a lease. CancellationException and InterruptedException always propagate so shutdown is never swallowed.
+
+## [2026-10-24] QA cap exhaustion advances to review instead of blocking
+Context: A qa_fix cap or stale-QA outcome used to block the run, which SKILL-443 forbids.
+Decision: The qa to qa_fix and write_history to audit edges use CapExhaustionBehavior.ADVANCE, a qa_incomplete completion at qa or qa_fix goes to review, and the cap warning is recorded on the QA outcome through the loop rules.
+Reason: The run keeps moving and the desktop sees the gap through the INCOMPLETE outcome rather than a block the operator must clear.
+
+## [2026-10-24] Goal QA gate contains even its own failure recording
+Context: SKILL-443 requires that no QA failure blocks a goal run, but recording a contained failure writes to the store and can itself throw.
+Decision: DefaultGoalRunnerQaGate.run catches every non-cancellation Exception, logs it with its stack trace, tries to record it, and logs again if recording fails, always returning Warned.
+Reason: A gate that can throw reintroduces the blocking it exists to prevent. Cancellation, interrupts and non-Exception throwables still propagate so shutdown is not swallowed. The spec did not ask for the inner guard; the implementer added it for this reason.
+
+## [2026-10-24] QA failure kind rides on QaSettledRun, not a recordSettled parameter
+Context: AC-002 worded the optional failure kind as a new recordSettled parameter, which pushed it to six parameters and failed detekt LongParameterList.
+Decision: The kind is an optional field on QaSettledRun and recordSettled writes it to the row.
+Reason: Same behavior without a suppression or detekt config change. No caller passed a kind at the time.
+
 ## [2026-10-24] Check capability acquisition and transport before planning readiness
 Context: A modal feature required exact parent focus restoration while its callers and compatibility wrappers supplied no opening reference. Separate dialog and sheet amendments exposed the same missing integration in successive repairs. Preplan also discouraged wrapper and dependency reads needed to establish feasibility.
 Decision: Share one capability-closure directive across preplan, bundle planning, subtask planning and audit repair planning. Trace required input acquisition, caller transport and lifecycle ownership, check proposed signatures against configured project rules, and report a shared contract conflict's complete known impact before requesting an amendment. Permit targeted pinned-dependency reads when public contracts cannot answer that question.

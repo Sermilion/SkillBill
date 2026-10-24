@@ -6,6 +6,7 @@ import skillbill.contracts.qa.QaOutcomePayloadKeys
 internal object QaPhaseOutputKeys {
   const val VERDICT = "qa_verdict"
   const val REASON = "qa_reason"
+  const val FAILURE_KIND = "failure_kind"
   const val REPORT_TEXT = "qa_report_text"
   const val REPORT_REF = "qa_report_ref"
   const val HEAD_REVISION = "qa_head_revision"

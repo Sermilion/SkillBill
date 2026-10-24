@@ -22,6 +22,11 @@ object IdeStatusPayloadKeys {
   const val CURRENT_ACTIVITY = "current_activity"
   const val QA_OUTCOME = "qa_outcome"
   const val STALLED_SINCE = "stalled_since"
+  const val WORKFLOW_QA_OUTCOME = "workflow_qa_outcome"
+  const val OUTCOME = "outcome"
+  const val REASON = "reason"
+  const val FAILURE_KIND = "failure_kind"
+  const val RECORDED_AT = "recorded_at"
 }
 
 object WorkBoardPayloadKeys {

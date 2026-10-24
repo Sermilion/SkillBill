@@ -377,6 +377,35 @@ properties:
       old. Present only on active feature-goal snapshots; absence means the run is
       progressing or its liveness is not provable. Consumers render it as stalled,
       "no progress for now - stalled_since"; the runtime never stops the run on it.
+  workflow_qa_outcome:
+    type: object
+    additionalProperties: false
+    required:
+      - outcome
+      - recorded_at
+    properties:
+      outcome:
+        type: string
+        enum:
+          - attempted
+          - passed
+          - findings
+          - skipped
+          - incomplete
+      reason:
+        type: string
+        minLength: 1
+      failure_kind:
+        type: string
+        enum:
+          - environment
+          - defect
+      recorded_at:
+        type: string
+        minLength: 1
+    description: >
+      Present only on workflow-scope snapshots with a recorded QA outcome. `failure_kind`
+      is set when QA could not complete because of an environment error or a runtime defect.
   updated_at:
     type: string
     minLength: 1

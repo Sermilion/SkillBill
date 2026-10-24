@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.codereview.verify
 
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
@@ -25,7 +26,11 @@ internal class VerifyFindingsStep : PhaseStepHooks<PhaseVerifyFindingsStepBindin
 
   override fun failureContinuationOutput(
     upstream: List<FeatureTaskRuntimePhaseOutput>,
-  ): NormalizedFeatureTaskRuntimePhaseOutput = VerifyFindingsFailureOutput.carryReviewFindings(upstream)
+  ): PhaseFailureContinuationOutput =
+    PhaseFailureContinuationOutput(
+      VerifyFindingsFailureOutput.carryReviewFindings(upstream),
+      "value_expected=verified_findings value_used=original_review_findings",
+    )
 
   override fun launchPromptSupplement(
     run: PhaseRun,

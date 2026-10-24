@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.qa.report
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -27,6 +28,7 @@ internal object FeatureTaskQaOutcomeRecords {
       "$recordedAt",
       previous?.findings.orEmpty(),
       previous?.reportText,
+      failureKind = null,
     )
 
   fun settled(
@@ -54,6 +56,7 @@ internal object FeatureTaskQaOutcomeRecords {
       "$recordedAt",
       mergedFindings(previous?.findings.orEmpty(), retestsFindings(report, verdict), reported),
       report?.text,
+      FeatureTaskQaFailureKind.fromWire(produced[QaPhaseOutputKeys.FAILURE_KIND] as? String),
     )
   }
 
