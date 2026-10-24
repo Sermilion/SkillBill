@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.qa.report.qaTestReport
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Files
 import kotlin.io.path.readText
 import kotlin.test.Test
@@ -34,7 +34,7 @@ class VerifyQaOperationTest {
       assertEquals("QA is off for this verify run.", artifact["report_text"])
       assertEquals(emptyList(), harness.qaLeases.releasedInvocations)
       assertFalse(VerifyPromptSections.QA_STEP in harness.runner.stepNames())
-      assertFalse("Mobile QA Verdict Rules" in harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive)
+      assertFalse("QA Verdict Rules" in harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive)
       val finished = harness.telemetry.finished.single()
       assertEquals("skipped" to "disabled_policy", finished.qaOutcome to finished.qaReason)
     }
@@ -96,7 +96,7 @@ class VerifyQaOperationTest {
         steps.takeLast(3),
       )
       val directive = harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive
-      assertContains(directive, "Mobile QA Verdict Rules")
+      assertContains(directive, "QA Verdict Rules")
       assertContains(directive, "QA report (verdict: passed):")
       assertContains(directive, written)
       assertEquals(written, qaReport(harness, token)["report_text"])
@@ -212,6 +212,6 @@ class VerifyQaOperationTest {
   private companion object {
     val ANDROID_PACK =
       kotlinPackWithValidationGate()
-        .copy(qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), "qa/android-qa.md"))
+        .copy(qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), "qa/android-qa.md"))
   }
 }

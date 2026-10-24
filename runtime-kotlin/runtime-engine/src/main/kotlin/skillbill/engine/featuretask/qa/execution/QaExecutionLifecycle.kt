@@ -162,7 +162,7 @@ class QaExecutionLifecycle(
     when (opening) {
       is QaCheckoutOpening.Opened -> {
         warnings += opening.warnings
-        QaExecutionTarget.Supported(resolution.guidancePath, resolution.declaration.platforms, opening.checkout)
+        QaExecutionTarget.Supported(resolution.targets, opening.checkout)
       }
       is QaCheckoutOpening.Unavailable -> {
         warnings += opening.detail

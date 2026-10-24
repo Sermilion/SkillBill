@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.qa
 
+import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
@@ -13,9 +14,9 @@ internal object QaPromptSections {
   )
 
   const val DIRECTIVE: String =
-    "Run mobile QA for the current repository state from the QA checkout named below. Follow the pack QA " +
-      "guidance named below, drive the device or simulator yourself, report what you find without repairing it, " +
-      "and settle by writing the QA report to the path the runtime names."
+    "Run QA for the current repository state from the QA checkout named below. For each declared target, " +
+      "follow its pack QA guidance and drive the app, service, browser, device or simulator it names yourself. " +
+      "Report what you find without repairing it, and settle by writing the QA report to the path the runtime names."
 
   const val VALUE_CONTENT: String =
     "The verdict, the flows you exercised and left untested, any findings, and any reason QA was skipped or " +
@@ -66,11 +67,11 @@ internal object QaPromptSections {
       """
     |## QA run
     |
-    |- Guidance: `${target.guidancePath.value}`. Read it first and follow it.
+    |${targetLines(target.targets)}
+    |- Report coverage for every kind listed above.
     |- QA checkout: `${target.checkout}`. This temporary worktree holds exactly the tree under test plus the
     |  repository's ignored local configuration files. Build, install, and test from it. The runtime deletes it
     |  when QA ends.
-    |- Platforms the pack supports: ${target.platforms.joinToString(", ") { it.wireValue }}.
     |- Invocation directory: `${qa.workspace.directory}`. Write every generated script and evidence file there,
     |  outside the QA checkout, which is deleted.
     |- Evidence paths in the report must start with `${qa.expected.evidencePrefix}`.
@@ -129,4 +130,10 @@ internal object QaPromptSections {
     |  after the report is written.
       """.trimMargin()
   }
+
+  private fun targetLines(targets: List<QaDeclaredTarget>): String =
+    targets.joinToString("\n") { declared ->
+      "- Target `${declared.packSlug}`: kinds ${declared.kinds.joinToString(", ") { it.wireValue }}; " +
+        "guidance `${declared.guidancePath.value}`. Read it first and follow it."
+    }
 }

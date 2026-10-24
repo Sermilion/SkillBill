@@ -15,7 +15,7 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.test.Test
@@ -35,7 +35,8 @@ class QaStandalonePhaseRunTest {
   private val workspaces = InMemoryQaWorkspaces()
   private val leases = RecordingQaLeases()
   private val androidPack =
-    kotlinPackWithValidationGate().copy(qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), QA_GUIDE))
+    kotlinPackWithValidationGate()
+      .copy(qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), QA_GUIDE))
   private val launched = mutableListOf<QaExecutionContext?>()
 
   @Test
@@ -51,7 +52,10 @@ class QaStandalonePhaseRunTest {
     assertEquals(listOf(INVOCATION), leases.releasedInvocations)
     val qa = requireNotNull(launched.single())
     assertEquals(qaTestExpected(INVOCATION), qa.expected)
-    assertEquals(setOf(QaPlatform.ANDROID), assertIs<QaExecutionTarget.Supported>(qa.target).platforms)
+    assertEquals(
+      listOf(setOf(QaTargetKind("android"))),
+      assertIs<QaExecutionTarget.Supported>(qa.target).targets.map { it.kinds },
+    )
   }
 
   @Test

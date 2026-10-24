@@ -9,6 +9,7 @@ import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.review.plan.ReviewStackRouting
 import skillbill.review.plan.model.ReviewRoutingChangedFile
+import skillbill.review.plan.model.ReviewStackRoutingResult
 import skillbill.scaffold.model.PlatformManifest
 
 @Inject
@@ -66,22 +67,40 @@ class ValidationGateResolver(
   }
 }
 
+internal fun routedConcretePacks(
+  manifests: List<PlatformManifest>,
+  paths: List<String>,
+): List<PlatformManifest> = concretePacks(manifests, route(manifests, paths))
+
 internal fun dominantPacks(
   manifests: List<PlatformManifest>,
   paths: List<String>,
 ): List<PlatformManifest> {
-  val routing = ReviewStackRouting.route(manifests, paths.map { ReviewRoutingChangedFile(it, "") })
+  val routing = route(manifests, paths)
+  val concrete = concretePacks(manifests, routing)
+  val scopeBySlug =
+    concrete.associateWith { pack ->
+      val baselines = pack.codeReviewComposition?.baselineLayers.orEmpty().map { it.platform }
+      (listOf(pack.slug) + baselines).flatMap { routing.ownedPathsBySlug[it].orEmpty() }.toSet().size
+    }
+  val largestScope = scopeBySlug.values.maxOrNull() ?: return emptyList()
+  return scopeBySlug.filterValues { it == largestScope }.keys.toList()
+}
+
+private fun route(
+  manifests: List<PlatformManifest>,
+  paths: List<String>,
+): ReviewStackRoutingResult = ReviewStackRouting.route(manifests, paths.map { ReviewRoutingChangedFile(it, "") })
+
+private fun concretePacks(
+  manifests: List<PlatformManifest>,
+  routing: ReviewStackRoutingResult,
+): List<PlatformManifest> {
   val bySlug = manifests.associateBy { it.slug }
   val routed = routing.routedSlugs.mapNotNull(bySlug::get)
   val fallback = ReviewFallbackResolver.resolveOptional(manifests)
   val concrete = routed.filterNot { it.slug == fallback?.slug }.ifEmpty { routed }
-  val baselinesOf =
-    concrete.associateWith { pack -> pack.codeReviewComposition?.baselineLayers.orEmpty().map { it.platform } }
-  val absorbed = baselinesOf.values.flatten().toSet()
-  val scopeBySlug =
-    concrete.filterNot { it.slug in absorbed }.associateWith { pack ->
-      (listOf(pack.slug) + baselinesOf.getValue(pack)).flatMap { routing.ownedPathsBySlug[it].orEmpty() }.toSet().size
-    }
-  val largestScope = scopeBySlug.values.maxOrNull() ?: return emptyList()
-  return scopeBySlug.filterValues { it == largestScope }.keys.toList()
+  val absorbed =
+    concrete.flatMap { pack -> pack.codeReviewComposition?.baselineLayers.orEmpty().map { it.platform } }.toSet()
+  return concrete.filterNot { it.slug in absorbed }
 }

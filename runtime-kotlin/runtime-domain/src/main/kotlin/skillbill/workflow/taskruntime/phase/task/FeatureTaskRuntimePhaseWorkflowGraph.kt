@@ -63,7 +63,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to "Phase 4b: Plan Fix",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4c: Implement Fix",
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to "Phase 4d: Mobile QA",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA to "Phase 4d: QA",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX to "Phase 4e: QA Fix",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to "Phase 5: Code Review",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to "Phase 5a: Verify Findings",

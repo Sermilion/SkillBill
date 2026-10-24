@@ -1,23 +1,23 @@
 package skillbill.engine.featuretask.qa.capability
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.featuretask.validation.dominantPacks
+import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
+import skillbill.engine.featuretask.validation.routedConcretePacks
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
-import skillbill.model.FileLocation
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.scaffold.model.PlatformManifest
-import skillbill.scaffold.model.QaCapabilityDeclaration
 import java.nio.file.Path
 
 sealed interface QaCapabilityResolution {
-  data class Declared(
-    val declaration: QaCapabilityDeclaration,
-    val guidancePath: FileLocation,
-  ) : QaCapabilityResolution
+  data class Declared(val targets: List<QaDeclaredTarget>) : QaCapabilityResolution {
+    init {
+      require(targets.isNotEmpty()) { "A declared QA capability needs at least one target." }
+    }
+  }
 
   data class Absent(val routedPackSlug: String?) : QaCapabilityResolution {
     val detail: String
@@ -49,24 +49,15 @@ class QaCapabilityResolver(
           "Installed platform pack discovery failed: ${e.message ?: e.javaClass.simpleName}.",
         )
       }
-    return fromCandidates(dominantPacks(manifests, changedPaths))
-  }
-
-  private fun fromCandidates(candidates: List<PlatformManifest>): QaCapabilityResolution {
-    val dominant = candidates.singleOrNull()
-    val declaration = dominant?.qaCapability
-    return when {
-      candidates.size > 1 ->
-        QaCapabilityResolution.Incompatible(
-          "the repository scope is equally owned by ${candidates.map { it.slug }.sorted().joinToString(", ")}.",
-        )
-      dominant == null -> QaCapabilityResolution.Absent(null)
-      declaration == null -> QaCapabilityResolution.Absent(dominant.slug)
-      else ->
-        QaCapabilityResolution.Declared(
-          declaration = declaration,
-          guidancePath = dominant.packRoot.resolve(declaration.guidanceFile),
-        )
+    val routed = routedConcretePacks(manifests, changedPaths)
+    val targets =
+      routed.sortedBy(PlatformManifest::slug).mapNotNull { pack ->
+        pack.qaCapability?.let { QaDeclaredTarget(pack.slug, it.platforms, pack.packRoot.resolve(it.guidanceFile)) }
+      }
+    return if (targets.isEmpty()) {
+      QaCapabilityResolution.Absent(routed.singleOrNull()?.slug)
+    } else {
+      QaCapabilityResolution.Declared(targets)
     }
   }
 }

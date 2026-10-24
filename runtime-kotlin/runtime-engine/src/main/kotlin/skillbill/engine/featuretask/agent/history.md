@@ -1,5 +1,16 @@
 # featuretask runtime boundary history
 
+## [2026-10-24] SKILL-420 subtask 1 - Open QA target kinds and multi-target resolution
+Areas: runtime-engine featuretask QA resolution, prompt sections and verify directive; runtime-domain scaffold model and verify/phase workflow labels; runtime-infra/skills platform-pack loader; orchestration/contracts platform-pack schema; skills/skill-bill content; docs/runtime-command-guidance
+- MEDIUM feature. The closed android/ios QaPlatform enum became an open QaTargetKind value class validated by a lowercase kebab pattern (max 32 chars); manifest qa_capability.platforms accepts any matching kind, capped at 8, with duplicates and bad values rejected as invalid manifest schema. Contract version and existing manifests are unchanged.
+- QA resolution now yields every routed pack that declares qa_capability (sorted by slug) as a declared target with kinds and guidance path, instead of picking one pack or tying out. Absent carries a slug only when exactly one pack is routed.
+- The QA prompt supplement lists one line per target plus a coverage line; the base directive and verify directive are horizontal (QA checkout, "Step 8: QA", QA Verdict Rules) with no mobile wording. Workflow graph and verify definition labels moved in lockstep.
+- Operator docs describe the prose report.md contract (first verdict word, finding sections, stated verdict never rewritten) and drop the old receipt wording.
+- Reusable: ValidationGateResolver.routedConcretePacks exposes routed concrete packs without changing gate selection; QaDeclaredTarget carries one target for prompt and lifecycle.
+- Limits: FIX_DIRECTIVE still says mobile QA, and the "Mobile QA" PR heading and telemetry descriptions are untouched; later SKILL-420 subtasks own them.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented for this subtask.
+
 ## [2026-10-22] SKILL-434 subtask 1 - Inject per-project phase instructions
 Areas: runtime-engine featuretask phase prompt compose, launch briefing and slot attempt launch preparation; runtime-ports featuretask; runtime-infra/workflow featuretask; runtime-domain PhaseSlot; runtime-core featuretask slot DI; runtime-infra/skills installer gitignore; orchestration/contracts launch-briefing schema
 - MEDIUM feature. A repo may carry `.skill-bill/phases/<phase>.md`; at launch the runtime resolves it once and the composer adds a "Project instructions for this phase" section after the briefing text and before the required final output. The section states it cannot change the output or settlement contract.

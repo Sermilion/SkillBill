@@ -124,7 +124,7 @@ object FeatureVerifyWorkflowDefinition {
           "code_review" to "Step 5: Code Review",
           "unit_test_value_check" to "Step 6: Unit Test Value Check",
           "completeness_audit" to "Step 7: Completeness Audit",
-          "qa" to "Step 8: Mobile QA",
+          "qa" to "Step 8: QA",
           SharedPayloadKeys.VERDICT to "Step 9: Consolidated Verdict",
           "finish" to "Finish",
         ),
@@ -166,7 +166,7 @@ object FeatureVerifyWorkflowDefinition {
           "completeness_audit" to
             "Run completeness independently against criteria, its rubric, and diff_projection.",
           "qa" to
-            "Re-create the temporary target worktree and rerun QA; never reuse a receipt from another tree.",
+            "Rerun QA in a fresh temporary QA checkout at the target head; never reuse a QA report from another tree.",
           SharedPayloadKeys.VERDICT to
             "Reuse only compact typed evaluator receipts to produce the final verdict " +
             "without rerunning earlier phases.",
@@ -189,7 +189,7 @@ object FeatureVerifyWorkflowDefinition {
               directiveSection("Step 7: Completeness Audit"),
               directiveSection("Completeness Audit"),
             ),
-          "qa" to listOf(directiveSection("Step 8: Mobile QA")),
+          "qa" to listOf(directiveSection("Step 8: QA")),
           SharedPayloadKeys.VERDICT to
             listOf(
               directiveSection("Step 9: Consolidated Verdict"),
@@ -223,8 +223,8 @@ object FeatureVerifyWorkflowDefinition {
             "checkpoint-scoped diff_projection. Refresh the projection if the target changed materially.",
           "qa" to
             "Honor the stored qa_selection. With off, persist a skipped qa_report. With on, check the " +
-            "target head out into a fresh temporary detached worktree, run report-only QA there, persist qa_report, " +
-            "and remove the worktree.",
+            "target head out into a fresh temporary QA checkout, run report-only QA there, persist qa_report, " +
+            "and remove the QA checkout.",
           SharedPayloadKeys.VERDICT to
             "Reuse only compact typed evaluator receipts to produce the final verdict " +
             "without rerunning earlier phases.",

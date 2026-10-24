@@ -123,18 +123,18 @@ Use the Completeness Audit rubric below for the audit format and rules.
 
 Run completeness independently against acceptance criteria, its declared rubric, and the authoritative checkpoint-scoped diff projection; do not provide sibling evaluator output. Persist only `completeness_audit_receipt`. When the verify target changes materially during the same session, invalidate stale projections and receipts, refresh the checkpoint-scoped diff, and increment the next step's `attempt_count`. Otherwise, update workflow state so `completeness_audit` is completed and `qa` is running.
 
-## Step 8: Mobile QA
+## Step 8: QA
 
 Step id: `qa`
 
 Primary artifact: `qa_report`
 
 The proposal names the QA selection, `qa:on` or `qa:off` (default `off`), and confirm keeps it. With `off`, the
-runtime records a skipped report without probing devices or launching an agent. With `on`, the runtime checks out the
-confirmed head into a temporary detached worktree and runs report-only QA there with the pack QA guidance; the
+runtime records a skipped report without opening a QA checkout or launching an agent. With `on`, the runtime checks out the
+confirmed head into the temporary QA checkout and runs report-only QA there with the pack QA guidance; the
 operator's checkout, HEAD, and target never change. QA writes its report in prose; the runtime reads the verdict from
-its first line and stores the report text unchanged. The runtime removes the worktree on every exit, recording any
-retained worktree with manual cleanup guidance. Workflows proposed before QA existed skip this step and report
+its first line and stores the report text unchanged. The runtime removes the QA checkout on every exit, recording any
+retained QA checkout with manual cleanup guidance. Workflows proposed before QA existed skip this step and report
 `not_selected`.
 
 Persist `qa_report` after QA settles. Update workflow state so `qa` is completed or skipped and `verdict` is running.
@@ -248,11 +248,11 @@ If the user wants a PR comment:
 - Format the verdict as a GitHub PR review comment using `gh pr review <number>`
 - Use `--comment` for APPROVE WITH FIXES, `--approve` for APPROVE, `--request-changes` for REQUEST CHANGES
 
-## Mobile QA Verdict Rules
+## QA Verdict Rules
 
 Apply these rules only when the run selected `qa:on`:
 
-- Add a `--- MOBILE QA ---` section after `--- UNIT TEST VALUE ---` with the QA verdict and every QA finding id,
+- Add a `--- QA ---` section after `--- UNIT TEST VALUE ---` with the QA verdict and every QA finding id,
   its title, and its evidence paths, taken from the QA report below.
 - QA findings join the consolidated findings. An open QA finding rules out an unqualified `APPROVE`; use
   `APPROVE WITH FIXES` or `REQUEST CHANGES`.
