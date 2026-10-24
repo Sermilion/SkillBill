@@ -297,17 +297,7 @@ internal class VerifyStepSequence(
     val qa = VerifyQaReport.at(run, stepId, store.artifacts(run.workflowId))
     val steps = listOf(stepEntry(stepId, WorkflowStepStatus.FAILED, attempt))
     val failed = store.write(run.workflowId, WorkflowStatus.FAILED, stepId, steps, qa.patch)
-    if (failed is VerifyWrite.Rejected) {
-      (diffProjection(run.context, run.target) as? VerifyDiffProjection.Ready)?.let { refreshed ->
-        store.write(
-          run.workflowId,
-          WorkflowStatus.FAILED,
-          stepId,
-          steps,
-          mapOf(VerifyWorkflow.DIFF_PROJECTION to refreshed.artifact) + qa.patch,
-        )
-      }
-    }
+    val rejection = (failed as? VerifyWrite.Rejected)?.error
     val status =
       when (stepId) {
         in REVIEW_STAGE -> ABANDONED_AT_REVIEW
@@ -315,9 +305,10 @@ internal class VerifyStepSequence(
         else -> ERROR_STATUS
       }
     val artifacts = store.artifacts(run.workflowId)
-    finished(run, status, artifacts, qa)
+    if (rejection == null) finished(run, status, artifacts, qa)
+    val persistenceFailure = rejection?.let { "\nFailed write rejected: $it" }.orEmpty()
     return OperationOutcome.Failed(
-      "Verify step '$stepId' failed: $reason\n${qa.presentation.joinToString("\n")}\n" +
+      "Verify step '$stepId' failed: $reason\n${qa.presentation.joinToString("\n")}$persistenceFailure\n" +
         "Verify workflow: ${run.workflowId}",
     )
   }

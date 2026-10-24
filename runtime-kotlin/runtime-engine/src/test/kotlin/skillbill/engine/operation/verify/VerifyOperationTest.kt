@@ -85,6 +85,22 @@ class VerifyOperationTest {
   }
 
   @Test
+  fun `a resumed verify failure retains its original diff checkpoint after an unauthorized edit`() {
+    VerifyOperationHarness().use { harness ->
+      val token = harness.seedSkillWorkflowAtCodeReview()
+      val diff = harness.snapshot(token).artifacts.getValue("diff_projection")
+      harness.editDuring(VerifyPromptSections.CODE_REVIEW_STEP)
+
+      assertIs<OperationOutcome.Failed>(harness.confirm(token, target = harness.range))
+
+      val snapshot = harness.snapshot(token)
+      assertEquals("failed", snapshot.workflowStatus.wireValue)
+      assertFalse("code_review_receipt" in snapshot.artifacts)
+      assertEquals(diff, snapshot.artifacts.getValue("diff_projection"))
+    }
+  }
+
+  @Test
   fun `a workflow the skill left at code_review resumes there when confirmed with its target`() {
     VerifyOperationHarness().use { harness ->
       val token = harness.seedSkillWorkflowAtCodeReview()
