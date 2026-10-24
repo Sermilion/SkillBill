@@ -45,7 +45,8 @@ class LegacySpecImport(
       if (name == DONE_DIRECTORY) {
         fileStore.listDirectChildDirectories(bundle).sorted().forEach { archived ->
           val label = "$DONE_DIRECTORY/${archived.fileName}"
-          outcomes.getOrPut(copy(archived, specsRoot.resolve(label), label)) { mutableListOf() } += label
+          val target = specsRoot.resolve(archived.fileName.toString())
+          outcomes.getOrPut(copy(archived, target, label)) { mutableListOf() } += label
         }
       } else {
         val outcome =
@@ -91,7 +92,7 @@ class LegacySpecImport(
     val issueKey = issueAndFeature(bundleName).first
     return fileStore.listDirectChildDirectories(specsRoot).any { existing ->
       val name = existing.fileName.toString()
-      name != DONE_DIRECTORY && issueAndFeature(name).first == issueKey && bundleFiles(existing).isNotEmpty()
+      issueAndFeature(name).first == issueKey && bundleFiles(existing).isNotEmpty()
     }
   }
 
@@ -149,10 +150,13 @@ class LegacySpecImport(
   private enum class Outcome { IMPORTED, ALREADY_IN_STORE, IN_FLIGHT, FAILED }
 
   private companion object {
-    const val DONE_DIRECTORY = "done"
+    const val DONE_DIRECTORY = LegacyProjectStatePaths.FEATURE_SPECS_ARCHIVE_DIRECTORY
     const val MANIFEST_FILE = "decomposition-manifest.yaml"
     const val BUNDLE_JOURNAL_PREFIX = ".decomposition-manifest-bundle-"
     val LEGACY_MANIFEST_PATH =
-      Regex("""(^|[\s"':\[,])${Regex.escape(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)}""", RegexOption.MULTILINE)
+      Regex(
+        """(^|[\s"':\[,])${Regex.escape(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)}(?:$DONE_DIRECTORY/)?""",
+        RegexOption.MULTILINE,
+      )
   }
 }

@@ -30,12 +30,9 @@ import java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY
 import java.nio.file.WatchService
 import java.nio.file.attribute.BasicFileAttributes
 
-private const val ARCHIVE_DIRECTORY = "done"
-
 /**
- * Watches a project's spec directory with the platform watch service: the root, its folders and every `done` folder, but
- * not the archived bundles inside `done`, which can number in the hundreds. Directories created later are registered as
- * the watch service reports them. There is no polling.
+ * Watches a project's spec directory and every non-hidden folder under it with the platform watch service. Directories
+ * created later are registered as the watch service reports them. There is no polling.
  */
 @Inject
 @SingleIn(AppScope::class)
@@ -102,8 +99,7 @@ open class NioSpecDirectoryChanges(private val diagnostics: Diagnostics) : SpecD
       object : SimpleFileVisitor<Path>() {
         override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
           val hidden = dir.fileName?.toString()?.startsWith(".") == true
-          val archivedBundle = dir.parent?.fileName?.toString() == ARCHIVE_DIRECTORY
-          if (dir != root && (hidden || archivedBundle)) return FileVisitResult.SKIP_SUBTREE
+          if (dir != root && hidden) return FileVisitResult.SKIP_SUBTREE
           return try {
             dir.register(watch, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE)
             FileVisitResult.CONTINUE

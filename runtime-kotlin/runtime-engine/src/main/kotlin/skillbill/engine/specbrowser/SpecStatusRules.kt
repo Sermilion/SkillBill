@@ -7,8 +7,7 @@ import skillbill.engine.specbrowser.model.SpecBrowserStatusGroup
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
-
-private const val ARCHIVE_SEGMENT = "done"
+import java.time.Instant
 
 private val IN_PROGRESS_STATUSES =
   setOf(SpecBrowserStatus.RUNNING, SpecBrowserStatus.PAUSING, SpecBrowserStatus.IN_PROGRESS)
@@ -16,6 +15,11 @@ private val IN_PROGRESS_STATUSES =
 internal data class LiveGoal(
   val lifecycle: IdeStatusLifecycleState,
   val pauseRequested: Boolean,
+)
+
+internal data class LiveCandidates(
+  val unfinished: Set<String>,
+  val finished: Set<String>,
 )
 
 internal data class ResolvedSpecTree(
@@ -48,17 +52,12 @@ internal fun liveStatus(
   }
 
 internal fun bundleStatus(
-  underDone: Boolean,
   live: LiveGoal?,
   manifest: DecompositionManifest?,
 ): SpecBrowserStatus =
-  if (underDone) {
-    SpecBrowserStatus.COMPLETE
-  } else {
-    live?.let { liveStatus(it.lifecycle, it.pauseRequested) }
-      ?: manifest?.let { manifestStatus(it.status) }
-      ?: SpecBrowserStatus.PENDING
-  }
+  live?.let { liveStatus(it.lifecycle, it.pauseRequested) }
+    ?: manifest?.let { manifestStatus(it.status) }
+    ?: SpecBrowserStatus.PENDING
 
 internal fun statusGroup(status: SpecBrowserStatus): SpecBrowserStatusGroup =
   when (status) {
@@ -72,19 +71,26 @@ internal fun statusGroup(status: SpecBrowserStatus): SpecBrowserStatusGroup =
     SpecBrowserStatus.COMPLETE, SpecBrowserStatus.CANCELED -> SpecBrowserStatusGroup.DONE
   }
 
-internal fun isUnderDone(bundlePath: String): Boolean = bundlePath.split('/').dropLast(1).contains(ARCHIVE_SEGMENT)
+internal fun liveCandidates(nodes: List<RawSpecNode>): LiveCandidates {
+  val (finished, unfinished) = rawBundles(nodes).partition { it.finished() }
+  return LiveCandidates(unfinished.keys(), finished.keys())
+}
 
-internal fun liveCandidateKeys(nodes: List<RawSpecNode>): Set<String> =
-  nodes.filterIsInstance<RawSpecDirectory>().flatMap { directory ->
-    val own = directory.bundle?.issueKey?.takeIf { !isUnderDone(directory.path) }
-    listOfNotNull(own) + liveCandidateKeys(directory.children)
-  }.toSet()
+private fun RawSpecBundle.finished(): Boolean =
+  manifest?.let {
+    manifestStatus(it.status)
+  } == SpecBrowserStatus.COMPLETE
+
+private fun List<RawSpecBundle>.keys(): Set<String> = mapNotNullTo(HashSet()) { it.issueKey }
+
+private fun rawBundles(nodes: List<RawSpecNode>): List<RawSpecBundle> =
+  nodes.filterIsInstance<RawSpecDirectory>().flatMap { listOfNotNull(it.bundle) + rawBundles(it.children) }
 
 internal fun resolveSpecTree(
   raw: List<RawSpecNode>,
   live: Map<String, LiveGoal>,
 ): ResolvedSpecTree {
-  val resolved = raw.map { resolveNode(it, live) }
+  val resolved = ordered(raw.map { resolveNode(it, live) })
   val statuses = resolved.flatMap { it.bundleStatuses }
   val groups = statuses.map(::statusGroup)
   val counts =
@@ -100,7 +106,23 @@ internal fun resolveSpecTree(
 private class ResolvedNode(
   val node: SpecBrowserNode,
   val bundleStatuses: List<SpecBrowserStatus>,
+  val finishedAt: Instant? = null,
 )
+
+private fun ordered(nodes: List<ResolvedNode>): List<ResolvedNode> {
+  val (bundles, rest) = nodes.partition { it.node is SpecBrowserNode.Bundle }
+  return bundles.sortedWith(bundleOrder) + rest
+}
+
+private val bundleOrder: Comparator<ResolvedNode> =
+  compareBy<ResolvedNode> { groupRank((it.node as SpecBrowserNode.Bundle).group) }.thenByDescending { it.finishedAt }
+
+private fun groupRank(group: SpecBrowserStatusGroup): Int =
+  when (group) {
+    SpecBrowserStatusGroup.ACTIVE -> 0
+    SpecBrowserStatusGroup.PENDING -> 1
+    SpecBrowserStatusGroup.DONE -> 2
+  }
 
 private fun resolveNode(
   raw: RawSpecNode,
@@ -127,7 +149,7 @@ private fun resolveDirectory(
   raw: RawSpecDirectory,
   live: Map<String, LiveGoal>,
 ): ResolvedNode {
-  val children = raw.children.map { resolveNode(it, live) }
+  val children = ordered(raw.children.map { resolveNode(it, live) })
   val below = children.flatMap { it.bundleStatuses }
   val childNodes = children.map { it.node }
   val bundle = raw.bundle
@@ -143,9 +165,8 @@ private fun resolveDirectory(
       )
     return ResolvedNode(folder, below)
   }
-  val underDone = isUnderDone(raw.path)
-  val liveGoal = bundle.issueKey?.takeIf { !underDone }?.let(live::get)
-  val status = bundleStatus(underDone, liveGoal, bundle.manifest)
+  val status = bundleStatus(bundle.issueKey?.let(live::get), bundle.manifest)
+  val group = statusGroup(status)
   val subtasks = bundle.manifest?.subtasks
   val node =
     SpecBrowserNode.Bundle(
@@ -155,10 +176,11 @@ private fun resolveDirectory(
       issueKey = bundle.issueKey,
       title = bundle.title,
       status = status,
-      group = statusGroup(status),
+      group = group,
       subtasksDone = subtasks?.count { manifestStatus(it.status) == SpecBrowserStatus.COMPLETE },
       subtasksTotal = subtasks?.size,
       children = childNodes,
     )
-  return ResolvedNode(node, listOf(status) + below)
+  val finishedAt = bundle.manifestModified.takeIf { group == SpecBrowserStatusGroup.DONE }
+  return ResolvedNode(node, listOf(status) + below, finishedAt)
 }

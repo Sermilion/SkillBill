@@ -18,23 +18,30 @@ class FileSystemDecompositionManifestFileStoreTest {
   private val projectStore = FixedProjectStorePort(storeRoot)
 
   @Test
-  fun `manifest discovery lists store bundles before legacy bundles and skips archived store bundles`() {
+  fun `manifest discovery lists every store bundle, nested ones too, before legacy bundles`() {
     val repoRoot = Files.createTempDirectory("decomposition-manifest-store-first")
     val stored = storeRoot.resolve("specs/SKILL-902-goal/decomposition-manifest.yaml")
     val legacy = repoRoot.resolve(".feature-specs/SKILL-903-goal/decomposition-manifest.yaml")
-    val archived = storeRoot.resolve("specs/done/SKILL-904-goal/decomposition-manifest.yaml")
-    listOf(stored, legacy, archived).forEach { manifest ->
+    val nested = storeRoot.resolve("specs/done/SKILL-904-goal/decomposition-manifest.yaml")
+    listOf(stored, legacy, nested).forEach { manifest ->
       Files.createDirectories(manifest.parent)
       Files.writeString(manifest, "manifest")
     }
     val store = FileSystemDecompositionManifestFileStore(projectStore)
 
-    assertEquals(listOf(stored, legacy), store.findDecompositionManifestFiles(repoRoot))
-    assertEquals(listOf(stored, legacy), store.findDecompositionManifestFilesWithoutRecovery(repoRoot))
+    val reads =
+      listOf(
+        store.findDecompositionManifestFiles(repoRoot),
+        store.findDecompositionManifestFilesWithoutRecovery(repoRoot),
+      )
+    for (found in reads) {
+      assertEquals(setOf(stored, nested), found.take(2).toSet())
+      assertEquals(listOf(legacy), found.drop(2))
+    }
   }
 
   @Test
-  fun `manifest discovery ignores archived bundles and their pending journals`() {
+  fun `manifest discovery ignores un-imported legacy archives and their pending journals`() {
     val repoRoot = Files.createTempDirectory("decomposition-manifest-archived")
     val active = repoRoot.resolve(".feature-specs/SKILL-901-goal/decomposition-manifest.yaml")
     val archived = repoRoot.resolve(".feature-specs/done/SKILL-901-goal/decomposition-manifest.yaml")

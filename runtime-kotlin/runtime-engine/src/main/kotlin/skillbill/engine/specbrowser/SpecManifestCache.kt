@@ -34,6 +34,8 @@ internal class SpecManifestCache(
       null
     }
 
+  fun modifiedAt(manifestPath: Path): Instant? = entries[manifestPath]?.modified
+
   fun retainUnder(
     root: Path,
     keep: Set<Path>,

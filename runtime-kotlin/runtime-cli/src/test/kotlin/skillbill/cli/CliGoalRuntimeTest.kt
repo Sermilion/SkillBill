@@ -4,7 +4,6 @@ import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliExecutionResult
 import skillbill.di.core.SkillBillVersion
 import skillbill.infrastructure.sqlite.ensureTestDatabase
-import java.nio.file.Files
 import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -613,40 +612,6 @@ class CliGoalExecutionOptionsTest {
     }
 
     assertContains(status.stdout, "active_agent: none")
-  }
-
-  @Test
-  fun `goal status uses durable completion after specs move to done without mutating stale child`() {
-    val fixture = goalFixture(subtaskCount = 1)
-    val staleChild = startRunningGoalChild(fixture)
-    recordRunningGoalChildProgress(fixture, staleChild, sequence = 9, message = "stale active event")
-    seedAuthoritativeCompleteChild(fixture, staleChild)
-    val archivedBundle = fixture.parentSpec.parent.resolveSibling("done").resolve("SKILL-901-goal")
-    Files.createDirectories(archivedBundle.parent)
-    Files.move(fixture.parentSpec.parent, archivedBundle)
-    Files.writeString(archivedBundle.resolve("decomposition-manifest.yaml"), "invalid projection")
-
-    val status =
-      CliRuntime.run(
-        listOf("--db", fixture.dbPath.toString(), "goal", "status", "SKILL-901", "--agent", "codex"),
-        fixture.context(launcher = NoopGoalTestAgentRunLauncher),
-      )
-    val staleWorkflow =
-      RuntimeWorkflowTestSupport.get(
-        fixture.dbPath,
-        staleChild,
-        fixture.context(launcher = NoopGoalTestAgentRunLauncher),
-      )
-
-    assertFalse(Files.exists(fixture.parentSpec.parent))
-    assertEquals(0, status.exitCode, status.stdout)
-    assertContains(status.stdout, "complete: 1")
-    assertContains(status.stdout, "pending: 0")
-    assertContains(status.stdout, "blocked: 0")
-    assertContains(status.stdout, "current_subtask: none")
-    assertEquals(false, status.stdout.contains("latest_observability:"), status.stdout)
-    assertEquals("running", staleWorkflow["workflow_status"])
-    assertEquals(false, staleWorkflow["artifacts"]?.toString().orEmpty().contains("stale running child"))
   }
 }
 

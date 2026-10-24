@@ -9,6 +9,7 @@ import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.time.Instant
 
 internal sealed interface RawSpecNode {
   val name: String
@@ -20,6 +21,7 @@ internal data class RawSpecBundle(
   val issueKey: String?,
   val title: String,
   val manifest: DecompositionManifest?,
+  val manifestModified: Instant? = null,
 )
 
 internal data class RawSpecDirectory(
@@ -132,8 +134,11 @@ internal class SpecTreeReader(
     directory: Path,
     name: String,
     hasManifest: Boolean,
-  ): RawSpecBundle =
-    rawSpecBundle(name, if (hasManifest) manifests.read(directory.resolve(DECOMPOSITION_MANIFEST_FILENAME)) else null)
+  ): RawSpecBundle {
+    if (!hasManifest) return rawSpecBundle(name, null)
+    val manifestPath = directory.resolve(DECOMPOSITION_MANIFEST_FILENAME)
+    return rawSpecBundle(name, manifests.read(manifestPath), manifests.modifiedAt(manifestPath))
+  }
 
   private fun fileNode(
     specsRoot: Path,
@@ -189,11 +194,13 @@ private val ISSUE_KEY_PREFIX = Regex("^[A-Z][A-Z0-9]*-[0-9]+")
 internal fun rawSpecBundle(
   folderName: String,
   manifest: DecompositionManifest?,
+  manifestModified: Instant? = null,
 ): RawSpecBundle =
   RawSpecBundle(
     issueKey = manifest?.issueKey?.takeIf(String::isNotBlank) ?: ISSUE_KEY_PREFIX.find(folderName)?.value,
     title = manifest?.featureName?.takeIf(String::isNotBlank) ?: humanisedTitle(folderName),
     manifest = manifest,
+    manifestModified = manifestModified,
   )
 
 private fun humanisedTitle(folderName: String): String {

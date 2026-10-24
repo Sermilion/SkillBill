@@ -52,7 +52,7 @@ class SpecBrowserService(
     val project = locate(projectId, preferredRepoRoot)
     val specsRoot = project?.specsRoot ?: return missingProjectSnapshot(projectId)
     val read = treeReader.read(specsRoot)
-    val live = project.repoRoot?.let { liveGoals.overrides(it, liveCandidateKeys(read.roots)) }.orEmpty()
+    val live = project.repoRoot?.let { liveGoals.overrides(it, liveCandidates(read.roots)) }.orEmpty()
     val tree = resolveSpecTree(read.roots, live)
     return SpecBrowserSnapshot(project, tree.roots, tree.counts, tree.anyInProgress, read.failure)
   }
@@ -70,8 +70,7 @@ class SpecBrowserService(
     }
     val manifest = manifestCache.read(directory.resolve(DECOMPOSITION_MANIFEST_FILENAME))
     val bundle = rawSpecBundle(directory.fileName.toString(), manifest)
-    val relativePath = specsRoot.relativize(directory).joinToString("/") { it.toString() }
-    val treeStatus = bundleStatus(isUnderDone(relativePath), null, manifest)
+    val treeStatus = bundleStatus(null, manifest)
     val repoRoot = project.repoRoot
     val issueKey = bundle.issueKey
     val facts =

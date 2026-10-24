@@ -33,7 +33,6 @@ import skillbill.cli.goal.run.GoalRunPresenter
 import skillbill.cli.goal.run.RUNTIME_CLASSPATH_ENV
 import skillbill.cli.goal.run.RUNTIME_EXECUTABLE_ENV
 import skillbill.cli.goal.run.RUNTIME_PATH_SEPARATOR_ENV
-import skillbill.cli.goal.run.goalArchivedSpecText
 import skillbill.cli.goal.run.goalIntakeRequestText
 import skillbill.cli.goal.run.parseCodeReviewMode
 import skillbill.cli.goal.run.resolveInvokedAgentId
@@ -209,10 +208,6 @@ class GoalRunCommand(
       is GoalIntakeAdmission.NeedsInput -> {
         state.appendStderr(goalIntakeRequestText(admission))
         state.completeEmpty(exitCode = 1)
-        null
-      }
-      is GoalIntakeAdmission.ArchivedSpec -> {
-        state.completeText(goalArchivedSpecText(admission))
         null
       }
     }

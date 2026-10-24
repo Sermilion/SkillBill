@@ -6,6 +6,7 @@ import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkRunActions
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.workPauseEligible
+import skillbill.engine.work.pagination.readLiveIssueKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.db.DatabaseSessionFactory
@@ -33,12 +34,16 @@ internal class SpecLiveGoalReader(
 ) {
   fun overrides(
     repoRoot: Path,
-    issueKeys: Set<String>,
+    candidates: LiveCandidates,
   ): Map<String, LiveGoal> {
-    if (issueKeys.isEmpty()) return emptyMap()
+    if (candidates.unfinished.isEmpty() && candidates.finished.isEmpty()) return emptyMap()
     val identity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
     return database.readIfPresent { unit ->
-      issueKeys.mapNotNull { key -> liveGoal(unit, identity, key)?.let { key to it } }.toMap()
+      val finishedWithLiveWork =
+        if (candidates.finished.isEmpty()) emptySet() else candidates.finished intersect readLiveIssueKeys(unit)
+      (candidates.unfinished + finishedWithLiveWork).mapNotNull { key ->
+        liveGoal(unit, identity, key)?.let { key to it }
+      }.toMap()
     }.orEmpty()
   }
 

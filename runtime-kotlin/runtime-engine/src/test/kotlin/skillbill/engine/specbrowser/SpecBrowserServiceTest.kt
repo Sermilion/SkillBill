@@ -23,7 +23,6 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectCatalogPort
 import skillbill.ports.projectstore.model.ProjectCatalogEntry
@@ -37,6 +36,8 @@ import skillbill.ports.work.model.WorkRunStopResult
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -44,25 +45,37 @@ import kotlin.test.assertTrue
 
 class SpecBrowserServiceTest {
   @Test
-  fun `tree is classified, ordered and statused with archived bundles complete`() {
+  fun `tree is classified, statused from manifests and ordered active, pending, then latest finished`() {
     val root = Files.createTempDirectory("spec-browser-tree").toRealPath()
     val specsRoot = Files.createDirectories(root.resolve("store").resolve("specs"))
     val subtasks = listOf(1 to "complete", 2 to "pending", 3 to "pending")
     writeBundle(specsRoot, "SKILL-100-first-feature", "SKILL-100", "in_progress", subtasks)
     Files.writeString(specsRoot.resolve("SKILL-100-first-feature").resolve("notes.txt"), "notes")
     bareBundle(specsRoot, "SKILL-99-plain-bundle")
-    writeBundle(specsRoot, "done/SKILL-50-archived", "SKILL-50", "in_progress", listOf(1 to "pending"))
-    bareBundle(specsRoot, "done/SKILL-51-bare")
+    writeBundle(specsRoot, "SKILL-50-finished-first", "SKILL-50", "complete", listOf(1 to "complete"))
+    writeBundle(specsRoot, "SKILL-51-finished-later", "SKILL-51", "complete", listOf(1 to "complete"))
+    writeBundle(specsRoot, "group/SKILL-30-grouped", "SKILL-30", "complete", listOf(1 to "complete"))
+    finishedAt(specsRoot, "SKILL-50-finished-first", "2026-09-01T10:00:00Z")
+    finishedAt(specsRoot, "SKILL-51-finished-later", "2026-09-02T10:00:00Z")
     val environment = mapOf("HOME" to root.toString())
     val database = sqliteSessionFactoryForTests(root, root.resolve("absent.db").toString(), environment)
 
     val snapshot = harness(database, root).service.snapshot("test-project", root)
 
     assertNull(snapshot.failure)
-    assertEquals(listOf("SKILL-99-plain-bundle", "SKILL-100-first-feature", "done"), snapshot.roots.map { it.name })
-    val plain = snapshot.roots[0] as SpecBrowserNode.Bundle
-    val first = snapshot.roots[1] as SpecBrowserNode.Bundle
-    val done = snapshot.roots[2] as SpecBrowserNode.Folder
+    assertEquals(
+      listOf(
+        "SKILL-100-first-feature",
+        "SKILL-99-plain-bundle",
+        "SKILL-51-finished-later",
+        "SKILL-50-finished-first",
+        "group",
+      ),
+      snapshot.roots.map { it.name },
+    )
+    val first = snapshot.roots[0] as SpecBrowserNode.Bundle
+    val plain = snapshot.roots[1] as SpecBrowserNode.Bundle
+    val group = snapshot.roots[4] as SpecBrowserNode.Folder
     assertEquals(SpecBrowserStatus.PENDING, plain.status)
     assertEquals(SpecBrowserStatus.IN_PROGRESS, first.status)
     assertEquals(1 to 3, first.subtasksDone to first.subtasksTotal)
@@ -95,49 +108,46 @@ class SpecBrowserServiceTest {
       listOf(SpecBrowserStatus.COMPLETE, SpecBrowserStatus.PENDING, SpecBrowserStatus.PENDING),
       files.mapNotNull { it.status },
     )
-    assertEquals(
-      listOf(SpecBrowserStatus.COMPLETE, SpecBrowserStatus.COMPLETE),
-      done.children.map { (it as SpecBrowserNode.Bundle).status },
-    )
-    assertEquals(2, done.bundleCount)
-    assertEquals(mapOf(SpecBrowserStatus.COMPLETE to 2), done.statusCounts)
-    assertEquals(listOf(4, 1, 1, 2), snapshot.counts.let { listOf(it.all, it.active, it.pending, it.done) })
+    assertEquals(SpecBrowserStatus.COMPLETE, (group.children.single() as SpecBrowserNode.Bundle).status)
+    assertEquals(1, group.bundleCount)
+    assertEquals(mapOf(SpecBrowserStatus.COMPLETE to 1), group.statusCounts)
+    assertEquals(listOf(5, 1, 1, 3), snapshot.counts.let { listOf(it.all, it.active, it.pending, it.done) })
     assertTrue(snapshot.anyInProgress)
   }
 
   @Test
-  fun `archived bundles never query the database but live candidates do`() {
-    val root = Files.createTempDirectory("spec-browser-reads").toRealPath()
+  fun `a bundle without a readable manifest is pending wherever it sits`() {
+    val root = Files.createTempDirectory("spec-browser-bare").toRealPath()
     val specsRoot = Files.createDirectories(root.resolve("store").resolve("specs"))
-    writeBundle(specsRoot, "done/SKILL-50-archived", "SKILL-50", "in_progress", listOf(1 to "pending"))
     bareBundle(specsRoot, "done/SKILL-51-bare")
     val environment = mapOf("HOME" to root.toString())
-    val real = sqliteSessionFactoryForTests(root, root.resolve("absent.db").toString(), environment)
-    var reads = 0
-    val counting =
-      object : DatabaseSessionFactory by real {
-        override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? {
-          reads++
-          return real.readIfPresent(block)
-        }
-      }
-    val service = harness(counting, root).service
+    val database = sqliteSessionFactoryForTests(root, root.resolve("absent.db").toString(), environment)
 
-    service.snapshot("test-project", root)
-    assertEquals(0, reads)
+    val snapshot = harness(database, root).service.snapshot("test-project", root)
 
-    bareBundle(specsRoot, "SKILL-60-live-candidate")
-    service.snapshot("test-project", root)
-    assertEquals(1, reads)
+    val folder = snapshot.roots.single() as SpecBrowserNode.Folder
+    assertEquals(SpecBrowserStatus.PENDING, (folder.children.single() as SpecBrowserNode.Bundle).status)
   }
 
   @Test
   fun `a live goal overrides the manifest status`() {
+    assertLiveGoalOverrides(manifestStatus = "in_progress", subtasks = listOf(1 to "complete", 2 to "pending"))
+  }
+
+  @Test
+  fun `a finished manifest still shows its goal while that goal has live work`() {
+    assertLiveGoalOverrides(manifestStatus = "complete", subtasks = listOf(1 to "complete", 2 to "complete"))
+  }
+
+  private fun assertLiveGoalOverrides(
+    manifestStatus: String,
+    subtasks: List<Pair<Int, String>>,
+  ) {
     establishTemporarySchemaReadiness("spec-browser-live").use { schema ->
       val repo = schema.tempDir.toRealPath()
       val specsRoot = Files.createDirectories(repo.resolve("store").resolve("specs"))
-      val subtasks = listOf(1 to "complete", 2 to "pending")
-      writeBundle(specsRoot, "SKILL-148-ide-status", "SKILL-148", "in_progress", subtasks)
+      writeBundle(specsRoot, "SKILL-148-ide-status", "SKILL-148", manifestStatus, subtasks)
+      writeBundle(specsRoot, "SKILL-149-finished", "SKILL-149", "complete", listOf(1 to "complete"))
       val environment = mapOf("HOME" to repo.toString())
       val database = sqliteSessionFactoryForTests(repo, schema.dbPath.toString(), environment, ideStatusClock)
       val manifests = testWorkflowGoalRunnerManifestStore(database, TestDecompositionManifestStore, ideStatusClock)
@@ -168,7 +178,9 @@ class SpecBrowserServiceTest {
 
       val snapshot: SpecBrowserSnapshot = harness(database, repo).service.snapshot("test-project", repo)
 
-      assertEquals(SpecBrowserStatus.PAUSED, (snapshot.roots.single() as SpecBrowserNode.Bundle).status)
+      val bundles = snapshot.roots.map { it as SpecBrowserNode.Bundle }
+      assertEquals(listOf("SKILL-148", "SKILL-149"), bundles.map { it.issueKey })
+      assertEquals(listOf(SpecBrowserStatus.PAUSED, SpecBrowserStatus.COMPLETE), bundles.map { it.status })
       assertTrue(!snapshot.anyInProgress)
     }
   }
@@ -220,6 +232,15 @@ class SpecBrowserServiceTest {
         TestRepositoryEnclosingRoot,
       ),
     )
+  }
+
+  private fun finishedAt(
+    specsRoot: Path,
+    relativePath: String,
+    instant: String,
+  ) {
+    val manifest = specsRoot.resolve(relativePath).resolve("decomposition-manifest.yaml")
+    Files.setLastModifiedTime(manifest, FileTime.from(Instant.parse(instant)))
   }
 
   private fun bareBundle(
