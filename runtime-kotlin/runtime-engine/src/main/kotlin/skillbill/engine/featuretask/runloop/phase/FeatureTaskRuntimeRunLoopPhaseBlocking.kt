@@ -40,6 +40,7 @@ import skillbill.engine.featuretask.runner.STATUS_PAUSED
 import skillbill.engine.featuretask.runner.isProcessFailureBlockReason
 import skillbill.engine.featuretask.runner.nonRetryingPhaseSchemaBlockReason
 import skillbill.engine.featuretask.runner.withSchemaGateDetail
+import skillbill.engine.featuretask.slot.PhaseStepFailureSource
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptScope
@@ -89,6 +90,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         failureDisposition = inPhase.failureDisposition,
         failureCode = block.failureCode,
         payload = inPhase.payload,
+        owedFindingRefs = block.owedFindingRefs,
       ),
       transitions,
     )
@@ -182,7 +184,14 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       recorder,
       transitions,
       args.observability,
-      PhaseFailureContinuationRequest(args.run, args.attemptCount, args.reason, args.payload.fileManifest),
+      PhaseFailureContinuationRequest(
+        run = args.run,
+        attempt = args.attemptCount,
+        reason = args.reason,
+        manifest = args.payload.fileManifest,
+        failureCode = args.failureCode,
+        owedFindingRefs = args.owedFindingRefs,
+      ),
     )?.let { return it }
     val request = args.run.request
     val run = args.run
@@ -238,7 +247,13 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       recorder,
       coupledRunTransitions,
       args.observability,
-      PhaseFailureContinuationRequest(args.run, args.attemptCount, args.reason, args.fileManifest),
+      PhaseFailureContinuationRequest(
+        run = args.run,
+        attempt = args.attemptCount,
+        reason = args.reason,
+        manifest = args.fileManifest,
+        source = PhaseStepFailureSource.PAUSE,
+      ),
     )?.let { return it }
     val run = args.run
     val attemptCount = args.attemptCount

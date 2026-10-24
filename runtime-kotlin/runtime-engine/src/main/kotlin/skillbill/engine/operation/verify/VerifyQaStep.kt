@@ -192,9 +192,19 @@ class VerifyQaStep(
       VerifyWorkflow.WARNINGS to report.warnings,
     )
 
-  private fun reason(report: QaReport): String? = report.reason.takeIf { report.verdict == QaVerdict.SKIPPED }
+  private fun reason(report: QaReport): String? =
+    when (report.verdict) {
+      QaVerdict.SKIPPED, QaVerdict.INCOMPLETE -> report.reason
+      QaVerdict.PASSED, QaVerdict.FINDINGS_OPEN -> {
+        val partial =
+          report.coverage.any { it.verdict == QaVerdict.SKIPPED || it.verdict == QaVerdict.INCOMPLETE } ||
+            report.coverageWarnings.isNotEmpty()
+        PARTIAL_COVERAGE.takeIf { partial }
+      }
+    }
 
   private companion object {
+    const val PARTIAL_COVERAGE = "partial_coverage"
     const val DISABLED_DETAIL = "QA is off for this verify run."
     const val MAX_RECORD_REASON = 200
     const val RETAINED_GUIDANCE =

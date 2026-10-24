@@ -11,7 +11,7 @@ import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -32,7 +32,7 @@ class QaExecutionCheckoutTest {
   private val git = GitWorkflowGitOperations()
   private val androidPack =
     kotlinPackWithValidationGate()
-      .copy(qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), "qa/android-qa.md"))
+      .copy(qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), "qa/android-qa.md"))
 
   init {
     run("init", "--quiet", "--initial-branch=main")

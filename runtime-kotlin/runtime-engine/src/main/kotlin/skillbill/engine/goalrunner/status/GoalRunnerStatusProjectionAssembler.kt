@@ -637,6 +637,7 @@ class GoalRunnerStatusProjectionAssembler(
             )
           },
           it.reportText,
+          it.failureKind?.wireValue,
         )
       }
     }.getOrElse { error ->

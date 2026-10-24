@@ -8,9 +8,13 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.observability.completedEvent
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseStepFailure
+import skillbill.engine.featuretask.slot.PhaseStepFailureSource
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 internal object FeatureTaskRuntimeNonBlockingFailure {
   fun settle(
@@ -20,42 +24,77 @@ internal object FeatureTaskRuntimeNonBlockingFailure {
     failure: PhaseFailureContinuationRequest,
   ): PhaseOutcome? {
     val run = failure.run
-    val normalized = run.failureContinuationOutput ?: return null
     val iteration = failure.attempt.coerceAtLeast(1)
-    val manifest = failure.manifest
+    val continuation = continuationFor(failure) ?: return null
     observability.diagnostics.error(
       "seam=phase_failure_continuation workflow=${run.request.workflowId} phase=${run.phaseId} " +
-        "attempt=$iteration value_expected=verified_findings value_used=original_review_findings " +
-        "reason=${boundedSchemaGateDetail(failure.reason)}",
+        "attempt=$iteration" + continuation.diagnosticDetail?.let { " $it" }.orEmpty() +
+        " reason=${boundedSchemaGateDetail(failure.reason)}",
     )
-    val output = FeatureTaskRuntimePhaseOutput(run.phaseId, iteration, normalized.canonicalJson, normalized)
-    val phase =
-      FeatureTaskRuntimePhaseStateRequest(
+    val completion =
+      RuntimeAuthoredCompletion(
         workflowId = run.request.workflowId,
         phaseId = run.phaseId,
-        status = "completed",
-        attemptCount = iteration,
         resolvedAgentId = run.resolvedAgent.resolvedAgentId,
-        finished = true,
-        outputArtifact = normalized.canonicalJson,
-        normalizedOutput = normalized,
-        fileManifestBefore = manifest?.before.orEmpty(),
-        fileManifestAfter = manifest?.after.orEmpty(),
-        fileManifestIntroduced = manifest?.introduced.orEmpty(),
+        iteration = iteration,
+        output = continuation.output,
+        manifest = failure.manifest,
         loopId = run.reentry?.loopId,
         edgeIteration = run.reentry?.edgeIteration,
       )
-    val start = phase.copy(status = "running", finished = false, normalizedOutput = null, outputArtifact = null)
-    if (recorder.recordRequiredPhaseStart(start) is RequiredPhaseWrite.Rejected) {
-      observability.diagnostics.error("seam=phase_failure_continuation phase=${run.phaseId} start_write=rejected")
-    }
-    val write = transitions.persistAuthoritativePhaseCompletion(recorder, phase, output)
+    val write = persistRuntimeAuthoredCompletion(recorder, transitions, observability, completion)
     if (write is RequiredPhaseWrite.Rejected) {
-      observability.diagnostics.error("seam=phase_failure_continuation phase=${run.phaseId} completion_write=rejected")
-      transitions.recordSyntheticUpstreamCompletion(output)
+      transitions.recordSyntheticUpstreamCompletion(completion.phaseOutput())
     }
     observability.completedEvent(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
-    return PhaseOutcome.completed(output)
+    return PhaseOutcome.completed(completion.phaseOutput())
+  }
+
+  fun persistRuntimeAuthoredCompletion(
+    recorder: PhaseRunRecords,
+    transitions: FeatureTaskRuntimeRunTransitionOwner,
+    observability: FeatureTaskRuntimeRunObservability,
+    completion: RuntimeAuthoredCompletion,
+  ): RequiredPhaseWrite {
+    val phaseId = completion.phaseId
+    val manifest = completion.manifest
+    val phase =
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = completion.workflowId,
+        phaseId = phaseId,
+        status = "completed",
+        attemptCount = completion.iteration,
+        resolvedAgentId = completion.resolvedAgentId,
+        finished = true,
+        outputArtifact = completion.output.canonicalJson,
+        normalizedOutput = completion.output,
+        fileManifestBefore = manifest?.before.orEmpty(),
+        fileManifestAfter = manifest?.after.orEmpty(),
+        fileManifestIntroduced = manifest?.introduced.orEmpty(),
+        loopId = completion.loopId,
+        edgeIteration = completion.edgeIteration,
+      )
+    val start = phase.copy(status = "running", finished = false, normalizedOutput = null, outputArtifact = null)
+    if (recorder.recordRequiredPhaseStart(start) is RequiredPhaseWrite.Rejected) {
+      observability.diagnostics.error("seam=phase_failure_continuation phase=$phaseId start_write=rejected")
+    }
+    val write = transitions.persistAuthoritativePhaseCompletion(recorder, phase, completion.phaseOutput())
+    if (write is RequiredPhaseWrite.Rejected) {
+      observability.diagnostics.error("seam=phase_failure_continuation phase=$phaseId completion_write=rejected")
+    }
+    return write
+  }
+
+  private fun continuationFor(failure: PhaseFailureContinuationRequest): PhaseFailureContinuationOutput? {
+    val run = failure.run
+    val stop =
+      PhaseStepFailure(
+        reason = failure.reason,
+        source = failure.source,
+        failureCode = failure.failureCode,
+        owedFindingRefs = failure.owedFindingRefs,
+      )
+    return run.failureContinuation?.outputFor(run, stop) ?: run.failureContinuationOutput
   }
 }
 
@@ -64,4 +103,21 @@ internal data class PhaseFailureContinuationRequest(
   val attempt: Int,
   val reason: String,
   val manifest: FeatureTaskRuntimePhaseFileManifest? = null,
+  val source: PhaseStepFailureSource = PhaseStepFailureSource.BLOCK,
+  val failureCode: String? = null,
+  val owedFindingRefs: Set<String> = emptySet(),
 )
+
+internal data class RuntimeAuthoredCompletion(
+  val workflowId: String,
+  val phaseId: String,
+  val resolvedAgentId: String,
+  val iteration: Int,
+  val output: NormalizedFeatureTaskRuntimePhaseOutput,
+  val manifest: FeatureTaskRuntimePhaseFileManifest? = null,
+  val loopId: String? = null,
+  val edgeIteration: Int? = null,
+) {
+  fun phaseOutput(): FeatureTaskRuntimePhaseOutput =
+    FeatureTaskRuntimePhaseOutput(phaseId, iteration, output.canonicalJson, output)
+}

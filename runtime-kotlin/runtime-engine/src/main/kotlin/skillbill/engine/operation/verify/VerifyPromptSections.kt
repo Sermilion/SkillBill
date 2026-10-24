@@ -35,7 +35,7 @@ internal object VerifyPromptSections {
 
   val CONSOLIDATED_VERDICT: String by lazy { span("## Consolidated Verdict", "After presenting the verdict, ask:") }
 
-  val QA_VERDICT_RULES: String by lazy { section("## Mobile QA Verdict Rules") }
+  val QA_VERDICT_RULES: String by lazy { section("## QA Verdict Rules") }
 
   val VERIFICATION_INPUT_BOUNDARY: String by lazy { section("## Verification Input Boundary") }
 
@@ -120,8 +120,8 @@ internal object VerifyPromptSections {
     checkout: Path,
     headRevision: String,
   ): String =
-    "# Operation: verify (mobile QA)\n\n" +
-      "Run mobile QA for the verify target `$headRevision`. The runtime checked it out into the temporary QA " +
+    "# Operation: verify (QA)\n\n" +
+      "Run QA for the verify target `$headRevision`. The runtime checked it out into the temporary QA " +
       "checkout `$checkout`; build, install, and test only from there. You may edit any file in that checkout to " +
       "reach a state the criteria need; the runtime deletes it afterwards. Never touch the operator's checkout, " +
       "and never commit, push, or open a pull request. Settle by writing the QA report at the path the runtime " +

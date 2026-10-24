@@ -173,6 +173,7 @@ object PhaseAttemptContinuations {
             payload = BlockAndPersistPayload(fileManifest = owed.fileManifest),
             failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
             failureCode = FeatureTaskRuntimeAttemptBudgets.ATTEMPT_BUDGET_FAILURE_CODE,
+            owedFindingRefs = owed.refs,
           ),
         )
       }

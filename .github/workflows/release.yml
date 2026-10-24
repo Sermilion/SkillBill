@@ -124,14 +124,19 @@ jobs:
         run: |
           set -euo pipefail
           runtime_record="runtime-kotlin/runtime-cli/build/install/runtime-cli/build-identity.properties"
-          mapfile -t desktop_records < <(find desktop-tray/composeApp/build/compose/binaries/main/app \
-            -name build-identity.properties -type f)
-          if [[ "${#desktop_records[@]}" -ne 1 ]]; then
-            echo "Expected one desktop build identity record, found ${#desktop_records[@]}." >&2
+          desktop_record=""
+          desktop_record_count=0
+          while IFS= read -r -d '' found_record; do
+            desktop_record="$found_record"
+            desktop_record_count=$((desktop_record_count + 1))
+          done < <(find desktop-tray/composeApp/build/compose/binaries/main/app \
+            -name build-identity.properties -type f -print0)
+          if [[ "$desktop_record_count" -ne 1 ]]; then
+            echo "Expected one desktop build identity record, found $desktop_record_count." >&2
             exit 1
           fi
           cat "$runtime_record"
-          cmp "$runtime_record" "${desktop_records[0]}"
+          cmp "$runtime_record" "$desktop_record"
 
       - name: Bundle skills archive
         if: matrix.host_token == 'linux-x64'

@@ -95,6 +95,15 @@ class QaFindingSettlementTest {
   }
 
   @Test
+  fun `a passed report that lists no assertions keeps unresolved findings open`() {
+    val unverified = QaReportParser.parse("Verdict: passed\n\nThe app looked fine.", qa.expected.evidencePrefix)
+
+    val result = settlement.observe(previous, unverified, qa)
+
+    assertEquals(previous.openFindings, result.openFindings)
+  }
+
+  @Test
   fun `a report that never landed keeps unresolved findings open`() {
     val result = settlement.observe(previous, QaReports.missing("QA agent wrote no report.md"), qa)
 
@@ -118,7 +127,7 @@ class QaFindingSettlementTest {
 
     assertEquals(QaVerdict.INCOMPLETE, report.verdict)
     assertEquals(null, report.text)
-    assertEquals("QA agent wrote no report.md", report.reason)
+    assertEquals(null, report.reason)
     assertEquals(listOf("QA agent wrote no report.md"), report.warnings)
   }
 

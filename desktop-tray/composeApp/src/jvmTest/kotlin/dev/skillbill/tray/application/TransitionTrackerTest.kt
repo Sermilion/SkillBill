@@ -5,6 +5,7 @@ import dev.skillbill.tray.core.testing.workItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class TransitionTrackerTest {
   @Test
@@ -32,6 +33,31 @@ class TransitionTrackerTest {
     assertEquals(listOf("blocked", "failed", "goal_completed", "pause_took_effect", "standalone_phase_finished"), events.map { it.second })
     val settings = AppSettings(notifications = defaultNotifications.mapValues { (key, _) -> key != "failed" })
     assertEquals(listOf("blocked", "goal_completed", "pause_took_effect", "standalone_phase_finished"), enabledTransitions(events, settings).map { it.second })
+  }
+
+  @Test
+  fun `qa that could not complete notifies once per settlement and replaces the generic block`() {
+    val tracker = TransitionTracker()
+    val at = Instant.parse("2026-10-24T10:00:00Z")
+    fun qa(outcome: String, failureKind: String?, recordedAt: Instant = at) = WorkQaOutcome(outcome, "device unavailable", failureKind, recordedAt)
+    val active = workItem("feature")
+    tracker.observe(listOf(active))
+
+    val skipped = active.copy(qaOutcome = qa("skipped", null), updatedAt = active.updatedAt + 1.seconds)
+    assertEquals(emptyList(), tracker.observe(listOf(skipped)))
+    val warning = skipped.copy(qaOutcome = qa("incomplete", null), updatedAt = active.updatedAt + 2.seconds)
+    assertEquals(emptyList(), tracker.observe(listOf(warning)))
+
+    val blocked = warning.copy(lifecycle = Lifecycle.BLOCKED, qaOutcome = qa("incomplete", "environment"), updatedAt = active.updatedAt + 3.seconds)
+    assertEquals(listOf("qa_incomplete"), tracker.observe(listOf(blocked)).map { it.second })
+    assertEquals("QA could not complete: device unavailable", notificationBody(blocked, "qa_incomplete"))
+    assertEquals(emptyList(), tracker.observe(listOf(blocked.copy(updatedAt = active.updatedAt + 4.seconds))))
+
+    val retried = blocked.copy(qaOutcome = qa("incomplete", "defect", at + 1.seconds), updatedAt = active.updatedAt + 5.seconds)
+    val events = tracker.observe(listOf(retried))
+    assertEquals(listOf("qa_incomplete"), events.map { it.second })
+    assertEquals(events, enabledTransitions(events, AppSettings()))
+    assertEquals(emptyList(), enabledTransitions(events, AppSettings(notifications = defaultNotifications + ("qa_incomplete" to false))))
   }
 
   @Test

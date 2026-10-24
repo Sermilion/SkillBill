@@ -37,4 +37,12 @@ internal fun qaTestReport(
       appendLine("Observed: the home screen stays blank.")
       appendLine("Evidence: ${expected.evidencePrefix}home-$id.png")
     }
+    if (verdict == QaVerdict.PASSED) {
+      appendLine()
+      appendLine("## Assertions")
+      appendLine("- login flow: the home screen shows the user name: passed")
+      appendLine()
+      appendLine("## Isolation")
+      appendLine("Disposable emulator profile; no database; outbound calls stubbed.")
+    }
   }

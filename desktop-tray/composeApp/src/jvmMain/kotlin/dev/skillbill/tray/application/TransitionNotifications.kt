@@ -20,9 +20,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
-/** A finished run's notification names how it ended; live work names the step it reached. */
-fun notificationBody(item: WorkItem): String =
-  if (item.finished()) listOfNotNull(item.phaseId ?: item.issueKey, item.outcomeLabel()).joinToString(" · ") else item.currentStepLabel
+/** A finished run's notification names how it ended; live work names the step it reached; a QA that could not complete names why. */
+fun notificationBody(item: WorkItem, transition: String): String = when {
+  transition == QA_INCOMPLETE -> item.qaOutcome?.reason?.let { "QA could not complete: $it" } ?: "QA could not complete"
+  item.finished() -> listOfNotNull(item.phaseId ?: item.issueKey, item.outcomeLabel()).joinToString(" · ")
+  else -> item.currentStepLabel
+}
+
+private const val QA_INCOMPLETE = "qa_incomplete"
 
 fun enabledTransitions(events: List<Pair<WorkItem, String>>, settings: AppSettings): List<Pair<WorkItem, String>> =
   events.filter { (_, transition) -> transition in allowedTransitions && settings.notifications[transition] == true }
@@ -98,7 +103,7 @@ class TransitionNotificationCoordinator(
     }
     val notificationEpoch = epoch
     enabledTransitions(tracker.observe(items), current).forEach { (item, transition) ->
-      native.notifyAuthorized(item.summary, notificationBody(item), item.identity, { send ->
+      native.notifyAuthorized(item.summary, notificationBody(item, transition), item.identity, { send ->
         if (notificationEpoch == epoch && current.notifications[transition] == true) send()
       }, onSelect)
     }
@@ -109,8 +114,9 @@ class TransitionNotificationCoordinator(
 
 class TransitionTracker {
   private data class Key(val identity: WorkIdentity, val executionId: String?)
+  /** [qaMarker] is the recorded-at of a QA that could not complete, so each QA settlement fires once. */
   private data class Observation(val lifecycle: Lifecycle, val revision: String?, val updatedAt: Instant,
-    val storeId: String?, val storeRevision: Long?)
+    val storeId: String?, val storeRevision: Long?, val qaMarker: Instant?)
   private val last = linkedMapOf<Key, Observation>()
 
   fun baseline(items: List<WorkItem>) {
@@ -141,14 +147,20 @@ class TransitionTracker {
         item.scope == ExecutionScope.STANDALONE_PHASE && item.lifecycle == Lifecycle.TERMINAL && prior.lifecycle != Lifecycle.TERMINAL -> "standalone_phase_finished"
         else -> null
       }
-      if (event != null) add(item to event)
+      val qaMarker = qaMarker(item)
+      val qaEvent = qaMarker != null && qaMarker != prior.qaMarker
+      if (qaEvent) add(item to QA_INCOMPLETE)
+      // The QA notification already explains a block or failure it caused, so it replaces the generic one.
+      if (event != null && !(qaEvent && (event == "blocked" || event == "failed"))) add(item to event)
     }
   }
 
   fun clear() { last.clear() }
 
   private fun observation(item: WorkItem) = Observation(item.lifecycle, item.statusRevision, item.updatedAt,
-    item.databaseStoreId, item.databaseRevision)
+    item.databaseStoreId, item.databaseRevision, qaMarker(item))
+
+  private fun qaMarker(item: WorkItem): Instant? = item.qaOutcome?.takeIf { it.couldNotComplete }?.recordedAt
 
   private fun isNewer(item: WorkItem, prior: Observation): Boolean {
     if (item.databaseStoreId != prior.storeId) return false

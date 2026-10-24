@@ -12,7 +12,16 @@ internal fun QaReport.qaOutcome(): StandaloneQaOutcome =
     QaVerdict.INCOMPLETE -> StandaloneQaOutcome.INCOMPLETE
   }
 
-internal fun QaReport.summary(): String = "QA verdict: ${verdict.wireValue}${reason?.let { ": $it" }.orEmpty()}"
+internal fun QaReport.summary(): String {
+  val verdictLine = "QA verdict: ${verdict.wireValue}${reason?.let { ": $it" }.orEmpty()}"
+  if (coverage.isEmpty()) return verdictLine
+  val targets =
+    coverage.joinToString(", ") { line ->
+      "${line.kind.wireValue} ${line.verdict.wireValue}${line.reason?.let { " ($it)" }.orEmpty()}" +
+        line.backend?.let { " backend ${it.wireValue}" }.orEmpty()
+    }
+  return "$verdictLine; coverage: $targets"
+}
 
 internal fun QaReport.targetReport(): List<String> =
   warnings.map { "Warning: $it" } +

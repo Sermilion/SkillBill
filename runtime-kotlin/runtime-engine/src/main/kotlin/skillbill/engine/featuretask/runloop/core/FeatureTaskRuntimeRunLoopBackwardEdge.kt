@@ -205,26 +205,33 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
     edge.capExhaustionBehavior == FeatureTaskRuntimeCapExhaustionBehavior.BLOCK &&
       edge.perEdgeCap?.let { iteration >= it } == true
 
+  internal fun activeReentryCovering(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+  ): PendingReentry? =
+    with(context) {
+      session.activeReentry
+        ?.takeIf { active ->
+          transitions.backwardEdges
+            .firstOrNull { it.loopId == active.loopId }
+            ?.let { edge ->
+              phaseId in
+                spanBetween(
+                  transitions,
+                  edge.destinationPhaseId,
+                  edge.fromPhaseId,
+                )
+            } == true
+        }?.copy(phaseId = phaseId)
+    }
+
   internal fun runPhaseFor(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
   ): String? =
     with(context) {
       val briefingReentry = runState.coupledRunTransitions.consumeBriefingPendingReentry(phaseId)
-      val reentry =
-        briefingReentry ?: session.activeReentry
-          ?.takeIf { active ->
-            transitions.backwardEdges
-              .firstOrNull { it.loopId == active.loopId }
-              ?.let { edge ->
-                phaseId in
-                  spanBetween(
-                    transitions,
-                    edge.destinationPhaseId,
-                    edge.fromPhaseId,
-                  )
-              } == true
-          }?.copy(phaseId = phaseId)
+      val reentry = briefingReentry ?: activeReentryCovering(context, phaseId)
       val outcome =
         FeatureTaskRuntimeRunLoopPlanningBranch.runPhase(
           context,

@@ -87,7 +87,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
         destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX,
         loopId = FeatureTaskRuntimePhaseWorkflowDefinition.QA_FIX_LOOP_ID,
         perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_FIX_ATTEMPTS,
-        capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
         capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
       ),
       FeatureTaskRuntimeBackwardEdge(
@@ -120,7 +120,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
         destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
         loopId = FeatureTaskRuntimePhaseWorkflowDefinition.QA_INVALIDATION_LOOP_ID,
         perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_QA_INVALIDATIONS,
-        capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
         capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
         crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
       ),

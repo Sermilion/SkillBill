@@ -1,8 +1,10 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordQaFailureKind
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
+import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.featuretask.model.FeatureTaskQaFinding
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -124,6 +126,82 @@ class SqliteFeatureTaskQaOutcomeStoreTest {
       assertNull(legacy.reportText)
     }
   }
+
+  @Test
+  fun `migration 84 keeps legacy rows readable, stores a failure kind and bumps the desktop revisions on QA writes`() {
+    val dbPath = Files.createTempDirectory("skillbill-qa-failure-kind").resolve("metrics.db")
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      DatabaseSchema.createBaseSchema(connection)
+      DatabaseMigrations.apply(
+        connection,
+        SqliteTestDiagnostics,
+        migrationSet = DatabaseMigrations.migrations.filter { it.version <= 83 },
+      )
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feature_task_qa_outcomes (workflow_id, outcome, reason, qa_fix_attempts, " +
+            "tested_tree_identity, recorded_at) VALUES ('wfl-legacy', 'incomplete', 'old', 0, NULL, " +
+            "'2026-10-20T10:15:30Z')",
+        )
+      }
+      assertTrue(!hasColumn(connection, "feature_task_qa_outcomes", "failure_kind"))
+    }
+
+    DatabaseRuntime.migrateExistingDatabase(dbPath, SqliteTestDiagnostics)
+
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      val store = SqliteFeatureTaskQaOutcomeStore(connection)
+      val legacy = assertNotNull(store.find("wfl-legacy"))
+      assertNull(legacy.failureKind)
+      val phasesBefore = revision(connection, "phases")
+      val goalsBefore = revision(connection, "goals")
+
+      store.upsert(legacy.copy(failureKind = FeatureTaskQaFailureKind.DEFECT))
+      assertEquals(FeatureTaskQaFailureKind.DEFECT, store.find("wfl-legacy")?.failureKind)
+      store.upsert(legacy.copy(failureKind = FeatureTaskQaFailureKind.ENVIRONMENT))
+
+      assertEquals(FeatureTaskQaFailureKind.ENVIRONMENT, store.find("wfl-legacy")?.failureKind)
+      assertTrue(revision(connection, "phases") > phasesBefore)
+      assertTrue(revision(connection, "goals") > goalsBefore)
+    }
+  }
+
+  @Test
+  fun `running the failure kind migration again keeps exactly three QA outcome revision triggers`() {
+    val dbPath = Files.createTempDirectory("skillbill-qa-failure-kind-rerun").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).close()
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      assertTrue(hasColumn(connection, "feature_task_qa_outcomes", "failure_kind"))
+
+      recordQaFailureKind(connection)
+
+      assertTrue(hasColumn(connection, "feature_task_qa_outcomes", "failure_kind"))
+      assertEquals(3, qaOutcomeTriggerCount(connection))
+    }
+  }
+
+  private fun qaOutcomeTriggerCount(connection: Connection): Int =
+    connection.createStatement().use { statement ->
+      statement.executeQuery(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' " +
+          "AND name LIKE 'desktop_change_feature_task_qa_outcomes_%'",
+      ).use {
+        it.next()
+        it.getInt(1)
+      }
+    }
+
+  private fun revision(
+    connection: Connection,
+    topic: String,
+  ): Int =
+    connection.prepareStatement("SELECT revision FROM desktop_change_revisions WHERE topic = ?").use { statement ->
+      statement.setString(1, topic)
+      statement.executeQuery().use {
+        it.next()
+        it.getInt(1)
+      }
+    }
 
   private fun hasColumn(
     connection: Connection,

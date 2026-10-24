@@ -8,6 +8,15 @@ Areas: desktop-tray (core/domain, core/data, core/ui, composeApp infrastructure 
 - Limits: goal activity shows a plan report only once the runtime's goal branch in WorkExecutionHistory attaches one (SKILL-441 subtask 6); NativeServicesImpl.openFile has no automated test; packagedDataSmoke was not run locally.
 Feature flag: N/A
 Acceptance criteria: 3/3 implemented
+## [2026-10-24] SKILL-443 subtask 3 QA could-not-complete notification and detail
+Areas: desktop-tray core/domain model, core/data runtime mapper, composeApp application (TransitionNotifications), feature/detail (PhaseResults, DetailPresentation, DetailContent)
+- MEDIUM feature. WorkItem.qaOutcome (WorkQaOutcome with derived couldNotComplete) comes from the IdeStatus workflow_qa_outcome field; GoalQaResult gains failureKind. An unparseable recordedAt maps to null, never a board failure.
+- qa_incomplete joins allowedTransitions and defaultNotifications (on). TransitionTracker.Observation keeps a qaMarker (the recordedAt when could-not-complete); a changed marker against a prior observation emits one qa_incomplete and drops the generic blocked and failed. First-seen items stay a silent baseline. reusable
+- notificationBody takes the transition and returns "QA could not complete: <reason>" or the bare phrase; the settings switch renders from allowedTransitions with no edit.
+- Detail: QaRow adds environment error or runtime defect labels and shows the reason even with a report; WorkflowQaSection renders the outcome for non-goal items.
+- Limits: the QA row and mapper timestamp fallback have no dedicated tests. Packaged-data smoke ran green on a clean tree.
+Feature flag: N/A (qa_incomplete notification toggle, default on)
+Acceptance criteria: 5/5 implemented
 
 ## [2026-10-21] SKILL-430 subtask 2 single runtime copy
 Areas: desktop-tray, composeApp/bootstrap, core/data, build-logic/convention, packaged-data smoke, .github/workflows, install.sh, README.md

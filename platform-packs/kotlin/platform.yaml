@@ -85,6 +85,9 @@ lane_conditions:
   ui: { content: ["compose", "swing", "javafx", "render"] }
   ux-accessibility: { content: ["semantics", "focus", "keyboard", "localization"] }
   code-quality: { required: true }
+qa_capability:
+  platforms: [backend]
+  guidance_file: qa/backend-qa.md
 validation_gate:
   full_gate_command:
     - ./gradlew

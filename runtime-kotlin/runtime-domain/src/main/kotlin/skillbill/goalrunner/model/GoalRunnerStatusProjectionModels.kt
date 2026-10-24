@@ -197,6 +197,7 @@ data class GoalRunnerQaResult(
   val recordedAt: Instant,
   val findings: List<GoalRunnerQaFinding> = emptyList(),
   val reportText: String? = null,
+  val failureKind: String? = null,
 )
 
 data class GoalRunnerQaFinding(

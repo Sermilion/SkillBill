@@ -105,6 +105,19 @@ internal fun addProductReportRevisionTriggers(connection: Connection) {
   }
 }
 
+internal fun addQaOutcomeRevisionTriggers(connection: Connection) {
+  connection.createStatement().use { statement ->
+    REVISION_TRIGGER_OPERATIONS.forEach { operation ->
+      statement.execute("DROP TRIGGER IF EXISTS desktop_change_feature_task_qa_outcomes_${operation.lowercase()}")
+    }
+    createRevisionTriggers(
+      statement,
+      "feature_task_qa_outcomes",
+      listOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.PHASES_TOPIC),
+    )
+  }
+}
+
 private val REVISION_TRIGGER_OPERATIONS = listOf("INSERT", "UPDATE", "DELETE")
 
 private fun installDesktopReadIndexes(connection: Connection) {

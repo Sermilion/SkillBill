@@ -2316,4 +2316,5 @@ private val expectedMigrationDefinitions =
     81 to "retain-product-report-submission-and-recovery-evidence",
     82 to "persist-pending-product-report-comments",
     83 to "record-qa-report-text",
+    84 to "record-qa-failure-kind",
   )

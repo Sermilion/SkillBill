@@ -5,6 +5,31 @@ Context: SKILL-441 moves project state into a project store, so a checkout's old
 Decision: After binding a store, the resolver warns once and records a notice timestamp as an optional field of the store's own record. It never modifies or deletes anything under the checkout's legacy directory.
 Reason: The store is runtime-owned and written atomically, so the stamp survives across processes while the user's tree stays untouched. The stamp is a second record write after bind because bind has many write paths. The field is optional and the contract version stays 0.1.
 Alternatives considered: A marker file inside the checkout, rejected because it writes into user projects.
+## [2026-10-24] QA resource teardown is the innermost lifecycle owner
+Context: SKILL-420 QA runs start processes and compose projects that use files inside the checkout.
+Decision: The owned-resource closer is the innermost AutoCloseable in the QA lifecycle, so it closes before the checkout, lease and workspace owners.
+Reason: Processes and compose projects must stop before the directories they use are removed. The execute exception stays primary; only expected teardown outcomes are caught, never interrupts.
+
+## [2026-10-24] QA unreadable-record warnings come only from the reconcile pass
+Context: Release and teardown paths also meet undecodable owned-resource records.
+Decision: Only reconcile (reclaimAbandoned at run start) emits the "record unreadable" diagnostic; other paths skip such records silently.
+Reason: One warning per run avoids repeated noise. Unreadable records are never deleted, so the operator keeps the evidence.
+
+## [2026-10-24] A reused pid is never signalled
+Context: QA process records hold a pid, and pids are reused after the original process exits.
+Decision: Process teardown requires a live pid whose start instant equals the recorded one, and refuses the owner pid, the current process and its ancestors.
+Reason: A pid alone could kill an unrelated process. A mismatched start instant means the original process is gone, so the record counts as released without any signal.
+
+## [2026-10-24] Only an identity-naming Docker "not found" line counts as removed
+Context: Docker removal can fail for many reasons, and a missing binary, timeout or generic error must not drop the record.
+Decision: Treat a resource as already removed only when Docker output is a not-found line naming the identity. Everything else is Retained with a redacted, truncated first output line, and the record stays.
+Reason: Deleting a record on an ambiguous failure would orphan a live container, network or volume. Reasons never echo the identity.
+
+## [2026-10-24] Foreign owned-resource record decides registration before validation
+Context: SKILL-420 register must stop one invocation from attaching a resource another invocation recorded, including a dead run's.
+Decision: register checks for an existing record first and returns Conflict naming the owner, even if this invocation could not have created that name. Identity validation runs only when no record exists.
+Reason: Validating first could hide a foreign record behind a Rejected result and let a dead run's resource be adopted. Conflict-first keeps ownership literal. Conflict is stable whether the owner is live or dead.
+Revisit when: nested invocation ids can share a Docker name prefix with unrecorded resources.
 
 ## [2026-10-16] Acceptance evidence references have no character limit
 Context: SKILL-428 stopped while saving a focused source audit because the runtime copies audit prose into criterion, closure, and transition evidence references. The schema rejected each reference above 512 characters.

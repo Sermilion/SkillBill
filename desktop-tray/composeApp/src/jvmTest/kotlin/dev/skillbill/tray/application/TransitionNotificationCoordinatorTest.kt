@@ -167,6 +167,6 @@ class TransitionNotificationCoordinatorTest {
     val skipped = workItem("qa-run", Lifecycle.TERMINAL, family = null, issueKey = null)
       .copy(scope = ExecutionScope.STANDALONE_PHASE, phaseId = "qa", currentStepLabel = "qa", qaVerdict = QaVerdict.SKIPPED)
 
-    assertEquals("qa · Skipped", notificationBody(skipped))
+    assertEquals("qa · Skipped", notificationBody(skipped, "standalone_phase_finished"))
   }
 }

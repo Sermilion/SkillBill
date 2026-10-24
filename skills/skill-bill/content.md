@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports mobile QA findings from a device or simulator; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports QA findings for the repository's declared QA targets (backend endpoints, web journeys, or a device or simulator); /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
@@ -110,7 +110,7 @@ verbatim: a Linear issue key or URL, the requirements as raw text, or a
 `spec:<path>` token. If it has no intake, stop and ask for it. Forward
 `target:`, `mode:`, and `qa:` verbatim; without `target:`, the runtime verifies
 HEAD against `origin/HEAD`, without `mode:`, it reviews inline, and without
-`qa:`, QA is `off`. `qa:on` adds mobile QA in a temporary worktree at the target
+`qa:`, QA is `off`. `qa:on` adds QA in a temporary QA checkout at the target
 head after the completeness audit.
 
 ## Token Forwarding
@@ -360,11 +360,14 @@ it finished; report it and exit non-zero.
 
 ## Phase QA
 
-`phase:qa` runs the report-only `qa` slot. The runtime resolves the platform from
-the installed packs, not the dispatcher: the routed pack's `qa_capability` names
-its guidance, and a repository with no declaring pack completes as a skipped
-`unsupported_target` run without launching an agent. The QA agent drives one
-device or simulator and writes a prose `report.md` and its evidence under
+`phase:qa` runs the report-only `qa` slot for the repository's declared QA
+targets, such as backend endpoints, web journeys, or a device or simulator. Pack
+manifests declare QA support through `qa_capability`, and one `phase:qa` serves
+every declared target. The runtime resolves the targets from the installed packs,
+not the dispatcher: each routed pack's `qa_capability` names its guidance, and a
+repository with no declaring pack completes as a skipped `unsupported_target`
+run without launching an agent. The QA agent drives the app, service, browser,
+device, or simulator the guidance names and writes a prose `report.md` and its evidence under
 `qa/<repo-key>/<invocation>/` in the skill-bill state directory
 (`SKILL_BILL_STATE_DIR` when set), never in the working tree or `.git/`. It runs on a
 test account, so every in-app action is allowed, and it picks a Local or staging
@@ -375,7 +378,7 @@ repository's ignored local configuration files, and it may edit any file there
 to reach a state the criteria need, such as an injected fault. The runtime
 deletes that worktree afterwards; QA never edits the working tree, commits,
 pushes, or opens a PR. QA never blocks and always exits 0. The runtime reads the report with
-no schema check: the first line naming `passed`, `findings`, `incomplete`, or
+no schema check: the first line naming `passed`, `findings_open`, `incomplete`, or
 `skipped` is the verdict, and a report with none settles `incomplete`. Each
 `### <finding-id> <title>` section is a finding. The runtime never rewrites the
 stated verdict. A missing `report.md` or a stopped QA agent settles `incomplete`;

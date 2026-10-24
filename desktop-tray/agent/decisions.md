@@ -1,6 +1,6 @@
 ## [2026-10-23] Open spec bundle files through suspend openFile returning Outcome
 Context: The spec asked for a plain openFile(path) on RepositoryNavigation, but opening a file can fail and must not reach the compose thread.
-Decision: openFile is suspend and returns Outcome<Unit>, like openRepository and openDirectory, and runs through the existing navigate failure path on the IO dispatcher.
+Decision: openFile is suspend and returns Outcome&lt;Unit&gt;, like openRepository and openDirectory, and runs through the existing navigate failure path on the IO dispatcher.
 Reason: Failures reach the UI through the same Outcome path as other navigation links, and the click handler launches it in a coroutine.
 Alternatives considered: A fire-and-forget function would hide a missing file or failed launch.
 

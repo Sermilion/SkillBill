@@ -11,6 +11,7 @@ data class FeatureTaskQaOutcome(
   val recordedAt: String,
   val findings: List<FeatureTaskQaFinding> = emptyList(),
   val reportText: String? = null,
+  val failureKind: FeatureTaskQaFailureKind? = null,
 ) {
   init {
     require(workflowId.isNotBlank()) { "FeatureTaskQaOutcome.workflowId must not be blank." }
@@ -41,6 +42,16 @@ data class FeatureTaskQaFinding(
   }
 
   val evidencePath: String? get() = evidencePaths.firstOrNull() ?: reportPath
+}
+
+enum class FeatureTaskQaFailureKind(val wireValue: String) {
+  ENVIRONMENT("environment"),
+  DEFECT("defect"),
+  ;
+
+  companion object {
+    fun fromWire(value: String?): FeatureTaskQaFailureKind? = entries.firstOrNull { it.wireValue == value }
+  }
 }
 
 enum class FeatureTaskQaFindingStatus(val wireValue: String) {

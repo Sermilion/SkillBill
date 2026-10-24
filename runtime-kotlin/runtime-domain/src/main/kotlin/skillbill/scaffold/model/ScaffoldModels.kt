@@ -184,23 +184,27 @@ enum class ValidationGateCompilerDiagnosticsFormat(val wireValue: String) {
   }
 }
 
-enum class QaPlatform(val wireValue: String) {
-  ANDROID("android"),
-  IOS("ios"),
-  ;
+@JvmInline
+value class QaTargetKind(val wireValue: String) {
+  init {
+    require(PATTERN.matches(wireValue)) { "QA target kind '$wireValue' must match $PATTERN_SOURCE." }
+  }
 
   companion object {
-    fun fromWire(value: String): QaPlatform? = entries.firstOrNull { it.wireValue == value }
+    const val PATTERN_SOURCE: String = "^[a-z][a-z0-9-]{0,31}$"
+    private val PATTERN = Regex(PATTERN_SOURCE)
+
+    fun isValid(value: String): Boolean = PATTERN.matches(value)
   }
 }
 
 data class QaCapabilityDeclaration(
-  val platforms: Set<QaPlatform>,
+  val platforms: Set<QaTargetKind>,
   val guidanceFile: String,
   val discoveryHints: List<String> = emptyList(),
 ) {
   init {
-    require(platforms.isNotEmpty()) { "qa_capability.platforms must name at least one platform." }
+    require(platforms.isNotEmpty()) { "qa_capability.platforms must name at least one QA target kind." }
     require(guidanceFile.isNotBlank()) { "qa_capability.guidance_file must be a non-blank pack-relative path." }
   }
 }

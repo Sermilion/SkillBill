@@ -702,6 +702,7 @@ object PrincipleEnforcementInventory {
       "projectConfigFilePort",
       "projectStorePort",
       "qaDeviceLeasePort",
+      "qaOwnedResourcePort",
       "phaseStrategyLookup",
       "repoValidationGateway",
       "repositoryEnclosingRootPort",

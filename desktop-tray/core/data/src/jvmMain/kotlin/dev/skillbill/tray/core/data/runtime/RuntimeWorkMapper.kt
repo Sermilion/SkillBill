@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.domain.model.*
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.idestatus.model.IdeStatusExecutionScope
@@ -34,6 +35,10 @@ internal fun StandaloneQaOutcome.toDomain(): QaVerdict = when (this) {
   StandaloneQaOutcome.SKIPPED -> QaVerdict.SKIPPED
   StandaloneQaOutcome.INCOMPLETE -> QaVerdict.INCOMPLETE
 }
+
+/** An unparseable `recordedAt` drops the QA signal for this item rather than failing the board. */
+internal fun IdeStatusWorkflowQaOutcome.toDomain(): WorkQaOutcome? =
+  runCatching { Instant.parse(recordedAt) }.getOrNull()?.let { WorkQaOutcome(outcome.wireValue, reason, failureKind, it) }
 
 internal fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)
@@ -66,6 +71,7 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     scope = scope?.let { ExecutionScope.valueOf(it.name) },
     goalLaunched = execution?.launchScope == IdeStatusLaunchScope.GOAL,
     qaVerdict = execution?.qaOutcome?.toDomain(),
+    qaOutcome = workflowQaOutcome?.toDomain(),
     phaseId = execution?.phaseId,
     activity = currentActivity,
     lifecycle = Lifecycle.valueOf(lifecycleState.name),
@@ -163,6 +169,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
         qa.outcome, qa.reason, qa.qaFixAttempts, qa.recordedAt.toKotlinInstant(),
         qa.findings.map { GoalQaFinding(it.id, it.title, it.evidencePath, it.fixed) },
         qa.reportText,
+        qa.failureKind,
       )
     },
     latestActivity = LatestActivity(

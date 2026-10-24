@@ -37,6 +37,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.featuretask.model.FeatureTaskQaFindingStatus
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
@@ -48,7 +49,7 @@ import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -62,6 +63,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class GoalQaRepairLoopTest {
   @TempDir lateinit var home: Path
@@ -90,7 +92,9 @@ class GoalQaRepairLoopTest {
         "Evidence: $evidence\n\n\nEvidence: $evidence",
     )
     val outcome = assertNotNull(fixture.storedOutcome())
-    assertEquals(StandaloneQaOutcome.PASSED, outcome.outcome)
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
+    assertContains(assertNotNull(outcome.reason), "validate changed code after QA settled")
+    assertNull(outcome.failureKind)
     assertEquals(1, outcome.qaFixAttempts)
     assertEquals(REPAIRED_TREE, outcome.testedTreeIdentity)
     assertContains(assertNotNull(outcome.reportText), "Verdict: passed")
@@ -118,8 +122,10 @@ class GoalQaRepairLoopTest {
     assertContains(warning, "qa_fix left the app without a passing build, so QA did not re-test the fix")
     assertContains(warning, "after 3 repair turns")
     val outcome = assertNotNull(fixture.storedOutcome())
-    assertEquals(StandaloneQaOutcome.FINDINGS, outcome.outcome)
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
+    assertEquals(FeatureTaskQaFailureKind.ENVIRONMENT, outcome.failureKind)
     assertContains(assertNotNull(outcome.reason), "QA did not re-test the fix")
+    assertEquals(listOf("F-1"), outcome.findings.map { it.id })
   }
 
   @Test
@@ -323,7 +329,7 @@ class GoalQaRepairLoopTest {
       }
       val pack =
         kotlinPackWithValidationGate().copy(
-          qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), "qa/android-qa.md"),
+          qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), "qa/android-qa.md"),
         )
       var invocations = 0
       val config =
@@ -373,6 +379,7 @@ class GoalQaRepairLoopTest {
           outcomes,
           QaCapabilityResolver(git) { listOf(pack) },
           testProjectStore,
+          NoopRuntimeDiagnostics,
         )
     }
 

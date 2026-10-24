@@ -49,6 +49,25 @@ class GoalCliStatusQaFindingsTest {
     assertFalse(text.contains("qa_criteria"), text)
   }
 
+  @Test
+  fun `goal status names the QA failure kind and reason and stays silent for outcomes without either`() {
+    val recordedAt = Instant.parse("2026-10-24T09:00:00Z")
+    val defect =
+      GoalRunnerQaResult("incomplete", "QA could not complete:\nboom", 0, recordedAt, failureKind = "defect")
+    val environment = defect.copy(reason = "device lease failed", failureKind = "environment")
+    val clean = GoalRunnerQaResult("passed", null, 0, recordedAt)
+
+    assertTrue(
+      goalStatusText("SKILL-500", projection(defect))
+        .contains("qa_outcome: incomplete (runtime defect) reason=QA could not complete: boom\n"),
+    )
+    assertTrue(
+      goalStatusText("SKILL-500", projection(environment))
+        .contains("qa_outcome: incomplete (environment) reason=device lease failed\n"),
+    )
+    assertFalse(goalStatusText("SKILL-500", projection(clean)).contains("qa_outcome"))
+  }
+
   private fun projection(qa: GoalRunnerQaResult): GoalRunnerStatusProjection =
     GoalRunnerStatusProjection(
       issueKey = "SKILL-500",

@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.qa.report.qaTestReport
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Files
 import kotlin.io.path.readText
 import kotlin.test.Test
@@ -34,7 +34,7 @@ class VerifyQaOperationTest {
       assertEquals("QA is off for this verify run.", artifact["report_text"])
       assertEquals(emptyList(), harness.qaLeases.releasedInvocations)
       assertFalse(VerifyPromptSections.QA_STEP in harness.runner.stepNames())
-      assertFalse("Mobile QA Verdict Rules" in harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive)
+      assertFalse("QA Verdict Rules" in harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive)
       val finished = harness.telemetry.finished.single()
       assertEquals("skipped" to "disabled_policy", finished.qaOutcome to finished.qaReason)
     }
@@ -96,7 +96,7 @@ class VerifyQaOperationTest {
         steps.takeLast(3),
       )
       val directive = harness.runner.input(VerifyPromptSections.VERDICT_STEP).directive
-      assertContains(directive, "Mobile QA Verdict Rules")
+      assertContains(directive, "QA Verdict Rules")
       assertContains(directive, "QA report (verdict: passed):")
       assertContains(directive, written)
       assertEquals(written, qaReport(harness, token)["report_text"])
@@ -141,6 +141,24 @@ class VerifyQaOperationTest {
       assertContains(directive, "### F-1 Home screen stays blank")
       assertContains(directive, "Observed: the home screen stays blank.")
       assertEquals("findings", harness.telemetry.finished.single().qaOutcome)
+    }
+  }
+
+  @Test
+  fun `a passed report with a skipped coverage line records partial_coverage as the QA reason`() {
+    VerifyOperationHarness().use { harness ->
+      harness.qaManifests = listOf(ANDROID_PACK)
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(qa = "on")).token
+      val written =
+        qaTestReport(QaVerdict.PASSED, expected()) +
+          "\n## Coverage\n- android: passed\n- web: skipped reason: browser_unavailable backend: none\n"
+      harness.runner.sideEffects[VerifyPromptSections.QA_STEP] = { harness.qaWorkspaces.report = written }
+
+      val report = assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      assertContains(report.text, "QA outcome: passed (partial_coverage)")
+      val finished = harness.telemetry.finished.single()
+      assertEquals("passed" to "partial_coverage", finished.qaOutcome to finished.qaReason)
     }
   }
 
@@ -234,6 +252,6 @@ class VerifyQaOperationTest {
   private companion object {
     val ANDROID_PACK =
       kotlinPackWithValidationGate()
-        .copy(qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), "qa/android-qa.md"))
+        .copy(qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), "qa/android-qa.md"))
   }
 }

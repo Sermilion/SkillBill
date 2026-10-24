@@ -91,7 +91,14 @@ data class WorkItem(
   val goalLaunched: Boolean = false,
   /** The verdict a standalone QA phase recorded; absent for every other kind of work. */
   val qaVerdict: QaVerdict? = null,
+  /** The QA outcome the runtime recorded for this workflow; absent for standalone phases and workflows without QA. */
+  val qaOutcome: WorkQaOutcome? = null,
 )
+
+/** A workflow's recorded QA outcome; [couldNotComplete] means QA ended incomplete because of an error, not an ordinary skip. */
+data class WorkQaOutcome(val outcome: String, val reason: String?, val failureKind: String?, val recordedAt: Instant) {
+  val couldNotComplete: Boolean = outcome == "incomplete" && failureKind != null
+}
 
 data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?, val criterionRef: String? = null)
 enum class PhaseExecutionKind { PASS, SEMANTIC_LOOP, GATE_RUN, BOUNDED_EDGE, ATTEMPT }
@@ -227,6 +234,7 @@ data class GoalQaResult(
   val recordedAt: Instant,
   val findings: List<GoalQaFinding> = emptyList(),
   val reportText: String? = null,
+  val failureKind: String? = null,
 )
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
 data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
@@ -410,8 +418,8 @@ sealed interface SettingsState {
 
 enum class WorkSection { NEEDS_YOU, GOALS, PHASES, OPERATIONS, HISTORY, RECENT }
 
-val allowedTransitions = listOf("blocked", "failed", "goal_completed", "pause_took_effect", "standalone_phase_finished")
-val defaultNotifications = mapOf("blocked" to true, "failed" to true, "goal_completed" to true, "pause_took_effect" to true, "standalone_phase_finished" to false)
+val allowedTransitions = listOf("blocked", "failed", "goal_completed", "pause_took_effect", "standalone_phase_finished", "qa_incomplete")
+val defaultNotifications = mapOf("blocked" to true, "failed" to true, "goal_completed" to true, "pause_took_effect" to true, "standalone_phase_finished" to false, "qa_incomplete" to true)
 
 fun WorkItem.needsAttention(): Boolean =
   requiresAttention

@@ -3,7 +3,7 @@ package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
 import skillbill.scaffold.model.PointerSpec
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -81,20 +81,13 @@ internal fun parseQaCapability(
   val raw = manifest["qa_capability"] ?: return null
   val capability =
     raw as? Map<*, *> ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability' must be a mapping when present.")
-  val platforms =
-    (capability["platforms"] as? List<*>)?.takeIf(List<*>::isNotEmpty)?.map { value ->
-      (value as? String)?.let(QaPlatform::fromWire)
-        ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' has unknown platform '$value'.")
-    } ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' must be a non-empty list.")
-  if (platforms.toSet().size != platforms.size) {
-    invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' must not repeat a platform.")
-  }
+  val platforms = parseQaTargetKinds(capability["platforms"], slug)
   val guidanceFile = requireQaGuidanceFile(capability, slug, packRoot)
   val hints =
     (capability["discovery_hints"] ?: emptyList<String>()) as? List<*>
       ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.discovery_hints' must be a list.")
   return QaCapabilityDeclaration(
-    platforms = platforms.toSet(),
+    platforms = platforms,
     guidanceFile = guidanceFile,
     discoveryHints =
       hints.map { hint ->
@@ -104,6 +97,28 @@ internal fun parseQaCapability(
           )
       },
   )
+}
+
+private fun parseQaTargetKinds(
+  raw: Any?,
+  slug: String,
+): Set<QaTargetKind> {
+  val items =
+    (raw as? List<*>)?.takeIf(List<*>::isNotEmpty)
+      ?: invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' must be a non-empty list.")
+  val kinds = LinkedHashSet<QaTargetKind>()
+  for (value in items) {
+    val token =
+      (value as? String)?.takeIf(QaTargetKind::isValid)
+        ?: invalidManifestSchema(
+          "Platform pack '$slug': 'qa_capability.platforms' item '$value' must be a string matching " +
+            "${QaTargetKind.PATTERN_SOURCE}.",
+        )
+    if (!kinds.add(QaTargetKind(token))) {
+      invalidManifestSchema("Platform pack '$slug': 'qa_capability.platforms' repeats QA target kind '$token'.")
+    }
+  }
+  return kinds
 }
 
 private fun requireQaGuidanceFile(
