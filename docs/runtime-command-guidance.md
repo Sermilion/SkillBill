@@ -327,6 +327,13 @@ A skipped or incomplete QA report carries one token from this vocabulary in `qa_
 
 ## Runtime Agent Behavior
 
+When a Codex worker ends a response with `max_output_tokens`, the launcher resumes
+that exact session and continues the same phase. There is no continuation-count
+cap. The original phase deadline, cancellation, launch authorization and review
+evidence lifetime still apply across those responses. Partial output does not
+complete a phase or consume a repair attempt. A missing or changed session identity
+and other provider failures retain the normal blocked-run behavior.
+
 Agent-specific behavior uses injectable strategies on `AgentRunProcessRequest`, not identity branching in the process runner: `progressProbe`, `declaredProgressProbe`, `activityProbe`, `progressEmitter`, `idlePolicy` (`HEARTBEAT_EXTENDED` | `DB_PROGRESS_ONLY`). `ProcessWaitLoop` calls strategies only; new agents add a strategy constant. Crash reconciliation: `FeatureTaskRuntimeWorkerSupervisor` self-heals expired-lease rows to resumable at startup.
 
 Status heartbeats report that a child process remains active. Workflow progress

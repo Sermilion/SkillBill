@@ -7,11 +7,14 @@ import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
 import skillbill.infrastructure.launcher.mcp.claudeRuntimeMcpArguments
 import skillbill.infrastructure.launcher.mcp.codexRuntimeMcpArguments
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
+import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.install.model.AGENT_LAUNCHER_CLIS
 import skillbill.install.model.AgentLauncherCli
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import skillbill.review.context.model.launch.ReviewConversationIsolation
 import java.net.URI
@@ -44,6 +47,11 @@ internal interface AgentRunCommandBuilder {
     }
 
   fun build(request: SkillRunRequest): AgentRunCommand
+
+  fun continuation(
+    command: AgentRunCommand,
+    diagnostics: RuntimeDiagnostics,
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null
 }
 
 internal val GoalContinuationEnvironment: Map<String, String> =
@@ -231,6 +239,16 @@ internal class CodexAgentRunCommandBuilder(
   override val reviewIsolation: ReviewLaunchIsolationStrategy =
     ReviewLaunchIsolationStrategy.CODEX_NATIVE_FORK_TURNS_NONE
 
+  override fun continuation(
+    command: AgentRunCommand,
+    diagnostics: RuntimeDiagnostics,
+  ): ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? =
+    if (command.stdinText == null) {
+      null
+    } else {
+      CodexOutputTokenContinuation(command, diagnostics)::nextLaunch
+    }
+
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)
     requireGovernedReviewLaunch(request, agent, governedReviewLaunchCapability)
@@ -307,3 +325,34 @@ internal val REVIEW_FAN_OUT_TOOLS = (listOf("Agent", "Task") + GOVERNED_REVIEW_T
 
 internal fun governedReviewToolList(fanOut: Boolean): String =
   if (fanOut) REVIEW_FAN_OUT_TOOLS else GOVERNED_REVIEW_TOOLS.joinToString(",")
+
+internal const val CODEX_OUTPUT_TOKEN_LIMIT_MESSAGE = "Incomplete response returned, reason: max_output_tokens"
+
+private val CODEX_SESSION_ID = Regex("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
+
+private class CodexOutputTokenContinuation(
+  private val command: AgentRunCommand,
+  private val diagnostics: RuntimeDiagnostics,
+) {
+  private var sessionId: String? = null
+
+  fun nextLaunch(result: AgentRunProcessResult): AgentRunProcessLaunchFields? {
+    val decoded = AgentRunOutputDecoder.CODEX_JSONL.decode(result.stdout)
+    if (decoded.failureDiagnostic != CODEX_OUTPUT_TOKEN_LIMIT_MESSAGE) return null
+    val observedSession = decoded.continuationSessionId?.takeIf(CODEX_SESSION_ID::matches)
+    if (observedSession == null || sessionId != null && observedSession != sessionId) {
+      diagnostics.warning("seam=codex_output_continuation reason=max_output_tokens outcome=session_unavailable")
+      return null
+    }
+    sessionId = observedSession
+    diagnostics.warning("seam=codex_output_continuation reason=max_output_tokens outcome=continuation_requested")
+    return AgentRunProcessLaunchFields(
+      command = command.command + listOf("resume", observedSession, "-"),
+      workingDirectory = command.workingDirectory,
+      stdinText =
+        "Continue the same task from the current session and worktree. The previous response reached its " +
+          "output-token limit. Preserve completed edits and continue the unfinished work. " +
+          "Return the required final output only after the work is complete.",
+    )
+  }
+}

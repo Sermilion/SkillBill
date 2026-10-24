@@ -153,6 +153,7 @@ internal class ProcessAgentRunAdapter(
         workingDirectory = command.workingDirectory,
         stdinText = command.stdinText,
         outputSink = request.outputSink,
+        continuation = commandBuilder.continuation(command, diagnostics),
       ),
     timing =
       AgentRunProcessTimingFields(
@@ -249,6 +250,7 @@ data class DecodedAgentRunOutput(
   val reportedIdentity: ReportedLaunchIdentity =
     ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED),
   val failureDiagnostic: String? = null,
+  val continuationSessionId: String? = null,
 )
 
 interface AgentRunOutputDecoder {
@@ -343,13 +345,19 @@ private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
   var text: String? = null
   var decodedEnvelope = false
   var failureDiagnostic: String? = null
+  var sessionId: String? = null
   stdout.lineSequence().filter(String::isNotBlank).forEach { line ->
 
     runCatching { structuredOutputMapper.readTree(line) }.getOrNull()?.let { event ->
       decodedEnvelope = true
+      val eventType = event.path("type").asText()
+      when (eventType) {
+        "thread.started" -> sessionId = event.path("thread_id").takeIf { it.isTextual }?.asText()
+        "turn.completed" -> failureDiagnostic = null
+      }
       event.path("item").path("text").takeIf { it.isTextual }?.asText()?.let { text = it }
       val failure =
-        when (event.path("type").asText()) {
+        when (eventType) {
           "error" -> event.path("message")
           "turn.failed" -> event.path("error").path("message")
           else -> null
@@ -363,6 +371,7 @@ private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
     text = text ?: if (decodedEnvelope) "" else stdout,
     reportedIdentity = ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.UNSUPPORTED_AGENT),
     failureDiagnostic = failureDiagnostic,
+    continuationSessionId = sessionId?.takeIf { failureDiagnostic == CODEX_OUTPUT_TOKEN_LIMIT_MESSAGE },
   )
 }
 

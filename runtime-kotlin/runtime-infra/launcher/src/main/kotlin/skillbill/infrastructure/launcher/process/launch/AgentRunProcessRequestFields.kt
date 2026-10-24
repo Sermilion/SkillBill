@@ -19,6 +19,7 @@ data class AgentRunProcessLaunchFields(
   val workingDirectory: Path,
   val stdinText: String? = null,
   val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+  val continuation: ((AgentRunProcessResult) -> AgentRunProcessLaunchFields?)? = null,
 )
 
 data class AgentRunProcessTimingFields(

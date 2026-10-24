@@ -28,7 +28,7 @@ class JvmAgentRunProcessRunner(
   override fun run(request: AgentRunProcessRequest): AgentRunProcessResult {
     request.review.reviewEvidenceEndpoint?.let(liveEndpoints::add)
     return try {
-      runGoverned(request)
+      runAgentRunContinuations(request, clock, ::runGoverned)
     } finally {
       closeEndpoint(request)
     }
