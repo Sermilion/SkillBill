@@ -98,7 +98,7 @@ class SkeletonDefinitionTest {
         "qa_fix",
         "qa_fix",
         3,
-        FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
         FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
       ),
       FeatureTaskRuntimeBackwardEdge(
@@ -115,7 +115,7 @@ class SkeletonDefinitionTest {
         "audit",
         "qa_invalidation",
         3,
-        FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
         FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
         crossSlotAllowance = FeatureTaskRuntimeCrossSlotAllowance.DECLARED,
       ),

@@ -154,9 +154,18 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
 
 /** The launch behaviour one strategy step adds to the shared launch preparation and pre-launch checks. */
 internal interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
+  /** The completed output this step continues with when it stops for any reason, from [upstream] alone. */
+  fun failureContinuationOutput(upstream: List<FeatureTaskRuntimePhaseOutput>): PhaseFailureContinuationOutput? = null
+
+  /**
+   * The completed output this step continues with when [failure] stops [run], read through the active step [state], or
+   * null when the stop keeps its block or pause behaviour.
+   */
   fun failureContinuationOutput(
-    upstream: List<FeatureTaskRuntimePhaseOutput>,
-  ): NormalizedFeatureTaskRuntimePhaseOutput? = null
+    run: PhaseRun,
+    failure: PhaseStepFailure,
+    state: B,
+  ): PhaseFailureContinuationOutput? = null
 
   /** Whether the launch prompt of this step carries the build command the validation gate declares. */
   val carriesPackBuildCommand: Boolean
@@ -528,6 +537,11 @@ internal class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution>(
     context: PhaseAttemptLaunchHookContext,
   ): String = hooks.launchPromptSupplement(run, context, binding)
 
+  fun failureContinuationOutput(
+    run: PhaseRun,
+    failure: PhaseStepFailure,
+  ): PhaseFailureContinuationOutput? = hooks.failureContinuationOutput(run, failure, binding)
+
   fun launchReviewTier(run: PhaseRun): PhaseLaunchReviewTier = hooks.launchReviewTier(run, binding)
 
   fun handoffFindingVerdicts(): List<ReviewFindingVerdict> = hooks.handoffFindingVerdicts(binding)
@@ -567,4 +581,30 @@ internal class PhaseBoundStepHooks<B : PhaseAcceptedStepExecution>(
     context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ) = hooks.recordAcceptedOutput(run, context, binding, outputMap)
+}
+
+internal enum class PhaseStepFailureSource {
+  BLOCK,
+  PAUSE,
+  THROWN,
+}
+
+internal data class PhaseStepFailure(
+  val reason: String,
+  val source: PhaseStepFailureSource,
+  val failureCode: String? = null,
+  val owedFindingRefs: Set<String> = emptySet(),
+)
+
+internal data class PhaseFailureContinuationOutput(
+  val output: NormalizedFeatureTaskRuntimePhaseOutput,
+  val diagnosticDetail: String? = null,
+)
+
+/** A step's decision, bound to its active step binding, over one stop of [run]. */
+internal fun interface PhaseFailureContinuation {
+  fun outputFor(
+    run: PhaseRun,
+    failure: PhaseStepFailure,
+  ): PhaseFailureContinuationOutput?
 }

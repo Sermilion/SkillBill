@@ -14,6 +14,7 @@ internal object QaVerdictRule : FeatureTaskRuntimeStepVerdictRule {
     wireVerdict: FeatureTaskRuntimeVerdict?,
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
   ): FeatureTaskRuntimeVerdict {
+    if (wireVerdict == FeatureTaskRuntimeVerdict.QA_INCOMPLETE) return FeatureTaskRuntimeVerdict.QA_INCOMPLETE
     val status = outputObject?.get(SharedPayloadKeys.STATUS) as? String
     if (status == "blocked" || status == "failed") return FeatureTaskRuntimeVerdict.BLOCK
     val produced =

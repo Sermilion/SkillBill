@@ -190,6 +190,25 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   }
 
   @Test
+  fun `QA findings at the qa_fix cap advance to review instead of blocking`() {
+    val def = FeatureTaskRuntimePhaseWorkflowDefinition
+    val next =
+      assertIs<FeatureTaskRuntimeNextPhase.Next>(
+        transition(def.PHASE_QA, FeatureTaskRuntimeVerdict.QA_FINDINGS, edgeIterationCount = def.MAX_QA_FIX_ATTEMPTS),
+      )
+    assertEquals(def.PHASE_REVIEW, next.phaseId)
+    assertEquals(null, next.loopId)
+  }
+
+  @Test
+  fun `a qa_fix completion with qa_incomplete advances to review`() {
+    val def = FeatureTaskRuntimePhaseWorkflowDefinition
+    val next =
+      assertIs<FeatureTaskRuntimeNextPhase.Next>(transition(def.PHASE_QA_FIX, FeatureTaskRuntimeVerdict.QA_INCOMPLETE))
+    assertEquals(def.PHASE_REVIEW, next.phaseId)
+  }
+
+  @Test
   fun `RECORD_REJECTED at audit advances forward when no regeneration edge targets implement`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val next =

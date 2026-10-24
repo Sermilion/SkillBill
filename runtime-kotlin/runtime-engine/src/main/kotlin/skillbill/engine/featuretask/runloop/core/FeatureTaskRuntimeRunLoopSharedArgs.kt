@@ -153,6 +153,7 @@ internal data class BlockAndPersistArgs(
   val failureDisposition: FeatureTaskRuntimeFailureDisposition,
   val failureCode: String? = null,
   val payload: BlockAndPersistPayload,
+  val owedFindingRefs: Set<String> = emptySet(),
 )
 
 internal data class BlockAndPersistPayload(
@@ -316,6 +317,7 @@ internal data class PhaseBlockRequest(
   val failureDisposition: FeatureTaskRuntimeFailureDisposition =
     FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
   val failureCode: String? = null,
+  val owedFindingRefs: Set<String> = emptySet(),
 )
 
 internal data class CheckpointCommitMessageArgs(

@@ -71,11 +71,26 @@ object FeatureTaskRuntimeAttemptBudgets {
     val progressed = omitted.size < priorOmitted.size && omitted.all(priorOmitted::contains)
     if (progressed) return null
     return "Phase '$phaseId' was sent back for the review findings its repair receipt left out and " +
-      "accounted for none of them: ${omitted.sorted().joinToString(", ")}. Re-entering it would " +
+      "$OMITTED_FINDINGS_MARKER${omitted.sorted().joinToString(FINDING_SEPARATOR)}. Re-entering it would " +
       "repeat a round that made no progress on coverage. A round that cannot close a finding " +
       "declares it with outcome 'attempted_unresolved' and a reason; leaving it out is not an " +
       "outcome, so the run blocks for an operator."
   }
+
+  fun omittedFindingsIn(reason: String): Set<String> =
+    if (OMITTED_FINDINGS_MARKER in reason) {
+      reason
+        .substringAfter(OMITTED_FINDINGS_MARKER)
+        .substringBefore(". Re-entering it would")
+        .split(FINDING_SEPARATOR)
+        .filter(String::isNotBlank)
+        .toSet()
+    } else {
+      emptySet()
+    }
+
+  private const val OMITTED_FINDINGS_MARKER = "accounted for none of them: "
+  private const val FINDING_SEPARATOR = ", "
 }
 
 private fun Enum<*>.label(): String = "${declaringJavaClass.simpleName}.$name"

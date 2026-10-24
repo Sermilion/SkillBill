@@ -24,6 +24,8 @@ data class FeatureTaskRuntimeVerdict(
 
     val QA_INVALIDATED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("qa_invalidated")
 
+    val QA_INCOMPLETE: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("qa_incomplete")
+
     val NO_FINDINGS_VERIFIED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("no_findings_verified")
 
     val REVIEW_CAP_REACHED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("review_cap_reached")

@@ -15,6 +15,8 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runner.LaunchResult
+import skillbill.engine.featuretask.slot.PhaseFailureContinuation
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
@@ -31,6 +33,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputR
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
+import kotlin.coroutines.cancellation.CancellationException
 
 internal data class RemediationCheckpointCommit(
   val commitSha: String,
@@ -302,7 +305,8 @@ internal data class PhaseRun(
   val agentRunValidateFallback: Boolean = false,
   val validationGateRepairTurn: Int = 0,
   val qaExecution: QaExecutionContext? = request.qaExecution,
-  val failureContinuationOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
+  val failureContinuationOutput: PhaseFailureContinuationOutput? = null,
+  val failureContinuation: PhaseFailureContinuation? = null,
 )
 
 internal data class PreLaunchBlock(
@@ -320,3 +324,6 @@ internal data class RecordRejection(
   val rejectionClass: String,
   val rejectionDetail: String,
 )
+
+internal fun Throwable.containableOrThrow(): Exception =
+  if (this is Exception && this !is CancellationException && this !is InterruptedException) this else throw this

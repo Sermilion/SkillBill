@@ -26,9 +26,12 @@ import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRul
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhasePreparedRunCapability
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
+import skillbill.engine.featuretask.slot.PhaseStepFailure
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -40,12 +43,12 @@ import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -59,6 +62,7 @@ class QaStrategy(
 ) : PhaseStrategy(),
   PhasePreparedRunCapability by QaPreparedRun(reports, execution, outcomes),
   PhaseResumeCapability by QaResume,
+  PhaseLoopCapability by QaLoopCapability,
   PhaseVerdictCapability {
   private val policies =
     mapOf(
@@ -126,16 +130,11 @@ class QaStrategy(
     run: PhaseRun,
     state: PhaseQaStepBinding,
   ): PhaseOutcome {
-    val qa = run.qaExecution
-    val target = qa?.target
+    val target = run.qaExecution?.target
     if (run.phaseId != entryStep) return runAgentStep(run, state)
     if (target !is QaExecutionTarget.Skipped) {
       if (run.request.admittedExecution != null) outcomes.recordAttempted(run.request.workflowId)
-      val outcome = runAgentStep(run, state)
-      val stopped = outcome as? PhaseOutcome.Blocked
-      if (stopped == null || qa == null || qa.policy == QaPolicy.STANDALONE) return outcome
-      val warning = "QA recorded incomplete because the QA agent step stopped: ${stopped.reason}"
-      return runtimeCompletion(run, state, warning, QaReports.missing(warning))
+      return runAgentStep(run, state)
     }
     return runtimeCompletion(run, state, target.detail, QaReports.skipped(target.reason, target.detail))
   }
@@ -182,10 +181,18 @@ class QaStrategy(
       findings.joinToString("\n") { finding -> "- ${finding.id}: reports=${finding.receiptRefs.joinToString()}" }
   }
 
-  private val repairHooks = QaRepairHooks(execution, outcomes, reports)
+  private val stops = QaStopContinuation(outcomes)
+
+  private val repairHooks = QaRepairHooks(execution, outcomes, reports, stops)
 
   private val hooks =
     object : PhaseStepHooks<PhaseQaStepBinding> {
+      override fun failureContinuationOutput(
+        run: PhaseRun,
+        failure: PhaseStepFailure,
+        state: PhaseQaStepBinding,
+      ): PhaseFailureContinuationOutput? = stops.outputFor(run, failure, state)
+
       override fun launchPromptSupplement(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
@@ -237,8 +244,8 @@ class QaStrategy(
         val produced =
           JsonCodec.anyToStringAnyMap(record[SharedPayloadKeys.PRODUCED_OUTPUTS])
             ?: error("normalized QA output has no produced_outputs object.")
-        val subtaskId = run.request.goalContinuation?.subtaskId ?: 1
-        val previous = state.qaRepairState() ?: QaRepairState(subtaskId)
+        val subtaskId = run.request.qaSubtaskId()
+        val previous = state.repairStateOrInitial(subtaskId)
         check(previous.subtaskId == subtaskId) { "QA repair state belongs to another subtask." }
         val repairWarning = QaRepairHooks.noChangeWarning(state, previous, qa.expected.treeIdentity)
         val settled = reports.observe(previous, warned, qa)
@@ -343,7 +350,7 @@ private class QaPreparedRun(
     testedTreeIdentity: String,
   ) {
     val wire = output.envelopeWireMap()
-    val verdict = QaVerdictRule.verdictFor(null, wire)
+    val verdict = QaVerdictRule.verdictFor(output.verdict?.let(FeatureTaskRuntimeVerdict::fromWire), wire)
     val produced =
       JsonCodec.anyToStringAnyMap(wire[SharedPayloadKeys.PRODUCED_OUTPUTS])
         ?: error("accepted QA output has no produced_outputs object.")
@@ -378,6 +385,7 @@ private class QaPreparedRun(
         report,
         qaReportRef(produced),
         legacyFindings,
+        FeatureTaskQaFailureKind.fromWire(produced[QaPhaseOutputKeys.FAILURE_KIND] as? String),
       ),
     )
   }

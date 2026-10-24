@@ -5,6 +5,7 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
 import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -16,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 
 class PhaseGoalQaRunTest {
   @TempDir lateinit var home: Path
@@ -61,7 +63,7 @@ class PhaseGoalQaRunTest {
   }
 
   @Test
-  fun `QA repository failure before launch blocks without an invalid zero attempt ledger entry`() {
+  fun `QA repository failure before launch is contained as an incomplete outcome without blocking`() {
     val clock = Clock.systemUTC()
     val database = phaseRunDatabase(home, clock)
     val git =
@@ -78,21 +80,24 @@ class PhaseGoalQaRunTest {
     val entry = phaseRunEntry(strategies, git, database, clock)
 
     val result =
-      assertIs<PhaseRunResult.Blocked>(
+      assertIs<PhaseRunResult.Completed>(
         entry.runForGoal(
           PhaseRunRequest(
             definitionId = SkeletonDefinition.GOAL_QA.id,
             repoRoot = home,
             invokedAgentId = "claude",
             qaSelection = FeatureTaskRuntimeQaSelection.OFF,
-            acceptanceCriteria = listOf("The goal stops before publication."),
+            acceptanceCriteria = listOf("The goal continues past a QA environment failure."),
           ),
           "goal-parent",
           "feat/existing-runtime-branch",
         ),
       )
 
-    assertEquals("qa", result.stepId)
-    assertContains(result.reason, "worktree is unreadable")
+    assertEquals(listOf("qa"), result.completedStepIds)
+    val outcome = assertNotNull(database.read { it.featureTaskQaOutcomes.find("goal-parent") })
+    assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
+    assertEquals(FeatureTaskQaFailureKind.ENVIRONMENT, outcome.failureKind)
+    assertContains(assertNotNull(outcome.reason), "worktree is unreadable")
   }
 }

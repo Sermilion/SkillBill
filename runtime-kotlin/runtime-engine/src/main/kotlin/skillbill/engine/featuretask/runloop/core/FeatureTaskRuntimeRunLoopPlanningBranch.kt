@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.runloop.core
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.phaseLoopContext
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeNonBlockingFailure
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -14,9 +15,15 @@ import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseBoundLoopRules
+import skillbill.engine.featuretask.slot.PhaseBoundStepHooks
+import skillbill.engine.featuretask.slot.PhaseFailureContinuation
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhasePreparedRunCapability
 import skillbill.engine.featuretask.slot.PhaseStepCapture
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
+import skillbill.engine.featuretask.slot.PhaseStepFailure
+import skillbill.engine.featuretask.slot.PhaseStepFailureSource
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.decomposition.model.SpecSource
@@ -91,7 +98,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     FeatureTaskRuntimeRunLoopPreLaunch
       .preLaunchBlock(
         context = context,
-        run = run,
+        run = run.copy(failureContinuation = StepBoundFailureContinuation(context)),
         state = args.state,
         observability = args.observability,
       )?.let { return it }
@@ -159,11 +166,13 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
   ): PhaseOutcome {
-    context.runState.stepBinding.authorizeCoordinatorDispatch(run)
+    val continuation = BoundFailureContinuation()
+    val prepared = run.copy(failureContinuation = continuation)
+    context.runState.stepBinding.authorizeCoordinatorDispatch(prepared)
     return context.runState
-      .strategyFor(run.phaseId)
-      .stepDescriptor(run.phaseId)
-      .capture(PreparedPhaseDispatch(context, run))
+      .strategyFor(prepared.phaseId)
+      .stepDescriptor(prepared.phaseId)
+      .capture(PreparedPhaseDispatch(context, prepared, continuation))
   }
 
   internal fun <T : Any> decideByStep(
@@ -186,6 +195,14 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       ?.let { edge ->
         decideByStep(context, context.runState.strategyFor(edge.destinationPhaseId).entryStep, decide)
       }
+
+  internal fun claimsFailure(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+  ): Boolean =
+    (context.runState.strategyFor(phaseId) as? PhaseLoopCapability)
+      ?.loopRules
+      ?.claimsFailure(phaseId, context.phaseLoopContext()) == true
 
   internal fun forEachSlotRules(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -278,12 +295,55 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     }
   }
 
+  private class BoundFailureContinuation : PhaseFailureContinuation {
+    var hooks: PhaseBoundStepHooks<*>? = null
+
+    override fun outputFor(
+      run: PhaseRun,
+      failure: PhaseStepFailure,
+    ): PhaseFailureContinuationOutput? = hooks?.failureContinuationOutput(run, failure)
+  }
+
+  private class StepBoundFailureContinuation(
+    private val context: FeatureTaskRuntimeRunLoopContext,
+  ) : PhaseFailureContinuation {
+    override fun outputFor(
+      run: PhaseRun,
+      failure: PhaseStepFailure,
+    ): PhaseFailureContinuationOutput? =
+      context.runState
+        .strategyFor(run.phaseId)
+        .stepDescriptor(run.phaseId)
+        .capture(StopContinuationDispatch(context, run, failure))
+  }
+
+  private class StopContinuationDispatch(
+    private val context: FeatureTaskRuntimeRunLoopContext,
+    private val run: PhaseRun,
+    private val failure: PhaseStepFailure,
+  ) : PhaseStepCapture<PhaseFailureContinuationOutput?> {
+    override fun <B : PhaseAcceptedStepExecution> capture(
+      descriptor: PhaseStepDescriptor<B>,
+    ): PhaseFailureContinuationOutput? {
+      context.runState.stepBinding.authorizeCoordinatorDispatch(run)
+      val state = descriptor.bind(context.bindingFactory(run))
+      return try {
+        state.boundHooks.failureContinuationOutput(run, failure)
+      } finally {
+        state.finishStepExecution()
+        context.runState.stepBinding.releaseCoordinatorDispatch()
+      }
+    }
+  }
+
   private class PreparedPhaseDispatch(
     private val context: FeatureTaskRuntimeRunLoopContext,
     private val run: PhaseRun,
+    private val continuation: BoundFailureContinuation,
   ) : PhaseStepCapture<PhaseOutcome> {
     override fun <B : PhaseAcceptedStepExecution> capture(descriptor: PhaseStepDescriptor<B>): PhaseOutcome {
       val state = descriptor.bind(context.bindingFactory(run))
+      continuation.hooks = state.boundHooks
       return try {
         execute(descriptor, state)
       } finally {
@@ -304,9 +364,10 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
           context.runState.coupledRunTransitions,
           context.observability,
           PhaseFailureContinuationRequest(
-            run,
-            context.state.phase(run.phaseId).nextIteration,
-            "Phase execution could not finish: ${error.code}",
+            run = run,
+            attempt = context.state.phase(run.phaseId).nextIteration,
+            reason = "Phase execution could not finish: ${error.code}",
+            source = PhaseStepFailureSource.THROWN,
           ),
         ) ?: throw error
       }

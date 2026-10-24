@@ -1,3 +1,14 @@
+## [2026-10-24] SKILL-443 subtask 2: run-loop QA containment for qa and qa_fix
+Areas: runtime-engine featuretask runloop core/phase/state, slot, slot/qa, slot/attempt, slot/codereview/verify; runtime-domain FeatureTaskRuntimeVerdict and phase workflow transitions
+- New qa_incomplete verdict: a qa or qa_fix completion carrying it routes to review. The qa to qa_fix and write_history to audit edges now ADVANCE on cap exhaustion instead of blocking.
+- Failure continuation seam: PhaseStepFailure, PhaseFailureContinuationOutput and a binding-aware NonBlockingFailure.settle live in slot/PhaseStepHooks. A step can turn a stop or block into a runtime-authored completion instead of a block. reusable
+- QA slot: QaIncompleteOutput builds the incomplete completion; QaStopContinuation turns qa and qa_fix agent stops and the qa_fix no-progress block into it. Standalone QA policy keeps its block. GOAL_QA stops record through recordWarning or recordContainedFailure.
+- PhaseLoopRules gains onLoopCapExhausted and containFailure. QaLoopRules records the qa_fix cap warning and stale-QA warning. claimsFailure moved to PhaseLoopCapability, implemented statelessly by QaLoopCapability.
+- Drive loop guards advance() and routes any non-cancellation Exception through containedNextPhase (route lambda breaks the Drive cycle). QaFailureContainment classifies ENVIRONMENT versus DEFECT, logs seam=qa_containment, records and returns qa_incomplete. Non-QA phases rethrow unchanged. The GOAL_QA-only conversion is deleted. reusable
+- Limits: a legacy durable BLOCKED qa record resumed at preLaunchBlock is not converted. DefaultGoalRunnerQaGate.settleAfterQa warns only on Blocked, so a contained INCOMPLETE run returns Passed with no gate warning. Dirty-tree packagedDataSmoke and smoke scripts left to PR CI.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented (validate ran full check green after repairs)
+
 ## [2026-10-24] SKILL-443 subtask 1: QA outcome failure kind, recorder semantics and goal QA gate containment
 Areas: runtime-engine featuretask/qa/report and goalrunner/qa and goalrunner/status; runtime-ports featuretask model; runtime-infra sqlite (migration 84, QA outcome store, desktop change revisions); runtime-contracts DesktopReadSchema; runtime-domain goalrunner status projection; runtime-cli goal status text
 - FeatureTaskQaOutcome gains a nullable failureKind (ENVIRONMENT or DEFECT); migration 84 record-qa-failure-kind adds the guarded failure_kind column and recreates the QA outcome desktop-revision triggers. DesktopReadSchema.VERSION is 84. Legacy rows read back as null.

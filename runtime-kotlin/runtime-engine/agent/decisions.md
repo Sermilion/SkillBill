@@ -1,3 +1,13 @@
+## [2026-10-24] QA containment lives in the drive loop, not in step cleanup
+Context: SKILL-443 subtask 2 must contain every qa and qa_fix failure, including runtime defects thrown from anywhere in the phase, without disturbing lease and workspace release.
+Decision: The drive loop wraps advance() and asks QaFailureContainment for an incomplete output. Non-QA phases and standalone QA policy get null and the original error propagates. QaExecutionLifecycle, QaPreparedRun and the runStep catch logic gain no new catches.
+Reason: The use-block cleanup has already run by the time the error reaches the drive, so containing there cannot leak a lease. CancellationException and InterruptedException always propagate so shutdown is never swallowed.
+
+## [2026-10-24] QA cap exhaustion advances to review instead of blocking
+Context: A qa_fix cap or stale-QA outcome used to block the run, which SKILL-443 forbids.
+Decision: The qa to qa_fix and write_history to audit edges use CapExhaustionBehavior.ADVANCE, a qa_incomplete completion at qa or qa_fix goes to review, and the cap warning is recorded on the QA outcome through the loop rules.
+Reason: The run keeps moving and the desktop sees the gap through the INCOMPLETE outcome rather than a block the operator must clear.
+
 ## [2026-10-24] Goal QA gate contains even its own failure recording
 Context: SKILL-443 requires that no QA failure blocks a goal run, but recording a contained failure writes to the store and can itself throw.
 Decision: DefaultGoalRunnerQaGate.run catches every non-cancellation Exception, logs it with its stack trace, tries to record it, and logs again if recording fails, always returning Warned.
