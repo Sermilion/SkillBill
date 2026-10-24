@@ -920,6 +920,7 @@ class IdeStatusService(
         listOf(
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
         )
       else -> listOf(step)
     }

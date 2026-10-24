@@ -108,6 +108,22 @@ class CliPhasePlanRuntimeTest {
   }
 
   @Test
+  fun `a plan blocked while planning subtasks already reports the bundle it authored`() {
+    installGoalBuildPack(tempDir)
+    val launcher = PhasePlanLauncher(tempDir, failPlanSubtasks = true)
+    val result =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "split the work", "--agent", "codex"),
+        fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
+      )
+    assertEquals(1, result.exitCode, result.stdout + result.stderr)
+    assertTrue("plan_subtasks" in launcher.phaseIds, launcher.phaseIds.toString())
+    val report = requireNotNull(JsonCodec.parseObjectOrNull(requireNotNull(planReport())))
+    val subtasks = (report["subtasks"] as JsonArray).map { it as JsonObject }
+    assertEquals(listOf("first part", "second part"), subtasks.map { it["name"].toString().trim('"') })
+  }
+
+  @Test
   fun `full run directory intake executes a completed plan without another planning handoff`() {
     installGoalBuildPack(tempDir)
     val launcher = PhasePlanLauncher(tempDir)
@@ -569,6 +585,7 @@ class CliPhasePlanRuntimeTest {
     private val dirtyOutsideBundle: Boolean = false,
     private val incompleteFirstBundle: Boolean = false,
     private val authorNothingFirst: Boolean = false,
+    private val failPlanSubtasks: Boolean = false,
   ) : AgentRunLauncher {
     val phaseIds = CopyOnWriteArrayList<String>()
     val timeouts = CopyOnWriteArrayList<Duration?>()
@@ -586,6 +603,9 @@ class CliPhasePlanRuntimeTest {
           "phase plan launched a prompt with no phase header"
         }
       phaseIds += phaseId
+      if (failPlanSubtasks && phaseId == "plan_subtasks") {
+        return agentRunLaunchFacts(SupportedAgent.CODEX, termination = AgentRunTermination.SpawnFailed)
+      }
       val stdout = if (phaseId == "plan") authorBundle() else phasePlanningPayload(phaseId)
       if (dirtyOutsideBundle && phaseIds.count { it == "plan" } == 1 && phaseId == "plan") {
         Files.writeString(repoRoot.resolve("outside-plan.txt"), "Concurrent edit")

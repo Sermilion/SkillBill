@@ -4,6 +4,8 @@ import dev.skillbill.tray.core.domain.model.ExecutionInstance
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
+import dev.skillbill.tray.core.domain.model.PlanRunReport
+import dev.skillbill.tray.core.domain.model.PlannedSubtask
 import dev.skillbill.tray.core.domain.model.QaVerdict
 import dev.skillbill.tray.core.domain.model.ReasonRestoration
 import dev.skillbill.tray.core.domain.model.WorkFamily
@@ -136,19 +138,44 @@ class DetailPresentationTest {
   @Test
   fun `goal finish marks the steps before monitor_fix done and keeps highlighting through repair`() {
     val pipeline = listOf("pr", "monitor", "monitor_fix")
-    fun states(item: WorkItem) = goalFinishSteps(item, pipeline).map { it.state }
+    fun states(item: WorkItem) = pipelineSteps(item, pipeline).map { it.state }
 
     assertEquals(
-      listOf(GoalFinishStepState.COMPLETE, GoalFinishStepState.COMPLETE, GoalFinishStepState.ACTIVE),
+      listOf(PipelineStepState.COMPLETE, PipelineStepState.COMPLETE, PipelineStepState.ACTIVE),
       states(workItem("a").copy(currentStepId = "monitor_fix")),
     )
     assertEquals(
-      List(3) { GoalFinishStepState.PENDING },
+      List(3) { PipelineStepState.PENDING },
       states(workItem("a").copy(currentStepId = "monitor", currentSubtaskId = "2")),
     )
     assertEquals(
-      List(3) { GoalFinishStepState.COMPLETE },
+      List(3) { PipelineStepState.COMPLETE },
       states(workItem("a", lifecycle = Lifecycle.TERMINAL).copy(currentStepId = "complete")),
     )
+  }
+
+  @Test
+  fun `a running plan marks preplan and plan done and highlights plan_subtasks`() {
+    val item = workItem("plan-run", family = null).copy(scope = ExecutionScope.STANDALONE_PHASE, currentStepId = "plan_subtasks")
+
+    assertEquals(
+      listOf(PipelineStepState.COMPLETE, PipelineStepState.COMPLETE, PipelineStepState.ACTIVE),
+      pipelineSteps(item, listOf("preplan", "plan", "plan_subtasks")).map { it.state },
+    )
+  }
+
+  @Test
+  fun `a plan run counts the subtask specs its live report lists and says nothing before the report arrives`() {
+    val item = workItem("plan-run", family = null).copy(scope = ExecutionScope.STANDALONE_PHASE, invocationId = "plan-current")
+    fun run(invocationId: String, subtasks: Int?) = ExecutionInstance(
+      invocationId, "execution-$invocationId", "active", fixtureInstant, fixtureInstant, null, null,
+      planReport = subtasks?.let { count ->
+        PlanRunReport("feature", "/specs/spec.md", List(count) { PlannedSubtask(it + 1, "part ${it + 1}", "/specs/s$it.md", emptyList()) })
+      },
+    )
+
+    assertEquals("", standalonePlanNote(detail(item).copy(executionHistory = listOf(run("plan-current", null), run("plan-older", 4)))))
+    assertEquals("6 subtask specs", standalonePlanNote(detail(item).copy(executionHistory = listOf(run("plan-older", 4), run("plan-current", 6)))))
+    assertEquals("1 subtask spec", standalonePlanNote(detail(item).copy(executionHistory = listOf(run("plan-current", 1)))))
   }
 }

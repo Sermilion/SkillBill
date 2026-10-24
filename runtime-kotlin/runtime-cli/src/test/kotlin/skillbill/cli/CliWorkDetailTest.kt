@@ -96,7 +96,7 @@ class CliWorkDetailTest {
       val snapshot = item["snapshot"] as Map<*, *>
       assertEquals("plan-invocation", snapshot["invocation_id"])
       assertEquals("terminal", snapshot["lifecycle_state"])
-      assertEquals(listOf("preplan", "plan"), item["step_pipeline"])
+      assertEquals(listOf("preplan", "plan", "plan_subtasks"), item["step_pipeline"])
       assertEquals("standalone_finished_at", item["finished_at_source"])
     }
   }
@@ -225,7 +225,7 @@ class CliWorkDetailTest {
     val phases =
       mapOf(
         "monitor" to listOf("commit_push", "monitor"),
-        "plan" to listOf("preplan", "plan"),
+        "plan" to listOf("preplan", "plan", "plan_subtasks"),
         "review" to listOf("review"),
         "validation" to listOf("validation"),
       )

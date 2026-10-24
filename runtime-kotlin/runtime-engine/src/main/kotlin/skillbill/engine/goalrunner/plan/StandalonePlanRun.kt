@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
@@ -121,6 +123,19 @@ class StandalonePlanRun(
       )
     }.onFailure(publisher::settleFailure).getOrThrow()
   }
+
+  private fun withLivePlanReport(
+    sink: FeatureTaskRuntimeRunEventSink,
+    publisher: StandalonePhaseStatusEventSink,
+    issueKey: String,
+    repoRoot: Path,
+  ): FeatureTaskRuntimeRunEventSink =
+    FeatureTaskRuntimeRunEventSink { event ->
+      sink.emit(event)
+      if (event is FeatureTaskRuntimeRunEvent.PhaseCompleted && event.phaseId in LIVE_PLAN_REPORT_PHASES) {
+        publisher.publishPlanReport { planReports.build(issueKey, repoRoot) }
+      }
+    }
 
   private fun withPublisher(
     input: FeatureTaskRuntimeRunInput,
@@ -309,9 +324,13 @@ class StandalonePlanRun(
     repoRoot: Path,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
+    val observed =
+      statusPublisher?.let { publisher ->
+        input.copy(eventSink = withLivePlanReport(input.eventSink, publisher, input.issueKey, repoRoot))
+      } ?: input
     val report =
       runCatching {
-        entry.run(input) { error("Could not run plan workflow: ${it.error}") }
+        entry.run(observed) { error("Could not run plan workflow: ${it.error}") }
       }.onFailure { error ->
         statusPublisher?.settleFailure(error, input.explicitWorkflowId)
       }.getOrThrow()
@@ -399,3 +418,9 @@ class StandalonePlanRun(
 
   private fun specHash(specPath: Path): String = sha256HexUtf8(fileStore.readText(specPath))
 }
+
+private val LIVE_PLAN_REPORT_PHASES =
+  setOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+  )

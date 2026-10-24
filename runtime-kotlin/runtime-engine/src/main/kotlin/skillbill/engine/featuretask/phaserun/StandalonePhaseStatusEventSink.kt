@@ -134,6 +134,18 @@ class StandalonePhaseStatusEventSink(
     }
   }
 
+  fun publishPlanReport(report: () -> StandalonePlanReport?) {
+    runCatching {
+      val built = report() ?: return@runCatching
+      ensureRegistered(null)
+      planReport = built
+      persist(state = "active", finishedAt = null, terminalResult = null)
+    }.onFailure { error ->
+      if (error is CancellationException) throw error
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status plan report publication failed", error)
+    }
+  }
+
   fun settleBlocked(
     reason: String,
     workflowId: String? = null,

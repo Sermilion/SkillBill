@@ -93,22 +93,28 @@ internal fun restorationNote(restoration: ReasonRestoration?): String? = when (r
   ReasonRestoration.BUDGET_EXCEEDED -> "The full original reason was not restored within the read budget; this text may be shortened."
 }
 
-internal enum class GoalFinishStepState { PENDING, ACTIVE, COMPLETE }
+/** The spec bundle a standalone plan run has written so far, empty until its plan report arrives. */
+internal fun standalonePlanNote(detail: Detail): String =
+  detail.executionHistory.firstOrNull { it.invocationId == detail.item.invocationId }?.planReport
+    ?.subtasks?.size?.let { count -> if (count == 1) "1 subtask spec" else "$count subtask specs" }
+    .orEmpty()
 
-internal data class GoalFinishStep(val id: String, val state: GoalFinishStepState)
+internal enum class PipelineStepState { PENDING, ACTIVE, COMPLETE }
 
-/** Places the goal on its finish pipeline: steps before the current one are done, and a finished goal completes them all. */
-internal fun goalFinishSteps(item: WorkItem, pipeline: List<String>): List<GoalFinishStep> {
+internal data class PipelineStep(val id: String, val state: PipelineStepState)
+
+/** Places a run on a step pipeline: steps before the current one are done, and a finished run completes them all. */
+internal fun pipelineSteps(item: WorkItem, pipeline: List<String>): List<PipelineStep> {
   val current = if (item.currentSubtaskId == null) pipeline.indexOf(item.currentStepId) else -1
   return pipeline.mapIndexed { index, id ->
     val state = when {
-      item.lifecycle == Lifecycle.TERMINAL -> GoalFinishStepState.COMPLETE
-      current < 0 -> GoalFinishStepState.PENDING
-      index < current -> GoalFinishStepState.COMPLETE
-      index == current && item.lifecycle == Lifecycle.ACTIVE -> GoalFinishStepState.ACTIVE
-      else -> GoalFinishStepState.PENDING
+      item.lifecycle == Lifecycle.TERMINAL -> PipelineStepState.COMPLETE
+      current < 0 -> PipelineStepState.PENDING
+      index < current -> PipelineStepState.COMPLETE
+      index == current && item.lifecycle == Lifecycle.ACTIVE -> PipelineStepState.ACTIVE
+      else -> PipelineStepState.PENDING
     }
-    GoalFinishStep(id, state)
+    PipelineStep(id, state)
   }
 }
 

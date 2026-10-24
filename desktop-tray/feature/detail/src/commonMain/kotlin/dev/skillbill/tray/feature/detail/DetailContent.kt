@@ -248,7 +248,7 @@ private fun LoadedDetail(
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
       if (!operation) {
-        DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
+        DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", if (standalone) standalonePlanNote(detail) else "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
         MetricDivider()
       }
       DetailMetric(
@@ -308,16 +308,16 @@ private fun LoadedDetail(
               HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
             }
             this.item(key = detail.key("goal-finish", "")) {
-              val finishSteps = goalFinishSteps(item, detail.goalFinishPipeline)
-              val finishActive = finishSteps.any { it.state == GoalFinishStepState.ACTIVE }
-              val finishDone = finishSteps.isNotEmpty() && finishSteps.all { it.state == GoalFinishStepState.COMPLETE }
+              val finishSteps = pipelineSteps(item, detail.goalFinishPipeline)
+              val finishActive = finishSteps.any { it.state == PipelineStepState.ACTIVE }
+              val finishDone = finishSteps.isNotEmpty() && finishSteps.all { it.state == PipelineStepState.COMPLETE }
               if (finishSteps.isNotEmpty()) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("—", Modifier.width(18.dp), color = if (finishActive) blue else dim, fontFamily = mono, fontSize = 11.sp)
                 WorkDot(if (finishActive) Lifecycle.ACTIVE else if (finishDone) Lifecycle.TERMINAL else Lifecycle.IDLE, Modifier.padding(top = 5.dp))
                 Column(Modifier.weight(1f)) {
                   Text("Goal finish", color = ink.copy(alpha = if (finishActive || finishDone) 1f else .55f), fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                   FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    finishSteps.forEach { PhaseChip(it.id, it.state == GoalFinishStepState.COMPLETE, it.state == GoalFinishStepState.ACTIVE, 0) }
+                    finishSteps.forEach { PhaseChip(it.id, it.state == PipelineStepState.COMPLETE, it.state == PipelineStepState.ACTIVE, 0) }
                   }
                 }
               }
@@ -328,7 +328,7 @@ private fun LoadedDetail(
         } else if (!operation && detail.stepPipeline.isNotEmpty()) {
           DesignLabel("Phase pipeline")
           FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            detail.stepPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, 0) }
+            pipelineSteps(item, detail.stepPipeline).forEach { PhaseChip(it.id, it.state == PipelineStepState.COMPLETE, it.state == PipelineStepState.ACTIVE, 0) }
           }
         }
         if (detail.dependencies.isNotEmpty() || detail.cursors[DetailList.DEPENDENCIES] != null) {
