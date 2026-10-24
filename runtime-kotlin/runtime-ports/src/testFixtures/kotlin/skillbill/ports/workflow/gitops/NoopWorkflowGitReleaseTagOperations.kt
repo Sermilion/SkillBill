@@ -11,11 +11,6 @@ object NoopWorkflowGitReleaseTagOperations : WorkflowGitReleaseTagOperations {
     sinceRef: String?,
   ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
 
-  override fun localBranchBehindRemote(
-    repoRoot: Path,
-    branch: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "false")
-
   override fun remoteBranchHead(
     repoRoot: Path,
     branch: String,

@@ -26,6 +26,12 @@ properties:
     type: string
     minLength: 1
     description: Absolute real path of the git common dir, or of the directory for a non-git project.
+  shared_common_dirs:
+    type: array
+    description: Git common dirs of further clones that share this store, attached by lineage with the same remote URL or through skill-bill project link.
+    items:
+      type: string
+      minLength: 1
   root_commits:
     type: array
     description: Sorted root commit ids. Empty for no_commits_path and non_git_path.

@@ -7,6 +7,7 @@ object ProjectStoreRecordKeys {
   const val PROJECT_ID: String = "project_id"
   const val KEY_KIND: String = "key_kind"
   const val COMMON_DIR: String = "common_dir"
+  const val SHARED_COMMON_DIRS: String = "shared_common_dirs"
   const val ROOT_COMMITS: String = "root_commits"
   const val REMOTE_URL: String = "remote_url"
   const val LAST_SEEN: String = "last_seen"

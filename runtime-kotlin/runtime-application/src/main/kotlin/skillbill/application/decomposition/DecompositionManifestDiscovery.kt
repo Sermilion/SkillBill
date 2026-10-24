@@ -5,6 +5,7 @@ import skillbill.application.decomposition.model.SpecBundleScope
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.ports.projectstore.model.ProjectStoreLocation
+import skillbill.ports.projectstore.model.SpecPathLocation
 import skillbill.ports.projectstore.model.classifySpecPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -95,7 +96,9 @@ fun resolveDecompositionManifest(
   recoverPending: Boolean = true,
 ): DecompositionManifest? {
   val (repoRoot, store) = scope
-  val candidates = findMatchingDecompositionManifests(scope, issueKey, fileStore, validator, recoverPending)
+  val candidates =
+    findMatchingDecompositionManifests(scope, issueKey, fileStore, validator, recoverPending)
+      .preferStore(repoRoot, store)
   val activeCandidates = candidates.filter { candidate -> candidate.manifest.isActiveGoalRuntime() }
   if (activeCandidates.size > 1) {
     throw invalidDecompositionManifestSchema(
@@ -107,4 +110,16 @@ fun resolveDecompositionManifest(
     )
   }
   return activeCandidates.firstOrNull()?.manifest ?: candidates.firstOrNull()?.manifest
+}
+
+private fun List<DecompositionManifestFileCandidate>.preferStore(
+  repoRoot: Path,
+  store: ProjectStoreLocation,
+): List<DecompositionManifestFileCandidate> {
+  val root = repoRoot.toAbsolutePath().normalize()
+  val inStore =
+    filter { candidate ->
+      store.classifySpecPath(candidate.path.toAbsolutePath().normalize(), root) is SpecPathLocation.Store
+    }
+  return inStore.ifEmpty { this }
 }

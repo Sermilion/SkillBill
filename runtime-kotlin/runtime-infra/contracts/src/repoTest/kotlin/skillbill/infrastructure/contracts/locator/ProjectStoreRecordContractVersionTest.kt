@@ -26,6 +26,7 @@ class ProjectStoreRecordContractVersionTest {
         ProjectStoreRecordKeys.PROJECT_ID,
         ProjectStoreRecordKeys.KEY_KIND,
         ProjectStoreRecordKeys.COMMON_DIR,
+        ProjectStoreRecordKeys.SHARED_COMMON_DIRS,
         ProjectStoreRecordKeys.ROOT_COMMITS,
         ProjectStoreRecordKeys.REMOTE_URL,
         ProjectStoreRecordKeys.LAST_SEEN,

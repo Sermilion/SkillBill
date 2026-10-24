@@ -63,22 +63,10 @@ class ProjectStoreResolver(
       val checkout = locate(workingDirectory)
       val targetDir = storeParent.resolve(projectId)
       val target = readTarget(projectId, targetDir)
-      val lineage = checkout.gitRoot?.let(lineages::lineage)
       val commonDir = checkout.commonDir.toString()
       scan().filter { it.id != projectId && it.record.commonDir == commonDir && it.record.linkedTo != projectId }
         .forEach { writeRecord(it.dir, it.record.copy(linkedTo = projectId)) }
-      writeRecord(
-        targetDir,
-        ProjectStoreRecord(
-          projectId = projectId,
-          keyKind = keyKindFor(checkout, lineage),
-          commonDir = commonDir,
-          rootCommits = lineage?.rootCommits.orEmpty(),
-          remoteUrl = lineage?.remoteUrl,
-          lastSeen = now(),
-          legacyStateNoticeAt = target.legacyStateNoticeAt,
-        ),
-      )
+      writeRecord(targetDir, target.withCheckout(commonDir).copy(lastSeen = now()))
       cache.clear()
       location(projectId)
     }
@@ -109,7 +97,9 @@ class ProjectStoreResolver(
     stores: List<StoredProject>,
     checkout: Checkout,
   ): StoredProject? =
-    stores.firstOrNull { it.record.commonDir == checkout.commonDir.toString() && it.record.linkedTo == null }
+    stores.firstOrNull {
+      checkout.commonDir.toString() in it.record.checkoutCommonDirs && it.record.linkedTo == null
+    }
 
   private fun bindNonGit(
     checkout: Checkout,
@@ -133,7 +123,9 @@ class ProjectStoreResolver(
     val only = candidates.singleOrNull()
     return when {
       candidates.isEmpty() -> createStore(null, baseId, checkout, lineage)
-      only != null && !Files.exists(Path.of(only.record.commonDir)) -> adopt(only, checkout, lineage)
+      only != null && only.liveCheckouts().isEmpty() -> adopt(only, checkout, lineage)
+      only != null && lineage.remoteUrl != null && only.record.remoteUrl == lineage.remoteUrl ->
+        share(only, checkout)
       only != null -> createStore("$SECOND_CLONE_OUTCOME matched=${only.id}", baseId, checkout, lineage)
       else ->
         createStore(
@@ -154,6 +146,7 @@ class ProjectStoreResolver(
       candidate.dir,
       candidate.record.copy(
         commonDir = checkout.commonDir.toString(),
+        sharedCommonDirs = emptyList(),
         rootCommits = lineage.rootCommits,
         remoteUrl = lineage.remoteUrl,
         lastSeen = now(),
@@ -162,6 +155,28 @@ class ProjectStoreResolver(
     identityWarning(ADOPTED_OUTCOME)
     return location(candidate.id)
   }
+
+  private fun share(
+    candidate: StoredProject,
+    checkout: Checkout,
+  ): ProjectStoreLocation {
+    val live = candidate.liveCheckouts()
+    val record = candidate.record
+    val primary = record.commonDir.takeIf(live::contains) ?: live.first()
+    writeRecord(
+      candidate.dir,
+      record.copy(commonDir = primary, sharedCommonDirs = live - primary, lastSeen = now())
+        .withCheckout(checkout.commonDir.toString()),
+    )
+    identityWarning("$SHARED_CLONE_OUTCOME matched=${candidate.id}")
+    return location(candidate.id)
+  }
+
+  private fun StoredProject.liveCheckouts(): List<String> =
+    record.checkoutCommonDirs.filter { Files.exists(Path.of(it)) }
+
+  private fun ProjectStoreRecord.withCheckout(commonDir: String): ProjectStoreRecord =
+    if (commonDir in checkoutCommonDirs) this else copy(sharedCommonDirs = sharedCommonDirs + commonDir)
 
   private fun touchOrRekey(
     exact: StoredProject,
@@ -398,6 +413,7 @@ class ProjectStoreResolver(
     const val ADOPTED_OUTCOME = "lineage_adopted"
     const val REKEYED_OUTCOME = "rekeyed_to_lineage"
     const val SECOND_CLONE_OUTCOME = "second_clone"
+    const val SHARED_CLONE_OUTCOME = "lineage_shared"
     const val MULTIPLE_CANDIDATES_OUTCOME = "multiple_candidates"
     const val GIT_UNAVAILABLE_OUTCOME = "git_unavailable"
     const val LINK_HINT = "'run skill-bill project link <id> to attach this checkout'"

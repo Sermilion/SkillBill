@@ -126,6 +126,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.goalrunner.preflight.GoalPreflightService",
         "skillbill.engine.goalrunner.model.GoalPreflightGateBlock",
         "skillbill.engine.goalrunner.GoalRunner",
+        "skillbill.engine.goalrunner.intake.LegacySpecImport",
         "skillbill.engine.goalrunner.plan.StandalonePlanLaunch",
         "skillbill.engine.goalrunner.plan.StandalonePlanResult",
         "skillbill.engine.goalrunner.plan.StandalonePlanRun",

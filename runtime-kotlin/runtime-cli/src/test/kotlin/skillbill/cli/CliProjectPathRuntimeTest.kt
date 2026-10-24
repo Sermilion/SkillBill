@@ -28,4 +28,25 @@ class CliProjectPathRuntimeTest {
     assertEquals(1, missing.exitCode, missing.stdout)
     assertContains(missing.stdout, storeRoot.resolve("specs").toString())
   }
+
+  @Test
+  fun `project import-specs copies legacy bundles into the store and reports them`() {
+    val checkout = Files.createTempDirectory("project-import-checkout")
+    val legacy = Files.createDirectories(checkout.resolve(".feature-specs/done/SKILL-5-archived"))
+    Files.writeString(legacy.resolve("spec.md"), "# SKILL-5\n")
+    val context =
+      CliRuntimeContext(
+        dbPathOverride = Files.createTempDirectory("project-import-db").resolve("metrics.db").toString(),
+        environment = isolatedProjectStoreEnvironment(),
+        repositoryRoot = checkout,
+      )
+    val storeRoot = Path.of(CliRuntime.run(listOf("project", "path"), context).stdout.trim())
+
+    val result = CliRuntime.run(listOf("project", "import-specs"), context)
+
+    assertEquals(0, result.exitCode, result.stdout)
+    assertContains(result.stdout, "Imported 1 bundle(s)")
+    assertEquals("# SKILL-5\n", Files.readString(storeRoot.resolve("specs/done/SKILL-5-archived/spec.md")))
+    assertEquals("# SKILL-5\n", Files.readString(legacy.resolve("spec.md")))
+  }
 }

@@ -21,13 +21,14 @@ import skillbill.engine.operation.core.OperationStepRunner
 import skillbill.engine.operation.core.anchorsMoved
 import skillbill.engine.operation.core.consumedToken
 import skillbill.engine.operation.core.foreignToken
-import skillbill.engine.operation.core.releaseBranchBehind
 import skillbill.engine.operation.core.releaseWorktreeDirty
 import skillbill.engine.operation.core.supersededToken
 import skillbill.engine.operation.core.unknownToken
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
+import skillbill.ports.operation.ReleaseBuildGate
+import skillbill.ports.operation.model.ReleaseBuildReadiness
 import skillbill.ports.projectstore.FixedProjectStorePort
 import java.nio.file.Files
 import java.nio.file.Path
@@ -48,6 +49,13 @@ class ReleaseOperationTest {
   private val runner = ChangelogRunner(CHANGELOG)
   private val git = GitWorkflowGitOperations()
   private val projectStore = FixedProjectStorePort(root.resolve("project-store"))
+  private var buildReadiness: ReleaseBuildReadiness = ReleaseBuildReadiness.Passed("main")
+  private val inspectedCommits = mutableListOf<String>()
+  private val buildGate =
+    ReleaseBuildGate { _, commit ->
+      inspectedCommits += commit
+      buildReadiness
+    }
   private val proposals =
     SqliteOperationProposalRepository(
       sqliteSessionFactoryForTests(
@@ -58,14 +66,14 @@ class ReleaseOperationTest {
     )
   private val executor =
     OperationExecutor(
-      OperationRegistry(listOf(ReleaseOperation(git))),
+      OperationRegistry(listOf(ReleaseOperation(git, buildGate))),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
       projectStore,
     )
   private val executorWithOtherOperation =
     OperationExecutor(
-      OperationRegistry(listOf(ReleaseOperation(git), OtherConfirmableOperation)),
+      OperationRegistry(listOf(ReleaseOperation(git, buildGate), OtherConfirmableOperation)),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
       OperationStepRunner(runner, git),
       projectStore,
@@ -92,6 +100,7 @@ class ReleaseOperationTest {
 
     assertContains(proposal.proposalSummary, "Release v1.3.0")
     assertContains(proposal.proposalSummary, CHANGELOG)
+    assertEquals(listOf(run(repo, "git", "rev-parse", "HEAD")), inspectedCommits)
     assertContains(runner.directives.single(), "feat: add runtime operations")
     assertContains(runner.directives.single(), "## What's New in v1.3.0")
     assertContains(runner.directives.single(), "### 2. Find the previous release tag")
@@ -138,10 +147,57 @@ class ReleaseOperationTest {
     commit(other, "c.txt", "fix: remote only")
     run(other, "git", "push", "--quiet", "origin", "main")
 
-    assertEquals(releaseBranchBehind("main"), release(bump = "patch").outcome)
+    val result = assertIs<OperationOutcome.Blocked>(release(bump = "patch").outcome)
+    assertContains(result.reason, "must match origin/main")
     assertTrue(runner.directives.isEmpty())
     assertEquals(0, proposalRowCount())
     assertEquals("", run(repo, "git", "tag", "--list", "v1.2.4"))
+  }
+
+  @Test
+  fun `failed or unavailable builds refuse a proposal without running the agent or creating a tag`() {
+    for (readiness in listOf(
+      ReleaseBuildReadiness.NotReady("Build failed: https://github.com/acme/repo/actions/runs/1"),
+      ReleaseBuildReadiness.Unavailable("Build results are unavailable"),
+    )) {
+      buildReadiness = readiness
+      assertIs<OperationOutcome.Blocked>(release(bump = "minor").outcome)
+    }
+    assertTrue(runner.directives.isEmpty())
+    assertEquals(0, proposalRowCount())
+    assertEquals("", run(repo, "git", "tag", "--list", "v1.3.0"))
+  }
+
+  @Test
+  fun `a build rerun pending after proposal blocks confirmation and the token remains usable after it passes`() {
+    val proposal = assertIs<OperationOutcome.AwaitingConfirmation>(release(bump = "minor").outcome)
+    buildReadiness = ReleaseBuildReadiness.NotReady("Build is pending")
+
+    assertEquals(OperationOutcome.Blocked("Build is pending"), release(confirm = proposal.token).outcome)
+    assertEquals("", run(repo, "git", "tag", "--list", "v1.3.0"))
+    assertEquals("", run(repo, "git", "ls-remote", "--tags", "origin", "v1.3.0"))
+
+    buildReadiness = ReleaseBuildReadiness.Passed("main")
+    assertIs<OperationOutcome.Completed>(release(confirm = proposal.token).outcome)
+  }
+
+  @Test
+  fun `an unpublished commit cannot release using successful builds from the default branch`() {
+    commit(repo, "c.txt", "feat: not pushed")
+
+    val result = assertIs<OperationOutcome.Blocked>(release(bump = "minor").outcome)
+
+    assertContains(result.reason, "must match origin/main")
+    assertTrue(runner.directives.isEmpty())
+    assertEquals("", run(repo, "git", "tag", "--list", "v1.3.0"))
+  }
+
+  @Test
+  fun `a detached checkout at the validated default branch tip can propose a release`() {
+    run(repo, "git", "checkout", "--detach", "origin/main")
+
+    assertIs<OperationOutcome.AwaitingConfirmation>(release(bump = "minor").outcome)
+    assertEquals(listOf(run(repo, "git", "rev-parse", "HEAD")), inspectedCommits)
   }
 
   @Test

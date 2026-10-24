@@ -62,9 +62,6 @@ internal fun pullRequestNotFound(reference: String?): OperationOutcome.Blocked =
 internal fun releaseWorktreeDirty(repoRoot: String): OperationOutcome.Blocked =
   OperationOutcome.Blocked("Release requires a clean worktree; '$repoRoot' has uncommitted changes.")
 
-internal fun releaseBranchBehind(branch: String): OperationOutcome.Blocked =
-  OperationOutcome.Blocked("Release requires '$branch' to be up to date with origin/$branch; pull first.")
-
 internal fun unresolvableVerifyTarget(
   target: String,
   detail: String,

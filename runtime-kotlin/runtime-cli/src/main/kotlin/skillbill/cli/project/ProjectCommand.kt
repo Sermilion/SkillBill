@@ -3,6 +3,7 @@ package skillbill.cli.project
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
+import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
@@ -11,6 +12,7 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.goalrunner.intake.LegacySpecImport
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.projectstore.ProjectStoreFailureCode
@@ -24,6 +26,12 @@ object ProjectCommandPayloadKeys {
   const val PROJECT_ID: String = "project_id"
   const val STORE_ROOT: String = "store_root"
   const val BUNDLE_PATH: String = "bundle_path"
+  const val SOURCE_ROOT: String = "source_root"
+  const val SPECS_ROOT: String = "specs_root"
+  const val IMPORTED: String = "imported"
+  const val ALREADY_IN_STORE: String = "already_in_store"
+  const val IN_FLIGHT: String = "in_flight"
+  const val FAILED: String = "failed"
   const val ERROR: String = "error"
 }
 
@@ -31,12 +39,13 @@ object ProjectCommandPayloadKeys {
 class ProjectCommand(
   linkCommand: ProjectLinkCommand,
   pathCommand: ProjectPathCommand,
+  importSpecsCommand: ProjectImportSpecsCommand,
 ) : DocumentedNoOpCliCommand(
     "project",
     "Manage the project store that holds Skill Bill state for the current checkout.",
   ) {
   init {
-    subcommands(linkCommand, pathCommand)
+    subcommands(linkCommand, pathCommand, importSpecsCommand)
   }
 }
 
@@ -140,5 +149,51 @@ class ProjectLinkCommand(
         ProjectCommandPayloadKeys.STORE_ROOT to location.root.toString(),
       ),
     )
+  }
+}
+
+@Inject
+class ProjectImportSpecsCommand(
+  private val legacySpecImport: LegacySpecImport,
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+) : DocumentedCliCommand(
+    "import-specs",
+    "Copy legacy .feature-specs/ bundles, including done/, into the project store. The source is never changed; " +
+      "bundles already in the store and bundles of in-progress goals are skipped.",
+  ) {
+  private val from by option("--from", help = "Legacy .feature-specs directory to import instead of the checkout's.")
+
+  override fun run() {
+    val result = legacySpecImport.import(resolveCliRepositoryRoot(null, inputs), from?.let(Path::of))
+    val text =
+      buildString {
+        append("Imported ${result.imported.size} bundle(s) from ${result.sourceRoot} into ${result.specsRoot}.\n")
+        appendBundles("Already in the store", result.alreadyInStore)
+        appendBundles("Left in place for in-progress goals", result.inFlight)
+        appendBundles("Failed", result.failed)
+      }
+    state.completeText(
+      text,
+      mapOf(
+        SharedPayloadKeys.STATUS to if (result.failed.isEmpty()) CliPayloadStatus.OK else "failed",
+        ProjectCommandPayloadKeys.SOURCE_ROOT to result.sourceRoot.toString(),
+        ProjectCommandPayloadKeys.SPECS_ROOT to result.specsRoot.toString(),
+        ProjectCommandPayloadKeys.IMPORTED to result.imported,
+        ProjectCommandPayloadKeys.ALREADY_IN_STORE to result.alreadyInStore,
+        ProjectCommandPayloadKeys.IN_FLIGHT to result.inFlight,
+        ProjectCommandPayloadKeys.FAILED to result.failed,
+      ),
+      exitCode = if (result.failed.isEmpty()) 0 else 1,
+    )
+  }
+
+  private fun StringBuilder.appendBundles(
+    heading: String,
+    bundles: List<String>,
+  ) {
+    if (bundles.isEmpty()) return
+    append("$heading:\n")
+    bundles.forEach { append("  $it\n") }
   }
 }

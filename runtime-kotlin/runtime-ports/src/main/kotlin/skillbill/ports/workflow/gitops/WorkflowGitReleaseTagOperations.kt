@@ -14,15 +14,6 @@ interface WorkflowGitReleaseTagOperations {
     sinceRef: String?,
   ): WorkflowGitOperationResult
 
-  /**
-   * `true` when `origin/<branch>` holds commits HEAD lacks, else `false`. Reads the remote-tracking ref, so call
-   * [WorkflowGitRemoteOperations.refreshRemoteBranch] first.
-   */
-  fun localBranchBehindRemote(
-    repoRoot: Path,
-    branch: String,
-  ): WorkflowGitOperationResult
-
   /** The commit `origin/<branch>` points at, or [WorkflowGitRemoteOperations.ABSENT_REMOTE_BRANCH]. */
   fun remoteBranchHead(
     repoRoot: Path,

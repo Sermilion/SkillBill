@@ -4,6 +4,7 @@ Skill Bill uses tag-driven GitHub Releases.
 
 The release contract is:
 
+- require successful push builds for the exact release commit on the default branch
 - create an annotated SemVer tag such as `v0.4.0`
 - push the tag to GitHub
 - let the `Release` workflow rerun validation and publish the GitHub Release
@@ -42,8 +43,8 @@ The desktop archive filename still carries the exact Skill Bill release version.
 After each runtime release publishes, the workflow deletes assets from every
 older runtime release, including prereleases. Their release pages and notes stay
 available. Only the newest
-published runtime release keeps downloads. Ordinary pushes to `main` do not
-build the tray app. Pull requests that touch `desktop-tray` or `runtime-kotlin`
+published runtime release keeps downloads. Pushes to `main` build and check the
+tray app on Linux, macOS, and Windows. Pull requests that touch `desktop-tray` or `runtime-kotlin`
 run the cross-platform build and publish a downloadable snapshot; cleanup keeps
 the newest successful complete snapshot set.
 
@@ -125,7 +126,8 @@ Skill Bill should stay on pre-1.0 SemVer until the install surface, taxonomy, an
 The `/skill-bill operation:release` operation automates the changelog-and-tag path
 of the checklist below. Pass the bump type and it will:
 
-1. verify the working tree is clean and the branch is up to date with its remote
+1. verify the working tree is clean, HEAD matches the remote default branch, and
+   every reported push workflow for that exact commit completed successfully
 2. find the previous stable tag and gather every commit since it
 3. generate a curated, user-facing changelog (New Features / Bug Fixes / Other),
    reading this file first for the versioning policy, and present it for review
@@ -140,15 +142,20 @@ of the checklist below. Pass the bump type and it will:
 The bump type is required — `bump:patch`, `bump:minor`, or `bump:major`, per the
 versioning policy above. The operation never creates a tag with a dirty tree, never
 skips changelog review, and never pushes without confirmation. It does not run
-the local validation gate, so run the checks in the checklist below first (or let
-the `Release` workflow re-run them on the pushed tag).
+the local validation gate. It reads GitHub Actions results before proposing and
+again before tagging. Missing, pending, failed, cancelled, skipped, or unreadable
+build results block the operation. A new run of the same workflow supersedes its
+older result for that commit. A successful build for another commit cannot satisfy
+the gate. The `Release` workflow still reruns validation on the pushed tag.
 
 ## Release checklist
 
 Use this when cutting a release by hand, or to know what `/skill-bill operation:release` does
 under the hood.
 
-1. Make sure the release commit is on `main`.
+1. Make sure the release commit matches remote `main` and all push workflows for
+   that exact commit passed, including runtime validation, installation smoke
+   tests, and the desktop build matrix. A pending or unavailable result is not a pass.
 2. Run the local checks:
 
    ```bash

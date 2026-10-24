@@ -25,22 +25,6 @@ internal object GitStandardWorkflowGitReleaseTagOperations : WorkflowGitReleaseT
     return runGitCommand(repoRoot, "log", "--no-decorate", "--format=%h %s", range)
   }
 
-  override fun localBranchBehindRemote(
-    repoRoot: Path,
-    branch: String,
-  ): WorkflowGitOperationResult {
-    val remoteRef = "refs/remotes/origin/${branch.trim()}"
-    if (runGitCommand(repoRoot, "rev-parse", "--verify", "--quiet", remoteRef) !is WorkflowGitOperationResult.Ok) {
-      return WorkflowGitOperationResult.Ok(value = "false")
-    }
-    val behind = runGitCommand(repoRoot, "rev-list", "--count", "HEAD..$remoteRef")
-    if (behind !is WorkflowGitOperationResult.Ok) return behind
-    val count =
-      behind.value.trim().toIntOrNull()
-        ?: return WorkflowGitOperationResult.Failed(error = "Could not parse behind count '${behind.value.trim()}'.")
-    return WorkflowGitOperationResult.Ok(value = (count > 0).toString())
-  }
-
   override fun remoteBranchHead(
     repoRoot: Path,
     branch: String,

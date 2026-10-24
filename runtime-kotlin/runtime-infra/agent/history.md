@@ -25,7 +25,7 @@ Acceptance criteria: 3/3 implemented
 
 ## [2026-10-23] SKILL-441 subtask 1: project store resolver and identity
 Areas: runtime-infra/host (projectstore), runtime-infra/workflow (git lineage), runtime-ports, runtime-contracts, runtime-core DI, runtime-cli, runtime-application uninstall, uninstall.sh, orchestration/contracts
-- ProjectStoreResolver (host/projectstore) maps a checkout to a store under the state dir's projects/ directory. Linked worktrees of one repo share a store through the real path of the primary git common dir; a moved checkout is adopted by root-commit lineage; a second clone gets a suffixed id; a repo with no commits is re-keyed to lineage once it has one; a non-git directory uses a path-hash key.
+- ProjectStoreResolver (host/projectstore) maps a checkout to a store under the state dir's projects/ directory. Linked worktrees of one repo share a store through the real path of the primary git common dir; a moved checkout is adopted by root-commit lineage; a second clone gets a suffixed id (superseded below: a clone with the same remote now shares the store); a repo with no commits is re-keyed to lineage once it has one; a non-git directory uses a path-hash key.
 - Any resolve failure falls back to a working-directory store with a git_unavailable warning. Malformed records are warned about, skipped and never rewritten. The resolver keeps a per-common-dir cache and touches last_seen atomically.
 - `skill-bill project link <id>` rebinds the current repo to an existing store and sets linked_to on the old one. An unknown id fails loudly with PROJECT_STORE_TARGET_UNKNOWN.
 - Record schema orchestration/contracts/project-store-record-schema.yaml (contract_version 0.1, additionalProperties false). A repoTest pins its property keys to ProjectStoreRecordKeys.
@@ -596,3 +596,9 @@ Areas: runtime-infra-fs/install, runtime-infra-fs/scaffold, runtime-domain/insta
 - Pattern reusable: any new sidecar or pointer that references an external file should inline the content at render time, not carry a path
 Feature flag: N/A
 Acceptance criteria: 8/8 implemented
+
+## [2026-10-24] SKILL-441 follow-up: shared clone stores and legacy spec import
+Areas: runtime-infra/host (projectstore), runtime-contracts, runtime-engine (goalrunner/intake), runtime-cli (project), orchestration/contracts
+- A clone with the same root commits and remote URL as a store whose checkout still exists now shares that store instead of getting a suffixed one, warning with value_used=lineage_shared. Extra checkouts are recorded in the optional shared_common_dirs record field; exact matching checks common_dir and every shared entry. A clone with a different remote (a fork) still gets its own suffixed store. Adoption by a moved checkout happens only once every recorded checkout is gone.
+- `skill-bill project link <id>` now adds the checkout to the target's shared_common_dirs instead of repointing the target's common_dir, so the original checkout keeps resolving to the target.
+- `skill-bill project import-specs [--from <dir>]` (LegacySpecImport) copies legacy .feature-specs/ bundles, active and done/, into the store's specs/. It never modifies the source, skips bundles already present in the store, and leaves an active bundle in place while its issue has a non-terminal workflow. Copied decomposition manifests have their .feature-specs/ paths rewritten to specs/.

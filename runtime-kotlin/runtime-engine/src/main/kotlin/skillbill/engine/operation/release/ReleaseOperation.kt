@@ -10,13 +10,15 @@ import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.engine.operation.core.gitValueOr
-import skillbill.engine.operation.core.releaseBranchBehind
 import skillbill.engine.operation.core.releaseWorktreeDirty
+import skillbill.ports.operation.ReleaseBuildGate
+import skillbill.ports.operation.model.ReleaseBuildReadiness
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
 class ReleaseOperation(
   private val gitOperations: WorkflowGitOperations,
+  private val buildGate: ReleaseBuildGate,
 ) : ConfirmableOperation {
   override val id: String = "release"
 
@@ -28,15 +30,35 @@ class ReleaseOperation(
     if (gitOperations.worktreeStatus(repoRoot).gitValueOr("worktree status") { return it }.isNotBlank()) {
       return releaseWorktreeDirty(repoRoot.toString())
     }
-    return branchFreshnessRefusal(context)
+    return buildReadinessRefusal(context)
   }
 
-  private fun branchFreshnessRefusal(context: OperationContext): OperationRefusal? {
+  private fun buildReadinessRefusal(context: OperationContext): OperationRefusal? {
     val repoRoot = context.repoRoot
-    val branch = branch(context) { return it }
-    gitOperations.refreshRemoteBranch(repoRoot, branch)
-    val behind = gitOperations.localBranchBehindRemote(repoRoot, branch).gitValueOr("branch freshness") { return it }
-    return if (behind == "true") releaseBranchBehind(branch) else null
+    val head = gitOperations.headCommitSha(repoRoot).gitValueOr("release commit") { return it }
+    return when (val readiness = buildGate.inspect(repoRoot, head)) {
+      is ReleaseBuildReadiness.Passed -> releaseHeadRefusal(context, readiness.branch, head)
+      is ReleaseBuildReadiness.NotReady -> OperationOutcome.Blocked(readiness.reason)
+      is ReleaseBuildReadiness.Unavailable -> OperationOutcome.Blocked(readiness.reason)
+    }
+  }
+
+  private fun releaseHeadRefusal(
+    context: OperationContext,
+    branch: String,
+    head: String,
+  ): OperationRefusal? {
+    val repoRoot = context.repoRoot
+    gitOperations.refreshRemoteBranch(repoRoot, branch).gitValueOr("release branch refresh") { return it }
+    val remoteHead = gitOperations.remoteBranchHead(repoRoot, branch).gitValueOr("release branch head") { return it }
+    return if (head == remoteHead) {
+      null
+    } else {
+      OperationOutcome.Blocked(
+        "Release commit $head must match origin/$branch at $remoteHead. " +
+          "Update the checkout and propose the release again.",
+      )
+    }
   }
 
   override fun run(context: OperationContext): OperationRunResult {

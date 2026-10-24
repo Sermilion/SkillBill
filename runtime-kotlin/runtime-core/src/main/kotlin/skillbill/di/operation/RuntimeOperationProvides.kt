@@ -23,6 +23,7 @@ import skillbill.engine.operation.verify.VerifyOperation
 import skillbill.engine.operation.verify.VerifyTelemetry
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.workflow.github.GhPullRequestReviewThreads
+import skillbill.infrastructure.workflow.github.GhReleaseBuildGate
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.operation.OperationProposalRepository
@@ -61,7 +62,7 @@ internal interface RuntimeOperationProvides {
     OperationRegistry(
       listOf(
         UpdateCheckOperation(updateCheckService),
-        ReleaseOperation(gitOperations),
+        ReleaseOperation(gitOperations, GhReleaseBuildGate()),
         UnitTestValueCheckOperation(gitOperations),
         FeatureGuardOperation(),
         featureGuardCleanup,

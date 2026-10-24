@@ -48,12 +48,41 @@ class ProjectStoreResolverTest {
   }
 
   @Test
-  fun `a second clone with the original still present gets its own suffixed store`() {
+  fun `a second clone of the same remote shares the original store while both stay present`() {
     val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
     val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A) }
 
     val first = resolver().resolve(original)
     val second = resolver().resolve(clone)
+
+    assertEquals(first.projectId, second.projectId)
+    assertEquals(listOf(first.projectId), storeNames())
+    assertEquals(first.projectId, resolver().resolve(original).projectId)
+    assertEquals(first.projectId, resolver().resolve(clone).projectId)
+    assertEquals(1, warnings.count { "value_used=lineage_shared matched=${first.projectId}" in it })
+  }
+
+  @Test
+  fun `a shared store is adopted by a moved checkout only once every recorded checkout is gone`() {
+    val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
+    val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A) }
+    val shared = resolver().resolve(original)
+    resolver().resolve(clone)
+    original.toFile().deleteRecursively()
+    val moved = gitCheckout("moved").also { lineages.set(it, LINEAGE_A) }
+
+    assertEquals(shared.projectId, resolver().resolve(moved).projectId)
+    assertEquals(shared.projectId, resolver().resolve(clone).projectId)
+    assertEquals(listOf(shared.projectId), storeNames())
+  }
+
+  @Test
+  fun `a clone of the same lineage with a different remote gets its own suffixed store`() {
+    val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
+    val fork = gitCheckout("fork").also { lineages.set(it, LINEAGE_A_FORK) }
+
+    val first = resolver().resolve(original)
+    val second = resolver().resolve(fork)
 
     assertEquals("${first.projectId}-2", second.projectId)
     assertEquals(listOf(first.projectId, second.projectId), storeNames())
@@ -111,9 +140,9 @@ class ProjectStoreResolverTest {
   }
 
   @Test
-  fun `link moves the exact match to the target store and the old store stops matching`() {
+  fun `link attaches the checkout to the target store and the old store stops matching`() {
     val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
-    val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A) }
+    val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A_FORK) }
     val target = resolver().resolve(original)
     val cloneStore = resolver().resolve(clone)
 
@@ -121,6 +150,7 @@ class ProjectStoreResolverTest {
 
     assertEquals(target.projectId, linked.projectId)
     assertEquals(target.projectId, resolver().resolve(clone).projectId)
+    assertEquals(target.projectId, resolver().resolve(original).projectId)
     val oldRecord = ProjectStoreRecordCodec.parse(Files.readString(cloneStore.root.resolve("project.json")))
     assertEquals(target.projectId, oldRecord.linkedTo)
   }
@@ -128,7 +158,7 @@ class ProjectStoreResolverTest {
   @Test
   fun `a linked checkout that moves adopts its link target instead of creating a third store`() {
     val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
-    val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A) }
+    val clone = gitCheckout("clone").also { lineages.set(it, LINEAGE_A_FORK) }
     val target = resolver().resolve(original)
     resolver().resolve(clone)
     resolver().link(clone, target.projectId)
@@ -203,5 +233,6 @@ class ProjectStoreResolverTest {
 
   private companion object {
     val LINEAGE_A = RepositoryLineage(listOf("a".repeat(40)), "git@example.com:org/repo.git")
+    val LINEAGE_A_FORK = RepositoryLineage(listOf("a".repeat(40)), "git@example.com:fork/repo.git")
   }
 }

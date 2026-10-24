@@ -22,7 +22,10 @@ internal data class ProjectStoreRecord(
   val lastSeen: String,
   val linkedTo: String? = null,
   val legacyStateNoticeAt: String? = null,
-)
+  val sharedCommonDirs: List<String> = emptyList(),
+) {
+  val checkoutCommonDirs: List<String> get() = listOf(commonDir) + sharedCommonDirs
+}
 
 internal data class StoredProject(
   val dir: Path,
@@ -45,6 +48,7 @@ internal object ProjectStoreRecordCodec {
       lastSeen = payload.requiredString(ProjectStoreRecordKeys.LAST_SEEN),
       linkedTo = payload[ProjectStoreRecordKeys.LINKED_TO] as? String,
       legacyStateNoticeAt = payload[ProjectStoreRecordKeys.LEGACY_STATE_NOTICE_AT] as? String,
+      sharedCommonDirs = JsonCodec.anyToStringList(payload[ProjectStoreRecordKeys.SHARED_COMMON_DIRS]).orEmpty(),
     )
   }
 
@@ -59,6 +63,9 @@ internal object ProjectStoreRecordCodec {
     payload[ProjectStoreRecordKeys.LAST_SEEN] = record.lastSeen
     record.linkedTo?.let { payload[ProjectStoreRecordKeys.LINKED_TO] = it }
     record.legacyStateNoticeAt?.let { payload[ProjectStoreRecordKeys.LEGACY_STATE_NOTICE_AT] = it }
+    record.sharedCommonDirs.takeIf(List<String>::isNotEmpty)?.let {
+      payload[ProjectStoreRecordKeys.SHARED_COMMON_DIRS] = it
+    }
     return JsonCodec.mapToJsonString(payload) + "\n"
   }
 

@@ -27,7 +27,7 @@ class CliRepoValidationRuntimeTest {
           "--format",
           "json",
         ),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(0, result.exitCode, result.stdout)
@@ -60,7 +60,7 @@ class CliRepoValidationRuntimeTest {
           "--format",
           "json",
         ),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(1, result.exitCode)
@@ -75,7 +75,7 @@ class CliRepoValidationRuntimeTest {
     val result =
       CliRuntime.run(
         listOf("validate-release-ref", "not-a-tag", "--repo-root", repoRoot.toString(), "--format", "text"),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(1, result.exitCode)
@@ -98,7 +98,7 @@ class CliRepoValidationRuntimeTest {
           "--format",
           "json",
         ),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(1, result.exitCode)
@@ -133,7 +133,7 @@ class CliRepoValidationRuntimeTest {
           "--format",
           "json",
         ),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(1, result.exitCode)
@@ -155,7 +155,7 @@ class CliRepoValidationRuntimeTest {
           "--format",
           "json",
         ),
-        CliRuntimeContext(),
+        CliRuntimeContext(environment = isolatedProjectStoreEnvironment()),
       )
 
     assertEquals(1, result.exitCode)
