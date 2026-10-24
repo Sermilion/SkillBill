@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.model.execution
 
 import skillbill.model.FileLocation
 import skillbill.ports.qa.model.QaWorkspace
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Path
 
 data class QaExecutionContext(
@@ -16,13 +16,22 @@ data class QaExecutionContext(
 
 sealed interface QaExecutionTarget {
   data class Supported(
-    val guidancePath: FileLocation,
-    val platforms: Set<QaPlatform>,
+    val targets: List<QaDeclaredTarget>,
     val checkout: Path,
-  ) : QaExecutionTarget
+  ) : QaExecutionTarget {
+    init {
+      require(targets.isNotEmpty()) { "A supported QA target needs at least one declared target." }
+    }
+  }
 
   data class Skipped(val reason: QaSkipReason, val detail: String) : QaExecutionTarget
 }
+
+data class QaDeclaredTarget(
+  val packSlug: String,
+  val kinds: Set<QaTargetKind>,
+  val guidancePath: FileLocation,
+)
 
 data class QaExpectedIdentity(
   val headRevision: String,

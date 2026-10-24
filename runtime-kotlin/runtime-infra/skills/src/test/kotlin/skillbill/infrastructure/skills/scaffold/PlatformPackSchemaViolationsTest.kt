@@ -236,6 +236,30 @@ class PlatformPackSchemaViolationsTest {
   }
 
   @Test
+  fun `qa_capability platforms item that is not a lowercase token fails the schema pattern`() {
+    val manifest =
+      """
+      platform: scenarioslug
+      contract_version: "1.8"
+      routing_signals:
+        strong: [".kt"]
+      declared_code_review_areas: []
+      qa_capability:
+        platforms: ["Bad Kind"]
+        guidance_file: qa/guide.md
+      """.trimIndent()
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
+    assertContains(error.message.orEmpty(), "fails schema validation")
+    assertContains(error.message.orEmpty(), "qa_capability")
+    assertContains(error.message.orEmpty(), "platforms")
+  }
+
+  @Test
   fun `contract_version mismatch surfaces contractVersionMismatchError`() {
     val manifest =
       """

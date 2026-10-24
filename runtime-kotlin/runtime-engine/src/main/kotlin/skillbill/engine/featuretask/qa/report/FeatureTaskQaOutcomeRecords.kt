@@ -52,10 +52,15 @@ internal object FeatureTaskQaOutcomeRecords {
       attempts,
       produced[QaPhaseOutputKeys.TREE_IDENTITY] as? String,
       "$recordedAt",
-      mergedFindings(previous?.findings.orEmpty(), verdict, reported),
+      mergedFindings(previous?.findings.orEmpty(), retestsFindings(report, verdict), reported),
       report?.text,
     )
   }
+
+  fun retestsFindings(
+    report: QaReport?,
+    verdict: QaVerdict,
+  ): Boolean = report?.retestsFindings ?: (verdict == QaVerdict.PASSED || verdict == QaVerdict.FINDINGS_OPEN)
 
   fun reportFrom(produced: Map<String, Any?>): QaReport? {
     val text = produced[QaPhaseOutputKeys.REPORT_TEXT] as? String
@@ -91,15 +96,14 @@ internal object FeatureTaskQaOutcomeRecords {
 
   fun mergedFindings(
     previous: List<FeatureTaskQaFinding>,
-    verdict: QaVerdict,
+    retestsFindings: Boolean,
     reported: List<FeatureTaskQaFinding>,
   ): List<FeatureTaskQaFinding> {
     val byId = reported.associateBy(FeatureTaskQaFinding::id)
-    val retested = verdict == QaVerdict.PASSED || verdict == QaVerdict.FINDINGS_OPEN
     val carried =
       previous.map { finding ->
         byId[finding.id]
-          ?: finding.copy(status = if (retested) FeatureTaskQaFindingStatus.FIXED else finding.status)
+          ?: finding.copy(status = if (retestsFindings) FeatureTaskQaFindingStatus.FIXED else finding.status)
       }
     val previousIds = previous.map(FeatureTaskQaFinding::id).toSet()
     return carried + byId.values.filterNot { it.id in previousIds }

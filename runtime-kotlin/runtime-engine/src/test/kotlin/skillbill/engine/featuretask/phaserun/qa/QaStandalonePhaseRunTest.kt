@@ -15,7 +15,7 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.test.Test
@@ -35,23 +35,27 @@ class QaStandalonePhaseRunTest {
   private val workspaces = InMemoryQaWorkspaces()
   private val leases = RecordingQaLeases()
   private val androidPack =
-    kotlinPackWithValidationGate().copy(qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), QA_GUIDE))
+    kotlinPackWithValidationGate()
+      .copy(qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), QA_GUIDE))
   private val launched = mutableListOf<QaExecutionContext?>()
 
   @Test
   fun `a findings report completes with its text verbatim and releases the invocation's leases`() {
-    val text = qaTestReport(QaVerdict.FINDINGS_OPEN, qaTestExpected(INVOCATION))
+    val text = androidReport(QaVerdict.FINDINGS_OPEN)
 
     val result = assertIs<PhaseRunResult.Completed>(runQa { text })
 
     assertEquals(StandaloneQaOutcome.FINDINGS, result.qaOutcome)
     assertEquals(text, result.qaReportText)
-    assertEquals("QA verdict: findings_open", result.value)
+    assertEquals("QA verdict: findings_open; coverage: android findings_open", result.value)
     assertEquals(listOf("Verdict: findings_open", text), result.targetReport)
     assertEquals(listOf(INVOCATION), leases.releasedInvocations)
     val qa = requireNotNull(launched.single())
     assertEquals(qaTestExpected(INVOCATION), qa.expected)
-    assertEquals(setOf(QaPlatform.ANDROID), assertIs<QaExecutionTarget.Supported>(qa.target).platforms)
+    assertEquals(
+      listOf(setOf(QaTargetKind("android"))),
+      assertIs<QaExecutionTarget.Supported>(qa.target).targets.map { it.kinds },
+    )
   }
 
   @Test
@@ -62,7 +66,10 @@ class QaStandalonePhaseRunTest {
 
     assertEquals(StandaloneQaOutcome.INCOMPLETE, result.qaOutcome)
     assertEquals(text, result.qaReportText)
-    assertEquals(listOf("Verdict: incomplete", text), result.targetReport)
+    assertEquals(
+      listOf("Warning: QA report has no coverage for target android", "Verdict: incomplete", text),
+      result.targetReport,
+    )
   }
 
   @Test
@@ -74,7 +81,7 @@ class QaStandalonePhaseRunTest {
     assertEquals(
       listOf(
         "Warning: QA agent wrote no report.md",
-        "Verdict: incomplete: QA agent wrote no report.md",
+        "Verdict: incomplete",
       ),
       result.targetReport,
     )
@@ -97,7 +104,7 @@ class QaStandalonePhaseRunTest {
 
   @Test
   fun `an agent reported skip completes as skipped`() {
-    val text = qaTestReport(QaVerdict.SKIPPED, qaTestExpected(INVOCATION))
+    val text = androidReport(QaVerdict.SKIPPED)
 
     val result = assertIs<PhaseRunResult.Completed>(runQa { text })
 
@@ -159,6 +166,9 @@ class QaStandalonePhaseRunTest {
     assertEquals(emptyList(), launched)
     assertNull(workspaces.report)
   }
+
+  private fun androidReport(verdict: QaVerdict): String =
+    qaTestReport(verdict, qaTestExpected(INVOCATION)) + "\n## Coverage\n- android: ${verdict.wireValue}\n"
 
   private fun runQa(
     manifests: List<PlatformManifest> = listOf(androidPack),

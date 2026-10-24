@@ -42,7 +42,11 @@ class FeatureTaskQaOutcomeRecorder(
           qaFixAttempts,
           tested.treeIdentity,
           "${clock.instant()}",
-          FeatureTaskQaOutcomeRecords.mergedFindings(previous?.findings.orEmpty(), tested.verdict, reported),
+          FeatureTaskQaOutcomeRecords.mergedFindings(
+            previous?.findings.orEmpty(),
+            FeatureTaskQaOutcomeRecords.retestsFindings(tested.report, tested.verdict),
+            reported,
+          ),
           tested.report?.text,
         ),
       )

@@ -26,7 +26,7 @@ import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -54,7 +54,7 @@ class IdeStatusServiceGoalProjectionTest {
         kotlinPackWithoutGate().copy(
           qaCapability =
             QaCapabilityDeclaration(
-              setOf(QaPlatform.ANDROID),
+              setOf(QaTargetKind("android")),
               "qa/android-qa.md",
             ).takeIf { declaresQa == true },
         )

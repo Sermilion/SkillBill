@@ -3,7 +3,7 @@ package skillbill.infrastructure.skills.scaffold
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.parseQaCapability
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -37,15 +37,32 @@ class ShellContentLoaderQaCapabilityTest {
         ),
       )
 
-    assertEquals(setOf(QaPlatform.ANDROID), declared.platforms)
+    assertEquals(setOf(QaTargetKind("android")), declared.platforms)
     assertEquals("qa/android-qa.md", declared.guidanceFile)
+  }
+
+  @Test
+  fun `pack-declared target kinds outside any central list load with their kinds preserved`() {
+    val kinds =
+      listOf(listOf("backend", "web"), listOf("desktop")).map { platforms ->
+        requireNotNull(
+          parseQaCapability(
+            mapOf("qa_capability" to mapOf("platforms" to platforms, "guidance_file" to "qa/android-qa.md")),
+            "custom",
+            packRoot,
+          ),
+        ).platforms
+      }
+
+    assertEquals(listOf(setOf(QaTargetKind("backend"), QaTargetKind("web")), setOf(QaTargetKind("desktop"))), kinds)
   }
 
   @Test
   fun `a malformed qa_capability fails the manifest schema`() {
     val malformed =
       listOf(
-        mapOf("platforms" to listOf("windows"), "guidance_file" to "qa/android-qa.md"),
+        mapOf("platforms" to listOf("Bad Kind"), "guidance_file" to "qa/android-qa.md"),
+        mapOf("platforms" to listOf("android", "android"), "guidance_file" to "qa/android-qa.md"),
         mapOf("platforms" to emptyList<String>(), "guidance_file" to "qa/android-qa.md"),
         mapOf("platforms" to listOf("android"), "guidance_file" to "../outside.md"),
         mapOf("platforms" to listOf("android"), "guidance_file" to "qa/missing.md"),

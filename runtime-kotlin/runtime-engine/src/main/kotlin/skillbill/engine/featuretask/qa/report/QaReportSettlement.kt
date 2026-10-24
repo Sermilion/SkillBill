@@ -3,11 +3,13 @@ package skillbill.engine.featuretask.qa.report
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.qa.QaWorkspacePort
+import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import java.nio.file.Path
@@ -42,8 +44,7 @@ class QaReportSettlement(
         .map { finding -> QaOpenFinding(finding.id, emptyList(), listOf(reference)) }
         .takeIf { report.verdict == QaVerdict.FINDINGS_OPEN }
         .orEmpty()
-    val conclusive = report.verdict == QaVerdict.PASSED || report.verdict == QaVerdict.FINDINGS_OPEN
-    return previous.observe(current, conclusive, qa.expected.treeIdentity)
+    return previous.observe(current, report.retestsFindings, qa.expected.treeIdentity)
   }
 
   internal fun retainedFinding(request: QaRetainedFindingRequest): QaReportFinding? {
@@ -106,12 +107,20 @@ class QaReportSettlement(
       if (source == null) {
         QaReports.missing("QA agent wrote no report.md")
       } else {
-        QaReportParser.parse(source.content, qa.expected.evidencePrefix, qa.workspace.reportPath.toString())
+        QaReportParser.parse(
+          source.content,
+          qa.expected.evidencePrefix,
+          qa.workspace.reportPath.toString(),
+          declaredKinds(qa),
+        )
       }
     } catch (failure: SkillBillRuntimeException) {
       failure.rethrowUnless(failure.isQaFailure)
       QaReports.incomplete("QA report was unreadable: ${failure.message.orEmpty()}")
     }
+
+  private fun declaredKinds(qa: QaExecutionContext): Set<QaTargetKind> =
+    (qa.target as? QaExecutionTarget.Supported)?.targets.orEmpty().flatMapTo(linkedSetOf()) { it.kinds }
 
   private companion object {
     const val MAX_RECORD_WARNING = 300

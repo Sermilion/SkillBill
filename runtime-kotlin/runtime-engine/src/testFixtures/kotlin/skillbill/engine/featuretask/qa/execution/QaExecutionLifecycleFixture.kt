@@ -6,11 +6,15 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.qa.QaDeviceLeasePort
+import skillbill.ports.qa.QaOwnedResourcePort
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaDeviceLease
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
 import skillbill.ports.qa.model.QaLeaseResult
+import skillbill.ports.qa.model.QaOwnedResource
 import skillbill.ports.qa.model.QaReportSource
+import skillbill.ports.qa.model.QaResourceRegistration
+import skillbill.ports.qa.model.QaResourceReleaseOutcome
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Path
@@ -26,6 +30,7 @@ fun testQaExecutionLifecycle(
   capabilities: QaCapabilityResolver = QaCapabilityResolver(gitOperations) { emptyList() },
   identifiers: IdentifierGeneratorPort = IdentifierGeneratorPort { "test-invocation" },
   diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  resources: QaOwnedResourcePort = TestQaOwnedResources(),
 ): QaExecutionLifecycle =
   QaExecutionLifecycle(
     workspaces,
@@ -35,6 +40,7 @@ fun testQaExecutionLifecycle(
     gitOperations,
     diagnostics,
     identifiers,
+    resources,
   )
 
 private class TestQaWorkspaces : QaWorkspacePort {
@@ -54,6 +60,27 @@ private class TestQaWorkspaces : QaWorkspacePort {
   ): QaReportSource? = null
 
   override fun close(workspace: QaWorkspace) = Unit
+}
+
+private class TestQaOwnedResources : QaOwnedResourcePort {
+  override fun register(
+    repoRoot: Path,
+    invocationId: String,
+    resource: QaOwnedResource,
+  ): QaResourceRegistration = QaResourceRegistration.Registered
+
+  override fun release(
+    repoRoot: Path,
+    invocationId: String,
+    resource: QaOwnedResource,
+  ): QaResourceReleaseOutcome = QaResourceReleaseOutcome.NotHeld(resource)
+
+  override fun releaseAllFor(
+    repoRoot: Path,
+    invocationId: String,
+  ): List<QaResourceReleaseOutcome> = emptyList()
+
+  override fun reclaimAbandoned(repoRoot: Path): List<QaResourceReleaseOutcome> = emptyList()
 }
 
 private class TestQaLeases : QaDeviceLeasePort {

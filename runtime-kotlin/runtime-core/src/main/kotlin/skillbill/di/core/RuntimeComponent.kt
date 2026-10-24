@@ -99,6 +99,7 @@ import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.qa.QaDeviceLeasePort
+import skillbill.ports.qa.QaOwnedResourcePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
@@ -251,6 +252,7 @@ abstract class RuntimeComponent(
 
   abstract val phaseRunEntry: PhaseRunEntry
   abstract val qaDeviceLeasePort: QaDeviceLeasePort
+  abstract val qaOwnedResourcePort: QaOwnedResourcePort
   abstract val phaseStrategyLookup: PhaseStrategyLookup
   abstract val operationExecutor: OperationExecutor
   abstract val operationRegistry: OperationRegistry

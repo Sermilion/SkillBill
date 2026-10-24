@@ -699,6 +699,7 @@ object PrincipleEnforcementInventory {
       "operationRegistry",
       "phaseRunEntry",
       "qaDeviceLeasePort",
+      "qaOwnedResourcePort",
       "phaseStrategyLookup",
       "repoValidationGateway",
       "repositoryEnclosingRootPort",

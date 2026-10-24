@@ -27,7 +27,7 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.scaffold.model.QaCapabilityDeclaration
-import skillbill.scaffold.model.QaPlatform
+import skillbill.scaffold.model.QaTargetKind
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
@@ -498,7 +498,7 @@ class FeatureTaskRuntimeQaExecutionTest {
     val expected = QaExpectedIdentity(QA_TEST_HEAD, QA_TEST_TREE, qaTestEvidencePrefix("qa-test-invocation"))
     val pack =
       kotlinPackWithValidationGate().copy(
-        qaCapability = QaCapabilityDeclaration(setOf(QaPlatform.ANDROID), "qa/android-qa.md"),
+        qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), "qa/android-qa.md"),
       )
     var capabilityReads = 0
     val execution =
