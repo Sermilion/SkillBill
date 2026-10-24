@@ -56,7 +56,7 @@ class GoalRunnerDirectRuntimeContinuationTest {
     assertEquals(1, context.subtaskId)
     assertEquals("feat/SKILL-56-goal", context.goalBranch)
     assertTrue(context.suppressPr)
-    assertEquals(".feature-specs/SKILL-56-goal/spec_subtask_1.md", context.specPath)
+    assertEquals("/tmp/skillbill-goal-runner/.feature-specs/SKILL-56-goal/spec_subtask_1.md", context.specPath)
     assertEquals("wfl-child-runtime", context.childWorkflowId)
     assertNull(launchRequest.skillRunRequest.promptOverride)
   }
@@ -95,6 +95,50 @@ class GoalRunnerDirectRuntimeContinuationTest {
 
     assertNull(context.childWorkflowId)
     assertEquals("wftr-fresh-assigned", context.assignedWorkflowId)
+  }
+
+  @Test
+  fun `store-relative subtask spec path reaches the child as its project store location`() {
+    val base = manifest(subtaskCount = 1)
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          base.copy(
+            parentSpecPath = "specs/SKILL-56-goal/spec.md",
+            subtasks = base.subtasks.map { it.copy(specPath = "specs/SKILL-56-goal/spec_subtask_${it.id}.md") },
+          ),
+      )
+    val outcomeStore = RecordingOutcomeStore()
+    val reconciler =
+      GoalRunnerLaunchReconciler(
+        manifestStore = store,
+        outcomeStore = outcomeStore,
+        progressReader = GoalRunnerProgressReader(outcomeStore),
+        activityStampWriter = testActivityStampWriter(),
+        worktreeEditJournalWriter = testWorktreeEditJournalWriter(),
+        clock = testHarnessClock,
+        diagnostics = NoopRuntimeDiagnostics,
+        projectStore = testProjectStore,
+      )
+
+    val launchRequest =
+      reconciler.subtaskLaunchRequest(
+        SubtaskLaunchRequestArgs(
+          issueKey = "SKILL-56",
+          subtaskId = 1,
+          request = wiringRunRequest(),
+          assignedWorkflowId = "wftr-fresh-assigned",
+          reviewBaseline = null,
+          spawnAuthorization = null,
+        ),
+      )
+    val context = requireNotNull(launchRequest.skillRunRequest.goalContinuation)
+
+    assertEquals(
+      testProjectStore.resolve(Path.of("/tmp/skillbill-goal-runner")).root
+        .resolve("specs/SKILL-56-goal/spec_subtask_1.md").toString(),
+      context.specPath,
+    )
   }
 
   private fun wiringRunRequest(): GoalRunnerRunRequest =

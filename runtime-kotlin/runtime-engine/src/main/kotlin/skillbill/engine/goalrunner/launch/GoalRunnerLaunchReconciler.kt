@@ -43,6 +43,7 @@ import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
@@ -155,7 +156,10 @@ class GoalRunnerLaunchReconciler(
       state.manifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
         ?: state.manifest.featureBranch?.takeIf(String::isNotBlank)
     val subtask = state.manifest.subtasks.firstOrNull { it.id == subtaskId }
-    val specPath = subtask?.specPath?.takeIf(String::isNotBlank)
+    val specPath =
+      subtask?.specPath?.takeIf(String::isNotBlank)?.let { declared ->
+        projectStore.resolve(request.repoRoot).resolveSpecPath(declared, request.repoRoot).normalize().toString()
+      }
     return if (branch != null && subtask != null && specPath != null) {
       val childWorkflowId =
         if (assignedWorkflowId == null) {
