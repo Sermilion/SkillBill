@@ -76,7 +76,13 @@ these seams:
   `seam=qa_device_lease kind=stale_reclaim` when a lease whose owner process is confirmed dead
   is reclaimed, and `seam=qa_cleanup` for each device lease the run could not release, which the
   runtime's cleanup note also reports as retained. Records carry the device fingerprint, kind,
-  and bounded reason only, never a raw serial or log body
+  and bounded reason only, never a raw serial or log body. Owned environment resources add
+  `seam=qa_cleanup` lines (`qa owned resource retained`) for each resource the run could not tear
+  down, and `seam=qa_reconcile` lines for an earlier run's resource that could not be removed at
+  the next QA start (`qa reconcile retained`) and for a resource or owner record skipped as
+  unreadable (`qa owned resource record unreadable`). They carry `kind`, `identity_digest` (a
+  sha256 prefix) and a bounded `reason` only; the identity itself appears only in the report's
+  retained-resource list, never in diagnostics or telemetry
 
 Each record names the seam, the value actually used, the value that was expected,
 and why the substitution happened. A fallback that cannot be attributed to a

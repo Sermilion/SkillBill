@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.qa
 import skillbill.engine.featuretask.model.execution.QaDeclaredTarget
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionTarget
+import skillbill.ports.qa.model.qaEnvironmentName
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 
 internal object QaPromptSections {
@@ -74,17 +75,12 @@ internal object QaPromptSections {
     |  when QA ends.
     |- Invocation directory: `${qa.workspace.directory}`. Write every generated script and evidence file there,
     |  outside the QA checkout, which is deleted.
+    |- Environment name: `${qaEnvironmentName(qa.workspace.invocationId)}`.
     |- Evidence paths in the report must start with `${qa.expected.evidencePrefix}`.
     |- Report path: `${qa.workspace.reportPath}`. Write exactly one markdown report there.
-    |- Before installing on a device, take its lease with
-    |  `skill-bill qa lease acquire --invocation ${qa.workspace.invocationId} --device <serial>`. A `contended`
-    |  result means another run owns the device: do not use it or release its lease. When no target was named,
-    |  pick a free authorized target and lease it, then follow the pack guidance to try another untried target if
-    |  needed. Preserve a named target; skip with the reason if it cannot be used. If no candidate can be used,
-    |  report `skipped` and describe the obstacles;
-    |  call it device-contended only when every authorized candidate is leased by someone else.
-    |  Release leases this invocation acquired before switching targets and when done with
-    |  `skill-bill qa lease release --invocation ${qa.workspace.invocationId} --device <serial>`.
+    |${deviceLeaseLines(qa.workspace.invocationId)}
+    |
+    |${environmentResourceRules(qa.workspace.invocationId)}
     |
     |Report:
     |
@@ -119,8 +115,9 @@ internal object QaPromptSections {
     |- Never put raw device serials, credentials, or log bodies in the report. Reference evidence by path.
     |- Start every long-running process the run needs (local backend, API simulator, mock server, Metro or another
     |  packager, log tailing) detached so the command returns:
-    |  `nohup <cmd> > ${qa.workspace.directory}/<name>.log 2>&1 &`. Record its PID and wait for readiness by
-    |  polling a health URL or log line with a bounded timeout, never by running it in the foreground.
+    |  `nohup <cmd> > ${qa.workspace.directory}/<name>.log 2>&1 &`. Record its PID, register it with
+    |  `--kind process --identity <pid>`, and wait for readiness by polling a health URL or log line with a
+    |  bounded timeout, never by running it in the foreground.
     |- Never run a command that does not end on its own in the foreground: servers, watch modes, `tail -f`, or
     |  `adb logcat` without `-d`. Use bounded forms such as `adb logcat -d` or `timeout <seconds> <cmd>`.
     |- Before writing the report, stop every process this run started by its recorded PID and describe it under a
@@ -130,6 +127,38 @@ internal object QaPromptSections {
     |  after the report is written.
       """.trimMargin()
   }
+
+  private fun deviceLeaseLines(invocationId: String): String =
+    """
+    |- Before installing on a device, take its lease with
+    |  `skill-bill qa lease acquire --invocation $invocationId --device <serial>`. A `contended`
+    |  result means another run owns the device: do not use it or release its lease. When no target was named,
+    |  pick a free authorized target and lease it, then follow the pack guidance to try another untried target if
+    |  needed. Preserve a named target; skip with the reason if it cannot be used. If no candidate can be used,
+    |  report `skipped` and describe the obstacles;
+    |  call it device-contended only when every authorized candidate is leased by someone else.
+    |  Release leases this invocation acquired before switching targets and when done with
+    |  `skill-bill qa lease release --invocation $invocationId --device <serial>`.
+    """.trimMargin()
+
+  private fun environmentResourceRules(invocationId: String): String =
+    """
+    |Environment resources:
+    |
+    |- Use the environment name, or a name that starts with it, as the Compose project name (`-p`) and for every
+    |  container, volume and network you create.
+    |- Before starting each Compose project, standalone container, named volume, network or background process,
+    |  register it with
+    |  `skill-bill qa resource register --invocation $invocationId --kind <kind> --identity <identity>`.
+    |  The kinds are `compose_project`, `container`, `volume`, `network`, `process` and `directory`. Do not use a
+    |  resource whose registration returns `conflict` or `rejected`.
+    |- Release what you no longer need with
+    |  `skill-bill qa resource release --invocation $invocationId --kind <kind> --identity <identity>`.
+    |  The runtime tears down everything still registered when QA ends.
+    |- Never run Docker prune commands. Never stop or remove a container, volume, network, Compose project or
+    |  process you did not create in this run. Leave the operator's development stack alone.
+    |- List under `## Cleanup` every resource that release reported as `retained`.
+    """.trimMargin()
 
   private fun targetLines(targets: List<QaDeclaredTarget>): String =
     targets.joinToString("\n") { declared ->

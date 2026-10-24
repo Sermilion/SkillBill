@@ -10,6 +10,7 @@ import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.resolveTelemetryStateDir
 import skillbill.infrastructure.workflow.process.runGitProcess
 import skillbill.model.EnvironmentContext
+import skillbill.ports.qa.model.QaOwnedResource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import java.io.IOException
 import java.nio.file.Files
@@ -21,8 +22,11 @@ import skillbill.contracts.qa.QaDeviceLeasePayloadKeys as Keys
 
 private const val MIN_OWNER_TOKEN_LENGTH = 16
 private val FINGERPRINT = Regex("^[0-9a-f]{64}$")
-private val INVOCATION_ID = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+internal val INVOCATION_ID = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 private const val LEASES_DIRECTORY = "leases"
+internal const val RESOURCES_DIRECTORY = "resources"
+private const val RESOURCE_DIGEST_LENGTH = 32
+private val RESERVED_DIRECTORIES = setOf(LEASES_DIRECTORY, RESOURCES_DIRECTORY)
 private const val QA_DIRECTORY = "qa"
 private const val REPO_KEY_DIGEST_LENGTH = 16
 private const val UNNAMED_REPOSITORY = "repo"
@@ -75,7 +79,7 @@ internal object QaPaths {
     qaRoot: Path,
     invocationId: String,
   ): Path {
-    if (!INVOCATION_ID.matches(invocationId) || invocationId == LEASES_DIRECTORY) {
+    if (!INVOCATION_ID.matches(invocationId) || invocationId in RESERVED_DIRECTORIES) {
       throw qaDeviceLeaseFailed("'$invocationId' is not a QA invocation id.")
     }
     return qaRoot.resolve(invocationId)
@@ -96,6 +100,16 @@ internal object QaPaths {
   }
 
   fun leasesDirectory(qaRoot: Path): Path = qaRoot.resolve(LEASES_DIRECTORY)
+
+  fun resourcesDirectory(qaRoot: Path): Path = qaRoot.resolve(RESOURCES_DIRECTORY)
+
+  fun resourceFile(
+    qaRoot: Path,
+    resource: QaOwnedResource,
+  ): Path = resourcesDirectory(qaRoot).resolve("${resourceDigest(resource)}.json")
+
+  private fun resourceDigest(resource: QaOwnedResource): String =
+    sha256Hex("${resource.kind.wireValue}:${resource.identity}").take(RESOURCE_DIGEST_LENGTH)
 }
 
 internal object QaLeaseRecordCodec {

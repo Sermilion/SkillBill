@@ -16,16 +16,22 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaDeviceLeaseFailure
 import skillbill.error.featuretask.qa.isQaFailure
+import skillbill.error.featuretask.qa.isQaOwnedResourceFailure
 import skillbill.error.featuretask.qa.qaDeviceLeaseReason
+import skillbill.error.featuretask.qa.qaOwnedResourceReason
 import skillbill.error.featuretask.qa.qaRepositoryUnreadable
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.qa.QaDeviceLeasePort
+import skillbill.ports.qa.QaOwnedResourcePort
 import skillbill.ports.qa.QaWorkspacePort
 import skillbill.ports.qa.model.QaLeaseReleaseOutcome
+import skillbill.ports.qa.model.QaOwnedResource
+import skillbill.ports.qa.model.QaResourceReleaseOutcome
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
 
 @Inject
@@ -37,6 +43,7 @@ class QaExecutionLifecycle(
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
   private val identifiers: IdentifierGeneratorPort,
+  private val resources: QaOwnedResourcePort,
 ) {
   internal fun <T> withExecution(
     repoRoot: Path,
@@ -56,18 +63,22 @@ class QaExecutionLifecycle(
     val workspaceOwner = AutoCloseable { retained = retained + closeWorkspace(workspace) }
     val leaseOwner = AutoCloseable { retained = retained + releaseLeases(repoRoot, invocationId) }
     val checkoutOwner = AutoCloseable { checkout?.let { retained = retained + checkouts.close(repoRoot, it) } }
+    val resourceOwner = AutoCloseable { retained = retained + releaseResources(repoRoot, invocationId) }
     val value =
       workspaceOwner.use {
         leaseOwner.use {
           checkoutOwner.use {
-            val target =
-              target(repoRoot, policy, warnings) {
-                checkouts.open(repoRoot, workspace, expected.headRevision, copyWorkingState = revision == null)
-              }
-            checkout = (target as? QaExecutionTarget.Supported)?.checkout
-            val result = execute(QaExecutionContext(workspace, expected, target, policy, warnings.toList(), caller))
-            warnings += callerChanges(repoRoot, caller)
-            result
+            resourceOwner.use {
+              if (policy != QaPolicy.OFF) reconcile(repoRoot, warnings)
+              val target =
+                target(repoRoot, policy, warnings) {
+                  checkouts.open(repoRoot, workspace, expected.headRevision, copyWorkingState = revision == null)
+                }
+              checkout = (target as? QaExecutionTarget.Supported)?.checkout
+              val result = execute(QaExecutionContext(workspace, expected, target, policy, warnings.toList(), caller))
+              warnings += callerChanges(repoRoot, caller)
+              result
+            }
           }
         }
       }
@@ -211,6 +222,69 @@ class QaExecutionLifecycle(
       QaRetainedResource("device_lease", failed.retainedIdentity)
     }
 
+  private fun reconcile(
+    repoRoot: Path,
+    warnings: MutableList<String>,
+  ) {
+    val outcomes =
+      try {
+        resources.reclaimAbandoned(repoRoot)
+      } catch (failure: SkillBillRuntimeException) {
+        failure.rethrowUnless(failure.isQaOwnedResourceFailure)
+        recordRetainedResource(ResourceSeam.RECONCILE, "records", NO_IDENTITY_DIGEST, failure.qaOwnedResourceReason)
+        warnings += "QA could not read the records of earlier QA resources; see the qa_reconcile diagnostics."
+        return
+      }
+    outcomes.filterIsInstance<QaResourceReleaseOutcome.Failed>().forEach { failed ->
+      recordRetainedResource(
+        ResourceSeam.RECONCILE,
+        failed.resource.kind.wireValue,
+        digestOf(failed.resource),
+        failed.detail,
+      )
+      warnings +=
+        "QA could not remove a ${failed.resource.kind.wireValue} left by an earlier QA run; " +
+        "see the qa_reconcile diagnostics."
+    }
+  }
+
+  private fun releaseResources(
+    repoRoot: Path,
+    invocationId: String,
+  ): List<QaRetainedResource> =
+    try {
+      val outcomes = resources.releaseAllFor(repoRoot, invocationId)
+      outcomes.filterIsInstance<QaResourceReleaseOutcome.Failed>().map { failed ->
+        recordRetainedResource(
+          ResourceSeam.CLEANUP,
+          failed.resource.kind.wireValue,
+          digestOf(failed.resource),
+          failed.detail,
+        )
+        QaRetainedResource(failed.resource.kind.wireValue, failed.resource.identity)
+      }
+    } catch (failure: SkillBillRuntimeException) {
+      failure.rethrowUnless(failure.isQaOwnedResourceFailure)
+      recordRetainedResource(ResourceSeam.CLEANUP, "records", NO_IDENTITY_DIGEST, failure.qaOwnedResourceReason)
+      listOf(QaRetainedResource("owned_resources", invocationId))
+    }
+
+  private fun digestOf(resource: QaOwnedResource): String =
+    sha256HexUtf8(resource.identity).take(IDENTITY_DIGEST_LENGTH)
+
+  private fun recordRetainedResource(
+    seam: ResourceSeam,
+    kind: String,
+    identityDigest: String,
+    reason: String,
+  ) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "${seam.label}: seam=${seam.wireValue} value_expected=removed value_used=retained kind=$kind " +
+        "identity_digest=$identityDigest reason=${reason.take(MAX_RECORD_REASON)}",
+    )
+  }
+
   private fun closeWorkspace(workspace: QaWorkspace): List<QaRetainedResource> =
     try {
       workspaces.close(workspace)
@@ -232,7 +306,17 @@ class QaExecutionLifecycle(
 
   private companion object {
     const val MAX_RECORD_REASON = 200
+    const val IDENTITY_DIGEST_LENGTH = 12
+    const val NO_IDENTITY_DIGEST = "none"
     const val MAX_CHANGED_LINES = 10
+  }
+
+  private enum class ResourceSeam(
+    val wireValue: String,
+    val label: String,
+  ) {
+    RECONCILE("qa_reconcile", "qa reconcile retained"),
+    CLEANUP("qa_cleanup", "qa owned resource retained"),
   }
 }
 

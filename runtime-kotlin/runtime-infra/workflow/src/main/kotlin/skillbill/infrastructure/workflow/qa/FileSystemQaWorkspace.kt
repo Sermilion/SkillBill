@@ -130,6 +130,7 @@ class FileSystemQaWorkspace(
       persisted != normalized -> "the retained report reference is not normalized"
       relative.nameCount != 2 -> "the retained report reference is outside its invocation report"
       relative.getName(0).toString() == "leases" -> "the retained report reference points into leases"
+      relative.getName(0).toString() == RESOURCES_DIRECTORY -> "the retained report reference points into resources"
       relative.getName(1).toString() !in setOf(REPORT_FILE, LEGACY_REPORT_FILE) ->
         "the retained report reference is not a report file"
       else -> null

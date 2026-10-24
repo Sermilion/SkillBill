@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 const val QA_REPAIR_STATE_CONTRACT_VERSION: String = "0.2"
 const val QA_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION: String = "0.1"
 const val QA_DEVICE_LEASE_CONTRACT_VERSION: String = "0.1"
+const val QA_OWNED_RESOURCE_CONTRACT_VERSION: String = "0.1"
 
 object QaDeviceLeasePayloadKeys {
   const val CONTRACT_VERSION = SharedPayloadKeys.CONTRACT_VERSION
@@ -22,6 +23,20 @@ object QaDeviceLeasePayloadKeys {
   val OWNER_FIELDS: Set<String> = setOf(CONTRACT_VERSION, INVOCATION_ID, OWNER_TOKEN, PROCESS, ACQUIRED_AT)
   val LEASE_FIELDS: Set<String> = OWNER_FIELDS + DEVICE_FINGERPRINT
   val PROCESS_FIELDS: Set<String> = setOf(HOST_IDENTITY, BOOT_IDENTITY, PID, PROCESS_BIRTH_TOKEN)
+}
+
+object QaOwnedResourcePayloadKeys {
+  const val CONTRACT_VERSION = SharedPayloadKeys.CONTRACT_VERSION
+  const val STATUS = SharedPayloadKeys.STATUS
+  const val KIND = "kind"
+  const val IDENTITY = "identity"
+  const val REGISTERED_AT = "registered_at"
+  const val PROCESS_STARTED_AT = "process_started_at"
+  const val OWNER_INVOCATION_ID = "owner_invocation_id"
+
+  val RECORD_FIELDS: Set<String> =
+    setOf(CONTRACT_VERSION, QaDeviceLeasePayloadKeys.INVOCATION_ID, KIND, IDENTITY, REGISTERED_AT)
+  val PROCESS_RECORD_FIELDS: Set<String> = RECORD_FIELDS + PROCESS_STARTED_AT
 }
 
 object QaOutcomePayloadKeys {
