@@ -1,3 +1,9 @@
+## [2026-10-24] Backend and web QA isolation rules live in the shared briefing
+Context: Backend and web QA needs environment isolation, setup budgets and mock attribution, but the runtime cannot inspect an agent's effective configuration.
+Decision: State the rules once in the runtime-owned QA supplement so every pack inherits them. Keep QA verdict, strategy, repair and settlement code free of target-kind branches.
+Reason: The enforceable runtime side is the contract text, the report evidence parsed in a later subtask and resource teardown. Per-kind code paths would duplicate rules and could not verify the agent's environment work anyway.
+Revisit when: the runtime can observe the agent's effective environment configuration directly.
+
 ## [2026-10-23] Bind acceptance verification to source contents
 
 Context: GV-1 recorded three satisfied AC-001 audits as failed repairs. The

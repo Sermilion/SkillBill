@@ -24,7 +24,7 @@ internal object QaPromptSections {
       "incomplete. Name evidence by path only."
 
   const val FIX_DIRECTIVE: String =
-    "Repair the findings recorded by the preceding mobile QA report by editing source in the repository root. " +
+    "Repair the findings recorded by the preceding QA report by editing source in the repository root. " +
       "Keep the finding ids in view. Do not claim that QA findings are closed; a later QA report decides that."
 
   const val FIX_VALUE_CONTENT: String =
@@ -59,6 +59,10 @@ internal object QaPromptSections {
     |- Fix every finding listed above. None may be left unchanged or explained away; QA builds the current code
     |  itself, so a finding it reports is present at HEAD.
     |- QA runs again on your changes next and decides whether each finding is closed.
+    |- When a finding reproduces an endpoint, database, asynchronous, or UI failure and the repository has a
+    |  suitable test harness, add or extend a repository test that reproduces it, so the regression flow is
+    |  retained.
+    |- Never change QA environment configuration, fixtures, or mocks to hide a finding.
       """.trimMargin()
   }
 
@@ -82,16 +86,11 @@ internal object QaPromptSections {
     |
     |${environmentResourceRules(qa.workspace.invocationId)}
     |
-    |Report:
+    |$ENVIRONMENT_AND_ISOLATION_RULES
     |
-    |- The first line names the verdict: `Verdict: passed`, `Verdict: findings_open`, `Verdict: incomplete`, or
-    |  `Verdict: skipped`. Say why when it is `incomplete` or `skipped`.
-    |- Write each finding under its own `### <id> <title>` heading, for example `### QA-1 Save button stays disabled`.
-    |  Under it give the steps, the expected result, the observed result, and evidence paths. Use `#` or `##` for
-    |  every other heading so a finding section ends where the next heading starts.
-    |- Describe the flows you exercised and the flows you left untested, with the reason, in your own words.
-    |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
-    |  the flows the change made possible. Write `None.` when you changed nothing.
+    |$BACKEND_AND_WEB_FLOW_RULES
+    |
+    |$REPORT_RULES
     |
     |Rules:
     |
@@ -101,16 +100,18 @@ internal object QaPromptSections {
     |  produce: inject a fault, force an error response, add a debug hook, or shorten a timeout. Rebuild after such
     |  an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit, push, or open
     |  a pull request. QA reports findings; it does not repair them.
-    |- QA runs on a test account with test data. Every in-app action is allowed: create, edit, and delete
-    |  records, add profiles, remove cards, log out. Never leave a flow untested to protect device or account state.
-    |- When the app or build offers an environment, flavor, or server choice, use Local when a local backend or
-    |  simulator backend is available, else staging. Never use production. When only production is available,
-    |  exercise no flow: report `skipped` and name the missing environment.
+    |- QA runs on a test account with test data. Within the environment and isolation rules, every in-app
+    |  action is allowed: create, edit, and delete records, add profiles, remove cards, log out. Never leave a flow
+    |  untested to protect device or account state.
+    |- When the app, build, or repository offers an environment, flavor, profile, or server choice, use a local or
+    |  disposable isolated one when available, else staging. Never use production. When only production is
+    |  available, exercise no flow: report `skipped` and name the missing environment.
     |- Derive flows from this run's acceptance criteria. Do not add flows the criteria do not ask for; report anything
     |  else you notice as a finding.
     |- QA never blocks the run. A missing report is recorded with a warning and the run continues, so report
     |  honestly: a listed flow left untested means `incomplete`.
-    |- An app launch alone is never a pass. `passed` needs at least one exercised flow that behaved as expected.
+    |- Launching or loading the app alone is never a pass. `passed` needs at least one exercised flow with an
+    |  asserted expected outcome.
     |- A simulator run cannot exercise a hardware-only flow; list it as untested.
     |- Never put raw device serials, credentials, or log bodies in the report. Reference evidence by path.
     |- Start every long-running process the run needs (local backend, API simulator, mock server, Metro or another
@@ -127,6 +128,77 @@ internal object QaPromptSections {
     |  after the report is written.
       """.trimMargin()
   }
+
+  private val ENVIRONMENT_AND_ISOLATION_RULES: String =
+    """
+    |Environment and isolation:
+    |
+    |- Use the repository's existing QA Compose files, test profiles, Testcontainers fixtures, or local isolated
+    |  setups, and pick exactly one as the environment owner. Inspect effective configuration, not names such as
+    |  `test` or `local`.
+    |- Use Docker Compose for multi-service backends when suitable. Name the project with the environment name
+    |  above, or a name that starts with it (`docker compose -p <environment name>`). Use fresh owned volumes
+    |  and free ports. Never attach production or developer database volumes, shared external networks, or the
+    |  host Docker socket.
+    |- When Docker is unavailable but an isolated local setup works, it is not a skip. A running Docker daemon does
+    |  not make an unsafe configuration usable.
+    |- Before the first write, check the effective database connection, inherited secrets, persistent storage, and
+    |  outbound effects (email, payments, object storage, webhooks, identity providers, queues). Use the supported
+    |  engine in a disposable instance. An isolated temporary SQLite file is valid only when SQLite is the
+    |  production engine.
+    |- When a database connection points at production or a personal development database, a secret's origin is
+    |  unknown, storage is shared and persistent, or a required outbound effect has no local substitute, test
+    |  implementation, or declared isolated sandbox: mutate nothing against it. Leave the affected flow untested,
+    |  or skip the target with reason `isolation_rejected`. Never send a synthetic write to an uncertain endpoint.
+    |- Setup per target is capped at 15 minutes of wall time. Setup means dependencies, migrations, seeding, app
+    |  start, and readiness. On overrun, stop setup, clean up, and skip the target with reason
+    |  `setup_budget_exceeded`. Bound each readiness probe or asynchronous wait at 120 seconds. Readiness must
+    |  distinguish still starting, startup failure, missing configuration, and healthy.
+    |- When no isolated environment can be established, skip the target with reason `environment_unavailable`. Use
+    |  `docker_unavailable` instead when the only viable environment needs Docker and Docker or its daemon is
+    |  unavailable.
+    |- Write temporary configuration, scripts, and data only in the invocation directory or in resources
+    |  registered under the environment name, never in the operator's checkout.
+    """.trimMargin()
+
+  private val BACKEND_AND_WEB_FLOW_RULES: String =
+    """
+    |Backend and web flows:
+    |
+    |- Backend: authenticate as synthetic QA users and call the acceptance endpoints. Assert the status, the
+    |  response content, and the relevant persisted or asynchronous side effect. Cover changed authorization and
+    |  validation boundaries, such as an unauthorized request and an invalid payload. A `200` or a health check
+    |  alone is never a pass. Seeding the database may prepare initial state but never bypasses the operation under
+    |  test. An asynchronous outcome not observed within its bounded wait leaves the assertion incomplete, not
+    |  passed.
+    |- Web: discover browser capabilities inside this worker. Never assume or substitute the parent session's
+    |  browser tools or connectors. Use an available CLI browser driver, such as Playwright, when suitable. When no
+    |  driver is usable, skip the web target with reason `browser_unavailable` and name the missing capability.
+    |- Exercise the changed web journeys with assertions on visible outcomes, navigation, form validation, and
+    |  access control. A page load is never a completed journey. A screenshot is evidence for an assertion, never a
+    |  substitute for one.
+    |- Bind cookies, storage state, and traffic to the QA environment. Never reuse an operator or production
+    |  browser profile.
+    |- Record for every web assertion whether it reached the disposable backend or a mock. Mock-backed UI
+    |  assertions never establish backend coverage. A static or UI-only frontend may run without Docker. In a
+    |  full-stack run, report the backend outcome and the browser outcome separately.
+    |- Never put tokens, connection strings, synthetic user passwords, sensitive response bodies, or full logs in
+    |  the report. Reference evidence by path under the invocation directory.
+    """.trimMargin()
+
+  private val REPORT_RULES: String =
+    """
+    |Report:
+    |
+    |- The first line names the verdict: `Verdict: passed`, `Verdict: findings_open`, `Verdict: incomplete`, or
+    |  `Verdict: skipped`. Say why when it is `incomplete` or `skipped`.
+    |- Write each finding under its own `### <id> <title>` heading, for example `### QA-1 Save button stays disabled`.
+    |  Under it give the steps, the expected result, the observed result, and evidence paths. Use `#` or `##` for
+    |  every other heading so a finding section ends where the next heading starts.
+    |- Describe the flows you exercised and the flows you left untested, with the reason, in your own words.
+    |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
+    |  the flows the change made possible. Write `None.` when you changed nothing.
+    """.trimMargin()
 
   private fun deviceLeaseLines(invocationId: String): String =
     """

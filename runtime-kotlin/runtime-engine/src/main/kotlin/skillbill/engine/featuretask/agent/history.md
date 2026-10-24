@@ -1,5 +1,15 @@
 # featuretask runtime boundary history
 
+## [2026-10-24] SKILL-420 subtask 4 - Horizontal backend and web execution rules in the QA briefing
+Areas: runtime-engine featuretask slot/qa prompt sections (QA supplement and qa_fix repair supplement)
+- MEDIUM feature. The QA supplement gained an "Environment and isolation" block: reuse repository QA setups, inspect effective configuration, Compose project named after the invocation environment name, isolation checks before the first write, a 15 minute setup budget, and skip reasons isolation_rejected, setup_budget_exceeded, environment_unavailable and docker_unavailable.
+- A second "Backend and web flows" block covers backend assertion depth, browser capability discovery (browser_unavailable), web journey assertions, binding browser state to the QA environment, mock attribution and report hygiene. Launching the app alone is never a pass; passed needs one exercised flow with an asserted outcome.
+- The production rule is now environment-neutral (any environment, flavor, profile or server choice) and the in-app action rule defers to the isolation rules. The qa_fix directive no longer says mobile and the repair supplement adds a repository-test rule plus a ban on changing QA environment configuration, fixtures or mocks to hide a finding.
+- Pattern: rules are shared prompt text inherited by every pack; no code branches on target kind. Both blocks are joined in one private value so the supplement function stays under the detekt LongMethod limit.
+- Limits: the runtime cannot inspect an agent's effective configuration; reason-token parsing and report evidence belong to subtask 5, and resource teardown to subtask 3. The "Mobile QA" PR heading and telemetry descriptions remain for later subtasks.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented for this subtask.
+
 ## [2026-10-24] SKILL-420 subtask 1 - Open QA target kinds and multi-target resolution
 Areas: runtime-engine featuretask QA resolution, prompt sections and verify directive; runtime-domain scaffold model and verify/phase workflow labels; runtime-infra/skills platform-pack loader; orchestration/contracts platform-pack schema; skills/skill-bill content; docs/runtime-command-guidance
 - MEDIUM feature. The closed android/ios QaPlatform enum became an open QaTargetKind value class validated by a lowercase kebab pattern (max 32 chars); manifest qa_capability.platforms accepts any matching kind, capped at 8, with duplicates and bad values rejected as invalid manifest schema. Contract version and existing manifests are unchanged.
