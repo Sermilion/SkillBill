@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.common.di.AppScope
 import dev.skillbill.tray.core.common.di.EntryScope
 import dev.skillbill.tray.core.common.di.WindowScope
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
+import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
@@ -12,6 +13,7 @@ import dev.skillbill.tray.feature.detail.DetailArgs
 import dev.skillbill.tray.feature.detail.DetailViewModel
 import dev.skillbill.tray.feature.history.HistoryViewModel
 import dev.skillbill.tray.feature.settings.SettingsViewModel
+import dev.skillbill.tray.feature.specs.SpecsViewModel
 import dev.skillbill.tray.feature.work.WorkViewModel
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesSubcomponent
@@ -75,6 +77,7 @@ class EntryViewModels(
   private val controls: WorkControlRepository,
   private val settings: SettingsRepository,
   private val storeStatus: WorkStoreStatusRepository,
+  private val specs: SpecBrowserRepository,
   private val clock: Clock,
 ) {
   fun work() = WorkViewModel(boards, settings)
@@ -84,4 +87,6 @@ class EntryViewModels(
   fun detail(args: DetailArgs) = DetailViewModel(args.identity, details, controls, boards, clock)
 
   fun settings() = SettingsViewModel(settings, storeStatus)
+
+  fun specs() = SpecsViewModel(specs, details, settings)
 }

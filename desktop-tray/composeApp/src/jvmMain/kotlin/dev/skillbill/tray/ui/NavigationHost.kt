@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +48,7 @@ import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
+import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.ui.navigation.AppRoute
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import dev.skillbill.tray.core.ui.navigation.EntryArgsOutcome
@@ -66,6 +68,10 @@ import dev.skillbill.tray.feature.history.HistoryUiState
 import dev.skillbill.tray.feature.history.historySection
 import dev.skillbill.tray.feature.settings.SettingsRoute
 import dev.skillbill.tray.feature.settings.SettingsScreen
+import dev.skillbill.tray.feature.specs.SPECS_PANE_WIDTH
+import dev.skillbill.tray.feature.specs.SpecsAction
+import dev.skillbill.tray.feature.specs.SpecsRoute
+import dev.skillbill.tray.feature.specs.SpecsViewModel
 import dev.skillbill.tray.feature.work.WorkAction
 import dev.skillbill.tray.feature.work.WorkEffect
 import dev.skillbill.tray.feature.work.WorkRoute
@@ -108,6 +114,7 @@ fun SkillBillNavHost(
   onCloseWindow: () -> Unit,
   modifier: Modifier = Modifier,
   onRefreshShell: () -> Unit = {},
+  specs: SpecsViewModel? = null,
 ) {
   val actions = remember(onOpenSettings, onCloseWindow, onRefreshShell) { WindowActions(onOpenSettings, onCloseWindow, onRefreshShell) }
   CompositionLocalProvider(LocalViewModelStoreOwner provides window.entryStoreOwner, LocalWindowActions provides actions) {
@@ -150,6 +157,7 @@ fun SkillBillNavHost(
               Modifier.weight(1f).fillMaxWidth(),
             )
           }
+          if (specs != null) SpecsPaneHost(specs, navigator.selected)
         }
       }
     }
@@ -157,6 +165,20 @@ fun SkillBillNavHost(
 }
 
 private val SIDEBAR_PANE_WIDTH = 250.dp
+
+/**
+ * The spec pane to the right of the detail, while it is open. The sidebar's selection goes in read-only; nothing here opens a
+ * detail or assigns navigator state, so the main panel keeps following the left sidebar alone.
+ */
+@Composable
+private fun RowScope.SpecsPaneHost(specs: SpecsViewModel, selected: WorkIdentity?) {
+  val state by specs.state.collectAsState()
+  LaunchedEffect(specs, selected) { specs.onAction(SpecsAction.SelectedWorkChanged(selected)) }
+  if (state.paneOpen) {
+    Box(Modifier.width(1.dp).fillMaxHeight().background(border))
+    SpecsRoute(specs, Modifier.width(SPECS_PANE_WIDTH).fillMaxHeight())
+  }
+}
 
 @Composable
 private fun NavigationPane(

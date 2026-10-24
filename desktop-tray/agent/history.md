@@ -1,3 +1,15 @@
+## [2026-10-24] SKILL-444 subtask 5 desktop spec pane browse
+Areas: desktop-tray (feature/specs new module, composeApp composition and ui, architecture guards, ARCHITECTURE.md, docs/architecture-parity.md)
+- MEDIUM feature. New :feature:specs module (plugin skillbill.feature) with contract, ViewModel, route, tree and status-dot composables; registered in settings.gradle.kts, composeApp dependencies, ModuleGraphRules.features and the ModuleGraphRulesTest baseline manifest (the consumed-in-production guard needs it).
+- SpecsViewModel takes SpecBrowserRepository, WorkDetailRepository and SettingsRepository and has no navigator. Project follows the selected work item's repository root, falls back to the first project, and PickProject pins the choice. One flatMapLatest snapshot subscription keyed on project, preferred root and a retry counter.
+- visibleRows is a pure depth-first walk that keeps runtime order (no sorting) and never reads Lifecycle or Freshness. Filtering expands ancestors for display only; the saved expansion set (AppSettings.specExpandedPaths) is written only by toggle and collapse-all. reusable
+- Pane states: loading, no specs, unreadable folder (Retry, Reveal folder), no match (Clear filters). Open file goes through LocalRepositoryNavigation.openFile and failures return as FileOpenFailed.
+- Window wiring: EntryViewModels gains specs(); DesignWindow gains an accessory slot in the title bar; SpecsToggle and rememberSpecsViewModel hold the ViewModel in the window entry store so a database switch discards it; SkillBillNavHost hosts a fixed 320dp SpecsPane after the detail column and only reads navigator.selected. Created only while the session is Active; the settings window shows neither.
+- Status dot encodes state by shape and pulse, not colour alone, with a content description. Rows support arrow, Enter and Space keyboard use. reusable
+- Limits: a filter-expanded folder does not visibly collapse on Toggle or Left; icons are drawn glyphs since commonMain has no icon dependency; pause, cancel and run-again stay unwired. Spotless was not run (needs a plain clone); packagedDataSmoke passed only in a clean scratch clone.
+Feature flag: N/A (specPaneOpen setting, default closed)
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-24] SKILL-444 subtask 4 desktop spec data and settings
 Areas: desktop-tray (core/domain, core/data, core/datastore, core/testing)
 - MEDIUM feature. core:domain gains the spec-browser model (SpecProject, SpecSnapshot, SpecNode folder/bundle/file tree, SpecBundleControl carrying a WorkIdentity) and a six-method SpecBrowserRepository. AppSettings and StoredSettings gain specPaneOpen and specExpandedPaths as nullable stored fields with defaults, so old settings files load with no migration; empty path sets are not stored.
