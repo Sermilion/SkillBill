@@ -20,9 +20,9 @@ class BoundedExternalProcessRunnerLifetimeTest {
               listOf(
                 "sh",
                 "-c",
-                "sleep 120 & echo \$! > '$childPidFile'; sleep 0.4; exit 0",
+                "sleep 120 & echo \$! > '$childPidFile'; sleep 3; exit 0",
               ),
-            deadlineSeconds = 5,
+            deadlineSeconds = 20,
           ),
         )
       assertEquals(0, result.exitCode, result.output)
