@@ -27,6 +27,19 @@ internal fun StringBuilder.appendOperatorSurfaceLines(projection: GoalRunnerStat
   }
 }
 
+internal fun StringBuilder.appendQaOutcomeLines(projection: GoalRunnerStatusProjection) {
+  val qa = projection.goalQaResult ?: return
+  if (qa.reason == null && qa.failureKind == null) return
+  val kind =
+    when (qa.failureKind) {
+      "environment" -> " (environment)"
+      "defect" -> " (runtime defect)"
+      else -> ""
+    }
+  val reason = qa.reason?.let { " reason=${it.replace(Regex("\\s+"), " ")}" }.orEmpty()
+  appendLine("qa_outcome: ${qa.outcome}$kind$reason")
+}
+
 internal fun StringBuilder.appendQaFindingsLines(projection: GoalRunnerStatusProjection) {
   val findings = projection.goalQaResult?.findings.orEmpty()
   if (findings.isEmpty()) return

@@ -1,3 +1,14 @@
+## [2026-10-24] SKILL-443 subtask 1: QA outcome failure kind, recorder semantics and goal QA gate containment
+Areas: runtime-engine featuretask/qa/report and goalrunner/qa and goalrunner/status; runtime-ports featuretask model; runtime-infra sqlite (migration 84, QA outcome store, desktop change revisions); runtime-contracts DesktopReadSchema; runtime-domain goalrunner status projection; runtime-cli goal status text
+- FeatureTaskQaOutcome gains a nullable failureKind (ENVIRONMENT or DEFECT); migration 84 record-qa-failure-kind adds the guarded failure_kind column and recreates the QA outcome desktop-revision triggers. DesktopReadSchema.VERSION is 84. Legacy rows read back as null.
+- FeatureTaskQaOutcomeRecorder.recordWarning now creates an INCOMPLETE row when none exists and appends deduplicated warnings. New recordContainedFailure upserts INCOMPLETE, keeps findings, attempts, tree identity and report text, appends the reason once and lets the latest kind win. reusable
+- DefaultGoalRunnerQaGate never throws: run wraps runQa, rethrows only cancellation, interrupts and non-Exception throwables, and turns any other failure into Warned after logging through RuntimeDiagnostics and recording it. A SkillBillRuntimeException with isQaFailure is ENVIRONMENT, everything else DEFECT.
+- Warnings the gate already returned (unreadable parent spec, QA stopped, build after qa_fix, validation after QA) are now persisted as ENVIRONMENT failures; the code-changed-after-QA warning goes through recordWarning.
+- Goal status projection carries failureKind; goal status text prints a qa_outcome line with kind and reason only when either exists, so older outcomes render unchanged.
+- Limits: run-loop callers of recordContainedFailure belong to subtask 2; IdeaStatus snapshot, desktop rows and RuntimeWorkMapper to subtask 3. Smoke scripts and packagedDataSmoke were left to PR CI.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented (validate ran full check green after repairs)
+
 ## [2026-10-22] SKILL-435 subtask 1: block capture and investigation lifecycle
 Areas: runtime-engine diagnostics/block, goalrunner persist and execution, featuretask phase core/record, acceptance repair, phaserun, runner; runtime-domain blockincident; runtime-ports blockincident; runtime-infra sqlite and host; runtime-contracts blockincident keys; runtime-core DI; desktop-tray detail
 - Every goal block (WorkflowGoalRunnerBlockWrites.markBlocked) and standalone phase block (StandalonePhaseStatusEventSink.settleBlocked) creates or links one incident after the BLOCKED write commits. Feature-task settlement, phase-state recorder and serial repair producers do the same.

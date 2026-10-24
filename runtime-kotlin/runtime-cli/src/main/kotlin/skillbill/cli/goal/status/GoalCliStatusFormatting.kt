@@ -268,6 +268,7 @@ internal fun goalStatusText(
       appendNoChangeStatusLines(it)
       appendOperatorSurfaceLines(it)
       appendValidationStatusLines(it)
+      appendQaOutcomeLines(it)
       appendQaFindingsLines(it)
       appendDiffStatusLines(it)
     }

@@ -1,3 +1,13 @@
+## [2026-10-24] Goal QA gate contains even its own failure recording
+Context: SKILL-443 requires that no QA failure blocks a goal run, but recording a contained failure writes to the store and can itself throw.
+Decision: DefaultGoalRunnerQaGate.run catches every non-cancellation Exception, logs it with its stack trace, tries to record it, and logs again if recording fails, always returning Warned.
+Reason: A gate that can throw reintroduces the blocking it exists to prevent. Cancellation, interrupts and non-Exception throwables still propagate so shutdown is not swallowed. The spec did not ask for the inner guard; the implementer added it for this reason.
+
+## [2026-10-24] QA failure kind rides on QaSettledRun, not a recordSettled parameter
+Context: AC-002 worded the optional failure kind as a new recordSettled parameter, which pushed it to six parameters and failed detekt LongParameterList.
+Decision: The kind is an optional field on QaSettledRun and recordSettled writes it to the row.
+Reason: Same behavior without a suppression or detekt config change. No caller passed a kind at the time.
+
 ## [2026-10-24] Check capability acquisition and transport before planning readiness
 Context: A modal feature required exact parent focus restoration while its callers and compatibility wrappers supplied no opening reference. Separate dialog and sheet amendments exposed the same missing integration in successive repairs. Preplan also discouraged wrapper and dependency reads needed to establish feasibility.
 Decision: Share one capability-closure directive across preplan, bundle planning, subtask planning and audit repair planning. Trace required input acquisition, caller transport and lifecycle ownership, check proposed signatures against configured project rules, and report a shared contract conflict's complete known impact before requesting an amendment. Permit targeted pinned-dependency reads when public contracts cannot answer that question.
