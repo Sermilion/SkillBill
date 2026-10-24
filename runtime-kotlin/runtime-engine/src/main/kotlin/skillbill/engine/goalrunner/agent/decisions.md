@@ -1,5 +1,11 @@
 # goalrunner boundary decisions
 
+## [2026-10-24] Purge resets a project-store bundle by rewriting only its manifest
+Context: Spec bundles now live in the project store, and purge reset only handled in-repo bundles, so a store manifest kept launched subtask state after purge.
+Decision: Add a store branch that atomically rewrites just the manifest to the unlaunched YAML. It never deletes, reads HEAD, or enumerates subtask spec paths.
+Reason: Store spec files are the only copy of the plan with no git history to restore from, so reset must leave them byte-identical. Survivors report a store manifest whose text still differs, so a dropped write is not reported as success.
+Alternatives considered: Reusing the in-repo tracked reset was rejected because it restores spec files from HEAD, which does not apply to the store.
+
 ## [2026-10-19] Reconcile stale segments only on an inserted start with ownership evidence
 Context: A crashed invocation can retain an open telemetry segment, but another parent may still own a live execution of the same issue.
 Decision: Only a genuinely inserted start authorizes transactional supersession. Same-parent admission permits older-segment cleanup; an expired other-parent lease requires supervisor-confirmed death. Missing-lease and parentless rows require no protected conflict.
