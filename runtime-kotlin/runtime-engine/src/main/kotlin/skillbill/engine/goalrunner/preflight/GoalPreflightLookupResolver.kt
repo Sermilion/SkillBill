@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.goalrunner.model.GoalPreflightLookupInput
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
 import skillbill.engine.goalrunner.model.GoalPreflightResult
+import skillbill.engine.goalrunner.model.GoalPreflightVerdict
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema
@@ -51,7 +52,7 @@ class GoalPreflightLookupResolver(
         it.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
       }
     return GoalPreflightResult(
-      verdict = "new_work",
+      verdict = GoalPreflightVerdict.NEW_WORK,
       issueKey = issueKey,
       gateBlock =
         activeManifest?.let {
@@ -70,7 +71,7 @@ class GoalPreflightLookupResolver(
     root: Path,
   ): GoalPreflightResult =
     GoalPreflightResult(
-      verdict = "resumable",
+      verdict = GoalPreflightVerdict.RESUMABLE,
       issueKey = issueKey,
       candidate = lookup.candidate,
       gateBlock =
@@ -85,7 +86,7 @@ class GoalPreflightLookupResolver(
     issueKey: String,
   ): GoalPreflightResult =
     GoalPreflightResult(
-      verdict = "already_running",
+      verdict = GoalPreflightVerdict.ALREADY_RUNNING,
       issueKey = issueKey,
       candidate = lookup.candidate,
     )
@@ -95,7 +96,7 @@ class GoalPreflightLookupResolver(
     issueKey: String,
   ): GoalPreflightResult =
     GoalPreflightResult(
-      verdict = "terminal_only",
+      verdict = GoalPreflightVerdict.TERMINAL_ONLY,
       issueKey = issueKey,
       candidates = lookup.candidates,
     )
@@ -114,7 +115,7 @@ class GoalPreflightLookupResolver(
         code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_MISSING_MANIFEST,
       )
     return GoalPreflightResult(
-      verdict = "goal_continuation",
+      verdict = GoalPreflightVerdict.GOAL_CONTINUATION,
       issueKey = issueKey,
       goal = candidate,
       gateBlock = gateBlockBuilder.build(request, manifest, root, candidate.parentWorkflowId),

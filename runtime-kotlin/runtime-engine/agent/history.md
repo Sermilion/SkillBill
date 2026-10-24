@@ -1,3 +1,15 @@
+## [2026-10-24] SKILL-444 subtask 2: in-process goal start entry point for a never-launched goal
+Areas: runtime-engine work/control (WorkRunActions, WorkControlService), goalrunner model (GoalPreflightVerdict), goalrunner preflight (GoalPreflightLookupResolver); runtime-engine tests under work/control and goalrunner
+- WorkControlService.startGoal(repoRoot, issueKey, agentId) delegates to WorkRunActions.startGoal, so the desktop can start a fresh goal without shelling out to the installed CLI. It rejects a missing or unsupported agent before preflight, then runs GoalPreflightService.
+- Only a new_work verdict with no gateBlock launches. Gate-held, already_running, resumable, goal_continuation, terminal_only and any other verdict return LaunchFailed with a verdict-specific message built from the preflight result.
+- The launch is one transaction through the existing launcher with the ownership key `<goalRepositoryIdentity>:<issueKey>:goal` and the shared goal arguments (goal KEY --agent --repo-root --no-live-output). goalArguments and runtimeResumeArguments (now takes the repository root path) are shared by launch, phaseArguments and startGoal. reusable
+- GoalPreflightVerdict holds the five verdict string consts and replaces the literals in GoalPreflightLookupResolver. reusable
+- WorkRunActions gained GoalPreflightService, EnvironmentContext and RepositoryEnclosingRootPort constructor params; all three were already in the kotlin-inject graph, so no provider or component change was needed.
+- Tests: real sqlite and a real GoalPreflightService via goalPreflightServiceForTests (GoalPreflightServiceTestSupport); WorkRunActionsTest builds actions through one helper with an explicit non-empty EnvironmentContext. reusable
+- Limits: a never-launched bundle with an active decomposition manifest gets a gateBlock and is refused; the key used for args and ownership is the caller's issueKey, not the preflight-normalized one. Per-verdict message tests were not added.
+Feature flag: N/A
+Acceptance criteria: implemented per spec (validate ran full check green; packaged-data smoke left to CI)
+
 ## [2026-10-23] SKILL-441 subtask 5: spec write side, legacy intake routing and Cursor/Junie staging
 Areas: runtime-engine featuretask prepare, phase/planning, runloop/planning, slot/plan, slot/attempt, phaserun, lifecycle; runtime-engine goalrunner intake, plan, model; runtime-application decomposition; runtime-domain install model; runtime-contracts projectstore, issuekey; runtime-cli featuretask; engine directive resources
 - New specs are written to the project store specs root (`<specsRoot>/<KEY>-<slug>/`). Manifest paths are store-relative `specs/<bundle>/...` for store bundles and stay `.feature-specs/...` for legacy ones, through one repoRelativePath(repoRoot, store, path) rule shared by the writer and StandalonePlanRun. reusable
