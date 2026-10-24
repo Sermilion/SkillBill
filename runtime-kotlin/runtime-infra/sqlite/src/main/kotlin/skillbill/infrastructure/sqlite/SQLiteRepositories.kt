@@ -305,6 +305,7 @@ private val PURGE_WORKFLOW_KEYED_TABLES =
     "feature_task_execution_identities",
     "goal_subtask_events",
     "feature_task_phase_settlements",
+    "standalone_phase_status",
   )
 
 private val PURGE_PARENT_KEYED_TABLES = listOf("goal_runner_controls", "goal_issue_progress")

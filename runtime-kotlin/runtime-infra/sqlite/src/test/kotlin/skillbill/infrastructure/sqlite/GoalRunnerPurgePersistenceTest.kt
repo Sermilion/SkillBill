@@ -19,6 +19,7 @@ private const val CHILD_RUNTIME_SESSION = "ftr-wftr-child-1"
 private const val PARENT_ONLY_RUNTIME_SESSION = "ftr-wftr-child-gone"
 private const val STANDALONE_RUNTIME_SESSION = "ftr-wftr-standalone"
 private const val SIBLING_SEGMENT = "wftr-parent-2:seg:2026-01-01T00:00:00Z"
+private const val SURVIVING_STANDALONE_RUN_WORKFLOW = "wftr-unrelated-plan"
 
 private data class GoalPurgeFixture(
   val parentId: String,
@@ -159,9 +160,14 @@ class GoalRunnerPurgePersistenceTest {
       "producer_output_evidence",
       "rejected_output_diagnostics",
       "agent_activity_stamps",
+      "standalone_phase_status",
     ).forEach { table ->
       assertEquals(0, countByWorkflowIds(connection, table, workflowIds))
     }
+    assertEquals(
+      1,
+      countByWorkflowIds(connection, "standalone_phase_status", listOf(SURVIVING_STANDALONE_RUN_WORKFLOW)),
+    )
     assertEquals(0, countByParentWorkflowId(connection, "goal_runner_controls", "parent_workflow_id", fixture.parentId))
     assertEquals(0, countByParentWorkflowId(connection, "goal_issue_progress", "parent_workflow_id", fixture.parentId))
     listOf("goal_planning_preparations", "goal_shared_preplans", "goal_subtask_plans").forEach { table ->
@@ -217,7 +223,32 @@ class GoalRunnerPurgePersistenceTest {
     seedGoalPurgeWorkflowSatellites(connection, listOf(parentId, childOne, childTwo))
     seedGoalRunSegments(connection, parentId)
     seedGoalPurgeEvidenceRows(connection, listOf(parentId, childOne, childTwo))
+    seedStandalonePhaseRuns(connection, listOf(parentId, SURVIVING_STANDALONE_RUN_WORKFLOW))
     seedRuntimeSessions(connection, parentId, childOne, childTwo)
+  }
+
+  private fun seedStandalonePhaseRuns(
+    connection: Connection,
+    workflowIds: List<String>,
+  ) {
+    workflowIds.forEachIndexed { index, workflowId ->
+      connection.prepareStatement(
+        """
+        INSERT INTO standalone_phase_status (
+          execution_id, repository_identity, branch_correlation, issue_key, workflow_id, invocation_id, phase_id,
+          status_store_id, run_sequence, status_revision, lifecycle_state, current_step, started_at, updated_at,
+          lease_owner, lease_generation, lease_expires_at
+        ) VALUES (?, 'repo', 'main', 'SKILL-245', ?, ?, 'plan', 'store', ?, '1', 'active', 'plan_subtasks',
+          '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'owner', 1, '2026-01-01T00:00:00Z')
+        """.trimIndent(),
+      ).use { statement ->
+        statement.setString(1, "phase-plan-$index")
+        statement.setString(2, workflowId)
+        statement.setString(3, "plan-$index")
+        statement.setString(4, (index + 1).toString())
+        statement.executeUpdate()
+      }
+    }
   }
 
   private fun seedGoalPurgeEvidenceRows(
