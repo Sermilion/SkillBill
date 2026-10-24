@@ -65,7 +65,6 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.projectstore.FixedProjectStorePort
-import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -272,13 +271,14 @@ internal fun goalManifestState(
     repoRoot = fixture,
   )
 
+internal val ideStatusProjectStoreRoot: Path by lazy { Files.createTempDirectory("ide-status-project-store") }
+
 internal fun ideStatusService(
   database: DatabaseSessionFactory,
   manifestStore: GoalRunnerManifestStore = EmptyManifestStore,
   outcomeStore: GoalRunnerWorkflowOutcomeStore = EmptyOutcomeStore,
   snapshotValidator: WorkflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,
   qaCapabilities: QaCapabilityResolver = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
-  projectStore: ProjectStorePort = FixedProjectStorePort(Path.of(System.getProperty("java.io.tmpdir"), "ide-status-project-store")),
 ): IdeStatusService {
   val phaseRecorder =
     featureTaskRuntimePhaseRecorder(
@@ -326,6 +326,13 @@ internal fun ideStatusService(
       manifestStore = manifestStore,
       diagnostics = NoopRuntimeDiagnostics,
       qaCapabilities = qaCapabilities,
+      planReports =
+        StandalonePlanReportBuilder(
+          manifestStore,
+          TestDecompositionManifestStore,
+          FixedProjectStorePort(ideStatusProjectStoreRoot),
+          NoopRuntimeDiagnostics,
+        ),
     )
   return IdeStatusService(
     database = database,
@@ -339,13 +346,6 @@ internal fun ideStatusService(
     workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
     diagnostics = NoopRuntimeDiagnostics,
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
-    planReports =
-      StandalonePlanReportBuilder(
-        manifestStore,
-        TestDecompositionManifestStore,
-        projectStore,
-        NoopRuntimeDiagnostics,
-      ),
   )
 }
 

@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.testHarnessClock
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -10,8 +11,10 @@ import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
+import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import java.nio.file.Path
@@ -57,6 +60,13 @@ class IdeStatusProjectorTest {
               override fun trackedPaths(repoRoot: Path) = WorkflowGitNameListResult.Failed("tracked paths unavailable")
             },
           ) { error("Failed Git discovery must not become pack absence.") },
+        planReports =
+          StandalonePlanReportBuilder(
+            EmptyManifestStore,
+            TestDecompositionManifestStore,
+            FixedProjectStorePort(ideStatusProjectStoreRoot),
+            NoopRuntimeDiagnostics,
+          ),
       )
 
     assertEquals(GOAL_FINISH_PIPELINE, projector.goalFinishPipeline(Path.of("repo")))

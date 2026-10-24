@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
-import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.work.control.workControlEligible
 import skillbill.engine.work.control.workDisplayGroup
@@ -111,7 +110,6 @@ class IdeStatusService(
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
   private val incidentProjectionBuilder: WorkIncidentProjectionBuilder,
-  private val planReports: StandalonePlanReportBuilder,
 ) {
   fun status(request: IdeStatusRequest): IdeStatusResult {
     val observedAt = request.observedAt ?: clock.instant()
@@ -610,7 +608,7 @@ class IdeStatusService(
         finishedAt = completion.first,
         finishedAtSource = completion.second,
         goalManifest = goalRead?.page?.manifest,
-        goalSpecBundle = goalRead?.page?.manifest?.let { planReports.report(it, context.repoRoot) },
+        goalSpecBundle = goalRead?.page?.manifest?.let { projector.goalSpecBundle(it, context.repoRoot) },
         goalFinishPipeline = goalRead?.page?.let { projector.goalFinishPipeline(context.repoRoot) }.orEmpty(),
         runtimeStatus = runtimeStatus,
         goalStatus = goalStatus,

@@ -32,7 +32,6 @@ class StandalonePlanReportBuilder(
   ): StandalonePlanReport? =
     manifestStore.readByIssueKeyIfPresent(issueKey, repoRoot)?.manifest?.let { report(it, repoRoot) }
 
-  /** The report for [manifest] with every spec path made absolute against the project store of [repoRoot]. */
   fun report(
     manifest: DecompositionManifest,
     repoRoot: Path,

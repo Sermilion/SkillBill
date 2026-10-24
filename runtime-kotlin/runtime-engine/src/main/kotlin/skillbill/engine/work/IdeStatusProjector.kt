@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.runner.OPERATOR_DECISION_QUALITY_GATE_PHASE_
 import skillbill.engine.featuretask.runner.operatorDecisionPause
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.work.model.IdeStatusCandidate
@@ -34,10 +35,12 @@ import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
+import skillbill.ports.idestatus.model.StandalonePlanReport
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
@@ -84,6 +87,7 @@ class IdeStatusProjector(
   private val manifestStore: GoalRunnerManifestStore,
   private val diagnostics: RuntimeDiagnostics,
   private val qaCapabilities: QaCapabilityResolver,
+  private val planReports: StandalonePlanReportBuilder,
 ) {
   private val workflowEngine = WorkflowEngine()
 
@@ -108,6 +112,11 @@ class IdeStatusProjector(
         (manifest.featureBranch == currentBranch || manifest.stackBranches.any { it.branch == currentBranch })
     return if (ownsBranch) currentBranch else registeredBranch
   }
+
+  internal fun goalSpecBundle(
+    manifest: DecompositionManifest,
+    repoRoot: Path,
+  ): StandalonePlanReport = planReports.report(manifest, repoRoot)
 
   internal fun goalFinishPipeline(repoRoot: Path): List<String> =
     when (val capability = qaCapabilities.resolve(repoRoot)) {

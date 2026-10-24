@@ -213,6 +213,13 @@ private class SnapshotFixture(
           manifestStore = EmptyManifestStore,
           diagnostics = NoopRuntimeDiagnostics,
           qaCapabilities = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
+          planReports =
+            StandalonePlanReportBuilder(
+              EmptyManifestStore,
+              TestDecompositionManifestStore,
+              FixedProjectStorePort(home.resolve("project-store")),
+              NoopRuntimeDiagnostics,
+            ),
         ),
       ideStatusValidator = NoopIdeStatusValidator,
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },
@@ -223,13 +230,6 @@ private class SnapshotFixture(
       workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
       diagnostics = NoopRuntimeDiagnostics,
       incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),
-      planReports =
-        StandalonePlanReportBuilder(
-          EmptyManifestStore,
-          TestDecompositionManifestStore,
-          FixedProjectStorePort(home.resolve("project-store")),
-          NoopRuntimeDiagnostics,
-        ),
     )
   }
 }
