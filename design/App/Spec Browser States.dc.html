@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec pane · statuses and states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0B0B0D}
+@keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sd{width:8px;height:8px;border-radius:50%;box-sizing:border-box;flex:none;display:inline-block}
+.sd.lg{width:12px;height:12px}
+.sd.complete{background:#3FB950}
+.sd.progress{border:1.5px solid #E9A81C;background:linear-gradient(90deg,#E9A81C 50%,transparent 50%);box-shadow:0 0 10px rgba(233,168,28,.35);animation:sbpulse 1.8s ease-in-out infinite}
+.sd.lg.progress{border-width:2px}
+.sd.pending{border:1.5px solid #8A8A94}
+.sd.lg.pending{border-width:2px}
+.sd.blocked{border:2px solid #E2703C}
+.sd.lg.blocked{border-width:3px}
+.sd.abandoned{height:2px;border-radius:1px;background:#8A8A94}
+.sd.lg.abandoned{height:3px}
+.lbl{font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8A8A94;text-transform:uppercase}
+.row{box-sizing:border-box;display:flex;align-items:center;gap:7px;height:30px;padding-right:12px;border-radius:6px;font:400 12.5px/1 Inter,sans-serif;color:#EDEDF0}
+.ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mono{font-family:'JetBrains Mono',monospace}
+.cap{font:400 11px/1.4 Inter,sans-serif;color:#9C9CA6}
+.chev{width:14px;display:inline-flex;justify-content:center;flex:none}
+.sd.paused{border:1.5px solid #E9A81C;background:linear-gradient(90deg,#E9A81C 50%,transparent 50%)}
+.tb{width:320px;box-sizing:border-box;padding:10px;border-radius:10px;background:#17171B;border:1px solid #26262C;display:flex;flex-direction:column;gap:9px}
+.tgt{display:flex;align-items:center;gap:7px;min-width:0;height:16px}
+.btns{display:flex;gap:6px}
+.ab{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 11px;border-radius:8px;font:600 12px/1 Inter,sans-serif;white-space:nowrap}
+.ab.go{background:#E9A81C;color:#14100A;font-weight:700}
+.ab.sec{border:1px solid #383840;background:#1F1F24;color:#EDEDF0}
+.ab.dng{border:1px solid rgba(240,85,91,.45);color:#F0555B}
+.ab.off{border:1px solid #26262C;color:#6A6A74}
+.ab.l{border-radius:8px 0 0 8px}
+.ab.r{border-radius:0 8px 8px 0;padding:0 7px}
+.ab.go.r{border-left:1px solid rgba(20,16,10,.25)}
+.ab.off.l{border-right:none}
+.ab{padding:0 10px}
+.ab.ic{width:30px;padding:0}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 1180px; min-height: 2280px; padding: 48px; background: #0B0B0D; font-family: Inter, system-ui, sans-serif; color: #EDEDF0; display: flex; flex-direction: column; gap: 44px">
+
+<section style="display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 18px/1.2 'Space Grotesk', sans-serif">Status vocabulary</h2>
+<p style="margin: 0; max-width: 760px; font: 400 12.5px/1.6 Inter, sans-serif; color: #9C9CA6">Shape carries the status, colour reinforces it, so the three main states stay apart for colour-blind users and in grayscale: filled, half-filled, empty ring. Same tokens as the work board's dots.</p>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+<div style="background: #17171B; border: 1px solid #26262C; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px"><span class="sd lg complete"></span><b style="font: 700 14px/1 'Space Grotesk', sans-serif; color: #3FB950">Complete</b><span class="mono" style="font-size: 11px; color: #9C9CA6">complete</span><span class="cap">Filled · success #3FB950</span></div>
+<div style="background: #17171B; border: 1px solid #26262C; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px"><span class="sd lg progress"></span><b style="font: 700 14px/1 'Space Grotesk', sans-serif; color: #F3C462">In progress</b><span class="mono" style="font-size: 11px; color: #9C9CA6">in_progress</span><span class="cap">Half-filled, pulsing · sakura #E9A81C</span></div>
+<div style="background: #17171B; border: 1px solid #26262C; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px"><span class="sd lg pending"></span><b style="font: 700 14px/1 'Space Grotesk', sans-serif">Pending</b><span class="mono" style="font-size: 11px; color: #9C9CA6">pending</span><span class="cap">Empty ring · slate #8A8A94</span></div>
+<div style="background: #17171B; border: 1px dashed #383840; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px"><span class="sd lg blocked"></span><b style="font: 700 14px/1 'Space Grotesk', sans-serif; color: #F49463">Blocked</b><span class="mono" style="font-size: 11px; color: #9C9CA6">blocked</span><span class="cap">Thick ring · gold #E2703C</span></div>
+<div style="background: #17171B; border: 1px dashed #383840; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px"><span class="sd lg abandoned" style="width: 12px"></span><b style="font: 700 14px/1 'Space Grotesk', sans-serif; color: #9C9CA6">Abandoned</b><span class="mono" style="font-size: 11px; color: #9C9CA6">abandoned</span><span class="cap">Dash, title dimmed</span></div>
+</div>
+<div style="display: flex; flex-direction: column; background: #17171B; border: 1px solid #26262C; border-radius: 10px; overflow: hidden">
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); padding: 10px 16px; border-bottom: 1px solid #383840"><span class="lbl">Node</span><span class="lbl">Status comes from</span></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); padding: 10px 16px; border-bottom: 1px solid #26262C; font: 400 12px/1.5 Inter, sans-serif; color: #9C9CA6"><span style="color: #EDEDF0; font-weight: 600">Bundle with manifest</span><span>Top-level <span class="mono" style="color: #F3C462">status</span> in <span class="mono" style="color: #F3C462">decomposition-manifest.yaml</span></span></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); padding: 10px 16px; border-bottom: 1px solid #26262C; font: 400 12px/1.5 Inter, sans-serif; color: #9C9CA6"><span style="color: #EDEDF0; font-weight: 600">Bundle without manifest</span><span>Under <span class="mono" style="color: #F3C462">done/</span> → complete; elsewhere → pending</span></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); padding: 10px 16px; border-bottom: 1px solid #26262C; font: 400 12px/1.5 Inter, sans-serif; color: #9C9CA6"><span style="color: #EDEDF0; font-weight: 600">Subtask spec file</span><span>Its subtask entry's <span class="mono" style="color: #F3C462">status</span>, matched by <span class="mono" style="color: #F3C462">spec_path</span></span></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); padding: 10px 16px; border-bottom: 1px solid #26262C; font: 400 12px/1.5 Inter, sans-serif; color: #9C9CA6"><span style="color: #EDEDF0; font-weight: 600">Other files</span><span><span class="mono">spec.md</span>, <span class="mono">traceability.md</span>, manifest: no status, file icon</span></div>
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); padding: 10px 16px; font: 400 12px/1.5 Inter, sans-serif; color: #9C9CA6"><span style="color: #EDEDF0; font-weight: 600">Plain folder</span><span>No dot. A status bar of the bundles inside and their count</span></div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 18px/1.2 'Space Grotesk', sans-serif">Run actions toolbar</h2>
+<p style="margin: 0; max-width: 820px; font: 400 12.5px/1.6 Inter, sans-serif; color: #EDEDF0; font-weight: 600">The spec browser only shows, controls and opens specs. Its selection is local to the pane: it never changes the main panel, which follows only the left sidebar.</p>
+<p style="margin: 0; max-width: 820px; font: 400 12.5px/1.6 Inter, sans-serif; color: #9C9CA6">Pinned at the top of the pane, under the header. It acts only on a selected spec folder (a bundle): a goal runs the whole bundle, never one subtask, so selecting a subtask file, the parent spec or a plain folder leaves every button disabled. Start, Pause and Cancel keep their place and only enable or disable. Purge (eraser icon, right edge) appears once the spec has ever been started, and is disabled while the goal is running or pausing. Start's caret picks the agent. A paused goal shows a still half-dot; a running one pulses.</p>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 24px">
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Subtask file selected</span>
+<div class="tb"><div style="font: 400 11.5px/16px Inter, sans-serif; color: #9C9CA6">Actions run a whole spec folder, not one subtask. Select SKILL-442 to control it.</div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab off l" disabled><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Start</button><button type="button" class="ab off r" disabled aria-label="Choose agent"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab off" disabled>Cancel</button></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Nothing or a plain folder selected</span>
+<div class="tb"><div style="font: 400 11.5px/16px Inter, sans-serif; color: #9C9CA6">Select a spec folder to start, pause or cancel it.</div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab off l" disabled><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Start</button><button type="button" class="ab off r" disabled aria-label="Choose agent"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab off" disabled>Cancel</button></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Pending · never started (no Purge)</span>
+<div class="tb"><div class="tgt"><span class="sd pending"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-444</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Spec browser pane in the desktop app</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #9C9CA6">not started</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab go l"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Start</button><button type="button" class="ab go r" aria-label="Choose agent: claude"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab off" disabled>Cancel</button></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Running · Purge disabled</span>
+<div class="tb"><div class="tgt"><span class="sd progress"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-442</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Cross-criterion audit, test-value…</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #F3C462">running</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab off l" disabled><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Start</button><button type="button" class="ab off r" disabled aria-label="Choose agent"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab sec">Pause</button><button type="button" class="ab dng">Cancel</button><span style="flex: 1"></span><button type="button" class="ab off ic" disabled aria-label="Purge SKILL-442 run history" title="Pause or cancel the goal before purging"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.2 8.7 4l4.3 4.3-5.2 5.2H5.8z"></path><path d="m5.6 7.1 4.3 4.3M7.8 13.5h6"></path></svg></button></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Pause requested</span>
+<div class="tb"><div class="tgt"><span class="sd progress"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-442</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Cross-criterion audit, test-value…</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #F3C462">pausing</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab off l" disabled><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Start</button><button type="button" class="ab off r" disabled aria-label="Choose agent"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause requested</button><button type="button" class="ab dng">Cancel</button><span style="flex: 1"></span><button type="button" class="ab off ic" disabled aria-label="Purge SKILL-442 run history" title="Pause or cancel the goal before purging"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.2 8.7 4l4.3 4.3-5.2 5.2H5.8z"></path><path d="m5.6 7.1 4.3 4.3M7.8 13.5h6"></path></svg></button></div>
+<div role="status" style="font: 400 11.5px/1.45 Inter, sans-serif; color: #9C9CA6">Pause recorded. The goal stops after its current subtask.</div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Paused · blocked</span>
+<div class="tb"><div class="tgt"><span class="sd paused"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-442</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Cross-criterion audit, test-value…</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #F3C462">paused</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab go l"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Resume</button><button type="button" class="ab go r" aria-label="Choose agent: claude"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab dng">Cancel</button><span style="flex: 1"></span><button type="button" class="ab dng ic" aria-label="Purge SKILL-442 run history" title="Purge run history…"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.2 8.7 4l4.3 4.3-5.2 5.2H5.8z"></path><path d="m5.6 7.1 4.3 4.3M7.8 13.5h6"></path></svg></button></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Cancel confirmation (inline)</span>
+<div class="tb"><div class="tgt"><span class="sd progress"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-442</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Cross-criterion audit, test-value…</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #F3C462">running</span></div>
+<div role="alertdialog" aria-label="Confirm cancel" style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: rgba(240,85,91,0.08); border: 1px solid rgba(240,85,91,.4)"><span style="font: 600 12px/1.35 Inter, sans-serif">Cancel SKILL-442?</span><span class="cap">The run stops and the goal is marked canceled. Its branch and commits stay.</span><div style="display: flex; gap: 6px; justify-content: flex-end"><button type="button" class="ab sec">Keep running</button><button type="button" class="ab" style="background: #F0555B; color: #14100A">Cancel goal</button></div></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Complete · Purge available</span>
+<div class="tb"><div class="tgt"><span class="sd complete"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-420</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Backend and web QA phase</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #3FB950">complete</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab off l" disabled><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Start</button><button type="button" class="ab off r" disabled aria-label="Choose agent"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab off" disabled>Cancel</button><span style="flex: 1"></span><button type="button" class="ab dng ic" aria-label="Purge SKILL-420 run history" title="Purge run history…"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.2 8.7 4l4.3 4.3-5.2 5.2H5.8z"></path><path d="m5.6 7.1 4.3 4.3M7.8 13.5h6"></path></svg></button></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Canceled</span>
+<div class="tb"><div class="tgt"><span class="sd abandoned"></span><span class="mono" style="font-size: 11px; color: #8A8A94">SKILL-442</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif; color: #9C9CA6; text-decoration: line-through">Cross-criterion audit, test-value…</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #9C9CA6">canceled</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab go l"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Run again</button><button type="button" class="ab go r" aria-label="Choose agent: claude"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab off" disabled>Cancel</button><span style="flex: 1"></span><button type="button" class="ab dng ic" aria-label="Purge SKILL-442 run history" title="Purge run history…"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.2 8.7 4l4.3 4.3-5.2 5.2H5.8z"></path><path d="m5.6 7.1 4.3 4.3M7.8 13.5h6"></path></svg></button></div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Action refused</span>
+<div class="tb"><div class="tgt"><span class="sd pending"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-444</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Spec browser pane in the desktop app</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #9C9CA6">not started</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab go l"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Start</button><button type="button" class="ab go r" aria-label="Choose agent: claude"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab off" disabled>Cancel</button></div>
+<div role="alert" style="font: 400 11.5px/1.45 Inter, sans-serif; color: #F49463">Couldn't start: [runtime refusal message, e.g. preflight found missing spec targets].</div></div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; grid-column: span 2"><span class="lbl">Purge confirmation dialog (modal over the window)</span>
+<div role="dialog" aria-modal="true" aria-label="Purge SKILL-420" style="width: 440px; box-sizing: border-box; background: #17171B; border: 1px solid #383840; border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.65); padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font: 700 17px/1.25 'Space Grotesk', sans-serif">Purge SKILL-420?</span><span style="font: 400 12.5px/1.55 Inter, sans-serif; color: #9C9CA6">Purge deletes everything Skill Bill recorded while running this spec, so it can start again from scratch.</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div style="border: 1px solid rgba(240,85,91,.35); background: rgba(240,85,91,0.06); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 7px"><span class="lbl" style="color: #F0555B">Deleted</span><span style="font: 400 12px/1.4 Inter, sans-serif">Goal and subtask run history</span><span style="font: 400 12px/1.4 Inter, sans-serif">Run evidence and task tracking</span><span style="font: 400 12px/1.4 Inter, sans-serif">Checkpoint refs</span><span style="font: 400 12px/1.4 Inter, sans-serif">Subtask progress (back to not started)</span></div>
+<div style="border: 1px solid rgba(63,185,80,.35); background: rgba(63,185,80,0.06); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 7px"><span class="lbl" style="color: #3FB950">Kept</span><span style="font: 400 12px/1.4 Inter, sans-serif">Every spec file in the folder</span><span style="font: 400 12px/1.4 Inter, sans-serif">Your branch and its commits</span><span style="font: 400 12px/1.4 Inter, sans-serif">Open pull requests</span></div>
+</div>
+<span style="font: 400 12px/1.5 Inter, sans-serif; color: #F49463">This can't be undone. Afterwards the spec shows as not started and Start runs it from the first subtask.</span>
+<div style="display: flex; gap: 8px; justify-content: flex-end"><button type="button" class="ab sec">Keep run history</button><button type="button" class="ab" style="background: #F0555B; color: #14100A; font-weight: 700">Purge SKILL-420</button></div>
+</div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Purge refused</span>
+<div class="tb"><div class="tgt"><span class="sd paused"></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-442</span><span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">Cross-criterion audit, test-value…</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #F3C462">paused</span></div>
+<div class="btns"><div style="display: flex"><button type="button" class="ab go l"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>Resume</button><button type="button" class="ab go r" aria-label="Choose agent: claude"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button></div><button type="button" class="ab off" disabled>Pause</button><button type="button" class="ab dng">Cancel</button><span style="flex: 1"></span><button type="button" class="ab dng ic" aria-label="Purge SKILL-442 run history" title="Purge run history…"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.2 8.7 4l4.3 4.3-5.2 5.2H5.8z"></path><path d="m5.6 7.1 4.3 4.3M7.8 13.5h6"></path></svg></button></div>
+<div role="alert" style="font: 400 11.5px/1.45 Inter, sans-serif; color: #F49463">Couldn't purge: [runtime refusal, e.g. a child worker is still live].</div></div></div>
+
+</div>
+</section>
+
+<div style="display: flex; gap: 44px; flex-wrap: wrap">
+
+<section style="width: 340px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 18px/1.2 'Space Grotesk', sans-serif">Row anatomy</h2>
+<div style="background: #141417; border: 1px solid #26262C; border-radius: 10px; padding: 8px 6px; display: flex; flex-direction: column; gap: 2px">
+
+<span class="lbl" style="padding: 8px 8px 4px">Folder · collapsed</span>
+<div class="row" style="padding-left: 6px"><span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9C9CA6" stroke-width="1.3" aria-hidden="true" style="flex: none"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3.2l1.5 1.6H13c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"></path></svg><span class="ttl" style="font-weight: 600">done</span><span style="flex: 1"></span><span style="display: flex; width: 38px; height: 4px; border-radius: 2px; overflow: hidden; background: #2A2A31"><span style="width: 100%; background: #3FB950"></span></span><span class="mono" style="font-size: 10.5px; color: #8A8A94">365</span></div>
+
+<span class="lbl" style="padding: 12px 8px 4px">Folder · mixed contents</span>
+<div class="row" style="padding-left: 6px"><span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9C9CA6" stroke-width="1.3" aria-hidden="true" style="flex: none"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3.2l1.5 1.6H13c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"></path></svg><span class="ttl" style="font-weight: 600">[folder name]</span><span style="flex: 1"></span><span style="display: flex; width: 38px; height: 4px; border-radius: 2px; overflow: hidden; background: #2A2A31"><span style="width: 50%; background: #3FB950"></span><span style="width: 25%; background: #E9A81C"></span></span><span class="mono" style="font-size: 10.5px; color: #8A8A94">4</span></div>
+
+<span class="lbl" style="padding: 12px 8px 4px">Bundle · in progress, expanded</span>
+<div class="row" style="padding-left: 6px"><span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" aria-hidden="true" style="transform: rotate(90deg)"><path d="m6 4 4 4-4 4"></path></svg></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd progress"></span></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-442</span><span class="ttl" style="font-weight: 600">Cross-criterion audit, test-value…</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #F3C462">2/8</span></div>
+<div class="row" style="padding-left: 22px"><span class="chev"></span><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.3" aria-hidden="true" style="flex: none"><path d="M4 1.8h5.2L12.5 5v8.2c0 .6-.4 1-1 1H4c-.6 0-1-.4-1-1V2.8c0-.6.4-1 1-1z"></path><path d="M9 1.8V5h3.5"></path></svg><span class="ttl" style="color: #9C9CA6">Overview</span></div>
+<div class="row" style="padding-left: 22px"><span class="chev"></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd complete"></span></span><span class="ttl">02  Interaction trace audit mode</span></div>
+<div class="row" style="padding-left: 22px; background: rgba(233,168,28,0.09); box-shadow: inset 2px 0 0 #E9A81C"><span class="chev"></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd progress"></span></span><span class="ttl">03  Accepted-criterion re-check…</span></div>
+<div class="row" style="padding-left: 22px"><span class="chev"></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd pending"></span></span><span class="ttl">04  Validate test probes</span></div>
+
+<span class="lbl" style="padding: 12px 8px 4px">Bundle · blocked / abandoned</span>
+<div class="row" style="padding-left: 6px"><span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd blocked"></span></span><span class="mono" style="font-size: 11px; color: #9C9CA6">[KEY]</span><span class="ttl" style="font-weight: 600">[Blocked bundle title]</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #F49463">1/4</span></div>
+<div class="row" style="padding-left: 6px"><span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd abandoned"></span></span><span class="mono" style="font-size: 11px; color: #8A8A94">[KEY]</span><span class="ttl" style="font-weight: 600; color: #9C9CA6; text-decoration: line-through">[Abandoned bundle title]</span></div>
+
+<span class="lbl" style="padding: 12px 8px 4px">Hover · keyboard focus</span>
+<div class="row" style="padding-left: 6px; background: #1F1F24"><span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd complete"></span></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-420</span><span class="ttl" style="font-weight: 600">Backend and web QA phase</span><span style="flex: 1"></span><span class="mono" style="font-size: 10.5px; color: #3FB950">5/5</span></div>
+<div class="row" style="padding-left: 6px; outline: 2px solid #E9A81C; outline-offset: -2px"><span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd pending"></span></span><span class="mono" style="font-size: 11px; color: #9C9CA6">SKILL-444</span><span class="ttl" style="font-weight: 600">Spec browser pane in the desktop app</span></div>
+</div>
+<span class="cap">30 px rows, 16 px indent per level. Clicking a folder or bundle toggles it. Clicking a file (or Enter on it) opens it in the OS default app for that file type, the same call the detail pane's spec bundle list uses.</span>
+<span class="lbl" style="padding-top: 6px">Open failed</span>
+<div style="background: #141417; border: 1px solid #26262C; border-radius: 10px; padding: 6px">
+<div class="row" style="padding-left: 22px; background: rgba(233,168,28,0.09); box-shadow: inset 2px 0 0 #E9A81C"><span class="chev"></span><span style="width: 15px; display: inline-flex; justify-content: center"><span class="sd pending"></span></span><span class="ttl">04  Validate test probes</span></div>
+<div style="padding: 4px 8px 6px 44px; font: 400 11.5px/1.4 Inter, sans-serif; color: #F49463">Could not open the file. Check that it still exists.</div>
+</div>
+</section>
+
+<section style="flex: 1; min-width: 560px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 18px/1.2 'Space Grotesk', sans-serif">Pane states</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Loading</span>
+<div style="height: 280px; background: #141417; border: 1px solid #26262C; border-radius: 10px; padding: 12px 10px; display: flex; flex-direction: column; gap: 10px" aria-busy="true" aria-label="Loading specs">
+<div style="display: flex; gap: 8px; align-items: center"><span style="width: 14px"></span><span style="width: 10px; height: 10px; border-radius: 50%; background: #2A2A31"></span><span style="width: 62%; height: 10px; border-radius: 4px; background: #2A2A31; animation: sbpulse 1.6s infinite"></span></div>
+<div style="display: flex; gap: 8px; align-items: center"><span style="width: 14px"></span><span style="width: 10px; height: 10px; border-radius: 50%; background: #2A2A31"></span><span style="width: 74%; height: 10px; border-radius: 4px; background: #2A2A31; animation: sbpulse 1.6s infinite"></span></div>
+<div style="display: flex; gap: 8px; align-items: center"><span style="width: 14px"></span><span style="width: 10px; height: 10px; border-radius: 50%; background: #2A2A31"></span><span style="width: 48%; height: 10px; border-radius: 4px; background: #2A2A31; animation: sbpulse 1.6s infinite"></span></div>
+<div style="display: flex; gap: 8px; align-items: center"><span style="width: 14px"></span><span style="width: 10px; height: 10px; border-radius: 3px; background: #2A2A31"></span><span style="width: 30%; height: 10px; border-radius: 4px; background: #2A2A31; animation: sbpulse 1.6s infinite"></span></div>
+</div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">No specs in this project</span>
+<div style="height: 280px; box-sizing: border-box; background: #141417; border: 1px solid #26262C; border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; text-align: center">
+<svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1" aria-hidden="true"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3.2l1.5 1.6H13c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"></path></svg>
+<span style="font: 600 13px/1.4 Inter, sans-serif">No specs yet</span>
+<span class="cap" style="max-width: 240px">Plan a feature with <span class="mono" style="color: #F3C462">/skill-bill phase:plan</span> and its bundle shows up here.</span>
+</div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Store unreadable</span>
+<div style="height: 280px; box-sizing: border-box; background: #141417; border: 1px solid #26262C; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column">
+<div style="display: flex; gap: 10px; padding: 12px 14px; background: rgba(226,112,60,0.10); border-bottom: 1px solid rgba(226,112,60,.4)"><span style="width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; border: 2px solid #E2703C; box-sizing: border-box; flex: none"></span><div style="display: flex; flex-direction: column; gap: 4px"><span style="font: 600 12.5px/1.3 Inter, sans-serif">Can't read the spec folder</span><span class="cap">Permission denied on <span class="mono">~/.skill-bill/projects/…/specs</span>. Fix the folder's permissions, then retry.</span></div></div>
+<div style="padding: 14px; display: flex; gap: 8px"><button type="button" style="all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid #383840; background: #1F1F24; font: 600 12px/30px Inter, sans-serif">Retry</button><button type="button" style="all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 8px; font: 600 12px/30px Inter, sans-serif; color: #F3C462">Reveal folder</button></div>
+</div></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px"><span class="lbl">Filter has no matches</span>
+<div style="height: 280px; box-sizing: border-box; background: #141417; border: 1px solid #26262C; border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; text-align: center">
+<span style="font: 600 13px/1.4 Inter, sans-serif">No specs match</span>
+<span class="cap" style="max-width: 240px">Nothing in this project matches the filter and status.</span>
+<button type="button" style="all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid #383840; background: #1F1F24; font: 600 12px/30px Inter, sans-serif">Clear filters</button>
+</div></div>
+
+</div>
+</section>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1180,"height":2280}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

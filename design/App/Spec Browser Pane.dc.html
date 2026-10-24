@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skill Bill · spec pane open</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0B0B0D}
+a{color:#F3C462}a:hover{color:#F5BC3E}
+@keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sd{width:8px;height:8px;border-radius:50%;box-sizing:border-box;flex:none;display:inline-block}
+.sd.complete{background:#3FB950}
+.sd.progress{border:1.5px solid #E9A81C;background:linear-gradient(90deg,#E9A81C 50%,transparent 50%);box-shadow:0 0 10px rgba(233,168,28,.35);animation:sbpulse 1.8s ease-in-out infinite}
+.sd.pending{border:1.5px solid #8A8A94}
+.sd.blocked{border:2px solid #E2703C}
+.sd.abandoned{height:2px;border-radius:1px;background:#8A8A94}
+.sd.none{visibility:hidden}
+.sd.paused{border:1.5px solid #E9A81C;background:linear-gradient(90deg,#E9A81C 50%,transparent 50%)}
+.abtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 10px;border-radius:8px;font:600 12px/1 Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+.abtn:focus-visible{outline:2px solid #E9A81C;outline-offset:1px}
+.abtn:disabled{cursor:default}
+.tree-row{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:7px;width:100%;height:30px;padding-right:12px;cursor:pointer;font:400 12.5px/1 Inter,system-ui,sans-serif;color:#EDEDF0;border-radius:6px}
+.tree-row:hover{background:#1F1F24}
+.tree-row:focus-visible{outline:2px solid #E9A81C;outline-offset:-2px}
+.ibtn{all:unset;box-sizing:border-box;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:#9C9CA6;cursor:pointer}
+.ibtn:hover{background:#1F1F24;color:#EDEDF0}
+.ibtn:focus-visible{outline:2px solid #E9A81C}
+.seg{all:unset;box-sizing:border-box;flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;height:26px;border-radius:6px;font:600 11px/1 Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.seg:focus-visible{outline:2px solid #E9A81C}
+.ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 100%; min-height: 900px; padding: 24px; background: #0B0B0D; font-family: Inter, system-ui, sans-serif; color: #EDEDF0">
+<div style="position: relative; max-width: 1392px; margin: 0 auto; background: #0E0E11; border: 1px solid #26262C; border-radius: 12px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); display: flex; flex-direction: column; min-height: 852px">
+
+<div style="display: flex; align-items: center; height: 38px; padding: 0 10px 0 14px; background: #08080A; border-bottom: 1px solid #26262C; gap: 10px">
+<div style="display: flex; gap: 7px; width: 110px" aria-hidden="true"><span style="width: 11px; height: 11px; border-radius: 50%; background: #3A3A42"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: #3A3A42"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: #3A3A42"></span></div>
+<div style="flex: 1; text-align: center; font: 600 12px/1 Inter, system-ui, sans-serif; color: #9C9CA6">Skill Bill</div>
+<div style="width: 110px; display: flex; justify-content: flex-end">
+<button type="button" onClick="{{togglePane}}" aria-pressed="{{paneOpenAttr}}" aria-label="Toggle spec browser" style="{{toggleStyle}}">
+<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M10 2.5v11"></path></svg>
+<span>Specs</span>
+</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; flex: 1; min-height: 0">
+
+<nav aria-label="Work" style="width: 250px; flex: 1 1 250px; max-width: 250px; border-right: 1px solid #26262C; background: #141417; display: flex; flex-direction: column">
+<div style="padding: 14px 14px 10px"><label style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; background: #2A2A31; border: 1px solid #26262C; font: 400 12px/1 Inter, sans-serif; color: #8A8A94"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg><input type="text" placeholder="Filter by repo, issue, branch" style="all: unset; flex: 1; min-width: 0; color: #EDEDF0; font: 400 12px/1 Inter, sans-serif"></label></div>
+<div style="font: 600 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .14em; color: #8A8A94; text-transform: uppercase; padding: 4px 14px 6px">Goals running · 1</div>
+<div style="display: flex; flex-direction: column; padding: 0 8px">
+<div style="display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; background: #1F1F24; box-shadow: inset 2px 0 0 #E9A81C"><span class="dot" style="background: #E9A81C; animation: sbpulse 1.8s ease-in-out infinite"></span><div style="flex: 1; min-width: 0"><div style="font: 700 12.5px/1.3 'Space Grotesk', sans-serif">skill-bill</div><div style="font: 400 10.5px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">SKILL-442 · implement</div></div><span style="font: 400 10.5px/1 'JetBrains Mono', monospace; color: #F3C462">3/8</span></div>
+</div>
+<div style="font: 600 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .14em; color: #8A8A94; text-transform: uppercase; padding: 14px 14px 6px">Recent · 2</div>
+<div style="display: flex; flex-direction: column; padding: 0 8px">
+<div style="display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px"><span class="dot" style="background: #3FB950"></span><div style="flex: 1; min-width: 0"><div style="font: 700 12.5px/1.3 'Space Grotesk', sans-serif">skill-bill</div><div style="font: 400 10.5px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">SKILL-443 · done</div></div></div>
+<div style="display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px"><span class="dot" style="background: #3FB950"></span><div style="flex: 1; min-width: 0"><div style="font: 700 12.5px/1.3 'Space Grotesk', sans-serif">skill-bill</div><div style="font: 400 10.5px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">SKILL-420 · done</div></div></div>
+</div>
+<div style="margin-top: auto; padding: 12px 14px; border-top: 1px solid #26262C; display: flex; justify-content: space-between; font: 400 11px/1 'JetBrains Mono', monospace; color: #8A8A94"><span>History</span><span>Settings</span></div>
+</nav>
+
+<main style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; background: radial-gradient(120% 80% at 85% -10%, rgba(233,168,28,0.10), transparent 60%), #0E0E11">
+<div style="padding: 20px 26px 18px; border-bottom: 1px solid #26262C; display: flex; flex-direction: column; gap: 9px">
+<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+<span style="display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 'JetBrains Mono', monospace; border-radius: 999px; padding: 4px 8px; color: #F3C462; background: rgba(233,168,28,0.12); border: 1px solid rgba(233,168,28,0.35)"><span class="dot" style="background: #E9A81C"></span>active</span>
+<span style="font: 500 11px/1 'JetBrains Mono', monospace; border-radius: 999px; padding: 4px 8px; color: #9C9CA6; border: 1px solid #383840">SKILL-442</span>
+<span style="font: 500 11px/1 'JetBrains Mono', monospace; border-radius: 999px; padding: 4px 8px; color: #F49463; border: 1px solid rgba(226,112,60,.5)">goal</span>
+</div>
+<h1 style="margin: 0; font: 700 24px/1.2 'Space Grotesk', sans-serif; letter-spacing: -.02em">Cross-criterion audit, test-value probes and goal assessment</h1>
+<div style="font: 400 12px/1.4 'JetBrains Mono', monospace; color: #9C9CA6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">skill-bill · ~/IdeaProjects/skill-bill · feat/SKILL-442-cross-criterion-audit-test-value-probes-and-goal-assessment</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #26262C">
+<div style="padding: 15px 18px; display: flex; flex-direction: column; gap: 7px; border-right: 1px solid #26262C"><span style="font: 600 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .14em; color: #8A8A94; text-transform: uppercase">Subtask</span><b style="font: 700 19px/1 'Space Grotesk', sans-serif"><span style="color: #F3C462">3</span><span style="color: #8A8A94">/8</span></b><small style="font: 400 11px/1 'JetBrains Mono', monospace; color: #9C9CA6">2 complete · 5 pending</small></div>
+<div style="padding: 15px 18px; display: flex; flex-direction: column; gap: 7px; border-right: 1px solid #26262C"><span style="font: 600 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .14em; color: #8A8A94; text-transform: uppercase">Phase</span><b style="font: 700 19px/1 'Space Grotesk', sans-serif">implement</b><small style="font: 400 11px/1 'JetBrains Mono', monospace; color: #9C9CA6">pass 1</small></div>
+<div style="padding: 15px 18px; display: flex; flex-direction: column; gap: 7px"><span style="font: 600 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .14em; color: #8A8A94; text-transform: uppercase">Goal active</span><b style="font: 700 19px/1 'Space Grotesk', sans-serif">2h 04m</b><small style="font: 400 11px/1 'JetBrains Mono', monospace; color: #9C9CA6">since 24 Oct 16:12</small></div>
+</div>
+<div style="padding: 18px 26px; display: flex; flex-direction: column; gap: 12px">
+<span style="font: 700 13px/1 'Space Grotesk', sans-serif">Subtasks</span>
+<div style="display: flex; gap: 3px" aria-hidden="true"><div style="flex: 1; height: 5px; border-radius: 2px; background: #3FB950"></div><div style="flex: 1; height: 5px; border-radius: 2px; background: #3FB950"></div><div style="flex: 1; height: 5px; border-radius: 2px; background: #E9A81C"></div><div style="flex: 1; height: 5px; border-radius: 2px; background: #2A2A31"></div><div style="flex: 1; height: 5px; border-radius: 2px; background: #2A2A31"></div><div style="flex: 1; height: 5px; border-radius: 2px; background: #2A2A31"></div><div style="flex: 1; height: 5px; border-radius: 2px; background: #2A2A31"></div><div style="flex: 1; height: 5px; border-radius: 2px; background: #2A2A31"></div></div>
+<div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #26262C"><span style="width: 18px; font: 500 11px/1.5 'JetBrains Mono', monospace; color: #8A8A94">01</span><span class="sd complete" style="margin-top: 5px"></span><div style="flex: 1; min-width: 0"><div style="font: 600 12.5px/1.5 Inter, sans-serif">Interaction scenario authoring and catalog</div><div style="font: 400 11px/1.5 'JetBrains Mono', monospace; color: #8A8A94">complete · validation passed</div></div></div>
+<div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #26262C"><span style="width: 18px; font: 500 11px/1.5 'JetBrains Mono', monospace; color: #8A8A94">02</span><span class="sd complete" style="margin-top: 5px"></span><div style="flex: 1; min-width: 0"><div style="font: 600 12.5px/1.5 Inter, sans-serif">Interaction trace audit mode</div><div style="font: 400 11px/1.5 'JetBrains Mono', monospace; color: #8A8A94">complete · validation passed</div></div></div>
+<div style="display: flex; gap: 12px; padding: 10px; margin: 0 -10px; border-radius: 8px; background: rgba(233,168,28,0.06)"><span style="width: 18px; font: 500 11px/1.5 'JetBrains Mono', monospace; color: #F3C462">03</span><span class="sd progress" style="margin-top: 5px"></span><div style="flex: 1; min-width: 0"><div style="font: 600 12.5px/1.5 Inter, sans-serif">Accepted-criterion re-check and unknown-scenario surfacing</div><div style="font: 400 11px/1.5 'JetBrains Mono', monospace; color: #F3C462">in_progress · implement</div></div></div>
+<div style="display: flex; gap: 12px; padding: 10px 0; opacity: .6"><span style="width: 18px; font: 500 11px/1.5 'JetBrains Mono', monospace; color: #8A8A94">04</span><span class="sd pending" style="margin-top: 5px"></span><div style="flex: 1; min-width: 0"><div style="font: 600 12.5px/1.5 Inter, sans-serif">Validate test probes</div><div style="font: 400 11px/1.5 'JetBrains Mono', monospace; color: #8A8A94">pending</div></div></div>
+</div>
+</main>
+
+<sc-if value="{{paneOpen}}" hint-placeholder-val="{{ true }}">
+<aside aria-label="Spec browser" style="flex: 1 1 320px; max-width: 340px; min-width: 280px; position: relative; border-left: 1px solid #26262C; background: #141417; display: flex; flex-direction: column">
+<div aria-hidden="true" style="position: absolute; left: -3px; top: 50%; width: 5px; height: 36px; margin-top: -18px; border-radius: 3px; background: #383840"></div>
+
+<div style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 10px 14px">
+<span style="font: 700 14px/1 'Space Grotesk', sans-serif; letter-spacing: -.01em">Specs</span>
+<button type="button" class="ibtn" aria-label="Project: skill-bill. Change project" style="width: auto; padding: 0 8px; gap: 5px; height: 24px; border: 1px solid #383840; font: 500 11px/1 'JetBrains Mono', monospace; color: #EDEDF0">skill-bill<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button>
+<span style="flex: 1"></span>
+<button type="button" class="ibtn" onClick="{{collapseAll}}" aria-label="Collapse all folders"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m5 3 3 3 3-3M5 13l3-3 3 3"></path></svg></button>
+<button type="button" class="ibtn" onClick="{{closePane}}" aria-label="Close spec browser"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button>
+</div>
+
+<div role="toolbar" aria-label="Spec run actions" style="margin: 0 12px 10px; padding: 10px; border-radius: 10px; background: #17171B; border: 1px solid #26262C; display: flex; flex-direction: column; gap: 9px">
+<sc-if value="{{hasTarget}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; align-items: center; gap: 7px; min-width: 0; height: 16px">
+<span class="{{target.dotCls}}"></span>
+<span style="font: 500 11px/1 'JetBrains Mono', monospace; color: #9C9CA6; flex: none">{{target.key}}</span>
+<span class="ttl" style="font: 600 12px/1.2 Inter, sans-serif">{{target.title}}</span>
+<span style="flex: 1"></span>
+<span style="{{target.wordStyle}}">{{target.word}}</span>
+</div>
+</sc-if>
+<sc-if value="{{noTarget}}" hint-placeholder-val="{{ false }}">
+<div style="font: 400 11.5px/16px Inter, sans-serif; color: #9C9CA6">{{hint}}</div>
+</sc-if>
+<div style="display: flex; gap: 6px">
+<div style="display: flex">
+<button type="button" class="abtn" onClick="{{onStart}}" disabled="{{startDisabled}}" style="{{startStyle}}"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"></path></svg>{{startLabel}}</button>
+<button type="button" class="abtn" disabled="{{startDisabled}}" aria-label="Choose agent: claude" title="Agent: claude" style="{{caretStyle}}"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg></button>
+</div>
+<button type="button" class="abtn" onClick="{{onPause}}" disabled="{{pauseDisabled}}" title="Pause after the current subtask" style="{{pauseStyle}}">{{pauseLabel}}</button>
+<button type="button" class="abtn" onClick="{{onCancel}}" disabled="{{cancelDisabled}}" style="{{cancelStyle}}">Cancel</button>
+<span style="flex: 1"></span>
+<sc-if value="{{showPurge}}" hint-placeholder-val="{{ true }}">
+<button type="button" class="abtn" onClick="{{onPurge}}" disabled="{{purgeDisabled}}" aria-label="{{purgeAria}}" title="{{purgeTip}}" style="{{purgeStyle}}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.2 8.7 4l4.3 4.3-5.2 5.2H5.8z"></path><path d="m5.6 7.1 4.3 4.3M7.8 13.5h6"></path></svg></button>
+</sc-if>
+</div>
+<sc-if value="{{hasNotice}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="font: 400 11.5px/1.45 Inter, sans-serif; color: #9C9CA6">{{notice}}</div>
+</sc-if>
+<sc-if value="{{confirming}}" hint-placeholder-val="{{ false }}">
+<div role="alertdialog" aria-label="Confirm cancel" style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: rgba(240,85,91,0.08); border: 1px solid rgba(240,85,91,.4)">
+<span style="font: 600 12px/1.35 Inter, sans-serif">Cancel {{target.key}}?</span>
+<span style="font: 400 11.5px/1.45 Inter, sans-serif; color: #9C9CA6">The run stops and the goal is marked canceled. Its branch and commits stay. You can run it again later.</span>
+<div style="display: flex; gap: 6px; justify-content: flex-end">
+<button type="button" class="abtn" onClick="{{keepRunning}}" style="border: 1px solid #383840; background: #1F1F24; color: #EDEDF0">Keep running</button>
+<button type="button" class="abtn" onClick="{{confirmCancel}}" style="background: #F0555B; color: #14100A">Cancel goal</button>
+</div>
+</div>
+</sc-if>
+</div>
+
+<div style="padding: 0 12px 8px">
+<label style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; background: #1F1F24; border: 1px solid #26262C; color: #8A8A94">
+<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Filter specs</span>
+<input type="text" value="{{query}}" onInput="{{onQuery}}" placeholder="Filter by key, title or file" style="all: unset; flex: 1; min-width: 0; color: #EDEDF0; font: 400 12px/1 Inter, sans-serif">
+</label>
+</div>
+
+<div role="group" aria-label="Status filter" style="display: flex; gap: 3px; margin: 0 12px 8px; padding: 3px; border-radius: 8px; background: #1F1F24; border: 1px solid #26262C">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+<button type="button" class="seg" onClick="{{f.pick}}" aria-pressed="{{f.pressed}}" style="{{f.style}}"><span class="{{f.dotCls}}"></span>{{f.label}}<span style="font: 500 10px/1 'JetBrains Mono', monospace; opacity: .75">{{f.count}}</span></button>
+</sc-for>
+</div>
+
+<div style="height: 1px; background: #26262C"></div>
+
+<div role="tree" aria-label="Spec folders" style="flex: 1; min-height: 0; overflow-y: auto; padding: 6px 6px">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="14">
+<button type="button" role="treeitem" class="tree-row" onClick="{{r.click}}" aria-expanded="{{r.ariaExpanded}}" aria-selected="{{r.ariaSelected}}" title="{{r.tip}}" style="{{r.style}}">
+<span style="{{r.chevBox}}" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.8" style="{{r.chevStyle}}"><path d="m6 4 4 4-4 4"></path></svg></span>
+<sc-if value="{{r.isFolder}}" hint-placeholder-val="{{ false }}">
+<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9C9CA6" stroke-width="1.3" aria-hidden="true" style="flex: none"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3.2l1.5 1.6H13c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"></path></svg>
+</sc-if>
+<sc-if value="{{r.hasDot}}" hint-placeholder-val="{{ true }}">
+<span style="width: 15px; display: inline-flex; justify-content: center; flex: none"><span class="{{r.dotCls}}"></span></span>
+</sc-if>
+<sc-if value="{{r.isPlainFile}}" hint-placeholder-val="{{ false }}">
+<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#8A8A94" stroke-width="1.3" aria-hidden="true" style="flex: none"><path d="M4 1.8h5.2L12.5 5v8.2c0 .6-.4 1-1 1H4c-.6 0-1-.4-1-1V2.8c0-.6.4-1 1-1z"></path><path d="M9 1.8V5h3.5"></path></svg>
+</sc-if>
+<sc-if value="{{r.hasKey}}" hint-placeholder-val="{{ false }}">
+<span style="font: 500 11px/1 'JetBrains Mono', monospace; color: #9C9CA6; flex: none">{{r.key}}</span>
+</sc-if>
+<span class="ttl" style="{{r.labelStyle}}">{{r.label}}</span>
+<span style="flex: 1"></span>
+<sc-if value="{{r.hasBar}}" hint-placeholder-val="{{ false }}">
+<span aria-hidden="true" style="display: flex; width: 38px; height: 4px; border-radius: 2px; overflow: hidden; background: #2A2A31; flex: none"><span style="{{r.barDone}}"></span><span style="{{r.barProg}}"></span></span>
+</sc-if>
+<span style="{{r.rightStyle}}">{{r.right}}</span>
+</button>
+</sc-for>
+<sc-if value="{{noMatches}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 28px 16px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center">
+<span style="font: 600 12.5px/1.4 Inter, sans-serif">No specs match</span>
+<span style="font: 400 11.5px/1.5 Inter, sans-serif; color: #9C9CA6">Nothing in this project matches the filter and status.</span>
+<button type="button" onClick="{{clearFilters}}" style="all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid #383840; background: #1F1F24; font: 600 12px/30px Inter, sans-serif">Clear filters</button>
+</div>
+</sc-if>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-top: 1px solid #26262C; background: #0E0E11">
+<span style="flex: 1; min-width: 0; font: 400 10.5px/1.3 'JetBrains Mono', monospace; color: #8A8A94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" title="~/.skill-bill/projects/l-f2eab7f540477baa/specs">~/.skill-bill/projects/l-f2ea…/specs</span>
+<a href="#" style="font: 600 11.5px/1 Inter, sans-serif; text-decoration: none">Reveal</a>
+</div>
+</aside>
+</sc-if>
+
+</div>
+<sc-if value="{{purging}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; background: rgba(8,8,10,0.66); display: flex; align-items: center; justify-content: center; padding: 24px">
+<div role="dialog" aria-modal="true" aria-labelledby="purge-title" style="width: 100%; max-width: 440px; box-sizing: border-box; background: #17171B; border: 1px solid #383840; border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.65); padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span id="purge-title" style="font: 700 17px/1.25 'Space Grotesk', sans-serif">Purge {{target.key}}?</span>
+<span style="font: 400 12.5px/1.55 Inter, sans-serif; color: #9C9CA6">Purge deletes everything Skill Bill recorded while running this spec, so it can start again from scratch.</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div style="border: 1px solid rgba(240,85,91,.35); background: rgba(240,85,91,0.06); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 7px">
+<span style="font: 600 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; color: #F0555B">Deleted</span>
+<span style="font: 400 12px/1.4 Inter, sans-serif">Goal and subtask run history</span>
+<span style="font: 400 12px/1.4 Inter, sans-serif">Run evidence and task tracking</span>
+<span style="font: 400 12px/1.4 Inter, sans-serif">Checkpoint refs</span>
+<span style="font: 400 12px/1.4 Inter, sans-serif">Subtask progress (back to not started)</span>
+</div>
+<div style="border: 1px solid rgba(63,185,80,.35); background: rgba(63,185,80,0.06); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 7px">
+<span style="font: 600 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; color: #3FB950">Kept</span>
+<span style="font: 400 12px/1.4 Inter, sans-serif">Every spec file in the folder</span>
+<span style="font: 400 12px/1.4 Inter, sans-serif">Your branch and its commits</span>
+<span style="font: 400 12px/1.4 Inter, sans-serif">Open pull requests</span>
+</div>
+</div>
+<span style="font: 400 12px/1.5 Inter, sans-serif; color: #F49463">This can't be undone. Afterwards the spec shows as not started and Start runs it from the first subtask.</span>
+<div style="display: flex; gap: 8px; justify-content: flex-end">
+<button type="button" class="abtn" onClick="{{keepRunState}}" style="border: 1px solid #383840; background: #1F1F24; color: #EDEDF0">Keep run history</button>
+<button type="button" class="abtn" onClick="{{confirmPurge}}" style="background: #F0555B; color: #14100A; font-weight: 700">Purge {{target.key}}</button>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"labels":{"editor":"enum","options":["titles","filenames"],"default":"titles","section":"Tree"},"startOpen":{"editor":"boolean","default":true,"section":"Pane"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: null, expanded: { b442: true }, sel: 'b444', query: '', filter: 'all', live: {}, confirm: false, notice: '', purging: false, started: { b442: true, b443: true, b420: true, d426: true, d415: true, d409: true, d400: true, d389: true, d233: true, d195: true, d44: true } };
+  }
+  statusOf(n) { return this.state.live[n.id] || n.status; }
+  findBundle(id, nodes) {
+    for (const n of nodes || this.tree()) {
+      if (n.kind === 'bundle' && (n.id === id || n.children.some((c) => c.id === id))) return n;
+      if (n.kind === 'folder') { const hit = this.findBundle(id, n.children); if (hit) return hit; }
+    }
+    return null;
+  }
+  setLive(id, status, notice) {
+    const live = Object.assign({}, this.state.live);
+    live[id] = status;
+    this.setState({ live: live, confirm: false, notice: notice || '' });
+  }
+  tree() {
+    const sub = (b, n, slug, title, status) => ({ id: b + '-s' + n, kind: 'file', num: ('0' + n).slice(-2), file: 'spec_subtask_' + n + '_' + slug + '.md', title: title, status: status });
+    const plain = (b, f) => ({ id: b + '-' + f, kind: 'file', file: f, title: f, status: null });
+    const overview = (b) => ({ id: b + '-spec', kind: 'file', file: 'spec.md', title: 'Overview', status: null, overview: true });
+    return [
+      { id: 'b442', kind: 'bundle', key: 'SKILL-442', file: 'SKILL-442-cross-criterion-audit-test-value-probes-and-goal-assessment', title: 'Cross-criterion audit, test-value probes and goal assessment', status: 'progress', children: [
+        overview('b442'),
+        sub('b442', 1, 'interaction-scenario-authoring-and-catalog', 'Interaction scenario authoring and catalog', 'complete'),
+        sub('b442', 2, 'interaction-trace-audit-mode', 'Interaction trace audit mode', 'complete'),
+        sub('b442', 3, 'accepted-criterion-recheck-and-unknown-surfacing', 'Accepted-criterion re-check and unknown-scenario surfacing', 'progress'),
+        sub('b442', 4, 'validate-test-probes', 'Validate test probes', 'pending'),
+        sub('b442', 5, 'goal-assessment-stage-assessors-and-verifier', 'Goal assessment stage, assessors, and verifier', 'pending'),
+        sub('b442', 6, 'goal-assessment-fix-loop-and-exit-rules', 'Goal assessment fix loop and exit rules', 'pending'),
+        sub('b442', 7, 'goal-assessment-pr-status-and-desktop-surfaces', 'Goal assessment PR, status, and desktop surfaces', 'pending'),
+        sub('b442', 8, 'trace-probe-and-assessment-telemetry', 'Trace, probe, and assessment telemetry', 'pending'),
+        plain('b442', 'decomposition-manifest.yaml')
+      ] },
+      { id: 'b444', kind: 'bundle', key: 'SKILL-444', file: 'SKILL-444-spec-browser-pane', title: 'Spec browser pane in the desktop app', status: 'pending', children: [ overview('b444') ] },
+      { id: 'b443', kind: 'bundle', key: 'SKILL-443', file: 'SKILL-443-qa-never-blocks-a-run-contain-every-qa-failure-record-it-and-notify-the-desktop-app', title: 'QA never blocks a run, contain and record every QA failure', status: 'complete', children: [
+        overview('b443'),
+        sub('b443', 1, 'qa-outcome-failure-kind-recorder-and-goal-gate', 'QA outcome failure kind, recorder semantics, and goal QA gate', 'complete'),
+        sub('b443', 2, 'run-loop-qa-containment', 'Run-loop QA containment for qa and qa_fix', 'complete'),
+        sub('b443', 3, 'ide-status-and-desktop-qa-notification', 'IDE status and desktop QA notification', 'complete'),
+        plain('b443', 'decomposition-manifest.yaml')
+      ] },
+      { id: 'b420', kind: 'bundle', key: 'SKILL-420', file: 'SKILL-420-backend-and-web-qa-phase', title: 'Backend and web QA phase', status: 'complete', children: [
+        overview('b420'),
+        sub('b420', 1, 'open-qa-targets', 'Open QA target kinds and multi-target resolution', 'complete'),
+        sub('b420', 2, 'backend-web-pack-guidance', 'Backend and web pack QA declarations', 'complete'),
+        sub('b420', 3, 'qa-owned-resources', 'Invocation-owned QA environment resources', 'complete'),
+        sub('b420', 4, 'backend-web-execution-rules', 'Backend and web execution rules', 'complete'),
+        sub('b420', 5, 'qa-report-coverage-vocabulary', 'Per-target coverage in the QA report', 'complete'),
+        plain('b420', 'traceability.md'),
+        plain('b420', 'decomposition-manifest.yaml')
+      ] },
+      { id: 'done', kind: 'folder', file: 'done', title: 'done', total: 365, children: [
+        { id: 'd426', kind: 'bundle', key: 'SKILL-426', file: 'SKILL-426-serial-acceptance-criterion-repair', title: 'Serial acceptance-criterion repair with durable budgets', status: 'complete', children: [ overview('d426') ] },
+        { id: 'd415', kind: 'bundle', key: 'SKILL-415', file: 'SKILL-415-generic-only-install-must-still-open-goals', title: 'Generic-only install must still open goals', status: 'complete', children: [ overview('d415') ] },
+        { id: 'd409', kind: 'bundle', key: 'SKILL-409', file: 'SKILL-409-goal-purge-removes-all-runtime-state', title: 'Goal purge removes all runtime state', status: 'complete', children: [ overview('d409') ] },
+        { id: 'd400', kind: 'bundle', key: 'SKILL-400', file: 'SKILL-400-runtime-error-codes', title: 'Runtime error codes', status: 'complete', children: [ overview('d400') ] },
+        { id: 'd389', kind: 'bundle', key: 'SKILL-389', file: 'SKILL-389-runtime-core-composition-and-guard-regressions', title: 'Runtime-core composition and guard regressions', status: 'complete', children: [ overview('d389') ] },
+        { id: 'd233', kind: 'bundle', key: 'SKILL-233', file: 'SKILL-233-runtime-architecture-health-remediation', title: 'Runtime architecture health remediation', status: 'complete', children: [ overview('d233') ] },
+        { id: 'd195', kind: 'bundle', key: 'SKILL-195', file: 'SKILL-195-governed-review-evidence-transport', title: 'Governed review evidence transport', status: 'complete', children: [ overview('d195') ] },
+        { id: 'd44', kind: 'bundle', key: 'SKILL-44', file: 'SKILL-44-repo-browser-read-only-tree', title: 'Repo browser read-only tree', status: 'complete', children: [ overview('d44') ] }
+      ] }
+    ];
+  }
+  filtering() { return this.state.filter !== 'all' || this.state.query.trim() !== ''; }
+  textMatch(n) {
+    const q = this.state.query.trim().toLowerCase();
+    if (!q) return true;
+    return [n.key, n.title, n.file].some((s) => s && s.toLowerCase().indexOf(q) >= 0);
+  }
+  statusMatch(n) {
+    const f = this.state.filter;
+    if (f === 'all') return true;
+    if (n.kind !== 'bundle') return false;
+    const st = this.statusOf(n);
+    return f === 'progress' ? ['progress', 'pausing', 'paused', 'blocked'].indexOf(st) >= 0 : st === f;
+  }
+  matches(n) { return this.statusMatch(n) && this.textMatch(n); }
+  hasMatchBelow(n) { return (n.children || []).some((c) => this.matches(c) || this.hasMatchBelow(c)); }
+  toggle(id) {
+    const e = Object.assign({}, this.state.expanded);
+    e[id] = !e[id];
+    this.setState({ expanded: e, sel: id, confirm: false, notice: '' });
+  }
+  row(n, depth, open) {
+    const s = this;
+    const labels = this.props.labels ?? 'titles';
+    const sel = this.state.sel === n.id;
+    const hasKids = !!n.children;
+    const isBundle = n.kind === 'bundle';
+    const isFolder = n.kind === 'folder';
+    const isSub = n.kind === 'file' && !!n.status;
+    const st = isBundle ? this.statusOf(n) : n.status;
+    const label = labels === 'filenames' ? n.file : (isSub ? n.num + '  ' + n.title : n.title);
+    let right = '';
+    let rightColor = '#8A8A94';
+    let barDone = '';
+    let barProg = '';
+    if (isBundle) {
+      const subs = n.children.filter((c) => c.status);
+      const done = subs.filter((c) => c.status === 'complete').length;
+      right = subs.length ? done + '/' + subs.length : '';
+      if (['progress', 'pausing', 'paused'].indexOf(st) >= 0) rightColor = '#F3C462';
+      if (st === 'complete') rightColor = '#3FB950';
+    }
+    if (isFolder) {
+      right = String(n.total);
+      barDone = 'height: 100%; width: 100%; background: #3FB950';
+      barProg = 'height: 100%; width: 0';
+    }
+    const statusWord = { complete: 'complete', progress: 'in progress', pausing: 'pausing', paused: 'paused', pending: 'pending', blocked: 'blocked', abandoned: 'canceled' };
+    const dotFor = { pausing: 'progress' };
+    return {
+      id: n.id,
+      isFolder: isFolder,
+      hasDot: isBundle || isSub,
+      isPlainFile: n.kind === 'file' && !n.status,
+      hasKey: isBundle && labels === 'titles',
+      key: n.key || '',
+      dotCls: 'sd ' + (dotFor[st] || st || 'none'),
+      label: label,
+      labelStyle: 'font-weight: ' + (isBundle || isFolder ? '600' : '400') + '; color: ' + ((n.kind === 'file' && !n.status) || st === 'abandoned' ? '#9C9CA6' : '#EDEDF0') + (st === 'abandoned' ? '; text-decoration: line-through' : '') + (labels === 'filenames' ? "; font-family: 'JetBrains Mono', monospace; font-size: 11.5px" : ''),
+      right: right,
+      rightStyle: "flex: none; font: 500 10.5px/1 'JetBrains Mono', monospace; color: " + rightColor,
+      hasBar: isFolder,
+      barDone: barDone,
+      barProg: barProg,
+      tip: (n.key ? n.key + ' · ' : '') + n.title + (st ? ' — ' + statusWord[st] : '') + '\n' + n.file,
+      chevBox: 'width: 14px; display: inline-flex; justify-content: center; flex: none; visibility: ' + (hasKids ? 'visible' : 'hidden'),
+      chevStyle: 'transition: transform .15s ease-out; transform: rotate(' + (open ? '90' : '0') + 'deg)',
+      ariaExpanded: hasKids ? String(open) : undefined,
+      ariaSelected: String(sel),
+      style: 'padding-left: ' + (6 + depth * 16) + 'px' + (sel ? '; background: rgba(233,168,28,0.09); box-shadow: inset 2px 0 0 #E9A81C' : ''),
+      click: () => hasKids ? s.toggle(n.id) : s.setState({ sel: n.id, confirm: false, notice: '' })
+    };
+  }
+  flatten(nodes, depth, out, inMatch) {
+    const filtering = this.filtering();
+    nodes.forEach((n) => {
+      const self = this.matches(n);
+      const below = filtering && !inMatch && !self && this.hasMatchBelow(n);
+      if (filtering && !inMatch && !self && !below) return;
+      const open = !!n.children && (below || !!this.state.expanded[n.id]);
+      out.push(this.row(n, depth, open));
+      if (open) this.flatten(n.children, depth + 1, out, inMatch || (filtering && self));
+    });
+  }
+  renderVals() {
+    const s = this;
+    const open = this.state.open === null ? (this.props.startOpen ?? true) : this.state.open;
+    const rows = [];
+    this.flatten(this.tree(), 0, rows, false);
+    const defs = [
+      { id: 'all', label: 'All', count: 369, dot: '' },
+      { id: 'progress', label: 'Active', count: 1, dot: 'sd progress' },
+      { id: 'pending', label: 'Pending', count: 1, dot: 'sd pending' },
+      { id: 'complete', label: 'Done', count: 367, dot: 'sd complete' }
+    ];
+    const filters = defs.map((d) => {
+      const on = s.state.filter === d.id;
+      return {
+        label: d.label, count: d.count, dotCls: d.dot,
+        pressed: String(on),
+        style: on ? 'background: #2A2A31; color: #EDEDF0' : 'color: #9C9CA6',
+        pick: () => s.setState({ filter: d.id })
+      };
+    });
+    const holder = this.findBundle(this.state.sel);
+    const b = holder && holder.id === this.state.sel ? holder : null;
+    const st = b ? this.statusOf(b) : null;
+    const hint = holder ? 'Actions run a whole spec folder, not one subtask. Select ' + holder.key + ' to control it.' : 'Select a spec folder to start, pause or cancel it.';
+    const words = { complete: ['complete', '#3FB950'], progress: ['running', '#F3C462'], pausing: ['pausing after subtask', '#F3C462'], paused: ['paused', '#F3C462'], pending: ['not started', '#9C9CA6'], blocked: ['blocked', '#F49463'], abandoned: ['canceled', '#9C9CA6'] };
+    const canStart = ['pending', 'paused', 'blocked', 'abandoned'].indexOf(st) >= 0;
+    const canPause = st === 'progress';
+    const canCancel = ['progress', 'pausing', 'paused', 'blocked'].indexOf(st) >= 0;
+    const startLabel = st === 'paused' || st === 'blocked' ? 'Resume' : st === 'abandoned' ? 'Run again' : 'Start';
+    const off = 'border: 1px solid #26262C; background: transparent; color: #6A6A74';
+    const btn = (on, onStyle) => on ? onStyle : off;
+    return {
+      hint: hint,
+      hasTarget: !!b,
+      noTarget: !b,
+      target: b ? { key: b.key, title: b.title, dotCls: 'sd ' + (st === 'pausing' ? 'progress' : st), word: words[st][0], wordStyle: "flex: none; font: 500 10.5px/1 'JetBrains Mono', monospace; color: " + words[st][1] } : { key: '', title: '', dotCls: 'sd none', word: '', wordStyle: '' },
+      startLabel: startLabel,
+      startDisabled: !canStart,
+      startStyle: btn(canStart, 'background: #E9A81C; color: #14100A; font-weight: 700; border-radius: 8px 0 0 8px') + (canStart ? '' : '; border-radius: 8px 0 0 8px; border-right: none'),
+      caretStyle: btn(canStart, 'background: #E9A81C; color: #14100A; border-left: 1px solid rgba(20,16,10,.25); border-radius: 0 8px 8px 0') + '; padding: 0 7px' + (canStart ? '' : '; border-radius: 0 8px 8px 0'),
+      pauseLabel: st === 'pausing' ? 'Pause requested' : 'Pause',
+      pauseDisabled: !canPause,
+      pauseStyle: btn(canPause, 'border: 1px solid #383840; background: #1F1F24; color: #EDEDF0'),
+      cancelDisabled: !canCancel,
+      cancelStyle: btn(canCancel, 'border: 1px solid rgba(240,85,91,.45); background: transparent; color: #F0555B'),
+      onStart: () => { if (!b) return; s.setLive(b.id, 'progress', startLabel === 'Start' ? 'Goal launched with claude. It shows under Goals running.' : 'Goal resumed with claude.'); s.setState({ started: Object.assign({}, s.state.started, { [b.id]: true }) }); },
+      showPurge: !!b && !!this.state.started[b.id],
+      purgeDisabled: st === 'progress' || st === 'pausing',
+      purgeAria: b ? 'Purge ' + b.key + ' run history' : 'Purge',
+      purgeTip: st === 'progress' || st === 'pausing' ? 'Pause or cancel the goal before purging' : 'Purge run history…',
+      purgeStyle: (st === 'progress' || st === 'pausing') ? 'width: 30px; padding: 0; border: 1px solid #26262C; color: #6A6A74' : 'width: 30px; padding: 0; border: 1px solid rgba(240,85,91,.45); color: #F0555B',
+      onPurge: () => s.setState({ purging: true, confirm: false, notice: '' }),
+      keepRunState: () => s.setState({ purging: false }),
+      confirmPurge: () => { if (!b) return; const started = Object.assign({}, s.state.started); delete started[b.id]; s.setState({ started: started, purging: false }); s.setLive(b.id, 'pending', b.key + ' purged. It is back to not started.'); },
+      purging: this.state.purging && !!b,
+      onPause: () => {
+        if (!b) return;
+        s.setLive(b.id, 'pausing', 'Pause recorded. The goal stops after its current subtask.');
+        setTimeout(() => { if (s.state.live[b.id] === 'pausing') s.setLive(b.id, 'paused', ''); }, 2600);
+      },
+      onCancel: () => s.setState({ confirm: true, notice: '' }),
+      keepRunning: () => s.setState({ confirm: false }),
+      confirmCancel: () => b && s.setLive(b.id, 'abandoned', 'Goal canceled.'),
+      confirming: this.state.confirm && !!b,
+      hasNotice: !!this.state.notice,
+      notice: this.state.notice,
+      paneOpen: open,
+      paneOpenAttr: String(open),
+      toggleStyle: 'all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 6px; font: 600 11.5px/1 Inter, sans-serif; ' + (open ? 'color: #F3C462; background: rgba(233,168,28,0.12); border: 1px solid rgba(233,168,28,0.35)' : 'color: #9C9CA6; border: 1px solid #383840'),
+      togglePane: () => s.setState({ open: !open }),
+      closePane: () => s.setState({ open: false }),
+      collapseAll: () => s.setState({ expanded: {} }),
+      query: this.state.query,
+      onQuery: (e) => s.setState({ query: e.target.value }),
+      clearFilters: () => s.setState({ query: '', filter: 'all' }),
+      filters: filters,
+      rows: rows,
+      noMatches: rows.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>
