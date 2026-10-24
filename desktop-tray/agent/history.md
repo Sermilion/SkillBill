@@ -1,3 +1,14 @@
+## [2026-10-24] SKILL-444 subtask 6 desktop spec pane run actions and purge
+Areas: desktop-tray (feature/specs contract, ViewModel, route, toolbar and dialog composables; composeApp WindowComponent wiring)
+- MEDIUM feature. SpecsViewModel now takes specs, details, controls and settings. A selected bundle loads its SpecBundleControl through one control job on selection, on every snapshot emission and after every action; stale answers are dropped by project and bundle path. A file selection resolves to its nearest bundle's key (issueKey, else name) by walking roots in runtime order with no sorting.
+- Start routes by state: NOT_STARTED goes through specs.startGoal; PAUSED, BLOCKED and CANCELED read the work detail then call controls.launch. Pause and Cancel go through details then controls; Cancel has a request, keep-running and confirm flow. An agent the user picked wins over the control's agentId seed.
+- One act helper is the single in-flight guard (flag, job, Ready control); it clears pending confirmations, drops messages if the selection moved and re-reads the control. Failures show the raw refusal summary, prefixed "Couldn't start" or "Couldn't purge". reusable
+- SpecRunToolbar keeps Start, agent caret, Pause and Cancel always composed (enable/disable only) with an icon-only eraser Purge at the right end; the line below follows a fixed priority of confirmation, message, pause notice, selection hint, unavailable reason. Purge has a tooltip explaining why it is disabled.
+- PurgeConfirmationDialog is a modal AlertDialog listing what is deleted and kept; "Keep run history" holds initial focus and Escape maps to it; the destructive button is a danger DesignButton. reusable
+- Limits: the runtime-side purge reset lives in subtask 1 and the UI only renders it; "Pause requested" with Purge visible may overflow 320dp (not checked visually).
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-24] SKILL-444 subtask 5 desktop spec pane browse
 Areas: desktop-tray (feature/specs new module, composeApp composition and ui, architecture guards, ARCHITECTURE.md, docs/architecture-parity.md)
 - MEDIUM feature. New :feature:specs module (plugin skillbill.feature) with contract, ViewModel, route, tree and status-dot composables; registered in settings.gradle.kts, composeApp dependencies, ModuleGraphRules.features and the ModuleGraphRulesTest baseline manifest (the consumed-in-production guard needs it).

@@ -88,5 +88,5 @@ class EntryViewModels(
 
   fun settings() = SettingsViewModel(settings, storeStatus)
 
-  fun specs() = SpecsViewModel(specs, details, settings)
+  fun specs() = SpecsViewModel(specs, details, controls, settings)
 }

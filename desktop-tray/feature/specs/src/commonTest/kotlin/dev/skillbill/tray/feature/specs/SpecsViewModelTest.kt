@@ -12,6 +12,7 @@ import dev.skillbill.tray.core.domain.model.SpecStatus
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.testing.FakeSettingsRepository
 import dev.skillbill.tray.core.testing.FakeSpecBrowserRepository
+import dev.skillbill.tray.core.testing.FakeWorkControlRepository
 import dev.skillbill.tray.core.testing.FakeWorkDetailRepository
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.workItem
@@ -63,7 +64,7 @@ class SpecsViewModelTest {
     Dispatchers.resetMain()
   }
 
-  private fun TestScope.viewModel(): SpecsViewModel = SpecsViewModel(specs, details, settings).also { runCurrent() }
+  private fun TestScope.viewModel(): SpecsViewModel = SpecsViewModel(specs, details, FakeWorkControlRepository(), settings).also { runCurrent() }
 
   @Test
   fun `a filter match inside a collapsed bundle is shown without touching the saved expansion`() = runTest(dispatcher) {

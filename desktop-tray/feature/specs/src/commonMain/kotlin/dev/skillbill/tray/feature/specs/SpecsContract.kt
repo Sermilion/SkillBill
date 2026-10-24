@@ -1,5 +1,6 @@
 package dev.skillbill.tray.feature.specs
 
+import dev.skillbill.tray.core.domain.model.SpecBundleControl
 import dev.skillbill.tray.core.domain.model.SpecNode
 import dev.skillbill.tray.core.domain.model.SpecProject
 import dev.skillbill.tray.core.domain.model.SpecSnapshot
@@ -36,6 +37,7 @@ data class SpecsUiState(
   val openErrors: Map<String, String> = emptyMap(),
   val paneOpen: Boolean = false,
   val anyInProgress: Boolean = false,
+  val toolbar: SpecToolbarState = SpecToolbarState(),
 ) {
   val filtersActive: Boolean get() = filtersActive(filterText, statusFilter)
 }
@@ -74,7 +76,77 @@ sealed interface SpecsAction {
   data object TogglePane : SpecsAction
 
   data object ClosePane : SpecsAction
+
+  data object OpenAgentMenu : SpecsAction
+
+  data object DismissAgentMenu : SpecsAction
+
+  data class ChooseAgent(val agentId: String) : SpecsAction
+
+  data object Start : SpecsAction
+
+  data object Pause : SpecsAction
+
+  data object RequestCancel : SpecsAction
+
+  data object KeepRunning : SpecsAction
+
+  data object ConfirmCancel : SpecsAction
+
+  data object RequestPurge : SpecsAction
+
+  data object KeepRunHistory : SpecsAction
+
+  data object ConfirmPurge : SpecsAction
 }
+
+/** What the toolbar acts on, derived from the selected tree row. [None] covers nothing, a plain folder and a file outside any bundle. */
+sealed interface ToolbarSelection {
+  data object None : ToolbarSelection
+
+  /** [key] is the containing bundle's `issueKey`, or its name when it has none. */
+  data class FileInBundle(val key: String) : ToolbarSelection
+
+  data class Bundle(val path: String) : ToolbarSelection
+}
+
+sealed interface ControlLoad {
+  data object Idle : ControlLoad
+
+  data object Loading : ControlLoad
+
+  data class Ready(val control: SpecBundleControl) : ControlLoad
+
+  data class Failed(val message: String) : ControlLoad
+}
+
+/** The run-actions toolbar: every enable flag comes from [control], the runtime's verdict; nothing here judges a lifecycle. */
+data class SpecToolbarState(
+  val selection: ToolbarSelection = ToolbarSelection.None,
+  val control: ControlLoad = ControlLoad.Idle,
+  val chosenAgent: String? = null,
+  val agentMenuOpen: Boolean = false,
+  val confirmingCancel: Boolean = false,
+  val purgeDialogOpen: Boolean = false,
+  val inFlight: Boolean = false,
+  val message: String? = null,
+)
+
+internal const val HINT_SELECT_FOLDER = "Select a spec folder to start, pause or cancel it."
+internal const val PAUSE_NOTICE = "Pause recorded. The goal stops after its current subtask."
+internal const val PURGE_DISABLED_TOOLTIP = "Pause or cancel the goal before purging"
+internal const val NO_CHECKOUT = "This project has no checkout on this machine."
+internal const val NO_WORK_ITEM = "This run has no work item."
+
+internal fun fileHint(key: String) = "Actions run a whole spec folder, not one subtask. Select $key to control it."
+
+internal fun cancelPrompt(key: String) = "Cancel $key? The run stops and the goal is marked canceled. Its branch and commits stay."
+
+internal fun purgeLabel(key: String) = "Purge $key run history"
+
+internal fun startFailure(summary: String) = "Couldn't start: $summary"
+
+internal fun purgeFailure(summary: String) = "Couldn't purge: $summary"
 
 /** Nothing here opens a detail or names a navigator: the pane never changes what the main panel shows. */
 sealed interface SpecsEffect {

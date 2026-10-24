@@ -4,12 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.SettingsState
+import dev.skillbill.tray.core.domain.model.SpecBundleControl
 import dev.skillbill.tray.core.domain.model.SpecNode
 import dev.skillbill.tray.core.domain.model.SpecProject
+import dev.skillbill.tray.core.domain.model.SpecRunState
 import dev.skillbill.tray.core.domain.model.WorkIdentity
+import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
+import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
 import dev.skillbill.tray.core.ui.NavigationEffects
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,6 +40,7 @@ import kotlinx.coroutines.launch
 class SpecsViewModel(
   private val specs: SpecBrowserRepository,
   private val details: WorkDetailRepository,
+  private val controls: WorkControlRepository,
   private val settings: SettingsRepository,
 ) : ViewModel() {
   private val local = MutableStateFlow(Local())
@@ -45,6 +50,8 @@ class SpecsViewModel(
   private var selectedWork: WorkIdentity? = null
   private var explicitPick = false
   private var following: Job? = null
+  private var controlJob: Job? = null
+  private var actionJob: Job? = null
 
   val state: StateFlow<SpecsUiState> = combine(local, appSettings, ::assemble)
     .stateIn(viewModelScope, SharingStarted.Eagerly, SpecsUiState())
@@ -63,7 +70,10 @@ class SpecsViewModel(
           previous = subscription
           observe(subscription, announceLoading = !rootOnly)
         }
-        .collect { snapshot -> local.update { it.copy(snapshot = snapshot) } }
+        .collect { snapshot ->
+          local.update { it.copy(snapshot = snapshot) }
+          if (snapshot is SpecSnapshotState.Loaded) loadControl()
+        }
     }
     follow()
   }
@@ -86,7 +96,7 @@ class SpecsViewModel(
       }
       is SpecsAction.Expand -> setExpanded(action.path, expand = true)
       is SpecsAction.Collapse -> setExpanded(action.path, expand = false)
-      is SpecsAction.Select -> local.update { it.copy(selectedPath = action.path) }
+      is SpecsAction.Select -> select(action.path)
       is SpecsAction.Activate -> activate(action.path)
       SpecsAction.CollapseAll -> collapseAll()
       is SpecsAction.FileOpenFailed -> local.update { it.copy(openErrors = it.openErrors + (action.absolutePath to action.message)) }
@@ -94,6 +104,205 @@ class SpecsViewModel(
       SpecsAction.Reveal -> local.value.project?.specsRoot?.takeIf { it.isNotBlank() }?.let { outbox.send(SpecsEffect.RevealDirectory(it)) }
       SpecsAction.TogglePane -> viewModelScope.launch { settings.update { it.copy(specPaneOpen = !it.specPaneOpen) } }
       SpecsAction.ClosePane -> viewModelScope.launch { settings.update { it.copy(specPaneOpen = false) } }
+      SpecsAction.OpenAgentMenu -> setAgentMenu(open = true)
+      SpecsAction.DismissAgentMenu -> setAgentMenu(open = false)
+      is SpecsAction.ChooseAgent -> chooseAgent(action.agentId)
+      SpecsAction.Start -> start()
+      SpecsAction.Pause -> pause()
+      SpecsAction.RequestCancel -> requestCancel()
+      SpecsAction.KeepRunning -> updateToolbar { it.copy(confirmingCancel = false) }
+      SpecsAction.ConfirmCancel -> confirmCancel()
+      SpecsAction.RequestPurge -> requestPurge()
+      SpecsAction.KeepRunHistory -> updateToolbar { it.copy(purgeDialogOpen = false) }
+      SpecsAction.ConfirmPurge -> confirmPurge()
+    }
+  }
+
+  private fun updateToolbar(change: (SpecToolbarState) -> SpecToolbarState) = local.update { it.copy(toolbar = change(it.toolbar)) }
+
+  private fun readyControl(): SpecBundleControl? = (local.value.toolbar.control as? ControlLoad.Ready)?.control
+
+  private fun setAgentMenu(open: Boolean) {
+    if (!local.value.toolbar.inFlight) updateToolbar { it.copy(agentMenuOpen = open) }
+  }
+
+  private fun chooseAgent(agentId: String) {
+    if (local.value.toolbar.inFlight) return
+    local.update { it.copy(toolbar = it.toolbar.copy(chosenAgent = agentId, agentMenuOpen = false), agentPicked = true) }
+  }
+
+  /** Never-launched specs start through the spec port; a paused, blocked or canceled run resumes through its work item. */
+  private fun start() {
+    val control = readyControl()?.takeIf { it.canStart } ?: return
+    val toolbar = local.value.toolbar
+    if (toolbar.inFlight) return
+    val agent = toolbar.chosenAgent
+    if (agent == null) {
+      updateToolbar { it.copy(agentMenuOpen = true) }
+      return
+    }
+    when (control.runState) {
+      SpecRunState.NOT_STARTED -> act { c ->
+        val repoRoot = repoRootOf(local.value)
+        val key = c.issueKey
+        if (repoRoot == null || key == null) {
+          startFailure(c.unavailableReason ?: NO_CHECKOUT)
+        } else {
+          specs.startGoal(repoRoot, key, agent).failureSummary()?.let(::startFailure)
+        }
+      }
+      SpecRunState.PAUSED, SpecRunState.BLOCKED, SpecRunState.CANCELED -> act { c ->
+        withItem(c, ::startFailure) { controls.launch(it, agent) }
+      }
+      else -> Unit
+    }
+  }
+
+  private fun pause() {
+    if (readyControl()?.canPause != true) return
+    act { c -> withItem(c) { controls.pause(it) } }
+  }
+
+  private fun requestCancel() {
+    if (readyControl()?.canCancel == true && !local.value.toolbar.inFlight) updateToolbar { it.copy(confirmingCancel = true) }
+  }
+
+  private fun confirmCancel() {
+    if (!local.value.toolbar.confirmingCancel) return
+    if (readyControl()?.canCancel != true) {
+      updateToolbar { it.copy(confirmingCancel = false) }
+      return
+    }
+    act { c -> withItem(c) { controls.cancel(it) } }
+  }
+
+  private fun requestPurge() {
+    val control = readyControl() ?: return
+    if (control.purgeVisible && control.canPurge && !local.value.toolbar.inFlight) updateToolbar { it.copy(purgeDialogOpen = true) }
+  }
+
+  private fun confirmPurge() {
+    if (!local.value.toolbar.purgeDialogOpen) return
+    updateToolbar { it.copy(purgeDialogOpen = false) }
+    if (readyControl()?.let { it.purgeVisible && it.canPurge } != true) return
+    act { c ->
+      val repoRoot = repoRootOf(local.value)
+      val key = c.issueKey
+      if (repoRoot == null || key == null) {
+        purgeFailure(c.unavailableReason ?: NO_CHECKOUT)
+      } else {
+        specs.purgeGoal(repoRoot, key).failureSummary()?.let(::purgeFailure)
+      }
+    }
+  }
+
+  /**
+   * The one in-flight guard: a no-op while a request runs or no control is ready. [block] returns the inline message, or null. The
+   * message is dropped when the selection moved meanwhile; otherwise the control is read again so the buttons follow the runtime.
+   */
+  private fun act(block: suspend (SpecBundleControl) -> String?) {
+    val control = readyControl() ?: return
+    if (local.value.toolbar.inFlight || actionJob?.isActive == true) return
+    val origin = selectionKey(local.value)
+    updateToolbar { it.copy(inFlight = true, message = null, confirmingCancel = false) }
+    actionJob = viewModelScope.launch {
+      try {
+        val message = block(control)
+        if (selectionKey(local.value) == origin) {
+          updateToolbar { it.copy(message = message) }
+          loadControl()
+        }
+      } finally {
+        updateToolbar { it.copy(inFlight = false) }
+      }
+    }
+  }
+
+  private suspend fun withItem(
+    control: SpecBundleControl,
+    describe: (String) -> String = { it },
+    run: suspend (WorkItem) -> Outcome<*>,
+  ): String? {
+    val work = control.work ?: return describe(NO_WORK_ITEM)
+    return when (val detail = details.detail(work)) {
+      is Outcome.Failure -> describe(detail.problem.summary)
+      is Outcome.Value -> run(detail.value.item).failureSummary()?.let(describe)
+    }
+  }
+
+  private fun Outcome<*>.failureSummary(): String? = (this as? Outcome.Failure)?.problem?.summary
+
+  private fun repoRootOf(l: Local): String? = (l.snapshot as? SpecSnapshotState.Loaded)?.snapshot?.project?.repoRoot
+
+  private fun selectionKey(l: Local): Pair<String?, String?> = l.project?.projectId to (selectionFor(l) as? ToolbarSelection.Bundle)?.path
+
+  private fun selectionFor(l: Local): ToolbarSelection {
+    val path = l.selectedPath ?: return ToolbarSelection.None
+    return findSelection(loadedRoots(l).orEmpty(), path, null) ?: ToolbarSelection.None
+  }
+
+  /** Walks the tree in snapshot order; a file takes the key of the nearest bundle above it. */
+  private fun findSelection(nodes: List<SpecNode>, path: String, bundle: SpecNode.Bundle?): ToolbarSelection? {
+    for (node in nodes) {
+      if (node.path == path) {
+        return when (node) {
+          is SpecNode.Bundle -> ToolbarSelection.Bundle(node.path)
+          is SpecNode.File -> bundle?.let { ToolbarSelection.FileInBundle(it.issueKey ?: it.name) }
+          is SpecNode.Folder -> null
+        }
+      }
+      val found = when (node) {
+        is SpecNode.Folder -> findSelection(node.children, path, bundle)
+        is SpecNode.Bundle -> findSelection(node.children, path, node)
+        is SpecNode.File -> null
+      }
+      if (found != null) return found
+    }
+    return null
+  }
+
+  /** A new selection or project drops everything the toolbar showed. An in-flight request is not cancelled; its answer is dropped. */
+  private fun resetToolbar(l: Local): Local = l.copy(
+    toolbar = SpecToolbarState(
+      control = if (selectionFor(l) is ToolbarSelection.Bundle) ControlLoad.Loading else ControlLoad.Idle,
+      inFlight = l.toolbar.inFlight,
+    ),
+    agentPicked = false,
+  )
+
+  private fun select(path: String) {
+    if (local.value.selectedPath == path) return
+    local.update { resetToolbar(it.copy(selectedPath = path)) }
+    loadControl()
+  }
+
+  /** Reads the selected bundle's control again; the newest read wins, and an answer for a moved selection is dropped. */
+  private fun loadControl() {
+    controlJob?.cancel()
+    val origin = local.value
+    val (projectId, path) = selectionKey(origin)
+    if (projectId == null || path == null) return
+    controlJob = viewModelScope.launch {
+      val result = specs.control(projectId, path, origin.followedRoot ?: origin.project?.repoRoot)
+      local.update { cur ->
+        if (selectionKey(cur) != (projectId to path)) return@update cur
+        val load = when (result) {
+          is Outcome.Value -> ControlLoad.Ready(result.value)
+          is Outcome.Failure -> ControlLoad.Failed(result.problem.summary)
+        }
+        val agent = if (cur.agentPicked) cur.toolbar.chosenAgent else (result as? Outcome.Value)?.value?.agentId
+        val fresh = (load as? ControlLoad.Ready)?.control
+        val tb = cur.toolbar
+        // A confirmation the runtime no longer allows is closed rather than left to be refused.
+        cur.copy(
+          toolbar = tb.copy(
+            control = load,
+            chosenAgent = agent,
+            confirmingCancel = tb.confirmingCancel && fresh?.canCancel == true,
+            purgeDialogOpen = tb.purgeDialogOpen && fresh?.let { it.purgeVisible && it.canPurge } == true,
+          ),
+        )
+      }
     }
   }
 
@@ -153,20 +362,24 @@ class SpecsViewModel(
 
   /** A different project clears the selection and open errors and starts from Loading; the filters stay. */
   private fun choose(project: SpecProject, followedRoot: String?) {
+    val changed = local.value.project?.projectId != project.projectId
     local.update {
       if (it.project?.projectId == project.projectId) {
         it.copy(project = project, followedRoot = followedRoot)
       } else {
-        it.copy(
-          project = project,
-          followedRoot = followedRoot,
-          snapshot = SpecSnapshotState.Loading,
-          selectedPath = null,
-          openErrors = emptyMap(),
-          shownWhileFiltering = emptyMap(),
+        resetToolbar(
+          it.copy(
+            project = project,
+            followedRoot = followedRoot,
+            snapshot = SpecSnapshotState.Loading,
+            selectedPath = null,
+            openErrors = emptyMap(),
+            shownWhileFiltering = emptyMap(),
+          ),
         )
       }
     }
+    if (changed) loadControl()
   }
 
   private fun observe(subscription: Subscription, announceLoading: Boolean): Flow<SpecSnapshotState> {
@@ -194,7 +407,7 @@ class SpecsViewModel(
 
   private fun activate(path: String) {
     val node = state.value.rows.firstOrNull { it.node.path == path }?.node ?: return
-    local.update { it.copy(selectedPath = path) }
+    select(path)
     if (node is SpecNode.File) {
       local.update { it.copy(openErrors = it.openErrors - node.absolutePath) }
       outbox.send(SpecsEffect.OpenFile(node.absolutePath))
@@ -260,6 +473,9 @@ class SpecsViewModel(
       openErrors = l.openErrors,
       paneOpen = app.specPaneOpen,
       anyInProgress = loaded?.anyInProgress == true,
+      toolbar = selectionFor(l).let { selection ->
+        l.toolbar.copy(selection = selection, control = if (selection is ToolbarSelection.Bundle) l.toolbar.control else ControlLoad.Idle)
+      },
     )
   }
 
@@ -279,6 +495,9 @@ class SpecsViewModel(
     val selectedPath: String? = null,
     val openErrors: Map<String, String> = emptyMap(),
     val retries: Int = 0,
+    val toolbar: SpecToolbarState = SpecToolbarState(),
+    /** True once the user picked an agent for the selected bundle; a later control read then keeps that pick. */
+    val agentPicked: Boolean = false,
   ) {
     val filtersActive: Boolean get() = filtersActive(filterText, statusFilter)
   }

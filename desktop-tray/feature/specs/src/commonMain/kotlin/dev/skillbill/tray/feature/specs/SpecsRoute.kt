@@ -10,7 +10,7 @@ import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 
 /** The pane bound to its ViewModel: it opens files and reveals the spec folder, and reports a file that would not open. */
 @Composable
-fun SpecsRoute(viewModel: SpecsViewModel, modifier: Modifier = Modifier, toolbar: @Composable () -> Unit = {}) {
+fun SpecsRoute(viewModel: SpecsViewModel, modifier: Modifier = Modifier) {
   val state by viewModel.state.collectAsState()
   val navigation = LocalRepositoryNavigation.current
   LaunchedEffect(viewModel, navigation) {
@@ -24,5 +24,5 @@ fun SpecsRoute(viewModel: SpecsViewModel, modifier: Modifier = Modifier, toolbar
       }
     }
   }
-  SpecsPane(state, viewModel::onAction, modifier, toolbar)
+  SpecsPane(state, viewModel::onAction, modifier) { SpecRunToolbar(state.toolbar, viewModel::onAction) }
 }
