@@ -1,3 +1,15 @@
+## [2026-10-24] SKILL-444 subtask 3: runtime spec-browser read model
+Areas: runtime-engine specbrowser (+model); runtime-ports projectstore (ProjectCatalogPort, ProjectCatalogEntry); runtime-infra host ProjectStoreResolver; runtime-core RuntimeComponent and PrincipleEnforcementInventory
+- SpecBrowserService (@RuntimeSingleton) exposes projects(), projectFor(repoRoot), snapshot(projectId, preferredRepoRoot) and control(projectId, bundlePath, preferredRepoRoot); RuntimeComponent has a specBrowserService accessor for the desktop. reusable
+- ProjectCatalogPort lists every project in the store (ordered by lastSeen, unparsable last); ProjectStoreResolver implements it on top of its existing scan(), so malformed records still skip with a warning and `.git` common dirs map to working trees. reusable
+- The tree is read through DecompositionManifestStore with a path-plus-mtime manifest cache, skipping hidden entries and symlink loops. Bundles sort before folders before files; a missing specsRoot is an empty tree, an unreadable one is a failure message.
+- Status precedence lives in SpecStatusRules (archived `done/` bundles are COMPLETE); SpecLiveGoalReader overlays live goal state with one database.readIfPresent per snapshot, and archived bundles never query the database.
+- SpecBundleControlPolicy is a pure function of facts (run state, key, checkout, database) giving start, pause, cancel and purge enablement; control rejects a bundle path outside specsRoot. reusable
+- Seven sibling files in specbrowser (ceiling 12). Tests: policy table test, service tree and live-override tests on SQLite, resolver catalog test.
+- Limits: SpecBrowserProject.specsRoot is nullable (null only for an unknown-project snapshot); live override test covers PAUSED not PAUSING; control does not catch runtime errors; packaged-data smoke left to CI.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate ran full check green)
+
 ## [2026-10-24] SKILL-444 subtask 2: in-process goal start entry point for a never-launched goal
 Areas: runtime-engine work/control (WorkRunActions, WorkControlService), goalrunner model (GoalPreflightVerdict), goalrunner preflight (GoalPreflightLookupResolver); runtime-engine tests under work/control and goalrunner
 - WorkControlService.startGoal(repoRoot, issueKey, agentId) delegates to WorkRunActions.startGoal, so the desktop can start a fresh goal without shelling out to the installed CLI. It rejects a missing or unsupported agent before preflight, then runs GoalPreflightService.

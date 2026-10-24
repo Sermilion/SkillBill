@@ -69,6 +69,7 @@ import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
+import skillbill.engine.specbrowser.SpecBrowserService
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
@@ -104,6 +105,7 @@ import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
+import skillbill.ports.projectstore.ProjectCatalogPort
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.RepositoryLineagePort
 import skillbill.ports.qa.QaDeviceLeasePort
@@ -222,6 +224,9 @@ abstract class RuntimeComponent(
   @Provides @RuntimeSingleton
   fun projectStorePort(resolver: ProjectStoreResolver): ProjectStorePort = resolver
 
+  @Provides @RuntimeSingleton
+  fun projectCatalogPort(resolver: ProjectStoreResolver): ProjectCatalogPort = resolver
+
   @Provides
   fun projectConfigFilePort(adapter: FileSystemProjectConfigFile): ProjectConfigFilePort = adapter
 
@@ -320,6 +325,7 @@ abstract class RuntimeComponent(
   abstract val workflowService: WorkflowService
   abstract val workListService: WorkListService
   abstract val workControlService: WorkControlService
+  abstract val specBrowserService: SpecBrowserService
 
   abstract val workObservationService: WorkObservationService
 

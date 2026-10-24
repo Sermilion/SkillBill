@@ -713,6 +713,7 @@ object PrincipleEnforcementInventory {
       "scaffoldCatalogGateway",
       "scaffoldGateway",
       "skillRemove",
+      "specBrowserService",
       "standalonePlanRun",
       "systemService",
       "skillBillUpdateService",
