@@ -38,6 +38,11 @@ dependencyResolutionManagement {
       }
     }
     mavenCentral()
+    maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies") {
+      content {
+        includeGroup("org.jetbrains.jediterm")
+      }
+    }
   }
 }
 

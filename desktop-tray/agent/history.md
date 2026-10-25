@@ -1,3 +1,13 @@
+## [2026-10-25] SKILL-445 subtask 2 desktop JVM terminal host
+Areas: desktop-tray (composeApp jvmMain terminal package and build, core/designsystem Theme, gradle catalog, settings.gradle.kts, DeletionRules guard, ARCHITECTURE.md)
+- MEDIUM feature. composeApp jvmMain gains JediTerm 3.57 (core, ui) and pty4j 0.13.10 behind a terminal package: pure terminalLaunch (login shell, TERM set, zsh fallback on macOS, home directory when the folder is missing), a PtyTerminalProcessFactory with an idempotent destroy, and a TerminalSession that opens once, reuses its view, and returns Failed so a later open retries. reusable
+- TerminalSessions keeps one session per window id, closes it when the window scope's job completes, and installs one shutdown hook so no shell outlives the app. TerminalSurface hosts the session component in SwingPanel, with a Retry message on failure and no header (the feature route owns the header).
+- TerminalTheme maps design-system colours and the bundled mono font onto JediTerm settings, leaving the ANSI palette alone. core/designsystem exposes one public suspend monoFontBytes because its resources are internal. reusable
+- JediTerm resolves from a group-filtered JetBrains intellij-dependencies repository in settings.gradle.kts; pty4j stays on Maven Central. A strict jetbrains-annotations 23.0.0 constraint keeps the desktop classpath equal to the runtime's.
+- Limits: no tests for the settings provider or the SwingPanel; QA owns the packaged-app pty4j native extraction, scrollback surviving hide/show and the no-orphan-shell check. The pane is still not hosted in the window.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-25] SKILL-445 subtask 1 desktop terminal state module
 Areas: desktop-tray (core/domain AppSettings, core/datastore StoredSettings, new feature/terminal module, composeApp WindowComponent and build, architecture guards, ARCHITECTURE.md, docs/architecture-parity.md)
 - MEDIUM feature. AppSettings gains terminalPaneOpen (default closed) and terminalPaneHeightDp with a companion MIN 120, MAX 1200 and DEFAULT 240; the init block rejects out-of-range heights. StoredSettings keeps both as nullable fields, so old settings files load with defaults and no migration, and a stored height outside the range is clamped on read rather than rejected. reusable

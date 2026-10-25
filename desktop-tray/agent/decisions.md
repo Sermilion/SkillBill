@@ -1,3 +1,20 @@
+## [2026-10-25] Terminal files join the approved OS-process set
+Context: The deletion guard allowed process types in four named native files, but the terminal needs a pty launch and a JVM shutdown hook, which can only be registered through Runtime.
+Decision: DeletionRules lists terminal/TerminalProcess.kt and terminal/TerminalSessions.kt in approvedProcessFiles, and the guard now also flags PtyProcess and PtyProcessBuilder, with a rejection fixture.
+Reason: The terminal is an approved new OS-process owner; widening to two named files keeps every other file banned, and the pty types were an unguarded gap.
+Alternatives considered: A suppression or baseline would hide future violations; avoiding Runtime would drop the shutdown hook that prevents orphaned shells.
+
+## [2026-10-25] Pin jetbrains-annotations to the runtime version
+Context: JediTerm pulls org.jetbrains:annotations 24.0.1, but verifySharedRuntimeVersions requires the desktop classpath to match the runtime's 23.0.0.
+Decision: A strict jvmMainImplementation constraint on the catalog's jetbrains-annotations 23.0.0, with no new consumed library.
+Reason: It keeps the shared-version convention satisfied without excluding the artifact JediTerm needs.
+Revisit when: The runtime bumps annotations, or JediTerm requires an API newer than 23.0.0.
+
+## [2026-10-25] Group-filtered JetBrains repository for JediTerm
+Context: JediTerm is not on Maven Central, and settings.gradle.kts uses FAIL_ON_PROJECT_REPOS.
+Decision: Declare the intellij-dependencies repository in settings only, restricted to the org.jetbrains.jediterm group.
+Reason: Nothing else can resolve from it, so the supply surface stays one group, and no project declares its own repository.
+
 ## [2026-10-24] Filtering expands ancestors for display only
 Context: The spec tree filter must reveal matches inside collapsed bundles, while expansion is persisted in AppSettings.specExpandedPaths.
 Decision: visibleRows shows ancestors of a match expanded without writing the saved set; ClearFilters restores the saved expansion.

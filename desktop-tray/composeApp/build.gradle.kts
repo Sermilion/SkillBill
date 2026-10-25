@@ -47,6 +47,9 @@ kotlin {
     implementation(libs.nucleus.notification.common)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.autolaunch)
+    implementation(libs.jediterm.core)
+    implementation(libs.jediterm.ui)
+    implementation(libs.pty4j)
     // The bootstrap loads runtime classes from the installed runtime after checking its build identity.
     compileOnly("dev.skillbill:runtime-core")
     compileOnly("dev.skillbill:runtime-contracts")
@@ -64,6 +67,12 @@ kotlin {
 }
 
 dependencies {
+  // verifySharedRuntimeVersions keeps every library the desktop shares with the runtime at the runtime's version.
+  constraints {
+    add("jvmMainImplementation", libs.jetbrains.annotations) {
+      version { strictly(libs.versions.jetbrains.annotations.get()) }
+    }
+  }
   add("jvmTestImplementation", testFixtures("dev.skillbill:runtime-infra-sqlite"))
   // Projects without a build script (the implicit ":core" parent) own no sources and no manifest.
   rootProject.subprojects.filter { it.buildFile.exists() }.forEach { add("architectureManifests", project(it.path)) }
