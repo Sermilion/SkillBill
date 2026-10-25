@@ -437,8 +437,15 @@ class ModelDirectiveSupplements(val enabled: Boolean) {
     owner: PhaseStrategy,
     stepId: String,
     profile: PhaseModelProfile,
+    probes: () -> Boolean = { false },
   ): PhaseStepPromptSections {
-    val block = directiveFor(owner, stepId, profile) ?: return sections
+    val block =
+      directiveFor(owner, stepId, profile)
+        ?.let {
+          if (PROBE_SECTION_MARKER in it && !probes()) it.substringBefore(PROBE_SECTION_MARKER).trimEnd() else it
+        }
+        ?.takeIf(String::isNotBlank)
+        ?: return sections
     return sections.copy(
       taskDirective = "${sections.taskDirective}\n\n$block",
       retryFocus = if (sections.retryFocus.isBlank()) sections.retryFocus else "${sections.retryFocus}\n\n$block",
@@ -449,6 +456,7 @@ class ModelDirectiveSupplements(val enabled: Boolean) {
   private companion object {
     const val BASE = "/skillbill/engine/featuretask/slot"
     const val PLAN_FAN_OUT_SUBTASKS_RESOURCE = "$BASE/plan/opus-5-5-goal-plan-fan-out.md"
+    const val PROBE_SECTION_MARKER = "\n## Test probes"
 
     val RESOURCES: Map<Pair<PhaseSlot, String>, String> =
       mapOf(

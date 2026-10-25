@@ -238,7 +238,11 @@ changed_paths:
 boundary_candidates:
   - src
 ### from: validate
-value: Project checks passed.
+value:
+```
+Project checks passed.
+Test probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test
+```
 ### run_invariant_spec_reference (run_invariant_field:spec_reference)
 spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
 ### run_invariant_feature_size (run_invariant_field:feature_size)

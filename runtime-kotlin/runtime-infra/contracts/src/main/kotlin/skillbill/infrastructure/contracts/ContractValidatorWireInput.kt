@@ -22,6 +22,7 @@ import skillbill.error.shellcontent.invalidFeatureTaskRuntimeSharedEvidenceProje
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidValidationTestProbes
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeHandoffEnvelopeSchemaPaths
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -119,5 +120,7 @@ private fun serialWireArtifactNonObjectError(
       invalidQaRepairStateSchema("$sourceLabel: $reason")
     FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS ->
       invalidFeatureTaskRuntimeImplementationProgressSchema(sourceLabel = sourceLabel, reason = reason)
+    FeatureTaskRuntimeWireArtifactKind.VALIDATION_TEST_PROBES ->
+      invalidValidationTestProbes(sourceLabel, reason)
     else -> error("Unexpected non-serial wire artifact $kind")
   }

@@ -64,6 +64,13 @@ internal interface FeatureTaskRuntimeProgressSnapshotAccess : FeatureTaskRuntime
     reason: String,
   ): PhaseBlockResume
 
+  /** The reason of every durable BLOCKED ledger entry of [phaseId] in the reentry of [loopId] and [edgeIteration]. */
+  fun blockedReasons(
+    phaseId: String,
+    loopId: String?,
+    edgeIteration: Int?,
+  ): List<String>
+
   fun trailingNonOutputAttempts(
     phaseId: String,
     isProcessFailure: (String) -> Boolean,

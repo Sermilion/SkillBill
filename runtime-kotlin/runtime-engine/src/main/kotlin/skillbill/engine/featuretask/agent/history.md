@@ -1,5 +1,16 @@
 # featuretask runtime boundary history
 
+## [2026-10-25] SKILL-442 subtask 4 - Validate test probes
+Areas: runtime-engine featuretask slot/qualitygate (ValidateProbePrompt, ValidateProbeActivation) and slot/qualitygate/agentvalidate (strategy, step hooks, ValidateProbeSettlement), slot/attempt launch preparation, prompt compose inputs, runloop record rejection and progress observations, opus-5-5-agent-validate.md; runtime-domain model/validation (ValidationTestProbe, parser) and artifact wire; runtime-contracts payload keys and failure code; runtime-infra contracts validator and schema paths; orchestration/contracts; docs/block-incident-classification
+- MEDIUM feature. Goal-child agent validate (not gate triage) asks for up to 6 test probes per run, one `survived`, `repaired` or `not_run` line each; `not_run` needs a reason, and survived or not_run imply repaired false. The ordered list is stored as `produced_outputs.test_probes` and never changes the verdict.
+- Probe scope comes from repaired scenarios in the bound catalog plus required criteria; prompt text and the md `## Test probes` section are included only when the scope is set, so standalone, post-QA and triage prompts stay probe-free.
+- New contract: validation-test-probes schema (cap 6), wire kind VALIDATION_TEST_PROBES with a duplicate `test_ref` check, failure code INVALID_VALIDATION_TEST_PROBES classified as a Skill Bill defect. Domain parser counts zero probe lines as malformed. reusable
+- Settlement: first malformed report is re-asked once through completionRejection; a second stores an empty list plus a best-effort diagnostics warning; `not_run` raises an unavailable-probe warning.
+- Pattern: pure functions split out of the settlement (correction, storing, applies) for tests; the correction budget is the durable phase attempt count, so it survives resume. blockedReasons moved to the progress snapshot sub-interface for the detekt function ceiling; scope builder and activation merged into one qualitygate file for the 12-file ceiling.
+- Limits: goal-child validate prose with no probe lines blocks at attempt 1 until the durable correction (confirm against "degrade, not block"); other retries of validate also consume the correction; no full PhaseRun resume test; goal-child fixtures and slotbaseline goldens now carry a probe line.
+Feature flag: N/A
+Acceptance criteria: all implemented for this subtask (validate passed ./gradlew check).
+
 ## [2026-10-25] SKILL-442 subtask 3 - Accepted-criterion re-check and unknown-scenario surfacing
 Areas: runtime-engine featuretask persist/acceptance (repair persistence, interaction trace round, phase recorder, trace diagnostics, audit admission), slot/audit and slot/codereview prompt sections, slot/attempt launch preparation, model/audit; runtime-engine goalrunner (finalization, branch plan, run models, outcome stores); runtime-domain model/audit and model/audit/interaction; runtime-infra contracts auxiliary validator
 - MEDIUM feature. After a repair round, accepted closed criteria whose cited production paths intersect the round's changed paths join recheck_refs; criteria citing no paths join recheck_any_change_refs on any change, with one warning each. Replays do not re-add refs.

@@ -527,6 +527,19 @@ internal class FeatureTaskRuntimeRunState(
   ): PhaseBlockResume =
     resumeRules(phaseId).persistedBlockResume(reason, recentBlockedReasons(normalizedInitialLedger, phaseId))
 
+  override fun blockedReasons(
+    phaseId: String,
+    loopId: String?,
+    edgeIteration: Int?,
+  ): List<String> =
+    normalizedInitialLedger
+      .filter { entry ->
+        entry.phaseId == phaseId &&
+          entry.action == FeatureTaskRuntimePhaseLedgerAction.BLOCKED &&
+          entry.loopId == loopId &&
+          entry.edgeIteration == edgeIteration
+      }.mapNotNull(FeatureTaskRuntimePhaseLedgerEntry::blockedReason)
+
   override fun legacyLaunchSeamRejectionConsumedBudget(
     phaseId: String,
     currentReason: String,

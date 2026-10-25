@@ -43,6 +43,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
+import skillbill.engine.featuretask.slot.qualitygate.ValidateProbeActivation
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -494,6 +495,7 @@ object PhaseLaunchPreparation {
       validationGateTriagePlan = run.validationGateTriagePlan,
       validationGateRepair = run.validationGateRepair,
       validationGateTriage = run.validationGateTriage,
+      validateProbeScopeSource = { ValidateProbeActivation.scopeFor(run.request, run.validationGateTriage) },
       agentRunValidateFallback = run.agentRunValidateFallback,
       packBuildCommand = packCommand(run, checkpointArgs, carriesBuild = true),
       mutating = run.policy.mutating,

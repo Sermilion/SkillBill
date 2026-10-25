@@ -203,6 +203,11 @@ governedResources {
     "SKILL-442: canonical interaction-scenario catalog schema",
   )
   copy(
+    "copyFeatureTaskRuntimeValidationTestProbesSchema",
+    "feature-task-runtime-validation-test-probes-schema.yaml",
+    "SKILL-442: canonical validation test-probes schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeReadinessEvidenceSchema",
     "feature-task-runtime-readiness-evidence-schema.yaml",
     "SKILL-364: canonical readiness-evidence schema",
