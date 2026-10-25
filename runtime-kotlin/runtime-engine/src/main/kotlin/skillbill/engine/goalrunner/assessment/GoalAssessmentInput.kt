@@ -15,6 +15,7 @@ internal data class GoalAssessmentSubtaskInput(
   val name: String,
   val specText: String?,
   val range: GoalAssessmentCommitRange,
+  val rangeFiles: List<String> = emptyList(),
 )
 
 internal data class GoalAssessmentBundle(
@@ -24,6 +25,7 @@ internal data class GoalAssessmentBundle(
   val parentSpec: String,
   val declared: InteractionScenarioCatalog?,
   val subtasks: List<GoalAssessmentSubtaskInput>,
+  val reassessmentScope: List<String>? = null,
 )
 
 internal sealed interface GoalAssessmentAssembly {

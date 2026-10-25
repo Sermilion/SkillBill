@@ -145,6 +145,7 @@ class DefaultGoalRunnerQaGateTest {
       )
     return DefaultGoalRunnerQaGate(
       phaseEntry,
+      DefaultGoalRunnerPostChangeValidation(phaseEntry),
       outcomes,
       git,
       object : FeatureTaskRuntimeRunInvariantsSource {

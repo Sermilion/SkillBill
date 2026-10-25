@@ -2,13 +2,14 @@ package skillbill.engine.goalrunner.assessment
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.idestatus.AgentActivityStampWriter
-import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
+import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.assessment.model.GoalAssessmentRound
@@ -27,7 +28,8 @@ class DefaultGoalRunnerAssessmentGate(
   projectStore: ProjectStorePort,
   clock: Clock,
   activityStampWriter: AgentActivityStampWriter,
-  private val diagnostics: RuntimeDiagnostics,
+  validation: GoalRunnerPostChangeValidation,
+  diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerAssessmentGate {
   private val assembler = GoalAssessmentInputAssembler(gitOperations, fileStore, projectStore, diagnostics)
   private val services =
@@ -38,6 +40,49 @@ class DefaultGoalRunnerAssessmentGate(
       GoalAssessmentProgress(outcomeStore, clock, diagnostics),
       diagnostics,
     )
+  private val loop =
+    GoalAssessmentLoop(services, GoalAssessmentFixStep(services, gitOperations, validation), this::runRound)
+
+  override fun run(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalAssessmentRecord =
+    runCatching { loop.run(state, request) }.getOrElse { failure ->
+      warnContained("the assessment stage could not complete", failure)
+      persistUnavailable(state)
+    }
+
+  private fun persistUnavailable(state: GoalRunnerManifestState): GoalAssessmentRecord {
+    val fallback = emptyRecord(state, GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
+    return runCatching {
+      val read = outcomeStore.readGoalAssessmentRecord(state.parentWorkflowId)
+      val base = (read as? GoalAssessmentRecordRead.Recorded)?.record ?: fallback
+      val exited =
+        base.copy(
+          exitReason = GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE,
+          openFindingRefs = GoalAssessmentLoopRules.openFindings(base).map { it.findingRef },
+        )
+      services.persist(state, exited)
+      exited
+    }.getOrElse { failure ->
+      warnContained("the unavailable exit could not be recorded", failure)
+      fallback
+    }
+  }
+
+  override fun skipNoChanges(state: GoalRunnerManifestState) {
+    runCatching { loop.skipNoChanges(state) }.onFailure { failure ->
+      warnContained("the no-change skip could not be recorded", failure)
+    }
+  }
+
+  private fun warnContained(
+    what: String,
+    failure: Throwable,
+  ) {
+    val contained = containableFailure(failure)
+    warn("$what: ${contained.javaClass.simpleName}: ${contained.message}", contained)
+  }
 
   override fun runRound(
     state: GoalRunnerManifestState,
@@ -116,5 +161,5 @@ class DefaultGoalRunnerAssessmentGate(
   private fun warn(
     message: String,
     cause: Throwable? = null,
-  ) = RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "goal_assessment_gate: $message", cause)
+  ) = services.warn(message, cause)
 }

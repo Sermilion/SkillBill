@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
@@ -121,6 +122,7 @@ class PhaseStrategyCompositionTest {
           unusedQaOutcomeRecorder(),
         ),
         GoalAssessmentStrategy(),
+        GoalAssessmentFixStrategy(),
       )
   }
 

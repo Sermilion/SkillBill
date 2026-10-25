@@ -45,7 +45,7 @@ internal class GoalAssessmentInputAssembler(
     val store = projectStore.resolve(repoRoot)
     val specAt = { specPath: String -> readSpec(resolvedParentSpecPath(repoRoot, Path.of(specPath), store)) }
     val parentSpec = specAt(manifest.parentSpecPath) ?: return unavailable("the parent spec could not be read")
-    val subtasks = subtaskInputs(manifest.subtasks, git.mergeBase, specAt)
+    val subtasks = subtaskInputs(repoRoot, manifest.subtasks, git.mergeBase, specAt)
     if (subtasks.none { it.range is GoalAssessmentCommitRange.Committed }) {
       return unavailable("no subtask recorded a commit to assess")
     }
@@ -79,6 +79,7 @@ internal class GoalAssessmentInputAssembler(
   }
 
   private fun subtaskInputs(
+    repoRoot: Path,
     subtasks: List<DecompositionSubtask>,
     mergeBase: String,
     readSpecText: (String) -> String?,
@@ -93,8 +94,27 @@ internal class GoalAssessmentInputAssembler(
           subtask.status.decompositionStatus() in NO_CHANGE_STATUSES -> GoalAssessmentCommitRange.NoCommit
           else -> GoalAssessmentCommitRange.Unavailable("the manifest records no commit for subtask ${subtask.id}")
         }
-      GoalAssessmentSubtaskInput(subtask.id, subtask.name, readSpecText(subtask.specPath), range)
+      GoalAssessmentSubtaskInput(
+        subtask.id,
+        subtask.name,
+        readSpecText(subtask.specPath),
+        range,
+        rangeFilesOf(repoRoot, range),
+      )
     }
+  }
+
+  private fun rangeFilesOf(
+    repoRoot: Path,
+    range: GoalAssessmentCommitRange,
+  ): List<String> {
+    if (range !is GoalAssessmentCommitRange.Committed) return emptyList()
+    val changed = gitOperations.runtimePhaseChangedPathsBetweenCommits(repoRoot, range.fromSha, range.toSha)
+    return (changed as? WorkflowGitNameListResult.Listed)?.names
+      ?: run {
+        warn("the files changed by ${range.toSha} could not be listed; scoped reassessment treats it as untouched.")
+        emptyList()
+      }
   }
 
   private fun declaredScenarios(

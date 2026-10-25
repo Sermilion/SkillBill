@@ -6,6 +6,7 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineRecoveryRe
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInputResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
@@ -263,6 +264,13 @@ class RecordingWorkflowGitOperations(
     val reachable = ancestor == descendant || (ancestor to descendant) !in nonAncestorPairs
     return WorkflowGitOperationResult.Ok(value = if (reachable) "true" else "false")
   }
+
+  var commitIdentityResult: WorkflowGitCommitIdentityResult? = null
+
+  override fun commitIdentity(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitCommitIdentityResult = commitIdentityResult ?: super.commitIdentity(repoRoot, commitSha)
 
   var headCommitShaCalls: Int = 0
 

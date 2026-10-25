@@ -1,5 +1,23 @@
 # goalrunner boundary decisions
 
+## [2026-10-25] Adopt an unrecorded assessment-fix commit by parent and paths, not tree identity
+Context: A crash between a round's fix commit and its record write would otherwise make resume commit the same fix twice.
+Decision: Adopt an existing commit only when its single parent equals the round head sha and its changed paths equal the recorded changed files.
+Reason: This recovers the crash window without recording tree identity, so the assessment-record schema needs no change.
+Alternatives considered: Recording the tree hash was rejected because it would force a record contract bump.
+
+## [2026-10-25] Encode a refuted carried finding as fixed while verification stays confirmed
+Context: A later round re-verifies carried open findings, and the verifier can refute one that the fix resolved.
+Decision: Move the finding to state fixed and leave its verification as confirmed.
+Reason: The record shape ties state refuted to refuted verification, so fixed is the only valid encoding of a finding that was real and is now gone.
+Revisit when: The record contract gains a distinct resolved-by-reverification state.
+
+## [2026-10-25] Run the assessment fix through its own skeleton definition
+Context: A goal-scoped phase launch always starts at the slot's entry step, and the read-only assessment skeleton cannot mutate files.
+Decision: Add a GOAL_ASSESSMENT_FIX skeleton definition with a mutating, file-mutating strategy and run it through the same phase runner.
+Reason: Reusing the read-only definition would put the fix on the wrong entry step and tool policy; the runtime, not the agent, sets changed files and status.
+Alternatives considered: A phase-specific launch path was rejected in favor of one compositional phase runner.
+
 ## [2026-10-24] Purge resets a project-store bundle by rewriting only its manifest
 Context: Spec bundles now live in the project store, and purge reset only handled in-repo bundles, so a store manifest kept launched subtask state after purge.
 Decision: Add a store branch that atomically rewrites just the manifest to the unlaunched YAML. It never deletes, reads HEAD, or enumerates subtask spec paths.

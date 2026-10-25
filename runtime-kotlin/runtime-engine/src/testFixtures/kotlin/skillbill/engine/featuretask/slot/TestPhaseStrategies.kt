@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
@@ -130,6 +131,7 @@ fun testPhaseStrategies(
           runner,
         ),
         PhaseStrategyRegistration(GoalAssessmentStrategy(), runner),
+        PhaseStrategyRegistration(GoalAssessmentFixStrategy(), runner),
       ),
     )
   val bindings =
@@ -295,6 +297,8 @@ fun testPhaseStrategyBindings(
       SkeletonDefinition.GOAL_QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_QA),
       SkeletonDefinition.GOAL_ASSESSMENT to
         SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_ASSESSMENT),
+      SkeletonDefinition.GOAL_ASSESSMENT_FIX to
+        SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_ASSESSMENT_FIX),
       SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
       SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
       SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),

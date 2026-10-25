@@ -36,45 +36,105 @@ internal class GoalAssessmentRunServices(
   val activityStampWriter: AgentActivityStampWriter,
   val progress: GoalAssessmentProgress,
   val diagnostics: RuntimeDiagnostics,
-)
+) {
+  fun branchOf(state: GoalRunnerManifestState): String =
+    state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
+
+  fun persist(
+    state: GoalRunnerManifestState,
+    record: GoalAssessmentRecord,
+  ): Boolean {
+    val stored =
+      runCatching { outcomeStore.recordGoalAssessmentRecord(state.parentWorkflowId, record) }
+        .getOrElse { failure ->
+          warn("the assessment record could not be persisted.", containableFailure(failure))
+          return false
+        }
+    if (!stored) warn("the assessment record for '${state.parentWorkflowId}' was not persisted.")
+    return stored
+  }
+
+  fun phaseRequest(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    definition: SkeletonDefinition,
+    instructions: PhaseInstructions?,
+  ): PhaseRunRequest =
+    PhaseRunRequest(
+      definitionId = definition.id,
+      repoRoot = request.repoRoot,
+      invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+      intake = request.issueKey,
+      instructions = instructions,
+      timeout = request.timeout,
+      agentAddonSelection = request.agentAddonSelection,
+      modelAssignment = request.modelAssignment,
+      eventSink = progress.eventSink(state, request),
+      activityOutput = progress.activityOutput(state, request),
+      activityStampSink = activityStampWriter.sink(state.parentWorkflowId, parentWorkflowId = null),
+    )
+
+  fun warn(
+    message: String,
+    cause: Throwable? = null,
+  ) = RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "goal_assessment_gate: $message", cause)
+}
 
 internal class GoalAssessmentRoundRun(
   private val services: GoalAssessmentRunServices,
   private val state: GoalRunnerManifestState,
   private val request: GoalRunnerRunRequest,
-  private val bundle: GoalAssessmentBundle,
+  bundle: GoalAssessmentBundle,
   private val prior: GoalAssessmentRecord,
   existing: GoalAssessmentRound?,
-  roundNumber: Int,
+  private val roundNumber: Int,
 ) {
   private var round: GoalAssessmentRound =
     existing ?: GoalAssessmentRound(
       round = roundNumber,
       headSha = bundle.headSha,
-      scopeFiles = emptyList(),
+      scopeFiles = GoalAssessmentScope.of(prior, roundNumber),
       assessorRuns = emptyList(),
       findings = emptyList(),
       scenarios = emptyList(),
       regressions = emptyList(),
       fix = null,
     )
+  private val bundle: GoalAssessmentBundle =
+    if (roundNumber > 1) bundle.copy(reassessmentScope = round.scopeFiles) else bundle
+  private var earlier: List<GoalAssessmentRound> = prior.rounds.take(roundNumber - 1)
   private var persisted = true
 
   fun execute(): GoalAssessmentRoundResult {
-    planned().filterNot(::isRecorded).forEach(::runAssessor)
-    val usable = round.assessorRuns.any { it.role != GoalAssessmentRole.VERIFIER && it.status == COMPLETED }
+    val plan = planned()
+    plan.filterNot(::isRecorded).forEach(::runAssessor)
+    val usable =
+      plan.isEmpty() ||
+        round.assessorRuns.any { it.role != GoalAssessmentRole.VERIFIER && it.status == COMPLETED }
     if (!usable) return unavailable("every assessor failed or produced no usable output")
     verify()
     save()
     val record = recordOf(null)
-    if (persisted) return GoalAssessmentRoundResult.Assessed(record, GoalAssessmentVerdicts.fixSetOf(round))
+    if (persisted) return GoalAssessmentRoundResult.Assessed(record, GoalAssessmentVerdicts.fixSetOf(earlier + round))
     warn("the verified round could not be persisted, so it grants no fix authority.")
     return GoalAssessmentRoundResult.Assessed(record, GoalAssessmentFixSet(emptyList(), emptyList()))
   }
 
-  private fun planned(): List<PlannedRun> =
-    bundle.subtasks.filter { it.range != GoalAssessmentCommitRange.NoCommit }
-      .map { PlannedRun(GoalAssessmentRole.SUBTASK, it.id) } + PlannedRun(GoalAssessmentRole.CROSS_SUBTASK, null)
+  private fun planned(): List<PlannedRun> {
+    val assessable = bundle.subtasks.filter { it.range != GoalAssessmentCommitRange.NoCommit }
+    if (roundNumber == 1) {
+      return assessable.map { PlannedRun(GoalAssessmentRole.SUBTASK, it.id) } +
+        PlannedRun(GoalAssessmentRole.CROSS_SUBTASK, null)
+    }
+    val scope = round.scopeFiles.map(GoalAssessmentScope::normalize).toSet()
+    if (scope.isEmpty()) return emptyList()
+    val attributed = GoalAssessmentScope.fixAttributedSubtasks(prior, roundNumber)
+    val subtasks =
+      assessable.filter { GoalAssessmentScope.subtaskTouched(it, scope) || it.id in attributed }
+        .map { PlannedRun(GoalAssessmentRole.SUBTASK, it.id) }
+    val cross = GoalAssessmentScope.crossSubtaskTouched(prior, roundNumber, scope)
+    return subtasks + listOfNotNull(PlannedRun(GoalAssessmentRole.CROSS_SUBTASK, null).takeIf { cross })
+  }
 
   private fun isRecorded(planned: PlannedRun): Boolean =
     round.assessorRuns.any { it.role == planned.role && it.subtaskId == planned.subtaskId }
@@ -106,7 +166,9 @@ internal class GoalAssessmentRoundRun(
   }
 
   private fun verify() {
-    val candidates = GoalAssessmentVerdicts.candidatesOf(round.findings)
+    val candidates =
+      GoalAssessmentVerdicts.candidatesOf(round.findings) +
+        GoalAssessmentVerdicts.carriedCandidatesOf(earlier.flatMap { it.findings })
     if (candidates.isEmpty() || round.assessorRuns.any { it.role == GoalAssessmentRole.VERIFIER }) return
     val launched = launch(GoalAssessmentFocus.Verifier(candidates), "the verifier")
     val parsed = (launched as? Launch.Value)?.let { GoalAssessmentLineParser.parseVerifier(it.text) }
@@ -139,6 +201,7 @@ internal class GoalAssessmentRoundRun(
     val unsettled = applied.count { it.findingRef in refs && it.verification == GoalAssessmentVerification.UNVERIFIED }
     if (unsettled > 0) warn("$unsettled candidates stay unverified: the verifier gave no single verdict for them.")
     round = round.copy(findings = applied)
+    earlier = earlier.map { it.copy(findings = GoalAssessmentVerdicts.applyCarried(it.findings, report)) }
   }
 
   private fun absorb(
@@ -149,8 +212,10 @@ internal class GoalAssessmentRoundRun(
       warn("${planned.label()} left ${report.rejectedLines.size} lines outside the grammar.")
     }
     val used = nextRefNumber()
-    val accepted = report.findings.take(minOf(MAX_FINDINGS_PER_RUN, MAX_REF_NUMBER - used + 1).coerceAtLeast(0))
-    if (accepted.size < report.findings.size) warn("${planned.label()} reported more findings than fit; dropped some.")
+    val carried = GoalAssessmentScope.carriedOf(prior, roundNumber)
+    val fresh = report.findings.filterNot { GoalAssessmentScope.restates(carried, it.path, it.failureScenario) }
+    val accepted = fresh.take(minOf(MAX_FINDINGS_PER_RUN, MAX_REF_NUMBER - used + 1).coerceAtLeast(0))
+    if (accepted.size < fresh.size) warn("${planned.label()} reported more findings than fit; dropped some.")
     val added =
       accepted.mapIndexed { index, candidate ->
         val needsVerdict = candidate.kind == GoalAssessmentFindingKind.DEFECT && candidate.severity.blocksAdvance
@@ -205,7 +270,7 @@ internal class GoalAssessmentRoundRun(
   }
 
   private fun nextRefNumber(): Int {
-    val refs = (prior.rounds.take(round.round - 1).flatMap { it.findings } + round.findings).map { it.findingRef }
+    val refs = (earlier.flatMap { it.findings } + round.findings).map { it.findingRef }
     return (refs.maxOfOrNull { it.removePrefix("GA-").toIntOrNull() ?: 0 } ?: 0) + 1
   }
 
@@ -216,56 +281,38 @@ internal class GoalAssessmentRoundRun(
 
   private fun save() {
     round = round.copy(findings = GoalAssessmentVerdicts.withDispositions(round.findings))
-    persisted = persist(recordOf(null))
+    earlier = earlier.map { it.copy(findings = GoalAssessmentVerdicts.withDispositions(it.findings)) }
+    persisted = services.persist(state, recordOf(null))
   }
 
   private fun unavailable(reason: String): GoalAssessmentRoundResult.Unavailable {
     val record = recordOf(GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
-    persist(record)
+    services.persist(state, record)
     warn("assessment unavailable: $reason.")
     return GoalAssessmentRoundResult.Unavailable(record, reason)
   }
 
   private fun recordOf(exitReason: GoalAssessmentExitReason?): GoalAssessmentRecord {
-    val rounds = prior.rounds.take(round.round - 1) + round
+    val rounds = earlier + round
     val open = rounds.flatMap { it.findings }.filter { it.state == GoalAssessmentFindingState.OPEN }
     return prior.copy(rounds = rounds, exitReason = exitReason, openFindingRefs = open.map { it.findingRef })
-  }
-
-  private fun persist(record: GoalAssessmentRecord): Boolean {
-    val stored =
-      runCatching { services.outcomeStore.recordGoalAssessmentRecord(state.parentWorkflowId, record) }
-        .getOrElse { failure ->
-          warn("the assessment record could not be persisted.", containableFailure(failure))
-          return false
-        }
-    if (!stored) warn("the assessment record for '${state.parentWorkflowId}' was not persisted.")
-    return stored
   }
 
   private fun launch(
     focus: GoalAssessmentFocus,
     label: String,
   ): Launch {
-    val branch = state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
     val phaseRequest =
-      PhaseRunRequest(
-        definitionId = SkeletonDefinition.GOAL_ASSESSMENT.id,
-        repoRoot = request.repoRoot,
-        invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
-        intake = request.issueKey,
-        instructions =
-          PhaseInstructions(
-            GoalAssessmentPromptRenderer.render(bundle, focus),
-            setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT),
-          ),
-        timeout = request.timeout,
-        agentAddonSelection = request.agentAddonSelection,
-        modelAssignment = request.modelAssignment,
-        eventSink = services.progress.eventSink(state, request),
-        activityOutput = services.progress.activityOutput(state, request),
-        activityStampSink = services.activityStampWriter.sink(state.parentWorkflowId, parentWorkflowId = null),
+      services.phaseRequest(
+        state,
+        request,
+        SkeletonDefinition.GOAL_ASSESSMENT,
+        PhaseInstructions(
+          GoalAssessmentPromptRenderer.render(bundle, focus),
+          setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT),
+        ),
       )
+    val branch = services.branchOf(state)
     val result =
       runCatching { services.phaseRunEntry.runForGoal(phaseRequest, state.parentWorkflowId, branch) }
         .getOrElse { failure ->
@@ -289,7 +336,7 @@ internal class GoalAssessmentRoundRun(
   private fun warn(
     message: String,
     cause: Throwable? = null,
-  ) = RuntimeDiagnosticsBestEffortWarning.record(services.diagnostics, "goal_assessment_gate: $message", cause)
+  ) = services.warn(message, cause)
 
   private sealed interface Launch {
     data class Value(val text: String) : Launch

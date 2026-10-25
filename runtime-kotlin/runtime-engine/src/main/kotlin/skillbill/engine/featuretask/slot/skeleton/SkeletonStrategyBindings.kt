@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategyBinding
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
@@ -76,6 +77,8 @@ object SkeletonStrategyBindings {
         ),
       SkeletonDefinition.GOAL_ASSESSMENT to
         mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentStrategy.ID)),
+      SkeletonDefinition.GOAL_ASSESSMENT_FIX to
+        mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentFixStrategy.ID)),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),

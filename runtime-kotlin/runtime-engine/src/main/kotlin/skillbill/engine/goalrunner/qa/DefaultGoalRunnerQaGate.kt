@@ -44,6 +44,7 @@ import java.time.Clock
 @Inject
 class DefaultGoalRunnerQaGate(
   private val phaseRunEntry: PhaseRunEntry,
+  private val validation: GoalRunnerPostChangeValidation,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val gitOperations: WorkflowGitOperations,
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
@@ -174,16 +175,9 @@ class DefaultGoalRunnerQaGate(
     run: GoalQaRun,
     buildWarning: String?,
   ): List<String> {
-    val validation =
-      phaseRunEntry.runForGoal(
-        run.request.copy(definitionId = SkeletonDefinition.VALIDATION.id, recordedGoalQaOutcome = null),
-        state.parentWorkflowId,
-        run.branch,
-      )
     val validationWarning =
-      (validation as? PhaseRunResult.Blocked)?.let { blocked ->
-        "Validation after QA stopped at '${blocked.stepId}': ${blocked.reason}"
-      }
+      (validation.run(run.request, state.parentWorkflowId, run.branch) as? GoalPostChangeValidationResult.Stopped)
+        ?.let { stopped -> "Validation after QA stopped at '${stopped.stepId}': ${stopped.reason}" }
     validationWarning?.let { recordContainedEnvironmentFailure(state, it) }
     val changedWarning = codeChangedAfterQa(state, request).takeIf { buildWarning == null }
     changedWarning?.let { recordBestEffort(state) { qaOutcomes.recordWarning(state.parentWorkflowId, it) } }

@@ -125,6 +125,13 @@ data class SkeletonDefinition(
         runStateKind = SkeletonRunStateKind.IN_MEMORY,
         stepIds = listOf(FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT),
       )
+    val GOAL_ASSESSMENT_FIX: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-assessment-fix",
+        listOf(PhaseSlot.GOAL_ASSESSMENT),
+        runStateKind = SkeletonRunStateKind.IN_MEMORY,
+        stepIds = listOf(FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT_FIX),
+      )
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
@@ -169,6 +176,7 @@ data class SkeletonDefinition(
           QA,
           GOAL_QA,
           GOAL_ASSESSMENT,
+          GOAL_ASSESSMENT_FIX,
           PLAN,
           PR,
           MONITOR,

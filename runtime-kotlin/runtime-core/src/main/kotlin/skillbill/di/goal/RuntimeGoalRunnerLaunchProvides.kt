@@ -8,7 +8,9 @@ import skillbill.engine.goalrunner.monitoring.DefaultGoalRunnerCiMonitor
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore
+import skillbill.engine.goalrunner.qa.DefaultGoalRunnerPostChangeValidation
 import skillbill.engine.goalrunner.qa.DefaultGoalRunnerQaGate
+import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
@@ -23,6 +25,11 @@ internal interface RuntimeGoalRunnerLaunchProvides {
 
   @Provides
   fun goalRunnerAssessmentGate(gate: DefaultGoalRunnerAssessmentGate): GoalRunnerAssessmentGate = gate
+
+  @Provides
+  fun goalRunnerPostChangeValidation(
+    validation: DefaultGoalRunnerPostChangeValidation,
+  ): GoalRunnerPostChangeValidation = validation
 
   @Provides
   fun goalRunnerSubtaskLauncher(adapter: AgentRunGoalRunnerSubtaskLauncher): GoalRunnerSubtaskLauncher = adapter

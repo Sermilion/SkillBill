@@ -206,6 +206,19 @@ class SkeletonDefinitionTest {
   }
 
   @Test
+  fun `goal assessment fix launches its own step in the goal assessment slot and is never invocable on its own`() {
+    val definition = SkeletonDefinition.GOAL_ASSESSMENT_FIX
+    val traversal = definition.traversal(definition.stepIds.toSet(), entryStepIds = setOf("goal_assessment_fix"))
+
+    assertEquals(definition, SkeletonDefinition.byId("goal-assessment-fix"))
+    assertEquals(listOf(PhaseSlot.GOAL_ASSESSMENT), definition.slots)
+    assertEquals(listOf("goal_assessment_fix"), definition.stepIds)
+    assertEquals(SkeletonRunStateKind.IN_MEMORY, definition.runStateKind)
+    assertFalse(definition.standaloneInvocable)
+    assertEquals(listOf("goal_assessment_fix"), traversal.forwardPhaseIds)
+  }
+
+  @Test
   fun `recorded goal-child revisions keep their composition while new lookup selects revision four without QA`() {
     val current = SkeletonDefinition.byId("goal-child")
     assertEquals(SkeletonDefinition.GOAL_CHILD, current)

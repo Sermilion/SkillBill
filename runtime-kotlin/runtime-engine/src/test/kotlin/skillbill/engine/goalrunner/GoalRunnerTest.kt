@@ -374,6 +374,35 @@ class GoalRunnerTest {
   }
 
   @Test
+  fun `goal assessment runs once after the subtasks and before goal QA`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { current -> current.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val events = mutableListOf<String>()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(
+          assessmentGate = RecordingGoalRunnerAssessmentGate(events),
+          qaGate =
+            GoalRunnerQaGate { _, _ ->
+              events += "qa"
+              GoalQaGateResult.Passed
+            },
+        ),
+      )
+
+    val report = runner.run(runRequest())
+
+    assertIs<GoalRunnerRunReport.Completed>(report, "$report")
+    assertEquals(listOf("assessment", "qa"), events)
+  }
+
+  @Test
   fun `an undecided historical no-change pause resumes its child instead of asking for approval`() {
     val recorder = goalRunnerDefaultPhaseRecorder()
     recorder.openTestWorkflow("wfl-1", "goal-child-no-change")
@@ -418,15 +447,21 @@ class GoalRunnerTest {
       )
     val launcher = RecordingSubtaskLauncher { launchFacts() }
     val pr = RecordingPullRequestPort()
+    val events = mutableListOf<String>()
     val runner =
       testGoalRunner(
         goalRunnerDeps(store, launcher, RecordingOutcomeStore(), pr)
-          .copy(phaseRecorder = recorder, childWorkflowDatabase = database),
+          .copy(
+            phaseRecorder = recorder,
+            childWorkflowDatabase = database,
+            assessmentGate = RecordingGoalRunnerAssessmentGate(events),
+          ),
       )
 
     val report = runner.run(runRequest())
 
     val noChange = assertIs<GoalRunnerRunReport.CompletedNoChange>(report)
+    assertEquals(listOf("assessment_skipped_no_changes"), events)
     assertEquals(
       WorkflowStatus.COMPLETED,
       database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, "wfl-1") }?.workflowStatus,

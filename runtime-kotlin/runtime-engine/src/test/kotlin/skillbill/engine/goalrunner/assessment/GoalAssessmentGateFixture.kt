@@ -17,6 +17,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.engine.goalrunner.qa.GoalPostChangeValidationResult
+import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
@@ -40,10 +42,11 @@ internal const val PARENT_SPEC_MARKER = "PARENT-SPEC-MARKER"
 internal const val FIRST_SUBTASK_SPEC_MARKER = "FIRST-SUBTASK-SPEC-MARKER"
 internal const val SECOND_SUBTASK_SPEC_MARKER = "SECOND-SUBTASK-SPEC-MARKER"
 
-internal enum class AssessmentCall { FIRST_SUBTASK, SECOND_SUBTASK, CROSS_SUBTASK, VERIFIER }
+internal enum class AssessmentCall { FIRST_SUBTASK, SECOND_SUBTASK, CROSS_SUBTASK, VERIFIER, FIX }
 
 internal fun assessmentCallOf(prompt: String): AssessmentCall =
   when {
+    "# Goal assessment fix:" in prompt -> AssessmentCall.FIX
     "Verify each candidate defect below" in prompt -> AssessmentCall.VERIFIER
     "Assess how the subtasks fit together" in prompt -> AssessmentCall.CROSS_SUBTASK
     "Assess subtask 1 (" in prompt -> AssessmentCall.FIRST_SUBTASK
@@ -93,19 +96,28 @@ internal class GoalAssessmentGateFixture(
   private val home: Path,
   val store: AssessmentOutcomeStore = AssessmentOutcomeStore(),
   private val subtaskOf: (Int) -> DecompositionSubtask = { id -> committedSubtask(id) },
+  private val fixedWorktreeStatus: String = "",
   private val script: (AssessmentCall) -> String?,
 ) {
   private val clock = Clock.systemUTC()
   val diagnostics = AssessmentDiagnostics()
   val calls = mutableListOf<AssessmentCall>()
   val prompts = mutableMapOf<AssessmentCall, String>()
+  var validationResult: GoalPostChangeValidationResult = GoalPostChangeValidationResult.Passed
+  var validations = 0
+  private val validation =
+    GoalRunnerPostChangeValidation { _, _, _ ->
+      validations++
+      validationResult
+    }
   val launcher =
     RuntimeRecordingLauncher { request ->
       val prompt = requireNotNull(request.skillRunRequest.promptOverride)
       val call = assessmentCallOf(prompt)
       calls += call
       prompts[call] = prompt
-      script(call)?.let { prose -> facts(settledOutput(prose)) }
+      if (call == AssessmentCall.FIX) git.worktreeStatusValue = fixedWorktreeStatus
+      script(call)?.let { prose -> facts(settledOutput(call, prose)) }
         ?: agentRunLaunchFacts(SupportedAgent.CLAUDE, termination = AgentRunTermination.Exited(1))
     }
   val git =
@@ -114,6 +126,7 @@ internal class GoalAssessmentGateFixture(
       mergeBaseWithHeadValue = ASSESSMENT_BASE_SHA
       changedPathsBetweenCommitsValue = listOf("src/Feature.kt", "src/FeatureTest.kt")
       worktreeStatusValue = ""
+      onCreateCommit = { worktreeStatusValue = "" }
     }
 
   init {
@@ -139,6 +152,7 @@ internal class GoalAssessmentGateFixture(
       testProjectStore,
       clock,
       testActivityStampWriter(),
+      validation,
       diagnostics,
     )
   }
@@ -161,11 +175,14 @@ internal class GoalAssessmentGateFixture(
 
   fun request() = GoalRunnerRunRequest(issueKey = "SKILL-442", repoRoot = home, invokedAgentId = "claude")
 
-  private fun settledOutput(prose: String): String =
+  private fun settledOutput(
+    call: AssessmentCall,
+    prose: String,
+  ): String =
     JsonCodec.mapToJsonString(
       mapOf(
         "contract_version" to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        "phase_id" to "goal_assessment",
+        "phase_id" to if (call == AssessmentCall.FIX) "goal_assessment_fix" else "goal_assessment",
         "status" to "completed",
         "summary" to "The assessment run settled.",
         "produced_outputs" to mapOf("value" to prose),

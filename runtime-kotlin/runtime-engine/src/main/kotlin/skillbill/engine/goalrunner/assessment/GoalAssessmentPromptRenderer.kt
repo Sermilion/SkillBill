@@ -66,10 +66,16 @@ internal object GoalAssessmentPromptRenderer {
   ): String =
     "## Your role\n\n" +
       when (focus) {
-        is GoalAssessmentFocus.Subtask -> subtaskRole(bundle, focus.subtaskId)
-        GoalAssessmentFocus.CrossSubtask -> CROSS_SUBTASK_ROLE
+        is GoalAssessmentFocus.Subtask -> subtaskRole(bundle, focus.subtaskId) + reassessmentText(bundle)
+        GoalAssessmentFocus.CrossSubtask -> CROSS_SUBTASK_ROLE + reassessmentText(bundle)
         is GoalAssessmentFocus.Verifier -> verifierRole(focus.candidates)
       }
+
+  private fun reassessmentText(bundle: GoalAssessmentBundle): String =
+    bundle.reassessmentScope?.let { files ->
+      " This is a re-assessment after a fix round: inspect only these files the fix changed, and report only " +
+        "defects the fix introduced or left in them.\n\n" + files.joinToString("\n") { "- `$it`" }
+    }.orEmpty()
 
   private fun subtaskRole(
     bundle: GoalAssessmentBundle,

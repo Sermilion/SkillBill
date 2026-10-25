@@ -1,8 +1,20 @@
 # goalrunner boundary history
 
+## [2026-10-25] SKILL-442 subtask 6: goal assessment fix loop and exit rules
+Areas: runtime-engine goalrunner (assessment, qa, execution/core) and featuretask slot/goalassessment and skeleton, runtime-domain goalrunner/assessment and skeleton, runtime-core DI, docs/runtime-command-guidance.md
+- GoalRunnerFinalization calls the assessment gate after the published goal result and immediately before goal QA; the no-change path records skipped_no_changes instead. GoalAssessmentLoop drives up to three rounds from the durable record alone, so a recorded exit skips the stage and resume continues from the first missing step.
+- Exit rules live in domain GoalAssessmentLoopRules: persistent_finding (confirmed Major that survived two fix rounds), converged, round_cap, and assessment_unavailable (exits at once). open_finding_refs lists every OPEN finding.
+- The fix runs through a new GOAL_ASSESSMENT_FIX skeleton definition because a launch always starts at the slot's entry step. The runtime, not the agent, sets fix.changed_files and fix.status.
+- Post-change validation is shared with the QA gate through GoalRunnerPostChangeValidation; a failure only warns. One commit per completed fix, subject `<issue_key>: goal assessment round <n>`, through WorkflowGitOperations. A commit that landed before its record write is adopted only when its parent is the round head and its paths equal the recorded changed files.
+- Later rounds are scoped to the previous committed fix's files: subtask and cross-subtask assessors are filtered, carried findings are re-verified, and a refuted carried finding moves to fixed while its verification stays confirmed.
+- Reusable: GoalRunnerPostChangeValidation (fun interface with a default) lets a gate validate after a change without the QA gate; the assessment package is at its 12-file ceiling, and GoalRunnerFinalization no longer owns final reconciliation (the goal loop calls it) to stay under the detekt parameter limit.
+- Limit: the fix step does not count a path already dirty before the fix launched as changed by the fix; the commit-recovery path has no test because the recording git fake cannot configure a commit identity.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented (validate passed clean check)
+
 ## [2026-10-25] SKILL-442 subtask 5: goal assessment stage, assessors and verifier
 Areas: runtime-engine goalrunner (assessment, persist/assessment) and featuretask slot/goalassessment and skeleton, runtime-domain goalrunner/assessment, skeleton, phase ids and workflow artifacts, runtime-contracts payload keys and failure codes, runtime-infra contracts (goal-owned schema validator), runtime-core DI, runtime-mcp telemetry enums
-- New read-only goal_assessment phase (PhaseSlot and SkeletonDefinition GOAL_ASSESSMENT, one read-only strategy). DefaultGoalRunnerAssessmentGate runs one assessor per committed subtask, then one cross-subtask assessor, then a verifier, sequentially through the shared phase runner. It is DI-bound but not yet called from finalization; subtask 6 owns that wiring and the fix loop.
+- New read-only goal_assessment phase (PhaseSlot and SkeletonDefinition GOAL_ASSESSMENT, one read-only strategy). DefaultGoalRunnerAssessmentGate runs one assessor per committed subtask, then one cross-subtask assessor, then a verifier, sequentially through the shared phase runner. Subtask 6 wires it into finalization and adds the fix loop.
 - Assessors see only git state, the parent spec, every subtask spec and the declared scenarios and regressions. They never read audit, review, validate, QA, receipt or acceptance data; an isolation test seeds sentinel markers and asserts none reach any role.
 - Governed assessment-record contract 0.1 (schema, payload keys, INVALID_GOAL_ASSESSMENT_RECORD, loud-failing wire codec) persists through a durable GOAL_ASSESSMENT_RECORD artifact family after every run. Reads are typed Absent, Recorded or Corrupt; a corrupt record is never overwritten.
 - Re-entry skips recorded (role, subtask) runs and adds no duplicate findings. Line-grammar output gets GA-NNN refs; fix authority is returned only when the final persist succeeded and the verifier left open Major-or-worse findings.

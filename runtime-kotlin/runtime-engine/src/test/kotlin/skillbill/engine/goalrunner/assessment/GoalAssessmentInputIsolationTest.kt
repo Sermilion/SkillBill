@@ -33,7 +33,7 @@ class GoalAssessmentInputIsolationTest {
 
     assertIs<GoalAssessmentRoundResult.Assessed>(fixture.gate().runRound(fixture.state(), fixture.request(), 1))
 
-    assertEquals(AssessmentCall.entries.toSet(), fixture.prompts.keys)
+    assertEquals(AssessmentCall.entries.toSet() - AssessmentCall.FIX, fixture.prompts.keys)
     fixture.prompts.forEach { (call, prompt) ->
       REQUIRED.forEach { required -> assertTrue(required in prompt, "$call prompt lacks '$required'") }
       SENTINELS.forEach { sentinel -> assertFalse(sentinel in prompt, "$call prompt carries '$sentinel'") }

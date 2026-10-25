@@ -15,6 +15,19 @@ interface GoalRunnerAssessmentGate {
     request: GoalRunnerRunRequest,
     round: Int,
   ): GoalAssessmentRoundResult
+
+  /**
+   * Runs the whole assessment stage once for the goal in [state]: assess, verify, fix, validate and commit until an
+   * exit rule fires, then returns the record carrying the exit reason. A recorded exit skips the stage. Never throws
+   * on a stage failure: those degrade into a warning and the record's exit.
+   */
+  fun run(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalAssessmentRecord
+
+  /** Records `skipped_no_changes` for a goal that finished without changes, unless an exit is already recorded. */
+  fun skipNoChanges(state: GoalRunnerManifestState)
 }
 
 sealed interface GoalAssessmentRoundResult {

@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.lifecycle.subtask.parseGitPorcelainPaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
@@ -21,7 +22,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
-import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.qa.GoalQaGateResult
 import skillbill.engine.goalrunner.qa.GoalQaSkipReason
@@ -63,31 +63,22 @@ class GoalRunnerFinalization(
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
-  private val reconciliation: GoalRunnerFinalReconciliation,
   private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
   private val ciMonitor: GoalRunnerCiMonitor,
   private val qaGate: GoalRunnerQaGate,
+  private val assessmentGate: GoalRunnerAssessmentGate,
   private val pullRequestIdentityLookup: PullRequestIdentityLookup,
 ) {
-  fun finalizeGoal(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-    attempted: List<Int>,
-    ledger: GoalRunnerLedgerRecorder,
-  ): GoalRunnerRunReport {
-    val finalState = reconciliation.reconcile(state, request, ledger)
-    return finalizePublication(finalState, request, attempted)
-  }
-
-  private fun finalizePublication(
+  fun finalizePublication(
     finalState: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     attempted: List<Int>,
   ): GoalRunnerRunReport {
     val settled =
-      noChangeFinalization(finalState.manifest, request, attempted)
+      noChangeFinalization(finalState.manifest, request, attempted)?.also { assessmentGate.skipNoChanges(finalState) }
         ?: publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
+    assessmentGate.run(finalState, request)
     val qaResult = qaGate.run(finalState, request)
     if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
     commitAllRemainingWorktree(finalState.manifest, request)?.let { reason ->
