@@ -58,10 +58,10 @@ internal fun detailDuration(item: WorkItem, now: Instant, stale: Boolean, frozen
   }
   val operation = item.family == WorkFamily.FEATURE_VERIFY
   val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
-  val value = if (standalone || operation) phaseElapsedText(item, now, stale) else
+  val value = if ((standalone && !item.goalLaunched) || operation) phaseElapsedText(item, now, stale) else
     durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, stale, frozen)
   return DetailDuration(
-    if (operation) "Operation elapsed" else if (item.goalLaunched) "Planning elapsed" else if (standalone) "Phase elapsed" else "Goal active",
+    if (operation) "Operation elapsed" else if (standalone && !item.goalLaunched) "Phase elapsed" else "Goal active",
     value,
     item.startedAt?.let { "since ${formatInstant(it, "d MMM HH:mm")}" } ?: "",
   )

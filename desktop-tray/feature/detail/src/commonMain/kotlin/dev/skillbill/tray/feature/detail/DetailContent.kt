@@ -68,12 +68,12 @@ import dev.skillbill.tray.core.designsystem.surface3
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.DetailList
-import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.PhaseExecution
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.stalled
+import dev.skillbill.tray.core.domain.model.showsAsStandalonePhase
 import dev.skillbill.tray.core.ui.ExpandableReason
 import dev.skillbill.tray.core.ui.FeedbackTone
 import dev.skillbill.tray.core.ui.PageFooter
@@ -177,7 +177,8 @@ private fun LoadedDetail(
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val frozen = !fresh
   val operation = item.family == WorkFamily.FEATURE_VERIFY
-  val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
+  val standalone = item.showsAsStandalonePhase()
+  val goal = item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched
   val blockReason = item.exactPauseReason
     ?: detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.result
     ?: item.pauseReason
@@ -240,19 +241,23 @@ private fun LoadedDetail(
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
       if (!operation) {
-        DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", if (standalone) standalonePlanNote(detail) else "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
+        val stage = item.currentSubtaskId?.let { "$it/${total ?: "?"}" }
+          ?: if (goal && item.currentStepId in detail.goalFinishPipeline) "Goal finish"
+          else if (goal) if (item.goalLaunched || planning) "Planning" else item.currentStepLabel
+          else item.phaseId ?: item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel
+        DetailMetric(if (item.currentSubtaskId != null) "Subtask" else if (goal) "Goal stage" else "Phase", stage, if (standalone || item.goalLaunched) standalonePlanNote(detail) else "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
         MetricDivider()
       }
       DetailMetric(
         if (standalone || operation) "Step" else "Phase",
-        if (operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
+        if (standalone || item.goalLaunched || operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
         if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else item.phaseExecution?.label() ?: "",
         Modifier.weight(1f),
       )
       MetricDivider()
       val duration = detailDuration(item, now, frozen)
       DetailMetric(duration.label, duration.value, duration.note, Modifier.weight(1f))
-      if (!standalone && !operation) {
+      if (!standalone && !operation && item.currentSubtaskId != null) {
         MetricDivider()
         DetailMetric("Subtask active", subtaskTime, if (frozen) "last known duration" else if (item.lifecycle == Lifecycle.ACTIVE) "ticking" else "", Modifier.weight(1f))
       }

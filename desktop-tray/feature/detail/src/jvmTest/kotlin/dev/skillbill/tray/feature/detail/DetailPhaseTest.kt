@@ -4,6 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -27,6 +28,7 @@ import dev.skillbill.tray.core.ui.RepositoryNavigation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPhaseTest {
@@ -34,6 +36,37 @@ class DetailPhaseTest {
     override suspend fun openRepository(root: String, branch: String?) = Outcome.Value(Unit)
     override suspend fun openDirectory(root: String) = Outcome.Value(Unit)
     override suspend fun openFile(path: String) = Outcome.Value(Unit)
+  }
+
+  @Test
+  fun `goal preplan shows planning and its live goal clock without a subtask or goal finish`() = runComposeUiTest {
+    val item = workItem("goal-preplan", family = WorkFamily.FEATURE_TASK_RUNTIME).copy(
+      scope = ExecutionScope.STANDALONE_PHASE,
+      goalLaunched = true,
+      phaseId = "plan",
+      currentStepId = "preplan",
+      currentStepLabel = "preplan",
+      startedAt = fixtureInstant,
+      activeDurationMs = 10_000,
+      activeDurationAsOf = fixtureInstant,
+    )
+    setContent {
+      CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
+        DesignSystemTheme {
+          DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(detail(item))), fixtureInstant + 20.seconds, {})
+        }
+      }
+    }
+
+    onNodeWithText("goal").assertExists()
+    onNodeWithText("GOAL STAGE").assertExists()
+    onAllNodesWithText("Planning").onFirst().assertExists()
+    onNodeWithText("preplan").assertExists()
+    onNodeWithText("PHASE").assertExists()
+    onNodeWithText("GOAL ACTIVE").assertExists()
+    onNodeWithText("30s").assertExists()
+    onNodeWithText("Goal finish").assertDoesNotExist()
+    onNodeWithText("SUBTASK ACTIVE").assertDoesNotExist()
   }
 
   @Test
@@ -140,7 +173,7 @@ class DetailPhaseTest {
       }
     }
 
-    onNodeWithText("Planning").assertExists()
+    onAllNodesWithText("Planning").onFirst().assertExists()
     onNodeWithText("1/3 plans saved").assertExists()
   }
 }
