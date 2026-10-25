@@ -4,6 +4,7 @@ import skillbill.application.testHarnessClock
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairAuditAdmission
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairLegacyAdoption
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPhaseRecorder
@@ -73,8 +74,10 @@ internal fun harnessAcceptanceRecorder(
         source,
         RUNNER_TEST_PROJECT_STORE,
       ),
+      AcceptanceCriterionRepairAuditAdmission(validator),
     ),
     gitOperations,
     persistence,
+    diagnostics,
   )
 }

@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-25] SKILL-442 subtask 2 - Interaction-trace audit mode for acceptance repair
+Areas: runtime-engine featuretask persist/acceptance (repair persistence, phase recorder, audit admission, interaction targets and trace round), slot/audit prompt sections and audit round, runner run entry and status, prompt compose inputs; runtime-domain model/audit and model/audit/interaction, artifact wire; runtime-infra contracts auxiliary validator; runtime-contracts payload keys and failure code; orchestration/contracts; docs/block-incident-classification
+- MEDIUM feature. After the last criterion is accepted, repair state enters INTERACTION_TRACE_REQUIRED and the audit traces each authored interaction scenario instead of re-auditing criteria.
+- Audit-result and repair-state schemas moved to 0.2: mode `interaction_trace`, required `interactions` and `rechecks` arrays, a required `interaction_trace` state field and a coherence check binding regressed refs to the scenario owners.
+- Domain: AcceptanceCriterionInteractionTraceParser (anchored, case-insensitive line grammar) reads the audit prose; a broken owner reopens its criterion as SOURCE_UNRESOLVED. Interaction types live in the new model.audit.interaction package. reusable
+- Engine: persistence calls requireInteractionTrace after each mutation in the same transaction; PhaseRecorder.completeInteractionTrace settles the trace, with one re-ask and then degradation to unknown. Run entry loads the spec's scenarios into the binding; the prompt lists the trace and re-check scope.
+- New failure code INVALID_INTERACTION_TRACE_AUDIT_OUTPUT is classified as a Skill Bill defect.
+- Pattern: the interaction types were split into a package so the 12-file model.audit ceiling holds without moving AcceptanceCriterionInteractionTrace away from the repair state, which keeps the domain cycle census empty.
+- Limits: the re-ask marker is in memory, so a restart grants one extra re-ask; 0.1 records fail loudly at decode; the admission InteractionTrace branch is exercised only by tests; no serial-repair end-to-end case for the scenarios.
+Feature flag: N/A
+Acceptance criteria: all implemented for this subtask (validate passed ./gradlew check).
+
 ## [2026-10-25] SKILL-442 subtask 1 - Interaction scenario authoring rules and catalog contract
 Areas: runtime-engine featuretask prepare (FeatureSpecPreparationWriter, AuthoredInteractionScenarioCheck), phase/planning decomposition planner, runloop/planning PlanDecompositionStop, slot/plan (feature-spec-directive, AgentPlanStrategy); runtime-domain review/spec parser and catalog model; runtime-contracts payload keys and failure code; runtime-infra contracts schema; orchestration/contracts; docs/block-incident-classification
 - MEDIUM feature. The plan directive and spec-bundle requirement teach authors a `## Interaction Scenarios` section for subtasks and a `## Transitional Regressions` section for the parent spec.

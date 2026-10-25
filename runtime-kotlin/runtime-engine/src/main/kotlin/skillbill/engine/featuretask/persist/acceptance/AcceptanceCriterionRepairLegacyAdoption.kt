@@ -4,7 +4,10 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
@@ -12,6 +15,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairLegacyProof
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairVersionPlan
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
@@ -34,6 +38,10 @@ import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArt
 import skillbill.workflow.taskruntime.artifact.decodeGoalContinuationArtifactFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
+import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionAuditResult
+import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.upgradeAuditResultFromPrevious
+import skillbill.workflow.taskruntime.artifact.upgradeRepairStateFromPrevious
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdoptionComposition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
@@ -469,6 +477,39 @@ class AcceptanceCriterionRepairLegacyAdoption(
       } == true
   }
 
+  internal fun versionRecovery(artifacts: Map<String, Any?>): AcceptanceCriterionRepairVersionPlan {
+    val originals = linkedMapOf<String, Any?>()
+    val regenerated = linkedMapOf<String, Any?>()
+    for (candidate in SUPERSEDED_CANDIDATES) {
+      val original =
+        candidate.family.takeIf { it.contains(artifacts) }
+          ?.let { FeatureTaskRuntimeWorkflowArtifactMap.from(it.value(artifacts)) }
+          ?.takeIf { candidate.recognizes(it) }
+          ?: continue
+      val upgraded =
+        candidate.upgrade(original)
+          ?: return AcceptanceCriterionRepairVersionPlan.Unrecoverable(candidate.family.label(), candidate.version)
+      originals[candidate.family.label()] = original
+      regenerated += candidate.family.entry(upgraded)
+    }
+    if (originals.isEmpty()) return AcceptanceCriterionRepairVersionPlan.NotSuperseded
+    val families = originals.keys.toList()
+    return AcceptanceCriterionRepairVersionPlan.Recovery(
+      families,
+      regenerated,
+      JsonCodec.valueToJsonString(originals).toByteArray(Charsets.UTF_8),
+      "Stored ${families.joinToString()} at contract ${SUPERSEDED_CANDIDATES.first().version}; " +
+        "regenerated at $ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION.",
+    )
+  }
+
+  private class SupersededCandidate(
+    val family: DurableWorkflowArtifactFamily,
+    val version: String,
+    val recognizes: (FeatureTaskRuntimeWorkflowArtifactMap) -> Boolean,
+    val upgrade: (FeatureTaskRuntimeWorkflowArtifactMap) -> FeatureTaskRuntimeWorkflowArtifactMap?,
+  )
+
   private data class LegacyTuple(val composition: AcceptanceCriterionRepairAdoptionComposition, val revision: Int)
 
   internal data class LegacyAdoptionRequest(
@@ -501,6 +542,21 @@ class AcceptanceCriterionRepairLegacyAdoption(
         LegacyTuple(AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_VALIDATE, 1),
         LegacyTuple(AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_VALIDATE, 2),
         LegacyTuple(AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_VALIDATE, 3),
+      )
+    val SUPERSEDED_CANDIDATES =
+      listOf(
+        SupersededCandidate(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR,
+          ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION,
+          { it.isPreviousVersionAcceptanceCriterionRepairState() },
+          { it.upgradeRepairStateFromPrevious() },
+        ),
+        SupersededCandidate(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_AUDIT_RESULT,
+          ACCEPTANCE_CRITERION_AUDIT_RESULT_PREVIOUS_CONTRACT_VERSION,
+          { it.isPreviousVersionAcceptanceCriterionAuditResult() },
+          { it.upgradeAuditResultFromPrevious() },
+        ),
       )
     val UNSETTLED_ATTEMPT_ACTIONS =
       setOf(

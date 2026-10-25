@@ -195,7 +195,7 @@ private fun AcceptanceCriterionRepairState.applyFocusedAudit(
   )
 }
 
-private fun AcceptanceCriterionRepairCriterion.afterProseAudit(
+internal fun AcceptanceCriterionRepairCriterion.afterProseAudit(
   audit: AcceptanceCriterionProseAudit,
   disposition: AcceptanceCriterionSourceDisposition,
 ): AcceptanceCriterionRepairCriterion =

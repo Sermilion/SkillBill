@@ -22,8 +22,9 @@ required:
   - admitted_tree_digest
   - admitted_checkpoint_id
   - source_transitions
+  - interaction_trace
 properties:
-  contract_version: { const: '0.1' }
+  contract_version: { const: '0.2' }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
   execution_id: { type: string, minLength: 1, maxLength: 256 }
   spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
@@ -104,7 +105,7 @@ properties:
       '^AC-[0-9]{3}$': { type: integer, minimum: 0, maximum: 3 }
   revision: { type: integer, minimum: 0 }
   mode: { enum: [initial_discovery, current_criterion_targeted, accepted] }
-  stage: { enum: [discovery_admitted, read_only_audit_required, repair_reserved, repair_completed_awaiting_targeted_verification, accepted, budget_blocked] }
+  stage: { enum: [discovery_admitted, read_only_audit_required, repair_reserved, repair_completed_awaiting_targeted_verification, accepted, budget_blocked, interaction_trace_required] }
   completed_repair_evidence_ref: { type: [string, 'null'], minLength: 1 }
   admitted_tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
   admitted_checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
@@ -143,6 +144,33 @@ properties:
         tree_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
         checkpoint_id: { type: string, minLength: 1, maxLength: 256 }
   pending_clarification_question: { type: [string, 'null'], maxLength: 1024 }
+  interaction_trace:
+    type: object
+    additionalProperties: false
+    required:
+      - pending_scenario_refs
+      - traced_scenario_refs
+      - broken_scenario_refs
+      - repaired_scenario_refs
+      - unknown_scenario_refs
+      - recheck_refs
+      - recheck_any_change_refs
+      - traced_spec_digest
+    properties:
+      pending_scenario_refs: { $ref: '#/$defs/scenario_ref_list' }
+      traced_scenario_refs: { $ref: '#/$defs/scenario_ref_list' }
+      broken_scenario_refs: { $ref: '#/$defs/scenario_ref_list' }
+      repaired_scenario_refs: { $ref: '#/$defs/scenario_ref_list' }
+      unknown_scenario_refs: { $ref: '#/$defs/scenario_ref_list' }
+      recheck_refs: { $ref: '#/$defs/scenario_ref_list' }
+      recheck_any_change_refs: { $ref: '#/$defs/scenario_ref_list' }
+      traced_spec_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
+$defs:
+  scenario_ref_list:
+    type: array
+    maxItems: 64
+    uniqueItems: true
+    items: { type: string, minLength: 1, maxLength: 16 }
 x-coherence-checks:
   - id: unique-catalog-identities
     description: Criteria have unique canonical references and ordinals, and every queue, dependency, reservation, outcome and counter reference resolves to one admitted criterion.
@@ -153,7 +181,7 @@ x-coherence-checks:
   - id: monotonic-budget
     description: Unsuccessful totals equal accepted unsuccessful outcomes at or after budget_start_outcome_index, which defaults to zero and cannot exceed the retained outcome count. Each criterion admits at most three failures per budget. Explicit operator resume of a budget-blocked child advances the index to the retained outcome count and clears the active totals without deleting history. Budget-blocked state has an exhausted criterion anywhere in the unresolved queue; discovery, reserved, and awaiting-verification stages have no exhausted unresolved criterion.
   - id: accepted-queue
-    description: An empty focused queue with no pending audit is accepted; settled criteria are trusted and no later full audit re-checks them.
+    description: An empty focused queue with no pending audit is accepted; settled criteria are trusted, and accepted criteria are re-checked only when the runtime lists them in interaction-trace or re-check scope.
   - id: immutable-transition-history
     description: Accepted source closures and focused-audit reopenings retain their producing identity and evidence through the authoritative state lifetime.
   - id: utf8-capacity

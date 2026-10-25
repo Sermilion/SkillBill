@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.audit
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -50,6 +51,10 @@ internal object AcceptanceAuditRound : PhaseStepHooks<PhaseQaStepBinding> {
     state: PhaseQaStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
+    val repair = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    if (repair != null && AcceptanceCriterionInteractionTraceRound.active(repair)) {
+      return interactionTraceRejection(run, outputMap)
+    }
     val claimed = auditsClaim(context)
     val verdict = outputMap[SharedPayloadKeys.VERDICT] as? String
     return when {
@@ -58,6 +63,20 @@ internal object AcceptanceAuditRound : PhaseStepHooks<PhaseQaStepBinding> {
         "Audit verdict '$verdict' requires a no-change claim on the implementation output."
       else -> null
     }
+  }
+
+  private fun interactionTraceRejection(
+    run: PhaseRun,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    val completed =
+      (outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.COMPLETED
+    val scope =
+      (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+        ?.takeIf { completed && run.phaseId == it.steps?.audit }
+        ?: return null
+    val prose = auditProseValue(outputMap) ?: return null
+    return AcceptanceCriterionInteractionTraceRound.reaskRejection(scope, prose)
   }
 
   override fun settleCompletedRound(

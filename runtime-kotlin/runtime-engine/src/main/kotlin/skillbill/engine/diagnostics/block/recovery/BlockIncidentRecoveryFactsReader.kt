@@ -1,5 +1,6 @@
 package skillbill.engine.diagnostics.block.recovery
 
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
@@ -14,6 +15,7 @@ import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -76,6 +78,9 @@ internal object BlockIncidentRecoveryFactsReader {
         owners.mandates.isNotEmpty() ->
           "the run carries ${owners.mandates.size} text-only mandate(s) with unknown retry authority"
         owners.repairStatePreContract -> "the acceptance repair state predates its typed contract"
+        owners.repairStateSuperseded ->
+          "the acceptance repair state predates contract " +
+            "$ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION and awaits in-band regeneration"
         else -> null
       }
     if (unavailable != null) return BlockIncidentRecoveryFactsRead.Unavailable(unavailable)
@@ -122,6 +127,7 @@ internal object BlockIncidentRecoveryFactsReader {
     val noChangePause: FeatureTaskRuntimeNoChangePause?,
     val repairState: AcceptanceCriterionRepairState?,
     val repairStatePreContract: Boolean,
+    val repairStateSuperseded: Boolean,
     val reviewState: GoalSubtaskReviewState?,
     val gateProgress: List<FeatureTaskRuntimeValidationGateProgress>,
   ) {
@@ -130,6 +136,7 @@ internal object BlockIncidentRecoveryFactsReader {
         val repairFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
         val repairWire = repairFamily.value(artifacts)?.let(FeatureTaskRuntimeWorkflowArtifactMap::from)
         val preContract = repairWire?.isPreContractAcceptanceCriterionRepairState() == true
+        val superseded = repairWire?.isPreviousVersionAcceptanceCriterionRepairState() == true
         return TypedOwners(
           mandates =
             decodeRunInvariantsFromArtifact(
@@ -141,9 +148,10 @@ internal object BlockIncidentRecoveryFactsReader {
             ),
           repairState =
             repairWire
-              ?.takeUnless { preContract }
+              ?.takeUnless { preContract || superseded }
               ?.toAcceptanceCriterionRepairState(repairFamily.label()),
           repairStatePreContract = preContract,
+          repairStateSuperseded = superseded,
           reviewState = GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(artifacts),
           gateProgress =
             listOf(
@@ -179,6 +187,7 @@ internal object BlockIncidentRecoveryFactsReader {
     setOf(
       AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
       AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION,
+      AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED,
     )
 
   private val UNSATISFIED_OUTCOME_KINDS =

@@ -4,6 +4,7 @@ import skillbill.agent.model.PhaseOutput
 import skillbill.application.testProjectStore
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
@@ -39,8 +40,11 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
@@ -56,6 +60,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 internal class SerialRepairSqliteFixture(
   archiveRevision: Int? = null,
@@ -135,7 +140,7 @@ internal class SerialRepairSqliteFixture(
         )
     }
   val warnings = mutableListOf<String>()
-  private val diagnostics =
+  internal val diagnostics =
     object : RuntimeDiagnostics {
       override fun warning(
         message: String,
@@ -225,6 +230,7 @@ internal class SerialRepairSqliteFixture(
         source,
         testProjectStore,
       ),
+      AcceptanceCriterionRepairAuditAdmission(validator),
     )
   }
 
@@ -333,15 +339,82 @@ internal class SerialRepairSqliteFixture(
     )
   }
 
-  fun audit(): AcceptanceCriterionRepairAuditEvidence {
-    return AcceptanceCriterionRepairAuditEvidence(
-      FeatureTaskRuntimeWorkflowArtifactMap.from(
-        mapOf(
-          SharedPayloadKeys.VALUE to "Reviewed the authored criterion against current production source.",
-        ),
+  fun audit(): AcceptanceCriterionRepairAuditEvidence =
+    auditResult(
+      AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
+      initial,
+      mapOf(
+        Keys.TREE_DIGEST to "d".repeat(64),
+        Keys.CHECKPOINT_ID to "checkpoint:discovery",
+        Keys.PRODUCING_OUTPUT_ID to "discovery",
+        Keys.PRODUCING_OUTPUT_DIGEST to "e".repeat(64),
       ),
+      initial.criteria.map { it to it.evidenceRef },
+    )
+
+  fun audit(
+    verifying: AcceptanceCriterionRepairState,
+    outcome: AcceptanceCriterionRepairOutcome,
+  ): AcceptanceCriterionRepairAuditEvidence {
+    val criterion = verifying.criteria.single { it.canonicalRef == outcome.criterionRef }
+    val closed =
+      if (outcome.successful) {
+        criterion.copy(sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
+      } else {
+        criterion
+      }
+    return auditResult(
+      AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
+      verifying,
+      mapOf(
+        Keys.TREE_DIGEST to requireNotNull(verifying.admittedTreeDigest),
+        Keys.CHECKPOINT_ID to requireNotNull(verifying.admittedCheckpointId),
+        Keys.PRODUCING_OUTPUT_ID to outcome.outcomeId,
+        Keys.PRODUCING_OUTPUT_DIGEST to outcome.digest,
+        Keys.EXPECTED_REVISION to verifying.revision,
+        Keys.CURRENT_CRITERION_REF to outcome.criterionRef,
+        Keys.RESERVATION_ID to outcome.reservationId,
+      ),
+      listOf(closed to outcome.evidenceRef),
     )
   }
+
+  private fun auditResult(
+    mode: AcceptanceCriterionRepairMode,
+    state: AcceptanceCriterionRepairState,
+    source: Map<String, Any?>,
+    criteria: List<Pair<AcceptanceCriterionRepairCriterion, String>>,
+  ) = AcceptanceCriterionRepairAuditEvidence(
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(
+        SharedPayloadKeys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+        Keys.MODE to mode.wireValue,
+        Keys.CATALOG_ID to state.catalogId,
+        Keys.SPEC_DIGEST to state.specDigest,
+        Keys.EXECUTION_ID to state.executionId,
+        Keys.EXPECTED_REVISION to null,
+        Keys.CURRENT_CRITERION_REF to null,
+        Keys.RESERVATION_ID to null,
+      ) + source +
+        mapOf(
+          Keys.CRITERIA to
+            criteria.map { (criterion, evidenceRef) ->
+              mapOf(
+                Keys.CANONICAL_REF to criterion.canonicalRef,
+                Keys.SOURCE_DISPOSITION to criterion.sourceDisposition.wireValue,
+                Keys.VALIDATION_OBLIGATION to criterion.validationObligation.wireValue,
+                Keys.VALIDATION_OWNER_AVAILABLE to criterion.validationOwnerAvailable,
+                Keys.EVIDENCE_REF to evidenceRef,
+              )
+            },
+          Keys.DEPENDENCIES to state.asRepairWireMap()[Keys.DEPENDENCIES],
+          Keys.REGRESSED_REFS to emptyList<String>(),
+          Keys.EDGE_CHANGES to emptyList<Any>(),
+          Keys.INTERACTIONS to emptyList<Any>(),
+          Keys.RECHECKS to emptyList<Any>(),
+        ),
+    ),
+  )
 
   override fun close() {
     root.toFile().deleteRecursively()

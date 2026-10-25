@@ -3,6 +3,7 @@ package skillbill.workflow.taskruntime.artifact
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
@@ -57,6 +58,7 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
       Keys.PENDING_AUDIT_REFS to pendingAuditRefs,
       Keys.PROSE_AUDITS to proseAudits.map(::proseAuditWire),
       Keys.PENDING_CLARIFICATION_QUESTION to pendingClarificationQuestion,
+      Keys.INTERACTION_TRACE to interactionTraceWire(interactionTrace),
     ),
   )
 
@@ -96,6 +98,7 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       pendingAuditRefs = optionalStringList(Keys.PENDING_AUDIT_REFS),
       proseAudits = repairProseAudits(),
       pendingClarificationQuestion = optionalString(Keys.PENDING_CLARIFICATION_QUESTION),
+      interactionTrace = repairInteractionTrace(),
     )
   return AcceptanceCriterionRepairState.restore(restored) ?: throw invalidAcceptanceCriterionRepairStateSchema(
     sourceLabel,
@@ -388,6 +391,37 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairProseAudits(): List<Acce
       checkpointId = audit.requiredString(Keys.CHECKPOINT_ID),
     )
   } ?: emptyList()
+
+private fun interactionTraceWire(value: AcceptanceCriterionInteractionTrace): Map<String, Any?> =
+  mapOf(
+    Keys.PENDING_SCENARIO_REFS to value.pendingScenarioRefs,
+    Keys.TRACED_SCENARIO_REFS to value.tracedScenarioRefs,
+    Keys.BROKEN_SCENARIO_REFS to value.brokenScenarioRefs,
+    Keys.REPAIRED_SCENARIO_REFS to value.repairedScenarioRefs,
+    Keys.UNKNOWN_SCENARIO_REFS to value.unknownScenarioRefs,
+    Keys.RECHECK_REFS to value.recheckRefs,
+    Keys.RECHECK_ANY_CHANGE_REFS to value.recheckAnyChangeRefs,
+    Keys.TRACED_SPEC_DIGEST to value.tracedSpecDigest,
+  )
+
+internal fun emptyInteractionTraceWire(): Map<String, Any?> =
+  interactionTraceWire(
+    AcceptanceCriterionInteractionTrace.EMPTY,
+  )
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.repairInteractionTrace(): AcceptanceCriterionInteractionTrace {
+  val trace = repairObject(this[Keys.INTERACTION_TRACE])
+  return AcceptanceCriterionInteractionTrace(
+    pendingScenarioRefs = trace.stringList(Keys.PENDING_SCENARIO_REFS),
+    tracedScenarioRefs = trace.stringList(Keys.TRACED_SCENARIO_REFS),
+    brokenScenarioRefs = trace.stringList(Keys.BROKEN_SCENARIO_REFS),
+    repairedScenarioRefs = trace.stringList(Keys.REPAIRED_SCENARIO_REFS),
+    unknownScenarioRefs = trace.stringList(Keys.UNKNOWN_SCENARIO_REFS),
+    recheckRefs = trace.stringList(Keys.RECHECK_REFS),
+    recheckAnyChangeRefs = trace.stringList(Keys.RECHECK_ANY_CHANGE_REFS),
+    tracedSpecDigest = trace.optionalString(Keys.TRACED_SPEC_DIGEST),
+  )
+}
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.optionalString(key: String): String? =
   optionalRepairString(

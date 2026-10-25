@@ -52,6 +52,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
         mandatesAndOverrides = GovernedSpecSectionParser.parseListSection(specText) { it in MANDATES_HEADINGS },
       ),
       sourceDigest = sha256HexUtf8(specText),
+      sourceText = specText,
     )
   }
 

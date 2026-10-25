@@ -4,7 +4,9 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairVersionPlan
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -36,6 +38,8 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionAuditResult
+import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toImplementationProgress
 import skillbill.workflow.taskruntime.artifact.toQaRepairState
@@ -226,11 +230,33 @@ class FeatureTaskRuntimeWorkflowPersistence
           validateSerialArtifacts(record.artifacts - family.label())
           return@read AcceptanceCriterionRepairStatusRead.PreContract
         }
+        if (payload?.isPreviousVersionAcceptanceCriterionRepairState() == true) {
+          validateSerialArtifacts(record.artifacts - supersededSerialLabels(record.artifacts))
+          return@read AcceptanceCriterionRepairStatusRead.SupersededVersion(
+            ACCEPTANCE_CRITERION_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION,
+          )
+        }
         validateSerialArtifacts(record.artifacts)
         payload?.let {
           AcceptanceCriterionRepairStatusRead.Current(
             it.toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}"),
           )
+        }
+      }
+
+    private fun supersededSerialLabels(artifacts: Map<String, Any?>): Set<String> =
+      buildSet {
+        val repair = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+        val result = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_AUDIT_RESULT
+        if (FeatureTaskRuntimeWorkflowArtifactMap.from(repair.value(artifacts))
+            .isPreviousVersionAcceptanceCriterionRepairState()
+        ) {
+          add(repair.label())
+        }
+        if (FeatureTaskRuntimeWorkflowArtifactMap.from(result.value(artifacts))
+            .isPreviousVersionAcceptanceCriterionAuditResult()
+        ) {
+          add(result.label())
         }
       }
 
@@ -333,6 +359,30 @@ class FeatureTaskRuntimeWorkflowPersistence
                   ),
                 ),
               ),
+            sessionId = record.sessionId.orEmpty(),
+          ),
+        )
+      workflowSnapshotValidator.validate(updated, updated.workflowName)
+      validateSerialArtifacts(updated.artifacts)
+      states.save(WorkflowFamily.TASK_RUNTIME, updated)
+    }
+
+    internal fun persistAcquiredRepairVersionRecovery(
+      states: WorkflowStateRepository,
+      record: WorkflowStateSnapshot,
+      recovery: AcceptanceCriterionRepairVersionPlan.Recovery,
+      quarantinePatch: Map<String, Any?>?,
+    ) {
+      validateSerialArtifacts(record.artifacts - recovery.families.toSet())
+      val updated =
+        engine.updateRecord(
+          WorkflowFamily.TASK_RUNTIME.definition,
+          record,
+          WorkflowUpdateInput(
+            workflowStatus = record.workflowStatus,
+            currentStepId = record.currentStepId,
+            stepUpdates = WorkflowStepUpdates.from(null),
+            artifactsPatch = WorkflowArtifactPatch.from(recovery.regenerated + quarantinePatch.orEmpty()),
             sessionId = record.sessionId.orEmpty(),
           ),
         )

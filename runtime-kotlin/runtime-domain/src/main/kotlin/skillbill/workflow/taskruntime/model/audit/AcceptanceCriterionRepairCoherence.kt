@@ -1,6 +1,8 @@
 package skillbill.workflow.taskruntime.model.audit
 
 internal object AcceptanceCriterionRepairCoherence {
+  private val SCENARIO_REF = Regex("""^(IS-\d{3}|AC-\d{3}\+AC-\d{3})$""")
+
   fun admissionIsCoherent(admission: AcceptanceCriterionRepairAdmission): Boolean {
     val identity =
       admission.catalogId.isNotBlank() && admission.executionId.isNotBlank() &&
@@ -103,7 +105,7 @@ internal object AcceptanceCriterionRepairCoherence {
     if (!awaiting && hasEvidence) return false
     if (reserved != (state.reservation != null)) return false
     if (readonly && (state.reservation != null || state.pendingAuditRefs.isEmpty())) return false
-    return stageIsCoherent(state) && reservationIsCoherent(state)
+    return stageIsCoherent(state) && reservationIsCoherent(state) && interactionTraceIsCoherent(state)
   }
 
   private fun stageIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
@@ -114,7 +116,30 @@ internal object AcceptanceCriterionRepairCoherence {
       AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION -> awaitingStageIsCoherent(state)
       AcceptanceCriterionRepairStage.ACCEPTED -> acceptedIsCoherent(state)
       AcceptanceCriterionRepairStage.BUDGET_BLOCKED -> budgetIsBlocked(state)
+      AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> acceptedIsCoherent(state)
     }
+
+  private fun interactionTraceIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
+    val trace = state.interactionTrace
+    val lists =
+      listOf(
+        trace.pendingScenarioRefs,
+        trace.tracedScenarioRefs,
+        trace.brokenScenarioRefs,
+        trace.repairedScenarioRefs,
+        trace.unknownScenarioRefs,
+        trace.recheckRefs,
+        trace.recheckAnyChangeRefs,
+      )
+    val wellFormed =
+      lists.all { refs ->
+        refs.size <= AcceptanceCriterionInteractionTrace.MAX_SCENARIO_REFS && refs.distinct().size == refs.size &&
+          refs.all(SCENARIO_REF::matches)
+      }
+    val digest = trace.tracedSpecDigest?.isDigest() != false
+    val awaiting = state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED
+    return wellFormed && digest && awaiting == trace.pendingScenarioRefs.isNotEmpty()
+  }
 
   private fun reservedIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && !hasExhaustedBudget(state)

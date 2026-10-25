@@ -34,11 +34,10 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
     val state = scope.snapshot ?: return null
     val steps = scope.steps
-    if (steps == null || state.stage == AcceptanceCriterionRepairStage.ACCEPTED ||
-      context.hasLeftSlot(PhaseSlot.AUDIT)
-    ) {
-      return null
-    }
+    val settled = state.stage == AcceptanceCriterionRepairStage.ACCEPTED
+    val tracePending = state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED
+    val leftAudit = !tracePending && context.hasLeftSlot(PhaseSlot.AUDIT)
+    if (steps == null || settled || leftAudit) return null
     val target =
       if (state.pendingClarificationQuestion != null) {
         steps.audit

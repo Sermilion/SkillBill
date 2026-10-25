@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.persist.acceptance
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEvidence
@@ -20,6 +21,7 @@ import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -39,6 +41,13 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationO
 import skillbill.workflow.taskruntime.model.audit.REPAIR_ADMISSION_CLARIFICATION_PREFIX
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.audit.auditNeedsClarification
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionEntry
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTarget
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParse
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParser
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionVerdict
+import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
 import skillbill.workflow.taskruntime.model.audit.qaReauditRefs
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -51,6 +60,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
   private val persistence: AcceptanceCriterionRepairPersistence,
   private val gitOperations: WorkflowGitOperations,
   private val workflows: FeatureTaskRuntimeWorkflowPersistence,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   internal fun session(
     scope: AcceptanceCriterionRepairRunState?,
@@ -140,19 +150,37 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val scope = session.accounting
     val inactive = !session.worker.ownsAuditStep(phase.phaseId)
     if (inactive || phase.phaseId == session.steps.planning) return null
-    val envelope = phase.normalizedOutput?.envelopeWireMap()
-    if (envelope == null) return rejected(phase, "The normalized phase output is unavailable.")
-    val state = invocationState(scope, phase) ?: scope.snapshot
-    if (state?.stage == AcceptanceCriterionRepairStage.ACCEPTED) return null
-    return if (state == null) {
-      completeDiscovery(
-        session,
-        phase,
-        envelope,
-      )
-    } else {
-      completeExisting(session, phase, envelope, state)
+    val envelope =
+      phase.normalizedOutput?.envelopeWireMap()
+        ?: return rejected(phase, "The normalized phase output is unavailable.")
+    val state =
+      invocationState(scope, phase) ?: scope.snapshot
+        ?: return completeDiscovery(session, phase, envelope)
+    return when (state.stage) {
+      AcceptanceCriterionRepairStage.ACCEPTED -> prepareInteractionTrace(session, phase, state)
+      AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
+        if (phase.phaseId == session.steps.audit) {
+          completeInteractionTrace(session, phase, envelope, state)
+        } else {
+          rejected(phase, "Interaction tracing requires the audit phase.")
+        }
+      else -> completeExisting(session, phase, envelope, state)
     }
+  }
+
+  private fun prepareInteractionTrace(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    state: AcceptanceCriterionRepairState,
+  ): RequiredPhaseWrite? {
+    val untraced = phase.phaseId == session.steps.audit && state.interactionTrace.tracedSpecDigest != state.specDigest
+    if (!untraced) return null
+    return commit(
+      session,
+      phase,
+      AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
+      CommitContext(expectedState = state),
+    )
   }
 
   private fun completeDiscovery(
@@ -229,6 +257,73 @@ class AcceptanceCriterionRepairPhaseRecorder(
         ),
       )
     } ?: rejected(phase, "The audit result does not match the active repair stage.")
+  }
+
+  private fun completeInteractionTrace(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+    state: AcceptanceCriterionRepairState,
+  ): RequiredPhaseWrite {
+    val prose = auditProseValue(envelope) ?: phase.outputArtifact.orEmpty()
+    val checkpoint =
+      sourceFingerprint(session.root).takeIf { it.ok && it.value.isNotBlank() }?.value
+        ?: return rejected(phase, "The repository fingerprint is unavailable.")
+    val tree = sha256Hex(checkpoint)
+    val outputId = "${phase.workflowId}:${phase.phaseId}:${phase.attemptCount}:${state.revision}"
+    val targets = AcceptanceCriterionInteractionTargets.pending(state, requireNotNull(session.accounting.binding))
+    val entries =
+      when (val parsed = AcceptanceCriterionInteractionTraceParser.parse(prose, targets)) {
+        is AcceptanceCriterionInteractionTraceParse.Parsed -> parsed.entries
+        is AcceptanceCriterionInteractionTraceParse.Malformed ->
+          degradedTrace(session, phase, state, targets, parsed)
+            ?: return rejected(phase, AcceptanceCriterionInteractionTraceRound.rejection(parsed))
+      }
+    val settlement =
+      AcceptanceCriterionInteractionTraceSettlement(
+        outputId,
+        sha256Hex("$outputId:$prose:$tree"),
+        tree,
+        checkpoint,
+        entries,
+      )
+    val predicted =
+      state.recordInteractionTrace(settlement)
+        ?: return rejected(phase, "The interaction trace does not match the pending scenarios.")
+    return commit(
+      session,
+      phase,
+      AcceptanceCriterionRepairMutation.InteractionTrace(settlement),
+      CommitContext(
+        AcceptanceCriterionRepairAuditEvidence(
+          AcceptanceCriterionInteractionTraceRound.evidence(settlement, predicted),
+        ),
+        expectedState = state,
+      ),
+    )
+  }
+
+  private fun degradedTrace(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    state: AcceptanceCriterionRepairState,
+    targets: List<AcceptanceCriterionInteractionTarget>,
+    malformed: AcceptanceCriterionInteractionTraceParse.Malformed,
+  ): List<AcceptanceCriterionInteractionEntry>? {
+    if (session.accounting.traceReaskScope != AcceptanceCriterionInteractionTraceRound.scopeKey(state)) return null
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=interaction_trace workflow=${phase.workflowId.take(MAX_DIAGNOSTIC_ID)} record_kind=degraded " +
+        "value_expected=${malformed.code.name} value_used=unknown reason=${malformed.reason.take(MAX_REASON)}",
+    )
+    return targets.map {
+      AcceptanceCriterionInteractionEntry(
+        it.scenarioRef,
+        AcceptanceCriterionInteractionVerdict.UNKNOWN,
+        null,
+        "interaction trace output stayed malformed after one re-ask: ${malformed.reason}",
+      )
+    }
   }
 
   private data class CompletionEvidence(
@@ -462,6 +557,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
         },
       AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION to
         steps.audit,
+      AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED to steps.audit,
     )
 
   private fun commit(
@@ -552,5 +648,10 @@ class AcceptanceCriterionRepairPhaseRecorder(
     return AcceptanceCriterionRepairAuditEvidence(
       FeatureTaskRuntimeWorkflowArtifactMap.from(payload),
     )
+  }
+
+  private companion object {
+    const val MAX_DIAGNOSTIC_ID = 128
+    const val MAX_REASON = 200
   }
 }

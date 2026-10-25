@@ -1,12 +1,15 @@
 package skillbill.engine.featuretask.model.audit
 
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.review.spec.model.InteractionScenario
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 
@@ -16,6 +19,7 @@ data class AcceptanceCriterionRepairBinding(
   val specDigest: String,
   val authoredCriteria: List<String>,
   val auditStepIds: Set<String> = emptySet(),
+  val interactionScenarios: List<InteractionScenario> = emptyList(),
 )
 
 data class AcceptanceCriterionRepairStepRoles(
@@ -67,6 +71,12 @@ sealed interface AcceptanceCriterionRepairMutation {
   ) : AcceptanceCriterionRepairMutation
 
   data class Outcome(val outcome: AcceptanceCriterionRepairOutcome) : AcceptanceCriterionRepairMutation
+
+  data class InteractionTrace(
+    val settlement: AcceptanceCriterionInteractionTraceSettlement,
+  ) : AcceptanceCriterionRepairMutation
+
+  data object PrepareInteractionTrace : AcceptanceCriterionRepairMutation
 }
 
 enum class AcceptanceCriterionRepairRefusal(val wireValue: String) {
@@ -81,6 +91,34 @@ enum class AcceptanceCriterionRepairRefusal(val wireValue: String) {
   ACTIVE_SESSION("active_session"),
   HISTORICAL_EVIDENCE_UNPROVABLE("historical_evidence_unprovable"),
   OWNING_SESSION_UNAVAILABLE("owning_session_unavailable"),
+  SUPERSEDED_VERSION_CHANGED("superseded_version_changed"),
+}
+
+internal fun OwningTransactionResult.Refusal.toRepairRefusal(): AcceptanceCriterionRepairRefusal =
+  when (this) {
+    OwningTransactionResult.Refusal.ACTIVE_SESSION -> AcceptanceCriterionRepairRefusal.ACTIVE_SESSION
+    OwningTransactionResult.Refusal.UNSUPPORTED -> AcceptanceCriterionRepairRefusal.OWNING_SESSION_UNAVAILABLE
+  }
+
+sealed interface AcceptanceCriterionRepairVersionPlan {
+  data object NotSuperseded : AcceptanceCriterionRepairVersionPlan
+
+  data class Unrecoverable(val family: String, val version: String) : AcceptanceCriterionRepairVersionPlan
+
+  class Recovery(
+    val families: List<String>,
+    val regenerated: Map<String, Any?>,
+    val rejectedRecord: ByteArray,
+    val detail: String,
+  ) : AcceptanceCriterionRepairVersionPlan
+}
+
+sealed interface AcceptanceCriterionRepairVersionRecoveryResult {
+  data object Unchanged : AcceptanceCriterionRepairVersionRecoveryResult
+
+  data class Recovered(val families: List<String>) : AcceptanceCriterionRepairVersionRecoveryResult
+
+  data class Refused(val reason: AcceptanceCriterionRepairRefusal) : AcceptanceCriterionRepairVersionRecoveryResult
 }
 
 sealed interface AcceptanceCriterionRepairHydration {
@@ -111,6 +149,13 @@ class AcceptanceCriterionRepairRunState internal constructor(
   }
 
   @Volatile private var accounting = hydration
+
+  @Volatile internal var traceReaskScope: String? = null
+    private set
+
+  internal fun recordTraceReask(key: String) {
+    traceReaskScope = key
+  }
 
   @Volatile internal var invocation: AcceptanceCriterionRepairInvocation? = null
     private set
@@ -170,11 +215,14 @@ class AcceptanceCriterionRepairRunState internal constructor(
       }
       if (current == null) {
         val outcome =
-          if (state.stage == AcceptanceCriterionRepairStage.ACCEPTED) {
-            "Every acceptance criterion is accepted. Tests, build, and project-quality work remain in their later " +
-              "phases."
-          } else {
-            "Audit the full authored acceptance set against current source."
+          when (state.stage) {
+            AcceptanceCriterionRepairStage.ACCEPTED ->
+              "Every acceptance criterion is accepted. Tests, build, and project-quality work remain in their later " +
+                "phases."
+            AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
+              "Every acceptance criterion is accepted. Trace the pending interaction scenarios across them against " +
+                "current source."
+            else -> "Audit the full authored acceptance set against current source."
           }
         return outcome + state.pendingClarificationQuestion?.let { " Read-only clarification: $it" }.orEmpty()
       }
@@ -203,12 +251,15 @@ sealed interface AcceptanceCriterionRepairStatusRead {
 
   /** Unversioned state from before the serial repair contract; status shows it, resume refuses it. */
   data object PreContract : AcceptanceCriterionRepairStatusRead
+
+  data class SupersededVersion(val version: String) : AcceptanceCriterionRepairStatusRead
 }
 
 sealed interface AcceptanceCriterionRepairWriteResult {
   data class Committed(
     val state: AcceptanceCriterionRepairState,
     val replayed: Boolean,
+    val interactionTraceSkipped: Boolean = false,
   ) : AcceptanceCriterionRepairWriteResult
 
   data class CommittedWithProjectionFailure(

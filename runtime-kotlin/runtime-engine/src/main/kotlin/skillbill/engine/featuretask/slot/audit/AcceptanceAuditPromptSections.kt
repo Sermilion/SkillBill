@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.slot.audit
 
+import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceScope
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.PHASE_COMPLETE_SETTLEMENT_TOOL
@@ -17,6 +19,29 @@ internal object AcceptanceAuditPromptSections {
       "store, the same list, board, status, or history seam, and callers of the function you would change. " +
       "Do not leave a cousin path for the next audit round. Do not open a different criterion to chase " +
       "unrelated work. The latest reported gap is context, not a scope limit."
+
+  const val ACCEPTED_RECHECK_SENTENCE: String =
+    "Criteria accepted by an earlier audit are re-checked only when the runtime lists them in the " +
+      "interaction-trace or re-check scope."
+
+  private const val TRACE_DIRECTIVE: String =
+    "This is the runtime-selected interaction trace of criteria that are already accepted. " +
+      "$ACCEPTED_RECHECK_SENTENCE Trace production code from each pending scenario's entry point, through " +
+      "its preconditions and steps, to its outcome, and cite a path:line or path:start-end for every step " +
+      "of the trace. Consider every listed same-file pair, even when no scenario names it, and check in the " +
+      "shared production files that the later criterion did not undo the earlier one. Exclude all test " +
+      "requirements. Stay read-only: do not edit files, spawn subagents, or repair gaps. " +
+      "$AUDIT_READONLY_EVIDENCE_SENTENCE A broken line must name an owner from that scenario's criteria, or " +
+      "one of the two members of a pair. Use unknown when source cannot establish the outcome; unknown " +
+      "reopens nothing. Complete through $PHASE_COMPLETE_SETTLEMENT_TOOL with status completed and verdict " +
+      "\"advance\" when any pending ref is broken, otherwise \"satisfied\". The runtime reads the " +
+      "Interaction lines, not the verdict, and no Open criteria line is required. Block only when an " +
+      "external dependency prevents inspection."
+
+  private const val TRACE_VALUE_CONTENT: String =
+    "Report the trace in ordinary prose and end with exactly one Interaction line per pending ref, in the " +
+      "grammar given at the end of the scope. There is no Open criteria line and no criterion list. Do not " +
+      "repair anything. Malformed output is re-asked once and then recorded as unknown."
 
   const val DIRECTIVE: String =
     "On the initial full audit, verify the production behavior required by every acceptance criterion " +
@@ -45,8 +70,7 @@ internal object AcceptanceAuditPromptSections {
       "in prose. A focused audit checks every independent production requirement in that criterion; treat earlier " +
       "audit findings as context, not as a complete list of its gaps. $DEFECT_CLASS_FANOUT_SENTENCE " +
       "If the source conclusion is ambiguous, keep " +
-      "the criterion open and request read-only clarification. Criteria accepted by an earlier audit stay " +
-      "accepted and are not re-checked. " +
+      "the criterion open and request read-only clarification. $ACCEPTED_RECHECK_SENTENCE " +
       "Settle with an explicit verdict: when you complete through $PHASE_COMPLETE_SETTLEMENT_TOOL, pass " +
       "verdict \"satisfied\" when the inspected production scope is met and verdict \"advance\" when it has " +
       "source gaps. For a runtime-supplied read-only repair-report admission, follow its narrower verdict " +
@@ -57,31 +81,63 @@ internal object AcceptanceAuditPromptSections {
       "test requirements remain. Block with a concrete failure_disposition only when an " +
       "external dependency prevents inspection. " + AUDIT_READONLY_EVIDENCE_SENTENCE
 
-  fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections =
-    PhaseStepPromptSections(
-      taskDirective = DIRECTIVE + if (inputs.noChangeClaim == null) auditScope(inputs) else noChangeScope(inputs),
+  fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections {
+    val trace = inputs.interactionTraceScope
+    return PhaseStepPromptSections(
+      taskDirective =
+        when {
+          trace != null -> TRACE_DIRECTIVE + traceScope(trace)
+          inputs.noChangeClaim == null -> DIRECTIVE + auditScope(inputs)
+          else -> DIRECTIVE + noChangeScope(inputs)
+        },
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).auditCeremony.promptLabel}. " +
           "Inspect the runtime-selected production scope without " +
           "editing files. Exclude test requirements and report production gaps for the implementation repair step. " +
           "An enforcement guard or architecture check whose implementation a criterion requires counts as " +
           "production behavior even under a test source set; its example and regression cases stay excluded.",
-      valueContent =
-        "Report source gaps and conclusions in ordinary prose. Say when the current source meets the " +
-          "production requirements. Exclude test-only criteria and test-related parts of mixed criteria, and " +
-          "state those later test or build obligations separately when relevant. Refer to criteria using their " +
-          "briefing labels when useful; apart from the initial full audit's Open criteria line there is no " +
-          "fixed format. " +
-          "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
-          "before downstream review. Focused audits inspect the runtime-selected criterion. " +
-          "List every remaining sibling of that criterion's defect class, not only the last named gap. " +
-          "For capability " +
-          "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
-          "inside an authorized review consumer alone does not prove a non-review access path. " +
-          "Report the current findings even when their criterion IDs, count or descriptions repeat. " +
-          "The runtime decides whether another repair is allowed. Reserve blocked status for an external " +
-          "dependency that prevents inspection.",
+      valueContent = if (trace != null) TRACE_VALUE_CONTENT else ORDINARY_VALUE_CONTENT,
     )
+  }
+
+  private const val ORDINARY_VALUE_CONTENT: String =
+    "Report source gaps and conclusions in ordinary prose. Say when the current source meets the " +
+      "production requirements. Exclude test-only criteria and test-related parts of mixed criteria, and " +
+      "state those later test or build obligations separately when relevant. Refer to criteria using their " +
+      "briefing labels when useful; apart from the initial full audit's Open criteria line there is no " +
+      "fixed format. " +
+      "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
+      "before downstream review. Focused audits inspect the runtime-selected criterion. " +
+      "List every remaining sibling of that criterion's defect class, not only the last named gap. " +
+      "For capability " +
+      "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
+      "inside an authorized review consumer alone does not prove a non-review access path. " +
+      "Report the current findings even when their criterion IDs, count or descriptions repeat. " +
+      "The runtime decides whether another repair is allowed. Reserve blocked status for an external " +
+      "dependency that prevents inspection."
+
+  private fun traceScope(trace: AcceptanceAuditInteractionTraceScope): String {
+    val pending =
+      trace.pendingScenarios.joinToString("\n") { scenario ->
+        "- ${scenario.scenarioRef} (criteria ${scenario.criterionRefs.joinToString(", ")}; subtasks " +
+          "${scenario.subtaskRefs.joinToString(", ")}): entry point: ${scenario.entryPoint}; preconditions: " +
+          "${scenario.preconditions}; steps: ${scenario.steps}; outcome: ${scenario.outcome}"
+      }
+    val pairs =
+      trace.sameFilePairs.joinToString("\n") { pair ->
+        val status =
+          if (pair.pairRef in trace.pendingRefs) "pending, owners ${pair.firstRef} or ${pair.secondRef}" else "context"
+        "- ${pair.pairRef} ($status): shared production files ${pair.sharedPaths.joinToString(", ")}"
+      }.ifEmpty { "none" }
+    val accepted =
+      trace.acceptedCriteria.joinToString("\n") { "- ${it.criterionRef}: ${it.closureEvidenceRef}" }.ifEmpty { "none" }
+    return "\nPending refs (exactly one Interaction line each): ${trace.pendingRefs.joinToString(", ")}\n" +
+      "Pending scenarios:\n${pending.ifEmpty { "none" }}\n" +
+      "Same-file pairs (a line is recorded only for a pending ref):\n$pairs\n" +
+      "Accepted criteria and their closure evidence:\n$accepted\n" +
+      "Re-check refs: ${trace.recheckRefs.joinToString(", ").ifEmpty { "none" }}\n" +
+      AcceptanceCriterionInteractionTraceRound.LINE_GRAMMAR
+  }
 
   private fun noChangeScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
     val claim = inputs.noChangeClaim ?: return ""

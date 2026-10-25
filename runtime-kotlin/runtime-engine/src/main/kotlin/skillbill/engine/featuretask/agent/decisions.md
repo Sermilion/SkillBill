@@ -1,3 +1,15 @@
+## [2026-10-25] Interaction-trace re-ask marker stays in memory
+Context: A malformed interaction-trace audit gets one re-ask before the trace degrades to unknown, and the runtime needs to remember that the re-ask was spent.
+Decision: Hold the marker on the run state (traceReaskScope) rather than a persisted pending-clarification marker.
+Reason: The marker only bounds one in-flight attempt, so a persisted field would need a new schema field and migration for little value. The cost is one extra re-ask after a process restart.
+Revisit when: restarts during a trace re-ask are common enough that the repeated re-ask shows up in cost or latency.
+
+## [2026-10-25] Repair-state and audit-result 0.1 records fail loudly after the 0.2 bump
+Context: Interaction-trace mode added required fields, so the schemas moved from 0.1 to 0.2.
+Decision: Add no 0.1 recovery path; decoding a 0.1 record fails on the version mismatch.
+Reason: A silent upgrade would invent an empty interaction trace and hide that the run was never traced. Failing loudly keeps the mode's coherence guarantees honest.
+Alternatives considered: a version-upgrade shim that defaults the trace to empty, rejected because it would pass untraced runs as traced.
+
 ## [2026-10-25] Operator-authored parent specs are exempt from the Transitional Regressions requirement
 Context: Authored-bundle verification now requires `## Transitional Regressions` on a bundle parent with two or more subtasks, but an operator can supply the parent spec themselves.
 Decision: Require the section only when the parent is rewritable (no protectedSpecSha256); a protected parent is accepted and yields a best-effort diagnostics warning.

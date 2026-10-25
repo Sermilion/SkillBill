@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutatio
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRefusal
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
 import skillbill.engine.featuretask.model.audit.ExpectedAcceptanceCriterionRepairState
+import skillbill.engine.featuretask.model.audit.toRepairRefusal
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
@@ -20,7 +21,6 @@ import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowStatusFor
-import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.error.core.SkillBillRuntimeException
@@ -43,13 +43,13 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.admitQaReaudit
 import skillbill.workflow.taskruntime.model.audit.continueReservedRepair
+import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import skillbill.workflow.taskruntime.model.audit.retainClarification
 import skillbill.workflow.taskruntime.model.audit.retainProseProgress
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Clock
@@ -66,6 +66,7 @@ class AcceptanceCriterionRepairPersistence(
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
   private val adoption: AcceptanceCriterionRepairLegacyAdoption,
+  private val admission: AcceptanceCriterionRepairAuditAdmission,
 ) {
   fun inspectExisting(
     worker: AcquiredFeatureTaskRuntimeWorker,
@@ -299,7 +300,94 @@ class AcceptanceCriterionRepairPersistence(
       if (committed.replayed) "replay" else "commit",
       "accepted",
     )
+    if (committed.interactionTraceSkipped && !committed.replayed) {
+      AcceptanceCriterionInteractionTargets.recordSkip(diagnostics, worker.workflowId)
+    }
     return project(repositoryRoot, worker.workflowId, committed)
+  }
+
+  fun prepareBoundInteractionTrace(
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    binding: AcceptanceCriterionRepairBinding,
+    repositoryRoot: Path,
+  ): AcceptanceCriterionRepairWriteResult {
+    val result =
+      boundary.requiredOwningWrite(
+        "serial_repair_trace_preparation",
+        "owner-fenced interaction trace preparation",
+      ) { work ->
+        prepareInTransaction(work, worker, binding, repositoryRoot)
+      }
+    val committed =
+      when (result) {
+        is OwningTransactionResult.Committed -> result.value
+        is OwningTransactionResult.Refused -> AcceptanceCriterionRepairWriteResult.Refused(owningRefusal(result.reason))
+      }
+    if (committed is AcceptanceCriterionRepairWriteResult.Refused) {
+      signal(worker.workflowId, null, worker.generation, "refusal", committed.reason.wireValue)
+    } else if (committed is AcceptanceCriterionRepairWriteResult.Committed && !committed.replayed) {
+      signal(worker.workflowId, committed.state, worker.generation, "commit", "accepted")
+      if (committed.interactionTraceSkipped) {
+        AcceptanceCriterionInteractionTargets.recordSkip(diagnostics, worker.workflowId)
+      }
+    }
+    return committed
+  }
+
+  private fun prepareInTransaction(
+    work: UnitOfWork,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    binding: AcceptanceCriterionRepairBinding,
+    repositoryRoot: Path,
+  ): AcceptanceCriterionRepairWriteResult {
+    val states = work.workflowStates
+    val refusal =
+      when {
+        !worker.admits(states) || binding.executionId != worker.workflowId ->
+          AcceptanceCriterionRepairRefusal.OWNER_CHANGED
+        !adoption.sourceMatches(worker, repositoryRoot, binding) ->
+          AcceptanceCriterionRepairRefusal.SPEC_SOURCE_CHANGED
+        else -> null
+      }
+    if (refusal != null) return refuse(worker, null, refusal)
+    val record =
+      states.get(WorkflowFamily.TASK_RUNTIME, worker.workflowId)
+        ?: throw invalidAcceptanceCriterionRepairStateSchema(worker.workflowId, "The workflow is missing.")
+    workflowPersistence.validateSerialArtifacts(record.artifacts)
+    val previous =
+      decode(record.artifacts, binding)
+        ?: return refuse(worker, null, AcceptanceCriterionRepairRefusal.UNSAFE_LEGACY_ADOPTION)
+    val next = AcceptanceCriterionInteractionTargets.prepare(previous, binding)
+    return when {
+      next == previous -> AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true)
+      !admission.matches(next, AcceptanceCriterionRepairMutation.PrepareInteractionTrace, null) ->
+        refuse(worker, previous, AcceptanceCriterionRepairRefusal.AUDIT_BINDING_CHANGED)
+      else -> {
+        workflowPersistence.persistAcquiredRepairState(
+          states,
+          record,
+          next,
+          emptyMap(),
+          WorkflowRowAdvance.keepFrom(record),
+        )
+        AcceptanceCriterionInteractionTargets.recordDroppedPairs(
+          diagnostics,
+          worker.workflowId,
+          previous,
+          next,
+          binding,
+        )
+        AcceptanceCriterionRepairWriteResult.Committed(
+          detach(next),
+          false,
+          AcceptanceCriterionInteractionTargets.skipped(
+            previous,
+            next,
+            AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
+          ),
+        )
+      }
+    }
   }
 
   private fun writeInTransaction(
@@ -332,55 +420,26 @@ class AcceptanceCriterionRepairPersistence(
     workflowPersistence.validateSerialArtifacts(record.artifacts)
     val previous = decode(record.artifacts, binding)
     return when {
-      previous != null && sameCommittedStart(record.artifacts, request) ->
+      previous != null && AcceptanceCriterionRepairStartLedger.sameCommittedStart(record.artifacts, request) ->
         AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true)
-      previous != null && supersededStart(record.artifacts, request) ->
+      previous != null && AcceptanceCriterionRepairStartLedger.supersededStart(record.artifacts, request) ->
         refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
       else -> {
         val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
-        val next = transition(previous, request.mutation, digest, request.expected.revision)
+        val next =
+          transition(previous, request.mutation, digest, request.expected.revision, binding)
         val legacySafe =
           previous != null || mayAdopt(record, request, binding, worker, repositoryRoot)
-        val refusal = candidateRefusal(previous, next, request, binding, legacySafe)
+        val refusal =
+          candidateRefusal(previous, next, request, binding, legacySafe) ?: admissionRefusal(next, request)
         if (refusal != null) {
           refuse(worker, previous, refusal)
         } else {
-          commitCandidate(work, worker, record, requireNotNull(next), request)
+          val committed = commitCandidate(work, worker, record, requireNotNull(next), request)
+          AcceptanceCriterionInteractionTargets.flagSkipped(committed, previous, request.mutation)
         }
       }
     }
-  }
-
-  private fun sameCommittedStart(
-    artifacts: Map<String, Any?>,
-    request: AcceptanceCriterionRepairCommit,
-  ): Boolean {
-    val phase = request.phase
-    if (phase.status != WorkflowStepStatus.RUNNING.wireValue) return false
-    val record = decodePhaseRecords(artifacts)[phase.phaseId] ?: return false
-    val latest = decodePhaseLedger(artifacts).maxByOrNull { it.sequenceNumber } ?: return false
-    val recordMatches =
-      record.status == WorkflowStepStatus.RUNNING && record.attemptCount == phase.attemptCount &&
-        record.resolvedAgentId == phase.resolvedAgentId
-    val loopMatches =
-      record.loopId == phase.loopId && record.edgeIteration == phase.edgeIteration &&
-        latest.loopId == phase.loopId && latest.edgeIteration == phase.edgeIteration
-    val startMatches =
-      latest.action == FeatureTaskRuntimePhaseLedgerAction.START && latest.phaseId == phase.phaseId &&
-        latest.attemptCount == phase.attemptCount && latest.resolvedAgentId == phase.resolvedAgentId
-    return recordMatches && loopMatches && startMatches
-  }
-
-  private fun supersededStart(
-    artifacts: Map<String, Any?>,
-    request: AcceptanceCriterionRepairCommit,
-  ): Boolean {
-    val phase = request.phase
-    if (phase.status != WorkflowStepStatus.RUNNING.wireValue) return false
-    val latest = decodePhaseRecords(artifacts)[phase.phaseId] ?: return false
-    return latest.attemptCount > phase.attemptCount ||
-      latest.attemptCount == phase.attemptCount &&
-      (latest.status != WorkflowStepStatus.RUNNING || !sameCommittedStart(artifacts, request))
   }
 
   private fun phaseIdentityMatches(
@@ -398,31 +457,10 @@ class AcceptanceCriterionRepairPersistence(
     worker: AcquiredFeatureTaskRuntimeWorker,
     repositoryRoot: Path,
   ): Boolean =
-    !adoption.hasAuditHistory(record) || freshCurrentAuditDiscovery(record, request) ||
+    !adoption.hasAuditHistory(
+      record,
+    ) || AcceptanceCriterionRepairStartLedger.freshCurrentAuditDiscovery(record, request) ||
       adoptionMatches(record.artifacts, binding, worker, repositoryRoot, record)
-
-  private fun freshCurrentAuditDiscovery(
-    record: WorkflowStateSnapshot,
-    request: AcceptanceCriterionRepairCommit,
-  ): Boolean {
-    val discovery = request.mutation is AcceptanceCriterionRepairMutation.Discover && request.phase.attemptCount == 1
-    val currentStep = record.workflowStatus == WorkflowStatus.RUNNING && !record.currentStepId.isNullOrBlank()
-    val current = decodePhaseRecords(record.artifacts)[request.phase.phaseId]
-    val currentPhaseOpen = current == null || current.attemptCount == 1 && current.finishedAt == null
-    val stepOpen =
-      record.steps.none {
-        it.stepId == request.phase.phaseId &&
-          (it.attemptCount > 1 || it.status !in setOf(WorkflowStepStatus.PENDING, WorkflowStepStatus.RUNNING))
-      }
-    val ledger = decodePhaseLedger(record.artifacts)
-    val auditLedger = ledger.filter { it.phaseId == request.phase.phaseId }
-    val currentLedger =
-      auditLedger.all {
-        it.attemptCount == 1 && it.action == FeatureTaskRuntimePhaseLedgerAction.START
-      }
-    val ledgerIsFresh = auditLedger.isEmpty() || currentLedger && auditLedger.size == 1
-    return discovery && currentStep && currentPhaseOpen && stepOpen && ledgerIsFresh
-  }
 
   private fun candidateRefusal(
     previous: AcceptanceCriterionRepairState?,
@@ -451,6 +489,14 @@ class AcceptanceCriterionRepairPersistence(
       else -> null
     }
   }
+
+  private fun admissionRefusal(
+    next: AcceptanceCriterionRepairState?,
+    request: AcceptanceCriterionRepairCommit,
+  ): AcceptanceCriterionRepairRefusal? =
+    AcceptanceCriterionRepairRefusal.AUDIT_BINDING_CHANGED.takeUnless {
+      admission.matches(requireNotNull(next), request.mutation, request.evidence)
+    }
 
   private fun hasReservationCapacity(
     state: AcceptanceCriterionRepairState?,
@@ -596,10 +642,7 @@ class AcceptanceCriterionRepairPersistence(
   }
 
   private fun owningRefusal(reason: OwningTransactionResult.Refusal): AcceptanceCriterionRepairRefusal =
-    when (reason) {
-      OwningTransactionResult.Refusal.ACTIVE_SESSION -> AcceptanceCriterionRepairRefusal.ACTIVE_SESSION
-      OwningTransactionResult.Refusal.UNSUPPORTED -> AcceptanceCriterionRepairRefusal.OWNING_SESSION_UNAVAILABLE
-    }
+    reason.toRepairRefusal()
 
   private fun project(
     root: Path,
@@ -674,15 +717,18 @@ class AcceptanceCriterionRepairPersistence(
     mutation: AcceptanceCriterionRepairMutation,
     auditDigest: String?,
     expectedRevision: Long?,
+    binding: AcceptanceCriterionRepairBinding,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
       is AcceptanceCriterionRepairMutation.QaReaudit,
+      is AcceptanceCriterionRepairMutation.InteractionTrace,
+      AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> proseTransition(state, mutation)
-      else -> repairTransition(state, mutation, auditDigest, expectedRevision)
-    }
+      else -> repairTransition(state, mutation, auditDigest, expectedRevision, binding)
+    }?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
 
   private fun proseTransition(
     state: AcceptanceCriterionRepairState?,
@@ -694,6 +740,9 @@ class AcceptanceCriterionRepairPersistence(
       AcceptanceCriterionRepairMutation.KeepProgress -> state?.retainProseProgress()
       is AcceptanceCriterionRepairMutation.QaReaudit -> state?.admitQaReaudit(mutation.criterionRefs)
       is AcceptanceCriterionRepairMutation.Clarification -> state?.retainClarification(mutation.question)
+      is AcceptanceCriterionRepairMutation.InteractionTrace ->
+        state?.recordInteractionTrace(mutation.settlement)?.clearPendingClarification()
+      AcceptanceCriterionRepairMutation.PrepareInteractionTrace -> state
       else -> null
     }
 
@@ -702,11 +751,13 @@ class AcceptanceCriterionRepairPersistence(
     mutation: AcceptanceCriterionRepairMutation,
     auditDigest: String?,
     expectedRevision: Long?,
+    binding: AcceptanceCriterionRepairBinding,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
       is AcceptanceCriterionRepairMutation.Discover -> {
         val admitted = AcceptanceCriterionRepairState.admit(mutation.admission)
-        if (state == null || state == admitted) admitted else null
+        val replayed = admitted?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
+        if (state == null || state == admitted || state == replayed) admitted else null
       }
       is AcceptanceCriterionRepairMutation.Reserve -> {
         if (state?.reservation?.reservationId == mutation.reservationId) {
@@ -741,6 +792,8 @@ class AcceptanceCriterionRepairPersistence(
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
       is AcceptanceCriterionRepairMutation.QaReaudit,
+      is AcceptanceCriterionRepairMutation.InteractionTrace,
+      AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> null
     }
 
@@ -765,6 +818,8 @@ class AcceptanceCriterionRepairPersistence(
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
       is AcceptanceCriterionRepairMutation.QaReaudit,
+      is AcceptanceCriterionRepairMutation.InteractionTrace,
+      AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> proseReplayExpected(state, expected, mutation)
       else -> repairReplayExpected(state, expected, mutation)
     }
@@ -782,9 +837,11 @@ class AcceptanceCriterionRepairPersistence(
           state?.proseAudits?.any { it == mutation.audit } == true
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
+      AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> expected.revision == state?.revision?.minus(1)
       is AcceptanceCriterionRepairMutation.QaReaudit ->
         expected.revision == state?.revision?.minus(1) && state?.pendingAuditRefs == mutation.criterionRefs
+      is AcceptanceCriterionRepairMutation.InteractionTrace -> expected.revision == state?.revision?.minus(1)
       else -> false
     }
 
@@ -814,6 +871,8 @@ class AcceptanceCriterionRepairPersistence(
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
       is AcceptanceCriterionRepairMutation.QaReaudit,
+      is AcceptanceCriterionRepairMutation.InteractionTrace,
+      AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> false
     }
 

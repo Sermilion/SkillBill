@@ -50,7 +50,12 @@ class AcceptanceCriterionRepairSourceIdentityTest {
           )
         val recorder =
           assertNotNull(
-            AcceptanceCriterionRepairPhaseRecorder(f.persistence, GitWorkflowGitOperations(), f.workflows)
+            AcceptanceCriterionRepairPhaseRecorder(
+              f.persistence,
+              GitWorkflowGitOperations(),
+              f.workflows,
+              f.diagnostics,
+            )
               .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
           )
         complete(recorder, "audit", 1, "advance", "Open criteria: AC-001")

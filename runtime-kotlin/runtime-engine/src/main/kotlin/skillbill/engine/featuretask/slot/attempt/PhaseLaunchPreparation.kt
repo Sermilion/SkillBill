@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseProjectInstructionsRecord
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
@@ -460,6 +461,7 @@ object PhaseLaunchPreparation {
     if (implementationTurn == null) {
       ImplementationChecklistLaunchPreparation.prepare(this, run, implementationContinuation)
     }
+    val acceptanceRepair = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
     return FeatureTaskRuntimePhasePromptComposeInputs(
       issueKey = run.request.issueKey,
       briefing = briefing,
@@ -476,14 +478,10 @@ object PhaseLaunchPreparation {
       priorReviewContext = null,
       priorTerminalFailure = priorCorrection?.retryableTerminalReason,
       priorFindingCoverage = priorCorrection?.findingCoverageReason,
-      priorAcceptanceAudit =
-        auditProseValue(
-          progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
-            .output?.normalizedOutput?.envelopeWireMap(),
-        ),
+      priorAcceptanceAudit = priorAcceptanceAudit(),
       currentAcceptanceCriterion = acceptanceCriterionContext(run),
-      priorAcceptanceRepairFailures =
-        (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.priorRepairFailures,
+      priorAcceptanceRepairFailures = acceptanceRepair?.priorRepairFailures,
+      interactionTraceScope = acceptanceRepair?.let(AcceptanceCriterionInteractionTraceRound::promptScope),
       noChangeClaim = auditNoChangeClaim(run),
       operatorBlockRetry =
         session.operatorBlockRetry
@@ -503,6 +501,11 @@ object PhaseLaunchPreparation {
       implementationChecklistAddress = implementationChecklistAddress(run),
     )
   }
+
+  private fun PhaseAttemptLaunchPreparationContext.priorAcceptanceAudit(): String? =
+    auditProseValue(
+      progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).output?.normalizedOutput?.envelopeWireMap(),
+    )
 
   private fun PhaseAttemptLaunchPreparationContext.implementationChecklistAddress(run: PhaseRun): String? =
     run.request.workflowId.takeIf(String::isNotBlank)?.let { workflowId ->

@@ -5,6 +5,7 @@ import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
@@ -202,6 +203,9 @@ class FeatureTaskRuntimeStatusService(
           null -> null
           is AcceptanceCriterionRepairStatusRead.Current -> acceptanceCriterionRepairExplanation(repair.state)
           AcceptanceCriterionRepairStatusRead.PreContract -> PRE_CONTRACT_REPAIR_EXPLANATION
+          is AcceptanceCriterionRepairStatusRead.SupersededVersion ->
+            "Acceptance repair state is stored at contract ${repair.version}; the next owned run quarantines " +
+              "the original record and regenerates it at $ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION"
         },
     )
   }
@@ -258,6 +262,7 @@ class FeatureTaskRuntimeStatusService(
           "Repair completed; targeted verification required"
         AcceptanceCriterionRepairStage.ACCEPTED -> "Every acceptance criterion accepted; source acceptance recorded"
         AcceptanceCriterionRepairStage.BUDGET_BLOCKED -> "Criterion exhausted; source repair cannot advance"
+        AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED -> "Interaction trace of accepted criteria required"
       }
     }
 
