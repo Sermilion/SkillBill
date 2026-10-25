@@ -222,32 +222,31 @@ private fun loadSchema(): JsonSchema =
 
 internal fun anchoredTopLevelFieldNames(): Set<String> = ANCHORED_TOP_LEVEL_FIELD_NAMES
 
-private val ANCHORED_TOP_LEVEL_FIELD_NAMES: Set<String>
-  get() {
-    val yamlText =
-      ClasspathContractSchemaLoader.readClasspathYamlText(
-        classLoader = PlatformPackSchemaValidator::class.java.classLoader,
-        resource = PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE,
-        missingError = {
-          invalidManifestSchema(
-            "Canonical platform-pack schema is missing. Expected to find it on the JVM classpath at " +
-              "'$PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE'.",
-          )
-        },
-      )
-    val yamlNode: JsonNode = ClasspathContractSchemaLoader.sharedYamlMapper().readTree(yamlText)
-    val properties = yamlNode.path("properties")
-    if (properties.isMissingNode || !properties.isObject) {
-      throw invalidManifestSchema(
-        "Canonical platform-pack schema is missing a top-level 'properties' object; cannot derive " +
-          "the anchored top-level field set.",
-      )
-    }
-    val anchored = linkedSetOf<String>()
-    properties.fields().forEach { (name, definition) ->
-      if (definition.path("x-runtime-anchored").asBoolean(false)) {
-        anchored += name
-      }
-    }
-    return anchored
+private val ANCHORED_TOP_LEVEL_FIELD_NAMES: Set<String> by lazy {
+  val yamlText =
+    ClasspathContractSchemaLoader.readClasspathYamlText(
+      classLoader = PlatformPackSchemaValidator::class.java.classLoader,
+      resource = PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE,
+      missingError = {
+        invalidManifestSchema(
+          "Canonical platform-pack schema is missing. Expected to find it on the JVM classpath at " +
+            "'$PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE'.",
+        )
+      },
+    )
+  val yamlNode: JsonNode = ClasspathContractSchemaLoader.sharedYamlMapper().readTree(yamlText)
+  val properties = yamlNode.path("properties")
+  if (properties.isMissingNode || !properties.isObject) {
+    throw invalidManifestSchema(
+      "Canonical platform-pack schema is missing a top-level 'properties' object; cannot derive " +
+        "the anchored top-level field set.",
+    )
   }
+  val anchored = linkedSetOf<String>()
+  properties.fields().forEach { (name, definition) ->
+    if (definition.path("x-runtime-anchored").asBoolean(false)) {
+      anchored += name
+    }
+  }
+  anchored
+}

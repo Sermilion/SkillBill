@@ -1,3 +1,9 @@
+## [2026-10-25] Goal subtasks fill one detail page and anchored detail cursors ignore store writes
+Context: The desktop detail pane paged goal subtasks at 10, and its Load more cursor was refused with "Work changed. Refresh the detail." whenever the store revision moved. A live goal writes the store about once a second, so the second page of a 16-subtask goal never loaded.
+Decision: IdeStatusService.detail reads a goal's subtask list with goalSubtaskPageLimit, which is the page-size cap (100) whatever page size was requested; completed-subtask validation keeps the requested size. A detail cursor only requires an unchanged store observation when its position has no row anchor.
+Reason: A goal manifest is small and the pane needs every subtask for its progress bar. Subtask, validation, dependency, phase and anchored execution pages continue after a row identity, so a later write cannot shift or repeat their rows; only offset pages need the pinned revision.
+Revisit when: goal manifests can exceed 100 subtasks often enough that the head page should grow, or an anchored list gains an ordering that a write can reshuffle.
+
 ## [2026-10-24] Spec browser project carries a nullable specsRoot instead of a placeholder path
 Context: SKILL-444 subtask 3 snapshots for an unknown project id still need a SpecBrowserProject, but a project with no store location has no real specsRoot.
 Decision: SpecBrowserProject.specsRoot is Path? and only the unknown-project snapshot leaves it null; projects(), projectFor() and resolved snapshots always set it.

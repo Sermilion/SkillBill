@@ -1,5 +1,6 @@
 package skillbill.engine.work.pagination
 
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailList
@@ -19,6 +20,11 @@ internal data class GoalPageRead(
   val list: WorkDetailList,
   val lastReadId: Int?,
 )
+
+internal fun goalSubtaskPageLimit(
+  requestedPageSize: Int,
+  completedOnly: Boolean,
+): Int = if (completedOnly) requestedPageSize else WorkPaginationLimits.MAX_PAGE_SIZE
 
 internal data class RuntimePhasePageRead(
   val status: WorkDetailRuntimeStatus,

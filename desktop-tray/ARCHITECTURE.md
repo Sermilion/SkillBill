@@ -149,7 +149,9 @@ separate connections. History has its own retention and family filter. Sidebar,
 history, and detail cursors are separate at the desktop boundary, and retained
 windows cap at five pages. Detail cursors carry the store id, revision,
 repository identity, list, and page size; a cursor from another store, list, or
-revision is refused and the read retries against one coherent snapshot.
+revision is refused. Detail reads publish the runtime snapshot and its revision
+without retrying when another writer commits during projection. Run options reuse
+that detail snapshot; control requests still validate their target when invoked.
 Generation-bound cursors reject stale appends and details after a path change or
 same-path replacement. Failed reads retain prior data with a stale indication.
 

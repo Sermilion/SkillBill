@@ -30,6 +30,7 @@ import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.engine.work.pagination.detailNextAnchors
 import skillbill.engine.work.pagination.emit
+import skillbill.engine.work.pagination.goalSubtaskPageLimit
 import skillbill.engine.work.pagination.includesDetailList
 import skillbill.engine.work.pagination.invalidWorkPaginationRequest
 import skillbill.engine.work.pagination.readStatusStandaloneRecords
@@ -480,7 +481,9 @@ class IdeStatusService(
     var nextAnchors: Map<WorkDetailList, WorkDetailAnchor> = emptyMap()
     val result =
       database.read { unitOfWork ->
-        if (request.cursor != null && position.observation != unitOfWork.workList.observation()) {
+        if (request.cursor != null && position.anchor == null &&
+          position.observation != unitOfWork.workList.observation()
+        ) {
           invalidWorkPaginationRequest("Work changed. Refresh the detail.")
         }
         val match = detailMatch(request.id, unitOfWork)
@@ -593,7 +596,7 @@ class IdeStatusService(
     val moreLists =
       detailContinuationLists(
         history.size > pageSize,
-        (goalRead?.page?.remainingCount ?: 0) > pageSize,
+        (goalRead?.page?.remainingCount ?: 0) > goalSubtaskPageLimit(pageSize, completedOnly = false),
         (validationPage?.remainingCount ?: 0) > pageSize,
         runtimeRead?.hasMore == true && request.includesDetailList(WorkDetailList.PHASES),
       )
@@ -696,7 +699,8 @@ class IdeStatusService(
     return goal?.takeIf { request.includesDetailList(list) }
       ?.let { work ->
         val offset = if (after == null) position.offset else 0
-        workList.goalSubtaskPage(work.workflowId, offset, request.pageSize, completedOnly, after)?.let { page ->
+        val limit = goalSubtaskPageLimit(request.pageSize, completedOnly)
+        workList.goalSubtaskPage(work.workflowId, offset, limit, completedOnly, after)?.let { page ->
           val projected =
             goalRunnerStatusService.reconcileSubtaskPage(
               work.workflowId,

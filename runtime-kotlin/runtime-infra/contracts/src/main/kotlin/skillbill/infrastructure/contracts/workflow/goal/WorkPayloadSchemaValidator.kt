@@ -9,6 +9,7 @@ import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WORK_DETAIL_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.error.shellcontent.invalidWorkBoardSchemaError
 import skillbill.error.shellcontent.invalidWorkDetailSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
@@ -67,19 +68,19 @@ class WorkPayloadSchemaValidator : WorkPayloadValidator {
     board: Boolean,
   ) {
     val pageSize = instance.path(WorkBoardPayloadKeys.PAGE_SIZE).asInt()
-    val lists =
+    val bounded =
       if (board) {
-        listOf(instance.path(WorkBoardPayloadKeys.ITEMS))
+        listOf(instance.path(WorkBoardPayloadKeys.ITEMS) to pageSize)
       } else {
         val item = instance.path(WorkDetailPayloadKeys.ITEM)
         listOf(
-          item.path(WorkDetailPayloadKeys.SUBTASKS),
-          item.path(WorkDetailPayloadKeys.PHASES),
-          item.path(WorkDetailPayloadKeys.EXECUTION_HISTORY),
-          item.path(WorkDetailPayloadKeys.COMPLETED_SUBTASK_VALIDATION),
+          item.path(WorkDetailPayloadKeys.SUBTASKS) to WorkPaginationLimits.MAX_PAGE_SIZE,
+          item.path(WorkDetailPayloadKeys.PHASES) to pageSize,
+          item.path(WorkDetailPayloadKeys.EXECUTION_HISTORY) to pageSize,
+          item.path(WorkDetailPayloadKeys.COMPLETED_SUBTASK_VALIDATION) to pageSize,
         )
       }
-    if (lists.any { it.isArray && it.size() > pageSize }) {
+    if (bounded.any { (list, limit) -> list.isArray && list.size() > limit }) {
       throw failure(sourceLabel, board, "A work list exceeds the requested page size.")
     }
     if (instance.has(WorkBoardPayloadKeys.PROBLEM) && !instance.path(WorkBoardPayloadKeys.NEXT_CURSOR).isNull) {
