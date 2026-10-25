@@ -35,6 +35,8 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
           "FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.VALIDATION_TEST_PROBES to
           "FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_TEST_PROBES",
+        FeatureTaskRuntimeWireArtifactKind.GOAL_ASSESSMENT_RECORD to
+          "FeatureTaskRuntimeFailureCode.INVALID_GOAL_ASSESSMENT_RECORD",
         FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD to
           "FeatureTaskRuntimeFailureCode.INVALID_QUARANTINE_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT to

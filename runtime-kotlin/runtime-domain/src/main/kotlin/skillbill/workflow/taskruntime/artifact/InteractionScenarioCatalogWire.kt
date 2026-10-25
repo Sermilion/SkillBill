@@ -159,7 +159,7 @@ private class InteractionScenarioCatalogDecoder(private val sourceLabel: String)
   }
 }
 
-private fun Number.toExactInt(): Int? =
+internal fun Number.toExactInt(): Int? =
   when (this) {
     is Byte, is Short, is Int -> toInt()
     else ->

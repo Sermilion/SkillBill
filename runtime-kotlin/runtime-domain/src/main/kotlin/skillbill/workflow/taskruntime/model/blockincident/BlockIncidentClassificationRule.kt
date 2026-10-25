@@ -138,6 +138,7 @@ private val RUNTIME_DEFECT_FAILURE_CODES =
     FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_SCENARIO_CATALOG.label(),
     FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_TRACE_AUDIT_OUTPUT.label(),
     FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_TEST_PROBES.label(),
+    FeatureTaskRuntimeFailureCode.INVALID_GOAL_ASSESSMENT_RECORD.label(),
     FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA.label(),
     FeatureTaskRuntimeFailureCode.INVALID_WORKER_OWNERSHIP_SCHEMA.label(),
     FeatureTaskRuntimeFailureCode.PHASE_SETTLEMENT_CONFLICT.label(),

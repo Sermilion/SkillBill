@@ -2,6 +2,8 @@ package skillbill.di.goal
 
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.agentrun.AgentRunGoalRunnerSubtaskLauncher
+import skillbill.engine.goalrunner.assessment.DefaultGoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.monitoring.DefaultGoalRunnerCiMonitor
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
@@ -18,6 +20,9 @@ internal interface RuntimeGoalRunnerLaunchProvides {
 
   @Provides
   fun goalRunnerQaGate(gate: DefaultGoalRunnerQaGate): GoalRunnerQaGate = gate
+
+  @Provides
+  fun goalRunnerAssessmentGate(gate: DefaultGoalRunnerAssessmentGate): GoalRunnerAssessmentGate = gate
 
   @Provides
   fun goalRunnerSubtaskLauncher(adapter: AgentRunGoalRunnerSubtaskLauncher): GoalRunnerSubtaskLauncher = adapter

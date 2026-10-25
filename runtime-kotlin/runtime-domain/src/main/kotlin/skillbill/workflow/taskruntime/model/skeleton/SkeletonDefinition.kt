@@ -118,6 +118,13 @@ data class SkeletonDefinition(
           listOf(FeatureTaskRuntimePhaseIds.QA, FeatureTaskRuntimePhaseIds.QA_FIX, FeatureTaskRuntimePhaseIds.BUILD),
         loopOnlyStepIds = setOf(FeatureTaskRuntimePhaseIds.BUILD),
       )
+    val GOAL_ASSESSMENT: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-assessment",
+        listOf(PhaseSlot.GOAL_ASSESSMENT),
+        runStateKind = SkeletonRunStateKind.IN_MEMORY,
+        stepIds = listOf(FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT),
+      )
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
@@ -161,6 +168,7 @@ data class SkeletonDefinition(
           VALIDATION,
           QA,
           GOAL_QA,
+          GOAL_ASSESSMENT,
           PLAN,
           PR,
           MONITOR,

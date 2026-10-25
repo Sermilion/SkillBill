@@ -54,6 +54,12 @@ object InteractionScenarioCatalogSchemaPaths {
   const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/interaction-scenario-catalog.yaml"
 }
 
+object GoalAssessmentRecordSchemaPaths {
+  const val REPO_RELATIVE_PATH: String = "orchestration/contracts/goal-assessment-record-schema.yaml"
+  const val CLASSPATH_RESOURCE: String = "skillbill/infrastructure/contracts/goal-assessment-record-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/goal-assessment-record.yaml"
+}
+
 object ValidationTestProbesSchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-validation-test-probes-schema.yaml"

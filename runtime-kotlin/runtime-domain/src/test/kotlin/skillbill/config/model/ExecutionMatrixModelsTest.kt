@@ -193,6 +193,8 @@ class ExecutionMatrixModelsTest {
     assertEquals(ExecutionTier.REASONING, matrix.tierOf("audit"))
     assertEquals(ExecutionTier.REASONING, matrix.tierOf("validate"))
     assertEquals(ExecutionTier.REASONING, matrix.tierOf("present_findings"))
+    assertEquals(ExecutionTier.REASONING, matrix.tierOf("goal_assessment"))
+    assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("goal_assessment_fix"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("preplan"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("implement"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("implement_fix"))

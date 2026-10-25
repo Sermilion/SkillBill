@@ -17,8 +17,11 @@ import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.model.GoalUnknownScenario
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.engine.goalrunner.persist.assessment.WorkflowGoalRunnerAssessmentRecording
 import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -106,6 +109,7 @@ class WorkflowGoalRunnerOutcomeStore
         workflowSnapshotValidator,
         wireArtifactValidator,
       )
+    private val assessmentRecording = WorkflowGoalRunnerAssessmentRecording(database, engine, wireArtifactValidator)
     private val terminal =
       WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations, crashReconciler)
     private val review = WorkflowGoalRunnerReviewBridge(database, engine)
@@ -147,6 +151,14 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? =
       database.read { unitOfWork -> unitOfWork.featureTaskQaOutcomes.find(parentWorkflowId) }
+
+    override fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
+      assessmentRecording.read(parentWorkflowId)
+
+    override fun recordGoalAssessmentRecord(
+      parentWorkflowId: String,
+      record: GoalAssessmentRecord,
+    ): Boolean = assessmentRecording.record(parentWorkflowId, record)
 
     override fun childQaSelection(
       workflowId: String,

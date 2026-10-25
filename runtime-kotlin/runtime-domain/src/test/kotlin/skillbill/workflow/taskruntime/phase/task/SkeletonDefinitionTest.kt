@@ -190,6 +190,22 @@ class SkeletonDefinitionTest {
   }
 
   @Test
+  fun `goal assessment is an in-memory read-only skeleton that is never invocable on its own`() {
+    val definition = SkeletonDefinition.GOAL_ASSESSMENT
+    val traversal = definition.traversal(definition.stepIds.toSet(), entryStepIds = setOf("goal_assessment"))
+
+    assertEquals("goal-assessment", definition.id)
+    assertEquals(definition, SkeletonDefinition.byId("goal-assessment"))
+    assertEquals(listOf(PhaseSlot.GOAL_ASSESSMENT), definition.slots)
+    assertEquals(listOf("goal_assessment"), definition.stepIds)
+    assertEquals(listOf("goal_assessment", "goal_assessment_fix"), PhaseSlot.GOAL_ASSESSMENT.steps)
+    assertEquals(SkeletonRunStateKind.IN_MEMORY, definition.runStateKind)
+    assertFalse(definition.standaloneInvocable)
+    assertEquals(listOf("goal_assessment"), traversal.forwardPhaseIds)
+    assertEquals(emptyList(), traversal.backwardEdges)
+  }
+
+  @Test
   fun `recorded goal-child revisions keep their composition while new lookup selects revision four without QA`() {
     val current = SkeletonDefinition.byId("goal-child")
     assertEquals(SkeletonDefinition.GOAL_CHILD, current)

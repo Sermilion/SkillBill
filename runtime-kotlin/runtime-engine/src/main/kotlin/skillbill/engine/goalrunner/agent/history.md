@@ -1,5 +1,17 @@
 # goalrunner boundary history
 
+## [2026-10-25] SKILL-442 subtask 5: goal assessment stage, assessors and verifier
+Areas: runtime-engine goalrunner (assessment, persist/assessment) and featuretask slot/goalassessment and skeleton, runtime-domain goalrunner/assessment, skeleton, phase ids and workflow artifacts, runtime-contracts payload keys and failure codes, runtime-infra contracts (goal-owned schema validator), runtime-core DI, runtime-mcp telemetry enums
+- New read-only goal_assessment phase (PhaseSlot and SkeletonDefinition GOAL_ASSESSMENT, one read-only strategy). DefaultGoalRunnerAssessmentGate runs one assessor per committed subtask, then one cross-subtask assessor, then a verifier, sequentially through the shared phase runner. It is DI-bound but not yet called from finalization; subtask 6 owns that wiring and the fix loop.
+- Assessors see only git state, the parent spec, every subtask spec and the declared scenarios and regressions. They never read audit, review, validate, QA, receipt or acceptance data; an isolation test seeds sentinel markers and asserts none reach any role.
+- Governed assessment-record contract 0.1 (schema, payload keys, INVALID_GOAL_ASSESSMENT_RECORD, loud-failing wire codec) persists through a durable GOAL_ASSESSMENT_RECORD artifact family after every run. Reads are typed Absent, Recorded or Corrupt; a corrupt record is never overwritten.
+- Re-entry skips recorded (role, subtask) runs and adds no duplicate findings. Line-grammar output gets GA-NNN refs; fix authority is returned only when the final persist succeeded and the verifier left open Major-or-worse findings.
+- Containment: assessor, verifier and parse failures never throw. Each is a best-effort warning, an unverified finding stays without fix authority, and all assessors failing yields Unavailable with exit reason assessment_unavailable. Only cancellation and interruption propagate.
+- Reusable: engine/diagnostics ContainableFailure (shared with the QA gate); GoalAssessmentGateFixture for scripted-launcher gate tests. The round run reads the accepted prose output before the canonical JSON value.
+- Limits: the cross-subtask assessor always runs, even with one subtask. Phase prompts do not inject AGENTS.md. Telemetry schema is 1.13.0.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented (validate passed clean check)
+
 ## [2026-10-24] SKILL-444 subtask 1: runtime purge resets project-store spec bundles
 Areas: runtime-engine goalrunner/reset (GoalRunnerPurgeSpecBundleReset) and its GoalRunnerPurgeCoordinatorTest
 - MEDIUM correctness fix. Purge reset used to ignore a bundle living in the project store, so its manifest kept launched subtask state. The reset now has three branches: in-repo tracked, in-repo untracked (both unchanged), and a new project-store branch. Anything else still resets nothing.

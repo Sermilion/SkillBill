@@ -9,6 +9,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
@@ -78,6 +80,13 @@ interface GoalRunnerWorkflowOutcomeStore :
   fun hasQaComposedPlan(workflowId: String): Boolean
 
   fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
+
+  fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
+
+  fun recordGoalAssessmentRecord(
+    parentWorkflowId: String,
+    record: GoalAssessmentRecord,
+  ): Boolean
 }
 
 interface GoalRunnerAttemptLedgerStore {

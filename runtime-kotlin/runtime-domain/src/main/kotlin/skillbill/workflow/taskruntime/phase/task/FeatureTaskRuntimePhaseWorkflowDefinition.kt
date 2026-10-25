@@ -32,6 +32,8 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_MONITOR: String = FeatureTaskRuntimePhaseIds.MONITOR
   const val PHASE_MONITOR_FIX: String = FeatureTaskRuntimePhaseIds.MONITOR_FIX
   const val PHASE_PRESENT_FINDINGS: String = FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS
+  const val PHASE_GOAL_ASSESSMENT: String = FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT
+  const val PHASE_GOAL_ASSESSMENT_FIX: String = FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT_FIX
 
   fun planSubtaskUnitRecordId(subtaskId: Int): String = FeatureTaskRuntimePhaseIds.planSubtaskUnitRecordId(subtaskId)
 
@@ -84,7 +86,8 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   val runtimeSettledPhaseIds: Set<String> = setOf(PHASE_INTAKE, PHASE_COMMIT_PUSH, PHASE_MONITOR)
 
-  val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - runtimeSettledPhaseIds + PHASE_QA
+  val agentSettledPhaseIds: Set<String> =
+    definition.stepIds.toSet() - runtimeSettledPhaseIds + PHASE_QA + PHASE_GOAL_ASSESSMENT + PHASE_GOAL_ASSESSMENT_FIX
 
   val noChangeClaimPhaseIds: Set<String> = setOf(PHASE_IMPLEMENT, PHASE_AUDIT_IMPLEMENT_FIX)
 

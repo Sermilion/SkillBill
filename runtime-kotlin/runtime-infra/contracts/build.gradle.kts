@@ -203,6 +203,11 @@ governedResources {
     "SKILL-442: canonical interaction-scenario catalog schema",
   )
   copy(
+    "copyGoalAssessmentRecordSchema",
+    "goal-assessment-record-schema.yaml",
+    "SKILL-442: canonical goal-assessment record schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeValidationTestProbesSchema",
     "feature-task-runtime-validation-test-probes-schema.yaml",
     "SKILL-442: canonical validation test-probes schema",

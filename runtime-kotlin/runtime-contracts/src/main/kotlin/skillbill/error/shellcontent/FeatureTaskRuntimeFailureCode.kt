@@ -27,6 +27,7 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_INTERACTION_SCENARIO_CATALOG,
   INVALID_INTERACTION_TRACE_AUDIT_OUTPUT,
   INVALID_VALIDATION_TEST_PROBES,
+  INVALID_GOAL_ASSESSMENT_RECORD,
   INVALID_EXECUTION_IDENTITY_SCHEMA,
   INVALID_WORKER_OWNERSHIP_SCHEMA,
   PHASE_SETTLEMENT_CONFLICT,
@@ -249,6 +250,17 @@ fun invalidInteractionScenarioCatalog(
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_SCENARIO_CATALOG,
     "Interaction scenario catalog '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidGoalAssessmentRecord(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_GOAL_ASSESSMENT_RECORD,
+    "Goal assessment record '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
   )
 

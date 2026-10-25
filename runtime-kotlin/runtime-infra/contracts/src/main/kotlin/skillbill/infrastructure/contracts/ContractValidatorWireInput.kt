@@ -19,6 +19,7 @@ import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeProjectionMeasurementSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeQuarantineSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeSharedEvidenceProjectionSchema
+import skillbill.error.shellcontent.invalidGoalAssessmentRecord
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
@@ -122,5 +123,7 @@ private fun serialWireArtifactNonObjectError(
       invalidFeatureTaskRuntimeImplementationProgressSchema(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.VALIDATION_TEST_PROBES ->
       invalidValidationTestProbes(sourceLabel, reason)
+    FeatureTaskRuntimeWireArtifactKind.GOAL_ASSESSMENT_RECORD ->
+      invalidGoalAssessmentRecord(sourceLabel, reason)
     else -> error("Unexpected non-serial wire artifact $kind")
   }

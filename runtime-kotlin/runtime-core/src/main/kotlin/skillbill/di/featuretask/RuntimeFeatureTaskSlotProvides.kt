@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
@@ -115,6 +116,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
         pullRequest.standaloneMonitor,
         pullRequest.standalonePublication,
         qa,
+        GoalAssessmentStrategy(),
       ).map { strategy -> PhaseStrategyRegistration(strategy, runner) },
     )
   }

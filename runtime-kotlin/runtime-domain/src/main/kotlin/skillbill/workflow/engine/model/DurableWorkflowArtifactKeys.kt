@@ -5,6 +5,7 @@ internal const val GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY = "goal_out_of_band_
 internal const val GOAL_CONTINUATION_OUTCOME_DISPLACEMENT_ARTIFACT_KEY =
   "goal_continuation_outcome_displacement"
 internal const val GOAL_BLOCK_IDENTITY_ARTIFACT_KEY = "goal_block_identity"
+internal const val GOAL_ASSESSMENT_RECORD_ARTIFACT_KEY: String = "goal_assessment_record"
 
 internal const val WORKER_SUBTASK_REQUEST_OUTCOMES_ARTIFACT_KEY = "goal_worker_subtask_request_outcomes"
 

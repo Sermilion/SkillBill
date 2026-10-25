@@ -73,6 +73,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
@@ -86,6 +87,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.goalrunner.GoalObservabilityArtifacts
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
 import skillbill.goalrunner.model.GoalObservabilityProgressEvent
@@ -5153,6 +5155,22 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   var goalQaOutcome: FeatureTaskQaOutcome? = null
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = goalQaOutcome
+
+  val goalAssessmentRecords: MutableMap<String, GoalAssessmentRecord> = mutableMapOf()
+  var goalAssessmentRecordRead: GoalAssessmentRecordRead? = null
+
+  override fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
+    goalAssessmentRecordRead
+      ?: goalAssessmentRecords[parentWorkflowId]?.let(GoalAssessmentRecordRead::Recorded)
+      ?: GoalAssessmentRecordRead.Absent
+
+  override fun recordGoalAssessmentRecord(
+    parentWorkflowId: String,
+    record: GoalAssessmentRecord,
+  ): Boolean {
+    goalAssessmentRecords[parentWorkflowId] = record
+    return true
+  }
 
   private val outcomes: MutableMap<String, GoalRunnerStoredOutcome> = mutableMapOf()
   private val reviewStates: MutableMap<String, GoalSubtaskReviewState> = mutableMapOf()
