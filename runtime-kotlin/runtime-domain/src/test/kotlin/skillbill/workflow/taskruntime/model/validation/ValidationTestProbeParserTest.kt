@@ -38,6 +38,20 @@ class ValidationTestProbeParserTest {
   }
 
   @Test
+  fun `a prose label line that names no test is not read as a probe`() {
+    val parsed =
+      parse(
+        """
+        **Test probe:** in the clean clone I removed the save, and the new test failed.
+        Test probe: the only test this subtask changed is NavHostTest.
+        Test probe NavHostTest.drag saves once: killed guards NavigationHost.kt onDragStopped repaired no reason it failed
+        """.trimIndent(),
+      )
+
+    assertEquals("NavHostTest.drag saves once", parsed.probes.single().testRef)
+  }
+
+  @Test
   fun `malformed reports are rejected with the probe failure code`() {
     val oversized = (1..ValidationTestProbeShape.MAX_PROBES + 1).joinToString("\n") { line("t$it", "killed", "no") }
     val rejected =

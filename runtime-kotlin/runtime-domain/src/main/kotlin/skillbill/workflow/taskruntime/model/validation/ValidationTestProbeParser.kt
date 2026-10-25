@@ -48,7 +48,7 @@ object ValidationTestProbeParser {
   private const val GUARDED_GROUP = 3
   private const val REPAIRED_GROUP = 4
   private const val REASON_GROUP = 5
-  private val PREFIX = Regex("""^\W*Test probe\b""", RegexOption.IGNORE_CASE)
+  private val PREFIX = Regex("""^\W*Test probe\b(?!\W*:)""", RegexOption.IGNORE_CASE)
   private val LINE =
     Regex(
       """^\W*Test probe\s+(.+?)\s*:\s*\W*(killed|survived|not_run)\b\W*\s+guards\s+(.+?)\s+""" +
