@@ -67,6 +67,19 @@ class OpenCiMonitorStatusTest {
   }
 
   @Test
+  fun `a live goal in its assessment projects finalization when children are complete`() {
+    listOf("goal_assessment", "goal_assessment_fix").forEach { step ->
+      assertTrue(
+        goalProjectsLiveFinalizationStep(
+          projection(complete = 1, pending = 0, blocked = 0)
+            .copy(executionLiveness = ExecutionLiveness.LIVE, currentStep = step),
+        ),
+        step,
+      )
+    }
+  }
+
+  @Test
   fun `a live goal on implement does not project finalization`() {
     assertFalse(
       goalProjectsLiveFinalizationStep(

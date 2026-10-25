@@ -58,6 +58,21 @@ class GoalRunnerStatusAssessmentResultTest {
   }
 
   @Test
+  fun `the fix validation of a running assessment reports the fix step`() {
+    val running =
+      GoalRunnerAssessmentResult(GoalRunnerAssessmentState.RUNNING, 2, null, true, emptyList(), emptyList())
+    val exited =
+      running.copy(state = GoalRunnerAssessmentState.COMPLETED, exitReason = GoalAssessmentExitReason.CONVERGED)
+
+    assertEquals("goal_assessment_fix", running.stageStep("validate"))
+    assertEquals("goal_assessment", running.stageStep("goal_assessment"))
+    assertEquals("goal_assessment_fix", running.stageStep("goal_assessment_fix"))
+    assertEquals("validate", exited.stageStep("validate"))
+    assertEquals("validate", null.stageStep("validate"))
+    assertNull(running.stageStep(null))
+  }
+
+  @Test
   fun `an absent record stays absent and a skipped record stays skipped`() {
     assertNull(status(null).goalAssessmentResult)
 

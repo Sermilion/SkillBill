@@ -179,7 +179,7 @@ internal fun goalProjectsLiveFinalizationStep(projection: GoalRunnerStatusProjec
   if (projection == null || projection.executionLiveness != ExecutionLiveness.LIVE) return false
   if (!goalStaysOnOpenCiMonitor(projection)) return false
   val step = projection.currentStep?.takeIf(String::isNotBlank) ?: return false
-  return step in GOAL_FINISH_PIPELINE
+  return step in GOAL_FINISH_PIPELINE || step in GOAL_ASSESSMENT_STEPS
 }
 
 internal data class GoalCurrentStepSignals(

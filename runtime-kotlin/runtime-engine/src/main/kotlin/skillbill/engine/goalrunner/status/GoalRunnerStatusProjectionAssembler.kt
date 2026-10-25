@@ -339,7 +339,8 @@ class GoalRunnerStatusProjectionAssembler(
   ): GoalRunnerStatusProjectionRuntimeInputs {
     val goalCompletedAt = assembly.loadedState.controlState.goalCompletedAt
     val currentStepOverride =
-      assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId)
+      (assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId))
+        .let { step -> if (assembly.childWorkflowId == null) assembly.goalAssessmentResult.stageStep(step) else step }
     val executionLiveness =
       resolveExecutionLiveness(
         parentWorkflowId = assembly.loadedState.parentWorkflowId,

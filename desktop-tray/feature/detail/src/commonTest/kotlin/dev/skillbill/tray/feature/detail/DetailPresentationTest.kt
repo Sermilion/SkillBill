@@ -158,7 +158,7 @@ class DetailPresentationTest {
   }
 
   @Test
-  fun `assessment pills follow the record and a skipped assessment never completes`() {
+  fun `running assessment pills follow the reported step and a settled assessment follows the record`() {
     val pipeline = listOf("goal_assessment", "goal_assessment_fix", "pr")
     val done = workItem("a", lifecycle = Lifecycle.TERMINAL).copy(currentStepId = "complete")
     fun states(item: WorkItem, assessment: GoalAssessmentResult?) =
@@ -168,9 +168,18 @@ class DetailPresentationTest {
       listOf(PipelineStepState.SKIPPED, PipelineStepState.SKIPPED, PipelineStepState.COMPLETE),
       states(done, GoalAssessmentResult(GoalAssessmentState.SKIPPED, 0, "skipped_no_changes", false)),
     )
+    val running = GoalAssessmentResult(GoalAssessmentState.RUNNING, 2, null, true)
     assertEquals(
-      listOf(PipelineStepState.ACTIVE, PipelineStepState.COMPLETE, PipelineStepState.PENDING),
-      states(workItem("a").copy(currentStepId = "pr", currentSubtaskId = "2"), GoalAssessmentResult(GoalAssessmentState.RUNNING, 2, null, true)),
+      listOf(PipelineStepState.ACTIVE, PipelineStepState.PENDING, PipelineStepState.PENDING),
+      states(workItem("a").copy(currentStepId = "goal_assessment"), running),
+    )
+    assertEquals(
+      listOf(PipelineStepState.COMPLETE, PipelineStepState.ACTIVE, PipelineStepState.PENDING),
+      states(workItem("a").copy(currentStepId = "goal_assessment_fix"), running),
+    )
+    assertEquals(
+      listOf(PipelineStepState.ACTIVE, PipelineStepState.PENDING, PipelineStepState.PENDING),
+      states(workItem("a").copy(currentStepId = "goal_assessment"), GoalAssessmentResult(GoalAssessmentState.PENDING, 1, null, false)),
     )
     assertEquals(
       List(3) { PipelineStepState.COMPLETE },

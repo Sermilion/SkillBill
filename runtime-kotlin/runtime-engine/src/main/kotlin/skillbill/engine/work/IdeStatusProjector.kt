@@ -21,6 +21,7 @@ import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAssessmentResult
+import skillbill.goalrunner.model.GoalRunnerAssessmentState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -138,11 +139,7 @@ class IdeStatusProjector(
   private fun assessmentFinishSteps(assessment: GoalRunnerAssessmentResult?): List<String> =
     when {
       assessment == null -> emptyList()
-      assessment.fixRan ->
-        listOf(
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
-        )
+      assessment.fixRan || assessment.state in IN_PROGRESS_ASSESSMENT -> GOAL_ASSESSMENT_STEPS
       else -> listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT)
     }
 
@@ -661,3 +658,11 @@ class IdeStatusProjector(
       workflowId = candidate.workflowId,
     )
 }
+
+internal val GOAL_ASSESSMENT_STEPS =
+  listOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
+  )
+
+private val IN_PROGRESS_ASSESSMENT = setOf(GoalRunnerAssessmentState.PENDING, GoalRunnerAssessmentState.RUNNING)

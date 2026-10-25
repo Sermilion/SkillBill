@@ -36,7 +36,7 @@ class IdeStatusProjectorTest {
   }
 
   @Test
-  fun `assessment steps lead the finish pipeline only when a record exists and add the fix step after a fix ran`() {
+  fun `assessment steps lead the finish pipeline when a record exists and keep the fix step while it can run`() {
     val projector = projector(mutableListOf())
 
     fun assessment(
@@ -55,6 +55,19 @@ class IdeStatusProjectorTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
       ) + GOAL_FINISH_PIPELINE,
       projector.goalFinishPipeline(Path.of("repo"), assessment(GoalRunnerAssessmentState.COMPLETED, fixRan = true)),
+    )
+    listOf(GoalRunnerAssessmentState.PENDING, GoalRunnerAssessmentState.RUNNING).forEach { state ->
+      assertEquals(
+        listOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
+        ) + GOAL_FINISH_PIPELINE,
+        projector.goalFinishPipeline(Path.of("repo"), assessment(state, fixRan = false)),
+      )
+    }
+    assertEquals(
+      listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT) + GOAL_FINISH_PIPELINE,
+      projector.goalFinishPipeline(Path.of("repo"), assessment(GoalRunnerAssessmentState.COMPLETED, fixRan = false)),
     )
   }
 

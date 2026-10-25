@@ -10,6 +10,8 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAssessmentFinding
 import skillbill.goalrunner.model.GoalRunnerAssessmentResult
 import skillbill.goalrunner.model.GoalRunnerAssessmentState
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private const val SEAM = "goal-status.goal_assessment_result"
 private const val EXPECTED = "goal_assessment_record"
@@ -40,6 +42,13 @@ internal fun GoalRunnerAssessmentResult.reconciledWith(liveness: ExecutionLivene
     copy(state = GoalRunnerAssessmentState.PENDING)
   } else {
     this
+  }
+
+internal fun GoalRunnerAssessmentResult?.stageStep(step: String?): String? =
+  when {
+    this == null || exitReason != null || step.isNullOrBlank() -> step
+    step in PhaseSlot.GOAL_ASSESSMENT.steps -> step
+    else -> FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX
   }
 
 private val DEAD_EXECUTOR_LIVENESS =

@@ -11,7 +11,6 @@ import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.ExecutionInstance
 import dev.skillbill.tray.core.domain.model.ExecutionScope
-import dev.skillbill.tray.core.domain.model.GoalAssessmentResult
 import dev.skillbill.tray.core.domain.model.GoalAssessmentState
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.ReasonRestoration
@@ -120,31 +119,22 @@ internal fun pipelineSteps(item: WorkItem, pipeline: List<String>): List<Pipelin
   }
 }
 
-private const val ASSESSMENT_STEP = "goal_assessment"
-private const val ASSESSMENT_FIX_STEP = "goal_assessment_fix"
+private val ASSESSMENT_STEPS = setOf("goal_assessment", "goal_assessment_fix")
 
-/** The goal finish steps, where the assessment pills follow the assessment record: a skipped stage stays skipped. */
+/**
+ * The goal finish steps. While the assessment runs, its pills follow the reported step like every other finish step;
+ * a finished assessment completes its pills and a skipped one stays skipped.
+ */
 internal fun goalFinishSteps(item: WorkItem, detail: Detail): List<PipelineStep> {
-  val assessment = detail.goalAssessment
+  val settled = when (detail.goalAssessment?.state) {
+    GoalAssessmentState.COMPLETED -> PipelineStepState.COMPLETE
+    GoalAssessmentState.SKIPPED -> PipelineStepState.SKIPPED
+    else -> null
+  }
   return pipelineSteps(item, detail.goalFinishPipeline).map { step ->
-    when {
-      assessment == null -> step
-      step.id == ASSESSMENT_STEP -> step.copy(state = assessment.stepState(item.lifecycle))
-      step.id == ASSESSMENT_FIX_STEP -> step.copy(state = assessment.fixStepState(item.lifecycle))
-      else -> step
-    }
+    if (settled != null && step.id in ASSESSMENT_STEPS) step.copy(state = settled) else step
   }
 }
-
-private fun GoalAssessmentResult.stepState(lifecycle: Lifecycle): PipelineStepState = when (state) {
-  GoalAssessmentState.PENDING -> PipelineStepState.PENDING
-  GoalAssessmentState.RUNNING -> if (lifecycle == Lifecycle.ACTIVE) PipelineStepState.ACTIVE else PipelineStepState.PENDING
-  GoalAssessmentState.COMPLETED -> PipelineStepState.COMPLETE
-  GoalAssessmentState.SKIPPED -> PipelineStepState.SKIPPED
-}
-
-private fun GoalAssessmentResult.fixStepState(lifecycle: Lifecycle): PipelineStepState =
-  if (state == GoalAssessmentState.PENDING || state == GoalAssessmentState.SKIPPED) stepState(lifecycle) else PipelineStepState.COMPLETE
 
 /** A scroll state that stays on the same row when pages arrive or rows disappear above it. */
 @Composable
