@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,14 +24,17 @@ import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.mono
 import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
+import dev.skillbill.tray.core.designsystem.red
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
 import dev.skillbill.tray.core.domain.model.ReviewFinding
 import dev.skillbill.tray.core.domain.model.ReviewPass
+import dev.skillbill.tray.core.domain.model.RunOutcome
 import dev.skillbill.tray.core.domain.model.SubtaskPhaseResults
 import dev.skillbill.tray.core.domain.model.WorkQaOutcome
 import dev.skillbill.tray.core.ui.ExpandableReason
 import dev.skillbill.tray.core.ui.formatInstant
+import dev.skillbill.tray.core.ui.label
 
 /** Review, audit and QA conclusions shown inside the goal activity panel. */
 @Composable
@@ -126,6 +128,20 @@ internal fun WorkflowQaSection(qa: WorkQaOutcome) {
 }
 
 @Composable
+internal fun ExecutionResult(phase: String, outcome: RunOutcome, result: String) {
+  val title = if (phase == "qa") "QA" else phase.replace('_', ' ').replace('-', ' ').replaceFirstChar(Char::uppercase)
+  val color = when (outcome) {
+    RunOutcome.COMPLETE, RunOutcome.PASSED -> green
+    RunOutcome.STALLED, RunOutcome.PAUSED, RunOutcome.BLOCKED, RunOutcome.FINDINGS -> orange
+    RunOutcome.FAILED -> red
+    RunOutcome.ACTIVE, RunOutcome.INCOMPLETE -> blue
+    RunOutcome.IDLE, RunOutcome.SKIPPED, RunOutcome.CANCELLED -> muted
+  }
+  PhaseHeading(title, outcome.label(), color)
+  PhaseBody(title, null, result)
+}
+
+@Composable
 private fun PhaseHeading(phase: String, outcome: String, color: Color) {
   Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
     Text(phase, Modifier.width(PHASE_INDENT - 12.dp), color = muted, fontFamily = body, fontSize = 11.5.sp, lineHeight = 16.sp)
@@ -144,7 +160,7 @@ private fun PhaseBody(title: String, summary: String?, detail: String?) {
     if (overlapping && compact != null) {
       ExpandableReason(compact, title, color = ink, fontSize = 12.sp, lineHeight = 18.sp)
     } else {
-      summary?.let { SelectionContainer { Text(it, color = ink, fontFamily = body, fontSize = 12.sp, lineHeight = 18.sp) } }
+      summary?.let { ExpandableReason(it, title, color = ink, fontSize = 12.sp, lineHeight = 18.sp) }
       detail?.let { ExpandableReason(it, title, fontSize = 11.5.sp, lineHeight = 17.sp) }
     }
   }

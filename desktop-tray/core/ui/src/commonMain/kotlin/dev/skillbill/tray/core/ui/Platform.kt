@@ -10,7 +10,7 @@ import dev.skillbill.tray.core.designsystem.muted
 import kotlin.time.Instant
 
 // Platform facts the common feature code cannot reach itself: the local time zone, the home directory, the clipboard and the
-// desktop-only scrollbar and hover widgets. Each has one actual per target.
+// desktop-only scrollbar and text dialogs. Each has one actual per target.
 
 /** Formats [value] in the user's time zone with a `java.time`-style [pattern] such as `d MMM HH:mm`. */
 expect fun formatInstant(value: Instant, pattern: String): String
@@ -24,16 +24,6 @@ expect fun abbreviateHomeDirectory(path: String): String
 /** A function that puts text on the system clipboard. */
 @Composable
 expect fun rememberCopyToClipboard(): (String) -> Unit
-
-/** A truncated reason that opens its full scrollable text in a popup after a hover. */
-@Composable
-expect fun ReasonTooltip(
-  reason: String,
-  modifier: Modifier = Modifier,
-  color: Color = muted,
-  fontSize: TextUnit = 12.sp,
-  lineHeight: TextUnit = 18.sp,
-)
 
 /** A truncated reason with a "Show more" button that opens its full scrollable text, titled [title], in a dialog. */
 @Composable

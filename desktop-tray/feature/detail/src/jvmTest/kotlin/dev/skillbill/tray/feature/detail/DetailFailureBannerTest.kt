@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
@@ -78,10 +79,10 @@ class DetailFailureBannerTest {
     onNodeWithText("Run blocked").assertExists()
     onAllNodesWithText(reason).onFirst().assertExists()
     onNodeWithText(item.summary).assertDoesNotExist()
-    onNodeWithText("Show full reason").performClick()
-    onNodeWithText("Collapse reason").assertExists()
+    onAllNodesWithText("Show more").onFirst().performClick()
+    onNodeWithText("Close").assertExists()
     val layouts = mutableListOf<TextLayoutResult>()
-    onAllNodesWithText(reason).onFirst().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+    onAllNodesWithText(reason).onLast().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
     assertFalse(layouts.single().hasVisualOverflow)
   }
 

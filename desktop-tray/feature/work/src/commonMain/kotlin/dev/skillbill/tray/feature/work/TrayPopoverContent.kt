@@ -55,6 +55,7 @@ import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.needsAttention
 import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.AppendState
+import dev.skillbill.tray.core.ui.ExpandableReason
 import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.PagedListState
@@ -221,7 +222,7 @@ internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, sta
         else -> null
       }
       note?.let {
-        Text(it, color = muted, fontFamily = body, fontSize = 11.sp, lineHeight = 16.sp, maxLines = if (item.lifecycle == Lifecycle.BLOCKED) 3 else 2, overflow = TextOverflow.Ellipsis)
+        ExpandableReason(it, "Run reason", color = if (attention) color else muted, fontSize = 11.sp, lineHeight = 16.sp)
       }
     }
   }

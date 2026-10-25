@@ -62,6 +62,9 @@ internal object DeletionRules {
           val combined = supertypes.flatMap { resolve(it, aliases) }.filter { it in ports }.toSortedSet()
           if (combined.size >= 2) add("$path: $type implements ${combined.joinToString(" and ")}; each work port has its own implementation")
         }
+        if ("ReasonTooltip" in found.names) {
+          add("$path references the retired ReasonTooltip renderer; use ExpandableReason")
+        }
         if (path !in approvedProcessFiles && found.names.any { it in processTypes }) {
           add("$path starts or inspects an OS process; only the native tray helpers may")
         }

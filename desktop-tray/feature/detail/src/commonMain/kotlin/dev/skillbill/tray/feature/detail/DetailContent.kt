@@ -74,9 +74,9 @@ import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.PhaseExecution
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.stalled
+import dev.skillbill.tray.core.ui.ExpandableReason
 import dev.skillbill.tray.core.ui.FeedbackTone
 import dev.skillbill.tray.core.ui.PageFooter
-import dev.skillbill.tray.core.ui.ReasonTooltip
 import dev.skillbill.tray.core.ui.WorkDot
 import dev.skillbill.tray.core.ui.age
 import dev.skillbill.tray.core.ui.coerceNonNegative
@@ -185,7 +185,6 @@ private fun LoadedDetail(
   val copyReason = if (item.family == WorkFamily.FEATURE_GOAL) item.exactPauseReason else blockReason
   val goalBlocked = item.family == WorkFamily.FEATURE_GOAL && item.lifecycle == Lifecycle.BLOCKED
   val goalBlockReason = copyReason.takeIf { goalBlocked }
-  var expandedReason by remember(item.identity, item.invocationId, blockReason) { mutableStateOf(false) }
   val subtaskTime = durationText(item.subtaskActiveDurationMs, item.subtaskActiveDurationAsOf, item, now, frozen)
   Column(modifier.background(canvas)) {
     Column(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -215,16 +214,9 @@ private fun LoadedDetail(
           Column(Modifier.fillMaxWidth().background(reasonColor.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, reasonColor.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(if (item.lifecycle == Lifecycle.FAILED) "Run failed" else if (item.lifecycle == Lifecycle.BLOCKED) "Run blocked" else "Run paused", color = reasonColor, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-              if (expandedReason) {
-                SelectionContainer(Modifier.weight(1f).heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
-                  Text(blockReason, color = reasonColor, fontSize = 13.sp, lineHeight = 19.sp)
-                }
-              } else {
-                ReasonTooltip(blockReason, Modifier.weight(1f), color = reasonColor, fontSize = 13.sp, lineHeight = 19.sp)
-              }
+              ExpandableReason(blockReason, "Run reason", Modifier.weight(1f), color = reasonColor, fontSize = 13.sp, lineHeight = 19.sp)
               DesignButton("Copy reason", enabled = copyReason != null) { copyReason?.let(copy) }
             }
-            DesignButton(if (expandedReason) "Collapse reason" else "Show full reason") { expandedReason = !expandedReason }
             val restoration = detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.restoration
             restorationNote(restoration)?.let { Text(it, color = muted, style = MaterialTheme.typography.bodySmall) }
           }
@@ -298,7 +290,7 @@ private fun LoadedDetail(
                     ).joinToString(" · "),
                     color = if (active) blue else dim, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp,
                   )
-                  task.blockedReason?.let { SelectionContainer { Text(it, color = orange, fontSize = 12.sp, lineHeight = 18.sp) } }
+                  task.blockedReason?.let { ExpandableReason(it, "Subtask block reason", color = orange, fontSize = 12.sp, lineHeight = 18.sp) }
                   if (active && pipeline.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), phase.attemptCount, item.phaseExecution?.takeIf { it.phaseId == phase.id }) }
                   }
@@ -373,7 +365,7 @@ private fun LoadedDetail(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
               Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Blocked · ${formatInstant(item.updatedAt, "d MMM HH:mm:ss")}", color = orange, fontSize = 12.sp)
-                ReasonTooltip(reason, color = orange)
+                ExpandableReason(reason, "Block reason", color = orange)
               }
               DesignButton("Copy reason") { copy(reason) }
             }
@@ -389,11 +381,17 @@ private fun LoadedDetail(
               val index = detail.executionHistory.indexOf(instance)
               HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
               Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("Run ${detail.executionHistory.size - index} · ${if (standalone) executionOutcomeLabel(item, instance) else "Invocation"} · ${formatInstant(instance.startedAt, "d MMM HH:mm:ss")}${if (index == 0) " · latest run" else ""}", color = ink, fontFamily = body, fontSize = 12.sp)
+                Text("Run ${detail.executionHistory.size - index} · ${if (standalone) executionOutcome(item, instance).label() else "Invocation"} · ${formatInstant(instance.startedAt, "d MMM HH:mm:ss")}${if (index == 0) " · latest run" else ""}", color = ink, fontFamily = body, fontSize = 12.sp)
                 SelectionContainer { Text(instance.invocationId, color = muted, fontFamily = mono, fontSize = 11.sp) }
                 SelectionContainer { Text("Execution ${instance.executionId}", color = dim, fontFamily = mono, fontSize = 11.sp) }
                 Text("${if (instance.finishedAt != null) "Finished" else "Last update"} ${formatInstant(instance.finishedAt ?: instance.updatedAt, "d MMM HH:mm:ss")}", color = muted, fontSize = 11.sp)
-                instance.result?.let { reason -> ReasonTooltip(reason) }
+                instance.result?.let { result ->
+                  ExecutionResult(
+                    if (standalone) item.phaseId ?: "Phase" else if (operation) "Operation" else "Run",
+                    executionOutcome(item, instance),
+                    result,
+                  )
+                }
                 instance.qaReportText?.let { QaReportSection(it) }
                 instance.planReport?.let { PlanReportSection(it) }
               }

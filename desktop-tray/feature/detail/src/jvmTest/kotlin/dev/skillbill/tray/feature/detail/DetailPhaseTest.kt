@@ -1,11 +1,20 @@
 package dev.skillbill.tray.feature.detail
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.v2.runComposeUiTest
 import dev.skillbill.tray.core.designsystem.DesignSystemTheme
+import dev.skillbill.tray.core.designsystem.green
 import dev.skillbill.tray.core.domain.model.ExecutionInstance
+import dev.skillbill.tray.core.domain.model.ExecutionScope
+import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.PhaseExecution
 import dev.skillbill.tray.core.domain.model.PhaseExecutionKind
@@ -16,6 +25,8 @@ import dev.skillbill.tray.core.testing.workItem
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import dev.skillbill.tray.core.ui.RepositoryNavigation
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPhaseTest {
@@ -23,6 +34,40 @@ class DetailPhaseTest {
     override suspend fun openRepository(root: String, branch: String?) = Outcome.Value(Unit)
     override suspend fun openDirectory(root: String) = Outcome.Value(Unit)
     override suspend fun openFile(path: String) = Outcome.Value(Unit)
+  }
+
+  @Test
+  fun `standalone review activity shows completion in green and opens its full report`() = runComposeUiTest {
+    val report = "Minor finding: the activity report loses its full text when truncated. ".repeat(40)
+    val item = workItem("review", Lifecycle.TERMINAL, family = null, issueKey = null).copy(
+      scope = ExecutionScope.STANDALONE_PHASE,
+      phaseId = "review",
+      executionId = "phase-review",
+      finishedAt = fixtureInstant,
+    )
+    val detail = detail(item).copy(executionHistory = listOf(
+      ExecutionInstance("review-run", "phase-review", "terminal", fixtureInstant, fixtureInstant, fixtureInstant, report),
+    ))
+    setContent {
+      CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
+        DesignSystemTheme {
+          DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(detail)), fixtureInstant, {})
+        }
+      }
+    }
+
+    onNodeWithText("PHASE ACTIVITY").assertExists()
+    val statusLayouts = mutableListOf<TextLayoutResult>()
+    onAllNodesWithText("Complete").onLast().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(statusLayouts) }
+    assertEquals(green, statusLayouts.single().layoutInput.style.color)
+    onNodeWithText("Show more").performClick()
+    val reportLayouts = mutableListOf<TextLayoutResult>()
+    onAllNodesWithText(report).onLast().performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(reportLayouts) }
+    assertFalse(reportLayouts.single().hasVisualOverflow)
+    onNodeWithText("Copy").assertExists()
+    onNodeWithText("Close").performClick()
+    onNodeWithText("Close").assertDoesNotExist()
+    onNodeWithText("Show more").assertExists()
   }
 
   @Test

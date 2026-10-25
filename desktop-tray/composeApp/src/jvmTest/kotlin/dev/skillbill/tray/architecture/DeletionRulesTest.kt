@@ -60,6 +60,8 @@ class DeletionRulesTest {
       "OS process" to (app to "fun go() = ProcessHandle.current()"),
       "OS process" to (domain to "class Bad(val running: Process)"),
       "OS process" to (work to "val launch = ::ProcessBuilder"),
+      "retired ReasonTooltip" to (work to "fun reason() = ReasonTooltip(\"truncated\")"),
+      "retired ReasonTooltip" to (work to "import dev.skillbill.tray.core.ui.ReasonTooltip as OldReason\nfun reason() = OldReason(\"truncated\")"),
       "retired preference pollSeconds" to (dataCommon to "val pollSeconds = 5"),
       "retired preference cliOverride" to (domain to "class Bad(val settings: Settings) { val path = settings.cliOverride }"),
       "repeating timer fixedRateTimer" to (work to "val timer = fixedRateTimer(period = 1000) { }"),

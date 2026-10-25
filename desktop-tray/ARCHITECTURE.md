@@ -55,7 +55,8 @@ input assertions and synthetic rejection fixtures: `ModuleGraphRulesTest` (the s
 project list and module edges), `DesktopArchitectureTest` and `SourceRulesTest` (source
 rules), `NavigationTypingRulesTest` (typed routes and arguments) and `DeletionRulesTest`
 (no combined work port, no process launcher outside the approved native files, no retired
-`cliOverride` or `pollSeconds` preference names, no repeating timers in data or feature code).
+`cliOverride` or `pollSeconds` preference names, no repeating timers in data or feature
+code, no retired `ReasonTooltip` renderer).
 No baseline, exemption or suppression list backs any of them.
 
 Windows and Linux use `dev.nucleusframework:composenativetray:2.1.6` with an
@@ -233,7 +234,9 @@ nearest panel edge. Tray availability uses the JVM `SystemTray` API without a
 `gdbus` query.
 The header supports dragging and has a close button that hides the tray window.
 Running work is green, attention is orange, and the tray icon uses the bundled
-Skill Bill logo. Blocked rows show the reason with a three-line ellipsis.
+Skill Bill logo. Reports and run reasons use the same three-line preview and a
+"Show more" button.
+The button opens the full selectable text in a dialog with Copy and Close controls.
 
 KDE hover uses the StatusNotifierItem tooltip description as escaped rich text,
 with at most four goals and four live phases in the board urgency order. The

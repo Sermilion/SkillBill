@@ -13,6 +13,7 @@ import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.fixtureInstant
 import dev.skillbill.tray.core.testing.workItem
+import dev.skillbill.tray.core.ui.label
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -34,11 +35,11 @@ class DetailPresentationTest {
     assertEquals(
       listOf("Incomplete", "Findings", "Skipped", "Complete", "Failed"),
       listOf(
-        executionOutcomeLabel(latest, run("execution-latest", "terminal", QaVerdict.ATTEMPTED)),
-        executionOutcomeLabel(latest, run("execution-older-1", "terminal", QaVerdict.FINDINGS)),
-        executionOutcomeLabel(latest, run("execution-older-2", "terminal", QaVerdict.SKIPPED)),
-        executionOutcomeLabel(latest, run("execution-older-3", "terminal", null)),
-        executionOutcomeLabel(latest, run("execution-older-4", "failed", QaVerdict.ATTEMPTED)),
+        executionOutcome(latest, run("execution-latest", "terminal", QaVerdict.ATTEMPTED)).label(),
+        executionOutcome(latest, run("execution-older-1", "terminal", QaVerdict.FINDINGS)).label(),
+        executionOutcome(latest, run("execution-older-2", "terminal", QaVerdict.SKIPPED)).label(),
+        executionOutcome(latest, run("execution-older-3", "terminal", null)).label(),
+        executionOutcome(latest, run("execution-older-4", "failed", QaVerdict.ATTEMPTED)).label(),
       ),
     )
   }
