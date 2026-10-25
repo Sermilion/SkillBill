@@ -20,7 +20,10 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import dev.skillbill.tray.WindowFakes
 import dev.skillbill.tray.composition.EntryComponent
 import dev.skillbill.tray.core.domain.model.AppSettings
+import dev.skillbill.tray.core.domain.model.WorkSection
+import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.testing.FakeWorkStoreSession
+import dev.skillbill.tray.core.testing.board
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import dev.skillbill.tray.core.ui.navigation.rememberEntryComponent
 import dev.skillbill.tray.feature.terminal.TerminalAction
@@ -90,8 +93,13 @@ class SkillBillNavHostTest {
 
       terminal.onAction(TerminalAction.TogglePane)
       waitForIdle()
-      onNodeWithTag("terminal-surface").assertExists()
       onNodeWithText("Terminal").assertExists()
+      // A session takes its directory only at its first launch, so the surface waits for the list to settle the first selection.
+      onNodeWithTag("terminal-surface").assertDoesNotExist()
+
+      WorkSection.entries.forEach { fakes.boards.emit(it, Outcome.Value(board(emptyList()))) }
+      waitForIdle()
+      onNodeWithTag("terminal-surface").assertExists()
 
       val writes = fakes.settings.updates.size
       onNodeWithTag(TERMINAL_DIVIDER_TAG).performTouchInput {

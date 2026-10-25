@@ -83,6 +83,26 @@ class TerminalViewModelTest {
   }
 
   @Test
+  fun `the directory is not resolved for a selection until its read finishes, and a failed read still resolves it`() = runTest(dispatcher) {
+    val item = workItem("a")
+    val read = CompletableDeferred<Unit>()
+    val viewModel = TerminalViewModel(details, settings)
+    details.onDetail = {
+      read.await()
+      Outcome.Failure(Problem(ProblemCode.UNKNOWN, "gone"))
+    }
+
+    viewModel.onAction(TerminalAction.SelectedWorkChanged(item.identity))
+    runCurrent()
+    assertNull(viewModel.state.value.resolvedFor)
+
+    read.complete(Unit)
+    runCurrent()
+    assertEquals(item.identity, viewModel.state.value.resolvedFor)
+    assertNull(viewModel.state.value.workingDirectory)
+  }
+
+  @Test
   fun `a slow read for an earlier selection never overwrites the newer selection's directory`() = runTest(dispatcher) {
     val older = workItem("a")
     val newer = workItem("b")

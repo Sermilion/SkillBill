@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.SettingsState
+import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
@@ -21,11 +22,11 @@ class TerminalViewModel(
   private val settings: SettingsRepository,
 ) : ViewModel() {
   private val appSettings = MutableStateFlow(AppSettings())
-  private val workingDirectory = MutableStateFlow<String?>(null)
+  private val resolution = MutableStateFlow(Resolution(identity = null, directory = null))
   private var resolving: Job? = null
 
-  val state: StateFlow<TerminalUiState> = combine(appSettings, workingDirectory) { stored, directory ->
-    TerminalUiState(stored.terminalPaneOpen, stored.terminalPaneHeightDp, directory)
+  val state: StateFlow<TerminalUiState> = combine(appSettings, resolution) { stored, resolved ->
+    TerminalUiState(stored.terminalPaneOpen, stored.terminalPaneHeightDp, resolved.directory, resolved.identity)
   }.stateIn(viewModelScope, SharingStarted.Eagerly, TerminalUiState())
 
   init {
@@ -48,7 +49,11 @@ class TerminalViewModel(
   private fun select(action: TerminalAction.SelectedWorkChanged) {
     resolving?.cancel()
     resolving = viewModelScope.launch {
-      workingDirectory.value = action.identity?.let { (details.detail(it) as? Outcome.Value)?.value?.item?.repositoryRoot }
+      val directory = action.identity?.let { (details.detail(it) as? Outcome.Value)?.value?.item?.repositoryRoot }
+      resolution.value = Resolution(action.identity, directory)
     }
   }
+
+  /** The selection a directory was read for, so a reader can tell a settled null from a read still in flight. */
+  private data class Resolution(val identity: WorkIdentity?, val directory: String?)
 }

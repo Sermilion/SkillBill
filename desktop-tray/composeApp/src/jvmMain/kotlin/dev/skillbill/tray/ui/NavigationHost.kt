@@ -189,7 +189,9 @@ fun SkillBillNavHost(
                   window,
                   Modifier.weight(1f).fillMaxWidth(),
                 )
-                if (terminal != null) TerminalPaneHost(terminal, navigator.selected, terminalSurface, columnHeight)
+                // A failed read never opens the first item, so it must not hold the terminal back either.
+                val listPending = status.loading && !status.failed
+                if (terminal != null) TerminalPaneHost(terminal, navigator.selected, listPending, terminalSurface, columnHeight)
               }
             }
             if (specs != null) SpecsPaneHost(specs, navigator.selected)
@@ -223,17 +225,22 @@ private fun RowScope.SpecsPaneHost(specs: SpecsViewModel, selected: WorkIdentity
 /**
  * The terminal pane under the detail, while it is open, with a divider above it that drags the pane taller or shorter. The drag
  * only moves local state; the height is saved once, when the drag stops. The detail always keeps [DETAIL_MIN_HEIGHT].
+ * The surface is withheld until the first selection and its directory are known ([listPending] covers the startup list read), because
+ * a session only takes its directory at its first launch; after that it never waits, so a later selection cannot flicker it.
  */
 @Composable
 private fun TerminalPaneHost(
   terminal: TerminalViewModel,
   selected: WorkIdentity?,
+  listPending: Boolean,
   surface: @Composable (workingDirectory: String?) -> Unit,
   columnHeight: Dp,
 ) {
   val state by terminal.state.collectAsState()
   LaunchedEffect(terminal, selected) { terminal.onAction(TerminalAction.SelectedWorkChanged(selected)) }
   if (!state.paneOpen) return
+  var directorySettled by remember { mutableStateOf(false) }
+  if (!listPending && state.resolvedFor == selected) directorySettled = true
   val density = LocalDensity.current
   val min = AppSettings.TERMINAL_PANE_MIN_HEIGHT_DP.dp
   val max = maxOf(min, minOf(AppSettings.TERMINAL_PANE_MAX_HEIGHT_DP.dp, columnHeight - DETAIL_MIN_HEIGHT))
@@ -271,7 +278,11 @@ private fun TerminalPaneHost(
   ) {
     Box(Modifier.align(Alignment.Center).fillMaxWidth().height(1.dp).background(border))
   }
-  TerminalRoute(terminal, surface, Modifier.fillMaxWidth().height(paneHeight.coerceIn(min, max)))
+  TerminalRoute(
+    terminal,
+    { directory -> if (directorySettled) surface(directory) },
+    Modifier.fillMaxWidth().height(paneHeight.coerceIn(min, max)),
+  )
 }
 
 @Composable
