@@ -38,11 +38,16 @@ dependencyResolutionManagement {
       }
     }
     mavenCentral()
+    maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies") {
+      content {
+        includeGroup("org.jetbrains.jediterm")
+      }
+    }
   }
 }
 
 include(
   ":composeApp",
   ":core:common", ":core:domain", ":core:designsystem", ":core:ui", ":core:testing", ":core:data", ":core:datastore",
-  ":feature:work", ":feature:detail", ":feature:history", ":feature:settings", ":feature:specs",
+  ":feature:work", ":feature:detail", ":feature:history", ":feature:settings", ":feature:specs", ":feature:terminal",
 )

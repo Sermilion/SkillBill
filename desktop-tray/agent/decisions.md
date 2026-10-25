@@ -1,3 +1,32 @@
+## [2026-10-25] Persist terminal pane height once, on drag release
+Context: The divider drag emits a delta per pointer move, and every ResizeTo writes AppSettings to disk.
+Decision: The host keeps the dragged height in local state seeded from settings and sends ResizeTo only in onDragStopped.
+Reason: Saving per delta would write the settings file once per pixel; one write on release stores the final height.
+Alternatives considered: Per-delta saving persists live but floods the datastore; the test uses a multi-step drag so that variant fails.
+
+## [2026-10-25] Enable interop blending before any Swing window
+Context: The terminal is a heavyweight Swing panel inside an undecorated, transparent Compose window.
+Decision: The compose.interop.blending property is set to true as the first statement of both composition main() and DesktopBootstrap.main(), as an inline literal.
+Reason: It must be set before the first Swing window can appear, and DesktopBootstrap can show Swing windows before main() runs.
+Revisit when: QA finds the panel's bottom corners escape the 12dp window clip and bottom padding does not fix it.
+
+## [2026-10-25] Terminal files join the approved OS-process set
+Context: The deletion guard allowed process types in four named native files, but the terminal needs a pty launch and a JVM shutdown hook, which can only be registered through Runtime.
+Decision: DeletionRules lists terminal/TerminalProcess.kt and terminal/TerminalSessions.kt in approvedProcessFiles, and the guard now also flags PtyProcess and PtyProcessBuilder, with a rejection fixture.
+Reason: The terminal is an approved new OS-process owner; widening to two named files keeps every other file banned, and the pty types were an unguarded gap.
+Alternatives considered: A suppression or baseline would hide future violations; avoiding Runtime would drop the shutdown hook that prevents orphaned shells.
+
+## [2026-10-25] Pin jetbrains-annotations to the runtime version
+Context: JediTerm pulls org.jetbrains:annotations 24.0.1, but verifySharedRuntimeVersions requires the desktop classpath to match the runtime's 23.0.0.
+Decision: A strict jvmMainImplementation constraint on the catalog's jetbrains-annotations 23.0.0, with no new consumed library.
+Reason: It keeps the shared-version convention satisfied without excluding the artifact JediTerm needs.
+Revisit when: The runtime bumps annotations, or JediTerm requires an API newer than 23.0.0.
+
+## [2026-10-25] Group-filtered JetBrains repository for JediTerm
+Context: JediTerm is not on Maven Central, and settings.gradle.kts uses FAIL_ON_PROJECT_REPOS.
+Decision: Declare the intellij-dependencies repository in settings only, restricted to the org.jetbrains.jediterm group.
+Reason: Nothing else can resolve from it, so the supply surface stays one group, and no project declares its own repository.
+
 ## [2026-10-24] Filtering expands ancestors for display only
 Context: The spec tree filter must reveal matches inside collapsed bundles, while expansion is persisted in AppSettings.specExpandedPaths.
 Decision: visibleRows shows ancestors of a match expanded without writing the saved set; ClearFilters restores the saved expansion.

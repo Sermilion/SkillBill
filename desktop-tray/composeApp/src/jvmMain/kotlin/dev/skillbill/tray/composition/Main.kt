@@ -1,6 +1,8 @@
 package dev.skillbill.tray.composition
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -27,6 +29,7 @@ import dev.skillbill.tray.core.ui.rememberViewModel
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import dev.skillbill.tray.core.ui.RepositoryNavigation
 import dev.skillbill.tray.feature.specs.SpecsAction
+import dev.skillbill.tray.feature.terminal.TerminalAction
 import dev.skillbill.tray.feature.work.TrayAction
 import dev.skillbill.tray.feature.work.TrayEffect
 import dev.skillbill.tray.feature.work.trayHover
@@ -39,18 +42,22 @@ import dev.skillbill.tray.infrastructure.TrayIconRenderer
 import dev.skillbill.tray.infrastructure.resolveDesktopUiScale
 import dev.skillbill.tray.lifetime.SessionState
 import dev.skillbill.tray.lifetime.WindowOwner
+import dev.skillbill.tray.terminal.TerminalSurface
 import dev.skillbill.tray.ui.DesignWindow
 import dev.skillbill.tray.ui.SkillBillNavHost
 import dev.skillbill.tray.ui.SkillBillTheme
 import dev.skillbill.tray.ui.SpecsToggle
+import dev.skillbill.tray.ui.TerminalToggle
 import dev.skillbill.tray.ui.TrayPopover
 import dev.skillbill.tray.ui.rememberSpecsViewModel
+import dev.skillbill.tray.ui.rememberTerminalViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 fun main() {
+  System.setProperty("compose.interop.blending", "true")
   val uiScale = resolveDesktopUiScale()
   val application = createApplicationComponent()
   nucleusApplication(backend = NucleusBackend.Awt) {
@@ -251,12 +258,17 @@ private fun MainWindow(
         // The pane's ViewModel starts once a database is open, so its first read never lands before the session is.
         val specs = if (session is SessionState.Active) rememberSpecsViewModel(windowOwner) else null
         val specsState = specs?.state?.collectAsState()?.value
+        val terminal = if (session is SessionState.Active) rememberTerminalViewModel(windowOwner) else null
+        val terminalState = terminal?.state?.collectAsState()?.value
         DesignWindow(
           mainWindowState,
           closeRequest,
           accessory = {
             if (specs != null && specsState != null) {
               SpecsToggle(specsState.paneOpen, specsState.anyInProgress) { specs.onAction(SpecsAction.TogglePane) }
+            }
+            if (terminal != null && terminalState != null) {
+              TerminalToggle(terminalState.paneOpen) { terminal.onAction(TerminalAction.TogglePane) }
             }
           },
         ) {
@@ -268,6 +280,8 @@ private fun MainWindow(
             onOpenSettings = { owner.router.dispatch(HostIntent.OpenSettings) },
             onCloseWindow = closeRequest,
             specs = specs,
+            terminal = terminal,
+            terminalSurface = { dir -> TerminalSurface(windowOwner, dir, Modifier.fillMaxSize()) },
           )
         }
       }

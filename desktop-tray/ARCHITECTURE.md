@@ -8,7 +8,7 @@ loads desktop jars with the jars in `runtime-cli/lib` through an application
 class loader. Work reads and controls run in process. The modules are
 `:core:common`, `:core:domain`, `:core:designsystem`, `:core:ui`, `:core:data`,
 `:core:datastore`, `:core:testing`, the screens `:feature:work`, `:feature:detail`,
-`:feature:history`, `:feature:settings` and `:feature:specs` (the spec-store browser pane, whose selection is pane-local), and the `:composeApp` shell. There is no
+`:feature:history`, `:feature:settings`, `:feature:specs` (the spec-store browser pane, whose selection is pane-local) and `:feature:terminal` (bottom terminal pane state and route; the JVM terminal surface is supplied by `:composeApp`), and the `:composeApp` shell. There is no
 root source set: the root build is an aggregator whose `check` depends on every child
 project's `check` and on the convention build's `:convention:check`, whose `test` runs
 every module's `jvmTest`, and which aliases the `:composeApp` distribution tasks
@@ -60,7 +60,7 @@ Guards run in `:composeApp:jvmTest` over Gradle-supplied manifests, each with no
 input assertions and synthetic rejection fixtures: `ModuleGraphRulesTest` (the settings
 project list and module edges), `DesktopArchitectureTest` and `SourceRulesTest` (source
 rules), `NavigationTypingRulesTest` (typed routes and arguments) and `DeletionRulesTest`
-(no combined work port, no process launcher outside the approved native files, no retired
+(no combined work port, no process launcher outside the approved native and terminal files, no retired
 `cliOverride` or `pollSeconds` preference names, no repeating timers in data or feature
 code, no retired `ReasonTooltip` renderer).
 No baseline, exemption or suppression list backs any of them.
@@ -191,8 +191,10 @@ longer expose `cliOverride` or `pollSeconds`; `LegacySettingsMigration` only
 records and discards those saved values. The only process launcher in the
 desktop source set is Linux AppImage `AppRun`, which starts the packaged app.
 Native notification/autolaunch libraries, the macOS status-item JNI bridge, and
-Linux AppRun are host integration code owned by `:composeApp`; `DeletionRulesTest`
-limits process use to four named files. Desktop CI watches runtime-library and
+Linux AppRun are host integration code owned by `:composeApp`. The embedded
+terminal starts the user's shell on a pty4j PTY from `terminal/TerminalProcess.kt`,
+and `terminal/TerminalSessions.kt` ends it on window disposal or JVM shutdown.
+`DeletionRulesTest` limits process use to those six named files. Desktop CI watches runtime-library and
 build-identity changes and builds the runtime before packaging. The
 `verifyPackagedRuntimeFree` task fails if the application image contains a Skill
 Bill runtime module jar.

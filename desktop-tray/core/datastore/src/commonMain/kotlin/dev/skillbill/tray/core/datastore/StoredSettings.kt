@@ -19,6 +19,8 @@ internal data class StoredSettings(
   val lastPopoverTab: String? = null,
   val specPaneOpen: Boolean? = null,
   val specExpandedPaths: Map<String, List<String>>? = null,
+  val terminalPaneOpen: Boolean? = null,
+  val terminalPaneHeightDp: Int? = null,
   val claudeConfigDir: String? = null,
 ) {
   fun toDomain(): AppSettings = AppSettings(
@@ -30,6 +32,9 @@ internal data class StoredSettings(
     lastPopoverTab = lastPopoverTab ?: "Goals",
     specPaneOpen = specPaneOpen ?: false,
     specExpandedPaths = specExpandedPaths.orEmpty().mapValues { it.value.toSet() },
+    terminalPaneOpen = terminalPaneOpen ?: false,
+    terminalPaneHeightDp = (terminalPaneHeightDp ?: AppSettings.TERMINAL_PANE_DEFAULT_HEIGHT_DP)
+      .coerceIn(AppSettings.TERMINAL_PANE_MIN_HEIGHT_DP, AppSettings.TERMINAL_PANE_MAX_HEIGHT_DP),
     claudeConfigDir = claudeConfigDir,
   )
 
@@ -43,6 +48,8 @@ internal data class StoredSettings(
     lastPopoverTab = settings.lastPopoverTab,
     specPaneOpen = settings.specPaneOpen,
     specExpandedPaths = settings.specExpandedPaths.filterValues { it.isNotEmpty() }.mapValues { it.value.toList() },
+    terminalPaneOpen = settings.terminalPaneOpen,
+    terminalPaneHeightDp = settings.terminalPaneHeightDp,
     claudeConfigDir = settings.claudeConfigDir,
   )
 
