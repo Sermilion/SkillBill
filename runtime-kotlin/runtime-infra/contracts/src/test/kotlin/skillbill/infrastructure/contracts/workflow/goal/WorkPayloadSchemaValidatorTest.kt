@@ -1,6 +1,7 @@
 package skillbill.infrastructure.contracts.workflow.goal
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.identity.status.WORK_DETAIL_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkFailureCode
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
@@ -67,7 +68,7 @@ class WorkPayloadSchemaValidatorTest {
     val payload =
       JsonCodec.mapToJsonString(
         mapOf(
-          "contract_version" to "1.2",
+          "contract_version" to "1.3",
           "page_size" to 20,
           "next_cursor" to null,
           "observed_at" to Instant.EPOCH.toString(),
@@ -88,6 +89,67 @@ class WorkPayloadSchemaValidatorTest {
   }
 
   @Test
+  fun `detail rejects a goal assessment finding with an unknown verification token`() {
+    val finding =
+      mapOf(
+        "finding_ref" to "GA-002",
+        "severity" to "major",
+        "path" to "src/Main.kt",
+        "line" to 12,
+        "failure_scenario" to "The retry never stops.",
+        "verification" to "confirmed",
+        "state" to "open",
+        "evidence" to "Reproduced on the second call.",
+      )
+
+    fun detail(finding: Map<String, Any?>) =
+      goalAssessmentDetail(
+        mapOf(
+          "state" to "completed",
+          "round" to 3,
+          "exit_reason" to "persistent_finding",
+          "fix_ran" to true,
+          "open_finding_refs" to listOf("GA-002"),
+          "findings" to listOf(finding),
+        ),
+      )
+
+    validator.validateDetail(detail(finding), "valid-assessment")
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        validator.validateDetail(detail(finding + ("verification" to "probably")), "invalid-assessment")
+      }
+    assertEquals(WorkFailureCode.INVALID_WORK_DETAIL_SCHEMA, error.code)
+  }
+
+  private fun goalAssessmentDetail(assessment: Map<String, Any?>): String {
+    val snapshot =
+      IdeStatusSnapshot(
+        repositoryIdentity = "repo-root-realpath-v1:/repo",
+        lifecycleState = IdeStatusLifecycleState.IDLE,
+        currentStep = IdeStatusStep("none", "No work"),
+        updatedAt = Instant.EPOCH,
+        freshness = IdeStatusFreshness.FRESH,
+        summary = "No work.",
+      )
+    return JsonCodec.mapToJsonString(
+      mapOf(
+        "contract_version" to WORK_DETAIL_CONTRACT_VERSION,
+        "page_size" to 20,
+        "next_cursor" to null,
+        "observed_at" to Instant.EPOCH.toString(),
+        "item" to
+          mapOf(
+            "snapshot" to IdeStatusSchemaValidator().toWirePayload(snapshot).toPayload(),
+            "repository_root" to "/repo",
+            "step_pipeline" to emptyList<String>(),
+            "goal_assessment" to assessment,
+          ),
+      ),
+    )
+  }
+
+  @Test
   fun `malformed board envelope fails with board failure code`() {
     val error =
       assertFailsWith<SkillBillRuntimeException> {
@@ -103,7 +165,7 @@ class WorkPayloadSchemaValidatorTest {
         validator.validateDetail(
           JsonCodec.mapToJsonString(
             mapOf(
-              "contract_version" to "1.2",
+              "contract_version" to "1.3",
               "page_size" to 20,
               "next_cursor" to null,
               "observed_at" to Instant.EPOCH.toString(),

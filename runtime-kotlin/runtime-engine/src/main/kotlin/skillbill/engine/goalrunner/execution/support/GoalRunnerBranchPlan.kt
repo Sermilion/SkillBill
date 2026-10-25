@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.execution.support
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -22,6 +23,7 @@ internal data class GoalRunnerBranchPlan(
 fun DecompositionManifest.toPullRequestRequest(
   repoRoot: Path,
   goalQaSummary: GoalQaSummary = GoalQaSummary.NotRecorded,
+  goalAssessment: GoalAssessmentRecordRead = GoalAssessmentRecordRead.Absent,
   qaSummary: (DecompositionSubtask) -> GoalSubtaskQaSummary? = { null },
   unknownScenarios: (DecompositionSubtask) -> GoalSubtaskUnknownScenarios? = { null },
 ): GoalPullRequestRequest {
@@ -56,6 +58,10 @@ fun DecompositionManifest.toPullRequestRequest(
       appendLine()
       appendLine("- Goal: ${goalQaSummary.pullRequestText()}")
       qa.forEach { (name, summary) -> appendLine("- $name: ${summary.pullRequestText()}") }
+      appendLine()
+      appendLine("## Goal Assessment")
+      appendLine()
+      goalAssessment.pullRequestLines().forEach { appendLine(it) }
       val untraced =
         subtasks.mapNotNull { subtask ->
           (unknownScenarios(subtask) as? GoalSubtaskUnknownScenarios.Recorded)?.let { subtask.name to it }
@@ -110,7 +116,7 @@ internal fun DecompositionManifest.branchPlanFor(subtaskId: Int): GoalRunnerBran
 private val MARKDOWN_WHITESPACE = Regex("""\s+""")
 private val MARKDOWN_ESCAPED = Regex("""[|`]""")
 
-private fun String.flattenedForMarkdown(): String =
+internal fun String.flattenedForMarkdown(): String =
   replace(MARKDOWN_WHITESPACE, " ").trim().replace(MARKDOWN_ESCAPED) { "\\${it.value}" }
 
 private fun GoalSubtaskUnknownScenarios.Recorded.pullRequestText(): String =

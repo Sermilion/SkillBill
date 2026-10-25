@@ -1,3 +1,9 @@
+## [2026-10-25] SKILL-442: read the goal assessment record through one path and decode it strictly
+Context: PR body, status projection, CLI, work detail and desktop all need the assessment record, and a stale or lenient reader would show a wrong verdict.
+Decision: Every surface derives state from the single durable record read; corrupt or failing reads degrade to null with a warning, and the desktop maps enums by exact name.
+Reason: A second derivation path could disagree with the PR body, and a defaulting decoder would turn an unknown verification token into confirmed. The work-detail contract version moved to 1.3 so older readers are not silently fed the new object.
+Revisit when: the assessment record persists a fixed-not-re-verified flag, which would let status and desktop show what the PR renderer computes.
+
 ## [2026-10-23] SKILL-441: one plan-report builder serves standalone and goal plan phases
 Context: The spec assumed goal plan phases settle through the feature-task run loop, so bundle files would need a second report path next to the standalone one.
 Decision: `StandalonePlanReportBuilder` is the only producer of `StandalonePlanReport`, including `bundleFiles`. Goal plan phases already run `StandalonePlanRun` with goal scope and publish through the same status sink, so no parallel model exists.

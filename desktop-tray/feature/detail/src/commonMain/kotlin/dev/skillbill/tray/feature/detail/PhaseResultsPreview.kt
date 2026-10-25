@@ -16,6 +16,11 @@ import dev.skillbill.tray.core.designsystem.DesignSystemTheme
 import dev.skillbill.tray.core.designsystem.border
 import dev.skillbill.tray.core.designsystem.canvas
 import dev.skillbill.tray.core.designsystem.panel
+import dev.skillbill.tray.core.domain.model.GoalAssessmentFinding
+import dev.skillbill.tray.core.domain.model.GoalAssessmentFindingState
+import dev.skillbill.tray.core.domain.model.GoalAssessmentResult
+import dev.skillbill.tray.core.domain.model.GoalAssessmentState
+import dev.skillbill.tray.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.tray.core.domain.model.GoalQaFinding
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
@@ -102,9 +107,39 @@ private fun PhaseResultsQaOnlyPreview() = PhaseResultsPreviewFrame(
   subtaskName = { null },
 )
 
+@Preview
+@Composable
+private fun GoalAssessmentMixedPreview() = PhaseResultsPreviewFrame(
+  results = emptyList(),
+  qa = null,
+  subtaskName = { null },
+  assessment = GoalAssessmentResult(
+    state = GoalAssessmentState.COMPLETED, round = 3, exitReason = "persistent_finding", fixRan = true,
+    findings = listOf(
+      GoalAssessmentFinding(
+        "GA-004", "major", "src/Cache.kt", 30, "The cache read can be null.",
+        GoalAssessmentVerification.REFUTED, GoalAssessmentFindingState.REFUTED, "The caller guards the null.",
+      ),
+      GoalAssessmentFinding(
+        "GA-002", "major", "src/Retry.kt", 12, "The retry loop never stops.",
+        GoalAssessmentVerification.CONFIRMED, GoalAssessmentFindingState.OPEN, "Reproduced twice.",
+      ),
+      GoalAssessmentFinding(
+        "GA-006", "blocker", "src/Save.kt", 48, "Saving twice drops the second edit.",
+        GoalAssessmentVerification.UNVERIFIED, GoalAssessmentFindingState.OPEN, "",
+      ),
+    ),
+  ),
+)
+
 /** The goal activity card around the section, so previews match the detail pane. */
 @Composable
-private fun PhaseResultsPreviewFrame(results: List<SubtaskPhaseResults>, qa: GoalQaResult?, subtaskName: (Int) -> String?) {
+private fun PhaseResultsPreviewFrame(
+  results: List<SubtaskPhaseResults>,
+  qa: GoalQaResult?,
+  subtaskName: (Int) -> String?,
+  assessment: GoalAssessmentResult? = null,
+) {
   DesignSystemTheme {
     Column(Modifier.background(canvas).padding(16.dp)) {
       Column(
@@ -115,6 +150,7 @@ private fun PhaseResultsPreviewFrame(results: List<SubtaskPhaseResults>, qa: Goa
         DesignLabel("Goal activity")
         PhaseResultsSection(results, qa, subtaskName)
         QaFindingsSection(qa)
+        GoalAssessmentSection(assessment)
         qa?.reportText?.let { QaReportSection(it) }
       }
     }

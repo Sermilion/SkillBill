@@ -123,6 +123,7 @@ data class Detail(
   val validation: List<SubtaskValidation> = emptyList(),
   val phaseResults: List<SubtaskPhaseResults> = emptyList(),
   val goalQa: GoalQaResult? = null,
+  val goalAssessment: GoalAssessmentResult? = null,
   val latestActivity: LatestActivity = LatestActivity(),
   val executionHistory: List<ExecutionInstance> = emptyList(),
   val observedAt: Instant? = null,
@@ -238,6 +239,27 @@ data class GoalQaResult(
 )
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
 data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
+enum class GoalAssessmentState { PENDING, RUNNING, COMPLETED, SKIPPED }
+enum class GoalAssessmentVerification { CONFIRMED, REFUTED, UNVERIFIED, NOT_REQUIRED }
+enum class GoalAssessmentFindingState { OPEN, FIXED, REFUTED }
+/** The goal assessment stage; [exitReason] is null until the stage settles, and a skipped stage carries no findings. */
+data class GoalAssessmentResult(
+  val state: GoalAssessmentState,
+  val round: Int,
+  val exitReason: String?,
+  val fixRan: Boolean,
+  val findings: List<GoalAssessmentFinding> = emptyList(),
+)
+data class GoalAssessmentFinding(
+  val ref: String,
+  val severity: String,
+  val path: String,
+  val line: Int,
+  val failureScenario: String,
+  val verification: GoalAssessmentVerification,
+  val state: GoalAssessmentFindingState,
+  val evidence: String,
+)
 data class ValidationCommand(val command: String, val exitCode: Int)
 data class ValidationResult(val status: String, val checks: List<String>, val gateRunCount: Int?, val gates: List<ValidationGateRun>)
 data class ValidationGateRun(

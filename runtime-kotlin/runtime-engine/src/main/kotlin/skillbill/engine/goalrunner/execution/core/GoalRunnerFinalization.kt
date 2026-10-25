@@ -23,6 +23,7 @@ import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.qa.GoalQaGateResult
 import skillbill.engine.goalrunner.qa.GoalQaSkipReason
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
@@ -132,6 +133,7 @@ class GoalRunnerFinalization(
       state.manifest.toPullRequestRequest(
         request.repoRoot,
         goalQaSummary = goalQaSummary(state, qaResult),
+        goalAssessment = goalAssessment(state),
         qaSummary = { subtask ->
           state.manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome)
             ?: GoalSubtaskQaSummary.NotRecorded
@@ -139,6 +141,18 @@ class GoalRunnerFinalization(
         unknownScenarios = { subtask -> unknownScenariosFor(state, subtask) },
       ),
     )
+
+  private fun goalAssessment(state: GoalRunnerManifestState): GoalAssessmentRecordRead =
+    try {
+      outcomeStore.readGoalAssessmentRecord(state.parentWorkflowId)
+    } catch (failure: SkillBillRuntimeException) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=goal_assessment_pr_body record_kind=lookup_failed value_expected=assessment_record " +
+          "value_used=unreadable reason=${failure.message.orEmpty().take(MAX_WARNING_REASON)}",
+      )
+      GoalAssessmentRecordRead.Corrupt(failure.message.orEmpty())
+    }
 
   private fun unknownScenariosFor(
     state: GoalRunnerManifestState,

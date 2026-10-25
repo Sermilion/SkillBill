@@ -6,6 +6,11 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runComposeUiTest
 import dev.skillbill.tray.core.designsystem.DesignSystemTheme
+import dev.skillbill.tray.core.domain.model.GoalAssessmentFinding
+import dev.skillbill.tray.core.domain.model.GoalAssessmentFindingState
+import dev.skillbill.tray.core.domain.model.GoalAssessmentResult
+import dev.skillbill.tray.core.domain.model.GoalAssessmentState
+import dev.skillbill.tray.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
 import dev.skillbill.tray.core.domain.model.ReviewFinding
@@ -18,6 +23,7 @@ import dev.skillbill.tray.core.testing.workItem
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import dev.skillbill.tray.core.ui.RepositoryNavigation
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class DetailPhaseResultsTest {
@@ -118,7 +124,55 @@ class DetailPhaseResultsTest {
     onNodeWithText("AC-001 failed. Retained field values are empty after restart.").assertExists()
   }
 
-  private fun ComposeUiTest.showPhaseResults(vararg results: SubtaskPhaseResults, qa: GoalQaResult? = null) {
+  @Test
+  fun `an assessment-only goal shows its round, exit reason and each finding with its verification label`() = runComposeUiTest {
+    showPhaseResults(
+      assessment = GoalAssessmentResult(
+        GoalAssessmentState.COMPLETED, 3, "persistent_finding", true,
+        listOf(
+          assessmentFinding("GA-004", "The cache read can be null.", GoalAssessmentVerification.REFUTED, GoalAssessmentFindingState.REFUTED, "The caller guards the null."),
+          assessmentFinding("GA-002", "The retry loop never stops.", GoalAssessmentVerification.CONFIRMED, GoalAssessmentFindingState.OPEN, "Reproduced twice."),
+          assessmentFinding("GA-006", "Saving twice drops the second edit.", GoalAssessmentVerification.UNVERIFIED, GoalAssessmentFindingState.OPEN, ""),
+        ),
+      ),
+    )
+
+    onNodeWithText("GOAL ASSESSMENT").assertExists()
+    onNodeWithText("Completed · round 3 · persistent finding").assertExists()
+    onNodeWithText("major · src/Retry.kt:12 · confirmed · open").assertExists()
+    onNodeWithText("The retry loop never stops.").assertExists()
+    onNodeWithText("Evidence: Reproduced twice.").assertExists()
+    onNodeWithText("major · src/Retry.kt:12 · refuted · refuted").assertExists()
+    onNodeWithText("Evidence: The caller guards the null.").assertExists()
+    onNodeWithText("major · src/Retry.kt:12 · unverified · open").assertExists()
+  }
+
+  @Test
+  fun `a running second round and a skipped assessment render their own state without findings`() = runComposeUiTest {
+    showPhaseResults(assessment = GoalAssessmentResult(GoalAssessmentState.RUNNING, 2, null, true))
+    onNodeWithText("Running · round 2").assertExists()
+  }
+
+  @Test
+  fun `a skipped assessment reads skipped in its summary`() {
+    val skipped = GoalAssessmentResult(GoalAssessmentState.SKIPPED, 0, "skipped_no_changes", false)
+
+    assertEquals("Skipped · skipped no changes", goalAssessmentSummary(skipped))
+  }
+
+  private fun assessmentFinding(
+    ref: String,
+    scenario: String,
+    verification: GoalAssessmentVerification,
+    state: GoalAssessmentFindingState,
+    evidence: String,
+  ) = GoalAssessmentFinding(ref, "major", "src/Retry.kt", 12, scenario, verification, state, evidence)
+
+  private fun ComposeUiTest.showPhaseResults(
+    vararg results: SubtaskPhaseResults,
+    qa: GoalQaResult? = null,
+    assessment: GoalAssessmentResult? = null,
+  ) {
     val item = workItem("phase-results")
     setContent {
       CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
@@ -126,7 +180,7 @@ class DetailPhaseResultsTest {
           DetailContent(
             DetailUiState(
               item.identity,
-              DetailLoad.Loaded(detail(item).copy(phaseResults = results.toList(), goalQa = qa)),
+              DetailLoad.Loaded(detail(item).copy(phaseResults = results.toList(), goalQa = qa, goalAssessment = assessment)),
             ),
             fixtureInstant,
             {},

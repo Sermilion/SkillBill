@@ -1,3 +1,14 @@
+## [2026-10-25] SKILL-442 subtask 7: goal assessment PR, status and desktop surfaces
+Areas: runtime-engine (goalrunner execution/support, status, work IdeStatusProjector/Service); runtime-domain (goalrunner status models); runtime-cli (goal status, work detail mapping); runtime-contracts (work-detail version); orchestration/contracts work-detail schema; desktop-tray (domain, data mapper, feature/detail)
+- MEDIUM feature. The PR body gains a `## Goal Assessment` block from the stored assessment record via `GoalAssessmentPullRequestText` (reusable renderer), placed before the interaction trace section so the not-traced lines survive. Absent, skipped-no-changes and corrupt records each render one explicit line.
+- The block lists exit reason, rounds, open findings (marked fixed, not re-verified when the last round's fix completed), unverified Blocker/Major defects, refuted findings with evidence, pr_only Minor and test-value findings, not-restored regressions, and warnings for failed or malformed assessor/verifier runs.
+- Status projection carries `GoalRunnerAssessmentResult` (pending/running/completed/skipped, round, exit reason, fixRan, open refs, findings), filled by `GoalRunnerStatusAssessmentResult` from the single durable read path; absent or corrupt records give null plus a degraded-read record. Running round 2 keeps round-1 findings.
+- CLI prints `goal_assessment:` and per-finding lines; work detail emits a `goal_assessment` object and `WORK_DETAIL_CONTRACT_VERSION` moved 1.2 to 1.3 in the const and schema. The IDE goal-finish pipeline prepends assessment steps (plus a fix step) only when a record exists.
+- Desktop maps the record with strict enum `valueOf` (unknown tokens fail loudly), adds a SKIPPED pipeline state, `goalFinishSteps`, and a `GoalAssessmentSection` (open findings first); assessment-only goals open the activity panel.
+- Limits: the status projection exposes only `fixRan`; the fixed-not-re-verified marker is computed in the PR renderer. Exit reason shows as its wire token with spaces.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented (validate passed)
+
 ## [2026-10-23] SKILL-441 subtask 6: project-store discoverability, CLI, skill text and repo hygiene
 Areas: runtime-ports (idestatus model, editor); runtime-engine (goalrunner plan); runtime-infra (sqlite idestatus migration, host system); runtime-cli (project, config); runtime-core (RuntimeComponent, PrincipleEnforcementInventory); skills/skill-bill; PR description directive; .gitignore
 - MEDIUM feature. `StandalonePlanReport` gains `bundleFiles`: absolute, sorted paths of every regular file under the parent spec's directory, built by the new `StandalonePlanReportBuilder` (reusable) for both standalone and goal plan phases, since both settle through `StandalonePlanRun`. A missing or unreadable directory yields an empty list plus one best-effort warning. Stored rows without `bundle_files` decode to empty, so no migration was needed.
