@@ -118,6 +118,21 @@ sealed interface GoalSubtaskQaSummary {
   data class Recorded(val outcome: FeatureTaskQaOutcome) : GoalSubtaskQaSummary
 }
 
+data class GoalUnknownScenario(
+  val scenarioRef: String,
+  val reason: String?,
+)
+
+sealed interface GoalSubtaskUnknownScenarios {
+  data object Absent : GoalSubtaskUnknownScenarios
+
+  data object Empty : GoalSubtaskUnknownScenarios
+
+  data class Malformed(val reason: String) : GoalSubtaskUnknownScenarios
+
+  data class Recorded(val scenarios: List<GoalUnknownScenario>) : GoalSubtaskUnknownScenarios
+}
+
 sealed interface GoalQaSummary {
   data object RanPerSubtask : GoalQaSummary
 

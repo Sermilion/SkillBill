@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -39,11 +40,11 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
-import java.util.concurrent.CancellationException
 
 @Inject
 class DefaultGoalRunnerQaGate(
   private val phaseRunEntry: PhaseRunEntry,
+  private val validation: GoalRunnerPostChangeValidation,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val gitOperations: WorkflowGitOperations,
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
@@ -58,14 +59,7 @@ class DefaultGoalRunnerQaGate(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalQaGateResult =
-    runCatching { runQa(state, request) }.getOrElse { failure -> containFailure(state, containable(failure)) }
-
-  private fun containable(failure: Throwable): Exception =
-    if (failure is Exception && failure !is CancellationException && failure !is InterruptedException) {
-      failure
-    } else {
-      throw failure
-    }
+    runCatching { runQa(state, request) }.getOrElse { failure -> containFailure(state, containableFailure(failure)) }
 
   private fun containFailure(
     state: GoalRunnerManifestState,
@@ -98,7 +92,7 @@ class DefaultGoalRunnerQaGate(
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "goal_qa_gate: could not record the QA warning for '${state.parentWorkflowId}'.",
-        containable(recordingFailure),
+        containableFailure(recordingFailure),
       )
     }
   }
@@ -181,16 +175,9 @@ class DefaultGoalRunnerQaGate(
     run: GoalQaRun,
     buildWarning: String?,
   ): List<String> {
-    val validation =
-      phaseRunEntry.runForGoal(
-        run.request.copy(definitionId = SkeletonDefinition.VALIDATION.id, recordedGoalQaOutcome = null),
-        state.parentWorkflowId,
-        run.branch,
-      )
     val validationWarning =
-      (validation as? PhaseRunResult.Blocked)?.let { blocked ->
-        "Validation after QA stopped at '${blocked.stepId}': ${blocked.reason}"
-      }
+      (validation.run(run.request, state.parentWorkflowId, run.branch) as? GoalPostChangeValidationResult.Stopped)
+        ?.let { stopped -> "Validation after QA stopped at '${stopped.stepId}': ${stopped.reason}" }
     validationWarning?.let { recordContainedEnvironmentFailure(state, it) }
     val changedWarning = codeChangedAfterQa(state, request).takeIf { buildWarning == null }
     changedWarning?.let { recordBestEffort(state) { qaOutcomes.recordWarning(state.parentWorkflowId, it) } }

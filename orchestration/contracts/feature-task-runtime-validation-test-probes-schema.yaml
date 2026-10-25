@@ -1,0 +1,46 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/feature-task-runtime-validation-test-probes.yaml
+title: Feature-task runtime validation test probes
+description: >-
+  The probe results a goal-subtask validate step reports for tests the subtask added or
+  changed. Each item records one test, the production line or branch it guards, and whether
+  removing that behavior made the test fail (`killed`), left it passing (`survived`), or could
+  not be tried (`not_run`). `repaired` is true only when a first probe survived, the validator
+  strengthened the test, and the single re-probe killed it. Test refs are unique within the
+  list; the parser owns that check.
+type: object
+additionalProperties: false
+required: [contract_version, test_probes]
+properties:
+  contract_version: { const: '0.1' }
+  test_probes:
+    type: array
+    maxItems: 6
+    items:
+      type: object
+      additionalProperties: false
+      required: [test_ref, guarded_ref, result, reason, repaired]
+      properties:
+        test_ref: { type: string, pattern: '\S' }
+        guarded_ref: { type: string, pattern: '\S' }
+        result: { enum: [killed, survived, not_run] }
+        reason: { type: string }
+        repaired: { type: boolean }
+      allOf:
+        - if:
+            properties:
+              result: { const: not_run }
+            required: [result]
+          then:
+            properties:
+              reason: { pattern: '\S' }
+        - if:
+            properties:
+              result: { enum: [survived, not_run] }
+            required: [result]
+          then:
+            properties:
+              repaired: { const: false }
+x-coherence-checks:
+  - id: unique-test-refs
+    description: Test refs are unique within the list; the parser owns this check.

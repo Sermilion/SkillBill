@@ -362,6 +362,7 @@ class GoalQaRepairLoopTest {
       gate =
         DefaultGoalRunnerQaGate(
           entry,
+          DefaultGoalRunnerPostChangeValidation(entry),
           progress,
           git,
           object : FeatureTaskRuntimeRunInvariantsSource {

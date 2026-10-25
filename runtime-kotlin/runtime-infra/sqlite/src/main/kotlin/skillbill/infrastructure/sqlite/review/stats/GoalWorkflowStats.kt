@@ -10,9 +10,12 @@ import skillbill.infrastructure.sqlite.review.core.requireNonNegativeLong
 import skillbill.infrastructure.sqlite.review.core.requirePositiveInt
 import skillbill.infrastructure.sqlite.review.core.requirePresentString
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
+import skillbill.review.model.GoalAssessmentStats
 import skillbill.review.model.GoalBlockedSubtaskSummary
+import skillbill.review.model.GoalInteractionScenarioStats
 import skillbill.review.model.GoalModeStats
 import skillbill.review.model.GoalRunSummary
+import skillbill.review.model.GoalTestProbeStats
 import skillbill.review.model.GoalWorkflowStats
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
@@ -102,6 +105,9 @@ internal fun buildGoalStats(
     invocationsWithUnknownGoal = runs.count { it.parentWorkflowId == null },
     goalIdentityAvailability = goalIdentityAvailability(runs).wireValue,
     resumedInvocations = runs.count { it.resumed },
+    interactionScenarios = subtasks.summedScenarios(),
+    testProbes = subtasks.summedProbes(),
+    goalAssessment = runs.summedAssessment(),
   )
 }
 
@@ -149,6 +155,8 @@ internal data class GoalRunRow(
   internal val durationMs: Long,
   internal val mode: String,
   internal val parentWorkflowId: String?,
+  internal val assessment: GoalAssessmentStats = GoalAssessmentStats(),
+  internal val assessmentExitReason: String? = null,
 )
 
 internal data class GoalSubtaskRow(
@@ -160,6 +168,8 @@ internal data class GoalSubtaskRow(
   internal val decompositionStatus: DecompositionStatus?,
   internal val durationMs: Long,
   internal val attemptCount: Int,
+  internal val scenarios: GoalInteractionScenarioStats = GoalInteractionScenarioStats(),
+  internal val probes: GoalTestProbeStats = GoalTestProbeStats(),
 )
 
 private fun parseGoalRunRow(row: Map<String, Any?>): GoalRunRow {
@@ -185,6 +195,8 @@ private fun parseGoalRunRow(row: Map<String, Any?>): GoalRunRow {
     durationMs = if (finished) row.requireNonNegativeLong("finished_duration_ms", identity) else 0L,
     mode = row.requireNonBlankString("mode", identity),
     parentWorkflowId = row[GoalTelemetryPayloadKeys.PARENT_WORKFLOW_ID]?.toString()?.takeIf(String::isNotBlank),
+    assessment = row.toAssessmentSnapshot(identity),
+    assessmentExitReason = row.assessmentExitReason(),
   )
 }
 
@@ -205,6 +217,8 @@ private fun parseGoalSubtaskRow(row: Map<String, Any?>): GoalSubtaskRow {
     decompositionStatus = DecompositionStatus.fromWire(status),
     durationMs = row.requireNonNegativeLong("duration_ms", identity),
     attemptCount = row.requireNonNegativeInt("attempt_count", identity),
+    scenarios = row.toScenarioStats(identity),
+    probes = row.toProbeStats(identity),
   )
 }
 
@@ -214,3 +228,78 @@ private fun averageMillis(values: List<Long>): Double =
   } else {
     String.format(Locale.US, "%.2f", values.sum().toDouble() / values.size).toDouble()
   }
+
+private fun Map<String, Any?>.toScenarioStats(identity: String): GoalInteractionScenarioStats =
+  GoalInteractionScenarioStats(
+    traced = requireNonNegativeLong(GoalTelemetryPayloadKeys.INTERACTION_SCENARIOS_TRACED, identity),
+    broken = requireNonNegativeLong(GoalTelemetryPayloadKeys.INTERACTION_SCENARIOS_BROKEN, identity),
+    repaired = requireNonNegativeLong(GoalTelemetryPayloadKeys.INTERACTION_SCENARIOS_REPAIRED, identity),
+    unknown = requireNonNegativeLong(GoalTelemetryPayloadKeys.INTERACTION_SCENARIOS_UNKNOWN, identity),
+  )
+
+private fun Map<String, Any?>.toProbeStats(identity: String): GoalTestProbeStats =
+  GoalTestProbeStats(
+    killed = requireNonNegativeLong(GoalTelemetryPayloadKeys.TEST_PROBES_KILLED, identity),
+    survived = requireNonNegativeLong(GoalTelemetryPayloadKeys.TEST_PROBES_SURVIVED, identity),
+    repaired = requireNonNegativeLong(GoalTelemetryPayloadKeys.TEST_PROBES_REPAIRED, identity),
+    notRun = requireNonNegativeLong(GoalTelemetryPayloadKeys.TEST_PROBES_NOT_RUN, identity),
+  )
+
+private fun Map<String, Any?>.toAssessmentSnapshot(identity: String): GoalAssessmentStats =
+  GoalAssessmentStats(
+    blockerFindings = requireNonNegativeLong(GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_BLOCKER_FINDINGS, identity),
+    majorFindings = requireNonNegativeLong(GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_MAJOR_FINDINGS, identity),
+    minorFindings = requireNonNegativeLong(GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_MINOR_FINDINGS, identity),
+    confirmed = requireNonNegativeLong(GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_CONFIRMED, identity),
+    refuted = requireNonNegativeLong(GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_REFUTED, identity),
+    rounds = requireNonNegativeLong(GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_ROUNDS, identity),
+    openFindings = requireNonNegativeLong(GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_OPEN_FINDINGS, identity),
+  )
+
+private fun Map<String, Any?>.assessmentExitReason(): String? =
+  this[GoalTelemetryPayloadKeys.GOAL_ASSESSMENT_EXIT_REASON]?.toString()?.takeIf(String::isNotBlank)
+
+private fun List<GoalSubtaskRow>.summedScenarios(): GoalInteractionScenarioStats =
+  GoalInteractionScenarioStats(
+    traced = sumOf { it.scenarios.traced },
+    broken = sumOf { it.scenarios.broken },
+    repaired = sumOf { it.scenarios.repaired },
+    unknown = sumOf { it.scenarios.unknown },
+  )
+
+private fun List<GoalSubtaskRow>.summedProbes(): GoalTestProbeStats =
+  GoalTestProbeStats(
+    killed = sumOf { it.probes.killed },
+    survived = sumOf { it.probes.survived },
+    repaired = sumOf { it.probes.repaired },
+    notRun = sumOf { it.probes.notRun },
+  )
+
+private fun List<GoalRunRow>.summedAssessment(): GoalAssessmentStats {
+  val snapshots = logicalGoalAssessmentSnapshots()
+  return GoalAssessmentStats(
+    blockerFindings = snapshots.sumOf { it.counts.blockerFindings },
+    majorFindings = snapshots.sumOf { it.counts.majorFindings },
+    minorFindings = snapshots.sumOf { it.counts.minorFindings },
+    confirmed = snapshots.sumOf { it.counts.confirmed },
+    refuted = snapshots.sumOf { it.counts.refuted },
+    rounds = snapshots.sumOf { it.counts.rounds },
+    openFindings = snapshots.sumOf { it.counts.openFindings },
+    exitReasonCounts = snapshots.groupingBy { it.exitReason }.eachCount(),
+  )
+}
+
+private data class GoalAssessmentSnapshot(
+  val exitReason: String,
+  val counts: GoalAssessmentStats,
+)
+
+private fun List<GoalRunRow>.logicalGoalAssessmentSnapshots(): List<GoalAssessmentSnapshot> =
+  withIndex()
+    .filter { (_, run) -> run.assessmentExitReason != null }
+    .groupBy { (index, run) -> run.parentWorkflowId ?: "unattributed:$index" }
+    .values
+    .map { segments ->
+      val latest = segments.map { it.value }.maxWith(compareBy<GoalRunRow>({ it.finishedAt }, { it.startedAt }))
+      GoalAssessmentSnapshot(requireNotNull(latest.assessmentExitReason), latest.assessment)
+    }

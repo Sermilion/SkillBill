@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.core.migration.area
 
+import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import java.sql.Connection
 
 internal object GoalTelemetryMigration {
@@ -74,4 +75,46 @@ internal object GoalTelemetryMigration {
       PRIMARY KEY (parent_workflow_id, issue_key)
     )
     """
+}
+
+private const val COUNT_COLUMN_DEFINITION = "INTEGER NOT NULL DEFAULT 0"
+
+private val GOAL_SUBTASK_EVENT_COUNT_COLUMNS =
+  listOf(
+    "interaction_scenarios_traced",
+    "interaction_scenarios_broken",
+    "interaction_scenarios_repaired",
+    "interaction_scenarios_unknown",
+    "test_probes_killed",
+    "test_probes_survived",
+    "test_probes_repaired",
+    "test_probes_not_run",
+  )
+
+private val GOAL_RUN_SESSION_COUNT_COLUMNS =
+  listOf(
+    "goal_assessment_blocker_findings",
+    "goal_assessment_major_findings",
+    "goal_assessment_minor_findings",
+    "goal_assessment_confirmed",
+    "goal_assessment_refuted",
+    "goal_assessment_rounds",
+    "goal_assessment_open_findings",
+  )
+
+private const val GOAL_RUN_SESSION_EXIT_REASON_COLUMN = "goal_assessment_exit_reason"
+
+internal fun recordGoalSubtaskTraceProbeCounts(connection: Connection) {
+  if (!DatabaseColumnMigrations.tableExists(connection, "goal_subtask_events")) return
+  GOAL_SUBTASK_EVENT_COUNT_COLUMNS.forEach { column ->
+    DatabaseColumnMigrations.ensureColumn(connection, "goal_subtask_events", column, COUNT_COLUMN_DEFINITION)
+  }
+}
+
+internal fun recordGoalAssessmentCounts(connection: Connection) {
+  if (!DatabaseColumnMigrations.tableExists(connection, "goal_run_sessions")) return
+  GOAL_RUN_SESSION_COUNT_COLUMNS.forEach { column ->
+    DatabaseColumnMigrations.ensureColumn(connection, "goal_run_sessions", column, COUNT_COLUMN_DEFINITION)
+  }
+  DatabaseColumnMigrations.ensureColumn(connection, "goal_run_sessions", GOAL_RUN_SESSION_EXIT_REASON_COLUMN, "TEXT")
 }

@@ -72,9 +72,9 @@ properties:
       `McpToolRegistry.toolNames`.
   contract_version:
     type: string
-    const: "1.12.0"
+    const: "1.13.0"
     description: >
-      Pinned to `TELEMETRY_EVENT_CONTRACT_VERSION` (currently "1.12.0").
+      Pinned to `TELEMETRY_EVENT_CONTRACT_VERSION` (currently "1.13.0").
       The parity test `TelemetryEventSchemaContractVersionTest` keeps
       the two in lockstep.
 
@@ -255,6 +255,14 @@ $defs:
       - out_of_repo
       - already_satisfied
       - not_reproducible
+  goalAssessmentExitReasonEnum:
+    type: string
+    enum:
+      - converged
+      - round_cap
+      - persistent_finding
+      - assessment_unavailable
+      - skipped_no_changes
   goalRunnerStopReasonEnum:
     type: string
     enum:
@@ -441,7 +449,7 @@ $defs:
       event_name:
         const: add_learning
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       scope:
         type: string
         enum:
@@ -474,7 +482,7 @@ $defs:
       event_name:
         const: doctor
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
 
   featureTaskPhaseCompleteEvent:
     type: object
@@ -490,13 +498,13 @@ $defs:
       event_name:
         const: feature_task_phase_complete
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       workflow_id:
         type: string
         minLength: 1
       phase_id:
         type: string
-        enum: [preplan, plan, plan_subtasks, implement, simplify, implement_fix, review, build, verify_findings, audit, audit_plan_fix, audit_implement_fix, qa, qa_fix, validate, write_history, pr, monitor_fix]
+        enum: [preplan, plan, plan_subtasks, implement, simplify, implement_fix, review, build, verify_findings, audit, audit_plan_fix, audit_implement_fix, qa, qa_fix, validate, write_history, pr, monitor_fix, goal_assessment, goal_assessment_fix]
       attempt:
         type: integer
         minimum: 1
@@ -530,13 +538,13 @@ $defs:
       event_name:
         const: feature_task_phase_block
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       workflow_id:
         type: string
         minLength: 1
       phase_id:
         type: string
-        enum: [preplan, plan, plan_subtasks, implement, simplify, implement_fix, review, build, verify_findings, audit, audit_plan_fix, audit_implement_fix, qa, qa_fix, validate, write_history, pr, monitor_fix]
+        enum: [preplan, plan, plan_subtasks, implement, simplify, implement_fix, review, build, verify_findings, audit, audit_plan_fix, audit_implement_fix, qa, qa_fix, validate, write_history, pr, monitor_fix, goal_assessment, goal_assessment_fix]
       attempt:
         type: integer
         minimum: 1
@@ -559,7 +567,7 @@ $defs:
       event_name:
         const: update_check
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
 
   featureVerifyStatsEvent:
     type: object
@@ -571,7 +579,7 @@ $defs:
       event_name:
         const: feature_verify_stats
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
 
   reviewStatsEvent:
     type: object
@@ -583,7 +591,7 @@ $defs:
       event_name:
         const: review_stats
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       # Commit-focused sparse specialist accounting. Every field is an identity, a count, or a lane
       # name: no commit subject, path, diff text, or company identifier reaches telemetry.
       commit_sequence_digest:
@@ -666,7 +674,7 @@ $defs:
       event_name:
         const: telemetry_proxy_capabilities
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
 
   telemetryRemoteStatsEvent:
     type: object
@@ -679,7 +687,7 @@ $defs:
       event_name:
         const: telemetry_remote_stats
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       workflow:
         type: string
         enum:
@@ -714,7 +722,7 @@ $defs:
       event_name:
         const: feature_verify_started
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       acceptance_criteria_count:
         type: integer
       rollout_relevant:
@@ -745,7 +753,7 @@ $defs:
       event_name:
         const: feature_verify_finished
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       feature_flag_audit_performed:
         type: boolean
       review_iterations:
@@ -816,7 +824,7 @@ $defs:
       event_name:
         const: feature_verify_workflow_continue
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       workflow_id:
         type: string
       qa:
@@ -835,7 +843,7 @@ $defs:
       event_name:
         const: feature_verify_workflow_get
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       workflow_id:
         type: string
 
@@ -849,7 +857,7 @@ $defs:
       event_name:
         const: feature_verify_workflow_latest
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
 
   featureVerifyWorkflowListEvent:
     type: object
@@ -861,7 +869,7 @@ $defs:
       event_name:
         const: feature_verify_workflow_list
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       limit:
         type: integer
 
@@ -875,7 +883,7 @@ $defs:
       event_name:
         const: feature_verify_workflow_open
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       session_id:
         type: string
       current_step_id:
@@ -905,7 +913,7 @@ $defs:
       event_name:
         const: feature_verify_workflow_resume
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       workflow_id:
         type: string
       qa:
@@ -926,7 +934,7 @@ $defs:
       event_name:
         const: feature_verify_workflow_update
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       workflow_id:
         type: string
       workflow_status:
@@ -966,7 +974,7 @@ $defs:
       event_name:
         const: goal_started
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       issue_key:
         type: string
       feature_name:
@@ -1013,7 +1021,7 @@ $defs:
       event_name:
         const: goal_subtask_finished
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       issue_key:
         type: string
       workflow_id:
@@ -1077,6 +1085,62 @@ $defs:
         description: >
           Whether the subtask's feature-task run wrote a boundary history.md entry.
           Additive-optional: legacy payloads omit the key.
+      interaction_scenarios_traced:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Distinct interaction scenarios traced, broken, repaired, or unknown in the subtask's
+          final repair state. Additive-optional: legacy payloads omit the key.
+      interaction_scenarios_broken:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Distinct interaction scenarios whose trace found them broken, counting those later
+          repaired. Additive-optional: legacy payloads omit the key.
+      interaction_scenarios_repaired:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Interaction scenarios that broke and held on re-trace. Additive-optional: legacy
+          payloads omit the key.
+      interaction_scenarios_unknown:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Interaction scenarios the trace could not decide. Additive-optional: legacy payloads
+          omit the key.
+      test_probes_killed:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output that a test caught. Additive-optional:
+          legacy payloads omit the key.
+      test_probes_survived:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output that no test caught. Additive-optional:
+          legacy payloads omit the key.
+      test_probes_repaired:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output marked repaired. Additive-optional:
+          legacy payloads omit the key.
+      test_probes_not_run:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output that could not run. Additive-optional:
+          legacy payloads omit the key.
 
   goalFinishedEvent:
     type: object
@@ -1099,7 +1163,7 @@ $defs:
       event_name:
         const: goal_finished
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       issue_key:
         type: string
       workflow_id:
@@ -1142,6 +1206,60 @@ $defs:
         oneOf:
           - $ref: "#/$defs/noChangeReasonEnum"
           - type: "null"
+      goal_assessment_blocker_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Blocker findings across all goal assessment rounds. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_major_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Major findings across all goal assessment rounds. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_minor_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Minor findings across all goal assessment rounds. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_confirmed:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Assessment findings verified as confirmed. Additive-optional: legacy payloads omit
+          the key.
+      goal_assessment_refuted:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Assessment findings verified as refuted. Additive-optional: legacy payloads omit the key.
+      goal_assessment_rounds:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Goal assessment rounds run. Additive-optional: legacy payloads omit the key.
+      goal_assessment_open_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Findings still open when the assessment exited. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_exit_reason:
+        oneOf:
+          - $ref: "#/$defs/goalAssessmentExitReasonEnum"
+          - type: "null"
+        description: >
+          Why the goal assessment exited; `null` when no assessment record exists.
+          Additive-optional: legacy payloads omit the key.
 
   goalIssueFinishedEvent:
     type: object
@@ -1166,7 +1284,7 @@ $defs:
       event_name:
         const: goal_issue_finished
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       issue_key:
         type: string
       parent_workflow_id:
@@ -1226,7 +1344,7 @@ $defs:
       event_name:
         const: goal_stats
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       since:
         type: string
       date_from:
@@ -1251,7 +1369,7 @@ $defs:
       event_name:
         const: import_review
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       review_text:
         type: string
       orchestrated:
@@ -1268,7 +1386,7 @@ $defs:
       event_name:
         const: new_skill_scaffold
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       payload:
         $ref: "#/$defs/freeObjectShape"
       dry_run:
@@ -1292,7 +1410,7 @@ $defs:
       event_name:
         const: pr_description_generated
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       commit_count:
         type: integer
       files_changed_count:
@@ -1333,7 +1451,7 @@ $defs:
       event_name:
         const: quality_check_finished
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       # Null on a reconciler-marked stale terminal: that check never reported back, so it has no final
       # count. Read `final_failure_count_availability` before this value.
       final_failure_count:
@@ -1399,7 +1517,7 @@ $defs:
       event_name:
         const: quality_check_started
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       routed_skill:
         type: string
       detected_stack:
@@ -1496,7 +1614,7 @@ $defs:
       event_name:
         const: skillbill_review_finished
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       total_findings:
         type: integer
       accepted_findings:
@@ -1649,7 +1767,7 @@ $defs:
       event_name:
         const: skillbill_review_stage_degradation
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       review_run_id:
         type: string
         minLength: 1
@@ -1693,7 +1811,7 @@ $defs:
       event_name:
         const: skillbill_review_finished_legacy_regenerated
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       review_run_id:
         type: string
         minLength: 1
@@ -1714,7 +1832,7 @@ $defs:
       event_name:
         const: resolve_learnings
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       repo:
         type: string
       skill:
@@ -1734,7 +1852,7 @@ $defs:
       event_name:
         const: triage_findings
       contract_version:
-        const: "1.12.0"
+        const: "1.13.0"
       review_run_id:
         type: string
       decisions:

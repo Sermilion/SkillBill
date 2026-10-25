@@ -11,7 +11,11 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
   @Test
   fun `audits never re-check criteria an earlier audit accepted`() {
     val auditPrompt = composePromptForPhase("audit")
-    assertContains(auditPrompt, "Criteria accepted by an earlier audit stay accepted and are not re-checked.")
+    assertContains(
+      auditPrompt,
+      "Criteria accepted by an earlier audit are re-checked only when the runtime lists them in the " +
+        "interaction-trace or re-check scope.",
+    )
     assertFalse(auditPrompt.contains("including criteria previously accepted"))
     assertTrue(!auditPrompt.contains("prior_gap_memory"))
     assertTrue(!auditPrompt.contains("Prior-gap memory"))

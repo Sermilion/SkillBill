@@ -155,6 +155,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
@@ -1940,6 +1941,17 @@ internal fun writePlanBundle(
   repoRoot: Path,
   issueKey: String,
   projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
+): FeatureSpecWriteResult {
+  val written = writePlanBundleSpecs(repoRoot, issueKey, projectStore)
+  val parentSpec = projectStore.resolve(repoRoot).resolveSpecPath(written.parentSpecPath, repoRoot)
+  Files.writeString(parentSpec, Files.readString(parentSpec) + "\n## Transitional Regressions\n\nNone.\n")
+  return written
+}
+
+private fun writePlanBundleSpecs(
+  repoRoot: Path,
+  issueKey: String,
+  projectStore: ProjectStorePort,
 ): FeatureSpecWriteResult =
   FeatureSpecPreparationWriter(
     decompositionManifestValidator = testDecompositionManifestValidator,

@@ -8,6 +8,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
@@ -15,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
@@ -52,6 +56,10 @@ interface GoalRunnerReviewOutcomeStore {
 
   fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded
 
+  fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios
+
+  fun recordedTraceProbeCounts(workflowId: String): GoalSubtaskTraceProbeCounts = GoalSubtaskTraceProbeCounts()
+
   /** The admitted plan's QA selection once the child has a stored plan, else [requested]; null keeps a pre-QA plan. */
   fun childQaSelection(
     workflowId: String,
@@ -75,6 +83,13 @@ interface GoalRunnerWorkflowOutcomeStore :
   fun hasQaComposedPlan(workflowId: String): Boolean
 
   fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
+
+  fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead
+
+  fun recordGoalAssessmentRecord(
+    parentWorkflowId: String,
+    record: GoalAssessmentRecord,
+  ): Boolean
 }
 
 interface GoalRunnerAttemptLedgerStore {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +26,11 @@ import dev.skillbill.tray.core.designsystem.mono
 import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.designsystem.red
+import dev.skillbill.tray.core.domain.model.GoalAssessmentFinding
+import dev.skillbill.tray.core.domain.model.GoalAssessmentFindingState
+import dev.skillbill.tray.core.domain.model.GoalAssessmentResult
+import dev.skillbill.tray.core.domain.model.GoalAssessmentState
+import dev.skillbill.tray.core.domain.model.GoalAssessmentVerification
 import dev.skillbill.tray.core.domain.model.GoalQaResult
 import dev.skillbill.tray.core.domain.model.PhaseConclusion
 import dev.skillbill.tray.core.domain.model.ReviewFinding
@@ -109,6 +115,56 @@ private fun QaRow(qa: GoalQaResult) {
     )
     // A failure kind marks the reason as the explanation of an error, so it stays visible beside the report.
     PhaseBody("Goal QA", qa.reason.takeUnless { qa.reportText != null && qa.failureKind == null && isBareQaReasonToken(it) }, null)
+  }
+}
+
+/** The goal assessment stage: its state, round and exit reason, then every finding with open ones first. */
+@Composable
+internal fun GoalAssessmentSection(assessment: GoalAssessmentResult?) {
+  if (assessment == null) return
+  val (open, settled) = assessment.findings.partition { it.state == GoalAssessmentFindingState.OPEN }
+  HorizontalDivider(color = border)
+  DesignLabel("Goal assessment")
+  Text(
+    goalAssessmentSummary(assessment),
+    color = if (open.isEmpty()) green else orange,
+    fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp,
+  )
+  (open + settled).forEach { GoalAssessmentFindingRow(it) }
+}
+
+internal fun goalAssessmentSummary(assessment: GoalAssessmentResult): String {
+  val state = when (assessment.state) {
+    GoalAssessmentState.PENDING -> "Pending"
+    GoalAssessmentState.RUNNING -> "Running · round ${assessment.round}"
+    GoalAssessmentState.COMPLETED -> "Completed · round ${assessment.round}"
+    GoalAssessmentState.SKIPPED -> "Skipped"
+  }
+  return listOfNotNull(state, assessment.exitReason?.let(::wireLabel)).joinToString(" · ")
+}
+
+internal fun goalAssessmentVerificationLabel(verification: GoalAssessmentVerification): String = when (verification) {
+  GoalAssessmentVerification.CONFIRMED -> "confirmed"
+  GoalAssessmentVerification.REFUTED -> "refuted"
+  GoalAssessmentVerification.UNVERIFIED -> "unverified"
+  GoalAssessmentVerification.NOT_REQUIRED -> "verification not required"
+}
+
+@Composable
+private fun GoalAssessmentFindingRow(finding: GoalAssessmentFinding) {
+  val titleColor = if (finding.state == GoalAssessmentFindingState.OPEN) ink else muted
+  Row(Modifier.padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.Top) {
+    Text(finding.ref, Modifier.width(52.dp), color = titleColor, fontFamily = mono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 17.sp)
+    SelectionContainer(Modifier.weight(1f)) {
+      Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+          "${finding.severity} · ${finding.path}:${finding.line} · ${goalAssessmentVerificationLabel(finding.verification)} · ${finding.state.name.lowercase()}",
+          color = muted, fontFamily = mono, fontSize = 10.5.sp, lineHeight = 15.sp,
+        )
+        Text(finding.failureScenario, color = titleColor, fontFamily = body, fontSize = 12.sp, lineHeight = 17.sp)
+        if (finding.evidence.isNotBlank()) Text("Evidence: ${finding.evidence}", color = muted, fontFamily = body, fontSize = 11.5.sp, lineHeight = 16.sp)
+      }
+    }
   }
 }
 

@@ -1,0 +1,51 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/interaction-scenario-catalog.yaml
+title: Interaction scenario catalog
+type: object
+additionalProperties: false
+required: [contract_version, spec_digest, scenarios, transitional_regressions]
+properties:
+  contract_version: { const: '0.1' }
+  spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+  scenarios:
+    type: array
+    maxItems: 6
+    items:
+      type: object
+      additionalProperties: false
+      required: [scenario_ref, criterion_refs, subtask_refs, entry_point, preconditions, steps, outcome]
+      properties:
+        scenario_ref: { type: string, pattern: '^IS-[0-9]{3}$' }
+        criterion_refs:
+          type: array
+          minItems: 2
+          uniqueItems: true
+          items: { type: string, pattern: '^AC-[0-9]{3}$' }
+        subtask_refs:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        entry_point: { type: string, pattern: '\S' }
+        preconditions: { type: string, pattern: '\S' }
+        steps: { type: string, pattern: '\S' }
+        outcome: { type: string, pattern: '\S' }
+  transitional_regressions:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [regression_ref, behavior, disabled_by_subtask, restored_by_subtask]
+      properties:
+        regression_ref: { type: string, pattern: '^TR-[0-9]{3}$' }
+        behavior: { type: string, pattern: '\S' }
+        disabled_by_subtask: { type: integer, minimum: 1 }
+        restored_by_subtask: { type: integer, minimum: 1 }
+x-coherence-checks:
+  - id: same-spec-criteria
+    description: Every criterion ref resolves to a criterion of the spec that declares the scenario; the parser owns this check.
+  - id: subtask-context
+    description: Subtask refs are empty for a subtask spec; a parent scenario names two or more known subtasks; the parser owns this check.
+  - id: unique-labels
+    description: Scenario refs are unique within the catalog and regression refs are unique within the catalog; the parser owns this check.
+  - id: restoration-order
+    description: A regression is restored by a known subtask later than the subtask that disables it; the parser owns this check.

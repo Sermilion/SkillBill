@@ -5,6 +5,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.slot.VALIDATE_PROBE_LINE
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
@@ -70,7 +71,9 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
 
   @Test
   fun `no discovered commands warns and advances workflow validation without packs`() {
-    val warning = "Warning: No applicable validation commands were found after inspecting project configuration."
+    val warning =
+      "Warning: No applicable validation commands were found after inspecting project configuration.\n" +
+        VALIDATE_PROBE_LINE
     val harness = validationHarness(false) { facts(warning) }
 
     val report = harness.runner.run(harness.request())
@@ -176,7 +179,8 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
 
   @Test
   fun `a stdout object with only status summary and value is admitted verbatim without a correction launch`() {
-    val stdout = """{"status":"completed","summary":"Project checks passed.","value":"Checks ran clean."}"""
+    val stdout =
+      """{"status":"completed","summary":"Project checks passed.","value":""" + "\n\"$VALIDATE_PROBE_LINE\"}"
     val harness = validationHarness(stdout)
 
     val report = harness.runner.run(harness.request())
@@ -194,7 +198,8 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   @Test
   fun `plain prose stdout is admitted as the phase value and advances the run`() {
     listOf("implement", "simplify", "validate").forEach { phaseId ->
-      val prose = "I finished $phaseId. Nothing was deferred, and no structured receipt is attached."
+      val probes = if (phaseId == "validate") "\n$VALIDATE_PROBE_LINE" else ""
+      val prose = "I finished $phaseId. Nothing was deferred, and no structured receipt is attached.$probes"
       val harness = runnerHarness(proseConfig(phaseId, prose))
 
       val report = harness.runner.run(harness.request())

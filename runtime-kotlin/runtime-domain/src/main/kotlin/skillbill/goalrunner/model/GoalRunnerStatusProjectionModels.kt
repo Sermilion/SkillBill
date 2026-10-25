@@ -2,6 +2,9 @@ package skillbill.goalrunner.model
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
+import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -11,6 +14,7 @@ import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSeverity
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 import java.time.Instant
@@ -114,6 +118,7 @@ data class GoalRunnerStatusProjection(
   val completedSubtaskValidation: List<GoalRunnerSubtaskValidationEvidence> = emptyList(),
   val completedSubtaskPhaseResults: List<GoalRunnerSubtaskPhaseResults> = emptyList(),
   val goalQaResult: GoalRunnerQaResult? = null,
+  val goalAssessmentResult: GoalRunnerAssessmentResult? = null,
   val paused: Boolean = false,
   val pauseRequested: Boolean = false,
   val pauseReason: String? = null,
@@ -207,6 +212,33 @@ data class GoalRunnerQaFinding(
   val fixed: Boolean,
 )
 
+enum class GoalRunnerAssessmentState(val wireValue: String) {
+  PENDING("pending"),
+  RUNNING("running"),
+  COMPLETED("completed"),
+  SKIPPED("skipped"),
+}
+
+data class GoalRunnerAssessmentResult(
+  val state: GoalRunnerAssessmentState,
+  val round: Int,
+  val exitReason: GoalAssessmentExitReason?,
+  val fixRan: Boolean,
+  val openFindingRefs: List<String>,
+  val findings: List<GoalRunnerAssessmentFinding>,
+)
+
+data class GoalRunnerAssessmentFinding(
+  val ref: String,
+  val severity: FeatureTaskRuntimeReviewSeverity,
+  val path: String,
+  val line: Int,
+  val failureScenario: String,
+  val verification: GoalAssessmentVerification,
+  val state: GoalAssessmentFindingState,
+  val evidence: String,
+)
+
 data class GoalRunnerAcceptedSubtask(
   val subtaskId: Int,
   val commitSha: String,
@@ -234,6 +266,7 @@ data class GoalRunnerStatusProjectionRuntimeInputs(
   val completedSubtaskValidation: List<GoalRunnerSubtaskValidationEvidence> = emptyList(),
   val completedSubtaskPhaseResults: List<GoalRunnerSubtaskPhaseResults> = emptyList(),
   val goalQaResult: GoalRunnerQaResult? = null,
+  val goalAssessmentResult: GoalRunnerAssessmentResult? = null,
   val paused: Boolean = false,
   val pauseRequested: Boolean = false,
   val pauseReason: String? = null,

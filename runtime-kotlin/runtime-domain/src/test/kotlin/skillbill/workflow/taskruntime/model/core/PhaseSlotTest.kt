@@ -33,6 +33,7 @@ class PhaseSlotTest {
         "pull_request",
         "monitor",
         "standalone_review",
+        "goal_assessment",
       ),
       PhaseSlot.entries.map { it.wireValue },
     )

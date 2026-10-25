@@ -29,6 +29,7 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.ExecutionProgressStall
 import skillbill.goalrunner.model.GoalNoChangeState
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
+import skillbill.goalrunner.model.GoalRunnerAssessmentResult
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
@@ -155,6 +156,7 @@ class GoalRunnerStatusProjectionAssembler(
                 emptyList()
               },
             goalQaResult = goalQaResult(parentWorkflowId, durableRead),
+            goalAssessmentResult = outcomeStore.goalAssessmentResult(parentWorkflowId, durableRead),
             currentSubtask = subject.current,
             acceptances = subject.acceptances,
             durableRead = durableRead,
@@ -299,6 +301,7 @@ class GoalRunnerStatusProjectionAssembler(
             emptyList()
           },
         goalQaResult = goalQaResult(loadedState.parentWorkflowId, durableRead),
+        goalAssessmentResult = outcomeStore.goalAssessmentResult(loadedState.parentWorkflowId, durableRead),
         currentSubtask = currentSubtask,
         acceptances = acceptances,
         durableRead = durableRead,
@@ -319,6 +322,7 @@ class GoalRunnerStatusProjectionAssembler(
     val validation: List<GoalRunnerSubtaskValidationEvidence>,
     val phaseResults: List<GoalRunnerSubtaskPhaseResults>,
     val goalQaResult: GoalRunnerQaResult?,
+    val goalAssessmentResult: GoalRunnerAssessmentResult?,
     val currentSubtask: DecompositionSubtask?,
     val acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
     val durableRead: GoalRunnerStatusDurableReadTracker,
@@ -362,6 +366,7 @@ class GoalRunnerStatusProjectionAssembler(
       completedSubtaskValidation = assembly.validation,
       completedSubtaskPhaseResults = assembly.phaseResults,
       goalQaResult = assembly.goalQaResult,
+      goalAssessmentResult = assembly.goalAssessmentResult?.reconciledWith(executionLiveness),
       paused = assembly.loadedState.controlState.paused,
       pauseRequested = assembly.loadedState.controlState.pauseRequested,
       pauseReason = assembly.loadedState.controlState.pauseReason,

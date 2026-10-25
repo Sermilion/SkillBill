@@ -240,4 +240,32 @@ data class GoalWorkflowStats(
   val invocationsWithUnknownGoal: Int,
   val goalIdentityAvailability: String,
   val resumedInvocations: Int,
+  val interactionScenarios: GoalInteractionScenarioStats = GoalInteractionScenarioStats(),
+  val testProbes: GoalTestProbeStats = GoalTestProbeStats(),
+  val goalAssessment: GoalAssessmentStats = GoalAssessmentStats(),
+)
+
+data class GoalInteractionScenarioStats(
+  val traced: Long = 0,
+  val broken: Long = 0,
+  val repaired: Long = 0,
+  val unknown: Long = 0,
+)
+
+data class GoalTestProbeStats(
+  val killed: Long = 0,
+  val survived: Long = 0,
+  val repaired: Long = 0,
+  val notRun: Long = 0,
+)
+
+data class GoalAssessmentStats(
+  val blockerFindings: Long = 0,
+  val majorFindings: Long = 0,
+  val minorFindings: Long = 0,
+  val confirmed: Long = 0,
+  val refuted: Long = 0,
+  val rounds: Long = 0,
+  val openFindings: Long = 0,
+  val exitReasonCounts: Map<String, Int> = emptyMap(),
 )

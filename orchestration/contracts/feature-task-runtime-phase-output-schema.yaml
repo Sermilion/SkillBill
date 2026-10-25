@@ -195,7 +195,9 @@ $defs:
       `path:start-end` strings), `boundary_trace` (non-blank prose), and optional
       `owning_system` and `suggested_handoff`. The claim arrives through the `no_change` argument of
       `feature_task_phase_complete`. The runtime validates the claim structurally and
-      the audit verifies its evidence. This is a description-only clarification and adds no
+      the audit verifies its evidence. A goal-subtask `validate` step also carries the runtime-stored
+      `test_probes` list, the probe results governed by the feature-task-runtime-validation-test-probes
+      contract at version 0.1. This is a description-only clarification and adds no
       JSON-Schema constraint.
     type: object
     required: [value]

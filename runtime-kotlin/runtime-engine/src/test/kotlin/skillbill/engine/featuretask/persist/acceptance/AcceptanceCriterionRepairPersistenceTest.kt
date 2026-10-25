@@ -49,7 +49,7 @@ class AcceptanceCriterionRepairPersistenceTest {
             AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE,
             "targeted:1",
           )
-        val evidence = f.audit()
+        val evidence = f.audit(verifying, outcome)
         val failed =
           assertIs<AcceptanceCriterionRepairWriteResult.Committed>(
             f.write(worker, verifying, AcceptanceCriterionRepairMutation.Outcome(outcome), evidence),
@@ -255,7 +255,7 @@ class AcceptanceCriterionRepairPersistenceTest {
             worker,
             verifying,
             AcceptanceCriterionRepairMutation.Outcome(success),
-            f.audit(),
+            f.audit(verifying, success),
             f.service(failing),
           )
         }

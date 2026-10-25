@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.lifecycle.subtask.parseGitPorcelainPaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
@@ -19,9 +20,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
-import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.qa.GoalQaGateResult
 import skillbill.engine.goalrunner.qa.GoalQaSkipReason
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
@@ -30,6 +32,7 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -61,31 +64,22 @@ class GoalRunnerFinalization(
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
-  private val reconciliation: GoalRunnerFinalReconciliation,
   private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
   private val ciMonitor: GoalRunnerCiMonitor,
   private val qaGate: GoalRunnerQaGate,
+  private val assessmentGate: GoalRunnerAssessmentGate,
   private val pullRequestIdentityLookup: PullRequestIdentityLookup,
 ) {
-  fun finalizeGoal(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-    attempted: List<Int>,
-    ledger: GoalRunnerLedgerRecorder,
-  ): GoalRunnerRunReport {
-    val finalState = reconciliation.reconcile(state, request, ledger)
-    return finalizePublication(finalState, request, attempted)
-  }
-
-  private fun finalizePublication(
+  fun finalizePublication(
     finalState: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     attempted: List<Int>,
   ): GoalRunnerRunReport {
     val settled =
-      noChangeFinalization(finalState.manifest, request, attempted)
+      noChangeFinalization(finalState.manifest, request, attempted)?.also { assessmentGate.skipNoChanges(finalState) }
         ?: publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
+    assessmentGate.run(finalState, request)
     val qaResult = qaGate.run(finalState, request)
     if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
     commitAllRemainingWorktree(finalState.manifest, request)?.let { reason ->
@@ -139,12 +133,60 @@ class GoalRunnerFinalization(
       state.manifest.toPullRequestRequest(
         request.repoRoot,
         goalQaSummary = goalQaSummary(state, qaResult),
+        goalAssessment = goalAssessment(state),
         qaSummary = { subtask ->
           state.manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome)
             ?: GoalSubtaskQaSummary.NotRecorded
         },
+        unknownScenarios = { subtask -> unknownScenariosFor(state, subtask) },
       ),
     )
+
+  private fun goalAssessment(state: GoalRunnerManifestState): GoalAssessmentRecordRead =
+    try {
+      outcomeStore.readGoalAssessmentRecord(state.parentWorkflowId)
+    } catch (failure: SkillBillRuntimeException) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=goal_assessment_pr_body record_kind=lookup_failed value_expected=assessment_record " +
+          "value_used=unreadable reason=${failure.message.orEmpty().take(MAX_WARNING_REASON)}",
+      )
+      GoalAssessmentRecordRead.Corrupt(failure.message.orEmpty())
+    }
+
+  private fun unknownScenariosFor(
+    state: GoalRunnerManifestState,
+    subtask: DecompositionSubtask,
+  ): GoalSubtaskUnknownScenarios? {
+    val workflowId = state.manifest.workflowIdFor(subtask.id) ?: return null
+    val recorded =
+      try {
+        outcomeStore.recordedUnknownScenarios(workflowId)
+      } catch (failure: SkillBillRuntimeException) {
+        warnUnknownScenarios(subtask, failure.message.orEmpty())
+        return null
+      }
+    if (recorded is GoalSubtaskUnknownScenarios.Malformed) warnUnknownScenarios(subtask, recorded.reason)
+    if (recorded is GoalSubtaskUnknownScenarios.Recorded) {
+      recorded.scenarios.filter { it.reason.isNullOrBlank() }.forEach {
+        warnUnknownScenarios(subtask, "scenario=${it.scenarioRef}", "reason_missing", "reason_unavailable")
+      }
+    }
+    return recorded
+  }
+
+  private fun warnUnknownScenarios(
+    subtask: DecompositionSubtask,
+    reason: String,
+    recordKind: String = "lookup_failed",
+    used: String = "omitted",
+  ) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=interaction_trace_pr_body subtask=${subtask.id} record_kind=$recordKind " +
+        "value_expected=unknown_scenarios value_used=$used reason=${reason.take(MAX_WARNING_REASON)}",
+    )
+  }
 
   private fun goalQaSummary(
     state: GoalRunnerManifestState,
@@ -448,3 +490,5 @@ class GoalRunnerFinalization(
   private fun resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
     resolveUnaddressedFindingsLedger(unaddressedFindingsLedgerService, issueKey)
 }
+
+private const val MAX_WARNING_REASON = 200

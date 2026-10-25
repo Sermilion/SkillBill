@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.qualitygate
 
+import skillbill.engine.featuretask.model.audit.ValidateProbeScope
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 
 private const val VALIDATE_PHASE_FORBIDDEN_EXTRAS: String =
@@ -16,7 +17,12 @@ private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
     "`skill-bill phase validation`, `./gradlew check`, `check " + "--" + "continue`, or the pack " +
     "collect_all_full_gate_command. Those are not this phase. "
 
-internal fun runtimeOwnedValidateAgentPhaseTask(): String {
+internal fun runtimeOwnedValidateAgentPhaseTask(probeScope: ValidateProbeScope? = null): String {
+  val probes = probeScope?.let { "\n\n${ValidateProbePrompt.directive(it)}" }.orEmpty()
+  return runtimeOwnedValidateChecksDirective() + probes
+}
+
+private fun runtimeOwnedValidateChecksDirective(): String {
   return "Discover the validation checks required by this project from its repository instructions, " +
     "build and test configuration, scripts, and CI workflows. Use the project's commands and environment. " +
     "Before choosing a host or container, read the applicable repository instructions and CI/setup scripts. " +
@@ -200,6 +206,9 @@ internal const val VALIDATE_VALUE_CONTENT: String =
     "Fix every other check failure in this session; missing tooling alone never blocks validation.\n" +
     "Gate runs and their evidence are runtime-measured.\n" +
     "Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings."
+
+internal const val VALIDATE_PROBE_VALUE_CONTENT: String =
+  VALIDATE_VALUE_CONTENT + "\n" + ValidateProbePrompt.VALUE_CONTENT
 
 internal const val BUILD_VALUE_CONTENT: String =
   "Run only the pack build_command. Do not run collect_all_full_gate_command, check " + "--" + "continue,\n" +

@@ -16,7 +16,13 @@ internal fun PhaseStrategy.promptSource(
   supplements: ModelDirectiveSupplements,
 ): PhaseStepPromptSource =
   PhaseStepPromptSource { inputs ->
-    supplements.supplement(promptSections(stepId, inputs), this, stepId, inputs.stepProfile)
+    supplements.supplement(
+      promptSections(stepId, inputs),
+      this,
+      stepId,
+      inputs.stepProfile,
+      probes = { inputs.validateProbesActive },
+    )
   }
 
 internal fun stepCall(

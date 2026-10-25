@@ -1,6 +1,9 @@
 package dev.skillbill.tray.core.data.runtime
 
 import dev.skillbill.tray.core.domain.model.*
+import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState as RuntimeAssessmentFindingState
+import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as RuntimeAssessmentVerification
+import skillbill.goalrunner.model.GoalRunnerAssessmentState
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
@@ -172,6 +175,15 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
         qa.failureKind,
       )
     },
+    goalAssessment = goal?.goalAssessmentResult?.let { assessment ->
+      GoalAssessmentResult(
+        assessment.state.toDomain(), assessment.round, assessment.exitReason?.wireValue, assessment.fixRan,
+        assessment.findings.map {
+          GoalAssessmentFinding(it.ref, it.severity.wireValue, it.path, it.line, it.failureScenario,
+            it.verification.toDomain(), it.state.toDomain(), it.evidence)
+        },
+      )
+    },
     latestActivity = LatestActivity(
       event = goal?.latestObservabilityEvent?.let { ActivityEvent(it.workflowPhase, it.workerRole, it.activitySummary, it.timestamp?.toKotlinInstant()) },
       edit = goal?.latestWorktreeEdit?.let { WorktreeEdit(it.recordedAt?.toKotlinInstant(), it.pathSample, it.netInsertions, it.netDeletions, it.phaseId) },
@@ -186,6 +198,27 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     incidentHistory = IncidentHistory(incidentHistory.map(WorkIncidentProjection::toDomain)),
     goalSpecBundle = goalSpecBundle?.toDomain(),
   )
+}
+
+// Exhaustive on purpose: a runtime constant without a desktop counterpart must fail the build, not detail load.
+private fun GoalRunnerAssessmentState.toDomain(): GoalAssessmentState = when (this) {
+  GoalRunnerAssessmentState.PENDING -> GoalAssessmentState.PENDING
+  GoalRunnerAssessmentState.RUNNING -> GoalAssessmentState.RUNNING
+  GoalRunnerAssessmentState.COMPLETED -> GoalAssessmentState.COMPLETED
+  GoalRunnerAssessmentState.SKIPPED -> GoalAssessmentState.SKIPPED
+}
+
+private fun RuntimeAssessmentVerification.toDomain(): GoalAssessmentVerification = when (this) {
+  RuntimeAssessmentVerification.CONFIRMED -> GoalAssessmentVerification.CONFIRMED
+  RuntimeAssessmentVerification.REFUTED -> GoalAssessmentVerification.REFUTED
+  RuntimeAssessmentVerification.UNVERIFIED -> GoalAssessmentVerification.UNVERIFIED
+  RuntimeAssessmentVerification.NOT_REQUIRED -> GoalAssessmentVerification.NOT_REQUIRED
+}
+
+private fun RuntimeAssessmentFindingState.toDomain(): GoalAssessmentFindingState = when (this) {
+  RuntimeAssessmentFindingState.OPEN -> GoalAssessmentFindingState.OPEN
+  RuntimeAssessmentFindingState.FIXED -> GoalAssessmentFindingState.FIXED
+  RuntimeAssessmentFindingState.REFUTED -> GoalAssessmentFindingState.REFUTED
 }
 
 private fun WorkIncidentProjection.toDomain(): Incident = Incident(

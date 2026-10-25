@@ -10,6 +10,8 @@ import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
@@ -30,6 +32,7 @@ import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -87,6 +90,7 @@ fun testPhaseStrategies(
   qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
   inlineRubricResolver: InlineCodeQualityRubricResolver? = null,
+  phaseInstructionSource: PhaseInstructionFileSource? = null,
 ): PhaseStrategyLookup {
   val runner = DefaultPhaseRunner(launcher, gitOperations)
   val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
@@ -126,17 +130,18 @@ fun testPhaseStrategies(
           QaStrategy(qaReports, qaExecution, qaOutcomes),
           runner,
         ),
+        PhaseStrategyRegistration(GoalAssessmentStrategy(), runner),
+        PhaseStrategyRegistration(GoalAssessmentFixStrategy(), runner),
       ),
     )
   val bindings =
     testPhaseStrategyBindings(
       if (delegatedReviewRunner == null) InlineStandaloneReviewStrategy.ID else DelegatedStandaloneReviewStrategy.ID,
     )
-  return PhaseStrategyLookup(
-    registry,
-    PhaseStrategySelection(registry, bindings),
-    ModelDirectiveSupplements(enabled = true),
-  )
+  val selection = PhaseStrategySelection(registry, bindings)
+  val supplements = ModelDirectiveSupplements(enabled = true)
+  return phaseInstructionSource?.let { PhaseStrategyLookup(registry, selection, supplements, it) }
+    ?: PhaseStrategyLookup(registry, selection, supplements)
 }
 
 fun unavailableQaReportSettlement(): QaReportSettlement =
@@ -290,6 +295,10 @@ fun testPhaseStrategyBindings(
       SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
       SkeletonDefinition.QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.QA),
       SkeletonDefinition.GOAL_QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_QA),
+      SkeletonDefinition.GOAL_ASSESSMENT to
+        SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_ASSESSMENT),
+      SkeletonDefinition.GOAL_ASSESSMENT_FIX to
+        SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.GOAL_ASSESSMENT_FIX),
       SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
       SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
       SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),

@@ -443,7 +443,7 @@
                         {
                             "kind": "text",
                             "name": "value",
-                            "text": "Project checks passed."
+                            "text": "Project checks passed.\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test"
                         }
                     ],
                     "producer_iteration": {

@@ -208,24 +208,27 @@ private fun updateGoalFinished(
       mode = ?,
       stop_reason = ?,
       no_change_reason = ?,
-      parent_workflow_id = COALESCE(?, parent_workflow_id)
+      parent_workflow_id = COALESCE(?, parent_workflow_id),
+      ${GOAL_ASSESSMENT_COUNT_COLUMNS.joinToString(",\n      ") { "$it = ?" }},
+      $GOAL_ASSESSMENT_EXIT_REASON_COLUMN = ?
     WHERE workflow_id = ? AND status IS NULL AND finished_at IS NULL
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
-      record.issueKey,
-      record.status,
-      record.startedAt,
-      record.finishedAt,
-      record.durationMs,
-      record.subtasksComplete,
-      record.subtasksBlocked,
-      record.subtasksSkipped,
-      record.mode,
-      record.stopReason,
-      record.noChangeReason,
-      record.parentWorkflowId,
-      record.workflowId,
+      listOf(
+        record.issueKey,
+        record.status,
+        record.startedAt,
+        record.finishedAt,
+        record.durationMs,
+        record.subtasksComplete,
+        record.subtasksBlocked,
+        record.subtasksSkipped,
+        record.mode,
+        record.stopReason,
+        record.noChangeReason,
+        record.parentWorkflowId,
+      ) + record.assessmentCounts.columnValues() + record.assessmentCounts.exitReason + record.workflowId,
     )
     statement.executeUpdate() > 0
   }
@@ -239,24 +242,27 @@ private fun insertGoalFinished(
     INSERT INTO goal_run_sessions (
       workflow_id, issue_key, started_at, status, finished_at,
       finished_duration_ms, subtasks_complete, subtasks_blocked, subtasks_skipped, mode, stop_reason,
-      no_change_reason, parent_workflow_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      no_change_reason, parent_workflow_id, ${GOAL_ASSESSMENT_COUNT_COLUMNS.joinToString()},
+      $GOAL_ASSESSMENT_EXIT_REASON_COLUMN
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${", ?".repeat(GOAL_ASSESSMENT_COUNT_COLUMNS.size + 1)})
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
-      record.workflowId,
-      record.issueKey,
-      record.startedAt,
-      record.status,
-      record.finishedAt,
-      record.durationMs,
-      record.subtasksComplete,
-      record.subtasksBlocked,
-      record.subtasksSkipped,
-      record.mode,
-      record.stopReason,
-      record.noChangeReason,
-      record.parentWorkflowId,
+      listOf(
+        record.workflowId,
+        record.issueKey,
+        record.startedAt,
+        record.status,
+        record.finishedAt,
+        record.durationMs,
+        record.subtasksComplete,
+        record.subtasksBlocked,
+        record.subtasksSkipped,
+        record.mode,
+        record.stopReason,
+        record.noChangeReason,
+        record.parentWorkflowId,
+      ) + record.assessmentCounts.columnValues() + record.assessmentCounts.exitReason,
     )
     statement.executeUpdate()
   }
@@ -480,24 +486,26 @@ internal fun saveGoalSubtaskFinished(
       INSERT INTO goal_subtask_events (
         issue_key, workflow_id, subtask_id, subtask_name, status,
         started_at, finished_at, duration_ms, attempt_count, blocked_reason,
-        finalizing_agent_id, participating_agent_ids
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        finalizing_agent_id, participating_agent_ids, ${GOAL_SUBTASK_COUNT_COLUMNS.joinToString()}
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${", ?".repeat(GOAL_SUBTASK_COUNT_COLUMNS.size)})
       ON CONFLICT (issue_key, subtask_id, workflow_id) DO NOTHING
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
-        record.issueKey,
-        record.workflowId,
-        record.subtaskId,
-        record.subtaskName,
-        record.status,
-        record.startedAt,
-        record.finishedAt,
-        record.durationMs,
-        record.attemptCount,
-        record.blockedReason,
-        record.finalizingAgentId,
-        listJson(record.participatingAgentIds),
+        listOf(
+          record.issueKey,
+          record.workflowId,
+          record.subtaskId,
+          record.subtaskName,
+          record.status,
+          record.startedAt,
+          record.finishedAt,
+          record.durationMs,
+          record.attemptCount,
+          record.blockedReason,
+          record.finalizingAgentId,
+          listJson(record.participatingAgentIds),
+        ) + record.traceProbeCounts.columnValues(),
       )
       statement.executeUpdate() > 0
     }

@@ -45,6 +45,7 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
+import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusPolicy
@@ -609,7 +610,7 @@ class IdeStatusService(
         finishedAtSource = completion.second,
         goalManifest = goalRead?.page?.manifest,
         goalSpecBundle = goalRead?.page?.manifest?.let { projector.goalSpecBundle(it, context.repoRoot) },
-        goalFinishPipeline = goalRead?.page?.let { projector.goalFinishPipeline(context.repoRoot) }.orEmpty(),
+        goalFinishPipeline = goalRead?.page?.let { detailGoalFinishPipeline(context, goalStatus) }.orEmpty(),
         runtimeStatus = runtimeStatus,
         goalStatus = goalStatus,
         pageOffset = position.offset,
@@ -732,6 +733,11 @@ class IdeStatusService(
     ),
   )
     ?.takeIf { it.issueKey == work.issueKey }
+
+  private fun detailGoalFinishPipeline(
+    context: IdeStatusProjectionContext,
+    goalStatus: GoalRunnerStatusProjection?,
+  ): List<String> = projector.goalFinishPipeline(context.repoRoot, goalStatus?.goalAssessmentResult)
 
   private fun detailContinuationLists(
     moreExecutions: Boolean,

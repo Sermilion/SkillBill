@@ -26,6 +26,9 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdopt
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionAuditResultMode
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionVerdict
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -124,19 +127,32 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
   }
 
   private fun auditResultCoherenceViolation(payload: Map<String, Any?>): String? {
-    val criteria =
-      (payload[Keys.CRITERIA] as? List<*>)?.map {
-        it as? Map<*, *>
-          ?: return "criteria must contain objects."
-      }
-        ?: return "criteria must be an array."
-    val refs = criteria.mapNotNull { it[Keys.CANONICAL_REF] as? String }
-    if (refs.size != refs.toSet().size) return "audit result contains duplicate criteria."
-    return when (payload[Keys.MODE]) {
+    val criteria = (payload[Keys.CRITERIA] as? List<*>).orEmpty()
+    val refs = criteria.mapNotNull { (it as? Map<*, *>)?.get(Keys.CANONICAL_REF) as? String }
+    val interactions = (payload[Keys.INTERACTIONS] as? List<*>).orEmpty()
+    val rechecks = (payload[Keys.RECHECKS] as? List<*>).orEmpty()
+    val tracing = payload[Keys.MODE] == AcceptanceCriterionAuditResultMode.INTERACTION_TRACE.wireValue
+    return when {
+      refs.size != refs.toSet().size -> "audit result contains duplicate criteria."
+      !tracing && (interactions.isNotEmpty() || rechecks.isNotEmpty()) ->
+        "interactions and rechecks are only allowed in interaction_trace mode."
+      else -> modeCoherenceViolation(payload, criteria.size, refs, interactions, rechecks)
+    }
+  }
+
+  private fun modeCoherenceViolation(
+    payload: Map<String, Any?>,
+    criteriaCount: Int,
+    refs: List<String>,
+    interactions: List<*>,
+    rechecks: List<*>,
+  ): String? =
+    when (payload[Keys.MODE]) {
       AcceptanceCriterionRepairMode.INITIAL_DISCOVERY.wireValue -> null
+      AcceptanceCriterionAuditResultMode.INTERACTION_TRACE.wireValue ->
+        interactionTraceCoherenceViolation(payload, interactions, rechecks)
       AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED.wireValue -> {
-        val current = payload[Keys.CURRENT_CRITERION_REF]
-        val identity = criteria.size == 1 && refs.singleOrNull() == current
+        val identity = criteriaCount == 1 && refs.singleOrNull() == payload[Keys.CURRENT_CRITERION_REF]
         val reservation = payload[Keys.RESERVATION_ID] is String && payload[Keys.EXPECTED_REVISION] is Number
         if (!identity || !reservation) {
           "targeted audit result does not bind exactly one current criterion and reservation."
@@ -145,6 +161,30 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
         }
       }
       else -> "audit result mode is unsupported."
+    }
+
+  private fun interactionTraceCoherenceViolation(
+    payload: Map<String, Any?>,
+    interactions: List<*>,
+    rechecks: List<*>,
+  ): String? {
+    val broken =
+      interactions.mapNotNull { it as? Map<*, *> }
+        .filter { it[Keys.VERDICT] == AcceptanceCriterionInteractionVerdict.BROKEN.wireValue }
+        .mapNotNull { it[Keys.OWNER_REF] as? String }
+    val regressed =
+      rechecks.mapNotNull {
+        it as? Map<*, *>
+      }.filter { it[Keys.VERDICT] == AcceptanceCriterionRecheckVerdict.REGRESSED.wireValue }
+        .mapNotNull { it[Keys.CRITERION_REF] as? String }
+    val declared = (payload[Keys.REGRESSED_REFS] as? List<*>).orEmpty().toSet()
+    val empty = interactions.isEmpty() && rechecks.isEmpty()
+    val unbound = declared != (broken + regressed).toSet()
+    val edges = (payload[Keys.EDGE_CHANGES] as? List<*>).orEmpty()
+    return if (empty || unbound || edges.isNotEmpty()) {
+      "interaction trace result does not bind its interactions, regressed refs and empty edge changes."
+    } else {
+      null
     }
   }
 

@@ -8,7 +8,7 @@ import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 const val IDE_STATUS_CONTRACT_VERSION: String = "0.6"
 const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
-const val WORK_DETAIL_CONTRACT_VERSION: String = "1.2"
+const val WORK_DETAIL_CONTRACT_VERSION: String = "1.3"
 
 object IdeStatusPayloadKeys {
   const val LIFECYCLE_STATE = "lifecycle_state"
@@ -86,6 +86,8 @@ object WorkDetailPayloadKeys {
   const val LATEST_OBSERVABILITY_EVENT = "latest_observability_event"
   const val LATEST_WORKTREE_EDIT = "latest_worktree_edit"
   const val COMPLETED_SUBTASK_VALIDATION = "completed_subtask_validation"
+  const val GOAL_ASSESSMENT = "goal_assessment"
+  const val FIX_RAN = "fix_ran"
   const val PHASE_ID = SharedPayloadKeys.PHASE_ID
   const val CURRENT_PHASE = "current_phase"
   const val COMPLETE_COUNT = "complete_count"

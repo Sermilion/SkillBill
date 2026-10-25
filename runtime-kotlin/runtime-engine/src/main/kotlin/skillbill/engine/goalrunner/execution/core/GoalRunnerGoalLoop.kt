@@ -32,6 +32,7 @@ import skillbill.workflow.model.DecompositionSubtaskAction
 internal class GoalRunnerGoalLoop(
   private val manifestStore: GoalRunnerManifestStore,
   private val goalPlanningSource: GoalPlanningSource,
+  private val reconciliation: GoalRunnerFinalReconciliation,
   private val finalization: GoalRunnerFinalization,
   private val selectedSubtaskLoop: GoalRunnerSelectedSubtaskLoop,
   private val pauseBoundary: GoalRunnerPauseBoundary,
@@ -53,11 +54,10 @@ internal class GoalRunnerGoalLoop(
         when (selection) {
           is GoalRunnerSelection.Done ->
             terminalReport =
-              finalization.finalizeGoal(
-                state,
+              finalization.finalizePublication(
+                reconciliation.reconcile(state, args.request, args.ledger),
                 args.request,
                 attemptState.attempted,
-                args.ledger,
               )
           is GoalRunnerSelection.Blocked ->
             blockedSelectionIteration(

@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
+import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
@@ -121,6 +122,7 @@ internal data class GoalRunnerTestWiring(
   val pullRequestIdentityLookup: PullRequestIdentityLookup =
     PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
+  val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
 )
 
 internal data class GoalRunnerTestWiringParams(
@@ -172,6 +174,7 @@ internal data class GoalRunnerTestInputs(
   val pullRequestIdentityLookup: PullRequestIdentityLookup =
     PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
+  val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -193,6 +196,7 @@ internal data class GoalRunnerTestInputs(
       ciMonitor = ciMonitor,
       qaGate = qaGate,
       pullRequestIdentityLookup = pullRequestIdentityLookup,
+      assessmentGate = assessmentGate,
     )
 }
 
@@ -222,10 +226,10 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       wiring.gitOperations,
       wiring.diagnostics,
       wiring.unaddressedFindingsLedgerService,
-      GoalRunnerFinalReconciliation(wiring.manifestStore, wiring.outcomeStore, progressReader),
       wiring.phaseRecorder,
       wiring.ciMonitor,
       wiring.qaGate,
+      wiring.assessmentGate,
       wiring.pullRequestIdentityLookup,
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
@@ -350,6 +354,7 @@ private fun testGoalRunnerLoopAssembler(
   return GoalRunnerPerRunLoopAssembler(
     manifestStore = wiring.manifestStore,
     goalPlanningSource = wiring.goalPlanningSource,
+    reconciliation = GoalRunnerFinalReconciliation(wiring.manifestStore, wiring.outcomeStore, progressReader),
     finalization = finalization,
     selectedSubtaskLoop = selectedSubtaskLoop,
     pauseBoundary = pauseBoundary,

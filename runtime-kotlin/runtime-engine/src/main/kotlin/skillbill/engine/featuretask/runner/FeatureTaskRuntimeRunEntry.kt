@@ -17,21 +17,27 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchResolver
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
-import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairHydration
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRefusal
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairVersionRecoveryResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
-import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairRunPreparation
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.error.shellcontent.invalidInteractionScenarioCatalog
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.review.spec.InteractionScenarioSectionParser
+import skillbill.review.spec.model.InteractionScenario
+import skillbill.review.spec.model.InteractionScenarioParseResult
+import skillbill.review.spec.model.InteractionScenarioSpecContext
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -43,6 +49,12 @@ import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
+
+private sealed interface RepairInspection {
+  data class Ready(val runState: AcceptanceCriterionRepairRunState?) : RepairInspection
+
+  data class Refused(val reason: AcceptanceCriterionRepairRefusal) : RepairInspection
+}
 
 private const val INTAKE_PASS_CRITERION = "Intake writes or keeps the parent spec before run invariants are read."
 
@@ -57,7 +69,7 @@ class FeatureTaskRuntimeRunEntry(
   private val stepLaunches: FeatureTaskRuntimeStepLaunchResolver,
   private val diagnostics: RuntimeDiagnostics,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
-  private val repairPersistence: AcceptanceCriterionRepairPersistence,
+  private val repairPreparation: AcceptanceCriterionRepairRunPreparation,
   private val blockIncidentReconciler: BlockIncidentEntryReconciler,
 ) {
   private companion object {
@@ -103,6 +115,10 @@ class FeatureTaskRuntimeRunEntry(
         (goalContinuation?.codeReviewMode ?: request.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
     ) { admittedExecution, acquiredWorker ->
+      val recovery = repairPreparation.recoverSupersededVersion(acquiredWorker)
+      if (recovery is AcceptanceCriterionRepairVersionRecoveryResult.Refused) {
+        return@runOwned versionRecoveryRefusal(request, acquiredWorker, specPath, recovery)
+      }
       val requestedQaSelection = if (goalContinuation != null) goalContinuation.qaSelection else request.qaSelection
       if (requestedQaSelection != null && requestedQaSelection != admittedExecution.plan.qaSelection) {
         return@runOwned changedQaSelectionRefusal(request, acquiredWorker, specPath, admittedExecution)
@@ -117,25 +133,39 @@ class FeatureTaskRuntimeRunEntry(
           runner.run(runRequest(request, workflowId, admittedExecution, invariants).copy(stopAfterIntake = true))
         if (!intakeCompleted(workflowId)) return@runOwned intakeReport
       }
-      val sourceRead = runInvariantsSource.read(specPath)
-      val sourceInvariants = sourceRead.requireInvariants()
-      val repairState = inspectRepairState(request, acquiredWorker, sourceRead, admittedExecution)
-      if (repairState?.historicalAttributionUnavailable() == true) {
-        return@runOwned historicalRepairRefusal(request, acquiredWorker, sourceInvariants)
-      }
-      runner.run(
-        runRequest(
-          request,
-          workflowId,
-          admittedExecution,
-          sourceInvariants.copy(
-            codeReviewMode = admittedExecution.reviewMode ?: sourceInvariants.codeReviewMode,
-            agentAddonSelection = request.agentAddonSelection.persisted,
-          ),
-        ).copy(acceptanceCriterionRepair = repairState),
-        acquiredWorker,
-      )
+      runWithRepairState(request, specPath, admittedExecution, acquiredWorker)
     }
+  }
+
+  private fun runWithRepairState(
+    request: FeatureTaskRuntimeRunInput,
+    specPath: Path,
+    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
+    acquiredWorker: AcquiredFeatureTaskRuntimeWorker,
+  ): FeatureTaskRuntimeRunReport {
+    val sourceRead = runInvariantsSource.read(specPath)
+    val sourceInvariants = sourceRead.requireInvariants()
+    val repairState =
+      when (val inspection = inspectRepairState(request, acquiredWorker, sourceRead, admittedExecution)) {
+        is RepairInspection.Refused ->
+          return tracePreparationRefusal(request, acquiredWorker, sourceInvariants, inspection.reason)
+        is RepairInspection.Ready -> inspection.runState
+      }
+    if (repairState?.historicalAttributionUnavailable() == true) {
+      return historicalRepairRefusal(request, acquiredWorker, sourceInvariants)
+    }
+    return runner.run(
+      runRequest(
+        request,
+        acquiredWorker.workflowId,
+        admittedExecution,
+        sourceInvariants.copy(
+          codeReviewMode = admittedExecution.reviewMode ?: sourceInvariants.codeReviewMode,
+          agentAddonSelection = request.agentAddonSelection.persisted,
+        ),
+      ).copy(acceptanceCriterionRepair = repairState),
+      acquiredWorker,
+    )
   }
 
   private fun planningResumeInput(input: FeatureTaskRuntimeRunInput): FeatureTaskRuntimeRunInput {
@@ -158,6 +188,24 @@ class FeatureTaskRuntimeRunEntry(
       blockedReason =
         "Cannot change QA selection on resume; the recorded selection is " +
           "'${admittedExecution.plan.qaSelection?.wireValue ?: "not composed"}'.",
+      completedPhaseIds = emptyList(),
+      resolvedBranch = null,
+    )
+
+  private fun versionRecoveryRefusal(
+    input: FeatureTaskRuntimeRunInput,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    specPath: Path,
+    refusal: AcceptanceCriterionRepairVersionRecoveryResult.Refused,
+  ): FeatureTaskRuntimeRunReport.Blocked =
+    FeatureTaskRuntimeRunReport.Blocked(
+      issueKey = input.issueKey,
+      workflowId = worker.workflowId,
+      featureSize = runInvariantsSource.read(specPath).requireInvariants().featureSize.name,
+      lastIncompletePhase = worker.currentStepId,
+      blockedReason =
+        "Cannot regenerate the stored acceptance repair state at the current contract version; " +
+          "recovery was refused (${refusal.reason.wireValue}). Retry the run once the workflow is quiescent.",
       completedPhaseIds = emptyList(),
       resolvedBranch = null,
     )
@@ -211,16 +259,16 @@ class FeatureTaskRuntimeRunEntry(
     worker: AcquiredFeatureTaskRuntimeWorker,
     sourceRead: FeatureTaskRuntimeRunInvariantsRead,
     admittedExecution: AdmittedFeatureTaskRuntimeExecution,
-  ): AcceptanceCriterionRepairRunState? {
+  ): RepairInspection {
     val auditStepIds =
       admittedExecution.plan.dispatchStrategyByStep
         .filterValues { it.slot == PhaseSlot.AUDIT }
         .keys
-    if (auditStepIds.isEmpty()) return null
+    if (auditStepIds.isEmpty()) return RepairInspection.Ready(null)
     val criteria = sourceRead.requireInvariants().acceptanceCriteria
-    val specDigest =
-      (sourceRead as? FeatureTaskRuntimeRunInvariantsRead.Read)?.sourceDigest ?: input.protectedSpecSha256
-    val hydration = repairPersistence.inspectExisting(worker, criteria, specDigest)
+    val read = sourceRead as? FeatureTaskRuntimeRunInvariantsRead.Read
+    val specDigest = read?.sourceDigest ?: input.protectedSpecSha256
+    val sourceText = read?.sourceText
     val binding =
       specDigest?.let {
         AcceptanceCriterionRepairBinding(
@@ -229,12 +277,51 @@ class FeatureTaskRuntimeRunEntry(
           specDigest = it,
           authoredCriteria = criteria,
           auditStepIds = auditStepIds,
+          interactionScenarios = interactionScenarios(input.specPath, it, sourceText),
         )
       }
-    if (hydration is AcceptanceCriterionRepairHydration.Present) {
-      repairPersistence.recoverProjection(input.repoRoot, worker.workflowId, requireNotNull(binding))
+    return when (val prepared = repairPreparation.prepare(worker, criteria, specDigest, binding, input.repoRoot)) {
+      is AcceptanceCriterionRepairRunPreparation.Prepared.Ready -> RepairInspection.Ready(prepared.runState)
+      is AcceptanceCriterionRepairRunPreparation.Prepared.Refused -> RepairInspection.Refused(prepared.reason)
     }
-    return AcceptanceCriterionRepairRunState(hydration, binding)
+  }
+
+  private fun tracePreparationRefusal(
+    input: FeatureTaskRuntimeRunInput,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    sourceInvariants: FeatureTaskRuntimeRunInvariants,
+    reason: AcceptanceCriterionRepairRefusal,
+  ): FeatureTaskRuntimeRunReport.Blocked =
+    FeatureTaskRuntimeRunReport.Blocked(
+      issueKey = input.issueKey,
+      workflowId = worker.workflowId,
+      featureSize = sourceInvariants.featureSize.name,
+      lastIncompletePhase = worker.currentStepId,
+      blockedReason =
+        "Cannot prepare the interaction trace for the bound spec digest; preparation was refused " +
+          "(${reason.wireValue}). Retry the run once the workflow is quiescent or restore the admitted spec.",
+      completedPhaseIds = emptyList(),
+      resolvedBranch = null,
+    )
+
+  private fun interactionScenarios(
+    specPath: String,
+    specDigest: String,
+    specText: String?,
+  ): List<InteractionScenario> {
+    val text =
+      specText
+        ?: throw invalidInteractionScenarioCatalog(specPath, "selected spec text for the bound digest is unavailable")
+    return when (
+      val result = InteractionScenarioSectionParser.parse(text, specDigest, InteractionScenarioSpecContext.Subtask)
+    ) {
+      is InteractionScenarioParseResult.Parsed -> result.catalog.scenarios
+      is InteractionScenarioParseResult.Rejected ->
+        throw invalidInteractionScenarioCatalog(
+          specPath,
+          result.issues.first().let { "${it.fieldPath}: ${it.reason}" },
+        )
+    }
   }
 
   private fun historicalRepairRefusal(

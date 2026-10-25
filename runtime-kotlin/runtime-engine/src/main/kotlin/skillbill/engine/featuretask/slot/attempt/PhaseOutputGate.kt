@@ -619,7 +619,7 @@ object PhaseOutputGate {
         stepOutputContext(run, stepHooks),
         attested.envelopeWireMap(),
       )?.let {
-        "output-verification" to it
+        stepHooks.completionRejectionRule to it
       }
 
   internal fun PhaseOutputSettlementContext.finalizeValidatedOutputAcceptance(

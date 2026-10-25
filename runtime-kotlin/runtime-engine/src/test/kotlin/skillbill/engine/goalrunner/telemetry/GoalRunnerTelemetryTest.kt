@@ -21,10 +21,13 @@ import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.telemetry.model.GoalAssessmentTelemetryCounts
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.withWorkflowId
@@ -193,6 +196,8 @@ class GoalRunnerTelemetryTest {
         telemetry = telemetry,
         clock = fixedClock(),
         state = GoalRunnerManifestState(parentWorkflowId = "wfl-parent", dbPath = "", manifest = manifest),
+        outcomes = RecordingOutcomeStore(),
+        diagnostics = NoopRuntimeDiagnostics,
       )
 
     emitter.goalFinished(
@@ -210,6 +215,34 @@ class GoalRunnerTelemetryTest {
     assertEquals("completed_no_change", finished.status)
     assertEquals("already_satisfied", finished.noChangeReason)
     assertNull(finished.stopReason)
+  }
+
+  @Test
+  fun `unreadable assessment record still emits goal finished with zero assessment counts`() {
+    val manifest = manifest(subtaskCount = 1)
+    val telemetry = RecordingGoalLifecycleTelemetryEmitter()
+    val outcomes = RecordingOutcomeStore().apply { goalAssessmentRecordRead = GoalAssessmentRecordRead.Corrupt("bad") }
+    val emitter =
+      GoalRunnerTelemetryEmitter(
+        telemetry = telemetry,
+        clock = fixedClock(),
+        state = GoalRunnerManifestState(parentWorkflowId = "wfl-parent", dbPath = "", manifest = manifest),
+        outcomes = outcomes,
+        diagnostics = NoopRuntimeDiagnostics,
+      )
+
+    emitter.goalFinished(
+      manifest,
+      GoalRunnerRunReport.CompletedNoChange(
+        issueKey = "SKILL-56",
+        attemptedSubtasks = listOf(1),
+        noChangeReason = "already_satisfied",
+        subtaskIds = listOf(1),
+        parentWorkflowId = "wfl-parent",
+      ),
+    )
+
+    assertEquals(GoalAssessmentTelemetryCounts(), telemetry.finished.single().assessmentCounts)
   }
 
   @Test

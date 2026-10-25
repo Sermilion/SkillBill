@@ -5,7 +5,7 @@ type: object
 additionalProperties: false
 required: [contract_version, observed_at, item, page_size, next_cursor]
 properties:
-  contract_version: {type: string, const: "1.2"}
+  contract_version: {type: string, const: "1.3"}
   page_size: {type: integer, minimum: 1, maximum: 100}
   next_cursor: {type: [string, "null"], minLength: 1}
   observed_at: {type: string, format: date-time}
@@ -133,3 +133,32 @@ $defs:
                       exit_code: {type: [integer, "null"]}
                       repository_checkpoint: {type: [string, "null"]}
             integrity_problem: {type: [string, "null"]}
+      goal_assessment:
+        type: object
+        additionalProperties: false
+        required: [state, round, exit_reason, fix_ran, open_finding_refs, findings]
+        properties:
+          state: {type: string, enum: [pending, running, completed, skipped]}
+          round: {type: integer, minimum: 0}
+          exit_reason:
+            type: [string, "null"]
+            enum: [converged, round_cap, persistent_finding, assessment_unavailable, skipped_no_changes, null]
+          fix_ran: {type: boolean}
+          open_finding_refs:
+            type: array
+            items: {type: string, pattern: "^GA-[0-9]{3}$"}
+          findings:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required: [finding_ref, severity, path, line, failure_scenario, verification, state, evidence]
+              properties:
+                finding_ref: {type: string, pattern: "^GA-[0-9]{3}$"}
+                severity: {type: string, enum: [blocker, major, minor]}
+                path: {type: string, minLength: 1}
+                line: {type: integer, minimum: 1}
+                failure_scenario: {type: string, minLength: 1}
+                verification: {type: string, enum: [confirmed, refuted, unverified, not_required]}
+                state: {type: string, enum: [open, fixed, refuted]}
+                evidence: {type: string}

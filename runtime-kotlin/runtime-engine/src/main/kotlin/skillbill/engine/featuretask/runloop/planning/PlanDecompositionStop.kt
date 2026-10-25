@@ -135,6 +135,8 @@ internal object PlanDecompositionStop {
           request.repoRoot,
           request.issueKey,
           request.runInvariants,
+          request.protectedSpecSha256 == null,
+          context.diagnostics,
         )
       val bundle = PlanBundleSnapshots(context.decompositionPlanner).capture(request.repoRoot, written, origin)
       val now = context.clock.instant()
@@ -297,7 +299,13 @@ internal class FeatureTaskRuntimePlanningStopper(
         return FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.notReadyReason(it))
       }
       val bundle =
-        decompositionPlanner.verifyAuthoredBundle(request.repoRoot, request.issueKey, request.runInvariants)
+        decompositionPlanner.verifyAuthoredBundle(
+          request.repoRoot,
+          request.issueKey,
+          request.runInvariants,
+          request.protectedSpecSha256 == null,
+          diagnostics,
+        )
       val terminal =
         FeatureTaskRuntimeDecomposeTerminal(
           reason = FeatureTaskRuntimeDecompositionPlanner.AUTHORED_BUNDLE_REASON,
