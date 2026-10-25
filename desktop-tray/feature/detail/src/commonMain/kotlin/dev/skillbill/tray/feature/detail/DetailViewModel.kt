@@ -215,12 +215,14 @@ class DetailViewModel(
         val page = details.detail(identity, cursor, list)
         val result: Outcome<Detail> = when (page) {
           is Outcome.Failure -> page
-          is Outcome.Value -> if (sameStoreRevision(previous, page.value)) {
+          // A live run writes the store every few seconds, so the next page is usually read at a later revision. Its
+          // rows continue after the previous page's anchor, and the next observed refresh re-reads the whole window.
+          is Outcome.Value -> if (previous.item.databaseStoreId == page.value.item.databaseStoreId) {
             val window = (windows[list].orEmpty() + page.value).takeLast(MAX_DETAIL_PAGES)
             windows[list] = window
             Outcome.Value(replaceDetailList(previous, list, window))
           } else {
-            Outcome.Failure(Problem(ProblemCode.STALE_TARGET, "Detail changed during append. Refresh before retrying."))
+            Outcome.Failure(Problem(ProblemCode.STALE_TARGET, "The database was replaced during append. Refresh before retrying."))
           }
         }
         when (result) {

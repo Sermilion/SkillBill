@@ -177,7 +177,11 @@ class RoomWorkDetailRepository(
     return@read Outcome.Value(mapped)
   }
 
-  /** A detail cursor only continues the read that issued it: same connection, store revision, item, list and page size. */
+  /**
+   * A detail cursor only continues the read that issued it: same connection, item, list and page size. The whole-detail
+   * cursor also needs the same store revision; a single list's cursor carries the runtime's row anchor, which a later
+   * write cannot shift, so the runtime alone decides whether the store has moved too far for it.
+   */
   private fun DetailCursor.isStale(
     generation: Long,
     observationSession: Long,
@@ -186,8 +190,8 @@ class RoomWorkDetailRepository(
     identity: WorkIdentity,
     list: DetailList?,
   ): Boolean = this.generation != generation || session != observationSession || this.storeId != storeId ||
-    this.revision != revision || id != identity.id || repositoryIdentity != identity.repositoryIdentity ||
-    this.list != list || pageSize != PAGE_SIZE
+    (list == null && this.revision != revision) || id != identity.id ||
+    repositoryIdentity != identity.repositoryIdentity || this.list != list || pageSize != PAGE_SIZE
 
   /** An anchor re-reads a page after the store changed; it only refuses another connection, database, item or list. */
   private fun DetailAnchor.isStale(
