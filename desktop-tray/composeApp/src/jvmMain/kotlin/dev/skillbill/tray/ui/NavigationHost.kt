@@ -101,6 +101,7 @@ import dev.skillbill.tray.feature.specs.SpecsRoute
 import dev.skillbill.tray.feature.specs.SpecsViewModel
 import dev.skillbill.tray.feature.terminal.TerminalAction
 import dev.skillbill.tray.feature.terminal.TerminalRoute
+import dev.skillbill.tray.feature.terminal.TerminalTab
 import dev.skillbill.tray.feature.terminal.TerminalViewModel
 import dev.skillbill.tray.feature.work.WorkAction
 import dev.skillbill.tray.feature.work.WorkEffect
@@ -111,8 +112,11 @@ import dev.skillbill.tray.lifetime.WindowOwner
 import dev.skillbill.tray.navigation.ListStatus
 import dev.skillbill.tray.navigation.Section
 import dev.skillbill.tray.navigation.WindowNavigator
+import dev.skillbill.tray.terminal.TerminalTabHost
 import java.awt.Cursor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /**
  * What an entry can ask of the application around it: open the settings window, close the window it is in, or refresh through
@@ -149,10 +153,14 @@ fun SkillBillNavHost(
   onRefreshShell: () -> Unit = {},
   specs: SpecsViewModel? = null,
   terminal: TerminalViewModel? = null,
-  terminalSurface: @Composable (workingDirectory: String?) -> Unit = {},
+  terminalTabs: TerminalTabHost? = null,
+  terminalSurface: @Composable (TerminalTab) -> Unit = {},
 ) {
   val actions = remember(onOpenSettings, onCloseWindow, onRefreshShell) { WindowActions(onOpenSettings, onCloseWindow, onRefreshShell) }
-  if (terminal != null) TerminalSelections(window.navigator, specs, terminal)
+  if (terminal != null && terminalTabs != null) {
+    TerminalSelections(window.navigator, specs, terminal)
+    TerminalTabSync(window, terminal, terminalTabs)
+  }
   FeedbackHost(modifier.fillMaxSize()) {
     CompositionLocalProvider(LocalViewModelStoreOwner provides window.entryStoreOwner, LocalWindowActions provides actions) {
       key(window.entryStoreOwner) {
@@ -197,7 +205,9 @@ fun SkillBillNavHost(
                   )
                   // A failed read never opens the first item, so it must not hold the terminal back either.
                   val listPending = status.loading && !status.failed
-                  if (terminal != null) TerminalPaneHost(terminal, navigator.selected, listPending, terminalSurface, columnHeight)
+                  if (terminal != null && terminalTabs != null) {
+                    TerminalPaneHost(terminal, terminalTabs, navigator.selected, listPending, terminalSurface, columnHeight)
+                  }
                 }
               }
               if (specs != null) SpecsPaneHost(specs, navigator.selected)
@@ -244,6 +254,25 @@ private fun TerminalSelections(navigator: WindowNavigator, specs: SpecsViewModel
   }
 }
 
+/**
+ * Keeps the terminal view model and the shells in step, from outside the window content so neither stops while the content
+ * recomposes: a shell that exited on its own becomes a [TerminalAction.TabsEnded], and a shell whose tab the view model no longer
+ * lists is ended. The view model's current tabs are read when the shells are reconciled, so a shell whose tab is listed is never
+ * ended. A view model recreated at a database generation change starts with no tabs, which ends the previous generation's shells.
+ * Nothing here ends a shell when it leaves composition.
+ */
+@Composable
+private fun TerminalTabSync(window: WindowOwner, terminal: TerminalViewModel, tabs: TerminalTabHost) {
+  LaunchedEffect(window, terminal, tabs) {
+    tabs.endedTabs(window).collect { if (it.isNotEmpty()) terminal.onAction(TerminalAction.TabsEnded(it)) }
+  }
+  LaunchedEffect(window, terminal, tabs) {
+    terminal.state.map { state -> state.tabs.map(TerminalTab::id) }.distinctUntilChanged().collect {
+      tabs.retainOnly(window, terminal.state.value.tabs.mapTo(mutableSetOf(), TerminalTab::id))
+    }
+  }
+}
+
 /** The directory one opening of the pane settled on; null [workingDirectory] is a settled "none" that falls back to home. */
 private data class OpenedIn(val workingDirectory: String?)
 
@@ -251,20 +280,27 @@ private data class OpenedIn(val workingDirectory: String?)
  * The terminal pane under the detail, while it is open, with a divider above it that drags the pane taller or shorter. The drag
  * only moves local state; the height is saved once, when the drag stops. The detail always keeps [DETAIL_MIN_HEIGHT].
  * Each opening of the pane takes the directory of the latest selection, sidebar work or a spec, once that is known ([listPending]
- * covers the startup list read), and keeps it until the pane closes, so selecting something else never swaps the shell underneath.
+ * covers the startup list read), and reports it once as [TerminalAction.PaneOpened], which activates or creates that directory's
+ * tab. Selecting something else afterwards never switches tabs; only the new-tab button starts a shell in the latest pick.
  */
 @Composable
 private fun TerminalPaneHost(
   terminal: TerminalViewModel,
+  tabs: TerminalTabHost,
   selected: WorkIdentity?,
   listPending: Boolean,
-  surface: @Composable (workingDirectory: String?) -> Unit,
+  surface: @Composable (TerminalTab) -> Unit,
   columnHeight: Dp,
 ) {
   val state by terminal.state.collectAsState()
   if (!state.paneOpen) return
   var openedIn by remember { mutableStateOf<OpenedIn?>(null) }
   if (openedIn == null && !listPending && state.resolvedFor == selected) openedIn = OpenedIn(state.workingDirectory)
+  LaunchedEffect(openedIn) {
+    val opened = openedIn ?: return@LaunchedEffect
+    val directory = tabs.resolveDirectory(opened.workingDirectory)
+    terminal.onAction(TerminalAction.PaneOpened(tabs.newTabId(), directory.path, directory.isHome))
+  }
   val density = LocalDensity.current
   val min = AppSettings.TERMINAL_PANE_MIN_HEIGHT_DP.dp
   val max = maxOf(min, minOf(AppSettings.TERMINAL_PANE_MAX_HEIGHT_DP.dp, columnHeight - DETAIL_MIN_HEIGHT))
@@ -304,8 +340,13 @@ private fun TerminalPaneHost(
   }
   TerminalRoute(
     terminal,
-    { openedIn?.let { surface(it.workingDirectory) } },
-    Modifier.fillMaxWidth().height(paneHeight.coerceIn(min, max)),
+    onNewTab = {
+      val directory = tabs.resolveDirectory(terminal.state.value.workingDirectory)
+      terminal.onAction(TerminalAction.NewTab(tabs.newTabId(), directory.path, directory.isHome))
+    },
+    // No shell starts before the opening has settled on its directory.
+    surface = { tab -> if (openedIn != null) surface(tab) },
+    modifier = Modifier.fillMaxWidth().height(paneHeight.coerceIn(min, max)),
   )
 }
 

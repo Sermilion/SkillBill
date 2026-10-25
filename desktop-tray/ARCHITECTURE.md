@@ -193,7 +193,7 @@ desktop source set is Linux AppImage `AppRun`, which starts the packaged app.
 Native notification/autolaunch libraries, the macOS status-item JNI bridge, and
 Linux AppRun are host integration code owned by `:composeApp`. The embedded
 terminal starts the user's shell on a pty4j PTY from `terminal/TerminalProcess.kt`,
-and `terminal/TerminalSessions.kt` keeps one shell per window and starting directory and ends them on window disposal or JVM shutdown.
+and `terminal/TerminalSessions.kt` keeps one shell per window and tab and ends it when its tab closes, its shell exits, its window is disposed or the JVM shuts down.
 `DeletionRulesTest` limits process use to those six named files. Desktop CI watches runtime-library and
 build-identity changes and builds the runtime before packaging. The
 `verifyPackagedRuntimeFree` task fails if the application image contains a Skill

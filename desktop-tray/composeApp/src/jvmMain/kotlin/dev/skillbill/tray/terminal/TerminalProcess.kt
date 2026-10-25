@@ -16,6 +16,9 @@ interface TerminalProcess {
   val connector: TtyConnector
 
   fun destroy()
+
+  /** Runs [listener] once when the shell ends, including after [destroy]. */
+  fun onExit(listener: () -> Unit)
 }
 
 fun interface TerminalProcessFactory {
@@ -45,6 +48,10 @@ private class PtyTerminalProcess(private val process: PtyProcess, override val c
       // The PTY is already gone; the process is destroyed below either way.
     }
     process.destroy()
+  }
+
+  override fun onExit(listener: () -> Unit) {
+    process.onExit().thenRun { listener() }
   }
 }
 

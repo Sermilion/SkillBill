@@ -8,6 +8,7 @@ import dev.skillbill.tray.lifetime.SessionTransitionCoordinator
 import dev.skillbill.tray.lifetime.WindowRegistry
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.SwingUtilities
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -22,18 +23,31 @@ class TerminalSessionsTest {
   private val launch = TerminalLaunch(listOf("/bin/zsh", "-l"), "/tmp", mapOf("TERM" to "xterm-256color"))
   private val settings = DefaultSettingsProvider()
 
+  // Like a real process, destroying it also completes its exit future.
   private class FakeProcess(private val onDestroy: () -> Unit) : TerminalProcess {
+    private var listener: (() -> Unit)? = null
+
     override val connector: TtyConnector get() = error("the fake view never reads the connector")
 
-    override fun destroy() = onDestroy()
+    override fun destroy() {
+      onDestroy()
+      listener?.invoke()
+    }
+
+    override fun onExit(listener: () -> Unit) {
+      this.listener = listener
+    }
+
+    fun fireExit() = listener?.invoke()
   }
 
   private class FakeView : TerminalView {
     override val component: JComponent = JPanel()
-    var closed = false
+    var closes = 0
+    val closed get() = closes > 0
 
     override fun close() {
-      closed = true
+      closes++
     }
   }
 
@@ -41,6 +55,7 @@ class TerminalSessionsTest {
     var starts = 0
     var destroys = 0
     var failNextStart = false
+    val processes = mutableListOf<FakeProcess>()
 
     override fun start(launch: TerminalLaunch): TerminalProcess {
       if (failNextStart) {
@@ -48,14 +63,16 @@ class TerminalSessionsTest {
         error("no pty")
       }
       starts++
-      return FakeProcess { destroys++ }
+      return FakeProcess { destroys++ }.also(processes::add)
     }
   }
 
   private val factory = FakeFactory()
   private val views = mutableListOf<FakeView>()
 
-  private fun session() = TerminalSession(factory) { _, _ -> FakeView().also(views::add) }
+  private fun session() = TerminalSession(factory, { _, _ -> FakeView().also(views::add) }, {})
+
+  private fun sessions() = TerminalSessions(factory, { _, _ -> FakeView().also(views::add) }, addShutdownHook = {})
 
   @Test
   fun `a second open returns the same view without starting another process`() {
@@ -85,7 +102,7 @@ class TerminalSessionsTest {
       if (!nativeLoaded) throw UnsatisfiedLinkError("no pty4j")
       factory.start(request)
     }
-    val session = TerminalSession(nativeFactory) { _, _ -> FakeView() }
+    val session = TerminalSession(nativeFactory, { _, _ -> FakeView() }, {})
 
     assertEquals(TerminalStart.Failed("no pty4j"), session.open(launch, settings))
     nativeLoaded = true
@@ -95,9 +112,7 @@ class TerminalSessionsTest {
   @Test
   fun `a failed attach destroys the process and leaves the session retryable`() {
     var attempts = 0
-    val session = TerminalSession(factory) { _, _ ->
-      if (attempts++ == 0) error("widget failed") else FakeView()
-    }
+    val session = TerminalSession(factory, { _, _ -> if (attempts++ == 0) error("widget failed") else FakeView() }, {})
 
     assertEquals(TerminalStart.Failed("widget failed"), session.open(launch, settings))
     assertEquals(1, factory.destroys)
@@ -111,9 +126,9 @@ class TerminalSessionsTest {
 
   @Test
   fun `hiding a window keeps its shell and disposing it ends the shell once`() = runTest {
-    val sessions = TerminalSessions(factory, { _, _ -> FakeView().also(views::add) }, addShutdownHook = {})
+    val sessions = sessions()
     val owner = registry().openMain()
-    val session = sessions.forWindow(owner, "/tmp")
+    val session = sessions.forTab(owner, 1)
     assertIs<TerminalStart.Started>(session.open(launch, settings))
 
     owner.hide()
@@ -130,22 +145,48 @@ class TerminalSessionsTest {
   }
 
   @Test
-  fun `each starting directory keeps its own shell and disposing the window ends them all`() = runTest {
-    val sessions = TerminalSessions(factory, { _, _ -> FakeView().also(views::add) }, addShutdownHook = {})
+  fun `two tabs in one directory get two shells, retainOnly ends only the tabs it drops and disposal ends the rest once`() = runTest {
+    val sessions = sessions()
     val owner = registry().openMain()
-    val first = sessions.forWindow(owner, "/repo/a")
-    assertIs<TerminalStart.Started>(first.open(launch.copy(workingDirectory = "/repo/a"), settings))
+    val tabs = (1L..3L).map { sessions.forTab(owner, it) }
+    tabs.forEach { assertIs<TerminalStart.Started>(it.open(launch, settings)) }
 
-    val second = sessions.forWindow(owner, "/repo/b")
-    assertIs<TerminalStart.Started>(second.open(launch.copy(workingDirectory = "/repo/b"), settings))
+    assertSame(tabs[0], sessions.forTab(owner, 1))
+    assertEquals(3, factory.starts, "Tabs that share a directory never share a shell.")
 
-    assertSame(first, sessions.forWindow(owner, "/repo/a"))
-    assertEquals(2, factory.starts)
-    assertEquals(0, factory.destroys, "Opening another project's shell never ends the first one.")
+    sessions.retainOnly(owner, setOf(1, 3, 99))
+
+    assertEquals(1, factory.destroys)
+    assertEquals(listOf(false, true, false), views.map { it.closed })
+    assertEquals(TerminalStart.Closed, tabs[1].open(launch, settings))
 
     owner.dispose()
 
+    assertEquals(3, factory.destroys)
+    assertTrue(views.all { it.closes == 1 })
+  }
+
+  @Test
+  fun `a shell that exits on its own is reported once and a close is not reported as an exit`() = runTest {
+    val sessions = sessions()
+    val owner = registry().openMain()
+    val exiting = sessions.forTab(owner, 1)
+    val retained = sessions.forTab(owner, 2)
+    assertIs<TerminalStart.Started>(exiting.open(launch, settings))
+    assertIs<TerminalStart.Started>(retained.open(launch, settings))
+
+    factory.processes[0].fireExit()
+    SwingUtilities.invokeAndWait {} // the view closes on the event thread, queued ahead of this no-op
+
+    assertEquals(setOf(1L), sessions.endedTabs(owner).value)
+    assertEquals(1, factory.destroys)
+    assertEquals(1, views[0].closes)
+    assertEquals(TerminalStart.Closed, sessions.forTab(owner, 1).open(launch, settings), "A dead tab never starts another shell.")
+
+    sessions.retainOnly(owner, setOf(1))
+
+    assertEquals(setOf(1L), sessions.endedTabs(owner).value, "Closing tab 2 on purpose is not an own exit.")
     assertEquals(2, factory.destroys)
-    assertTrue(views.all { it.closed })
+    assertEquals(1, views[1].closes)
   }
 }

@@ -170,4 +170,82 @@ class TerminalViewModelTest {
 
     assertEquals("/repo/a", viewModel.state.value.workingDirectory)
   }
+
+  private fun TerminalViewModel.openTabs(vararg directories: String) {
+    directories.forEachIndexed { index, directory -> onAction(TerminalAction.NewTab(index + 1L, directory, isHome = false)) }
+  }
+
+  @Test
+  fun `an opening activates the most recently used tab of its directory once and creates one only when none matches`() = runTest(dispatcher) {
+    val viewModel = TerminalViewModel(details, settings)
+    runCurrent()
+    viewModel.openTabs("/repo/a", "/repo/b", "/repo/a")
+    viewModel.onAction(TerminalAction.SelectTab(2))
+    viewModel.onAction(TerminalAction.SelectTab(99))
+    runCurrent()
+    assertEquals(2L, viewModel.state.value.activeTabId)
+    assertEquals(listOf("a 1", "b", "a 2"), viewModel.state.value.tabs.map { it.label })
+
+    viewModel.onAction(TerminalAction.TogglePane)
+    runCurrent()
+    viewModel.onAction(TerminalAction.PaneOpened(10, "/repo/a", isHome = false))
+    runCurrent()
+    assertEquals(3L, viewModel.state.value.activeTabId, "The newer /repo/a tab was used last, so it wins over the older one.")
+    assertEquals(3, viewModel.state.value.tabs.size)
+
+    viewModel.onAction(TerminalAction.PaneOpened(11, "/repo/b", isHome = false))
+    runCurrent()
+    assertEquals(3L, viewModel.state.value.activeTabId, "A second report in the same opening changes nothing.")
+
+    viewModel.onAction(TerminalAction.TogglePane)
+    runCurrent()
+    viewModel.onAction(TerminalAction.TogglePane)
+    runCurrent()
+    viewModel.onAction(TerminalAction.PaneOpened(12, "/repo/c", isHome = false))
+    runCurrent()
+    assertEquals(12L, viewModel.state.value.activeTabId)
+    assertEquals(4, viewModel.state.value.tabs.size)
+  }
+
+  @Test
+  fun `closing the active tab activates the most recently used one and the last tab closes the pane`() = runTest(dispatcher) {
+    val viewModel = TerminalViewModel(details, settings)
+    runCurrent()
+    viewModel.onAction(TerminalAction.TogglePane)
+    viewModel.openTabs("/repo/a", "/repo/b", "/repo/c")
+    viewModel.onAction(TerminalAction.SelectTab(1))
+    viewModel.onAction(TerminalAction.SelectTab(2))
+    runCurrent()
+
+    viewModel.onAction(TerminalAction.CloseTab(2))
+    runCurrent()
+    assertEquals(1L, viewModel.state.value.activeTabId)
+    assertEquals(listOf(1L, 3L), viewModel.state.value.tabs.map { it.id })
+
+    viewModel.onAction(TerminalAction.TabsEnded(setOf(99)))
+    runCurrent()
+    assertTrue(viewModel.state.value.paneOpen, "An exit for a tab that is already gone must not close the pane.")
+
+    viewModel.onAction(TerminalAction.TabsEnded(setOf(1, 3)))
+    runCurrent()
+    assertTrue(viewModel.state.value.tabs.isEmpty())
+    assertNull(viewModel.state.value.activeTabId)
+    assertFalse(settings.updates.last().terminalPaneOpen)
+    assertFalse(viewModel.state.value.paneOpen)
+  }
+
+  @Test
+  fun `tab labels name the directory, number duplicates in creation order and renumber after a removal`() {
+    fun labels(vararg tabs: TerminalTab) = terminalTabLabels(tabs.toList()).map { it.label }
+    val home = TerminalTab(1, "/Users/me", isHome = true, label = "")
+    val trailingSlash = TerminalTab(2, "/repo/skill-bill/", isHome = false, label = "")
+    val root = TerminalTab(3, "/", isHome = false, label = "")
+    val windows = TerminalTab(4, "C:\\work\\docs\\", isHome = false, label = "")
+    val first = TerminalTab(5, "/x/repo", isHome = false, label = "")
+    val second = TerminalTab(6, "/y/repo", isHome = false, label = "")
+
+    assertEquals(listOf("~", "skill-bill", "/", "docs"), labels(home, trailingSlash, root, windows))
+    assertEquals(listOf("repo 1", "docs", "repo 2"), labels(first, windows, second))
+    assertEquals(listOf("docs", "repo"), labels(windows, second))
+  }
 }

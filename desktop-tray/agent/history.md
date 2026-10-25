@@ -1,3 +1,15 @@
+## [2026-10-25] SKILL-446 desktop terminal tabs
+Areas: desktop-tray (feature/terminal contract, view model, route, tab strip and labels; composeApp jvmMain terminal package, ui NavigationHost, composition Main; jvmTest terminal and ui; ARCHITECTURE.md, agent/decisions.md)
+- MEDIUM feature. The terminal pane now holds a tab strip: the view model owns the tab list, labels and most-recently-used order in memory only, and no settings field was added. Opening the pane activates the latest pick's most recently used tab or creates one, once per opening; a pick while open changes no tab. reusable
+- TerminalTabStrip is a scrollable selectable group with Role.Tab tabs, separate close controls, arrow-key selection with wrap and focus, an amber underline for the active tab and a "+" new-tab button; the "Terminal" title is gone. Labels come from the pure terminalTabLabels (home as "~", last path segment, "label n" for duplicates). reusable
+- TerminalSessions is keyed by window and host-minted tab id (process-wide counter); retainOnly ends a window's sessions whose tabs are gone, and a per-window ended-tabs StateFlow carries shells that exited on their own. TerminalSession gained a required onExit callback fed by the new TerminalProcess.onExit listener.
+- TerminalTabHost is the app-module seam that resolves the working directory and mints tab ids, so the navigation host names no File; resolveTerminalDirectory is pure and falls back to home. TerminalTabSync reconciles retainOnly and forwards ended tabs as TabsEnded. SkillBillNavHost takes the host as an optional parameter.
+- Closing the last tab closes the pane through the same settings path as ClosePane. No composition disposal ends a shell; window scope completion and the JVM shutdown hook end the rest.
+- Tests cover the view model, session registry and nav host; six probes killed the retainOnly filter, exit reporting, directory-tab reuse, arrow wrap, TabsEnded forwarding and the once-per-opening guard.
+- Limits: a closed tab's completion handler stays on the window job until disposal; no test proves retainOnly leaves other windows alone.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-25] SKILL-445 subtask 3 desktop terminal split layout and toggle
 Areas: desktop-tray (composeApp jvmMain ui NavigationHost and TerminalToggle, composition Main, bootstrap DesktopBootstrap; composeApp jvmTest SkillBillNavHostTest)
 - MEDIUM feature. SkillBillNavHost gains an optional terminal ViewModel and a terminalSurface slot; the center column is wrapped in BoxWithConstraints and a private TerminalPaneHost draws a 6dp draggable divider plus TerminalRoute below the detail pane only while the pane is open. Sidebar and SpecsPaneHost are untouched.

@@ -19,11 +19,12 @@ import java.awt.Font
 import java.io.File
 
 /**
- * The terminal pane's content: the window's session for [workingDirectory] in a [SwingPanel]. Sessions outlive composition, so
- * re-entering one reparents the same widget and keeps the shell and its scrollback; a directory without one starts a new shell.
+ * One tab's terminal in a [SwingPanel]: the window's session for [tabId], started in [workingDirectory]. Sessions outlive
+ * composition, so re-entering one reparents the same widget and keeps the shell and its scrollback; a tab without one starts a new
+ * shell. Nothing here ends a shell, and a failed start with its retry belongs to this tab alone.
  */
 @Composable
-fun TerminalSurface(window: WindowOwner, workingDirectory: String?, modifier: Modifier = Modifier) {
+fun TerminalSurface(window: WindowOwner, tabId: Long, workingDirectory: String, modifier: Modifier = Modifier) {
   val launch = remember(workingDirectory) {
     terminalLaunch(
       System.getenv(),
@@ -32,10 +33,10 @@ fun TerminalSurface(window: WindowOwner, workingDirectory: String?, modifier: Mo
       workingDirectory,
     ) { File(it).isDirectory }
   }
-  val session = remember(window, launch.workingDirectory) { appTerminalSessions.forWindow(window, launch.workingDirectory) }
+  val session = remember(window, tabId) { appTerminalSessions.forTab(window, tabId) }
   val colors = terminalColors()
   val font by produceState<Font?>(null) { value = terminalFont() }
-  var attempt by remember { mutableIntStateOf(0) }
+  var attempt by remember(tabId) { mutableIntStateOf(0) }
   val start by produceState<TerminalStart?>(null, session, font, attempt) {
     val loaded = font ?: return@produceState
     value = session.open(launch, TerminalSettingsProvider(colors, loaded))

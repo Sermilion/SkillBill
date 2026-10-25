@@ -42,6 +42,7 @@ import dev.skillbill.tray.infrastructure.TrayIconRenderer
 import dev.skillbill.tray.infrastructure.resolveDesktopUiScale
 import dev.skillbill.tray.lifetime.SessionState
 import dev.skillbill.tray.lifetime.WindowOwner
+import dev.skillbill.tray.terminal.AppTerminalTabHost
 import dev.skillbill.tray.terminal.TerminalSurface
 import dev.skillbill.tray.ui.DesignWindow
 import dev.skillbill.tray.ui.SkillBillNavHost
@@ -281,7 +282,8 @@ private fun MainWindow(
             onCloseWindow = closeRequest,
             specs = specs,
             terminal = terminal,
-            terminalSurface = { dir -> TerminalSurface(windowOwner, dir, Modifier.fillMaxSize()) },
+            terminalTabs = AppTerminalTabHost,
+            terminalSurface = { tab -> TerminalSurface(windowOwner, tab.id, tab.directory, Modifier.fillMaxSize()) },
           )
         }
       }
