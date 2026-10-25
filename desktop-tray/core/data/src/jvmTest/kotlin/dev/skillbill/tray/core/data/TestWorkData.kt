@@ -111,6 +111,7 @@ fun workStack(
   /** Answers a control request in place of the runtime when it returns a result, so a test can script an outcome. */
   scriptedControl: (ControlAction) -> ControlResult? = { null },
   gate: RuntimeBuildGate = RuntimeBuildGate { null },
+  afterSnapshot: () -> Unit = {},
 ): WorkStack {
   val diagnostics = RecordingDiagnostics()
   val readWork = AtomicInteger()
@@ -129,7 +130,7 @@ fun workStack(
     sessionsCreated.incrementAndGet()
     val selection = DatabaseSelection().also { it.choose(path) }
     val runtime = object : RuntimeSessionProviders {}.runtimeComponent(selection, host, FakeSettingsRepository(SettingsState.Ready(AppSettings())))
-    val gateway = CountingGateway(RuntimeWorkAdapter(runtime), readWork, ownerRegistrations, scriptedControl)
+    val gateway = CountingGateway(RuntimeWorkAdapter(runtime), readWork, ownerRegistrations, scriptedControl, afterSnapshot)
     val session = DatabaseSession(gateway, store, signals, classifier, generations, dispatchers, diagnostics)
     SessionParts(
       session,
@@ -181,13 +182,14 @@ private class CountingGateway(
   private val readWork: AtomicInteger,
   private val ownerRegistrations: AtomicInteger,
   private val scriptedControl: (ControlAction) -> ControlResult?,
+  private val afterSnapshot: () -> Unit,
 ) : RuntimeWorkGateway by delegate {
   override fun request(item: WorkItem, action: ControlAction, agentId: String?, stillCurrent: () -> Boolean): ControlResult =
     scriptedControl(action) ?: delegate.request(item, action, agentId, stillCurrent)
 
   override fun <T : Any> existingSnapshot(read: SnapshotReads.() -> T): T {
     readWork.incrementAndGet()
-    return delegate.existingSnapshot(read)
+    return delegate.existingSnapshot(read).also { afterSnapshot() }
   }
 
   override fun observeOwners(ids: List<String>, observedAt: Instant, onExit: () -> Unit): OwnerRegistration {

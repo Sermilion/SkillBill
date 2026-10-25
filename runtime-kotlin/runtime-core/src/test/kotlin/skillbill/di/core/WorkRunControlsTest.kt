@@ -49,6 +49,25 @@ import kotlin.test.assertTrue
 
 class WorkRunControlsTest {
   @Test
+  fun `detail run options use the supplied snapshot and refuse a changed store revision`() {
+    establishTemporarySchemaReadiness("detail-run-options").use { fixture ->
+      val component = component(fixture.tempDir, fixture.dbPath)
+      component.databaseSession.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir)) }
+      val detail = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("interrupted")).item)
+      assertEquals(
+        component.workControlService.options(target(component)),
+        component.workControlService.options(detail),
+      )
+      component.databaseSession.transaction {
+        it.standalonePhaseStatuses.register(
+          registration(fixture.tempDir).copy(invocationId = "unrelated", executionId = "execution-unrelated"),
+        )
+      }
+      assertNull(component.workControlService.options(detail))
+    }
+  }
+
+  @Test
   fun `canceling an interrupted phase moves it into history and rejects late owner updates`() {
     establishTemporarySchemaReadiness("canceled-phase").use { fixture ->
       val launched = mutableListOf<WorkRunLaunchRequest>()

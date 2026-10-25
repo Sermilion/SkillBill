@@ -16,7 +16,6 @@ import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
-import dev.skillbill.tray.core.domain.model.StorageFailure
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkSection
@@ -33,7 +32,6 @@ import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import kotlin.time.Clock
 
-private const val DETAIL_READ_ATTEMPTS = 3
 private const val DETAIL_OWNER_CLOSE_FAILED = "room_detail_owner_close_failed"
 
 /** What one detail subscription last rendered: the shared signal revisions and its own deadline-reprojection count. */
@@ -87,9 +85,9 @@ class RoomWorkDetailRepository(
             } else {
               setOf(WorkSection.PHASES)
             }
-            watchOwner(owner, identity, result.value, scheduler)
           }
           emit(result)
+          if (result is Outcome.Value) watchOwner(owner, identity, result.value, scheduler)
         }
       }
     } finally {
@@ -136,9 +134,8 @@ class RoomWorkDetailRepository(
     val parsedAnchor = anchor?.let { CursorCodec.decodeAnchor(it) ?: return@read staleCursor() }
     val generation = session.generation
     val observationSession = session.observationSession
-    // Resolved before the store observation is taken, so a commit made while the time resolves cannot fail the fence check.
     val observedAt = clock.now()
-    repeat(DETAIL_READ_ATTEMPTS) {
+    if (parsed != null || parsedAnchor != null) {
       val before = session.workObservation()
       if (parsed != null && parsed.isStale(generation, observationSession, before.storeId, before.revision, identity, list)) {
         return@read staleCursor()
@@ -146,37 +143,38 @@ class RoomWorkDetailRepository(
       if (parsedAnchor != null && parsedAnchor.isStale(generation, observationSession, before.storeId, identity, list)) {
         return@read staleCursor()
       }
-      val loaded = session.gateway.existingSnapshot {
-        detail(identity, observedAt, parsed?.runtimeCursor, PAGE_SIZE, parsedAnchor?.runtimeAnchor, list)
-      }
-      if (!session.currentFileMatches() || session.workObservation() != before) return@repeat
-      val found = loaded.detail ?: return@read Outcome.Failure(
-        Problem(ProblemCode.fromWire(loaded.problemCode ?: "unknown_work_item"), "This work item is no longer available."),
-      )
-      fun token(selected: DetailList?): String? =
-        (if (selected == null) loaded.runtimeCursor else loaded.listCursors[selected])?.let { runtimeCursor ->
-          CursorCodec.encode(
-            DetailCursor(
-              generation, observationSession, before.storeId, before.revision, identity.id, identity.repositoryIdentity,
-              runtimeCursor, PAGE_SIZE, selected,
-            ),
-          )
-        }
-      val mapped = found.copy(
-        item = found.item.copy(databaseGeneration = generation),
-        nextCursor = token(null),
-        cursors = loaded.moreLists.associateWith { checkNotNull(token(it)) },
-        anchors = loaded.listAnchors.mapValues { (selected, runtimeAnchor) ->
-          CursorCodec.encode(
-            DetailAnchor(generation, observationSession, before.storeId, identity.id, identity.repositoryIdentity, selected, runtimeAnchor),
-          )
-        },
-        runOptions = loaded.runOptions,
-      )
-      if (mapped.item.identity != identity) return@read staleCursor()
-      return@read Outcome.Value(mapped)
     }
-    Outcome.Failure(Problem(ProblemCode.BUSY, "Detail changed during this read. Retry.", StorageFailure.BUSY))
+    val loaded = session.gateway.existingSnapshot {
+      detail(identity, observedAt, parsed?.runtimeCursor, PAGE_SIZE, parsedAnchor?.runtimeAnchor, list)
+    }
+    if (!session.currentFileMatches()) return@read staleCursor()
+    val found = loaded.detail ?: return@read Outcome.Failure(
+      Problem(ProblemCode.fromWire(loaded.problemCode ?: "unknown_work_item"), "This work item is no longer available."),
+    )
+    val storeId = checkNotNull(found.item.databaseStoreId)
+    val revision = checkNotNull(found.item.databaseRevision)
+    fun token(selected: DetailList?): String? =
+      (if (selected == null) loaded.runtimeCursor else loaded.listCursors[selected])?.let { runtimeCursor ->
+        CursorCodec.encode(
+          DetailCursor(
+            generation, observationSession, storeId, revision, identity.id, identity.repositoryIdentity,
+            runtimeCursor, PAGE_SIZE, selected,
+          ),
+        )
+      }
+    val mapped = found.copy(
+      item = found.item.copy(databaseGeneration = generation),
+      nextCursor = token(null),
+      cursors = loaded.moreLists.associateWith { checkNotNull(token(it)) },
+      anchors = loaded.listAnchors.mapValues { (selected, runtimeAnchor) ->
+        CursorCodec.encode(
+          DetailAnchor(generation, observationSession, storeId, identity.id, identity.repositoryIdentity, selected, runtimeAnchor),
+        )
+      },
+      runOptions = loaded.runOptions,
+    )
+    if (mapped.item.identity != identity) return@read staleCursor()
+    return@read Outcome.Value(mapped)
   }
 
   /** A detail cursor only continues the read that issued it: same connection, store revision, item, list and page size. */

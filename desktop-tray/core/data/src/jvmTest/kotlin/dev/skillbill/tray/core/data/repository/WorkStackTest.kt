@@ -134,6 +134,33 @@ class WorkStackTest {
   }
 
   @Test
+  fun `detail publishes its snapshot without retrying unrelated commits after projection`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-detail-snapshot-writer").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "selected", now, "main")) }
+      var armed = false
+      val writes = AtomicInteger()
+      val source = workStack(fixture.tempDir.toRealPath(), TestClock(now.toKotlinInstant()), afterSnapshot = {
+        if (armed) factory.transaction {
+          it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "writer-${writes.incrementAndGet()}", now, "main"))
+        }
+      })
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        val selected = value(source.board(WorkSection.PHASES, Retention.WEEK)).items.single()
+        armed = true
+        val detail = assertIs<Outcome.Value<Detail>>(source.detail(selected.identity)).value
+        assertEquals(selected.identity, detail.item.identity)
+        assertEquals(1, writes.get())
+        armed = false
+        val live = value(source.board(WorkSection.PHASES, Retention.WEEK))
+        assertTrue(live.revision!! > detail.item.databaseRevision!!)
+        assertTrue(live.items.any { it.identity.id == "writer-1" })
+      } finally { source.closeAndJoin() }
+    }
+  }
+
+  @Test
   fun `history publishes a coherent snapshot when an unrelated writer commits after projection`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-history-concurrent-writer").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())

@@ -102,6 +102,17 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
     )
   }
 
+  fun ledgerEntryFilter(
+    records: Map<String, FeatureTaskRuntimePhaseRecord>,
+  ): (FeatureTaskRuntimePhaseLedgerEntry) -> Boolean {
+    val keepKnownEntry =
+      FeatureTaskRuntimeRunStateReconstruction.statelessAuditLedgerEntryFilter(
+        records.filterKeys { it in rules },
+        ::resumeRules,
+      )
+    return { entry -> entry.phaseId !in rules || keepKnownEntry(entry) }
+  }
+
   fun currentExecution(context: FeatureTaskRuntimeCurrentPhaseExecutionContext): IdeStatusCurrentPhaseExecution? {
     val stepId = context.currentPhaseId ?: return null
     if (context.phases.none { it.phaseId == stepId }) return null

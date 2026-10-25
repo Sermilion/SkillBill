@@ -235,11 +235,7 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
           anchor = anchor,
         ),
       )
-      val options = result.item?.let { work ->
-        val domain = work.snapshot.toDomain(work.repositoryRoot, work.finishedAt?.toKotlinInstant(), work.finishedAtSource?.wireValue)
-          .copy(databaseFile = work.databaseFileObservation?.toDomain())
-        domain.runTarget()?.let(runtime.workControlService::options)
-      }
+      val options = result.item?.let(runtime.workControlService::options)
       val detail: Detail? = result.item?.toDomain(result.observedAt.toKotlinInstant(), null)?.let { mapped ->
         val standaloneAgent = options?.agentId.takeIf { mapped.item.scope == ExecutionScope.STANDALONE_PHASE }
         mapped.copy(

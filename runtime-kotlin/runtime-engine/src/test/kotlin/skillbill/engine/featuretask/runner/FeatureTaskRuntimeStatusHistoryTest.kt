@@ -47,6 +47,15 @@ class FeatureTaskRuntimeStatusHistoryTest {
             loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
             edgeIteration = 2,
           ),
+          FeatureTaskRuntimePhaseLedgerEntry(
+            FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
+            5002,
+            Instant.EPOCH.plusSeconds(5002),
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
+            1,
+            loopId = FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID,
+            edgeIteration = 3,
+          ),
         )
     val original = assertNotNull(harness.repository.getFeatureTaskWorkflowAsMode(id, FeatureTaskWorkflowMode.RUNTIME))
     val artifacts =
@@ -61,6 +70,7 @@ class FeatureTaskRuntimeStatusHistoryTest {
     val records = assertNotNull(harness.recorder.loadPhaseRecords(id))
     val compact = statusPhaseHistory(harness.recorder.phaseQuery, id, records, harness.service.history)
     assertTrue(compact.size <= 4, "Retained ${compact.size} entries for one phase and one loop.")
+    assertEquals(5001, compact.last().sequenceNumber)
     val request = FeatureTaskRuntimeStatusRequest(id)
     val expected =
       harness.service.buildStatusProjection(
