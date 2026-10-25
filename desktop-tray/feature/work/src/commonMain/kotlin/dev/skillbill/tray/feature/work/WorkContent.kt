@@ -37,6 +37,7 @@ import dev.skillbill.tray.core.ui.AppendState
 import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.PagedListState
+import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.SidebarWorkRow
 import kotlin.time.Instant
 
@@ -136,7 +137,7 @@ private fun SectionNote(text: String) {
 @Composable
 private fun SectionProblem(summary: String, retry: () -> Unit) {
   Column(Modifier.padding(horizontal = 16.dp)) {
-    Text(summary, color = amber, style = MaterialTheme.typography.bodySmall)
+    ProblemMessage(summary)
     TextButton(onClick = retry) { Text("Retry", color = amber) }
   }
 }

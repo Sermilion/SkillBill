@@ -5,11 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.LinkAnnotation
@@ -22,9 +18,9 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.core.designsystem.mono
 import dev.skillbill.tray.core.designsystem.muted
-import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.repository.Outcome
+import dev.skillbill.tray.core.ui.LocalFeedbackHost
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import dev.skillbill.tray.core.ui.abbreviateHomeDirectory
 import dev.skillbill.tray.core.ui.repositoryTitle
@@ -33,14 +29,13 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun RepositoryLocationLinks(item: WorkItem) {
   val navigation = LocalRepositoryNavigation.current
+  val feedback = LocalFeedbackHost.current
   val scope = rememberCoroutineScope()
-  var error by remember(item.repositoryRoot, item.branch) { mutableStateOf<String?>(null) }
   val styles = TextLinkStyles(style = SpanStyle(textDecoration = TextDecoration.Underline))
   fun open(action: suspend () -> Outcome<Unit>) {
     scope.launch {
-      error = null
       val result = action()
-      if (result is Outcome.Failure) error = result.problem.summary
+      if (result is Outcome.Failure) feedback?.showSnackbar(result.problem.summary)
     }
   }
   Column {
@@ -66,7 +61,6 @@ internal fun RepositoryLocationLinks(item: WorkItem) {
         LinkAnnotation.Clickable("directory", styles) { open { navigation.openDirectory(item.repositoryRoot) } },
       )
     }
-    error?.let { Text(it, color = orange, fontSize = 12.sp) }
   }
 }
 

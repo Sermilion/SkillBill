@@ -3,6 +3,7 @@ package dev.skillbill.tray.feature.detail
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
@@ -27,7 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 
 @OptIn(ExperimentalTestApi::class)
-class DetailFailureBannerTest {
+class DetailRunStatusTest {
   private val navigation = object : RepositoryNavigation {
     override suspend fun openRepository(root: String, branch: String?) = Outcome.Value(Unit)
     override suspend fun openDirectory(root: String) = Outcome.Value(Unit)
@@ -59,7 +60,7 @@ class DetailFailureBannerTest {
   }
 
   @Test
-  fun `a blocked goal shows its child failure above the acceptance progress and expands its full diagnostic`() = runComposeUiTest {
+  fun `a blocked goal keeps its diagnostic in activity without repeating a header banner`() = runComposeUiTest {
     val reason = "Subtask 1 finished without a terminal workflow-store outcome. " +
       "The child process exited with status 1. " +
       "Child stderr: Runtime-owned persistence fact could not be established at serial_repair_write. " +
@@ -76,8 +77,9 @@ class DetailFailureBannerTest {
       }
     }
 
-    onNodeWithText("Run blocked").assertExists()
-    onAllNodesWithText(reason).onFirst().assertExists()
+    onNodeWithText("Run blocked").assertDoesNotExist()
+    onNodeWithText("GOAL ACTIVITY").assertExists()
+    onAllNodesWithText(reason).assertCountEquals(1)
     onNodeWithText(item.summary).assertDoesNotExist()
     onAllNodesWithText("Show more").onFirst().performClick()
     onNodeWithText("Close").assertExists()
@@ -87,7 +89,7 @@ class DetailFailureBannerTest {
   }
 
   @Test
-  fun `a failed run displays an error banner with its saved failure`() = runComposeUiTest {
+  fun `a failed run keeps its saved failure in activity without a header banner`() = runComposeUiTest {
     val reason = "The repair process failed because its workflow record could not be saved."
     val item = workItem("failed", Lifecycle.FAILED).copy(exactPauseReason = reason)
     setContent {
@@ -98,7 +100,8 @@ class DetailFailureBannerTest {
       }
     }
 
-    onNodeWithText("Run failed").assertExists()
+    onNodeWithText("Run failed").assertDoesNotExist()
+    onNodeWithText("GOAL ACTIVITY").assertExists()
     onNodeWithText(reason).assertExists()
     onNodeWithText("Copy reason").assertExists()
   }

@@ -1,5 +1,7 @@
 package dev.skillbill.tray.ui
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -13,8 +15,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -26,10 +28,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.key
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,10 +45,11 @@ import dev.skillbill.tray.core.designsystem.border
 import dev.skillbill.tray.core.designsystem.canvas
 import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.muted
-import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.WorkIdentity
+import dev.skillbill.tray.core.ui.FeedbackHost
+import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.navigation.AppRoute
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import dev.skillbill.tray.core.ui.navigation.EntryArgsOutcome
@@ -58,8 +59,8 @@ import dev.skillbill.tray.core.ui.startOfToday
 import dev.skillbill.tray.feature.detail.DetailArgs
 import dev.skillbill.tray.feature.detail.DetailEffect
 import dev.skillbill.tray.feature.detail.DetailRoute
-import dev.skillbill.tray.feature.detail.IncidentDetailUnavailablePanel
 import dev.skillbill.tray.feature.detail.HistoryDetailRoute
+import dev.skillbill.tray.feature.detail.IncidentDetailUnavailablePanel
 import dev.skillbill.tray.feature.detail.WorkDetailRoute
 import dev.skillbill.tray.feature.history.HistoryAction
 import dev.skillbill.tray.feature.history.HistoryEffect
@@ -117,47 +118,49 @@ fun SkillBillNavHost(
   specs: SpecsViewModel? = null,
 ) {
   val actions = remember(onOpenSettings, onCloseWindow, onRefreshShell) { WindowActions(onOpenSettings, onCloseWindow, onRefreshShell) }
-  CompositionLocalProvider(LocalViewModelStoreOwner provides window.entryStoreOwner, LocalWindowActions provides actions) {
-    key(window.entryStoreOwner) {
-      val navigator = window.navigator
-      val routes = navigator.stack.entries
-      // A main window's routes are made under a generation; one without was made while a switch was under way, and the session
-      // state collected here can trail the navigator reset by a frame, so only an exact match renders.
-      val renderable = session is SessionState.Active &&
-        routes.all { it.generation == session.ref || navigator.section == null && it.generation == null }
-      if (session is SessionState.Refused && session.problem.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE) {
-        IncidentDetailUnavailablePanel(session.problem, onRefreshShell, modifier.fillMaxSize())
-      } else if (session is SessionState.Refused) {
-        MessagePane(
-          "Skill Bill runtime unavailable",
-          "Install a matched runtime and desktop pair with ${session.problem.reinstallCommand}, then retry.",
-          "Retry",
-          modifier.fillMaxSize(),
-          onRefreshShell,
-        )
-      } else if (!renderable) {
-        MessagePane("Opening your database", "Skill Bill is switching to the selected database.", null, modifier.fillMaxSize())
-      } else if (navigator.section == null) {
-        NavigationPane(routes, onBack = onCloseWindow, window, modifier.fillMaxSize())
-      } else {
-        Row(modifier.fillMaxSize().background(canvas)) {
-          NavigationPane(listOf(routes.first()), onBack = {}, window, Modifier.width(SIDEBAR_PANE_WIDTH).fillMaxHeight())
-          Box(Modifier.width(1.dp).fillMaxHeight().background(border))
-          Column(Modifier.weight(1f).fillMaxHeight()) {
-            val status = navigator.status
-            // A refused runtime build explains every other read failure, and only a shell refresh can clear it.
-            val runtimeRefusal = shellProblem?.takeIf { it.runtimeBuild != null }
-            val problem = runtimeRefusal ?: status.problem ?: shellProblem
-            val retry = if (runtimeRefusal != null) onRefreshShell else { { onRefreshShell(); status.onRefresh() } }
-            if (problem != null) ProblemBanner(problem, status, retry)
-            NavigationPane(
-              routes.drop(1).ifEmpty { listOf(NoSelection) },
-              onBack = { navigator.back() },
-              window,
-              Modifier.weight(1f).fillMaxWidth(),
-            )
+  FeedbackHost(modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalViewModelStoreOwner provides window.entryStoreOwner, LocalWindowActions provides actions) {
+      key(window.entryStoreOwner) {
+        val navigator = window.navigator
+        val routes = navigator.stack.entries
+        // A main window's routes are made under a generation; one without was made while a switch was under way, and the session
+        // state collected here can trail the navigator reset by a frame, so only an exact match renders.
+        val renderable = session is SessionState.Active &&
+          routes.all { it.generation == session.ref || navigator.section == null && it.generation == null }
+        if (session is SessionState.Refused && session.problem.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE) {
+          IncidentDetailUnavailablePanel(session.problem, onRefreshShell, modifier.fillMaxSize())
+        } else if (session is SessionState.Refused) {
+          MessagePane(
+            "Skill Bill runtime unavailable",
+            "Install a matched runtime and desktop pair with ${session.problem.reinstallCommand}, then retry.",
+            "Retry",
+            modifier.fillMaxSize(),
+            onRefreshShell,
+          )
+        } else if (!renderable) {
+          MessagePane("Opening your database", "Skill Bill is switching to the selected database.", null, modifier.fillMaxSize())
+        } else if (navigator.section == null) {
+          NavigationPane(routes, onBack = onCloseWindow, window, modifier.fillMaxSize())
+        } else {
+          Row(modifier.fillMaxSize().background(canvas)) {
+            NavigationPane(listOf(routes.first()), onBack = {}, window, Modifier.width(SIDEBAR_PANE_WIDTH).fillMaxHeight())
+            Box(Modifier.width(1.dp).fillMaxHeight().background(border))
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+              val status = navigator.status
+              // A refused runtime build explains every other read failure, and only a shell refresh can clear it.
+              val runtimeRefusal = shellProblem?.takeIf { it.runtimeBuild != null }
+              val problem = runtimeRefusal ?: status.problem ?: shellProblem
+              val retry = if (runtimeRefusal != null) onRefreshShell else { { onRefreshShell(); status.onRefresh() } }
+              if (problem != null) ProblemBanner(problem, status, retry)
+              NavigationPane(
+                routes.drop(1).ifEmpty { listOf(NoSelection) },
+                onBack = { navigator.back() },
+                window,
+                Modifier.weight(1f).fillMaxWidth(),
+              )
+            }
+            if (specs != null) SpecsPaneHost(specs, navigator.selected)
           }
-          if (specs != null) SpecsPaneHost(specs, navigator.selected)
         }
       }
     }
@@ -344,16 +347,9 @@ private fun EmptyDetailEntry(window: WindowOwner) {
 
 @Composable
 private fun ProblemBanner(problem: Problem, status: ListStatus, onRetry: () -> Unit) {
-  Row(Modifier.fillMaxWidth().background(orange.copy(alpha = .10f)).padding(horizontal = 22.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-    Column(Modifier.weight(1f)) {
-      Text(problem.summary, color = amber, style = MaterialTheme.typography.bodyMedium)
-      problem.runtimeBuild?.let { build ->
-        Text("Installed runtime: ${build.installedIdentity ?: "none"}", color = muted, style = MaterialTheme.typography.bodySmall)
-        Text("This app: ${build.desktopIdentity}", color = muted, style = MaterialTheme.typography.bodySmall)
-        Text("Install a matched pair with ${build.reinstallCommand}, then retry.", color = muted, style = MaterialTheme.typography.bodySmall)
-      }
-      if (status.stale) Text("Showing the last successful update.", color = muted, style = MaterialTheme.typography.bodySmall)
-    }
+  ProblemMessage(problem.summary)
+  Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+    if (status.stale) Text("Showing the last successful update.", Modifier.weight(1f), color = muted, style = MaterialTheme.typography.bodySmall)
     TextButton(onClick = onRetry) { Text("Retry", color = amber) }
   }
 }

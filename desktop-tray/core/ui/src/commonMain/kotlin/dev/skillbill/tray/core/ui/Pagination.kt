@@ -34,6 +34,9 @@ fun PageFooter(append: AppendState, load: () -> Unit) {
     AppendState.Exhausted -> Unit
     AppendState.Loading -> Text("Loading...", color = muted)
     AppendState.Idle -> TextButton(onClick = load) { Text("Load more", color = mint) }
-    is AppendState.Failed -> TextButton(onClick = load) { Text("Retry page", color = mint) }
+    is AppendState.Failed -> {
+      ProblemMessage(append.problem.summary)
+      TextButton(onClick = load) { Text("Retry page", color = mint) }
+    }
   }
 }

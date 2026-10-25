@@ -24,6 +24,15 @@ import dev.skillbill.tray.core.testing.fixtureInstant
 import dev.skillbill.tray.core.testing.workItem
 import dev.skillbill.tray.core.ui.AppendState
 import dev.skillbill.tray.core.ui.FeedbackTone
+import dev.skillbill.tray.core.ui.LaunchRequests
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,14 +45,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModelTest {
@@ -71,7 +72,7 @@ class DetailViewModelTest {
   private fun launchOptions() = RunOptions(canCancel = true, canLaunch = true, launchLabel = "Launch", agentId = null, agentChoices = emptyList(), unavailableReason = null)
 
   private fun TestScope.viewModel(first: Detail? = detail(controllable())): DetailViewModel {
-    val vm = DetailViewModel(identity, details, controls, boards, clock)
+    val vm = DetailViewModel(identity, details, controls, boards, clock, LaunchRequests(backgroundScope, controls, boards, clock))
     runCurrent()
     if (first != null) show(first)
     return vm

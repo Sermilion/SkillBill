@@ -81,6 +81,7 @@ class AppOwner(
 
   /** Stops the coordinators when the application composition itself is torn down; the stores are closed by [quit]. */
   fun cancelScopes() {
+    application.launches.cancel()
     shellScope.coroutineContext[Job]?.cancel()
     notificationScope.coroutineContext[Job]?.cancel()
     appScope.coroutineContext[Job]?.cancel()

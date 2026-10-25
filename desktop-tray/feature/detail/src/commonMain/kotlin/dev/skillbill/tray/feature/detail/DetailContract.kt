@@ -1,11 +1,11 @@
 package dev.skillbill.tray.feature.detail
 
-import dev.skillbill.tray.core.domain.model.Detail
-import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
-import dev.skillbill.tray.core.domain.model.Incident
 import dev.skillbill.tray.core.domain.model.DatabaseFileIdentity
-import dev.skillbill.tray.core.domain.model.IncidentPrerequisite
+import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
+import dev.skillbill.tray.core.domain.model.Incident
+import dev.skillbill.tray.core.domain.model.IncidentPrerequisite
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
@@ -52,6 +52,7 @@ data class DetailUiState(
   /** Lists whose next page is being fetched or failed; any other list is idle or exhausted according to its cursor. */
   val appends: Map<DetailList, AppendState> = emptyMap(),
   val control: ControlState = ControlState.Idle,
+  val launchPending: Boolean = false,
   /** Whether the item is live or finished recently enough for run controls to be offered; false until the detail lands. */
   val controllable: Boolean = false,
   val pendingFeedback: List<Feedback> = emptyList(),

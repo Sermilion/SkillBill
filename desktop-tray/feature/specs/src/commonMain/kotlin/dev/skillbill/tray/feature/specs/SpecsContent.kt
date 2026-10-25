@@ -1,5 +1,7 @@
 package dev.skillbill.tray.feature.specs
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,8 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,10 +26,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -52,6 +52,7 @@ import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.raised
 import dev.skillbill.tray.core.designsystem.sidebar
 import dev.skillbill.tray.core.designsystem.strongBorder
+import dev.skillbill.tray.core.ui.ProblemMessage
 
 /** The pane is this wide wherever it is hosted. */
 val SPECS_PANE_WIDTH: Dp = 320.dp
@@ -201,7 +202,8 @@ private fun Body(state: SpecsUiState, onAction: (SpecsAction) -> Unit) {
 
 @Composable
 private fun UnreadableFolder(message: String, onAction: (SpecsAction) -> Unit) {
-  StateMessage("Can't read the spec folder", message) {
+  ProblemMessage(message)
+  StateMessage("Specs unavailable") {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       DesignButton("Retry") { onAction(SpecsAction.Retry) }
       DesignButton("Reveal folder") { onAction(SpecsAction.Reveal) }

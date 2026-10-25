@@ -34,8 +34,14 @@ subscription, so each owner (the main window's `WorkViewModel`, the tray and the
 notification coordinator) reads the live and recent sections through its own
 `TrackedBoardSections`, the detail pane observes the sections it needs directly, and
 `HistoryViewModel` owns history. Effects are per family: navigation
-effects keep the newest one and transient effects hold at most four. Feedback the user
-must see travels in `UiState` and stays until acknowledged by id.
+effects keep the newest one and transient effects hold at most four. Action feedback
+travels in `UiState` until the window snackbar displays and acknowledges it by id. Each window hosts a bottom popup that dismisses after a few
+seconds or when the user closes it. Read failures use the same popup; retry controls
+stay available. Launch reservations are app scoped and keyed by work identity, so
+the detail and Specs controls disable together until a launch registers or fails.
+`LaunchRequests` owns the launch request and registration wait in an app-owned scope.
+Entries await its result without owning or canceling the request. App shutdown cancels
+and joins launches before closing the database session.
 
 Four lifetimes are generated with kotlin-inject and Anvil, each with a named owner.
 `AppScope` lives for the process and is owned by `AppOwner`, which ends it in order on

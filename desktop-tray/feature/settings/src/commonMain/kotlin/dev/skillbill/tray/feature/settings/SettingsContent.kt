@@ -1,7 +1,7 @@
 package dev.skillbill.tray.feature.settings
 
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,12 +25,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.skillbill.tray.core.designsystem.amber
 import dev.skillbill.tray.core.designsystem.canvas
 import dev.skillbill.tray.core.designsystem.green
 import dev.skillbill.tray.core.designsystem.ink
@@ -38,6 +36,8 @@ import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.allowedTransitions
 import dev.skillbill.tray.core.domain.model.defaultNotifications
+import dev.skillbill.tray.core.ui.FeedbackMessages
+import dev.skillbill.tray.core.ui.ProblemMessage
 import kotlinx.coroutines.delay
 
 private const val SAVED_NOTICE_MILLIS = 2_000L
@@ -67,17 +67,15 @@ fun SettingsContent(
   onClose: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  FeedbackMessages(state.pendingFeedback) { onAction(SettingsAction.AcknowledgeFeedback(it)) }
   Column(modifier.width(460.dp).heightIn(max = 680.dp).background(canvas).padding(20.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text("Settings", Modifier.weight(1f), color = ink, style = MaterialTheme.typography.titleLarge)
       TextButton(onClick = onClose) { Text("Close") }
     }
-    state.pendingFeedback.forEach { feedback ->
-      Text(feedback.message, Modifier.fillMaxWidth().clickable { onAction(SettingsAction.AcknowledgeFeedback(feedback.id)) }, color = amber, style = MaterialTheme.typography.bodySmall)
-    }
     when (val readiness = state.readiness) {
       SettingsReadiness.Loading -> Text("Loading settings...", color = muted, style = MaterialTheme.typography.bodySmall)
-      is SettingsReadiness.Unreadable -> Text(readiness.problem.summary, color = amber, style = MaterialTheme.typography.bodySmall)
+      is SettingsReadiness.Unreadable -> ProblemMessage(readiness.problem.summary)
       SettingsReadiness.Ready -> ReadySettings(state, saved, onAction)
     }
   }

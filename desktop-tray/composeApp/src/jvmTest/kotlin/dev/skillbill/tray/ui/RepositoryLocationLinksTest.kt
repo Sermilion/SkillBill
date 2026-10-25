@@ -16,13 +16,14 @@ import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.fixtureInstant
 import dev.skillbill.tray.core.testing.workItem
+import dev.skillbill.tray.core.ui.FeedbackHost
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import dev.skillbill.tray.core.ui.RepositoryNavigation
 import dev.skillbill.tray.feature.detail.DetailContent
 import dev.skillbill.tray.feature.detail.DetailLoad
 import dev.skillbill.tray.feature.detail.DetailUiState
-import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalTestApi::class)
 class RepositoryLocationLinksTest {
@@ -46,7 +47,9 @@ class RepositoryLocationLinksTest {
     setContent {
       CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
         DesignSystemTheme {
-          DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(detail(item))), fixtureInstant, {})
+          FeedbackHost {
+            DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(detail(item))), fixtureInstant, {})
+          }
         }
       }
     }

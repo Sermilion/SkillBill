@@ -20,6 +20,15 @@ import dev.skillbill.tray.core.testing.FakeWorkControlRepository
 import dev.skillbill.tray.core.testing.FakeWorkDetailRepository
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.workItem
+import dev.skillbill.tray.core.testing.FakeWorkBoardRepository
+import dev.skillbill.tray.core.testing.TestClock
+import dev.skillbill.tray.core.testing.fixtureInstant
+import dev.skillbill.tray.core.ui.LaunchRequests
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -28,12 +37,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpecsToolbarViewModelTest {
@@ -88,7 +91,7 @@ class SpecsToolbarViewModelTest {
 
   /** A view model with the bundle selected and its control loaded. */
   private fun TestScope.selectedBundle(): SpecsViewModel {
-    val vm = SpecsViewModel(specs, details, controls, settings)
+    val vm = SpecsViewModel(specs, details, controls, settings, LaunchRequests(backgroundScope, controls, FakeWorkBoardRepository(), TestClock(fixtureInstant)))
     runCurrent()
     specs.emitSnapshot(Outcome.Value(SpecSnapshot(project, listOf(folder), SpecCounts(1, 0, 1, 0), anyInProgress = false, failure = null)))
     runCurrent()
@@ -100,7 +103,7 @@ class SpecsToolbarViewModelTest {
   private fun controlReads() = specs.calls.count { it.startsWith("control:") }
 
   @Test
-  fun `a never-started bundle starts through the spec port and a refusal is shown inline`() = runTest(dispatcher) {
+  fun `a never-started bundle starts through the spec port and a refusal reaches popup feedback`() = runTest(dispatcher) {
     var started: Triple<String, String, String?>? = null
     specs.onStartGoal = { repoRoot, key, agent ->
       started = Triple(repoRoot, key, agent)
@@ -119,7 +122,7 @@ class SpecsToolbarViewModelTest {
     vm.onAction(SpecsAction.Start)
     runCurrent()
 
-    assertEquals("Couldn't start: already running", vm.state.value.toolbar.message)
+    assertEquals("Couldn't start: already running", vm.state.value.pendingFeedback.lastOrNull()?.message)
   }
 
   @Test
@@ -145,7 +148,7 @@ class SpecsToolbarViewModelTest {
     vm.onAction(SpecsAction.ConfirmPurge)
     runCurrent()
 
-    assertEquals("Couldn't purge: child worker still live", vm.state.value.toolbar.message)
+    assertEquals("Couldn't purge: child worker still live", vm.state.value.pendingFeedback.lastOrNull()?.message)
     assertTrue(!vm.state.value.toolbar.purgeDialogOpen)
 
     val readsBefore = controlReads()
@@ -156,7 +159,9 @@ class SpecsToolbarViewModelTest {
     runCurrent()
 
     assertTrue(controlReads() > readsBefore)
-    assertNull(vm.state.value.toolbar.message)
+    vm.onAction(SpecsAction.AcknowledgeFeedback(vm.state.value.pendingFeedback.single().id))
+    runCurrent()
+    assertTrue(vm.state.value.pendingFeedback.isEmpty())
     assertEquals(false, (vm.state.value.toolbar.control as ControlLoad.Ready).control.purgeVisible)
   }
 }

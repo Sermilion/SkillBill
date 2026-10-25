@@ -7,11 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -25,9 +21,9 @@ import dev.skillbill.tray.core.designsystem.dim
 import dev.skillbill.tray.core.designsystem.green
 import dev.skillbill.tray.core.designsystem.mono
 import dev.skillbill.tray.core.designsystem.muted
-import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.domain.model.PlanRunReport
 import dev.skillbill.tray.core.domain.repository.Outcome
+import dev.skillbill.tray.core.ui.LocalFeedbackHost
 import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
 import kotlinx.coroutines.launch
 
@@ -41,8 +37,8 @@ internal fun specBundlePaths(report: PlanRunReport): List<String> =
 internal fun SpecBundleFileList(paths: List<String>) {
   if (paths.isEmpty()) return
   val navigation = LocalRepositoryNavigation.current
+  val feedback = LocalFeedbackHost.current
   val scope = rememberCoroutineScope()
-  var error by remember(paths) { mutableStateOf<String?>(null) }
   Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
     Text("Spec bundle", color = muted, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 16.sp)
     paths.forEach { path ->
@@ -53,9 +49,8 @@ internal fun SpecBundleFileList(paths: List<String>) {
             .fillMaxWidth()
             .clickable(role = Role.Button) {
               scope.launch {
-                error = null
                 val result = navigation.openFile(path)
-                if (result is Outcome.Failure) error = result.problem.summary
+                if (result is Outcome.Failure) feedback?.showSnackbar(result.problem.summary)
               }
             }
             .semantics { contentDescription = "Open $name" },
@@ -73,7 +68,6 @@ internal fun SpecBundleFileList(paths: List<String>) {
         }
       }
     }
-    error?.let { Text(it, color = orange, fontSize = 12.sp) }
   }
 }
 

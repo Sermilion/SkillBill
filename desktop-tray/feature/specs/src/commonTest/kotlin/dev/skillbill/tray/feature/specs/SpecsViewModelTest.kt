@@ -16,6 +16,15 @@ import dev.skillbill.tray.core.testing.FakeWorkControlRepository
 import dev.skillbill.tray.core.testing.FakeWorkDetailRepository
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.workItem
+import dev.skillbill.tray.core.testing.FakeWorkBoardRepository
+import dev.skillbill.tray.core.testing.TestClock
+import dev.skillbill.tray.core.testing.fixtureInstant
+import dev.skillbill.tray.core.ui.LaunchRequests
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
@@ -26,11 +35,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpecsViewModelTest {
@@ -64,7 +68,7 @@ class SpecsViewModelTest {
     Dispatchers.resetMain()
   }
 
-  private fun TestScope.viewModel(): SpecsViewModel = SpecsViewModel(specs, details, FakeWorkControlRepository(), settings).also { runCurrent() }
+  private fun TestScope.viewModel(): SpecsViewModel = SpecsViewModel(specs, details, FakeWorkControlRepository(), settings, LaunchRequests(backgroundScope, FakeWorkControlRepository(), FakeWorkBoardRepository(), TestClock(fixtureInstant))).also { runCurrent() }
 
   @Test
   fun `a filter match inside a collapsed bundle is shown without touching the saved expansion`() = runTest(dispatcher) {

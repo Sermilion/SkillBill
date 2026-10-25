@@ -31,6 +31,7 @@ import dev.skillbill.tray.core.designsystem.display
 import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.mint
 import dev.skillbill.tray.core.domain.model.WorkIdentity
+import dev.skillbill.tray.core.ui.FeedbackHost
 import dev.skillbill.tray.feature.work.TrayPopoverRoute
 import dev.skillbill.tray.feature.work.TrayViewModel
 
@@ -45,18 +46,20 @@ fun WindowScope.TrayPopover(
   onQuit: () -> Unit,
   onRefresh: () -> Unit,
 ) {
-  TrayPopoverRoute(tray, selected, openMain, openSettings, onQuit, onRefresh, Modifier.fillMaxSize()) {
-    WindowDraggableArea {
-      Row(
-        Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(mint.copy(alpha = .07f), Color.Transparent)))
-          .padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Image(painterResource("icons/skill-bill.svg"), "", Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)))
-        Text("Skill Bill", Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = (-.3).sp)
-        IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
-          Icon(Icons.Default.Close, contentDescription = "Close tray window", tint = dim, modifier = Modifier.size(16.dp))
+  FeedbackHost(Modifier.fillMaxSize()) {
+    TrayPopoverRoute(tray, selected, openMain, openSettings, onQuit, onRefresh, Modifier.fillMaxSize()) {
+      WindowDraggableArea {
+        Row(
+          Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(mint.copy(alpha = .07f), Color.Transparent)))
+            .padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 12.dp),
+          horizontalArrangement = Arrangement.spacedBy(9.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Image(painterResource("icons/skill-bill.svg"), "", Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)))
+          Text("Skill Bill", Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = (-.3).sp)
+          IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
+            Icon(Icons.Default.Close, contentDescription = "Close tray window", tint = dim, modifier = Modifier.size(16.dp))
+          }
         }
       }
     }
