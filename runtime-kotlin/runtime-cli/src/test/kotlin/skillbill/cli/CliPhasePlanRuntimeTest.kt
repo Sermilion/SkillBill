@@ -619,7 +619,8 @@ class CliPhasePlanRuntimeTest {
       Files.writeString(
         bundle.resolve("spec.md"),
         specText("Parent", "The split work completes.") +
-          "\nThis invocation prepares artifacts only. Stop after planning. Do not execute the goal from this phase.\n",
+          "\nThis invocation prepares artifacts only. Stop after planning. Do not execute the goal from this phase.\n" +
+          "\n## Transitional Regressions\n\nNone.\n",
       )
       SUBTASK_FILES.forEach { (id, fileName) ->
         if (incompleteFirstBundle && phaseIds.count { it == "plan" } == 1 && id == 2) return@forEach

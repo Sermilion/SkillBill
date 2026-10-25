@@ -184,6 +184,15 @@ class AgentPlanStrategy :
           "The operator authored that spec.md; never modify it, the runtime blocks the plan when its bytes change."
         }
       val parentSpecRule = parentSpecOwnership + stagedManifestRule(target)
+      val scenarioSectionRule =
+        if (specRewritable) {
+          "Every subtask spec with two or more criteria needs an `## Interaction Scenarios` section, and the " +
+            "parent you author needs `## Transitional Regressions` when the bundle has two or more subtasks " +
+            "(`None.` when no subtask disables shipped behavior)."
+        } else {
+          "Every subtask spec with two or more criteria needs an `## Interaction Scenarios` section; the " +
+            "operator-authored parent is not changed and needs neither it nor `## Transitional Regressions`."
+        }
       return """
         ## Spec bundle planning requirement
         No later phase consumes this plan: the runtime accepts it as a governed spec bundle that you author on
@@ -191,7 +200,8 @@ class AgentPlanStrategy :
         Add one spec_subtask_<id>_<slug>.md per subtask (one or more, in ascending dependency order) and
         decomposition-manifest.yaml whose parent spec path names that spec.md and whose
         subtasks list those files in order, each depending only on earlier subtasks. The parent and every subtask
-        spec need an Acceptance Criteria list as the Spec Format Contract requires. Each spec you author must
+        spec need an Acceptance Criteria list as the Spec Format Contract requires. $scenarioSectionRule
+        Each spec you author must
         have one to five criteria; preserve an operator-authored parent unchanged even if it exceeds five.
         Split a subtask needing more than five criteria into the fewest dependency-ordered specs needed
         to keep each at five or fewer. Balance the counts so they differ by at most one: six criteria

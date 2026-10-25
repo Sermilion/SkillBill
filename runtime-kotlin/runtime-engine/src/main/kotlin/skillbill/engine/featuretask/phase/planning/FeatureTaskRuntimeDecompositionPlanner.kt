@@ -6,11 +6,13 @@ import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.projectstore.ProjectStoreLayout
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.featurespec.model.FeatureSpecPreparationIntake
 import skillbill.featurespec.model.FeatureSpecWriteResult
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
@@ -57,6 +59,8 @@ class FeatureTaskRuntimeDecompositionPlanner(
     repoRoot: Path,
     issueKey: String,
     runInvariants: FeatureTaskRuntimeRunInvariants,
+    parentRewritable: Boolean,
+    diagnostics: RuntimeDiagnostics,
   ): FeatureSpecWriteResult {
     val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(issueKey, null, repoRoot))
     val parentSpecPath =
@@ -76,7 +80,9 @@ class FeatureTaskRuntimeDecompositionPlanner(
         nonGoals = emptyList(),
       ),
     )
-    return preparationWriter.verifyAuthored(repoRoot, parentSpecPath)
+    return preparationWriter.verifyAuthored(repoRoot, parentSpecPath, parentRewritable) { warning ->
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, warning)
+    }
   }
 
   fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =

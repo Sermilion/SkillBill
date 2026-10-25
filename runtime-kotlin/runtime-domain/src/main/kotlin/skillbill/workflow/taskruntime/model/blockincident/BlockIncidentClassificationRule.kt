@@ -135,6 +135,7 @@ private val RUNTIME_DEFECT_FAILURE_CODES =
     FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA.label(),
     FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_SCHEMA.label(),
     FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_SCHEMA.label(),
+    FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_SCENARIO_CATALOG.label(),
     FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA.label(),
     FeatureTaskRuntimeFailureCode.INVALID_WORKER_OWNERSHIP_SCHEMA.label(),
     FeatureTaskRuntimeFailureCode.PHASE_SETTLEMENT_CONFLICT.label(),

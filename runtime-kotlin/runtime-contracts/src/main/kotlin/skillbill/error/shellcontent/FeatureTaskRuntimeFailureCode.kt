@@ -24,6 +24,7 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
   INVALID_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_SCHEMA,
   INVALID_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_SCHEMA,
+  INVALID_INTERACTION_SCENARIO_CATALOG,
   INVALID_EXECUTION_IDENTITY_SCHEMA,
   INVALID_WORKER_OWNERSHIP_SCHEMA,
   PHASE_SETTLEMENT_CONFLICT,
@@ -235,6 +236,17 @@ fun invalidAcceptanceCriterionAuditResultSchema(
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
     "Acceptance criterion audit result '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidInteractionScenarioCatalog(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_SCENARIO_CATALOG,
+    "Interaction scenario catalog '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
   )
 

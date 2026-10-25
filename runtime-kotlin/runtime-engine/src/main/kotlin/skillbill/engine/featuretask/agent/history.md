@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-25] SKILL-442 subtask 1 - Interaction scenario authoring rules and catalog contract
+Areas: runtime-engine featuretask prepare (FeatureSpecPreparationWriter, AuthoredInteractionScenarioCheck), phase/planning decomposition planner, runloop/planning PlanDecompositionStop, slot/plan (feature-spec-directive, AgentPlanStrategy); runtime-domain review/spec parser and catalog model; runtime-contracts payload keys and failure code; runtime-infra contracts schema; orchestration/contracts; docs/block-incident-classification
+- MEDIUM feature. The plan directive and spec-bundle requirement teach authors a `## Interaction Scenarios` section for subtasks and a `## Transitional Regressions` section for the parent spec.
+- InteractionScenarioSectionParser (runtime-domain) beside GovernedSpecSectionParser returns Parsed or Rejected with field-path issues. Subtask and Parent contexts check criterion refs against the spec's own ACs, unique labels and restoration order. reusable
+- A versioned catalog contract (interaction-scenario-catalog-schema.yaml, version 0.1) has a wire codec that fails loudly on both encode and decode, plus failure code INVALID_INTERACTION_SCENARIO_CATALOG and a block-incident classification row.
+- Authored-bundle verification requires scenarios for a subtask with two or more criteria and regressions for a rewritable parent of a bundle with two or more subtasks. Rejections reuse the existing invalid-preparation-request path and in-phase block, with no new block reason or budget.
+- Pattern: verifyAuthored takes parentRewritable, threaded from protectedSpecSha256 == null at both PlanDecompositionStop call sites.
+- Operator-authored (protected) parents are exempt and only produce a best-effort diagnostics warning.
+- Limits: no planning settlement test for the in-phase block of a rejected bundle; the section must be the last content of the parent since trailing prose joins its body; prompt text avoids "at least two" because a prompt-composer guard bans it.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented for this subtask.
+
 ## [2026-10-24] SKILL-420 subtask 5 - Per-target coverage, reason vocabulary and unverified passes in the QA report
 Areas: runtime-engine featuretask qa/report (report model, parser, settlement, outcome records), slot/qa prompt sections, model/execution QaSkipReason, phaserun/qa, operation/verify VerifyQaStep; docs/runtime-command-guidance
 - MEDIUM feature. The prose QA report gains a `## Coverage` section with one line per target kind (verdict, optional reason and backend attribution real, mocked or none), plus `## Assertions` and `## Isolation` sections; the QA briefing's Report block asks for all of them and a `Reason:` token line.

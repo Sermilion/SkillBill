@@ -100,12 +100,15 @@ class FeatureSpecPreparationWriter(
   fun verifyAuthored(
     repoRoot: Path,
     parentSpecPath: Path,
+    parentRewritable: Boolean,
+    onParentWarning: (String) -> Unit,
   ): FeatureSpecWriteResult {
     val store = projectStore.resolve(repoRoot)
     val parentRelativePath = repoRelativePath(repoRoot, store, parentSpecPath)
-    requireAcceptanceList("parent_spec.acceptance_criteria", authoredLines("parent_spec", parentSpecPath))
+    val parentText = authoredText("parent_spec", parentSpecPath)
+    requireAcceptanceList("parent_spec.acceptance_criteria", parentText.lines())
     val manifestPath = parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)
-    authoredLines("decomposition_manifest", manifestPath)
+    authoredText("decomposition_manifest", manifestPath)
     val loaded = loadPreparedManifest(manifestPath)
     if (loaded.manifest.parentSpecPath != parentRelativePath) {
       invalidRequest("parent_spec_path", "manifest parent_spec_path must name the authored parent spec.")
@@ -117,8 +120,13 @@ class FeatureSpecPreparationWriter(
       if (!subtaskPath.startsWith(parentSpecPath.parent)) {
         invalidRequest("subtasks[$index].spec_path", "subtask spec must live in the authored bundle.")
       }
-      requireAcceptanceList("subtasks[$index].acceptance_criteria", authoredLines("subtasks[$index]", subtaskPath))
+      val subtaskText = authoredText("subtasks[$index]", subtaskPath)
+      requireAcceptanceList("subtasks[$index].acceptance_criteria", subtaskText.lines())
+      AuthoredInteractionScenarioCheck.requireSubtaskSections(index, subtaskText)
     }
+    val parentCheck =
+      ParentSectionCheck(parentText, parentRelativePath, subtasks.map { it.id }.toSet(), parentRewritable)
+    AuthoredInteractionScenarioCheck.checkParentSections(parentCheck, onParentWarning)
     return FeatureSpecWriteResult(
       mode = FeatureSpecPreparationMode.DECOMPOSED,
       parentSpecPath = parentRelativePath,
@@ -133,13 +141,13 @@ class FeatureSpecPreparationWriter(
   fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
     loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest.subtasks
 
-  private fun authoredLines(
+  private fun authoredText(
     fieldPath: String,
     path: Path,
-  ): List<String> {
+  ): String {
     if (!fileStore.isRegularFile(path)) invalidRequest(fieldPath, "authored file '${path.fileName}' is missing.")
     return try {
-      fileStore.readText(path).lines()
+      fileStore.readText(path)
     } catch (error: IOException) {
       invalidRequest(fieldPath, "authored file '${path.fileName}' is unreadable: ${error.message}")
     }

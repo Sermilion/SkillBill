@@ -1,3 +1,9 @@
+## [2026-10-25] Operator-authored parent specs are exempt from the Transitional Regressions requirement
+Context: Authored-bundle verification now requires `## Transitional Regressions` on a bundle parent with two or more subtasks, but an operator can supply the parent spec themselves.
+Decision: Require the section only when the parent is rewritable (no protectedSpecSha256); a protected parent is accepted and yields a best-effort diagnostics warning.
+Reason: The planner cannot rewrite or block on a spec the operator owns, so rejecting it would strand the plan phase with no repair path. Reusing the invalid-preparation-request block keeps the rule inside the existing in-phase budget.
+Alternatives considered: rejecting protected parents too, rejected because the agent cannot repair a file it may not edit.
+
 ## [2026-10-24] An unverified QA pass keeps its verdict but does not close findings
 Context: A QA agent can state passed with no assertions, no isolation evidence, missing target coverage or a mocked web backend.
 Decision: Keep the agent's stated verdict and attach warnings; QaReport.retestsFindings, not the verdict, decides whether findings are retested and closed.

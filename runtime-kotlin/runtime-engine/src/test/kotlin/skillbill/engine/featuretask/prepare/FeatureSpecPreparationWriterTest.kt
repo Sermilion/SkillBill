@@ -120,7 +120,8 @@ class FeatureSpecPreparationWriterTest {
       )
 
     val written = writer.write(repoRoot, request)
-    val verified = writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
+    appendScenarioSection(storeRoot.resolve(written.subtaskSpecPaths.single()))
+    val verified = verify(repoRoot, storeRoot.resolve(written.parentSpecPath))
 
     assertEquals(written.parentSpecPath, verified.parentSpecPath)
     assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
@@ -207,7 +208,8 @@ class FeatureSpecPreparationWriterTest {
 
     val planned = writer.plannedParentSpecPath(repoRoot, request.decision.issueKey, request.featureName)
     val written = writer.write(repoRoot, request)
-    val verified = writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
+    appendRegressionSection(storeRoot.resolve(written.parentSpecPath))
+    val verified = verify(repoRoot, storeRoot.resolve(written.parentSpecPath))
     val parentName = storeRoot.resolve(written.parentSpecPath).parent.fileName.toString()
     val subtaskPaths = written.subtaskSpecPaths.map(storeRoot::resolve)
     val manifest = loadTestManifest(storeRoot.resolve(written.decompositionManifestPath))
@@ -266,7 +268,7 @@ class FeatureSpecPreparationWriterTest {
     Files.writeString(explicitParent, "# Operator-authored\n\n## Acceptance Criteria\n\n- Keep this parent.\n")
 
     val written = writer.write(repoRoot, authoredBundleRequest(), existingParentSpecPath = explicitParent)
-    val verified = writer.verifyAuthored(repoRoot, explicitParent)
+    val verified = verify(repoRoot, explicitParent, rewritable = false)
 
     assertEquals("operator-authored/deep/spec.md", written.parentSpecPath)
     assertEquals(written.parentSpecPath, verified.parentSpecPath)
@@ -722,8 +724,9 @@ class FeatureSpecPreparationWriterTest {
   fun `a complete authored bundle verifies and returns its parent path and reloadable manifest`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authored")
     val written = writer.write(repoRoot, authoredBundleRequest())
+    appendRegressionSection(storeRoot.resolve(written.parentSpecPath))
 
-    val verified = writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
+    val verified = verify(repoRoot, storeRoot.resolve(written.parentSpecPath))
 
     assertEquals(written.parentSpecPath, verified.parentSpecPath)
     assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
@@ -740,10 +743,65 @@ class FeatureSpecPreparationWriterTest {
 
     val error =
       assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
-        writer.verifyAuthored(repoRoot, storeRoot.resolve(written.parentSpecPath))
+        verify(repoRoot, storeRoot.resolve(written.parentSpecPath))
       }
 
     assertEquals("subtasks[0].acceptance_criteria", error.fieldPath)
+  }
+
+  @Test
+  fun `a multi-criterion subtask needs scenarios while an operator-authored parent needs no sections`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-scenario-presence")
+    val request =
+      authoredBundleRequest().copy(
+        subtasks = listOf(singleSubtask().copy(acceptanceCriteria = listOf("First outcome.", "Second outcome."))),
+      )
+    val written = writer.write(repoRoot, request)
+    val parent = storeRoot.resolve(written.parentSpecPath)
+    val warnings = mutableListOf<String>()
+
+    val missing =
+      assertFailsWith<InvalidFeatureSpecPreparationRequestError> { verify(repoRoot, parent, false, warnings) }
+    appendScenarioSection(storeRoot.resolve(written.subtaskSpecPaths.single()))
+    val verified = verify(repoRoot, parent, false, warnings)
+
+    assertEquals("subtasks[0].interaction_scenarios", missing.fieldPath)
+    assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
+    assertEquals(1, warnings.size)
+    assertContains(warnings.single(), written.parentSpecPath)
+  }
+
+  @Test
+  fun `a scenario citing a criterion absent from its subtask is refused with the reference named`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-scenario-reference")
+    val request =
+      authoredBundleRequest().copy(
+        subtasks = listOf(singleSubtask().copy(acceptanceCriteria = listOf("First outcome.", "Second outcome."))),
+      )
+    val written = writer.write(repoRoot, request)
+    appendScenarioSection(storeRoot.resolve(written.subtaskSpecPaths.single()), "AC-001, AC-009")
+
+    val error =
+      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+        verify(repoRoot, storeRoot.resolve(written.parentSpecPath))
+      }
+
+    assertEquals("subtasks[0].interaction_scenarios", error.fieldPath)
+    assertContains(error.reason, "AC-009")
+  }
+
+  @Test
+  fun `a rewritable parent of a multi-subtask bundle needs transitional regressions`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-regression-presence")
+    val written = writer.write(repoRoot, authoredBundleRequest())
+    val parent = storeRoot.resolve(written.parentSpecPath)
+
+    val missing = assertFailsWith<InvalidFeatureSpecPreparationRequestError> { verify(repoRoot, parent) }
+    appendRegressionSection(parent)
+    val verified = verify(repoRoot, parent)
+
+    assertEquals("parent.transitional_regressions", missing.fieldPath)
+    assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
   }
 
   @Test
@@ -824,6 +882,31 @@ class FeatureSpecPreparationWriterTest {
         authoredSince,
       ),
     )
+
+  private fun verify(
+    repoRoot: Path,
+    parentSpecPath: Path,
+    rewritable: Boolean = true,
+    warnings: MutableList<String> = mutableListOf(),
+  ): FeatureSpecWriteResult = writer.verifyAuthored(repoRoot, parentSpecPath, rewritable) { warnings += it }
+
+  private fun appendScenarioSection(
+    specPath: Path,
+    criteria: String = "AC-001, AC-002",
+  ) {
+    Files.writeString(
+      specPath,
+      Files.readString(specPath) +
+        "\n## Interaction Scenarios\n\n" +
+        "- IS-001. Criteria: $criteria. Entry point: the operator runs the command. " +
+        "Preconditions: a prepared bundle exists. Steps: run it, then rerun it. " +
+        "Outcome: both runs report the same result.\n",
+    )
+  }
+
+  private fun appendRegressionSection(specPath: Path) {
+    Files.writeString(specPath, Files.readString(specPath) + "\n## Transitional Regressions\n\nNone.\n")
+  }
 
   private fun storeTarget(written: FeatureSpecWriteResult) =
     PlanBundleTarget.Store(storeRoot.resolve(written.parentSpecPath).parent)

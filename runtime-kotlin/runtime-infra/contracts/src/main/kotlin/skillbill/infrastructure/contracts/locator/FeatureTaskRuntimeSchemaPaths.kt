@@ -47,6 +47,13 @@ object AcceptanceCriterionRepairAdoptionSchemaPaths {
   const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/acceptance-criterion-repair-adoption.yaml"
 }
 
+object InteractionScenarioCatalogSchemaPaths {
+  const val REPO_RELATIVE_PATH: String = "orchestration/contracts/interaction-scenario-catalog-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/interaction-scenario-catalog-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/interaction-scenario-catalog.yaml"
+}
+
 object FeatureTaskRuntimePhaseOutputSchemaPaths {
   const val CURRENT_CLASSPATH_RESOURCE: String =
     "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema.yaml"

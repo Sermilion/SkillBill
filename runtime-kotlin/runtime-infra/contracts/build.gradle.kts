@@ -198,6 +198,11 @@ governedResources {
     "SKILL-426: canonical acceptance-criterion repair-adoption schema",
   )
   copy(
+    "copyInteractionScenarioCatalogSchema",
+    "interaction-scenario-catalog-schema.yaml",
+    "SKILL-442: canonical interaction-scenario catalog schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeReadinessEvidenceSchema",
     "feature-task-runtime-readiness-evidence-schema.yaml",
     "SKILL-364: canonical readiness-evidence schema",
