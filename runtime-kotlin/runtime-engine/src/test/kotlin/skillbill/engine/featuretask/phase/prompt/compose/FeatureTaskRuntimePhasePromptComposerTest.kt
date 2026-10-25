@@ -1,6 +1,7 @@
 
 package skillbill.engine.featuretask.phase.prompt.compose
 
+import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
 import skillbill.ports.validation.model.ValidationGateFinding
@@ -386,6 +387,26 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertFalse(prompt.contains("--baseline-untracked-exclude"))
     assertContains(prompt, "- `a-before.tmp`")
     assertContains(prompt, "- `z-before.tmp`")
+  }
+
+  @Test
+  fun `review prompt lists untraced interaction scenarios as context only and omits the section otherwise`() {
+    val scenarios = listOf(UnknownInteractionScenarioContext("IS-007", "POST /orders", "order is persisted"))
+    val withUnknown =
+      composePhasePrompt(
+        PROMPT_COMPOSER_ISSUE_KEY,
+        promptComposerBriefingFor("review"),
+      ) { copy(codeReviewMode = CodeReviewExecutionMode.INLINE, unknownInteractionScenarios = scenarios) }
+    val without =
+      composePhasePrompt(
+        PROMPT_COMPOSER_ISSUE_KEY,
+        promptComposerBriefingFor("review"),
+      ) { copy(codeReviewMode = CodeReviewExecutionMode.INLINE) }
+
+    assertContains(withUnknown, "## Interaction scenarios not traced")
+    assertContains(withUnknown, "- IS-007: entry point: POST /orders; outcome: order is persisted")
+    assertContains(withUnknown, "context only")
+    assertFalse(without.contains("Interaction scenarios not traced"))
   }
 
   @Test

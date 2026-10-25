@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.execution.support
 
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -22,6 +23,7 @@ fun DecompositionManifest.toPullRequestRequest(
   repoRoot: Path,
   goalQaSummary: GoalQaSummary = GoalQaSummary.NotRecorded,
   qaSummary: (DecompositionSubtask) -> GoalSubtaskQaSummary? = { null },
+  unknownScenarios: (DecompositionSubtask) -> GoalSubtaskUnknownScenarios? = { null },
 ): GoalPullRequestRequest {
   val title = "[$issueKey] ${featureName.toPullRequestTitle()}"
   val body =
@@ -54,6 +56,16 @@ fun DecompositionManifest.toPullRequestRequest(
       appendLine()
       appendLine("- Goal: ${goalQaSummary.pullRequestText()}")
       qa.forEach { (name, summary) -> appendLine("- $name: ${summary.pullRequestText()}") }
+      val untraced =
+        subtasks.mapNotNull { subtask ->
+          (unknownScenarios(subtask) as? GoalSubtaskUnknownScenarios.Recorded)?.let { subtask.name to it }
+        }
+      if (untraced.isNotEmpty()) {
+        appendLine()
+        appendLine("## Interaction Trace")
+        appendLine()
+        untraced.forEach { (name, recorded) -> appendLine("- $name: ${recorded.pullRequestText()}") }
+      }
     }
   return GoalPullRequestRequest(
     repoRoot = repoRoot,
@@ -93,6 +105,18 @@ internal fun DecompositionManifest.branchPlanFor(subtaskId: Int): GoalRunnerBran
       val stackBranch = stackBranches.first { it.subtaskId == subtaskId }
       GoalRunnerBranchPlan(branch = stackBranch.branch, baseBranch = stackBranch.baseBranch, validateBase = true)
     }
+  }
+
+private val MARKDOWN_WHITESPACE = Regex("""\s+""")
+private val MARKDOWN_ESCAPED = Regex("""[|`]""")
+
+private fun String.flattenedForMarkdown(): String =
+  replace(MARKDOWN_WHITESPACE, " ").trim().replace(MARKDOWN_ESCAPED) { "\\${it.value}" }
+
+private fun GoalSubtaskUnknownScenarios.Recorded.pullRequestText(): String =
+  scenarios.joinToString(separator = "; ", prefix = "Interaction scenarios not traced: ") { scenario ->
+    val reason = scenario.reason?.flattenedForMarkdown()?.takeIf(String::isNotEmpty) ?: "reason unavailable"
+    "${scenario.scenarioRef} ($reason)"
   }
 
 private fun GoalSubtaskQaSummary.pullRequestText(): String =

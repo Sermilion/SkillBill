@@ -8,6 +8,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
@@ -51,6 +52,8 @@ interface GoalRunnerReviewOutcomeStore {
   fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection?
 
   fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded
+
+  fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios
 
   /** The admitted plan's QA selection once the child has a stored plan, else [requested]; null keeps a pre-QA plan. */
   fun childQaSelection(

@@ -178,9 +178,10 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
       }.filter { it[Keys.VERDICT] == AcceptanceCriterionRecheckVerdict.REGRESSED.wireValue }
         .mapNotNull { it[Keys.CRITERION_REF] as? String }
     val declared = (payload[Keys.REGRESSED_REFS] as? List<*>).orEmpty().toSet()
+    val empty = interactions.isEmpty() && rechecks.isEmpty()
     val unbound = declared != (broken + regressed).toSet()
     val edges = (payload[Keys.EDGE_CHANGES] as? List<*>).orEmpty()
-    return if (interactions.isEmpty() || unbound || edges.isNotEmpty()) {
+    return if (empty || unbound || edges.isNotEmpty()) {
       "interaction trace result does not bind its interactions, regressed refs and empty edge changes."
     } else {
       null

@@ -2,8 +2,12 @@ package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.engine.featuretask.model.audit.AcceptanceAuditAcceptedCriterion
 import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceScope
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
+import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
 import skillbill.engine.featuretask.persist.sha256Hex
+import skillbill.engine.operation.unittestvalue.UnitTestPathClassifier
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -13,6 +17,10 @@ import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterio
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParse
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParser
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckUpdate
+import skillbill.workflow.taskruntime.model.audit.interaction.recheckUpdateAfter
+import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
+import skillbill.workflow.taskruntime.model.audit.interaction.withRecheckUpdate
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION as AUDIT_RESULT_VERSION
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
@@ -25,18 +33,36 @@ internal object AcceptanceCriterionInteractionTraceRound {
       "`Interaction <ref>: broken owner AC-NNN trace <path:line citations>` or " +
       "`Interaction <ref>: unknown trace <reason>`."
 
+  internal const val RECHECK_GRAMMAR =
+    "For each listed re-check, answer with exactly one line of the form " +
+      "`Recheck AC-NNN: holds evidence <path:line, path:line>` or " +
+      "`Recheck AC-NNN: regressed evidence <path:line, path:line>`."
+
   fun scopeKey(state: AcceptanceCriterionRepairState): String =
     sha256Hex(
       listOf(
         state.specDigest,
         state.interactionTrace.pendingScenarioRefs.joinToString(","),
+        state.interactionTrace.pendingRechecks.joinToString(","),
         state.outcomes.size,
         state.proseAudits.size,
       ).joinToString("|"),
     ).take(SCOPE_KEY_LENGTH)
 
-  fun rejection(malformed: AcceptanceCriterionInteractionTraceParse.Malformed): String =
-    "${malformed.code.name}: ${malformed.reason} $LINE_GRAMMAR"
+  fun grammar(
+    scenarios: Boolean,
+    rechecks: Boolean,
+  ): String = listOfNotNull(LINE_GRAMMAR.takeIf { scenarios }, RECHECK_GRAMMAR.takeIf { rechecks }).joinToString(" ")
+
+  fun rejection(
+    malformed: AcceptanceCriterionInteractionTraceParse.Malformed,
+    state: AcceptanceCriterionRepairState,
+  ): String =
+    "${malformed.code.name}: ${malformed.reason} " +
+      grammar(
+        state.interactionTrace.pendingScenarioRefs.isNotEmpty(),
+        state.interactionTrace.pendingRechecks.isNotEmpty(),
+      )
 
   fun active(scope: AcceptanceCriterionRepairRunState): Boolean =
     scope.snapshot?.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED
@@ -58,8 +84,18 @@ internal object AcceptanceCriterionInteractionTraceRound {
             criterion.closureEvidenceRef?.let { AcceptanceAuditAcceptedCriterion(criterion.canonicalRef, it) }
           },
       sameFilePairs = AcceptanceCriterionInteractionTargets.sameFilePairs(state),
-      recheckRefs = state.interactionTrace.recheckRefs,
+      recheckRefs = state.interactionTrace.pendingRechecks,
     )
+  }
+
+  fun unknownContext(scope: AcceptanceCriterionRepairRunState): List<UnknownInteractionScenarioContext> {
+    val state = scope.snapshot ?: return emptyList()
+    val scenarios = scope.binding?.interactionScenarios.orEmpty().associateBy { it.scenarioRef }
+    return state.unknownScenarios().mapNotNull { unknown ->
+      scenarios[unknown.scenarioRef]?.let {
+        UnknownInteractionScenarioContext(it.scenarioRef, it.entryPoint, it.outcome)
+      }
+    }
   }
 
   fun reaskRejection(
@@ -69,12 +105,41 @@ internal object AcceptanceCriterionInteractionTraceRound {
     val state = scope.snapshot?.takeIf { active(scope) } ?: return null
     val binding = scope.binding ?: return null
     val targets = AcceptanceCriterionInteractionTargets.pending(state, binding)
-    val parsed = AcceptanceCriterionInteractionTraceParser.parse(prose, targets)
+    val parsed = AcceptanceCriterionInteractionTraceParser.parse(prose, targets, state.interactionTrace.pendingRechecks)
     val key = scopeKey(state)
     if (parsed !is AcceptanceCriterionInteractionTraceParse.Malformed || scope.traceReaskScope == key) return null
     scope.recordTraceReask(key)
-    return rejection(parsed)
+    return rejection(parsed, state)
   }
+
+  fun recheckUpdate(
+    previous: AcceptanceCriterionRepairState?,
+    raw: AcceptanceCriterionRepairState?,
+    changedPaths: List<String>,
+  ): AcceptanceCriterionRecheckUpdate? {
+    if (changedPaths.isEmpty()) return null
+    if (previous == null || raw == null || raw == previous) return null
+    return previous.recheckUpdateAfter(changedPaths, UnitTestPathClassifier::isUnitTest)
+  }
+
+  fun scheduleRechecks(
+    raw: AcceptanceCriterionRepairState?,
+    update: AcceptanceCriterionRecheckUpdate?,
+    binding: AcceptanceCriterionRepairBinding,
+  ): AcceptanceCriterionRepairState? {
+    val scheduled = update?.let { raw?.withRecheckUpdate(it) } ?: raw
+    return scheduled?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
+  }
+
+  fun annotateRechecks(
+    result: AcceptanceCriterionRepairWriteResult,
+    update: AcceptanceCriterionRecheckUpdate?,
+  ): AcceptanceCriterionRepairWriteResult =
+    if (result is AcceptanceCriterionRepairWriteResult.Committed && !result.replayed && update != null) {
+      result.copy(newAnyChangeRechecks = update.newAnyChangeRefs, droppedRechecks = update.droppedRefs)
+    } else {
+      result
+    }
 
   fun evidence(
     settlement: AcceptanceCriterionInteractionTraceSettlement,
@@ -96,7 +161,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
         Keys.RESERVATION_ID to null,
         Keys.CRITERIA to predicted.criteria.map(::criterionFact),
         Keys.DEPENDENCIES to predicted.dependencies.map(::dependencyFact),
-        Keys.REGRESSED_REFS to settlement.entries.mapNotNull { it.ownerRef }.distinct(),
+        Keys.REGRESSED_REFS to settlement.reopenedRefs,
         Keys.EDGE_CHANGES to emptyList<Any>(),
         Keys.INTERACTIONS to
           settlement.entries.map {
@@ -107,7 +172,14 @@ internal object AcceptanceCriterionInteractionTraceRound {
               Keys.TRACE_REF to it.traceRef,
             )
           },
-        Keys.RECHECKS to emptyList<Any>(),
+        Keys.RECHECKS to
+          settlement.rechecks.map {
+            mapOf(
+              Keys.CRITERION_REF to it.criterionRef,
+              Keys.VERDICT to it.verdict.wireValue,
+              Keys.EVIDENCE_REF to it.evidenceRef,
+            )
+          },
       ),
     )
 

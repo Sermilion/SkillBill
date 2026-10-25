@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
 import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceScope
+import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationTurn
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -33,6 +34,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val currentAcceptanceCriterion: String? = null,
   val priorAcceptanceRepairFailures: String? = null,
   val interactionTraceScope: AcceptanceAuditInteractionTraceScope? = null,
+  val unknownInteractionScenarios: List<UnknownInteractionScenarioContext> = emptyList(),
   val noChangeClaim: String? = null,
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry? = null,
   val implementationContinuation: FeatureTaskRuntimeImplementationContinuation? = null,

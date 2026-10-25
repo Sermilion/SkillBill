@@ -482,6 +482,8 @@ object PhaseLaunchPreparation {
       currentAcceptanceCriterion = acceptanceCriterionContext(run),
       priorAcceptanceRepairFailures = acceptanceRepair?.priorRepairFailures,
       interactionTraceScope = acceptanceRepair?.let(AcceptanceCriterionInteractionTraceRound::promptScope),
+      unknownInteractionScenarios =
+        acceptanceRepair?.let(AcceptanceCriterionInteractionTraceRound::unknownContext).orEmpty(),
       noChangeClaim = auditNoChangeClaim(run),
       operatorBlockRetry =
         session.operatorBlockRetry

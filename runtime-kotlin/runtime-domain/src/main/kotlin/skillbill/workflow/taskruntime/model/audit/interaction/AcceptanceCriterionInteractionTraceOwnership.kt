@@ -14,6 +14,25 @@ internal fun brokenLine(
   trace: String,
 ): String = "Interaction $ref: broken owner $owner trace $trace"
 
+internal fun recheckAuditId(
+  outputId: String,
+  criterionRef: String,
+): String = "$outputId:recheck:$criterionRef"
+
+internal fun regressedLine(
+  criterionRef: String,
+  evidence: String,
+): String = "Recheck $criterionRef: regressed evidence $evidence"
+
+internal const val UNKNOWN_AUDIT_SUFFIX: String = ":trace:unknown"
+
+internal fun unknownAuditId(outputId: String): String = "$outputId$UNKNOWN_AUDIT_SUFFIX"
+
+internal fun unknownLine(
+  ref: String,
+  reason: String,
+): String = "Interaction $ref: unknown trace ${reason.replace(Regex("""\s+"""), " ").trim()}"
+
 private val BROKEN_LINE = Regex("""^Interaction (\S+): broken owner AC-\d{3} trace """, RegexOption.MULTILINE)
 
 private fun brokenRefsIn(evidence: String): Set<String> =

@@ -98,7 +98,7 @@ internal object InlineReviewPromptSections {
       ceremonyLine =
         "The runtime owns ${scaling.reviewScope.promptLabel}. Keep the review gate real: inspect the implemented " +
           "change for defects and record concrete file references.",
-      stepContext = reviewExecutionDirective(inputs),
+      stepContext = (reviewExecutionDirective(inputs) + unknownScenarioContext(inputs)).trim(),
       valueContent = REVIEW_VALUE_CONTENT,
     )
   }
@@ -123,6 +123,18 @@ internal object InlineReviewPromptSections {
       append(baselineUntrackedPolicy(inputs.baselineUntrackedPaths))
       append(materializedScope(inputs))
     }.trim()
+
+  private fun unknownScenarioContext(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String =
+    inputs.unknownInteractionScenarios
+      .takeIf { it.isNotEmpty() }
+      ?.joinToString(
+        separator = "\n",
+        prefix =
+          "\n\n## Interaction scenarios not traced\n" +
+            "The acceptance audit could not establish these scenarios. They are context only: do not block on them " +
+            "and do not report them as findings unless the diff shows a defect.\n",
+      ) { "- ${it.scenarioRef}: entry point: ${it.entryPoint}; outcome: ${it.outcome}" }
+      .orEmpty()
 
   private fun baselineUntrackedPolicy(baselineUntrackedPaths: List<String>): String =
     baselineUntrackedPaths

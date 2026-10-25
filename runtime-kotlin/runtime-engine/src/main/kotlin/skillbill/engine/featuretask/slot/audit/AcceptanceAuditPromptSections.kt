@@ -24,24 +24,69 @@ internal object AcceptanceAuditPromptSections {
     "Criteria accepted by an earlier audit are re-checked only when the runtime lists them in the " +
       "interaction-trace or re-check scope."
 
-  private const val TRACE_DIRECTIVE: String =
+  private const val TRACE_INTRO: String =
     "This is the runtime-selected interaction trace of criteria that are already accepted. " +
-      "$ACCEPTED_RECHECK_SENTENCE Trace production code from each pending scenario's entry point, through " +
+      "$ACCEPTED_RECHECK_SENTENCE "
+
+  private const val SCENARIO_DIRECTIVE: String =
+    "Trace production code from each pending scenario's entry point, through " +
       "its preconditions and steps, to its outcome, and cite a path:line or path:start-end for every step " +
       "of the trace. Consider every listed same-file pair, even when no scenario names it, and check in the " +
-      "shared production files that the later criterion did not undo the earlier one. Exclude all test " +
-      "requirements. Stay read-only: do not edit files, spawn subagents, or repair gaps. " +
-      "$AUDIT_READONLY_EVIDENCE_SENTENCE A broken line must name an owner from that scenario's criteria, or " +
+      "shared production files that the later criterion did not undo the earlier one. "
+
+  private const val RECHECK_DIRECTIVE: String =
+    "Re-check every listed accepted criterion against the current tree: read the production code its closure " +
+      "evidence cites together with the files the repair touched, answer holds with fresh path:line evidence " +
+      "when its required behavior still holds, or regressed when a change broke it. A regressed answer " +
+      "reopens that criterion for repair. "
+
+  private const val TRACE_COMMON: String =
+    "Exclude all test requirements. Stay read-only: do not edit files, spawn subagents, or repair gaps. " +
+      "$AUDIT_READONLY_EVIDENCE_SENTENCE "
+
+  private const val SCENARIO_RULES: String =
+    "A broken line must name an owner from that scenario's criteria, or " +
       "one of the two members of a pair. Use unknown when source cannot establish the outcome; unknown " +
-      "reopens nothing. Complete through $PHASE_COMPLETE_SETTLEMENT_TOOL with status completed and verdict " +
-      "\"advance\" when any pending ref is broken, otherwise \"satisfied\". The runtime reads the " +
-      "Interaction lines, not the verdict, and no Open criteria line is required. Block only when an " +
-      "external dependency prevents inspection."
+      "reopens nothing. "
 
   private const val TRACE_VALUE_CONTENT: String =
     "Report the trace in ordinary prose and end with exactly one Interaction line per pending ref, in the " +
       "grammar given at the end of the scope. There is no Open criteria line and no criterion list. Do not " +
       "repair anything. Malformed output is re-asked once and then recorded as unknown."
+
+  private const val COMBINED_VALUE_CONTENT: String =
+    "Report the trace and the re-check in ordinary prose and end with exactly one Interaction line per " +
+      "pending ref and exactly one Recheck line per listed criterion, in the grammar given at the end of the " +
+      "scope. There is no Open criteria line and no criterion list. Do not repair anything. Malformed output " +
+      "is re-asked once, then pending scenarios are recorded as unknown and every re-check as holding."
+
+  private const val RECHECK_ONLY_VALUE_CONTENT: String =
+    "Report the re-check in ordinary prose and end with exactly one Recheck line per listed criterion, in the " +
+      "grammar given at the end of the scope. There is no Open criteria line and no criterion list. Do not " +
+      "repair anything. Malformed output is re-asked once and then every re-check is recorded as holding."
+
+  private fun traceDirective(trace: AcceptanceAuditInteractionTraceScope): String {
+    val scenarios = trace.pendingRefs.isNotEmpty()
+    val rechecks = trace.recheckRefs.isNotEmpty()
+    val regressed = if (rechecks) " or any re-check regressed" else ""
+    val lines = listOfNotNull("Interaction".takeIf { scenarios }, "Recheck".takeIf { rechecks }).joinToString(" and ")
+    return TRACE_INTRO +
+      (if (scenarios) SCENARIO_DIRECTIVE else "") +
+      (if (rechecks) RECHECK_DIRECTIVE else "") +
+      TRACE_COMMON +
+      (if (scenarios) SCENARIO_RULES else "") +
+      "Complete through $PHASE_COMPLETE_SETTLEMENT_TOOL with status completed and verdict " +
+      "\"advance\" when any pending ref is broken$regressed, otherwise \"satisfied\". The runtime reads the " +
+      "$lines lines, not the verdict, and no Open criteria line is required. Block only when an " +
+      "external dependency prevents inspection."
+  }
+
+  private fun traceValueContent(trace: AcceptanceAuditInteractionTraceScope): String =
+    when {
+      trace.pendingRefs.isEmpty() -> RECHECK_ONLY_VALUE_CONTENT
+      trace.recheckRefs.isEmpty() -> TRACE_VALUE_CONTENT
+      else -> COMBINED_VALUE_CONTENT
+    }
 
   const val DIRECTIVE: String =
     "On the initial full audit, verify the production behavior required by every acceptance criterion " +
@@ -86,7 +131,7 @@ internal object AcceptanceAuditPromptSections {
     return PhaseStepPromptSections(
       taskDirective =
         when {
-          trace != null -> TRACE_DIRECTIVE + traceScope(trace)
+          trace != null -> traceDirective(trace) + traceScope(trace)
           inputs.noChangeClaim == null -> DIRECTIVE + auditScope(inputs)
           else -> DIRECTIVE + noChangeScope(inputs)
         },
@@ -96,7 +141,7 @@ internal object AcceptanceAuditPromptSections {
           "editing files. Exclude test requirements and report production gaps for the implementation repair step. " +
           "An enforcement guard or architecture check whose implementation a criterion requires counts as " +
           "production behavior even under a test source set; its example and regression cases stay excluded.",
-      valueContent = if (trace != null) TRACE_VALUE_CONTENT else ORDINARY_VALUE_CONTENT,
+      valueContent = if (trace != null) traceValueContent(trace) else ORDINARY_VALUE_CONTENT,
     )
   }
 
@@ -131,12 +176,27 @@ internal object AcceptanceAuditPromptSections {
       }.ifEmpty { "none" }
     val accepted =
       trace.acceptedCriteria.joinToString("\n") { "- ${it.criterionRef}: ${it.closureEvidenceRef}" }.ifEmpty { "none" }
-    return "\nPending refs (exactly one Interaction line each): ${trace.pendingRefs.joinToString(", ")}\n" +
-      "Pending scenarios:\n${pending.ifEmpty { "none" }}\n" +
-      "Same-file pairs (a line is recorded only for a pending ref):\n$pairs\n" +
-      "Accepted criteria and their closure evidence:\n$accepted\n" +
-      "Re-check refs: ${trace.recheckRefs.joinToString(", ").ifEmpty { "none" }}\n" +
-      AcceptanceCriterionInteractionTraceRound.LINE_GRAMMAR
+    val scenarios = trace.pendingRefs.isNotEmpty()
+    val rechecks = trace.recheckRefs.isNotEmpty()
+    val scenarioScope =
+      if (scenarios) {
+        "\nPending refs (exactly one Interaction line each): ${trace.pendingRefs.joinToString(", ")}\n" +
+          "Pending scenarios:\n${pending.ifEmpty { "none" }}\n" +
+          "Same-file pairs (a line is recorded only for a pending ref):\n$pairs\n" +
+          "Accepted criteria and their closure evidence:\n$accepted\n"
+      } else {
+        ""
+      }
+    return scenarioScope + recheckScope(trace) +
+      AcceptanceCriterionInteractionTraceRound.grammar(scenarios, rechecks)
+  }
+
+  private fun recheckScope(trace: AcceptanceAuditInteractionTraceScope): String {
+    if (trace.recheckRefs.isEmpty()) return ""
+    val evidence = trace.acceptedCriteria.associate { it.criterionRef to it.closureEvidenceRef }
+    val listed =
+      trace.recheckRefs.joinToString("\n") { "- $it: closure evidence ${evidence[it] ?: "none"}" }
+    return "\nRe-check refs (exactly one Recheck line each) with their closure evidence:\n$listed\n"
   }
 
   private fun noChangeScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {

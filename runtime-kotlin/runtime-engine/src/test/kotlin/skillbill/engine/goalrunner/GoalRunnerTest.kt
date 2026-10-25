@@ -66,6 +66,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
@@ -5199,6 +5200,11 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
     qualityGateSelections[workflowId]
+
+  val unknownScenarios: MutableMap<String, GoalSubtaskUnknownScenarios> = mutableMapOf()
+
+  override fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios =
+    unknownScenarios[workflowId] ?: GoalSubtaskUnknownScenarios.Absent
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
     unemittedReviewPasses[workflowId].orEmpty()

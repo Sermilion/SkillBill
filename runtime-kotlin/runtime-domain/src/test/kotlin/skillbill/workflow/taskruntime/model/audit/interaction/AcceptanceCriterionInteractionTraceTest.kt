@@ -9,6 +9,8 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict.HOLDS
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict.REGRESSED
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import kotlin.test.Test
@@ -181,6 +183,109 @@ class AcceptanceCriterionInteractionTraceTest {
     assertEquals(listOf("AC-001", "AC-002"), pairs.single().target().allowedOwners)
   }
 
+  @Test
+  fun `a repair that touches a cited production file schedules a recheck and an uncited file does not`() {
+    val state = acceptedState(::citedEvidence)
+    val isTest = { path: String -> path.endsWith("Test.kt") }
+
+    val touched = state.recheckUpdateAfter(listOf("src/Store.kt"), isTest)
+    assertEquals(listOf("AC-001"), touched.recheckRefs)
+    assertEquals(listOf("AC-002"), touched.recheckAnyChangeRefs)
+    assertEquals(listOf("AC-002"), touched.newAnyChangeRefs)
+
+    val uncited = state.recheckUpdateAfter(listOf("src/Other.kt"), isTest)
+    assertEquals(emptyList(), uncited.recheckRefs)
+    assertEquals(listOf("AC-002"), uncited.recheckAnyChangeRefs)
+
+    val untouched = state.recheckUpdateAfter(emptyList(), isTest)
+    assertEquals(emptyList(), untouched.recheckRefs + untouched.recheckAnyChangeRefs)
+
+    val underRepair = state.copy(currentCriterionRef = "AC-001").recheckUpdateAfter(listOf("src/Store.kt"), isTest)
+    assertEquals(emptyList(), underRepair.recheckRefs)
+  }
+
+  @Test
+  fun `a holds recheck replaces closure evidence and a regressed recheck reopens the criterion`() {
+    val required = recheckState(emptyList())
+    assertEquals(AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED, required.stage)
+    assertEquals(listOf("AC-001"), required.interactionTrace.pendingRechecks)
+    assertEquals(required, AcceptanceCriterionRepairState.restore(required))
+
+    val holds =
+      recheckSettlement("trace:1", emptyList(), AcceptanceCriterionRecheckEntry("AC-001", HOLDS, "src/Store.kt:12"))
+    val replaced = assertNotNull(required.recordInteractionTrace(holds))
+    assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, replaced.stage)
+    assertEquals("src/Store.kt:12", replaced.criterion("AC-001").closureEvidenceRef)
+    assertEquals(emptyList(), replaced.interactionTrace.pendingRechecks)
+    assertEquals(replaced, AcceptanceCriterionRepairState.restore(replaced))
+    assertEquals(replaced, replaced.recordInteractionTrace(holds))
+
+    val regressed =
+      recheckSettlement(
+        "trace:2",
+        emptyList(),
+        AcceptanceCriterionRecheckEntry("AC-001", REGRESSED, "src/Store.kt:12"),
+      )
+    val reopened = assertNotNull(required.recordInteractionTrace(regressed))
+    assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, reopened.stage)
+    assertEquals(listOf("AC-001"), reopened.unresolvedQueue)
+    assertEquals(reopened, AcceptanceCriterionRepairState.restore(reopened))
+  }
+
+  @Test
+  fun `the second malformed fallback keeps prior evidence and records pending scenarios as unknown`() {
+    val required = recheckState(listOf(scenario))
+    val prior = assertNotNull(required.criterion("AC-001").closureEvidenceRef)
+    val fallback =
+      recheckSettlement(
+        "trace:1",
+        listOf(
+          AcceptanceCriterionInteractionEntry(
+            "IS-001",
+            AcceptanceCriterionInteractionVerdict.UNKNOWN,
+            null,
+            "malformed audit output",
+          ),
+        ),
+        AcceptanceCriterionRecheckEntry("AC-001", HOLDS, prior),
+      )
+
+    val settled = assertNotNull(required.recordInteractionTrace(fallback))
+
+    assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, settled.stage)
+    assertEquals(prior, settled.criterion("AC-001").closureEvidenceRef)
+    assertEquals(
+      listOf(AcceptanceCriterionUnknownScenario("IS-001", "malformed audit output")),
+      settled.unknownScenarios(),
+    )
+    assertEquals(settled, AcceptanceCriterionRepairState.restore(settled))
+  }
+
+  private fun citedEvidence(ref: String): String =
+    if (ref == "AC-001") "AC-001 met at src/Store.kt:10" else "AC-002 met per review notes"
+
+  private fun recheckState(targets: List<AcceptanceCriterionInteractionTarget>): AcceptanceCriterionRepairState {
+    val accepted = acceptedState(::citedEvidence)
+    val scheduled = accepted.copy(interactionTrace = accepted.interactionTrace.copy(recheckRefs = listOf("AC-001")))
+    return scheduled.requireInteractionTrace(targets)
+  }
+
+  private fun AcceptanceCriterionRepairState.criterion(ref: String): AcceptanceCriterionRepairCriterion =
+    criteria.single { it.canonicalRef == ref }
+
+  private fun recheckSettlement(
+    outputId: String,
+    entries: List<AcceptanceCriterionInteractionEntry>,
+    vararg rechecks: AcceptanceCriterionRecheckEntry,
+  ) = AcceptanceCriterionInteractionTraceSettlement(
+    outputId,
+    "e".repeat(64),
+    "f".repeat(64),
+    "checkpoint:$outputId",
+    entries,
+    rechecks.toList(),
+  )
+
   private fun traceSettlement(
     outputId: String,
     vararg entries: AcceptanceCriterionInteractionEntry,
@@ -192,7 +297,9 @@ class AcceptanceCriterionInteractionTraceTest {
     entries.toList(),
   )
 
-  private fun acceptedState(): AcceptanceCriterionRepairState {
+  private fun acceptedState(
+    evidence: (String) -> String = { "$it met at src/Flow.kt:10" },
+  ): AcceptanceCriterionRepairState {
     val initial =
       assertNotNull(
         AcceptanceCriterionRepairState.admit(
@@ -227,7 +334,7 @@ class AcceptanceCriterionInteractionTraceTest {
               revision = state.revision + 1,
               criterionRef = ref,
               satisfied = true,
-              prose = "$ref met at src/Flow.kt:10",
+              prose = evidence(ref),
             ),
           ),
         )

@@ -22,7 +22,7 @@ object AcceptanceCriterionEvidencePaths {
     }
   }
 
-  private fun pathsOf(
+  fun pathsOf(
     criterion: AcceptanceCriterionRepairCriterion,
     isTestPath: (String) -> Boolean,
   ): Set<String> {
@@ -30,9 +30,11 @@ object AcceptanceCriterionEvidencePaths {
     val ref = Regex("""(?<![\w-])${Regex.escape(criterion.canonicalRef)}(?![\w-])""", RegexOption.IGNORE_CASE)
     val named = evidence.lineSequence().filter { line -> ref.containsMatchIn(line) }
     val lines = named.toList().ifEmpty { evidence.lines() }
-    return lines.flatMap { line -> PATH_CITATION.findAll(line).map { it.groupValues[1] }.toList() }
+    return lines.flatMap { line -> PATH_CITATION.findAll(line).map { normalize(it.groupValues[1]) }.toList() }
       .filterNot(isTestPath).toSet()
   }
+
+  fun normalize(path: String): String = path.replace('\\', '/').removePrefix("./")
 
   private val PATH_CITATION = Regex("""([\w.\-]+(?:/[\w.\-]+)*\.\w+):\d+""")
 }

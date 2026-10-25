@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.persist.acceptance
 
-import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutation
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
@@ -75,10 +74,15 @@ internal object AcceptanceCriterionInteractionTargets {
     if (previous.stage == next.stage) return
     val dropped = droppedPairCount(next, binding)
     if (dropped == 0) return
-    RuntimeDiagnosticsBestEffortWarning.record(
+    AcceptanceCriterionTraceDiagnostics.warn(
       diagnostics,
-      "seam=interaction_trace workflow=${workflowId.take(MAX_DIAGNOSTIC_ID)} record_kind=truncated " +
-        "value_expected=all_same_file_pairs value_used=capped dropped_pairs=$dropped",
+      workflowId,
+      AcceptanceCriterionTraceDiagnostics.Warning(
+        "truncated",
+        "all_same_file_pairs",
+        "capped",
+        "dropped_pairs=$dropped",
+      ),
     )
   }
 
@@ -86,10 +90,10 @@ internal object AcceptanceCriterionInteractionTargets {
     diagnostics: RuntimeDiagnostics,
     workflowId: String,
   ) {
-    RuntimeDiagnosticsBestEffortWarning.record(
+    AcceptanceCriterionTraceDiagnostics.warn(
       diagnostics,
-      "seam=interaction_trace workflow=${workflowId.take(MAX_DIAGNOSTIC_ID)} record_kind=skip " +
-        "value_expected=interaction_targets value_used=none",
+      workflowId,
+      AcceptanceCriterionTraceDiagnostics.Warning("skip", "interaction_targets", "none"),
     )
   }
 
@@ -131,5 +135,4 @@ internal object AcceptanceCriterionInteractionTargets {
   }
 
   private const val MIN_OWNERS = 2
-  private const val MAX_DIAGNOSTIC_ID = 128
 }

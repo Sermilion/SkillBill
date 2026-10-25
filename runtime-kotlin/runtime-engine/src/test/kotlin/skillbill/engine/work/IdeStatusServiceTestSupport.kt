@@ -32,6 +32,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
@@ -896,6 +897,9 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? = null
 
   override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? = null
+
+  override fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios =
+    GoalSubtaskUnknownScenarios.Absent
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> = emptyList()
 

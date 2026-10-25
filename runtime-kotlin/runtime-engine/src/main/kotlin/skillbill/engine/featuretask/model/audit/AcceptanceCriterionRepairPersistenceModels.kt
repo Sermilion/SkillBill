@@ -44,6 +44,7 @@ data class AcceptanceCriterionRepairCommit(
   val nextSteps: Map<AcceptanceCriterionRepairStage, String> = emptyMap(),
   val additionalPhaseId: String? = null,
   val additionalAttemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
+  val repairChangedPaths: List<String> = emptyList(),
 )
 
 sealed interface AcceptanceCriterionRepairMutation {
@@ -260,6 +261,8 @@ sealed interface AcceptanceCriterionRepairWriteResult {
     val state: AcceptanceCriterionRepairState,
     val replayed: Boolean,
     val interactionTraceSkipped: Boolean = false,
+    val newAnyChangeRechecks: List<String> = emptyList(),
+    val droppedRechecks: List<String> = emptyList(),
   ) : AcceptanceCriterionRepairWriteResult
 
   data class CommittedWithProjectionFailure(

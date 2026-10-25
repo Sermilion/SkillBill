@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-25] SKILL-442 subtask 3 - Accepted-criterion re-check and unknown-scenario surfacing
+Areas: runtime-engine featuretask persist/acceptance (repair persistence, interaction trace round, phase recorder, trace diagnostics, audit admission), slot/audit and slot/codereview prompt sections, slot/attempt launch preparation, model/audit; runtime-engine goalrunner (finalization, branch plan, run models, outcome stores); runtime-domain model/audit and model/audit/interaction; runtime-infra contracts auxiliary validator
+- MEDIUM feature. After a repair round, accepted closed criteria whose cited production paths intersect the round's changed paths join recheck_refs; criteria citing no paths join recheck_any_change_refs on any change, with one warning each. Replays do not re-add refs.
+- The trace stage is entered when scenarios or rechecks are pending; one batched audit answers `Recheck AC-NNN: holds|regressed evidence <paths>` lines. A holds verdict replaces closure evidence; regressed reopens the criterion inside the 3-outcome budget and routes to audit_plan_fix. Domain: AcceptanceCriterionRecheckSchedule and AcceptanceCriterionRecheckParser. reusable
+- After a re-ask and a second malformed output, rechecks are treated as holds with prior evidence and pending scenarios as unknown with reason `malformed audit output`.
+- Unknown scenarios store their reasons in a null-criterion prose audit and are projected by AcceptanceCriterionUnknownScenario. They surface as warnings, as a context-only section in the CODE_REVIEW prompt, and as an `## Interaction Trace` section in the goal PR body per subtask, via the new recordedUnknownScenarios on GoalRunnerReviewOutcomeStore. Unknown never changes a criterion's stage or blocks. reusable
+- Coherence relaxed: recheck refs are criterion refs and must be disjoint; CLOSED to CLOSED prose reaffirmation is allowed.
+- Pattern: recheck helpers live in the interaction trace round file to keep the 12-file sibling ceiling and detekt function limits.
+- Limits: no serial-repair end-to-end case for a regressed recheck (covered at recorder level); unknownInteractionScenarios is populated for every phase but rendered only in CODE_REVIEW.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented for this subtask (validate passed ./gradlew check).
+
 ## [2026-10-25] SKILL-442 subtask 2 - Interaction-trace audit mode for acceptance repair
 Areas: runtime-engine featuretask persist/acceptance (repair persistence, phase recorder, audit admission, interaction targets and trace round), slot/audit prompt sections and audit round, runner run entry and status, prompt compose inputs; runtime-domain model/audit and model/audit/interaction, artifact wire; runtime-infra contracts auxiliary validator; runtime-contracts payload keys and failure code; orchestration/contracts; docs/block-incident-classification
 - MEDIUM feature. After the last criterion is accepted, repair state enters INTERACTION_TRACE_REQUIRED and the audit traces each authored interaction scenario instead of re-auditing criteria.

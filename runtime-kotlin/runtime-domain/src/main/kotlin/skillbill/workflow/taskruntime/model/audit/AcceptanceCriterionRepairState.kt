@@ -124,6 +124,8 @@ data class AcceptanceCriterionInteractionTrace(
   val recheckAnyChangeRefs: List<String> = emptyList(),
   val tracedSpecDigest: String? = null,
 ) {
+  val pendingRechecks: List<String> get() = (recheckRefs + recheckAnyChangeRefs).distinct().sorted()
+
   companion object {
     val EMPTY: AcceptanceCriterionInteractionTrace = AcceptanceCriterionInteractionTrace()
     const val MAX_SCENARIO_REFS: Int = 64

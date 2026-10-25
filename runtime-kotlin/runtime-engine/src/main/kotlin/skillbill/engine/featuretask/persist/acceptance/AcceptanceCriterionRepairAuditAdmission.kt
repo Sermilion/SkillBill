@@ -112,17 +112,30 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
     mutation: AcceptanceCriterionRepairMutation.InteractionTrace,
   ): Boolean {
     val settlement = mutation.settlement
-    val owners = settlement.entries.mapNotNull { it.ownerRef }.toSet()
     val unbound = wire[Keys.EXPECTED_REVISION] == null && wire[Keys.RESERVATION_ID] == null
     val output =
       wire[Keys.PRODUCING_OUTPUT_ID] == settlement.outputId &&
         wire[Keys.PRODUCING_OUTPUT_DIGEST] == settlement.outputDigest
     val source = wire[Keys.TREE_DIGEST] == settlement.treeDigest && wire[Keys.CHECKPOINT_ID] == settlement.checkpointId
-    val regressed = (wire[Keys.REGRESSED_REFS] as List<*>).toSet() == owners
-    val rechecks = (wire[Keys.RECHECKS] as List<*>).isEmpty() && (wire[Keys.EDGE_CHANGES] as List<*>).isEmpty()
+    val regressed = (wire[Keys.REGRESSED_REFS] as List<*>).toSet() == settlement.reopenedRefs.toSet()
+    val noEdges = (wire[Keys.EDGE_CHANGES] as List<*>).isEmpty()
     val traced = wire[Keys.MODE] == AcceptanceCriterionAuditResultMode.INTERACTION_TRACE.wireValue
-    return traced && unbound && output && source && regressed && rechecks &&
-      interactionsMatch(wire, settlement) && criteriaMatch(wire, next)
+    return traced && unbound && output && source && regressed && noEdges &&
+      interactionsMatch(wire, settlement) && recheckEntriesMatch(wire, settlement) && criteriaMatch(wire, next)
+  }
+
+  private fun recheckEntriesMatch(
+    wire: FeatureTaskRuntimeWorkflowArtifactMap,
+    settlement: AcceptanceCriterionInteractionTraceSettlement,
+  ): Boolean {
+    val rechecks = (wire[Keys.RECHECKS] as List<*>).map { FeatureTaskRuntimeWorkflowArtifactMap.from(it) }
+    return rechecks.size == settlement.rechecks.size &&
+      settlement.rechecks.all { entry ->
+        rechecks.any {
+          it[Keys.CRITERION_REF] == entry.criterionRef && it[Keys.VERDICT] == entry.verdict.wireValue &&
+            it[Keys.EVIDENCE_REF] == entry.evidenceRef
+        }
+      }
   }
 
   private fun interactionsMatch(

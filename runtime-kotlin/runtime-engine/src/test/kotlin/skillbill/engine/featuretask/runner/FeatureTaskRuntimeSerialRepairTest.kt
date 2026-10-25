@@ -119,6 +119,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       assertEquals(1, scope.snapshot?.outcomes?.size)
+      assertTrue(assertNotNull(scope.snapshot).interactionTrace.pendingRechecks.isEmpty())
       assertContains(harness.launchOrder(), "review")
       assertContains(harness.launchOrder(), "validate")
     }
@@ -910,6 +911,10 @@ class FeatureTaskRuntimeSerialRepairTest {
       state == null -> serialDiscoveryOutput()
       state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
         serialStructuredAuditOutput(audits, state, "The complete production repair is present.")
+      state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
+        auditRemainingAcOutput(
+          state.interactionTrace.pendingRechecks.joinToString("\n") { "Recheck $it: holds evidence src/Foo.kt:1" },
+        ).replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"satisfied\",")
       else ->
         auditRemainingAcOutput("Open criteria: AC-001").replace(
           "\"status\": \"completed\",",

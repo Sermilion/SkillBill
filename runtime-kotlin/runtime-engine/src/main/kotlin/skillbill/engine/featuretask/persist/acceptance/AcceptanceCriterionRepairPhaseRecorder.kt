@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.persist.acceptance
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEvidence
@@ -47,6 +46,8 @@ import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterio
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceParser
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
 import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionVerdict
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckEntry
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionRecheckVerdict
 import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
 import skillbill.workflow.taskruntime.model.audit.qaReauditRefs
@@ -173,7 +174,10 @@ class AcceptanceCriterionRepairPhaseRecorder(
     phase: FeatureTaskRuntimePhaseStateRequest,
     state: AcceptanceCriterionRepairState,
   ): RequiredPhaseWrite? {
-    val untraced = phase.phaseId == session.steps.audit && state.interactionTrace.tracedSpecDigest != state.specDigest
+    val trace = state.interactionTrace
+    val untraced =
+      phase.phaseId == session.steps.audit &&
+        (trace.tracedSpecDigest != state.specDigest || trace.pendingRechecks.isNotEmpty())
     if (!untraced) return null
     return commit(
       session,
@@ -272,12 +276,13 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val tree = sha256Hex(checkpoint)
     val outputId = "${phase.workflowId}:${phase.phaseId}:${phase.attemptCount}:${state.revision}"
     val targets = AcceptanceCriterionInteractionTargets.pending(state, requireNotNull(session.accounting.binding))
-    val entries =
-      when (val parsed = AcceptanceCriterionInteractionTraceParser.parse(prose, targets)) {
-        is AcceptanceCriterionInteractionTraceParse.Parsed -> parsed.entries
+    val rechecks = state.interactionTrace.pendingRechecks
+    val parsed =
+      when (val result = AcceptanceCriterionInteractionTraceParser.parse(prose, targets, rechecks)) {
+        is AcceptanceCriterionInteractionTraceParse.Parsed -> result
         is AcceptanceCriterionInteractionTraceParse.Malformed ->
-          degradedTrace(session, phase, state, targets, parsed)
-            ?: return rejected(phase, AcceptanceCriterionInteractionTraceRound.rejection(parsed))
+          degradedTrace(session, phase, state, targets, result)
+            ?: return rejected(phase, AcceptanceCriterionInteractionTraceRound.rejection(result, state))
       }
     val settlement =
       AcceptanceCriterionInteractionTraceSettlement(
@@ -285,7 +290,8 @@ class AcceptanceCriterionRepairPhaseRecorder(
         sha256Hex("$outputId:$prose:$tree"),
         tree,
         checkpoint,
-        entries,
+        parsed.entries,
+        parsed.rechecks,
       )
     val predicted =
       state.recordInteractionTrace(settlement)
@@ -309,21 +315,33 @@ class AcceptanceCriterionRepairPhaseRecorder(
     state: AcceptanceCriterionRepairState,
     targets: List<AcceptanceCriterionInteractionTarget>,
     malformed: AcceptanceCriterionInteractionTraceParse.Malformed,
-  ): List<AcceptanceCriterionInteractionEntry>? {
+  ): AcceptanceCriterionInteractionTraceParse.Parsed? {
     if (session.accounting.traceReaskScope != AcceptanceCriterionInteractionTraceRound.scopeKey(state)) return null
-    RuntimeDiagnosticsBestEffortWarning.record(
+    AcceptanceCriterionTraceDiagnostics.warn(
       diagnostics,
-      "seam=interaction_trace workflow=${phase.workflowId.take(MAX_DIAGNOSTIC_ID)} record_kind=degraded " +
-        "value_expected=${malformed.code.name} value_used=unknown reason=${malformed.reason.take(MAX_REASON)}",
+      phase.workflowId,
+      AcceptanceCriterionTraceDiagnostics.Warning(
+        "degraded",
+        malformed.code.name,
+        "unknown_and_holds",
+        "reason=${malformed.reason.take(AcceptanceCriterionTraceDiagnostics.MAX_REASON)}",
+      ),
     )
-    return targets.map {
-      AcceptanceCriterionInteractionEntry(
-        it.scenarioRef,
-        AcceptanceCriterionInteractionVerdict.UNKNOWN,
-        null,
-        "interaction trace output stayed malformed after one re-ask: ${malformed.reason}",
-      )
-    }
+    val entries =
+      targets.map {
+        AcceptanceCriterionInteractionEntry(
+          it.scenarioRef,
+          AcceptanceCriterionInteractionVerdict.UNKNOWN,
+          null,
+          DEGRADED_UNKNOWN_REASON,
+        )
+      }
+    val rechecks =
+      state.interactionTrace.pendingRechecks.map { ref ->
+        val prior = state.criteria.firstOrNull { it.canonicalRef == ref }?.closureEvidenceRef.orEmpty()
+        AcceptanceCriterionRecheckEntry(ref, AcceptanceCriterionRecheckVerdict.HOLDS, prior)
+      }
+    return AcceptanceCriterionInteractionTraceParse.Parsed(entries, emptyList(), rechecks)
   }
 
   private data class CompletionEvidence(
@@ -593,6 +611,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
           serialNextSteps(session.steps, mutation),
           additionalPhaseId,
           FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE.takeIf { additionalPhaseId != null },
+          phase.fileManifestIntroduced.takeIf { phase.phaseId == session.steps.repair && phase.finished }.orEmpty(),
         ),
         session.root,
       )
@@ -651,7 +670,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
   }
 
   private companion object {
-    const val MAX_DIAGNOSTIC_ID = 128
-    const val MAX_REASON = 200
+    const val DEGRADED_UNKNOWN_REASON = "malformed audit output"
   }
 }

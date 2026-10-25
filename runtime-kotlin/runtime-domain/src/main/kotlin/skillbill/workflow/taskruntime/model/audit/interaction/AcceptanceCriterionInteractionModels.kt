@@ -55,6 +55,12 @@ data class AcceptanceCriterionInteractionEntry(
   val traceRef: String,
 )
 
+data class AcceptanceCriterionRecheckEntry(
+  val criterionRef: String,
+  val verdict: AcceptanceCriterionRecheckVerdict,
+  val evidenceRef: String,
+)
+
 enum class AcceptanceCriterionAuditResultMode(val wireValue: String) {
   INITIAL_DISCOVERY("initial_discovery"),
   CURRENT_CRITERION_TARGETED("current_criterion_targeted"),

@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -30,6 +31,7 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -143,8 +145,43 @@ class GoalRunnerFinalization(
           state.manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome)
             ?: GoalSubtaskQaSummary.NotRecorded
         },
+        unknownScenarios = { subtask -> unknownScenariosFor(state, subtask) },
       ),
     )
+
+  private fun unknownScenariosFor(
+    state: GoalRunnerManifestState,
+    subtask: DecompositionSubtask,
+  ): GoalSubtaskUnknownScenarios? {
+    val workflowId = state.manifest.workflowIdFor(subtask.id) ?: return null
+    val recorded =
+      try {
+        outcomeStore.recordedUnknownScenarios(workflowId)
+      } catch (failure: SkillBillRuntimeException) {
+        warnUnknownScenarios(subtask, failure.message.orEmpty())
+        return null
+      }
+    if (recorded is GoalSubtaskUnknownScenarios.Malformed) warnUnknownScenarios(subtask, recorded.reason)
+    if (recorded is GoalSubtaskUnknownScenarios.Recorded) {
+      recorded.scenarios.filter { it.reason.isNullOrBlank() }.forEach {
+        warnUnknownScenarios(subtask, "scenario=${it.scenarioRef}", "reason_missing", "reason_unavailable")
+      }
+    }
+    return recorded
+  }
+
+  private fun warnUnknownScenarios(
+    subtask: DecompositionSubtask,
+    reason: String,
+    recordKind: String = "lookup_failed",
+    used: String = "omitted",
+  ) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=interaction_trace_pr_body subtask=${subtask.id} record_kind=$recordKind " +
+        "value_expected=unknown_scenarios value_used=$used reason=${reason.take(MAX_WARNING_REASON)}",
+    )
+  }
 
   private fun goalQaSummary(
     state: GoalRunnerManifestState,
@@ -448,3 +485,5 @@ class GoalRunnerFinalization(
   private fun resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
     resolveUnaddressedFindingsLedger(unaddressedFindingsLedgerService, issueKey)
 }
+
+private const val MAX_WARNING_REASON = 200

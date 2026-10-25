@@ -11,6 +11,9 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.model.GoalUnknownScenario
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -27,6 +30,7 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
+import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
@@ -213,10 +217,105 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         val degraded = assertNotNull(scope.snapshot)
         assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, degraded.stage)
         assertEquals(listOf("IS-001"), degraded.interactionTrace.unknownScenarioRefs)
+        assertEquals(listOf("malformed audit output"), degraded.unknownScenarios().map { it.reason })
+
+        val store = testWorkflowGoalRunnerOutcomeStore(f.database)
+        assertEquals(
+          GoalSubtaskUnknownScenarios.Recorded(listOf(GoalUnknownScenario("IS-001", "malformed audit output"))),
+          store.recordedUnknownScenarios(f.workflowId),
+        )
+        assertEquals(GoalSubtaskUnknownScenarios.Absent, store.recordedUnknownScenarios("wftr-never-recorded"))
         assertTrue(f.warnings.any { it.contains("seam=interaction_trace") && it.contains("record_kind=degraded") })
       }
     }
   }
+
+  @Test
+  fun `a repair that edits a cited file schedules a recheck that survives continuation reload and replay`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val scope = openScope(f, worker)
+        val recorder = recorderFor(f, worker, scope)
+        audit(f, recorder, 1, true, "AC-001 is implemented at src/Flow.kt:10.")
+        audit(f, recorder, 2, false, "AC-002 still needs a caller.")
+
+        val repair = phase(f, "audit_implement_fix", 2)
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
+        val progress =
+          output(repair, "progress", "Only part of AC-002 is connected.")
+            .copy(fileManifestIntroduced = listOf("src/Flow.kt"))
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(progress))
+        val scheduled = assertNotNull(scope.snapshot)
+        assertEquals(listOf("AC-001"), scheduled.interactionTrace.recheckRefs)
+        assertEquals(scheduled, openScope(f, worker).snapshot)
+
+        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(progress))
+        assertEquals(scheduled, scope.snapshot)
+        assertEquals(scheduled, openScope(f, worker).snapshot)
+      }
+    }
+  }
+
+  @Test
+  fun `a recheck only trace settles holds with fresh evidence and a regressed line reopens the criterion`() {
+    mapOf(
+      "holds" to AcceptanceCriterionRepairStage.ACCEPTED,
+      "regressed" to AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+    ).forEach { (verdict, stage) ->
+      SerialRepairSqliteFixture().use { f ->
+        f.owned { worker ->
+          val scope = openScope(f, worker)
+          val recorder = recorderFor(f, worker, scope)
+          audit(f, recorder, 1, true, "AC-001 is implemented at src/Flow.kt:10.")
+          audit(f, recorder, 2, false, "AC-002 still needs a caller.")
+          val repair = phase(f, "audit_implement_fix", 2)
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
+          val repaired =
+            output(repair, "satisfied", "Connected the caller.").copy(fileManifestIntroduced = listOf("src/Flow.kt"))
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(repaired))
+          audit(f, recorder, 3, true, "AC-002 is implemented at src/Other.kt:3.")
+          val pending = assertNotNull(scope.snapshot)
+          assertEquals(AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED, pending.stage)
+          assertEquals(listOf("AC-001"), pending.interactionTrace.pendingRechecks)
+          assertEquals(emptyList(), pending.interactionTrace.pendingScenarioRefs)
+
+          val trace = phase(f, "audit", 4)
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(trace))
+          val settled = recorder.complete(output(trace, "advance", "Recheck AC-001: $verdict evidence src/Flow.kt:11"))
+
+          assertEquals(RequiredPhaseWrite.Acknowledged, settled)
+          val state = assertNotNull(scope.snapshot)
+          assertEquals(stage, state.stage)
+          assertEquals(emptyList(), state.interactionTrace.pendingRechecks)
+          if (verdict == "holds") {
+            assertEquals("src/Flow.kt:11", state.criteria.single { it.canonicalRef == "AC-001" }.closureEvidenceRef)
+          } else {
+            assertEquals("AC-001", state.currentCriterionRef)
+            assertEquals("audit_plan_fix", f.snapshot().currentStepId)
+            assertTrue(state.unsuccessfulTotals.isEmpty())
+          }
+        }
+      }
+    }
+  }
+
+  private fun openScope(
+    f: SerialRepairSqliteFixture,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+  ) = AcceptanceCriterionRepairRunState(
+    f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+    f.binding,
+  )
+
+  private fun recorderFor(
+    f: SerialRepairSqliteFixture,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    scope: AcceptanceCriterionRepairRunState,
+  ): AcceptanceCriterionRepairSession =
+    requireNotNull(
+      AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows, f.diagnostics)
+        .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+    )
 
   private fun tracePendingSession(
     f: SerialRepairSqliteFixture,

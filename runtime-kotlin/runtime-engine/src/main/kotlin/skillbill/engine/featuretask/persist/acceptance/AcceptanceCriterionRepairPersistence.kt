@@ -303,6 +303,7 @@ class AcceptanceCriterionRepairPersistence(
     if (committed.interactionTraceSkipped && !committed.replayed) {
       AcceptanceCriterionInteractionTargets.recordSkip(diagnostics, worker.workflowId)
     }
+    AcceptanceCriterionTraceDiagnostics.record(diagnostics, worker.workflowId, request.mutation, committed)
     return project(repositoryRoot, worker.workflowId, committed)
   }
 
@@ -426,8 +427,9 @@ class AcceptanceCriterionRepairPersistence(
         refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
       else -> {
         val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
-        val next =
-          transition(previous, request.mutation, digest, request.expected.revision, binding)
+        val raw = transition(previous, request.mutation, digest, request.expected.revision, binding)
+        val update = AcceptanceCriterionInteractionTraceRound.recheckUpdate(previous, raw, request.repairChangedPaths)
+        val next = AcceptanceCriterionInteractionTraceRound.scheduleRechecks(raw, update, binding)
         val legacySafe =
           previous != null || mayAdopt(record, request, binding, worker, repositoryRoot)
         val refusal =
@@ -436,7 +438,10 @@ class AcceptanceCriterionRepairPersistence(
           refuse(worker, previous, refusal)
         } else {
           val committed = commitCandidate(work, worker, record, requireNotNull(next), request)
-          AcceptanceCriterionInteractionTargets.flagSkipped(committed, previous, request.mutation)
+          AcceptanceCriterionInteractionTraceRound.annotateRechecks(
+            AcceptanceCriterionInteractionTargets.flagSkipped(committed, previous, request.mutation),
+            update,
+          )
         }
       }
     }
@@ -728,7 +733,7 @@ class AcceptanceCriterionRepairPersistence(
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> proseTransition(state, mutation)
       else -> repairTransition(state, mutation, auditDigest, expectedRevision, binding)
-    }?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
+    }
 
   private fun proseTransition(
     state: AcceptanceCriterionRepairState?,

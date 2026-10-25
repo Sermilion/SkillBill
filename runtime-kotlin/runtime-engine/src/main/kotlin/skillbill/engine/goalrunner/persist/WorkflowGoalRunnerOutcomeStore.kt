@@ -15,7 +15,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.model.GoalUnknownScenario
 import skillbill.engine.workflow.support.workflowFamilyFor
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -46,6 +49,9 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
@@ -146,6 +152,9 @@ class WorkflowGoalRunnerOutcomeStore
       workflowId: String,
       requested: FeatureTaskRuntimeQaSelection?,
     ): FeatureTaskRuntimeQaSelection? = review.childQaSelection(workflowId, requested)
+
+    override fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios =
+      review.recordedUnknownScenarios(workflowId)
 
     override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
       review.unemittedGoalReviewPasses(workflowId)
@@ -400,6 +409,25 @@ internal class WorkflowGoalRunnerReviewBridge(
         } else {
           GoalSubtaskQaSummary.NotComposed
         }
+    }
+
+  override fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios =
+    database.read { unitOfWork ->
+      val artifacts = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+      if (artifacts == null || !family.contains(artifacts)) return@read GoalSubtaskUnknownScenarios.Absent
+      val state =
+        try {
+          FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+            .toAcceptanceCriterionRepairState(family.label())
+        } catch (failure: SkillBillRuntimeException) {
+          return@read GoalSubtaskUnknownScenarios.Malformed(failure.message.orEmpty())
+        }
+      state.unknownScenarios()
+        .map { GoalUnknownScenario(it.scenarioRef, it.reason) }
+        .takeIf { it.isNotEmpty() }
+        ?.let(GoalSubtaskUnknownScenarios::Recorded)
+        ?: GoalSubtaskUnknownScenarios.Empty
     }
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
