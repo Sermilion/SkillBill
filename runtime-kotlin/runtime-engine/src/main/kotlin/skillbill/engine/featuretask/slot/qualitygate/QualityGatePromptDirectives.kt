@@ -36,10 +36,18 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "Run the full project validation when checks exist, including required tests, static analysis, " +
     "formatting checks, and " +
     "repository checks. Compilation alone is insufficient. " +
+    "Validation owns running checks and fixing every failure, including build failures. Run the project's " +
+    "build and packaging commands when checks need them, including the pack build_command. Prepare missing " +
+    "or stale artifacts in this session. Rebuild after source repairs so the artifacts match the candidate " +
+    "under validation, then rerun every required check. Do not return to an earlier phase or ask the operator " +
+    "to rebuild artifacts you can create here. The separate compile-only build gate does not restrict " +
+    "builds required by validation. Preserve artifact identity and integrity checks; do not bypass them " +
+    "or count a rebuild alone as validation success. " +
     "Do not recursively invoke `skill-bill phase validation`. " +
     "Keep repairing in this same session until every required project check passes. Do not spawn delegated " +
     "subagents. Settle completed only when every required check passes, naming the checks you ran and how " +
-    "each ended. Test failures, static-analysis findings, formatting failures, and outdated fixtures are " +
+    "each ended. Build failures, test failures, static-analysis findings, formatting failures, " +
+    "and outdated fixtures are " +
     "repair work in this session: fix a formatting failure with the project's formatter, then rerun the " +
     "required checks. No failure, formatting included, hands the work to another validation session. " +
     "Do not stop after reducing the failure count or return a partial progress report. Keep fixing and " +

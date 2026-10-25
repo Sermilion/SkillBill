@@ -1,3 +1,13 @@
+## [2026-10-25] Validation owns rebuilds and build failure repairs
+
+GV-2 validation repaired source, then blocked because its release package was stale
+and the briefing reserved builds for a separate phase. Validation now receives build
+permission and owns build failures, packaging prerequisites and rebuilds after repairs
+within its existing session. Monitor repair receives the same permission because it
+runs the same local checks. Authoring and audit retain their build restrictions.
+The compile-only gate stays separate, completed phases stay complete, and artifact
+identity checks still have to pass before validation can finish.
+
 ## [2026-10-24] An unverified QA pass keeps its verdict but does not close findings
 Context: A QA agent can state passed with no assertions, no isolation evidence, missing target coverage or a mocked web backend.
 Decision: Keep the agent's stated verdict and attach warnings; QaReport.retestsFindings, not the verdict, decides whether findings are retested and closed.

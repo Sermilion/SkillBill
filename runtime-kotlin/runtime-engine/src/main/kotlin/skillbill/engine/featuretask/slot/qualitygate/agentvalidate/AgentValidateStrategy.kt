@@ -50,6 +50,7 @@ class AgentValidateStrategy :
       taskDirective =
         if (inputs.validationGateTriage) validateGateTriagePhaseTask() else runtimeOwnedValidateAgentPhaseTask(),
       runsValidationGate = true,
+      runsBuildGate = true,
       valueContent = VALIDATE_VALUE_CONTENT,
     )
   }
