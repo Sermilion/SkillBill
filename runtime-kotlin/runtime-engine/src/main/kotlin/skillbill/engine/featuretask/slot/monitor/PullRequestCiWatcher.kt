@@ -32,7 +32,7 @@ internal class PullRequestCiWatcher(
   ): PullRequestCiOutcome {
     val startedAt = now()
     val refresh = expectedHead.refreshAfter?.let { CheckRefresh(it, startedAt + refreshGrace) }
-    val request = WatchRequest(repoRoot, branch, expectedHead.sha, refresh)
+    val request = WatchRequest(repoRoot, branch, refresh)
     var ciStarted = false
     var inconclusiveReported = false
     var progress = CiProgress()
@@ -61,7 +61,6 @@ internal class PullRequestCiWatcher(
   private data class WatchRequest(
     val repoRoot: Path,
     val branch: String,
-    val expectedHeadSha: String?,
     val refresh: CheckRefresh?,
   )
 
@@ -189,11 +188,11 @@ internal class PullRequestCiWatcher(
           null
         } else if (failingChecks != null) {
           PullRequestCiOutcome.Failed(failingChecks, observedIdentity.headSha, latest.editableFieldsDigest)
-        } else if (isExpectedHead(latest, request.expectedHeadSha)) {
-          PullRequestCiOutcome.Passed(requireNotNull(latest.headSha))
         } else {
-          onInconclusive("Green checks are not associated with the published pull request head.")
-          null
+          latest.headSha?.takeIf(String::isNotBlank)?.let(PullRequestCiOutcome::Passed) ?: run {
+            onInconclusive("Green checks have no pull request head to attribute them to.")
+            null
+          }
         }
     }
 
@@ -208,13 +207,6 @@ internal class PullRequestCiWatcher(
       PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
       is PullRequestIdentity.Found -> if (latest.conflicting) PullRequestCiOutcome.Conflicted else observed
     }
-
-  private fun isExpectedHead(
-    identity: PullRequestIdentity.Found,
-    expectedHeadSha: String?,
-  ): Boolean =
-    identity.number > 0 && !expectedHeadSha.isNullOrBlank() && !identity.headSha.isNullOrBlank() &&
-      identity.headSha == expectedHeadSha
 
   private data class CiProgress(val at: Instant? = null, val names: List<String>? = null)
 
