@@ -3,22 +3,24 @@ package dev.skillbill.tray.composition
 import dev.skillbill.tray.core.common.di.AppScope
 import dev.skillbill.tray.core.common.di.EntryScope
 import dev.skillbill.tray.core.common.di.WindowScope
+import dev.skillbill.tray.core.domain.repository.AgentHomeRepository
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
 import dev.skillbill.tray.core.domain.repository.WorkStoreStatusRepository
+import dev.skillbill.tray.core.ui.LaunchRequests
 import dev.skillbill.tray.feature.detail.DetailArgs
 import dev.skillbill.tray.feature.detail.DetailViewModel
 import dev.skillbill.tray.feature.history.HistoryViewModel
 import dev.skillbill.tray.feature.settings.SettingsViewModel
 import dev.skillbill.tray.feature.specs.SpecsViewModel
 import dev.skillbill.tray.feature.work.WorkViewModel
+import kotlin.time.Clock
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesSubcomponent
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
-import kotlin.time.Clock
 
 /**
  * Everything one window owns. A component is created when a window opens and dropped when it is disposed; hiding a window keeps
@@ -78,15 +80,17 @@ class EntryViewModels(
   private val settings: SettingsRepository,
   private val storeStatus: WorkStoreStatusRepository,
   private val specs: SpecBrowserRepository,
+  private val agentHomes: AgentHomeRepository,
   private val clock: Clock,
+  private val launches: LaunchRequests,
 ) {
   fun work() = WorkViewModel(boards, settings)
 
   fun history() = HistoryViewModel(boards, settings)
 
-  fun detail(args: DetailArgs) = DetailViewModel(args.identity, details, controls, boards, clock)
+  fun detail(args: DetailArgs) = DetailViewModel(args.identity, details, controls, boards, clock, launches)
 
-  fun settings() = SettingsViewModel(settings, storeStatus)
+  fun settings() = SettingsViewModel(settings, storeStatus, agentHomes)
 
-  fun specs() = SpecsViewModel(specs, details, controls, settings)
+  fun specs() = SpecsViewModel(specs, details, controls, settings, launches)
 }

@@ -9,6 +9,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.system.HostAgentHomesPort
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
@@ -27,10 +28,15 @@ class DetachedWorkRunLauncher internal constructor(
   private val diagnostics: RuntimeDiagnostics,
   private val startupGrace: Duration,
   private val projectStore: ProjectStorePort,
+  private val agentHomes: HostAgentHomesPort,
 ) : WorkRunLauncher {
   @Inject
-  constructor(environment: EnvironmentContext, diagnostics: RuntimeDiagnostics, projectStore: ProjectStorePort) :
-    this(environment, diagnostics, STARTUP_GRACE, projectStore)
+  constructor(
+    environment: EnvironmentContext,
+    diagnostics: RuntimeDiagnostics,
+    projectStore: ProjectStorePort,
+    agentHomes: HostAgentHomesPort,
+  ) : this(environment, diagnostics, STARTUP_GRACE, projectStore, agentHomes)
 
   override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
     val launchEnvironment = launchEnvironment(request)
@@ -78,9 +84,14 @@ class DetachedWorkRunLauncher internal constructor(
 
   private fun ownership() = WorkHarnessOwnership(environment.userHome.resolve(".skill-bill/desktop/runs"), diagnostics)
 
-  private fun launchEnvironment(request: WorkRunLaunchRequest): Map<String, String> =
-    environment.environment + request.agentEnvironment.filterKeys { it in AgentHomeEnvironmentKeys.ALL } +
+  private fun launchEnvironment(request: WorkRunLaunchRequest): Map<String, String> {
+    val hostChoice = agentHomes.current().filterKeys { it in AgentHomeEnvironmentKeys.ALL }
+    val recorded =
+      request.agentEnvironment.filter { (key, value) -> key in AgentHomeEnvironmentKeys.ALL && value.isNotBlank() }
+    val cleared = hostChoice.filterValues(String::isBlank).keys
+    return environment.environment + recorded + hostChoice.filterValues(String::isNotBlank) - cleared +
       ("PATH" to searchDirectories().joinToString(pathSeparator().toString()))
+  }
 
   private fun installedLaunch(
     request: WorkRunLaunchRequest,
@@ -216,6 +227,7 @@ class DetachedWorkRunLauncher internal constructor(
       .redirectErrorStream(true).redirectOutput(log.toFile())
       .apply {
         environment().putAll(launchEnvironment)
+        AgentHomeEnvironmentKeys.ALL.filterNot(launchEnvironment::containsKey).forEach(environment()::remove)
         environment().putAll(built.environment)
         environment()[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH] = request.databasePath.toString()
       }.start()

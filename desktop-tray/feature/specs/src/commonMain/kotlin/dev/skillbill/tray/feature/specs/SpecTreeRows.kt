@@ -59,7 +59,6 @@ internal val SPEC_INDENT = 16.dp
 internal fun SpecRowItem(
   row: SpecRow,
   selected: Boolean,
-  openError: String?,
   onClick: () -> Unit,
   onToggle: () -> Unit,
   modifier: Modifier = Modifier,
@@ -92,7 +91,6 @@ internal fun SpecRowItem(
         is SpecNode.File -> FileRow(node)
       }
     }
-    openError?.let { Text(it, Modifier.padding(start = SPEC_INDENT * row.depth + 34.dp, end = 10.dp, bottom = 4.dp), color = orange, fontFamily = body, fontSize = 11.sp) }
   }
 }
 

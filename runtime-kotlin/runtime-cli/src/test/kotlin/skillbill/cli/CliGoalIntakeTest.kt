@@ -11,6 +11,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -21,6 +22,25 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CliGoalIntakeTest {
+  @Test
+  fun `failed progress output does not hide goal planning from the desktop`() {
+    val root = Files.createTempDirectory("goal-intake-broken-output")
+    val db = root.resolve("metrics.db")
+    val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
+    val launcher = StoppedPlanningLauncher(db)
+    try {
+      val result =
+        CliRuntime.run(
+          listOf("--db", db.toString(), "APP-123 Refresh board filters.", "--agent", "codex"),
+          fixture.context(launcher = launcher, liveStdout = { throw IOException("Progress output closed") }),
+        )
+      assertEquals(1, result.exitCode, result.stderr + result.stdout)
+      assertTrue(launcher.observedGoalPlanning, "Preplan must publish its goal identity before progress output")
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
   @Test
   fun `supplied tracker and local keys start durable planning without a prepared workflow`() {
     startNewGoal(
@@ -240,6 +260,7 @@ class CliGoalIntakeTest {
 
   private class StoppedPlanningLauncher(private val db: Path) : AgentRunLauncher {
     val prompts = mutableListOf<String>()
+    var observedGoalPlanning = false
 
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
       passThroughResolvedLaunchModel(request)
@@ -248,6 +269,19 @@ class CliGoalIntakeTest {
       assertEquals(0, parentCount(db))
       if (!request.skillRunRequest.issueKey.startsWith("bi_")) {
         prompts += request.skillRunRequest.promptOverride.orEmpty()
+        DriverManager.getConnection("jdbc:sqlite:$db").use { connection ->
+          connection.createStatement().use { statement ->
+            statement.executeQuery(
+              "SELECT launch_scope, current_step FROM standalone_phase_status WHERE lifecycle_state = 'active'",
+            ).use { rows ->
+              assertTrue(rows.next(), "Goal planning must be visible before launching preplan")
+              assertEquals("goal", rows.getString("launch_scope"))
+              assertEquals("preplan", rows.getString("current_step"))
+              assertFalse(rows.next())
+              observedGoalPlanning = true
+            }
+          }
+        }
       }
       return agentRunLaunchFacts(
         SupportedAgent.CODEX,

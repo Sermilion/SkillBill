@@ -5,6 +5,7 @@ import dev.skillbill.tray.core.domain.model.SpecNode
 import dev.skillbill.tray.core.domain.model.SpecProject
 import dev.skillbill.tray.core.domain.model.SpecSnapshot
 import dev.skillbill.tray.core.domain.model.WorkIdentity
+import dev.skillbill.tray.core.ui.Feedback
 
 enum class SpecStatusFilter { ALL, ACTIVE, PENDING, DONE }
 
@@ -33,8 +34,7 @@ data class SpecsUiState(
   val expandedPaths: Set<String> = emptySet(),
   val rows: List<SpecRow> = emptyList(),
   val selectedPath: String? = null,
-  /** Keyed by the file's `absolutePath`, the value [SpecsEffect.OpenFile] carries. */
-  val openErrors: Map<String, String> = emptyMap(),
+  val pendingFeedback: List<Feedback> = emptyList(),
   val paneOpen: Boolean = false,
   val anyInProgress: Boolean = false,
   val toolbar: SpecToolbarState = SpecToolbarState(),
@@ -74,6 +74,8 @@ sealed interface SpecsAction {
   data object CollapseAll : SpecsAction
 
   data class FileOpenFailed(val absolutePath: String, val message: String) : SpecsAction
+
+  data class AcknowledgeFeedback(val id: Long) : SpecsAction
 
   data object Retry : SpecsAction
 
@@ -135,7 +137,6 @@ data class SpecToolbarState(
   val confirmingCancel: Boolean = false,
   val purgeDialogOpen: Boolean = false,
   val inFlight: Boolean = false,
-  val message: String? = null,
 )
 
 internal const val HINT_SELECT_FOLDER = "Select a spec folder to start, pause or cancel it."

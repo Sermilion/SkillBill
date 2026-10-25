@@ -42,15 +42,14 @@ import dev.skillbill.tray.core.designsystem.body
 import dev.skillbill.tray.core.designsystem.border
 import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.muted
-import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.designsystem.raised
 import dev.skillbill.tray.core.designsystem.red
 import dev.skillbill.tray.core.designsystem.strongBorder
+import dev.skillbill.tray.core.ui.ProblemMessage
 
 /**
  * Start, Pause, Cancel and Purge for the selected spec folder. The buttons never move; they only enable or disable, and every
- * flag is the runtime's verdict carried by the control. The line under them holds the cancel confirmation, a refusal, the pause
- * notice or a hint.
+ * flag is the runtime's verdict carried by the control. The line under them holds the cancel confirmation, pause notice or hint.
  */
 @Composable
 internal fun SpecRunToolbar(state: SpecToolbarState, onAction: (SpecsAction) -> Unit) {
@@ -96,7 +95,7 @@ internal fun SpecRunToolbar(state: SpecToolbarState, onAction: (SpecsAction) -> 
   }
 }
 
-/** The first case that applies: cancel confirmation, inline refusal, pause notice, selection hint, then the runtime's reason. */
+/** The first case that applies: cancel confirmation, pause notice or selection hint. */
 @Composable
 private fun StatusLine(
   state: SpecToolbarState,
@@ -107,6 +106,7 @@ private fun StatusLine(
   onAction: (SpecsAction) -> Unit,
 ) {
   val failedLoad = (state.control as? ControlLoad.Failed)?.message
+  ProblemMessage(unavailableReason ?: failedLoad)
   when {
     state.confirmingCancel -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Text(cancelPrompt(key), color = ink, fontFamily = body, fontSize = 12.sp)
@@ -115,11 +115,10 @@ private fun StatusLine(
         DesignButton("Cancel goal", enabled = idle, danger = true) { onAction(SpecsAction.ConfirmCancel) }
       }
     }
-    state.message != null -> Text(state.message, color = orange, fontFamily = body, fontSize = 12.sp)
     pauseRequested -> Text(PAUSE_NOTICE, color = muted, fontFamily = body, fontSize = 11.sp)
     state.selection is ToolbarSelection.None -> Text(HINT_SELECT_FOLDER, color = muted, fontFamily = body, fontSize = 11.sp)
     state.selection is ToolbarSelection.FileInBundle -> Text(fileHint(state.selection.key), color = muted, fontFamily = body, fontSize = 11.sp)
-    else -> (unavailableReason ?: failedLoad)?.let { Text(it, color = muted, fontFamily = body, fontSize = 11.sp) }
+    else -> Unit
   }
 }
 

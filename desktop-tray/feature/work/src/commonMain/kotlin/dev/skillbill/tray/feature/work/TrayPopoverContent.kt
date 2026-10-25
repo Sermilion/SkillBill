@@ -1,5 +1,6 @@
 package dev.skillbill.tray.feature.work
 
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +24,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,17 +56,19 @@ import dev.skillbill.tray.core.domain.model.needsAttention
 import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.AppendState
 import dev.skillbill.tray.core.ui.ExpandableReason
+import dev.skillbill.tray.core.ui.FeedbackMessages
 import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.PagedListState
+import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.WorkDot
 import dev.skillbill.tray.core.ui.age
 import dev.skillbill.tray.core.ui.coerceNonNegative
 import dev.skillbill.tray.core.ui.durationText
 import dev.skillbill.tray.core.ui.effectiveFreshness
-import dev.skillbill.tray.core.ui.phaseLabel
 import dev.skillbill.tray.core.ui.outcomeLabel
 import dev.skillbill.tray.core.ui.phaseElapsedText
+import dev.skillbill.tray.core.ui.phaseLabel
 import dev.skillbill.tray.core.ui.progressLabel
 import dev.skillbill.tray.core.ui.repositoryTitle
 import dev.skillbill.tray.core.ui.statusColor
@@ -139,16 +141,8 @@ fun TrayPopoverContent(
       PopoverTab.PHASES -> state.popoverFinishedPhases
       PopoverTab.OPERATIONS -> state.popoverFinishedOperations
     }
-    state.liveProblem?.let {
-      Text(it.summary, Modifier.fillMaxWidth().background(orange.copy(alpha = .12f)).padding(12.dp), color = amber, fontFamily = body, fontSize = 11.sp)
-    }
-    state.pendingFeedback.firstOrNull()?.let { feedback ->
-      Text(
-        feedback.message,
-        Modifier.fillMaxWidth().background(orange.copy(alpha = .12f)).clickable { onAction(TrayAction.AcknowledgeFeedback(feedback.id)) }.padding(12.dp),
-        color = amber, fontFamily = body, fontSize = 11.sp,
-      )
-    }
+    ProblemMessage(state.liveProblem?.summary)
+    FeedbackMessages(state.pendingFeedback) { onAction(TrayAction.AcknowledgeFeedback(it)) }
     val scroll = rememberLazyListState()
     val liveLists = listOf(state.sections.needsYou, state.sections.goals, state.sections.phases, state.sections.operations)
     val loading = liveLists.any { it is PagedListState.Content && it.append == AppendState.Loading }

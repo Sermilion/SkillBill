@@ -11,11 +11,12 @@ import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
 import dev.skillbill.tray.core.domain.repository.WorkPolicyRepository
 import dev.skillbill.tray.core.domain.repository.WorkStoreSession
+import dev.skillbill.tray.core.ui.LaunchRequests
+import kotlin.time.Clock
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.MergeComponent
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
-import kotlin.time.Clock
 
 /**
  * The application's dependency graph. Every module contributes its own bindings to [AppScope]; this component merges
@@ -37,19 +38,22 @@ abstract class ApplicationComponent(
   abstract val settings: SettingsRepository
   abstract val dispatchers: DispatcherProvider
   abstract val clock: Clock
+  abstract val launches: LaunchRequests
   abstract val shutdown: ApplicationShutdown
   abstract val viewModels: ViewModelFactory
   abstract val windows: WindowComponents
 }
 
-/** Releases what the application owns for its whole run: the selected database session and the settings store. */
+/** Ends app-owned launches before closing the database session and settings store. */
 @Inject
 @SingleIn(AppScope::class)
 class ApplicationShutdown(
   private val storeSession: WorkStoreSession,
   private val settingsLifetime: SettingsLifetime,
+  private val launches: LaunchRequests,
 ) {
   suspend fun closeAndJoin() {
+    launches.closeAndJoin()
     try {
       storeSession.closeAndJoin()
     } finally {

@@ -11,8 +11,9 @@ import zipfile
 project = Path(__file__).resolve().parents[1]
 image = project / "composeApp/build/compose/binaries/main/app"
 classes = project / "core/data/build/classes/kotlin/jvm/test"
+fixtures = project / "core/testing/build/classes/kotlin/jvm/main"
 runtime_install = Path(sys.argv[1]) if len(sys.argv) > 1 else None
-if not image.is_dir() or not classes.is_dir() or runtime_install is None or not runtime_install.is_dir():
+if not image.is_dir() or not classes.is_dir() or not fixtures.is_dir() or runtime_install is None or not runtime_install.is_dir():
     raise SystemExit("Run `./gradlew packagedDataSmoke` (it builds the distribution, runtime install image and smoke classes first).")
 
 for path in image.rglob("*.jar"):
@@ -49,8 +50,9 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     cfg = cfgs[0]
     smoke_jar = cfg.parent / "packaged-data-smoke.jar"
     with zipfile.ZipFile(smoke_jar, "w") as archive:
-        for class_file in classes.rglob("*.class"):
-            archive.write(class_file, class_file.relative_to(classes))
+        for class_root in (classes, fixtures):
+            for class_file in class_root.rglob("*.class"):
+                archive.write(class_file, class_file.relative_to(class_root))
     content = cfg.read_text()
     content = content.replace("[JavaOptions]", "app.classpath=$APPDIR/packaged-data-smoke.jar\n\n[JavaOptions]")
     content += (

@@ -5,18 +5,14 @@ import androidx.lifecycle.viewModelScope
 import dev.skillbill.tray.core.domain.model.ControlConfirmation
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
-import dev.skillbill.tray.core.domain.model.ExecutionScope
+import dev.skillbill.tray.core.domain.model.IncidentProgress
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
+import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
-import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreviewResult
-import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
-import dev.skillbill.tray.core.domain.model.IncidentProgress
-import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
-import dev.skillbill.tray.core.domain.model.WorkSection
 import dev.skillbill.tray.core.domain.model.eligibleForControl
-import dev.skillbill.tray.core.domain.model.hasStartedOrFinished
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
@@ -25,44 +21,33 @@ import dev.skillbill.tray.core.ui.AppendState
 import dev.skillbill.tray.core.ui.Feedback
 import dev.skillbill.tray.core.ui.FeedbackIds
 import dev.skillbill.tray.core.ui.FeedbackTone
+import dev.skillbill.tray.core.ui.LaunchRequests
 import dev.skillbill.tray.core.ui.NavigationEffects
 import dev.skillbill.tray.core.ui.acknowledged
 import dev.skillbill.tray.core.ui.withFeedback
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 /** Pages kept in memory per detail list. */
 private const val MAX_DETAIL_PAGES = 5
 private const val READ_FAILURE_GRACE_MS = 500L
-
-private val LAUNCH_REGISTRATION_TIMEOUT = 120.seconds
-
-/** How long a launch waits for the board's current attempts before it starts without them. */
-private val KNOWN_ATTEMPTS_TIMEOUT = 5.seconds
 
 /** A finished item keeps its run controls for this long. */
 private val CONTROL_WINDOW = 24.hours
 
 /**
  * One work item's detail. Selecting another item creates another instance and clears this one, which cancels anything still
- * in flight: a control request, an append or a refresh can never land on the item that replaced this one.
+ * in flight on this entry. Launch requests live in the application; this entry only awaits their result.
  */
 class DetailViewModel(
   private val identity: WorkIdentity,
@@ -70,6 +55,7 @@ class DetailViewModel(
   private val controls: WorkControlRepository,
   private val boards: WorkBoardRepository,
   private val clock: Clock,
+  private val launches: LaunchRequests,
 ) : ViewModel() {
   private enum class OrdinaryControl(val kind: ControlKind) {
     PAUSE(ControlKind.PAUSE),
@@ -93,6 +79,9 @@ class DetailViewModel(
   val effects: Flow<DetailEffect> = navigation.flow
 
   init {
+    viewModelScope.launch {
+      launches.pending.collect { pending -> mutable.update { it.copy(launchPending = identity in pending) } }
+    }
     viewModelScope.launch {
       details.observeDetail(identity).collect { observed -> mutex.withLock { applyObserved(observed) } }
     }
@@ -265,30 +254,30 @@ class DetailViewModel(
       return
     }
     val generation = item.databaseGeneration
-    val requestedAt = clock.now()
+    val launch = if (control == OrdinaryControl.LAUNCH) launches.launch(item, agentId) ?: return else null
     mutable.update { it.copy(control = ControlState.InProgress(kind)) }
     controlJob = viewModelScope.launch {
       try {
-        // Attempts that exist before the request, so the one it registers can be told apart; nothing arriving in time means none.
-        val knownAttempts = if (control == OrdinaryControl.LAUNCH) {
-          withTimeoutOrNull(KNOWN_ATTEMPTS_TIMEOUT) { launchCandidates().first() }.orEmpty().map { it.identity }.toSet()
-        } else {
-          emptySet()
-        }
         val result: Outcome<*> = when (control) {
           OrdinaryControl.PAUSE -> controls.pause(item)
           OrdinaryControl.STOP -> controls.stop(item)
           OrdinaryControl.CANCEL -> controls.cancel(item)
-          OrdinaryControl.LAUNCH -> controls.launch(item, agentId)
+          OrdinaryControl.LAUNCH -> checkNotNull(launch).await()
         }
-        // The store was replaced while the request ran: its answer belongs to a work item that no longer exists.
         if (loaded()?.detail?.item?.databaseGeneration != generation) return@launch
         when (result) {
           is Outcome.Failure -> refuse(kind, result.problem)
-          is Outcome.Value<*> -> (result.value as? ControlConfirmation)?.let { addFeedback(FeedbackTone.CONFIRMATION, confirmationNotice(it)) }
+          is Outcome.Value<*> -> {
+            if (launch != null) {
+              val successor = result.value as? WorkIdentity
+              if (successor != null) navigation.send(DetailEffect.SelectSuccessor(item.identity, successor))
+              else addFeedback(FeedbackTone.PROBLEM, "The harness started but has not registered a new attempt yet. Check its output before trying again.")
+            } else {
+              (result.value as? ControlConfirmation)?.let { addFeedback(FeedbackTone.CONFIRMATION, confirmationNotice(it)) }
+            }
+          }
         }
-        boards.refresh()
-        if (result is Outcome.Value<*> && control == OrdinaryControl.LAUNCH) followLaunch(item, knownAttempts, requestedAt)
+        if (launch == null) boards.refresh()
       } finally {
         mutable.update { if (it.control is ControlState.InProgress) it.copy(control = ControlState.Idle) else it }
       }
@@ -464,35 +453,11 @@ class DetailViewModel(
       confirmedPrerequisites = if (keepChecks) state.confirmedPrerequisites else emptySet())
   }
 
-  /** The live board's items, which is where a launched attempt registers; finished attempts are included so a fast one is not missed. */
-  private fun launchCandidates(): Flow<List<WorkItem>> = combine(
-    boardItems(WorkSection.NEEDS_YOU),
-    boardItems(WorkSection.GOALS),
-    boardItems(WorkSection.PHASES),
-    boardItems(WorkSection.RECENT),
-  ) { needsYou, goals, phases, recent ->
-    ((needsYou + goals + phases).filter { it.liveSection != null } + recent).distinctBy { it.identity }
-  }
-
-  private fun boardItems(section: WorkSection): Flow<List<WorkItem>> =
-    boards.observe(section, Retention.DAY).map { (it as? Outcome.Value)?.value?.items.orEmpty() }
-
   /** Records a control that did not run, or failed, in the control state and as the notice that explains it. */
   private fun refuse(kind: ControlKind, problem: Problem) {
     val feedback = Feedback(feedbackIds.next(), FeedbackTone.PROBLEM, problem.summary)
     mutable.update {
       it.copy(control = ControlState.Refused(kind, problem, feedback.id), pendingFeedback = it.pendingFeedback.withFeedback(feedback))
-    }
-  }
-
-  private suspend fun followLaunch(item: WorkItem, knownAttempts: Set<WorkIdentity>, requestedAt: Instant) {
-    val successor = withTimeoutOrNull(LAUNCH_REGISTRATION_TIMEOUT) {
-      launchCandidates().map { items -> items.firstOrNull { candidate -> isSuccessor(candidate, item, knownAttempts, requestedAt) } }.filterNotNull().first()
-    }
-    if (successor != null) {
-      navigation.send(DetailEffect.SelectSuccessor(item.identity, successor.identity))
-    } else {
-      addFeedback(FeedbackTone.PROBLEM, "The harness started but has not registered a new attempt yet. Check its output before trying again.")
     }
   }
 
@@ -504,23 +469,6 @@ class DetailViewModel(
   private sealed interface Reread {
     data class Refreshed(val detail: Detail, val windows: Map<DetailList, List<Detail>>) : Reread
     data class Failed(val problem: Problem) : Reread
-  }
-}
-
-/** A launch's successor is a new attempt of the same standalone phase, or the same goal once it has started again. */
-private fun isSuccessor(candidate: WorkItem, item: WorkItem, knownAttempts: Set<WorkIdentity>, requestedAt: Instant): Boolean {
-  if (candidate.identity.repositoryIdentity != item.identity.repositoryIdentity || candidate.branch != item.branch ||
-    candidate.phaseId != item.phaseId || candidate.issueKey != item.issueKey
-  ) {
-    return false
-  }
-  return if (item.scope == ExecutionScope.STANDALONE_PHASE) {
-    candidate.identity !in knownAttempts && candidate.startedAt?.let { started ->
-      started >= requestedAt && (item.startedAt?.let { started > it } ?: (candidate.updatedAt > item.updatedAt))
-    } == true
-  } else {
-    candidate.identity == item.identity && candidate.updatedAt > item.updatedAt &&
-      (candidate.executionId != item.executionId || candidate.hasStartedOrFinished())
   }
 }
 

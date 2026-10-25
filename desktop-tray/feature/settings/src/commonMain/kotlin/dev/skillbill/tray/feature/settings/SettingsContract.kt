@@ -26,6 +26,8 @@ data class SettingsUiState(
   /** The database path being typed; it is only written by [SettingsAction.SavePath]. */
   val draftPath: String = "",
   val pathError: PathError? = null,
+  /** The Claude config directories found on this machine, offered as the choices for [AppSettings.claudeConfigDir]. */
+  val claudeConfigDirectories: List<String> = emptyList(),
   val savingPath: Boolean = false,
   /** The database the board is reading right now, which a blank path leaves to the runtime; null when none is open. */
   val effectiveDatabasePath: String? = null,
@@ -35,6 +37,8 @@ data class SettingsUiState(
 sealed interface SettingsAction {
   data class PathChanged(val text: String) : SettingsAction
   data object SavePath : SettingsAction
+
+  data class ClaudeConfigDirChosen(val directory: String) : SettingsAction
   data class RetentionChosen(val retention: Retention) : SettingsAction
   data class NotificationToggled(val key: String, val enabled: Boolean) : SettingsAction
   data class StartAtLoginChanged(val enabled: Boolean) : SettingsAction

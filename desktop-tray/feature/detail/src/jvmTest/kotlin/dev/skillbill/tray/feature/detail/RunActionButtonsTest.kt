@@ -28,7 +28,7 @@ class RunActionButtonsTest {
         setContent {
           DesignSystemTheme {
             RunActionButtons(
-              stopped, false, true, false, false, null, emptySet(), null, false,
+              stopped, false, true, false, false, null, emptySet(), false,
               FocusRequester(), false, actions::add,
             )
           }
@@ -50,7 +50,7 @@ class RunActionButtonsTest {
     setContent {
       DesignSystemTheme {
         RunActionButtons(
-          stopped, false, true, false, false, null, emptySet(), null, false,
+          stopped, false, true, false, false, null, emptySet(), false,
           FocusRequester(), false, {},
         )
       }
@@ -69,7 +69,7 @@ class RunActionButtonsTest {
     setContent {
       DesignSystemTheme {
         RunActionButtons(
-          interrupted, false, true, false, false, null, emptySet(), null, false,
+          interrupted, false, true, false, false, null, emptySet(), false,
           FocusRequester(), false, actions::add,
         )
       }
@@ -89,7 +89,7 @@ class RunActionButtonsTest {
     setContent {
       DesignSystemTheme {
         RunActionButtons(
-          interrupted, false, true, false, false, null, emptySet(), null, false,
+          interrupted, false, true, false, false, null, emptySet(), false,
           FocusRequester(), false, {},
         )
       }
@@ -97,6 +97,6 @@ class RunActionButtonsTest {
 
     onNodeWithText("Resume").assertIsNotEnabled()
     onNodeWithText("Agent: codex").assertIsNotEnabled()
-    onNodeWithText("This run still has a running owner.").assertExists()
+    onNodeWithText("This run still has a running owner.").assertDoesNotExist()
   }
 }

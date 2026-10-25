@@ -246,6 +246,15 @@ supplied briefing without starting standalone phase or operation commands.
 
 ### Phases
 
+Validation runs the project's required checks and fixes every failure in the same
+session, including build failures. It may run repository build and packaging commands,
+including the pack build command, to prepare missing or stale validation artifacts.
+After source repairs it rebuilds the affected artifacts and reruns all required checks
+against the current candidate. The separate compile-only build gate does not reserve
+these commands away from validation. A rebuild does not complete validation, and
+artifact identity and integrity checks remain mandatory. Monitor repair uses the same
+validation responsibility before publishing its fix.
+
 Workflow phases advance in order. Once execution leaves a phase, later edits,
 validation repairs, checkpoint commits, and resume do not reopen it. Repair loops
 stay inside their owning phase, including audit planning and implementation

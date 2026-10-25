@@ -97,7 +97,7 @@ class StandalonePhaseStatusPublisherFactory(
     status: StandalonePhaseStatusEventSink,
   ): FeatureTaskRuntimeRunEventSink =
     FeatureTaskRuntimeRunEventSink { event ->
-      stdout(event)
       status.emit(event)
+      stdout(event)
     }
 }

@@ -25,6 +25,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvai
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseIncidentAlias
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CancellationException
 
@@ -38,6 +39,8 @@ class StandalonePhaseStatusEventSink(
 ) : FeatureTaskRuntimeRunEventSink {
   private var registered: StandalonePhaseStatusRecord? = null
   private var revision: String? = null
+  private var activeDurationMs: Long = 0
+  private var activeDurationAsOf: Instant? = null
   private var currentStep: String = "run"
   private var currentActivity: String? = null
   private var lastCiObservedPendingSampleNames: Set<String>? = null
@@ -249,6 +252,10 @@ class StandalonePhaseStatusEventSink(
     acceptedResult: String? = terminalResult,
   ) {
     val current = registered ?: return
+    val now = clock.instant()
+    val elapsed = activeDurationAsOf?.let { Duration.between(it, now).toMillis().coerceAtLeast(0) } ?: 0
+    val duration = activeDurationMs + elapsed
+    val anchor = now.takeIf { state == "active" }
     val result =
       database.transaction { unitOfWork ->
         unitOfWork.standalonePhaseStatuses.update(
@@ -260,8 +267,10 @@ class StandalonePhaseStatusEventSink(
             lifecycleState = state,
             currentStep = currentStep,
             currentActivity = currentActivity,
-            updatedAt = clock.instant(),
+            updatedAt = now,
             finishedAt = finishedAt,
+            activeDurationMs = duration,
+            activeDurationAsOf = anchor,
             terminalResult = terminalResult?.takeIf(String::isNotBlank),
             acceptedResult = acceptedResult?.takeIf(String::isNotBlank),
             monitorCleanup = monitorCleanup,
@@ -274,6 +283,8 @@ class StandalonePhaseStatusEventSink(
     when (result) {
       StandalonePhaseStatusUpdateResult.ACCEPTED -> {
         revision = incrementDecimal(requireNotNull(revision))
+        activeDurationMs = duration
+        activeDurationAsOf = anchor
       }
       StandalonePhaseStatusUpdateResult.IDEMPOTENT -> Unit
       else -> {
@@ -290,6 +301,8 @@ class StandalonePhaseStatusEventSink(
     val record = database.transaction { it.standalonePhaseStatuses.register(registrationForWorkflow(workflowId)) }
     registered = record
     revision = record.statusRevision
+    activeDurationMs = record.activeDurationMs ?: 0
+    activeDurationAsOf = record.activeDurationAsOf ?: record.startedAt.takeIf { record.lifecycleState == "active" }
     currentStep = record.phaseId
   }
 

@@ -1,16 +1,16 @@
 package dev.skillbill.tray.feature.specs
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -21,7 +21,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import dev.skillbill.tray.core.domain.model.SpecNode
 import kotlinx.coroutines.launch
 
 /** The visible rows as a lazy list keyed by node path, with keyboard navigation over the rows. */
@@ -77,7 +76,6 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
       SpecRowItem(
         row = row,
         selected = path == state.selectedPath,
-        openError = (row.node as? SpecNode.File)?.let { state.openErrors[it.absolutePath] },
         onClick = {
           requester.requestFocus()
           onAction(SpecsAction.Click(path))

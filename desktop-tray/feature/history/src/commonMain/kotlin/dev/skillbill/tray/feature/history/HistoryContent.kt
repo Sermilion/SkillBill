@@ -1,6 +1,5 @@
 package dev.skillbill.tray.feature.history
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,9 +24,11 @@ import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.domain.model.HistoryFilter
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.ui.AppendState
+import dev.skillbill.tray.core.ui.FeedbackMessages
 import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.PagedListState
+import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.SidebarWorkRow
 
 private const val FOOTER_KEY = "history:footer"
@@ -49,9 +50,7 @@ fun LazyListScope.historySection(state: HistoryUiState, selected: WorkIdentity?,
       }
     }
     Text("Finished within ${state.retention.cliValue}", Modifier.padding(start = 16.dp, bottom = 6.dp), color = dim, style = MaterialTheme.typography.bodySmall)
-    state.pendingFeedback.firstOrNull()?.let { feedback ->
-      Text(feedback.message, Modifier.clickable { onAction(HistoryAction.AcknowledgeFeedback(feedback.id)) }.padding(start = 16.dp, bottom = 6.dp), color = amber, style = MaterialTheme.typography.bodySmall)
-    }
+    FeedbackMessages(state.pendingFeedback) { onAction(HistoryAction.AcknowledgeFeedback(it)) }
   }
   when (list) {
     PagedListState.InitialLoading -> item(key = "history:loading") { Note("Loading...") }
@@ -80,7 +79,7 @@ private fun Note(text: String) {
 @Composable
 private fun Problem(summary: String, retry: () -> Unit) {
   Column(Modifier.padding(horizontal = 16.dp)) {
-    Text(summary, color = amber, style = MaterialTheme.typography.bodySmall)
+    ProblemMessage(summary)
     TextButton(onClick = retry) { Text("Retry", color = amber) }
   }
 }

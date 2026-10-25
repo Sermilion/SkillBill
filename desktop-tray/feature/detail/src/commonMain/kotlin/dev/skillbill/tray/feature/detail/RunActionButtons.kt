@@ -1,36 +1,37 @@
 package dev.skillbill.tray.feature.detail
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.core.designsystem.DesignButton
 import dev.skillbill.tray.core.designsystem.muted
-import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.IncidentProgress
 import dev.skillbill.tray.core.domain.model.IncidentRecoveryPreview
 import dev.skillbill.tray.core.domain.model.Lifecycle
-import dev.skillbill.tray.core.domain.model.eligibleForControl
 import dev.skillbill.tray.core.domain.model.WorkIdentity
+import dev.skillbill.tray.core.domain.model.eligibleForControl
+import dev.skillbill.tray.core.ui.ProblemMessage
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -42,7 +43,6 @@ internal fun RunActionButtons(
   recoveryPreviewLoading: Boolean,
   recoveryPreview: IncidentRecoveryPreview?,
   confirmedPrerequisites: Set<String>,
-  refusalMessage: String?,
   recovering: Boolean,
   statusFocus: FocusRequester,
   statusAttached: Boolean,
@@ -128,8 +128,7 @@ internal fun RunActionButtons(
         ) { onAction(DetailAction.Recover) }
       }
     }
-    refusalMessage?.let { Text(it, color = muted, fontSize = 12.sp) }
-    options?.unavailableReason?.let { Text(it, color = muted, fontSize = 11.sp) }
+    ProblemMessage(options?.unavailableReason)
     if (canLaunch && resumable) {
       Text("Starts the installed agent harness", color = muted, fontSize = 11.sp)
     }

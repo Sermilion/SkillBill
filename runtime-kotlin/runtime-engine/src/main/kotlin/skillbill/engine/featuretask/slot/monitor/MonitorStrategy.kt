@@ -131,6 +131,7 @@ class MonitorStrategy(
         taskDirective = directiveFor(stepId),
         stepContext = fixBrief.stepContextFor(inputs.issueKey),
         runsValidationGate = true,
+        runsBuildGate = true,
       )
     }
   }

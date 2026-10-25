@@ -428,6 +428,8 @@ data class AppSettings(
   val specPaneOpen: Boolean = false,
   /** Expanded spec node paths per project id; collapsed nodes are never stored. */
   val specExpandedPaths: Map<String, Set<String>> = emptyMap(),
+  /** The Claude Code config directory runs started here use when they recorded none; null leaves the app's environment. */
+  val claudeConfigDir: String? = null,
 ) {
   init {
     require(lastPopoverTab in setOf("Goals", "Phases"))

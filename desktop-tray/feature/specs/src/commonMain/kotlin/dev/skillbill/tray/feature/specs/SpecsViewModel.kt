@@ -15,7 +15,13 @@ import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
+import dev.skillbill.tray.core.ui.Feedback
+import dev.skillbill.tray.core.ui.FeedbackIds
+import dev.skillbill.tray.core.ui.FeedbackTone
+import dev.skillbill.tray.core.ui.LaunchRequests
 import dev.skillbill.tray.core.ui.NavigationEffects
+import dev.skillbill.tray.core.ui.acknowledged
+import dev.skillbill.tray.core.ui.withFeedback
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -42,10 +48,12 @@ class SpecsViewModel(
   private val details: WorkDetailRepository,
   private val controls: WorkControlRepository,
   private val settings: SettingsRepository,
+  private val launches: LaunchRequests,
 ) : ViewModel() {
   private val local = MutableStateFlow(Local())
   private val appSettings = MutableStateFlow(AppSettings())
   private val outbox = NavigationEffects<SpecsEffect>()
+  private val feedbackIds = FeedbackIds()
 
   private var selectedWork: WorkIdentity? = null
   private var explicitPick = false
@@ -53,7 +61,12 @@ class SpecsViewModel(
   private var controlJob: Job? = null
   private var actionJob: Job? = null
 
-  val state: StateFlow<SpecsUiState> = combine(local, appSettings, ::assemble)
+  val state: StateFlow<SpecsUiState> = combine(local, appSettings, launches.pending) { local, settings, pending ->
+    assemble(local, settings).let { state ->
+      val work = (state.toolbar.control as? ControlLoad.Ready)?.control?.work
+      state.copy(toolbar = state.toolbar.copy(inFlight = state.toolbar.inFlight || work in pending))
+    }
+  }
     .stateIn(viewModelScope, SharingStarted.Eagerly, SpecsUiState())
 
   val effects: Flow<SpecsEffect> = outbox.flow
@@ -101,7 +114,8 @@ class SpecsViewModel(
       is SpecsAction.Click -> click(action.path)
       is SpecsAction.Toggle -> setExpanded(action.path, expand = null)
       SpecsAction.CollapseAll -> collapseAll()
-      is SpecsAction.FileOpenFailed -> local.update { it.copy(openErrors = it.openErrors + (action.absolutePath to action.message)) }
+      is SpecsAction.FileOpenFailed -> addFeedback(action.message)
+      is SpecsAction.AcknowledgeFeedback -> local.update { it.copy(feedback = it.feedback.acknowledged(action.id)) }
       SpecsAction.Retry -> retry()
       SpecsAction.Reveal -> local.value.project?.specsRoot?.takeIf { it.isNotBlank() }?.let { outbox.send(SpecsEffect.RevealDirectory(it)) }
       SpecsAction.TogglePane -> viewModelScope.launch { settings.update { it.copy(specPaneOpen = !it.specPaneOpen) } }
@@ -118,6 +132,11 @@ class SpecsViewModel(
       SpecsAction.KeepRunHistory -> updateToolbar { it.copy(purgeDialogOpen = false) }
       SpecsAction.ConfirmPurge -> confirmPurge()
     }
+  }
+
+  private fun addFeedback(message: String) {
+    val feedback = Feedback(feedbackIds.next(), FeedbackTone.PROBLEM, message)
+    local.update { it.copy(feedback = it.feedback.withFeedback(feedback)) }
   }
 
   private fun updateToolbar(change: (SpecToolbarState) -> SpecToolbarState) = local.update { it.copy(toolbar = change(it.toolbar)) }
@@ -154,7 +173,16 @@ class SpecsViewModel(
         }
       }
       SpecRunState.PAUSED, SpecRunState.BLOCKED, SpecRunState.CANCELED -> act { c ->
-        withItem(c, ::startFailure) { controls.launch(it, agent) }
+        withItem(c, ::startFailure) { item ->
+          when (val result = launches.launch(item, agent)?.await()) {
+            null -> Outcome.Value(Unit)
+            is Outcome.Failure -> result
+            is Outcome.Value -> {
+              if (result.value == null) addFeedback("The harness started but has not registered yet. Check its output before trying again.")
+              Outcome.Value(Unit)
+            }
+          }
+        }
       }
       else -> Unit
     }
@@ -199,19 +227,19 @@ class SpecsViewModel(
   }
 
   /**
-   * The one in-flight guard: a no-op while a request runs or no control is ready. [block] returns the inline message, or null. The
+   * The one in-flight guard: a no-op while a request runs or no control is ready. [block] returns a notice, or null. The
    * message is dropped when the selection moved meanwhile; otherwise the control is read again so the buttons follow the runtime.
    */
   private fun act(block: suspend (SpecBundleControl) -> String?) {
     val control = readyControl() ?: return
-    if (local.value.toolbar.inFlight || actionJob?.isActive == true) return
+    if (local.value.toolbar.inFlight || actionJob?.isActive == true || control.work in launches.pending.value) return
     val origin = selectionKey(local.value)
-    updateToolbar { it.copy(inFlight = true, message = null, confirmingCancel = false) }
+    updateToolbar { it.copy(inFlight = true, confirmingCancel = false) }
     actionJob = viewModelScope.launch {
       try {
         val message = block(control)
         if (selectionKey(local.value) == origin) {
-          updateToolbar { it.copy(message = message) }
+          message?.let(::addFeedback)
           loadControl()
         }
       } finally {
@@ -375,7 +403,6 @@ class SpecsViewModel(
             followedRoot = followedRoot,
             snapshot = SpecSnapshotState.Loading,
             selectedPath = null,
-            openErrors = emptyMap(),
             shownWhileFiltering = emptyMap(),
           ),
         )
@@ -416,7 +443,6 @@ class SpecsViewModel(
     val node = state.value.rows.firstOrNull { it.node.path == path }?.node ?: return
     select(path)
     if (node is SpecNode.File) {
-      local.update { it.copy(openErrors = it.openErrors - node.absolutePath) }
       outbox.send(SpecsEffect.OpenFile(node.absolutePath))
     } else {
       setExpanded(path, expand = null)
@@ -477,7 +503,7 @@ class SpecsViewModel(
       expandedPaths = expanded,
       rows = rowsFor(l, app),
       selectedPath = l.selectedPath,
-      openErrors = l.openErrors,
+      pendingFeedback = l.feedback,
       paneOpen = app.specPaneOpen,
       anyInProgress = loaded?.anyInProgress == true,
       toolbar = selectionFor(l).let { selection ->
@@ -500,7 +526,7 @@ class SpecsViewModel(
     /** Expansion the user set while the current filter is active; never saved, cleared when the filter or project changes. */
     val shownWhileFiltering: Map<String, Boolean> = emptyMap(),
     val selectedPath: String? = null,
-    val openErrors: Map<String, String> = emptyMap(),
+    val feedback: List<Feedback> = emptyList(),
     val retries: Int = 0,
     val toolbar: SpecToolbarState = SpecToolbarState(),
     /** True once the user picked an agent for the selected bundle; a later control read then keeps that pick. */

@@ -122,10 +122,11 @@ class WorkflowGoalRunnerManifestLoader(
         } else {
           null
         }
+      val planningTime = unitOfWork.planWorkflowTiming(planWorkflowId)
       val imported =
         engine.updateRecord(
           WorkflowFamily.TASK_RUNTIME.definition,
-          base,
+          base.copy(startedAt = planningTime.startedAt ?: base.startedAt),
           WorkflowUpdateInput(
             workflowStatus = WorkflowStatus.PAUSED,
             currentStepId = "plan",
@@ -139,6 +140,13 @@ class WorkflowGoalRunnerManifestLoader(
         WorkflowFamily.TASK_RUNTIME,
         imported.toRecord().copy(issueKey = normalizeRequiredIssueKey(manifest.issueKey)),
       )
+      if (existing == null) {
+        val control = unitOfWork.goalRunnerControls.controlState(imported.workflowId)
+        unitOfWork.goalRunnerControls.persistControlState(
+          imported.workflowId,
+          control.copy(activeDurationMs = planningTime.activeDurationMs),
+        )
+      }
       val saved = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, imported.workflowId) ?: imported
       GoalRunnerManifestState(
         parentWorkflowId = saved.workflowId,

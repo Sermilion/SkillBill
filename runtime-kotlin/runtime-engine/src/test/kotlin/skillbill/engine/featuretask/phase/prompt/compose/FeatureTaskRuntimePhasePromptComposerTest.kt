@@ -261,6 +261,20 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
+  fun `validation and monitor repair can rebuild without returning to an earlier phase`() {
+    listOf("validate", "monitor_fix").forEach { phaseId ->
+      val prompt = composePromptForPhase(phaseId)
+
+      assertFalse(prompt.contains("## Build ownership"), phaseId)
+      assertContains(prompt, "build failures", false, phaseId)
+      assertContains(prompt, "missing or stale artifacts", false, phaseId)
+      assertContains(prompt, "Rebuild after source repairs", false, phaseId)
+      assertContains(prompt, "Do not return to an earlier phase", false, phaseId)
+      assertContains(prompt, "Settle completed only when every required check passes", false, phaseId)
+    }
+  }
+
+  @Test
   fun `build prompt names pack build_command and forbids collect-all and validate checklists`() {
     val prompt =
       composePhasePrompt(

@@ -1,8 +1,10 @@
 package dev.skillbill.tray.feature.detail
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,38 +12,35 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,17 +65,18 @@ import dev.skillbill.tray.core.designsystem.red
 import dev.skillbill.tray.core.designsystem.strongBorder
 import dev.skillbill.tray.core.designsystem.surface3
 import dev.skillbill.tray.core.domain.model.Detail
-import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.DetailList
-import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.PhaseExecution
+import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.WorkFamily
+import dev.skillbill.tray.core.domain.model.showsAsStandalonePhase
 import dev.skillbill.tray.core.domain.model.stalled
 import dev.skillbill.tray.core.ui.ExpandableReason
-import dev.skillbill.tray.core.ui.FeedbackTone
+import dev.skillbill.tray.core.ui.FeedbackMessages
 import dev.skillbill.tray.core.ui.PageFooter
+import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.WorkDot
 import dev.skillbill.tray.core.ui.age
 import dev.skillbill.tray.core.ui.coerceNonNegative
@@ -117,14 +117,17 @@ fun DetailContent(
   modifier: Modifier = Modifier,
   onBackToList: (() -> Unit)? = null,
 ) {
+  FeedbackMessages(state.pendingFeedback) { onAction(DetailAction.AcknowledgeFeedback(it)) }
+  ProblemMessage(state.readHealth.reportedProblem?.summary)
   when (val load = state.load) {
     DetailLoad.Loading -> DetailMessage("Loading work detail", "Fetching phases, subtasks, and history.", null, null, modifier)
     is DetailLoad.Failed -> {
       val unavailable = load.problem.runtimeBuild?.takeIf { it.reason == RuntimeBuildReason.INCIDENT_DETAIL_UNAVAILABLE }
       if (unavailable != null) IncidentDetailUnavailablePanel(unavailable, { onAction(DetailAction.Refresh) }, modifier)
-      else DetailMessage(
-        "Work detail unavailable", load.problem.summary, { onAction(DetailAction.Refresh) }, onBackToList, modifier,
-      )
+      else {
+        ProblemMessage(load.problem.summary)
+        DetailMessage("Work detail unavailable", "", { onAction(DetailAction.Refresh) }, onBackToList, modifier)
+      }
     }
     is DetailLoad.Loaded -> LoadedDetail(state, load, now, onAction, modifier)
   }
@@ -177,14 +180,16 @@ private fun LoadedDetail(
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val frozen = !fresh
   val operation = item.family == WorkFamily.FEATURE_VERIFY
-  val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
+  val standalone = item.showsAsStandalonePhase()
+  val goal = item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched
   val blockReason = item.exactPauseReason
     ?: detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.result
     ?: item.pauseReason
     ?: item.summary
-  val copyReason = if (item.family == WorkFamily.FEATURE_GOAL) item.exactPauseReason else blockReason
   val goalBlocked = item.family == WorkFamily.FEATURE_GOAL && item.lifecycle == Lifecycle.BLOCKED
-  val goalBlockReason = copyReason.takeIf { goalBlocked }
+  val stopped = item.lifecycle in setOf(Lifecycle.BLOCKED, Lifecycle.PAUSED, Lifecycle.FAILED)
+  val runReason = if (goalBlocked) item.exactPauseReason else blockReason
+  val reasonColor = if (item.lifecycle == Lifecycle.FAILED) red else orange
   val subtaskTime = durationText(item.subtaskActiveDurationMs, item.subtaskActiveDurationAsOf, item, now, frozen)
   Column(modifier.background(canvas)) {
     Column(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -200,37 +205,15 @@ private fun LoadedDetail(
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         RepositoryLocationLinks(item)
-        state.readHealth.reportedProblem?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
-        state.pendingFeedback.forEach { feedback ->
-          Text(
-            feedback.message,
-            Modifier.clickable { onAction(DetailAction.AcknowledgeFeedback(feedback.id)) },
-            color = if (feedback.tone == FeedbackTone.PROBLEM) orange else green,
-            style = MaterialTheme.typography.bodySmall,
-          )
-        }
-        if (item.lifecycle in setOf(Lifecycle.BLOCKED, Lifecycle.PAUSED, Lifecycle.FAILED)) {
-          val reasonColor = if (item.lifecycle == Lifecycle.FAILED) red else orange
-          Column(Modifier.fillMaxWidth().background(reasonColor.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, reasonColor.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (item.lifecycle == Lifecycle.FAILED) "Run failed" else if (item.lifecycle == Lifecycle.BLOCKED) "Run blocked" else "Run paused", color = reasonColor, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-              ExpandableReason(blockReason, "Run reason", Modifier.weight(1f), color = reasonColor, fontSize = 13.sp, lineHeight = 19.sp)
-              DesignButton("Copy reason", enabled = copyReason != null) { copyReason?.let(copy) }
-            }
-            val restoration = detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.restoration
-            restorationNote(restoration)?.let { Text(it, color = muted, style = MaterialTheme.typography.bodySmall) }
-          }
-        }
       }
       RunActionButtons(
         detail,
-        state.control is ControlState.InProgress,
+        state.control is ControlState.InProgress || state.launchPending,
         state.controllable && !state.readHealth.blocksControls,
         state.recoveryConfirmation,
         state.recoveryPreviewLoading,
         state.recoveryPreview,
         state.confirmedPrerequisites,
-        (state.control as? ControlState.Refused)?.problem?.summary,
         (state.control as? ControlState.InProgress)?.kind == ControlKind.RECOVER,
         recoveryStatusFocus,
         recoveryStatusAttached,
@@ -240,19 +223,23 @@ private fun LoadedDetail(
     HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
       if (!operation) {
-        DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", if (standalone) standalonePlanNote(detail) else "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
+        val stage = item.currentSubtaskId?.let { "$it/${total ?: "?"}" }
+          ?: if (goal && item.currentStepId in detail.goalFinishPipeline) "Goal finish"
+          else if (goal) if (item.goalLaunched || planning) "Planning" else item.currentStepLabel
+          else item.phaseId ?: item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel
+        DetailMetric(if (item.currentSubtaskId != null) "Subtask" else if (goal) "Goal stage" else "Phase", stage, if (standalone || item.goalLaunched) standalonePlanNote(detail) else "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
         MetricDivider()
       }
       DetailMetric(
         if (standalone || operation) "Step" else "Phase",
-        if (operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
+        if (standalone || item.goalLaunched || operation || planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel,
         if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else item.phaseExecution?.label() ?: "",
         Modifier.weight(1f),
       )
       MetricDivider()
       val duration = detailDuration(item, now, frozen)
       DetailMetric(duration.label, duration.value, duration.note, Modifier.weight(1f))
-      if (!standalone && !operation) {
+      if (!standalone && !operation && item.currentSubtaskId != null) {
         MetricDivider()
         DetailMetric("Subtask active", subtaskTime, if (frozen) "last known duration" else if (item.lifecycle == Lifecycle.ACTIVE) "ticking" else "", Modifier.weight(1f))
       }
@@ -349,7 +336,7 @@ private fun LoadedDetail(
           event?.let { add("Event" to listOfNotNull(it.workflowPhase, it.workerRole, it.summary).joinToString(" · ")) }
           item.activity?.let { add((if (operation) "Operation event" else "Phase event") to it) }
         }
-        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked || detail.phaseResults.isNotEmpty() || detail.goalQa != null || detail.goalAssessment != null || workflowQaOutcome(item) != null || hasIncident) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || stopped || detail.phaseResults.isNotEmpty() || detail.goalQa != null || detail.goalAssessment != null || workflowQaOutcome(item) != null || hasIncident) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           DesignLabel(if (operation) "Operation activity" else if (standalone) "Phase activity" else "Goal activity")
           if (hasIncident) {
             IncidentPanel(
@@ -361,16 +348,20 @@ private fun LoadedDetail(
               copy,
             )
           }
-          goalBlockReason?.let { reason ->
+          runReason?.takeIf { stopped }?.let { reason ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
               Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Blocked · ${formatInstant(item.updatedAt, "d MMM HH:mm:ss")}", color = orange, fontSize = 12.sp)
-                ExpandableReason(reason, "Block reason", color = orange)
+                Text("${item.outcomeLabel()} · ${formatInstant(item.updatedAt, "d MMM HH:mm:ss")}", color = reasonColor, fontSize = 12.sp)
+                ExpandableReason(reason, "Run reason", color = reasonColor)
               }
               DesignButton("Copy reason") { copy(reason) }
             }
           }
-          if (goalBlocked && goalBlockReason == null) Text("The full block reason was not saved for this attempt.", color = muted, fontSize = 12.sp)
+          if (goalBlocked && runReason == null) Text("The full block reason was not saved for this attempt.", color = muted, fontSize = 12.sp)
+          if (stopped) {
+            val restoration = detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.restoration
+            restorationNote(restoration)?.let { Text(it, color = muted, style = MaterialTheme.typography.bodySmall) }
+          }
           activity.forEach { (label, value) -> DesignKv(label, value) }
           PhaseResultsSection(detail.phaseResults, detail.goalQa) { id -> detail.subtasks.firstOrNull { it.id == id }?.name }
           workflowQaOutcome(item)?.let { WorkflowQaSection(it) }

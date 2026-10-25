@@ -116,6 +116,7 @@ class StandaloneMonitorStrategy(
       PhaseStepPromptSections(
         taskDirective = directiveFor(stepId),
         runsValidationGate = true,
+        runsBuildGate = true,
         valueContent = StandaloneMonitorDirectives.REPAIR_VALUE_CONTENT,
       )
     }

@@ -56,6 +56,7 @@ class AgentValidateStrategy :
           runtimeOwnedValidateAgentPhaseTask(probeScope)
         },
       runsValidationGate = true,
+      runsBuildGate = true,
       valueContent = if (probeScope == null) VALIDATE_VALUE_CONTENT else VALIDATE_PROBE_VALUE_CONTENT,
     )
   }
