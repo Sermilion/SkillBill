@@ -6,6 +6,7 @@ import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.repository.Outcome
+import dev.skillbill.tray.core.testing.FakeAgentHomeRepository
 import dev.skillbill.tray.core.testing.FakeSettingsRepository
 import dev.skillbill.tray.core.testing.FakeWorkStoreStatusRepository
 import dev.skillbill.tray.core.ui.FeedbackTone
@@ -33,6 +34,7 @@ import kotlin.test.assertTrue
 class SettingsViewModelTest {
   private val dispatcher = StandardTestDispatcher()
   private val repository = FakeSettingsRepository()
+  private val agentHomes = FakeAgentHomeRepository()
 
   @BeforeTest
   fun setUp() {
@@ -46,7 +48,7 @@ class SettingsViewModelTest {
 
   private fun TestScope.viewModel(initial: SettingsState = SettingsState.Ready(AppSettings(databasePath = "/data/store.db"))): SettingsViewModel {
     repository.publish(initial)
-    return SettingsViewModel(repository, FakeWorkStoreStatusRepository()).also { runCurrent() }
+    return SettingsViewModel(repository, FakeWorkStoreStatusRepository(), agentHomes).also { runCurrent() }
   }
 
   @Test
@@ -104,6 +106,30 @@ class SettingsViewModelTest {
 
     vm.onAction(SettingsAction.PathChanged("/other.db"))
     assertNull(vm.state.value.pathError)
+  }
+
+  @Test
+  fun `the found claude config directories are offered and choosing one saves it at once`() = runTest(dispatcher) {
+    agentHomes.directories = Outcome.Value(listOf("/home/.claude", "/home/.claude-work"))
+    val vm = viewModel()
+    assertEquals(listOf("/home/.claude", "/home/.claude-work"), vm.state.value.claudeConfigDirectories)
+
+    vm.onAction(SettingsAction.ClaudeConfigDirChosen("/home/.claude-work"))
+    runCurrent()
+    assertEquals("/home/.claude-work", vm.state.value.settings.claudeConfigDir)
+
+    vm.onAction(SettingsAction.ClaudeConfigDirChosen(null))
+    runCurrent()
+    assertNull(vm.state.value.settings.claudeConfigDir)
+  }
+
+  @Test
+  fun `a failed directory listing is reported and leaves the choice alone`() = runTest(dispatcher) {
+    agentHomes.directories = Outcome.Failure(Problem(ProblemCode.DATABASE_ACCESS, "No database is selected."))
+    val vm = viewModel()
+
+    assertEquals(emptyList(), vm.state.value.claudeConfigDirectories)
+    assertEquals("No database is selected.", vm.state.value.pendingFeedback.single().message)
   }
 
   @Test

@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.common.di.AppScope
 import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildRefusedException
 import dev.skillbill.tray.core.domain.model.WorkSection
+import dev.skillbill.tray.core.domain.repository.AgentHomeRepository
 import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
@@ -31,6 +32,7 @@ class SessionParts(
   val detail: WorkDetailRepository,
   val control: WorkControlRepository,
   val specs: SpecBrowserRepository,
+  val agentHomes: AgentHomeRepository,
 )
 
 /** Creates the parts of a session for [path]; the generated session component is the production implementation. */

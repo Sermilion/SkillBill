@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.SettingsState
+import dev.skillbill.tray.core.domain.repository.AgentHomeRepository
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.WorkStoreStatusRepository
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
   private val settings: SettingsRepository,
   storeStatus: WorkStoreStatusRepository,
+  agentHomes: AgentHomeRepository,
 ) : ViewModel() {
   private val mutable = MutableStateFlow(SettingsUiState())
   private val feedbackIds = FeedbackIds()
@@ -36,11 +38,18 @@ class SettingsViewModel(
     viewModelScope.launch {
       storeStatus.effectiveDatabasePath.collect { path -> mutable.update { it.copy(effectiveDatabasePath = path) } }
     }
+    viewModelScope.launch {
+      when (val found = agentHomes.claudeConfigDirectories()) {
+        is Outcome.Value -> mutable.update { it.copy(claudeConfigDirectories = found.value) }
+        is Outcome.Failure -> addFeedback(found.problem.summary)
+      }
+    }
   }
 
   fun onAction(action: SettingsAction) {
     when (action) {
       is SettingsAction.PathChanged -> mutable.update { it.copy(draftPath = action.text, pathError = null) }
+      is SettingsAction.ClaudeConfigDirChosen -> write { it.copy(claudeConfigDir = action.directory) }
       SettingsAction.SavePath -> savePath()
       is SettingsAction.RetentionChosen -> write { it.copy(retention = action.retention) }
       is SettingsAction.NotificationToggled -> write { it.copy(notifications = it.notifications + (action.key to action.enabled)) }

@@ -3,6 +3,7 @@ package dev.skillbill.tray.composition
 import dev.skillbill.tray.core.common.di.AppScope
 import dev.skillbill.tray.core.common.di.EntryScope
 import dev.skillbill.tray.core.common.di.WindowScope
+import dev.skillbill.tray.core.domain.repository.AgentHomeRepository
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
@@ -78,6 +79,7 @@ class EntryViewModels(
   private val settings: SettingsRepository,
   private val storeStatus: WorkStoreStatusRepository,
   private val specs: SpecBrowserRepository,
+  private val agentHomes: AgentHomeRepository,
   private val clock: Clock,
 ) {
   fun work() = WorkViewModel(boards, settings)
@@ -86,7 +88,7 @@ class EntryViewModels(
 
   fun detail(args: DetailArgs) = DetailViewModel(args.identity, details, controls, boards, clock)
 
-  fun settings() = SettingsViewModel(settings, storeStatus)
+  fun settings() = SettingsViewModel(settings, storeStatus, agentHomes)
 
   fun specs() = SpecsViewModel(specs, details, controls, settings)
 }

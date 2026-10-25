@@ -21,6 +21,7 @@ import dev.skillbill.tray.core.domain.model.TrayStatus
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.WorkSection
+import dev.skillbill.tray.core.domain.repository.AgentHomeRepository
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
@@ -281,6 +282,10 @@ class FakeWorkStoreSession : WorkStoreSession {
   override suspend fun closeAndJoin() {
     closes += 1
   }
+}
+
+class FakeAgentHomeRepository(var directories: Outcome<List<String>> = Outcome.Value(emptyList())) : AgentHomeRepository {
+  override suspend fun claudeConfigDirectories(): Outcome<List<String>> = directories
 }
 
 class FakeWorkStoreStatusRepository(initial: String? = null) : WorkStoreStatusRepository {

@@ -9,6 +9,7 @@ import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.process.InstallerProcessPort
 import skillbill.ports.process.InstallerScriptFetchPort
+import skillbill.ports.system.HostAgentHomesPort
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.time.RuntimeTimingPort
@@ -36,6 +37,7 @@ data class OptionalCallbacks(
   val hostPlatformPort: HostPlatformPort? = null,
   val installerProcessPort: InstallerProcessPort? = null,
   val installerScriptFetchPort: InstallerScriptFetchPort? = null,
+  val hostAgentHomesPort: HostAgentHomesPort? = null,
 )
 
 data class RuntimeContext(

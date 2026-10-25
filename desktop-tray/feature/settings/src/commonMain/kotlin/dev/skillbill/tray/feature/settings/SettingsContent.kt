@@ -2,6 +2,7 @@ package dev.skillbill.tray.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,8 +10,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -24,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.skillbill.tray.core.designsystem.amber
 import dev.skillbill.tray.core.designsystem.canvas
@@ -91,6 +96,7 @@ private fun ReadySettings(state: SettingsUiState, saved: Boolean, onAction: (Set
     singleLine = true,
   )
   state.effectiveDatabasePath?.let { Text("Current database: $it", color = muted, style = MaterialTheme.typography.bodySmall) }
+  ClaudeConfigDirPicker(settings.claudeConfigDir, state.claudeConfigDirectories, onAction)
   Text("History retention", color = ink)
   Row { Retention.entries.forEach { value -> FilterChip(settings.retention == value, { onAction(SettingsAction.RetentionChosen(value)) }, label = { Text(value.cliValue) }) } }
   Text("Notifications", color = ink)
@@ -109,3 +115,28 @@ private fun ReadySettings(state: SettingsUiState, saved: Boolean, onAction: (Set
     if (saved) Text("Saved", Modifier.padding(start = 12.dp), color = green, style = MaterialTheme.typography.bodySmall)
   }
 }
+
+/** Runs started from the app use the chosen directory as CLAUDE_CONFIG_DIR; a saved one no longer found stays listed. */
+@Composable
+private fun ClaudeConfigDirPicker(chosen: String?, directories: List<String>, onAction: (SettingsAction) -> Unit) {
+  var open by remember { mutableStateOf(false) }
+  val choices = listOf(null) + (directories + listOfNotNull(chosen)).distinct()
+  Text("Claude account", color = ink)
+  Box {
+    OutlinedButton(onClick = { open = true }, Modifier.fillMaxWidth()) {
+      Text(claudeDirLabel(chosen), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      Text("▾", color = muted)
+    }
+    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+      choices.forEach { directory ->
+        DropdownMenuItem(text = { Text(claudeDirLabel(directory)) }, onClick = {
+          open = false
+          onAction(SettingsAction.ClaudeConfigDirChosen(directory))
+        })
+      }
+    }
+  }
+  Text("Runs started here use it as CLAUDE_CONFIG_DIR.", color = muted, style = MaterialTheme.typography.bodySmall)
+}
+
+private fun claudeDirLabel(directory: String?): String = directory ?: "App environment"

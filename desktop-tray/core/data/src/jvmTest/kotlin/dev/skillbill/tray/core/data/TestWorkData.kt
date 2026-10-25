@@ -17,6 +17,7 @@ import dev.skillbill.tray.core.data.port.WorkStoreAccess
 import dev.skillbill.tray.core.data.port.WorkStoreConnection
 import dev.skillbill.tray.core.data.repository.RoomWorkBoardRepository
 import dev.skillbill.tray.core.data.repository.RoomWorkDetailRepository
+import dev.skillbill.tray.core.data.repository.RuntimeAgentHomeRepository
 import dev.skillbill.tray.core.data.repository.RuntimeSpecBrowserRepository
 import dev.skillbill.tray.core.data.repository.RuntimeWorkControlRepository
 import dev.skillbill.tray.core.data.repository.SessionWorkBoardRepository
@@ -24,6 +25,7 @@ import dev.skillbill.tray.core.data.repository.SessionWorkControlRepository
 import dev.skillbill.tray.core.data.repository.SessionWorkDetailRepository
 import dev.skillbill.tray.core.data.runtime.JvmFailureClassifier
 import dev.skillbill.tray.core.data.runtime.RuntimeSessionProviders
+import dev.skillbill.tray.core.data.runtime.RuntimeAgentHomeAdapter
 import dev.skillbill.tray.core.data.runtime.RuntimeSpecAdapter
 import dev.skillbill.tray.core.data.runtime.RuntimeWorkAdapter
 import dev.skillbill.tray.core.data.session.DatabaseGenerations
@@ -38,11 +40,14 @@ import dev.skillbill.tray.core.data.session.WorkStoreSessionManager
 import dev.skillbill.tray.core.data.signal.DesktopCommitSignalSource
 import dev.skillbill.tray.core.data.signal.NioSpecDirectoryChanges
 import dev.skillbill.tray.core.data.store.JvmWorkStoreAccess
+import dev.skillbill.tray.core.domain.model.AppSettings
+import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
 import dev.skillbill.tray.core.domain.repository.WorkStoreSession
+import dev.skillbill.tray.core.testing.FakeSettingsRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -123,7 +128,7 @@ fun workStack(
   val sessions = SessionFactory { path ->
     sessionsCreated.incrementAndGet()
     val selection = DatabaseSelection().also { it.choose(path) }
-    val runtime = object : RuntimeSessionProviders {}.runtimeComponent(selection, host)
+    val runtime = object : RuntimeSessionProviders {}.runtimeComponent(selection, host, FakeSettingsRepository(SettingsState.Ready(AppSettings())))
     val gateway = CountingGateway(RuntimeWorkAdapter(runtime), readWork, ownerRegistrations, scriptedControl)
     val session = DatabaseSession(gateway, store, signals, classifier, generations, dispatchers, diagnostics)
     SessionParts(
@@ -134,6 +139,7 @@ fun workStack(
       RuntimeSpecBrowserRepository(
         RuntimeSpecAdapter(runtime), NioSpecDirectoryChanges(diagnostics), signals, dispatchers, diagnostics,
       ),
+      RuntimeAgentHomeRepository(RuntimeAgentHomeAdapter(runtime, host), dispatchers),
     )
   }
   val manager = WorkStoreSessionManager(sessions, generations, gate)

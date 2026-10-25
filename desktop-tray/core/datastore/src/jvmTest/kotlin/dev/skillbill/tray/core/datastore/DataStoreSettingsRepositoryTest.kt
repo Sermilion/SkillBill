@@ -131,6 +131,26 @@ class DataStoreSettingsRepositoryTest {
   }
 
   @Test
+  fun `a settings file from before the claude config directory loads and the directory survives a restart`() = runBlocking {
+    val home = SettingsFixture.newHome("desktop-settings-claude-config")
+    val old = SettingsFixture(home)
+    Files.createDirectories(old.file.parent)
+    Files.writeString(old.file, """{"migrated":true,"retention":"7d"}""")
+    try {
+      assertNull(old.repository.ready().claudeConfigDir)
+      old.repository.update { it.copy(claudeConfigDir = "~/.claude-work") }
+    } finally {
+      old.handle.closeAndJoin()
+    }
+    val restarted = SettingsFixture(home)
+    try {
+      assertEquals("~/.claude-work", restarted.repository.ready().claudeConfigDir)
+    } finally {
+      restarted.handle.closeAndJoin()
+    }
+  }
+
+  @Test
   fun `corrupt settings remain on disk and report corruption without resetting choices`() = runBlocking {
     val home = SettingsFixture.newHome("desktop-corrupt-settings")
     val fixture = SettingsFixture(home)

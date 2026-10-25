@@ -80,6 +80,12 @@ interface WorkStoreStatusRepository {
   val effectiveDatabasePath: Flow<String?>
 }
 
+/** The agent account directories on this machine, as the runtime recognises them. */
+interface AgentHomeRepository {
+  /** Every Claude Code config directory, in the runtime's order; the default `~/.claude` comes first. */
+  suspend fun claudeConfigDirectories(): Outcome<List<String>>
+}
+
 /** Preference access. App-scope teardown owns closing the backing store, so there is no `close` here. */
 interface SettingsRepository {
   val settings: Flow<SettingsState>

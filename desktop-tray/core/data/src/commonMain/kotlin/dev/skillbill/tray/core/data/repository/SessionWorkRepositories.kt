@@ -23,6 +23,7 @@ import dev.skillbill.tray.core.domain.model.StorageFailure
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.WorkSection
+import dev.skillbill.tray.core.domain.repository.AgentHomeRepository
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
@@ -189,4 +190,12 @@ class SessionSpecBrowserRepository(private val manager: WorkStoreSessionManager)
 
   override suspend fun purgeGoal(repoRoot: String, issueKey: String): Outcome<Unit> =
     manager.settledParts()?.specs?.purgeGoal(repoRoot, issueKey) ?: noDatabase()
+}
+
+@Inject
+@SingleIn(AppScope::class)
+@ContributesBinding(AppScope::class)
+class SessionAgentHomeRepository(private val manager: WorkStoreSessionManager) : AgentHomeRepository {
+  override suspend fun claudeConfigDirectories(): Outcome<List<String>> =
+    manager.settledParts()?.agentHomes?.claudeConfigDirectories() ?: noDatabase()
 }
