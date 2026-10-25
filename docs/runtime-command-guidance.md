@@ -549,9 +549,10 @@ Each criterion has its own allowance of three unsuccessful repair outcomes. If
 AC-002 fails verification once and passes after its second repair, AC-003 starts
 with zero failures used and three available. AC-002's failure remains in history
 and does not reduce AC-003's allowance. Phase execution counts identify launches;
-they are not the per-criterion repair budget. The desktop audit header and active
-phase chip show the current criterion's repair attempt, which advances after an
-unsuccessful repair outcome and starts at one for the next criterion.
+they are not the per-criterion repair budget. The desktop audit header shows the
+current criterion's repair attempt, which advances after an unsuccessful repair
+outcome and starts at one for the next criterion. Phase chips always show only
+their phase names, including active and skipped phases.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted
