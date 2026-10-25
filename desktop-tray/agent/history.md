@@ -1,3 +1,39 @@
+## [2026-10-24] SKILL-444 subtask 6 desktop spec pane run actions and purge
+Areas: desktop-tray (feature/specs contract, ViewModel, route, toolbar and dialog composables; composeApp WindowComponent wiring)
+- MEDIUM feature. SpecsViewModel now takes specs, details, controls and settings. A selected bundle loads its SpecBundleControl through one control job on selection, on every snapshot emission and after every action; stale answers are dropped by project and bundle path. A file selection resolves to its nearest bundle's key (issueKey, else name) by walking roots in runtime order with no sorting.
+- Start routes by state: NOT_STARTED goes through specs.startGoal; PAUSED, BLOCKED and CANCELED read the work detail then call controls.launch. Pause and Cancel go through details then controls; Cancel has a request, keep-running and confirm flow. An agent the user picked wins over the control's agentId seed.
+- One act helper is the single in-flight guard (flag, job, Ready control); it clears pending confirmations, drops messages if the selection moved and re-reads the control. Failures show the raw refusal summary, prefixed "Couldn't start" or "Couldn't purge". reusable
+- SpecRunToolbar keeps Start, agent caret, Pause and Cancel always composed (enable/disable only) with an icon-only eraser Purge at the right end; the line below follows a fixed priority of confirmation, message, pause notice, selection hint, unavailable reason. Purge has a tooltip explaining why it is disabled.
+- PurgeConfirmationDialog is a modal AlertDialog listing what is deleted and kept; "Keep run history" holds initial focus and Escape maps to it; the destructive button is a danger DesignButton. reusable
+- Limits: the runtime-side purge reset lives in subtask 1 and the UI only renders it; "Pause requested" with Purge visible may overflow 320dp (not checked visually).
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
+## [2026-10-24] SKILL-444 subtask 5 desktop spec pane browse
+Areas: desktop-tray (feature/specs new module, composeApp composition and ui, architecture guards, ARCHITECTURE.md, docs/architecture-parity.md)
+- MEDIUM feature. New :feature:specs module (plugin skillbill.feature) with contract, ViewModel, route, tree and status-dot composables; registered in settings.gradle.kts, composeApp dependencies, ModuleGraphRules.features and the ModuleGraphRulesTest baseline manifest (the consumed-in-production guard needs it).
+- SpecsViewModel takes SpecBrowserRepository, WorkDetailRepository and SettingsRepository and has no navigator. Project follows the selected work item's repository root, falls back to the first project, and PickProject pins the choice. One flatMapLatest snapshot subscription keyed on project, preferred root and a retry counter.
+- visibleRows is a pure depth-first walk that keeps runtime order (no sorting) and never reads Lifecycle or Freshness. Filtering expands ancestors for display only; the saved expansion set (AppSettings.specExpandedPaths) is written only by toggle and collapse-all. reusable
+- Pane states: loading, no specs, unreadable folder (Retry, Reveal folder), no match (Clear filters). Open file goes through LocalRepositoryNavigation.openFile and failures return as FileOpenFailed.
+- Window wiring: EntryViewModels gains specs(); DesignWindow gains an accessory slot in the title bar; SpecsToggle and rememberSpecsViewModel hold the ViewModel in the window entry store so a database switch discards it; SkillBillNavHost hosts a fixed 320dp SpecsPane after the detail column and only reads navigator.selected. Created only while the session is Active; the settings window shows neither.
+- Status dot encodes state by shape and pulse, not colour alone, with a content description. Rows support arrow, Enter and Space keyboard use. reusable
+- Limits: a filter-expanded folder does not visibly collapse on Toggle or Left; icons are drawn glyphs since commonMain has no icon dependency; pause, cancel and run-again stay unwired. Spotless was not run (needs a plain clone); packagedDataSmoke passed only in a clean scratch clone.
+Feature flag: N/A (specPaneOpen setting, default closed)
+Acceptance criteria: 4/4 implemented
+
+## [2026-10-24] SKILL-444 subtask 4 desktop spec data and settings
+Areas: desktop-tray (core/domain, core/data, core/datastore, core/testing)
+- MEDIUM feature. core:domain gains the spec-browser model (SpecProject, SpecSnapshot, SpecNode folder/bundle/file tree, SpecBundleControl carrying a WorkIdentity) and a six-method SpecBrowserRepository. AppSettings and StoredSettings gain specPaneOpen and specExpandedPaths as nullable stored fields with defaults, so old settings files load with no migration; empty path sets are not stored.
+- core:data adds the RuntimeSpecGateway port and a jvmMain RuntimeSpecAdapter that maps runtime spec types to domain one-to-one with exhaustive enum mapping and no sorting. A null runtime specsRoot maps to a blank string; the repository and watcher treat blank as no directory.
+- RuntimeSpecBrowserRepository runs every call through one guarded helper on the IO dispatcher: it rethrows cancellation and maps other exceptions to Failure. startGoal and purgeGoal map runtime outcomes (accepted, launch failed, rejected, purge refusal and leftovers); rejection reuses runRefusalMessage. reusable
+- observeSnapshot is a channelFlow: one read first, then NIO directory triggers and goal-store commit signals, debounced 250ms and conflated. Each trigger source has its own catch so a failing watcher degrades to the other. A failed read emits Failure and keeps observing.
+- NioSpecDirectoryChanges is a WatchService-backed Flow: it skips hidden directories and archived bundles under done, registers new directories as they appear, and closes the watch service on cancel. reusable
+- Session wiring: SessionParts gains specs, DatabaseSessionComponent exposes it, and an app-scope SessionSpecBrowserRepository facade follows SessionWorkDetailRepository. FakeSpecBrowserRepository lives in core:testing.
+- runRefusalMessage and WorkControlRejection.toRefusal became internal for reuse.
+- Limits: no UI, :feature:specs or composeApp wiring yet (subtasks 5 and 6); pause, cancel and run-again are not wired. packagedDataSmoke was not verified locally (dirty tree needs SKILL_BILL_INSTALL_RUN_ID); CI runs it.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-23] SKILL-441 subtask 7 desktop bundle file links
 Areas: desktop-tray (core/domain, core/data, core/ui, composeApp infrastructure and architecture test, feature/detail)
 - MEDIUM feature. PlanRunReport carries bundleFiles (default empty, so an older runtime maps to no list). RuntimeWorkMapper passes bundleFiles, parentSpecPath and subtask specPaths through verbatim; the desktop does no repo-root path joining.

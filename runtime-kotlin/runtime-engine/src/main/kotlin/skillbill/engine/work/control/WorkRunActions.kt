@@ -3,6 +3,12 @@ package skillbill.engine.work.control
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
+import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goalrunner.model.GoalPreflightGateBlock
+import skillbill.engine.goalrunner.model.GoalPreflightRequest
+import skillbill.engine.goalrunner.model.GoalPreflightResult
+import skillbill.engine.goalrunner.model.GoalPreflightVerdict
+import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.executionLivenessBlocksIdleSafeRefresh
 import skillbill.engine.work.IdeStatusService
@@ -15,11 +21,13 @@ import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.install.model.SupportedAgent
+import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
@@ -32,6 +40,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Path
 import java.time.Clock
 
 @Inject
@@ -43,7 +52,47 @@ class WorkRunActions(
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val launcher: WorkRunLauncher,
   private val clock: Clock,
+  private val preflight: GoalPreflightService,
+  private val environment: EnvironmentContext,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
+  fun startGoal(
+    repoRoot: Path,
+    issueKey: String,
+    agentId: String?,
+  ): WorkControlResult {
+    val agent =
+      agentId?.takeIf { it in SupportedAgent.supportedIds }
+        ?: return WorkControlResult.Rejected(WorkControlRejection.AGENT_REQUIRED)
+    val result =
+      preflight.preflight(
+        GoalPreflightRequest(
+          issueKey,
+          repoRoot,
+          invokedAgentId = agent,
+          userHome = environment.userHome,
+          environment = environment.environment,
+        ),
+      )
+    goalStartRefusal(result)?.let { return WorkControlResult.LaunchFailed(it) }
+    val key = result.issueKey
+    val ownershipKey = "${goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)}:$key:goal"
+    return database.transaction { unit ->
+      val request =
+        WorkRunLaunchRequest(
+          repoRoot,
+          unit.dbPath,
+          ownershipKey,
+          WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(goalArguments(key, agent), repoRoot)),
+          emptyMap(),
+        )
+      when (val launched = launcher.start(request)) {
+        is WorkRunLaunchResult.Refused -> WorkControlResult.LaunchFailed(launched.reason)
+        is WorkRunLaunchResult.Started -> WorkControlResult.Accepted
+      }
+    }
+  }
+
   fun launch(
     target: WorkRunTarget,
     agentId: String?,
@@ -175,9 +224,14 @@ class WorkRunActions(
     ) {
       listOf("phase", "plan", issue, "--agent", agent)
     } else {
-      listOf("goal", issue, "--agent", agent)
+      goalArguments(issue, agent)
     }
   }
+
+  private fun goalArguments(
+    issue: String,
+    agent: String,
+  ): List<String> = listOf("goal", issue, "--agent", agent)
 
   private fun phaseArguments(
     phase: StandalonePhaseStatusRecord,
@@ -188,7 +242,7 @@ class WorkRunActions(
     }
     phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent) }
     return when {
-      phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { listOf("goal", it, "--agent", agent) }
+      phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { goalArguments(it, agent) }
       phase.workflowId != null && phase.phaseId == SkeletonDefinition.PLAN.id ->
         phase.issueKey?.let { listOf("phase", "plan", it, "--agent", agent) }
       phase.phaseId in
@@ -230,17 +284,17 @@ class WorkRunActions(
     target: WorkRunTarget,
   ): WorkRunLaunchKind =
     if (phase == null) {
-      WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(arguments, target))
+      WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(arguments, target.repositoryRoot))
     } else {
       WorkRunLaunchKind.AgentHarness(agent, launchPrompt(item, phase, arguments, agent))
     }
 
   private fun runtimeResumeArguments(
     arguments: List<String>,
-    target: WorkRunTarget,
+    repositoryRoot: Path,
   ): List<String> =
     if (arguments.first() == "goal") {
-      arguments + listOf("--repo-root", target.repositoryRoot.toString(), "--no-live-output")
+      arguments + listOf("--repo-root", repositoryRoot.toString(), "--no-live-output")
     } else {
       arguments
     }
@@ -297,3 +351,21 @@ class WorkRunActions(
     return (current ?: records.firstOrNull())?.get(FeatureTaskRuntimeExecutionPlanKeys.AGENT_ID) as? String
   }
 }
+
+internal fun goalStartRefusal(result: GoalPreflightResult): String? {
+  val key = result.issueKey
+  return when (result.verdict) {
+    GoalPreflightVerdict.NEW_WORK ->
+      result.gateBlock?.takeIf { it.expectedFirstRunnableSubtask == null }?.let(::blockedGateMessage)
+    GoalPreflightVerdict.ALREADY_RUNNING -> "$key is already running."
+    GoalPreflightVerdict.RESUMABLE, GoalPreflightVerdict.GOAL_CONTINUATION ->
+      "$key already has a run. Use Resume or Run again."
+    GoalPreflightVerdict.TERMINAL_ONLY ->
+      "$key already finished. Purge its run history to start it again."
+    else -> "Skill Bill can't start $key: preflight returned ${result.verdict}."
+  }
+}
+
+private fun blockedGateMessage(gate: GoalPreflightGateBlock): String =
+  "${gate.issueKey} is blocked at the goal gate: no subtask of ${gate.featureName} is runnable. " +
+    "Subtasks: ${gate.subtasks.joinToString { "${it.id} ${it.status}" }}."

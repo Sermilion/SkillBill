@@ -422,13 +422,13 @@ monitor checks the PR's state on every poll so a merge during CI ends the wait.
 When every subtask is terminal, resume skips the planning sweep and continues
 finalization without reading archived planning specs.
 Goal and IDE status read workflow state from the database without consulting spec
-projections. Issue-key spec lookup uses only active bundles directly under
-`.feature-specs/`. Bundles under `.feature-specs/done/` are archived and never
-supply intake or an existing planning bundle, even for the same issue key.
-With no active bundle, supplied requirements start a new bundle outside `done`.
+projections. Issue-key spec lookup uses bundles directly under the project store's
+`specs/` and, for in-flight legacy goals, directly under `.feature-specs/`. The
+store is flat: a finished bundle stays in place and its manifest marks it complete.
+Bundles under a legacy `.feature-specs/done/` are un-imported archives and never
+supply intake or an existing planning bundle, even for the same issue key;
+`skill-bill project import-specs` copies them to the top level of the store.
 Archived keys still count when allocating the next local issue number.
-When a bundle moves to `done`, subsequent manifest projection
-writes follow the archived bundle instead of recreating its active directory.
 A resumed goal recognizes its merged pull request before committing, pushing, or
 trying to publish another pull request, including after deletion of the remote
 feature branch. Before returning a failed check or conflict, monitoring refreshes

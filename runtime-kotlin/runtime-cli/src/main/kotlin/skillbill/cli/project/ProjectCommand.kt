@@ -159,8 +159,9 @@ class ProjectImportSpecsCommand(
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "import-specs",
-    "Copy legacy .feature-specs/ bundles, including done/, into the project store. The source is never changed; " +
-      "bundles already in the store and bundles of in-progress goals are skipped.",
+    "Copy legacy .feature-specs/ bundles into the project store. Bundles under done/ land at the top level " +
+      "beside the others. The source is never changed; bundles already in the store and bundles of in-progress " +
+      "goals are skipped.",
   ) {
   private val from by option("--from", help = "Legacy .feature-specs directory to import instead of the checkout's.")
 

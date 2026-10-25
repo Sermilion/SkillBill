@@ -21,18 +21,19 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.WindowPlacement
 
 @Composable
-fun WindowScope.DesignWindow(state: WindowState, onClose: () -> Unit, content: @Composable () -> Unit) {
+fun WindowScope.DesignWindow(state: WindowState, onClose: () -> Unit, accessory: @Composable () -> Unit = {}, content: @Composable () -> Unit) {
   Column(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(canvas).border(1.dp, border, RoundedCornerShape(12.dp))) {
     WindowDraggableArea {
-      Row(Modifier.fillMaxWidth().height(36.dp).background(titlebar).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(Modifier.width(60.dp))
-        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-          Text("Skill Bill", color = muted, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 12.sp)
-        }
-        Row(Modifier.width(60.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-          ChromeControl("–", "Minimize") { state.isMinimized = true }
-          ChromeControl("□", "Maximize") { state.placement = if (state.placement == WindowPlacement.Maximized) WindowPlacement.Floating else WindowPlacement.Maximized }
-          ChromeControl("×", "Hide to tray", onClose)
+      // The title is centred on the bar itself, so an accessory beside the window controls never moves it.
+      Box(Modifier.fillMaxWidth().height(36.dp).background(titlebar).padding(horizontal = 14.dp)) {
+        Text("Skill Bill", Modifier.align(Alignment.Center), color = muted, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 12.sp)
+        Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+          accessory()
+          Row(Modifier.width(60.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            ChromeControl("–", "Minimize") { state.isMinimized = true }
+            ChromeControl("□", "Maximize") { state.placement = if (state.placement == WindowPlacement.Maximized) WindowPlacement.Floating else WindowPlacement.Maximized }
+            ChromeControl("×", "Hide to tray", onClose)
+          }
         }
       }
     }

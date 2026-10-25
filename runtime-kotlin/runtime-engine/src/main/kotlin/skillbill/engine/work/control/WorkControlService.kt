@@ -64,6 +64,12 @@ class WorkControlService(
         )
     }
 
+  fun startGoal(
+    repoRoot: Path,
+    issueKey: String,
+    agentId: String?,
+  ): WorkControlResult = runs.startGoal(repoRoot, issueKey, agentId)
+
   fun recoveryPreview(
     target: WorkRunTarget,
     incidentToken: String,

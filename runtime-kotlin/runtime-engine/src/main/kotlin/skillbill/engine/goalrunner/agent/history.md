@@ -1,5 +1,15 @@
 # goalrunner boundary history
 
+## [2026-10-24] SKILL-444 subtask 1: runtime purge resets project-store spec bundles
+Areas: runtime-engine goalrunner/reset (GoalRunnerPurgeSpecBundleReset) and its GoalRunnerPurgeCoordinatorTest
+- MEDIUM correctness fix. Purge reset used to ignore a bundle living in the project store, so its manifest kept launched subtask state. The reset now has three branches: in-repo tracked, in-repo untracked (both unchanged), and a new project-store branch. Anything else still resets nothing.
+- The store branch rewrites only the manifest to the unlaunched YAML in one atomic bundle write. It never deletes, never reads HEAD and never enumerates subtask spec paths, so spec files stay byte-identical. It emits one RESET action with a store-relative `specs/...` path and skips a manifest that is missing or already unlaunched.
+- Survivor reporting mirrors the three branches. A store manifest is reported as a leftover when its text still differs from the unlaunched YAML or when encoding that YAML fails, so a silently dropped write is visible instead of reported as success.
+- Reusable: one private store-membership test and one unlaunched-manifest YAML builder are shared by the reset and survivor paths; the store-aware repo-relative path overload names store files.
+- Limit: the in-repo tracked reset still builds its own YAML, left untouched to keep in-repo bytes stable. Store discovery depends on the store-aware manifest store finding the bundle by issue key.
+Feature flag: N/A
+Acceptance criteria: 2/2 implemented (validate passed clean check)
+
 ## [2026-10-19] SKILL-432 repair stale goal runs and bound generated spec paths
 Areas: runtime-engine goalrunner and featuretask/prepare, runtime-application telemetry/lifecycle, runtime-infra/sqlite telemetry and goalrunner controls, runtime-ports telemetry/lifecycle/model, runtime-contracts telemetry
 - MEDIUM correctness fix. An inserted goal start atomically abandons eligible strictly older same-key segments with superseded_by_new_run and emits their existing finish events. Replay and late finishes preserve first-terminal evidence.

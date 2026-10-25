@@ -2,8 +2,10 @@ package skillbill.engine.work.control
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
+import skillbill.engine.goalrunner.goalPreflightServiceForTests
 import skillbill.engine.work.EmptyManifestStore
 import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.engine.work.control.model.WorkControlRejection
@@ -18,6 +20,7 @@ import skillbill.engine.work.testGoalRepositoryIdentity
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -84,6 +87,9 @@ class WorkPlanResumeTest {
           supervisor,
           launcher,
           ideStatusClock,
+          goalPreflightServiceForTests(database),
+          EnvironmentContext(),
+          TestRepositoryEnclosingRoot,
         )
       val item = assertNotNull(status.detail(WorkDetailRequest(workflowId)).item)
       val options = database.read { actions.options(item, it) }

@@ -73,3 +73,11 @@ data class GoalPreflightRehydrateTarget(
   val linearIssueId: String?,
   val targetPath: String,
 )
+
+object GoalPreflightVerdict {
+  const val NEW_WORK = "new_work"
+  const val RESUMABLE = "resumable"
+  const val ALREADY_RUNNING = "already_running"
+  const val TERMINAL_ONLY = "terminal_only"
+  const val GOAL_CONTINUATION = "goal_continuation"
+}

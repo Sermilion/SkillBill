@@ -12,8 +12,10 @@ import skillbill.infrastructure.host.resolveTelemetryStateDir
 import skillbill.infrastructure.host.withProcessDefaults
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.projectstore.ProjectCatalogPort
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.RepositoryLineagePort
+import skillbill.ports.projectstore.model.ProjectCatalogEntry
 import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.projectstore.model.RepositoryLineage
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -22,6 +24,8 @@ import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
+import java.time.format.DateTimeParseException
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -32,7 +36,7 @@ class ProjectStoreResolver(
   private val diagnostics: RuntimeDiagnostics,
   context: EnvironmentContext,
   private val clock: Clock,
-) : ProjectStorePort {
+) : ProjectStorePort, ProjectCatalogPort {
   private val resolvedContext = context.withProcessDefaults()
   private val storeParent: Path =
     resolveTelemetryStateDir(resolvedContext.environment, resolvedContext.userHome).resolve(PROJECTS_DIRECTORY)
@@ -69,6 +73,29 @@ class ProjectStoreResolver(
       writeRecord(targetDir, target.withCheckout(commonDir).copy(lastSeen = now()))
       cache.clear()
       location(projectId)
+    }
+
+  override fun list(): List<ProjectCatalogEntry> = scan().map(::catalogEntry).sortedWith(CATALOG_ORDER)
+
+  private fun catalogEntry(store: StoredProject): ProjectCatalogEntry =
+    ProjectCatalogEntry(
+      projectId = store.id,
+      storeRoot = store.dir,
+      specsRoot = store.dir.resolve(ProjectStoreLayout.SPECS_DIRECTORY),
+      checkoutRoots = store.liveCheckouts().map(::workingTreeOf).distinct(),
+      lastSeen = parseInstantOrNull(store.record.lastSeen),
+    )
+
+  private fun workingTreeOf(commonDir: String): Path {
+    val path = Path.of(commonDir)
+    return if (path.fileName?.toString() == GIT_MARKER) path.parent ?: path else path
+  }
+
+  private fun parseInstantOrNull(raw: String): Instant? =
+    try {
+      Instant.parse(raw)
+    } catch (_: DateTimeParseException) {
+      null
     }
 
   private fun locate(workingDirectory: Path): Checkout {
@@ -418,5 +445,7 @@ class ProjectStoreResolver(
     const val GIT_UNAVAILABLE_OUTCOME = "git_unavailable"
     const val LINK_HINT = "'run skill-bill project link <id> to attach this checkout'"
     val STORE_ID_PATTERN = Regex("""[A-Za-z0-9_-][A-Za-z0-9._-]*""")
+    val CATALOG_ORDER: Comparator<ProjectCatalogEntry> =
+      compareByDescending<ProjectCatalogEntry, Instant?>(nullsFirst()) { it.lastSeen }.thenBy { it.projectId }
   }
 }

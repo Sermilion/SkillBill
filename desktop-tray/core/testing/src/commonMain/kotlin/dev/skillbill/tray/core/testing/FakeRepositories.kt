@@ -14,12 +14,16 @@ import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.RuntimeBuildProblem
 import dev.skillbill.tray.core.domain.model.SettingsState
+import dev.skillbill.tray.core.domain.model.SpecBundleControl
+import dev.skillbill.tray.core.domain.model.SpecProject
+import dev.skillbill.tray.core.domain.model.SpecSnapshot
 import dev.skillbill.tray.core.domain.model.TrayStatus
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.WorkSection
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
+import dev.skillbill.tray.core.domain.repository.SpecBrowserRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
@@ -177,6 +181,57 @@ class FakeWorkControlRepository : WorkControlRepository {
   ): Outcome<IncidentRecoveryPreviewResult> {
     calls += "recoveryPreview:${item.identity.id}:$incidentToken"
     return onRecoveryPreview(item, incidentToken, confirmedPrerequisites)
+  }
+}
+
+class FakeSpecBrowserRepository : SpecBrowserRepository {
+  private val observed = MutableSharedFlow<Outcome<SpecSnapshot>>(extraBufferCapacity = 64)
+
+  val calls = mutableListOf<String>()
+  val observeCalls = mutableListOf<Pair<String, String?>>()
+
+  var onProjects: suspend () -> Outcome<List<SpecProject>> = { Outcome.Failure(Problem(ProblemCode.UNKNOWN, "no projects configured")) }
+  var onProjectFor: suspend (String) -> Outcome<SpecProject> = { Outcome.Failure(Problem(ProblemCode.UNKNOWN, "no project configured")) }
+  var onControl: suspend (String, String, String?) -> Outcome<SpecBundleControl> = { _, _, _ ->
+    Outcome.Failure(Problem(ProblemCode.UNKNOWN, "no control configured"))
+  }
+  var onStartGoal: suspend (String, String, String?) -> Outcome<Unit> = { _, _, _ -> Outcome.Value(Unit) }
+  var onPurgeGoal: suspend (String, String) -> Outcome<Unit> = { _, _ -> Outcome.Value(Unit) }
+
+  override suspend fun projects(): Outcome<List<SpecProject>> {
+    calls += "projects"
+    return onProjects()
+  }
+
+  override suspend fun projectFor(repositoryRoot: String): Outcome<SpecProject> {
+    calls += "projectFor:$repositoryRoot"
+    return onProjectFor(repositoryRoot)
+  }
+
+  override fun observeSnapshot(projectId: String, preferredRepoRoot: String?): Flow<Outcome<SpecSnapshot>> {
+    observeCalls += projectId to preferredRepoRoot
+    return observed
+  }
+
+  override suspend fun control(projectId: String, bundlePath: String, preferredRepoRoot: String?): Outcome<SpecBundleControl> {
+    calls += "control:$projectId:$bundlePath"
+    return onControl(projectId, bundlePath, preferredRepoRoot)
+  }
+
+  override suspend fun startGoal(repoRoot: String, issueKey: String, agentId: String?): Outcome<Unit> {
+    calls += "startGoal:$issueKey:${agentId.orEmpty()}"
+    return onStartGoal(repoRoot, issueKey, agentId)
+  }
+
+  override suspend fun purgeGoal(repoRoot: String, issueKey: String): Outcome<Unit> {
+    calls += "purgeGoal:$issueKey"
+    return onPurgeGoal(repoRoot, issueKey)
+  }
+
+  fun subscribers(): Int = observed.subscriptionCount.value
+
+  fun emitSnapshot(outcome: Outcome<SpecSnapshot>) {
+    check(observed.tryEmit(outcome))
   }
 }
 

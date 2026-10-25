@@ -46,7 +46,7 @@ class CliProjectPathRuntimeTest {
 
     assertEquals(0, result.exitCode, result.stdout)
     assertContains(result.stdout, "Imported 1 bundle(s)")
-    assertEquals("# SKILL-5\n", Files.readString(storeRoot.resolve("specs/done/SKILL-5-archived/spec.md")))
+    assertEquals("# SKILL-5\n", Files.readString(storeRoot.resolve("specs/SKILL-5-archived/spec.md")))
     assertEquals("# SKILL-5\n", Files.readString(legacy.resolve("spec.md")))
   }
 }

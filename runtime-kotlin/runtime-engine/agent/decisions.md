@@ -1,3 +1,20 @@
+## [2026-10-24] Spec browser project carries a nullable specsRoot instead of a placeholder path
+Context: SKILL-444 subtask 3 snapshots for an unknown project id still need a SpecBrowserProject, but a project with no store location has no real specsRoot.
+Decision: SpecBrowserProject.specsRoot is Path? and only the unknown-project snapshot leaves it null; projects(), projectFor() and resolved snapshots always set it.
+Reason: A Path.of("") fallback tripped AmbientEnvironmentArchitectureTest and a baseline entry would hide it. This departs from the spec's literal shape, which marks only repoRoot nullable, so the desktop consumer must handle null.
+Revisit when: the desktop pane needs to render an unknown project differently, making a dedicated unknown-project result type cleaner.
+
+## [2026-10-24] Spec browser reads live goal state once per snapshot and skips archived bundles
+Context: Snapshots overlay live goal run state on manifest statuses, and the pane refreshes often across many bundles.
+Decision: SpecLiveGoalReader makes exactly one database.readIfPresent per snapshot, only for live candidates; done/ bundles are forced COMPLETE without a query. projectFor builds from ProjectStorePort.resolve instead of consulting the catalog.
+Reason: Keeps refresh cost flat in bundle count and keeps archived status stable. The resolved location's specsRoot already equals the catalog's, so a catalog lookup adds nothing.
+
+## [2026-10-24] Desktop goal start refuses gate-held bundles and goes through preflight
+Context: SKILL-444 subtask 2 needs a desktop-triggered start for a never-launched goal that must not bypass the checks the CLI goal command applies.
+Decision: WorkRunActions.startGoal runs GoalPreflightService and launches only for new_work with a null gateBlock; every other verdict or a gate block returns LaunchFailed with a specific message.
+Reason: Reusing preflight keeps one authority for whether a goal may start and avoids a second ownership or resume check. Preflight sets a gateBlock whenever an active decomposition manifest exists, so such bundles are refused, which follows the spec's AC literally.
+Revisit when: product wants never-launched decomposed bundles to start from the desktop, since the spec's "with or without a manifest" wording conflicts with this behavior.
+
 ## [2026-10-24] Workflow QA outcome is an optional IdeStatus field with no contract bump
 Context: SKILL-443 subtask 3 must show QA could-not-complete state to the desktop through the IdeStatus contract, which installed desktops and old snapshots already read.
 Decision: workflow_qa_outcome is an optional root property emitted only when a QA outcome row exists, and contract_version stays 0.6. The desktop notification fires on a changed recordedAt, not on a status transition.

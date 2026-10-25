@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LegacySpecImportTest {
@@ -21,7 +22,7 @@ class LegacySpecImportTest {
   private val legacyRoot: Path = repoRoot.resolve(".feature-specs")
 
   @Test
-  fun `active and archived bundles are copied into the store and the legacy files are left alone`() {
+  fun `active and archived bundles are copied flat into the store and the legacy files are left alone`() {
     writeBundle("SKILL-7-active", manifest = true)
     writeBundle("done/SKILL-3-archived")
 
@@ -29,7 +30,8 @@ class LegacySpecImportTest {
 
     assertEquals(listOf("SKILL-7-active", "done/SKILL-3-archived"), result.imported)
     assertEquals("# SKILL-7-active\n", Files.readString(specsRoot.resolve("SKILL-7-active/spec.md")))
-    assertEquals("# done/SKILL-3-archived\n", Files.readString(specsRoot.resolve("done/SKILL-3-archived/spec.md")))
+    assertEquals("# done/SKILL-3-archived\n", Files.readString(specsRoot.resolve("SKILL-3-archived/spec.md")))
+    assertFalse(Files.exists(specsRoot.resolve("done")))
     assertEquals("# SKILL-7-active\n", Files.readString(legacyRoot.resolve("SKILL-7-active/spec.md")))
   }
 

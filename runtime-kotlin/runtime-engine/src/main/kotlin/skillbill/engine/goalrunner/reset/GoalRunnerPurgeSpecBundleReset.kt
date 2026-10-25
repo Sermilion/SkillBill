@@ -28,9 +28,14 @@ internal class GoalRunnerPurgeSpecBundleReset(
     manifestPath: Path,
   ): List<GoalRunnerPurgeSpecAction> =
     when {
-      !isInsideRepo(repoRoot, manifestPath) -> emptyList()
-      isTracked(repoRoot, manifestPath) -> resetTrackedBundle(repoRoot, source, manifestPath)
-      else -> deleteUntrackedBundle(repoRoot, source, manifestPath)
+      isInsideRepo(repoRoot, manifestPath) ->
+        if (isTracked(repoRoot, manifestPath)) {
+          resetTrackedBundle(repoRoot, source, manifestPath)
+        } else {
+          deleteUntrackedBundle(repoRoot, source, manifestPath)
+        }
+      isInsideStoreSpecs(repoRoot, manifestPath) -> resetStoreManifest(repoRoot, source, manifestPath)
+      else -> emptyList()
     }
 
   fun survivors(
@@ -38,12 +43,64 @@ internal class GoalRunnerPurgeSpecBundleReset(
     source: DecompositionManifest,
     manifestPath: Path,
   ): List<String> =
-    if (!isInsideRepo(repoRoot, manifestPath) || isTracked(repoRoot, manifestPath)) {
-      emptyList()
-    } else {
-      (untrackedSubtaskSpecs(repoRoot, source) + listOf(manifestPath).filter(manifestFileStore::isRegularFile))
-        .map { path -> repoRelativePath(repoRoot, path) }
+    when {
+      isInsideRepo(repoRoot, manifestPath) ->
+        if (isTracked(repoRoot, manifestPath)) {
+          emptyList()
+        } else {
+          (untrackedSubtaskSpecs(repoRoot, source) + listOf(manifestPath).filter(manifestFileStore::isRegularFile))
+            .map { path -> repoRelativePath(repoRoot, path) }
+        }
+      isInsideStoreSpecs(repoRoot, manifestPath) -> storeManifestSurvivors(repoRoot, source, manifestPath)
+      else -> emptyList()
     }
+
+  private fun resetStoreManifest(
+    repoRoot: Path,
+    source: DecompositionManifest,
+    manifestPath: Path,
+  ): List<GoalRunnerPurgeSpecAction> {
+    if (!manifestFileStore.isRegularFile(manifestPath)) return emptyList()
+    val manifestYaml = unlaunchedManifestYaml(source, manifestPath)
+    if (manifestFileStore.readText(manifestPath) == manifestYaml) return emptyList()
+    manifestFileStore.writeBundleAtomically(listOf(manifestPath to manifestYaml)) {
+      manifestValidator.validateYamlTextResult(manifestYaml, manifestPath.toString())
+        .requireAccepted(manifestPath.toString())
+    }
+    return listOf(
+      GoalRunnerPurgeSpecAction(
+        repoRelativePath(repoRoot, projectStore.resolve(repoRoot), manifestPath),
+        GoalRunnerPurgeSpecActionKind.RESET,
+      ),
+    )
+  }
+
+  private fun storeManifestSurvivors(
+    repoRoot: Path,
+    source: DecompositionManifest,
+    manifestPath: Path,
+  ): List<String> {
+    val expected = runCatching { unlaunchedManifestYaml(source, manifestPath) }.getOrNull()
+    val unreset =
+      expected == null ||
+        (manifestFileStore.isRegularFile(manifestPath) && manifestFileStore.readText(manifestPath) != expected)
+    return if (unreset) {
+      listOf(repoRelativePath(repoRoot, projectStore.resolve(repoRoot), manifestPath))
+    } else {
+      emptyList()
+    }
+  }
+
+  private fun unlaunchedManifestYaml(
+    source: DecompositionManifest,
+    manifestPath: Path,
+  ): String =
+    encodeDecompositionManifestYaml(
+      source.resetManifest(hard = true),
+      manifestValidator,
+      manifestFileStore,
+      sourceLabel = manifestPath.toString(),
+    )
 
   private fun deleteUntrackedBundle(
     repoRoot: Path,
@@ -127,6 +184,13 @@ internal class GoalRunnerPurgeSpecBundleReset(
     repoRoot: Path,
     path: Path,
   ): Boolean = path.toAbsolutePath().normalize().startsWith(repoRoot.toAbsolutePath().normalize())
+
+  private fun isInsideStoreSpecs(
+    repoRoot: Path,
+    path: Path,
+  ): Boolean =
+    path.toAbsolutePath().normalize()
+      .startsWith(projectStore.resolve(repoRoot).specsRoot.toAbsolutePath().normalize())
 
   private fun isTracked(
     repoRoot: Path,

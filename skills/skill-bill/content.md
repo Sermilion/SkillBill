@@ -156,13 +156,15 @@ Stop without running any CLI command when:
 
 For a tracker link or issue key, check local specs and persisted workflow state
 before contacting the tracker. Get the project store with `skill-bill project path`
-and search active bundles directly under `<store>/specs/`. Exclude
-`<store>/specs/done/`; archived bundles never supply intake or resume work,
-even when their issue key matches. Then search active bundles directly under the
-legacy `./.feature-specs/` in the current repository, including ignored and
-untracked files, for in-flight legacy goals, and exclude `./.feature-specs/done/`.
-Use `rg --files --hidden --no-ignore -g '!done/**' <directory>` or inspect the
-directory directly. `skill-bill project path <issue-key>` prints the matching
+and search bundles directly under `<store>/specs/`. The store is flat: finished
+bundles stay beside the others and their manifests mark them complete. Then
+search active bundles directly under the legacy `./.feature-specs/` in the
+current repository, including ignored and untracked files, for in-flight legacy
+goals, and exclude `./.feature-specs/done/`, which holds un-imported archived
+bundles that never supply intake or resume work. Use
+`rg --files --hidden --no-ignore <directory>` for the store,
+`rg --files --hidden --no-ignore -g '!done/**' <directory>` for the legacy
+directory, or inspect each directory directly. `skill-bill project path <issue-key>` prints the matching
 bundle directory when one exists. Match the issue key and read the matching
 `spec.md`. A filename search that honors ignore rules does not prove that a spec
 is absent. If several bundles match, ask for the intended spec path.
@@ -242,8 +244,8 @@ full runtime once with the resolved intake.
 
 For new requirements without a key, inspect `<store>/specs/` (the project store
 from `skill-bill project path`) and the legacy `./.feature-specs/` in the current
-repository, including ignored and untracked files and archived folders such as
-`done/` in both places. Use `rg --files --hidden --no-ignore <directory>` or inspect
+repository, including ignored and untracked files and the legacy archive
+`./.feature-specs/done/`. Use `rg --files --hidden --no-ignore <directory>` or inspect
 each directory directly. Read bundle directory names, parent `spec.md` identities,
 and `decomposition-manifest.yaml` issue keys. Count bundle identities, not keys
 mentioned as dependencies or examples inside requirements.

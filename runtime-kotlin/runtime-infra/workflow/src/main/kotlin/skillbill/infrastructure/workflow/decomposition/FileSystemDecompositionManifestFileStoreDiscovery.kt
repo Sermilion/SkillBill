@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.decomposition
 
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.specBundleRoots
 import skillbill.ports.workflow.decomposition.DecompositionManifestDiscoveryPort
@@ -36,15 +37,18 @@ internal class FileSystemDecompositionManifestFileStoreDiscovery(
     recoverPending: Boolean,
   ): List<Path> {
     val specsRoots = projectStore.resolve(repoRoot).specBundleRoots(repoRoot)
-    return specsRoots.flatMap { specsRoot -> manifestsUnder(specsRoot, recoverPending) }
+    val legacyArchive =
+      repoRoot.resolve(LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY)
+        .resolve(LegacyProjectStatePaths.FEATURE_SPECS_ARCHIVE_DIRECTORY)
+    return specsRoots.flatMap { specsRoot -> manifestsUnder(specsRoot, recoverPending, legacyArchive) }
   }
 
   private fun manifestsUnder(
     specsRoot: Path,
     recoverPending: Boolean,
+    legacyArchive: Path,
   ): List<Path> {
     if (!Files.isDirectory(specsRoot)) return emptyList()
-    val archivedRoot = specsRoot.resolve("done")
     val manifests = mutableListOf<Path>()
     Files.walkFileTree(
       specsRoot,
@@ -53,7 +57,7 @@ internal class FileSystemDecompositionManifestFileStoreDiscovery(
           dir: Path,
           attrs: BasicFileAttributes,
         ): FileVisitResult {
-          if (dir == archivedRoot) return FileVisitResult.SKIP_SUBTREE
+          if (dir == legacyArchive) return FileVisitResult.SKIP_SUBTREE
           if (recoverPending) bundleJournal.recoverPending(dir) else bundleJournal.failIfPending(dir)
           return FileVisitResult.CONTINUE
         }

@@ -61,7 +61,7 @@ internal object ModuleGraphRules {
   const val DATA = ":core:data"
   const val DATASTORE = ":core:datastore"
   const val UI = ":core:ui"
-  val features = listOf(":feature:work", ":feature:detail", ":feature:history", ":feature:settings")
+  val features = listOf(":feature:work", ":feature:detail", ":feature:history", ":feature:settings", ":feature:specs")
   val expectedProjects = setOf(":composeApp", ":core:common", DOMAIN, ":core:designsystem", TESTING, DATA, DATASTORE, UI) + features
   val allowedTargets = setOf("jvm:jvm", "metadata:common")
 

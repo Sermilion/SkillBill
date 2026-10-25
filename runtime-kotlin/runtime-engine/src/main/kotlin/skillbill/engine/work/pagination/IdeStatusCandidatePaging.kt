@@ -46,6 +46,22 @@ internal fun readStatusWorkItems(
   return items
 }
 
+internal fun readLiveIssueKeys(unitOfWork: UnitOfWork): Set<String> {
+  val keys = HashSet<String>()
+  var afterKey: String? = null
+  var read = 0
+  while (read < STATUS_CANDIDATE_BUDGET) {
+    val limit = minOf(STATUS_CANDIDATE_PAGE_SIZE, STATUS_CANDIDATE_BUDGET - read)
+    val page = unitOfWork.workList.statusCandidates(WorkStatusCandidateQuery(afterKey, limit, liveWorkflowStates))
+    read += page.items.size
+    val live = page.items.takeWhile { it.currentState in liveWorkflowStates }
+    live.mapNotNullTo(keys) { it.issueKey }
+    if (live.size < page.items.size || page.items.size < limit) return keys
+    afterKey = page.lastKey
+  }
+  return keys
+}
+
 internal fun readStatusStandaloneRecords(
   unitOfWork: UnitOfWork,
   repository: IdeStatusRepositoryResolution.Ok,

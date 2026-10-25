@@ -338,64 +338,6 @@ internal fun recordGoalCompletion(
   }
 }
 
-internal fun seedAuthoritativeCompleteChild(
-  fixture: GoalCliFixture,
-  siblingWorkflowId: String,
-) {
-  val sibling =
-    RuntimeWorkflowTestSupport.get(
-      fixture.dbPath,
-      siblingWorkflowId,
-      fixture.context(launcher = NoopGoalTestAgentRunLauncher),
-    )
-  val continuation =
-    requireNotNull(
-      (sibling["artifacts"] as Map<*, *>)["goal_continuation"] as? Map<*, *>,
-    ).toMutableMap()
-  continuation["parent_workflow_id"] =
-    ensureTestDatabase(fixture.dbPath).use { connection ->
-      connection.prepareStatement(
-        "SELECT workflow_id FROM feature_task_workflows WHERE issue_key = ? AND workflow_id <> ?",
-      ).use { statement ->
-        statement.setString(1, "SKILL-901")
-        statement.setString(2, siblingWorkflowId)
-        statement.executeQuery().use { rows ->
-          check(rows.next()) { "completed sibling needs the decomposed parent workflow" }
-          rows.getString(1)
-        }
-      }
-    }
-  val authoritativeChild =
-    RuntimeWorkflowTestSupport.open(
-      fixture.dbPath,
-      fixture.context(launcher = NoopGoalTestAgentRunLauncher),
-    )["workflow_id"] as String
-  runtimeWorkflowUpdate(
-    fixture,
-    WorkflowUpdateFixture(
-      dbPath = fixture.dbPath,
-      workflowId = authoritativeChild,
-      currentStep = "commit_push",
-      stepUpdates = """[{"step_id":"commit_push","status":"completed","attempt_count":1}]""",
-      artifactsPatch =
-        jsonString(
-          mapOf(
-            "goal_continuation" to continuation,
-            "goal_continuation_outcome" to
-              mapOf(
-                "issue_key" to "SKILL-901",
-                "subtask_id" to 1,
-                "status" to "complete",
-                "workflow_id" to authoritativeChild,
-                "commit_sha" to "sha-1",
-                "last_resumable_step" to "commit_push",
-              ),
-          ),
-        ),
-    ),
-  )
-}
-
 internal data class GoalCliFixture(
   val tempDir: Path,
   val dbPath: Path,

@@ -6,6 +6,7 @@ import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.decomposition.loadDecompositionManifest
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.repoRelativePath
+import skillbill.application.storeAwareTestDecompositionManifestStore
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
@@ -35,6 +36,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.taskruntime.model.implementationChecklistDirectory
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -274,6 +276,49 @@ class GoalRunnerPurgeCoordinatorTest {
   }
 
   @Test
+  fun `purge resets a project-store bundle manifest and keeps every spec file`() {
+    val fixture = storeBundleFixture()
+    val service = storePurgeService(fixture, storeAwareTestDecompositionManifestStore(fixture.port))
+
+    val result = service.purge(GoalRunnerPurgeRequest("SKILL-245", fixture.root))
+    val reset =
+      loadDecompositionManifest(
+        fixture.manifestPath,
+        TestDecompositionManifestStore,
+        testDecompositionManifestValidator,
+      )
+
+    assertNull(result.refusalReason)
+    assertEquals(emptyList(), result.leftovers)
+    assertEquals(
+      listOf("specs/SKILL-245-goal/decomposition-manifest.yaml" to GoalRunnerPurgeSpecActionKind.RESET),
+      result.specBundleActions.map { action -> action.path to action.kind },
+    )
+    assertUnlaunched(reset)
+    assertUnlaunchedYaml(Files.readString(fixture.manifestPath))
+    fixture.specBodies.forEach { (path, body) -> assertEquals(body, Files.readString(path)) }
+  }
+
+  @Test
+  fun `purge reports a project-store manifest whose reset did not take`() {
+    val fixture = storeBundleFixture()
+    val before = Files.readString(fixture.manifestPath)
+    val droppedWrites =
+      object : DecompositionManifestStore by storeAwareTestDecompositionManifestStore(fixture.port) {
+        override fun <T> writeBundleAtomically(
+          writes: List<Pair<Path, String>>,
+          verify: () -> T,
+        ): T = verify()
+      }
+    val service = storePurgeService(fixture, droppedWrites)
+
+    val result = service.purge(GoalRunnerPurgeRequest("SKILL-245", fixture.root))
+
+    assertContains(result.leftovers, "specs/SKILL-245-goal/decomposition-manifest.yaml")
+    assertEquals(before, Files.readString(fixture.manifestPath))
+  }
+
+  @Test
   fun `failed directory delete reports leftovers and skips the database and spec steps`() {
     val root = Files.createTempDirectory("goal-purge-leftover")
     val storeRoot = Files.createTempDirectory("goal-purge-leftover-store")
@@ -471,6 +516,74 @@ private fun restoreFixture(): PurgeRestoreFixture {
     InMemoryGoalManifestStore(sourceManifest),
   )
 }
+
+private fun storeBundleFixture(): PurgeStoreBundleFixture {
+  val root = Files.createTempDirectory("goal-purge-store-root")
+  val storeRoot = Files.createTempDirectory("goal-purge-store-bundle")
+  val bundle = storeRoot.resolve("specs/SKILL-245-goal")
+  Files.createDirectories(bundle)
+  val specBodies =
+    listOf("spec.md", "spec_subtask_1.md", "spec_subtask_2.md", "traceability.md")
+      .associate { name -> bundle.resolve(name) to "body of $name" }
+  specBodies.forEach { (path, body) -> Files.writeString(path, body) }
+  val sourceManifest =
+    manifest(subtaskCount = 2).copy(
+      issueKey = "SKILL-245",
+      parentSpecPath = "specs/SKILL-245-goal/spec.md",
+      subtasks =
+        manifest(2).subtasks.mapIndexed { index, subtask ->
+          subtask.copy(
+            specPath = "specs/SKILL-245-goal/spec_subtask_${index + 1}.md",
+            status = if (index == 0) "complete" else "in_progress",
+            branch = "feat/SKILL-245-goal",
+            commitSha = "sha-${index + 1}",
+            workflowId = "wf-child-${index + 1}",
+            lastResumableStep = "implement",
+          )
+        },
+    )
+  val manifestPath = bundle.resolve("decomposition-manifest.yaml")
+  Files.writeString(
+    manifestPath,
+    encodeDecompositionManifestYaml(
+      sourceManifest,
+      testDecompositionManifestValidator,
+      TestDecompositionManifestStore,
+      manifestPath.toString(),
+    ),
+  )
+  return PurgeStoreBundleFixture(
+    root,
+    FixedProjectStorePort(storeRoot),
+    manifestPath,
+    specBodies,
+    InMemoryGoalManifestStore(sourceManifest),
+  )
+}
+
+private fun storePurgeService(
+  fixture: PurgeStoreBundleFixture,
+  decompositionManifestStore: DecompositionManifestStore,
+) = testGoalRunnerStatusService(
+  manifestStore = PurgeTrackingStore(fixture.store),
+  outcomeStore = RecordingOutcomeStore(),
+  ports =
+    GoalRunnerStatusTestPorts(
+      gitOperations = TrackedSpecGitOperations(emptyMap()),
+      goalStateFiles = LocalGoalRuntimeStateFileStore(),
+      projectStore = fixture.port,
+    ),
+  database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+  decompositionManifestStore = decompositionManifestStore,
+)
+
+private data class PurgeStoreBundleFixture(
+  val root: Path,
+  val port: FixedProjectStorePort,
+  val manifestPath: Path,
+  val specBodies: Map<Path, String>,
+  val store: InMemoryGoalManifestStore,
+)
 
 private data class PurgeRestoreFixture(
   val root: Path,
