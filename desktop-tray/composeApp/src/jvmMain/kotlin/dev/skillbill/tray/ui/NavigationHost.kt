@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -33,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -45,11 +49,12 @@ import dev.skillbill.tray.core.designsystem.border
 import dev.skillbill.tray.core.designsystem.canvas
 import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.muted
+import dev.skillbill.tray.core.designsystem.sidebar
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.ui.FeedbackHost
-import dev.skillbill.tray.core.ui.ProblemMessage
+import dev.skillbill.tray.core.ui.PagedListState
 import dev.skillbill.tray.core.ui.navigation.AppRoute
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import dev.skillbill.tray.core.ui.navigation.EntryArgsOutcome
@@ -142,24 +147,24 @@ fun SkillBillNavHost(
         } else if (navigator.section == null) {
           NavigationPane(routes, onBack = onCloseWindow, window, modifier.fillMaxSize())
         } else {
-          Row(modifier.fillMaxSize().background(canvas)) {
-            NavigationPane(listOf(routes.first()), onBack = {}, window, Modifier.width(SIDEBAR_PANE_WIDTH).fillMaxHeight())
-            Box(Modifier.width(1.dp).fillMaxHeight().background(border))
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-              val status = navigator.status
-              // A refused runtime build explains every other read failure, and only a shell refresh can clear it.
-              val runtimeRefusal = shellProblem?.takeIf { it.runtimeBuild != null }
-              val problem = runtimeRefusal ?: status.problem ?: shellProblem
-              val retry = if (runtimeRefusal != null) onRefreshShell else { { onRefreshShell(); status.onRefresh() } }
-              if (problem != null) ProblemBanner(problem, status, retry)
+          Column(modifier.fillMaxSize().background(canvas)) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+              NavigationPane(listOf(routes.first()), onBack = {}, window, Modifier.width(SIDEBAR_PANE_WIDTH).fillMaxHeight())
+              Box(Modifier.width(1.dp).fillMaxHeight().background(border))
               NavigationPane(
                 routes.drop(1).ifEmpty { listOf(NoSelection) },
                 onBack = { navigator.back() },
                 window,
-                Modifier.weight(1f).fillMaxWidth(),
+                Modifier.weight(1f).fillMaxHeight(),
               )
+              if (specs != null) SpecsPaneHost(specs, navigator.selected)
             }
-            if (specs != null) SpecsPaneHost(specs, navigator.selected)
+            val status = navigator.status
+            // A refused runtime build explains every other read failure, and only a shell refresh can clear it.
+            val runtimeRefusal = shellProblem?.takeIf { it.runtimeBuild != null }
+            val problem = runtimeRefusal ?: status.problem ?: shellProblem
+            val retry = if (runtimeRefusal != null) onRefreshShell else { { onRefreshShell(); status.onRefresh() } }
+            if (problem != null) StatusLine(problem, status, retry)
           }
         }
       }
@@ -239,12 +244,12 @@ private fun WorkEntry(window: WindowOwner) {
   LaunchedEffect(work) {
     work.effects.collect { effect -> if (effect is WorkEffect.OpenDetail) navigator.openDetail(effect.identity) }
   }
-  LaunchedEffect(state.loaded, state.liveProblem, state.stale, state.hasMoreLive) {
+  LaunchedEffect(state.loaded, state.liveProblem, state.finished, state.stale, state.hasMoreLive) {
     navigator.status = ListStatus(
       loading = !state.loaded,
       failed = state.liveProblem != null,
       hasMore = state.hasMoreLive,
-      problem = state.liveProblem,
+      problem = state.liveProblem ?: state.finished.readProblem(),
       stale = state.stale,
       onRefresh = { work.onAction(WorkAction.Refresh) },
     )
@@ -279,7 +284,9 @@ private fun HistoryEntry(window: WindowOwner) {
   LaunchedEffect(history) {
     history.effects.collect { effect -> if (effect is HistoryEffect.OpenDetail) navigator.openDetail(effect.identity) }
   }
-  LaunchedEffect(state.list) { navigator.status = ListStatus(loading = false, onRefresh = { history.onAction(HistoryAction.Retry) }) }
+  LaunchedEffect(state.list) {
+    navigator.status = ListStatus(loading = false, problem = state.list.readProblem(), onRefresh = { history.onAction(HistoryAction.Retry) })
+  }
 
   val onAction: (HistoryAction) -> Unit = { action ->
     if (action == HistoryAction.Retry) actions.refreshShell()
@@ -345,12 +352,23 @@ private fun EmptyDetailEntry(window: WindowOwner) {
   }
 }
 
+/** The first failed read of a list, whether nothing could be shown or the rows on screen are from an earlier read. */
+private fun PagedListState<*>.readProblem(): Problem? = when (this) {
+  is PagedListState.InitialError -> problem
+  is PagedListState.Content -> readError
+  else -> null
+}
+
+/** The window's one place for a read failure: what went wrong across the bottom, and the retry that can clear it. */
 @Composable
-private fun ProblemBanner(problem: Problem, status: ListStatus, onRetry: () -> Unit) {
-  ProblemMessage(problem.summary)
-  Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-    if (status.stale) Text("Showing the last successful update.", Modifier.weight(1f), color = muted, style = MaterialTheme.typography.bodySmall)
-    TextButton(onClick = onRetry) { Text("Retry", color = amber) }
+private fun StatusLine(problem: Problem, status: ListStatus, onRetry: () -> Unit) {
+  Column(Modifier.fillMaxWidth().background(sidebar)) {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(border))
+    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp).heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+      val message = if (status.stale) "${problem.summary} Showing the last successful update." else problem.summary
+      Text(message, Modifier.weight(1f), color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+      TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Retry", color = amber, style = MaterialTheme.typography.bodySmall) }
+    }
   }
 }
 

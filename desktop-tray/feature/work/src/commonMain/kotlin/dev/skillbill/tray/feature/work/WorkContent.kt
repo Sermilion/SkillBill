@@ -3,7 +3,6 @@ package dev.skillbill.tray.feature.work
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,7 +21,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.core.designsystem.DesignLabel
-import dev.skillbill.tray.core.designsystem.amber
 import dev.skillbill.tray.core.designsystem.body
 import dev.skillbill.tray.core.designsystem.dim
 import dev.skillbill.tray.core.designsystem.ink
@@ -37,7 +34,6 @@ import dev.skillbill.tray.core.ui.AppendState
 import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.PagedListState
-import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.SidebarWorkRow
 import kotlin.time.Instant
 
@@ -106,10 +102,10 @@ private fun LazyListScope.workSection(
   }
   when (list) {
     PagedListState.InitialLoading -> item(key = "$section:loading") { SectionNote("Loading...") }
-    is PagedListState.InitialError -> item(key = "$section:problem") { SectionProblem(list.problem.summary) { onAction(WorkAction.Retry(section)) } }
+    // Read failures are reported once, in the window's status line, so the section only says it has nothing to show.
+    is PagedListState.InitialError -> item(key = "$section:problem") { SectionNote("Couldn't load") }
     is PagedListState.LoadedEmpty -> emptyNote(section, if (filtering) "No matching work" else empty)
     is PagedListState.Content -> {
-      list.readError?.let { problem -> item(key = "$section:problem") { SectionProblem(problem.summary) { onAction(WorkAction.Retry(section)) } } }
       if (rows.isEmpty()) emptyNote(section, if (filtering) "No matching work" else empty)
       items(rows, key = { "$section:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
         SidebarWorkRow(item, selected == item.identity) { onAction(WorkAction.Select(item.identity)) }
@@ -132,12 +128,4 @@ private fun LazyListScope.emptyNote(section: WorkSection, text: String) {
 @Composable
 private fun SectionNote(text: String) {
   Text(text, Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall)
-}
-
-@Composable
-private fun SectionProblem(summary: String, retry: () -> Unit) {
-  Column(Modifier.padding(horizontal = 16.dp)) {
-    ProblemMessage(summary)
-    TextButton(onClick = retry) { Text("Retry", color = amber) }
-  }
 }
