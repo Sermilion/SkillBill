@@ -255,6 +255,14 @@ $defs:
       - out_of_repo
       - already_satisfied
       - not_reproducible
+  goalAssessmentExitReasonEnum:
+    type: string
+    enum:
+      - converged
+      - round_cap
+      - persistent_finding
+      - assessment_unavailable
+      - skipped_no_changes
   goalRunnerStopReasonEnum:
     type: string
     enum:
@@ -1077,6 +1085,62 @@ $defs:
         description: >
           Whether the subtask's feature-task run wrote a boundary history.md entry.
           Additive-optional: legacy payloads omit the key.
+      interaction_scenarios_traced:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Distinct interaction scenarios traced, broken, repaired, or unknown in the subtask's
+          final repair state. Additive-optional: legacy payloads omit the key.
+      interaction_scenarios_broken:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Distinct interaction scenarios whose trace found them broken, counting those later
+          repaired. Additive-optional: legacy payloads omit the key.
+      interaction_scenarios_repaired:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Interaction scenarios that broke and held on re-trace. Additive-optional: legacy
+          payloads omit the key.
+      interaction_scenarios_unknown:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Interaction scenarios the trace could not decide. Additive-optional: legacy payloads
+          omit the key.
+      test_probes_killed:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output that a test caught. Additive-optional:
+          legacy payloads omit the key.
+      test_probes_survived:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output that no test caught. Additive-optional:
+          legacy payloads omit the key.
+      test_probes_repaired:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output marked repaired. Additive-optional:
+          legacy payloads omit the key.
+      test_probes_not_run:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Test probes of the last goal-child validate output that could not run. Additive-optional:
+          legacy payloads omit the key.
 
   goalFinishedEvent:
     type: object
@@ -1142,6 +1206,60 @@ $defs:
         oneOf:
           - $ref: "#/$defs/noChangeReasonEnum"
           - type: "null"
+      goal_assessment_blocker_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Blocker findings across all goal assessment rounds. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_major_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Major findings across all goal assessment rounds. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_minor_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Minor findings across all goal assessment rounds. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_confirmed:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Assessment findings verified as confirmed. Additive-optional: legacy payloads omit
+          the key.
+      goal_assessment_refuted:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Assessment findings verified as refuted. Additive-optional: legacy payloads omit the key.
+      goal_assessment_rounds:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Goal assessment rounds run. Additive-optional: legacy payloads omit the key.
+      goal_assessment_open_findings:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+        description: >
+          Findings still open when the assessment exited. Additive-optional: legacy payloads
+          omit the key.
+      goal_assessment_exit_reason:
+        oneOf:
+          - $ref: "#/$defs/goalAssessmentExitReasonEnum"
+          - type: "null"
+        description: >
+          Why the goal assessment exited; `null` when no assessment record exists.
+          Additive-optional: legacy payloads omit the key.
 
   goalIssueFinishedEvent:
     type: object

@@ -253,7 +253,7 @@ class GoalRunner(
     val observability = GoalRunnerObservabilityEmitter(outcomeStore, clock, diagnostics)
     val ledger = GoalRunnerLedgerRecorder(outcomeStore, effectiveRequest, clock, diagnostics)
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
-    val telemetryEmitter = GoalRunnerTelemetryEmitter(telemetry, clock, state)
+    val telemetryEmitter = GoalRunnerTelemetryEmitter(telemetry, clock, state, outcomeStore, diagnostics)
     return runCatching {
       manifestStore.updateControlState(state.parentWorkflowId) { current ->
         current.copy(goalBlockedReason = null)

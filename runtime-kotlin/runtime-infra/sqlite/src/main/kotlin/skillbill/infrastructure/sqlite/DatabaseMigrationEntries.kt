@@ -35,6 +35,8 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion5
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
+import skillbill.infrastructure.sqlite.core.migration.area.recordGoalAssessmentCounts
+import skillbill.infrastructure.sqlite.core.migration.area.recordGoalSubtaskTraceProbeCounts
 import skillbill.infrastructure.sqlite.core.migration.area.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
@@ -873,4 +875,14 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 84,
       name = "record-qa-failure-kind",
       operation = ::recordQaFailureKind,
+    ) +
+    DatabaseMigration(
+      version = 85,
+      name = "record-goal-subtask-trace-probe-counts",
+      operation = ::recordGoalSubtaskTraceProbeCounts,
+    ) +
+    DatabaseMigration(
+      version = 86,
+      name = "record-goal-assessment-counts",
+      operation = ::recordGoalAssessmentCounts,
     )

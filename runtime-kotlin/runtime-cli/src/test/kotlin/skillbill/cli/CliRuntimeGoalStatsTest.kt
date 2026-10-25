@@ -92,4 +92,25 @@ class CliRuntimeGoalStatsTest {
     assertEquals("bill-goal-run", payload["workflow"])
     assertEquals(0, payload["total_runs"])
   }
+
+  @Test
+  fun `goal-stats json carries nested trace probe and assessment objects with zeros when nothing was recorded`() {
+    val tempDir = Files.createTempDirectory("skillbill-cli-goal-stats-nested")
+    val dbPath = tempDir.resolve("metrics.db")
+
+    val result =
+      CliRuntime.run(
+        listOf("--db", dbPath.toString(), "goal-stats", "--format", "json"),
+        CliRuntimeContext(),
+      )
+    val payload = decodeJsonObject(result.stdout)
+
+    val scenarios = payload["interaction_scenarios"] as Map<*, *>
+    val probes = payload["test_probes"] as Map<*, *>
+    assertEquals(setOf("traced", "broken", "repaired", "unknown"), scenarios.keys)
+    assertEquals(setOf("killed", "survived", "repaired", "not_run"), probes.keys)
+    val assessment = payload["goal_assessment"] as Map<*, *>
+    assertEquals(0, (assessment["rounds"] as Number).toInt())
+    assertEquals(emptyMap<String, Any?>(), assessment["exit_reasons"])
+  }
 }

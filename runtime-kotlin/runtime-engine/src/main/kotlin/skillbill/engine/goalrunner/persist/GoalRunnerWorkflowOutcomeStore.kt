@@ -18,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
@@ -56,6 +57,8 @@ interface GoalRunnerReviewOutcomeStore {
   fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded
 
   fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios
+
+  fun recordedTraceProbeCounts(workflowId: String): GoalSubtaskTraceProbeCounts = GoalSubtaskTraceProbeCounts()
 
   /** The admitted plan's QA selection once the child has a stored plan, else [requested]; null keeps a pre-QA plan. */
   fun childQaSelection(

@@ -1,3 +1,14 @@
+## [2026-10-25] SKILL-442 subtask 8: trace, probe, and assessment telemetry
+Areas: runtime-infra/sqlite (migrations 85-86, goal telemetry save/payloads, goal-stats); runtime-engine goalrunner telemetry and persist/assessment; runtime-domain and runtime-application telemetry and stats models; telemetry-event-schema.yaml; DesktopReadSchema; docs/review-telemetry.md
+- Goal-subtask-finished events carry 8 optional counters (interaction scenarios traced/broken/repaired/unknown, test probes killed/survived/repaired/not_run); goal-finished events carry 7 goal_assessment counters plus a nullable exit-reason enum. Telemetry schema stays 1.13.0 (unreleased bump already on branch); fields are optional so legacy payloads validate.
+- Append-only migrations 85 (subtask columns) and 86 (goal run session columns) default counts to 0 and exit reason to NULL; DesktopReadSchema.VERSION is 86. Columns are not added to base CREATE TABLE, so the legacy-upgrade test is meaningful. reusable
+- Counting rules live in persist/assessment GoalTelemetryFactCounts: distinct scenario refs, last validate test_probes, findings across all rounds, open_finding_refs length. reusable
+- goal-stats sums subtask counters but takes one goal-counter snapshot per logical goal (latest finished segment with an exit reason), because resumed segments re-read the cumulative assessment record.
+- The emitter degrades a missing or SkillBillRuntimeException-coded unreadable source to zero counts plus a diagnostic; defects propagate. Duplicate terminal events keep the first counts via the status IS NULL guard.
+- New code was merged into existing files or a sub-package to stay under the 12-file package sibling ceiling.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented (validate ran full check green)
+
 ## [2026-10-18] SKILL-422 subtask 3: SQLite maintenance and audit closure
 Areas: runtime-infra/sqlite test fixtures and tests; runtime-cli installer repoTests; runtime-application uninstall tests; SKILL-422 audit docs (inventory, matrix, findings register, evidence, audit-coverage)
 - No production maintenance change. Source review found install.sh pre-install cleanup already keeps *.db, -wal, -shm, -journal, backups and the baseline manifest, and explicit shell and application uninstall stay destructive.

@@ -97,6 +97,7 @@ internal fun goalFinishedPayload(
     row[GoalTelemetryPayloadKeys.NO_CHANGE_REASON]?.toString()?.let { reason ->
       put(GoalTelemetryPayloadKeys.NO_CHANGE_REASON, reason)
     }
+    putAll(row.assessmentCountPayload())
   }
 
 internal fun goalIssueFinishedPayload(
@@ -145,6 +146,7 @@ internal fun goalSubtaskFinishedPayload(
     GoalTelemetryPayloadKeys.ATTEMPT_COUNT to row.intOrZero(GoalTelemetryPayloadKeys.ATTEMPT_COUNT),
     GoalTelemetryPayloadKeys.BLOCKED_REASON to row[GoalTelemetryPayloadKeys.BLOCKED_REASON]?.toString(),
   ).apply {
+    putAll(row.subtaskCountPayload())
     if (level == "full") {
       put(GoalTelemetryPayloadKeys.SUBTASK_NAME, row.stringOrEmpty(GoalTelemetryPayloadKeys.SUBTASK_NAME))
       put(
