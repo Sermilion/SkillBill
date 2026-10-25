@@ -245,10 +245,13 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "Do not recursively invoke `skill-bill phase validation`")
     assertFalse(prompt.contains("Do not run pack validation_gate argv"))
     assertContains(prompt, "Keep repairing in this same session")
-    assertContains(prompt, "Settle completed only when every required check passes")
+    assertContains(prompt, "Settle completed when every runnable required check passes")
     assertContains(prompt, "Do not stop after reducing the failure count")
     assertContains(prompt, "return a partial progress report")
-    assertContains(prompt, "Settle blocked only for a concrete external obstacle")
+    assertContains(
+      prompt,
+      "Settle blocked only for a concrete external obstacle other than confirmed unavailable tooling",
+    )
     assertContains(prompt, "The runtime does not rerun the checks")
     assertContains(prompt, "## Required final output")
     assertFalse(prompt.contains("validated schema gate"))
@@ -269,7 +272,17 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       assertContains(prompt, "missing or stale artifacts", false, phaseId)
       assertContains(prompt, "Rebuild after source repairs", false, phaseId)
       assertContains(prompt, "Do not return to an earlier phase", false, phaseId)
-      assertContains(prompt, "Settle completed only when every required check passes", false, phaseId)
+      assertContains(prompt, "Settle completed when every runnable required check passes", false, phaseId)
+      assertContains(
+        prompt,
+        "skip only the checks that depend on it and continue all independent checks",
+        false,
+        phaseId,
+      )
+      assertContains(prompt, "Never count a skipped check as passed", false, phaseId)
+      assertContains(prompt, "run its remaining independent tasks separately", false, phaseId)
+      assertContains(prompt, "missing prerequisite, and confirming evidence", false, phaseId)
+      assertContains(prompt, "an unexplained command failure is not evidence of unavailable tooling", false, phaseId)
     }
   }
 

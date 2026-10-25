@@ -27,8 +27,18 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "mutable state. Do not install packages automatically, stop a shared daemon, or change unrelated jobs. " +
     "Revisit setup when relevant scripts, configuration, toolchain, or workspace requirements change; " +
     "an earlier setup does not prove an uninspected change is safe. " +
-    "Setup reuse never skips checks: run every required local check for each repair candidate before publication, " +
+    "For each repair candidate, run every required local check whose tooling is available before publication, " +
     "preserve clean and cache-bypass requirements, and do not count a previous candidate's pass as current evidence. " +
+    "When preflight or command output confirms that a required tool, SDK, or host platform is unavailable, " +
+    "skip only the checks that depend on it and continue all independent checks. This includes packaging " +
+    "utilities missing on Linux and targets requiring macOS with Xcode on a Linux host. Report each skip " +
+    "as a warning naming the exact command or target, missing prerequisite, and confirming evidence. " +
+    "Never count a skipped check as passed. If an aggregate command stops solely at unavailable tooling, " +
+    "run its remaining independent tasks separately. Skip artifact checks only when they require an " +
+    "artifact that the unavailable tooling must produce, and report that dependency. Do not edit project " +
+    "configuration, disable targets, or add test skips to work around missing tooling. Source, dependency, " +
+    "test, analysis, formatting, fixture, and configuration failures still require repair; an unexplained " +
+    "command failure is not evidence of unavailable tooling. " +
     "If you find no applicable validation commands after inspecting those sources, print a warning " +
     "that no validation commands were found, then settle completed and allow the workflow to advance. " +
     "Do not invent commands or report checks as passed when none ran. A failed discovery command or " +
@@ -39,20 +49,23 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "Validation owns running checks and fixing every failure, including build failures. Run the project's " +
     "build and packaging commands when checks need them, including the pack build_command. Prepare missing " +
     "or stale artifacts in this session. Rebuild after source repairs so the artifacts match the candidate " +
-    "under validation, then rerun every required check. Do not return to an earlier phase or ask the operator " +
-    "to rebuild artifacts you can create here. The separate compile-only build gate does not restrict " +
+    "under validation, then rerun every runnable required check. Do not return to an earlier phase or ask " +
+    "the operator to rebuild artifacts you can create here. The separate compile-only build gate does not restrict " +
     "builds required by validation. Preserve artifact identity and integrity checks; do not bypass them " +
     "or count a rebuild alone as validation success. " +
     "Do not recursively invoke `skill-bill phase validation`. " +
-    "Keep repairing in this same session until every required project check passes. Do not spawn delegated " +
-    "subagents. Settle completed only when every required check passes, naming the checks you ran and how " +
-    "each ended. Build failures, test failures, static-analysis findings, formatting failures, " +
+    "Keep repairing in this same session until every runnable required project check passes. Do not spawn delegated " +
+    "subagents. Settle completed when every runnable required check passes, with warnings for unavailable " +
+    "tooling coverage. Missing tooling alone never blocks validation. If no checks can run because their " +
+    "tooling is unavailable, complete with warnings and state that no checks ran. Name the checks you ran " +
+    "and how each ended. Build failures, test failures, static-analysis findings, formatting failures, " +
     "and outdated fixtures are " +
     "repair work in this session: fix a formatting failure with the project's formatter, then rerun the " +
     "required checks. No failure, formatting included, hands the work to another validation session. " +
     "Do not stop after reducing the failure count or return a partial progress report. Keep fixing and " +
-    "rerunning the required checks in this session until they all pass. " +
-    "Settle blocked only for a concrete external obstacle you cannot resolve, and describe the obstacle, " +
+    "rerunning the runnable required checks in this session until they all pass. " +
+    "Settle blocked only for a concrete external obstacle other than confirmed unavailable tooling that " +
+    "you cannot resolve, and describe the obstacle, " +
     "any setup retries, the required operator action, and any remaining failures in ordinary prose. " +
     "Use the existing blocked and recovery behavior. Wall-clock timeout still stops " +
     "the subtask. The runtime does not rerun the checks itself. Report each command and its result, " +
@@ -181,8 +194,10 @@ internal fun buildGateFindingsDirective(
 
 internal const val VALIDATE_VALUE_CONTENT: String =
   "Say in prose which required project checks you ran and how each ended.\n" +
-    "Fix every check failure in this session before finishing, and block only for an external obstacle " +
-    "requiring operator action.\n" +
+    "Report each check skipped for unavailable tooling as a warning with its command or target, missing " +
+    "prerequisite, and confirming evidence. Never report skipped coverage as passed.\n" +
+    "Complete when every runnable required check passes, even if unavailable tooling prevents other checks. " +
+    "Fix every other check failure in this session; missing tooling alone never blocks validation.\n" +
     "Gate runs and their evidence are runtime-measured.\n" +
     "Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings."
 

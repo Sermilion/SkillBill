@@ -2,11 +2,15 @@
 
 Discover and run the project's required validation from repository instructions,
 build configuration, scripts, and CI. Compilation alone does not complete the gate.
-Stop when every required check passes or a concrete external obstacle remains.
+Complete when every runnable required check passes. Confirmed unavailable tooling
+skips only the affected checks, with warnings naming each command or target, missing
+prerequisite, and evidence. Continue independent checks and never report skipped
+coverage as passed. Missing tooling alone never blocks validation, even if no checks
+can run. Other unresolved external obstacles retain the existing blocked behavior.
 
 Fix build failures in this session along with test, analysis, and formatting failures.
 Run the project's build and packaging commands when checks need them. Prepare missing
-or stale artifacts and rebuild after source repairs, then rerun every required check
+or stale artifacts and rebuild after source repairs, then rerun every runnable required check
 against the current candidate. Keep artifact identity and integrity checks intact.
 Do not return to an earlier phase or ask the operator to perform a rebuild you can run.
 

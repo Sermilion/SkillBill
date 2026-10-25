@@ -249,7 +249,7 @@ supplied briefing without starting standalone phase or operation commands.
 Validation runs the project's required checks and fixes every failure in the same
 session, including build failures. It may run repository build and packaging commands,
 including the pack build command, to prepare missing or stale validation artifacts.
-After source repairs it rebuilds the affected artifacts and reruns all required checks
+After source repairs it rebuilds the affected artifacts and reruns all runnable required checks
 against the current candidate. The separate compile-only build gate does not reserve
 these commands away from validation. A rebuild does not complete validation, and
 artifact identity and integrity checks remain mandatory. Monitor repair uses the same
@@ -280,6 +280,22 @@ project regardless of which files changed and requires no platform pack or decla
 validation command. If discovery finds no applicable commands, the agent prints a
 warning and completes the step so the workflow can advance. Unreadable configuration
 or failed discovery remains an obstacle and does not count as an empty check list.
+
+Confirmed unavailable tools, SDKs, or host platforms skip only the checks that
+depend on them. Validation continues all independent checks and completes when
+every runnable required check passes. Each skip produces a warning naming the
+command or target, missing prerequisite, and confirming preflight or error evidence.
+Skipped coverage never counts as passed. If an aggregate command stops solely at
+unavailable tooling, run the remaining independent tasks separately. An artifact
+check may skip when it depends on an artifact that the unavailable tooling must
+produce, with that dependency reported. If no checks can run, complete with warnings
+and state that no checks ran. Missing tooling alone does not block validation or
+authorize package installation, project configuration changes, disabled targets, or
+test skips. Source, dependency, test, analysis, formatting, fixture, and configuration
+failures still require repair. Failed discovery and unexplained command failures
+retain the existing failure behavior. This applies to standalone and workflow
+validation and the local validation performed during monitor repair; remote CI
+results keep their existing completion rules.
 
 A monitor retry rechecks an abandoned owner's retained `publication_unknown` state
 under the admission lock after confirming that the previous owner process is dead
@@ -391,7 +407,7 @@ Reuse only caches and mutable state that invocation may own, never another
 worktree's mutable state. Recheck the relevant instructions and scripts after a
 change to their setup, configuration, toolchain, or workspace requirements. A
 previously working setup does not validate a change you have not inspected.
-Setup reuse does not skip checks: run all required local checks for every repair
+Setup reuse does not skip runnable checks: run all runnable required local checks for every repair
 candidate before the runtime publishes it. Preserve clean and cache-bypass
 requirements, and do not carry a prior candidate's local pass forward as evidence.
 Explain setup retries and any missing tool, permission, or display problem in the
@@ -403,7 +419,7 @@ assertion, or error. The repair agent traces that evidence through the repositor
 and fixes the cause. A passing local rerun does not resolve a CI failure.
 Intermittent failures require investigation of timing, concurrency, isolation,
 or environment differences as the evidence warrants. Repair completion requires
-a repository fix and passing required local checks. If investigation cannot
+a repository fix and passing runnable required local checks. If investigation cannot
 establish a fix, the agent blocks with the failed check URL, inspected evidence,
 and unresolved cause or missing evidence. An unchanged tree and green local
 checks cannot complete repair. The runtime owns commit, push, and subsequent CI

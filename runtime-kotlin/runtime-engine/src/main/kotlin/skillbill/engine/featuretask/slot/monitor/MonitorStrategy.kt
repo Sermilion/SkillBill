@@ -168,7 +168,8 @@ class MonitorStrategy(
         "GitHub CLI cannot report checks, monitoring blocks."
 
     private const val MONITOR_FIX_DIRECTIVE: String =
-      "Monitor repair completion requires both a fix for the recorded failure and passing local project checks. " +
+      "Monitor repair completion requires both a fix for the recorded failure and passing runnable local " +
+        "project checks. " +
         "Passing local checks alone does not satisfy this phase, even when discovery finds no applicable checks. " +
         "When the brief names a merge conflict, follow its merge steps: merge the fetched remote base without " +
         "committing, resolve every conflict, and leave the merge in progress for the runtime to commit. " +
