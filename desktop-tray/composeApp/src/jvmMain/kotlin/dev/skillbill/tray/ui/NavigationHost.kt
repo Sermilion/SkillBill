@@ -71,6 +71,7 @@ import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.ui.FeedbackHost
+import dev.skillbill.tray.core.ui.PagedListState
 import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.navigation.AppRoute
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
@@ -341,9 +342,15 @@ private fun WorkEntry(window: WindowOwner) {
   LaunchedEffect(work) {
     work.effects.collect { effect -> if (effect is WorkEffect.OpenDetail) navigator.openDetail(effect.identity) }
   }
-  LaunchedEffect(state.loaded, state.liveProblem, state.stale, state.hasMoreLive) {
+  // The first live item opens once the sections are read, unless something is selected already.
+  val initial = if (!opened && navigator.selected == null) defaultSelection(state, HistoryUiState()) else null
+  // The list is still resolving its first item while a live section is unread or that item is not open yet, so the terminal
+  // pane waits for it: a session only takes its directory at its first launch.
+  val selectionPending = !opened && navigator.selected == null &&
+    (initial != null || listOf(state.needsYou, state.goals, state.phases, state.operations).any { it is PagedListState.InitialLoading })
+  LaunchedEffect(state.loaded, selectionPending, state.liveProblem, state.stale, state.hasMoreLive) {
     navigator.status = ListStatus(
-      loading = !state.loaded,
+      loading = !state.loaded || selectionPending,
       failed = state.liveProblem != null,
       hasMore = state.hasMoreLive,
       problem = state.liveProblem,
@@ -351,8 +358,6 @@ private fun WorkEntry(window: WindowOwner) {
       onRefresh = { work.onAction(WorkAction.Refresh) },
     )
   }
-  // The first live item opens once the sections are read, unless something is selected already.
-  val initial = if (!opened && navigator.selected == null) defaultSelection(state, HistoryUiState()) else null
   LaunchedEffect(initial) {
     if (initial != null && navigator.openDetail(initial)) opened = true
   }
