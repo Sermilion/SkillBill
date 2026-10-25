@@ -122,4 +122,52 @@ class TerminalViewModelTest {
 
     assertEquals("/repo/b", viewModel.state.value.workingDirectory)
   }
+
+  @Test
+  fun `a spec picked after a sidebar item moves the directory to the spec's project and keeps the sidebar selection settled`() = runTest(dispatcher) {
+    val item = workItem("a")
+    val viewModel = TerminalViewModel(details, settings)
+    details.onDetail = { Outcome.Value(detail(item)) }
+    viewModel.onAction(TerminalAction.SelectedWorkChanged(item.identity))
+    runCurrent()
+
+    viewModel.onAction(TerminalAction.SpecSelected("/repo/specs-project"))
+    runCurrent()
+
+    assertEquals("/repo/specs-project", viewModel.state.value.workingDirectory)
+    assertEquals(item.identity, viewModel.state.value.resolvedFor)
+  }
+
+  @Test
+  fun `a spec picked while a sidebar read is in flight wins over that read and settles the selection`() = runTest(dispatcher) {
+    val item = workItem("a")
+    val read = CompletableDeferred<Unit>()
+    val viewModel = TerminalViewModel(details, settings)
+    details.onDetail = {
+      read.await()
+      Outcome.Value(detail(item))
+    }
+
+    viewModel.onAction(TerminalAction.SelectedWorkChanged(item.identity))
+    runCurrent()
+    viewModel.onAction(TerminalAction.SpecSelected(null))
+    read.complete(Unit)
+    runCurrent()
+
+    assertNull(viewModel.state.value.workingDirectory)
+    assertEquals(item.identity, viewModel.state.value.resolvedFor)
+  }
+
+  @Test
+  fun `a sidebar item picked after a spec moves the directory back to the item's project`() = runTest(dispatcher) {
+    val item = workItem("a")
+    val viewModel = TerminalViewModel(details, settings)
+    details.onDetail = { Outcome.Value(detail(item)) }
+
+    viewModel.onAction(TerminalAction.SpecSelected("/repo/specs-project"))
+    viewModel.onAction(TerminalAction.SelectedWorkChanged(item.identity))
+    runCurrent()
+
+    assertEquals("/repo/a", viewModel.state.value.workingDirectory)
+  }
 }

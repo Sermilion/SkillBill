@@ -1,3 +1,9 @@
+## [2026-10-25] Terminal opens in the latest selection's project, one shell per directory
+Context: A window had one shell that took its directory only at its first launch, so the terminal never followed the selected goal, phase, operation or spec.
+Decision: Each opening of the pane fixes the directory of the latest pick (a sidebar item, re-picks included, or a spec row picked in the spec pane, at the checkout the pane reads it from) and keeps it until the pane closes; a spec project with no checkout falls back to the home directory like an unreadable selection. Picks reach the terminal as events (WindowNavigator.picks, SpecsViewModel.picks), not as inferred state changes. TerminalSessions keys sessions by window id and starting directory, and all of a window's sessions end on its disposal.
+Reason: Restarting or cd-ing the one shell on reopen would kill or disturb a running process; a shell per directory keeps each project's scrollback and running commands, and fixing the directory per opening means a click never swaps the shell underneath.
+Alternatives considered: Swapping the shell live on every selection change surprises a user mid-command; inferring spec picks from the selected path missed re-picks of the selected row.
+
 ## [2026-10-25] Persist terminal pane height once, on drag release
 Context: The divider drag emits a delta per pointer move, and every ResizeTo writes AppSettings to disk.
 Decision: The host keeps the dragged height in local state seeded from settings and sends ResizeTo only in onDragStopped.

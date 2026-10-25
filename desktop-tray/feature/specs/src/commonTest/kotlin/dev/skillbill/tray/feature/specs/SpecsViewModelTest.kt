@@ -119,4 +119,25 @@ class SpecsViewModelTest {
     assertTrue(specs.calls.none { it.startsWith("projectFor:") }, "A picked project must not be re-resolved from the selection.")
     assertTrue(effects.isEmpty())
   }
+
+  @Test
+  fun `every row pick is announced with the checkout the pane follows, a re-pick of the selected row included`() = runTest(dispatcher) {
+    val worktree = workItem("wt")
+    details.onDetail = { Outcome.Value(detail(worktree)) }
+    val vm = viewModel()
+    vm.onAction(SpecsAction.Select("done"))
+    runCurrent()
+    val picks = mutableListOf<SpecPick>()
+    backgroundScope.launch { vm.picks.toList(picks) }
+    vm.onAction(SpecsAction.SelectedWorkChanged(worktree.identity))
+    specs.emitSnapshot(Outcome.Value(SpecSnapshot(p1, listOf(folder), SpecCounts(1, 0, 0, 1), anyInProgress = false, failure = null)))
+    runCurrent()
+
+    vm.onAction(SpecsAction.Click("done"))
+    runCurrent()
+    vm.onAction(SpecsAction.Click("done"))
+    runCurrent()
+
+    assertEquals(listOf(SpecPick("done", "/repo/wt"), SpecPick("done", "/repo/wt")), picks, "A pick made before collecting is never replayed.")
+  }
 }

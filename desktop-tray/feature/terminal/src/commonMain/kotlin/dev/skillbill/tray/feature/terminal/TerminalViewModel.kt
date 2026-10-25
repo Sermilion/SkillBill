@@ -16,7 +16,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Pane visibility and height persist in settings; the working directory follows the selected work and is never persisted. */
+/**
+ * Pane visibility and height persist in settings; the working directory follows the latest selection, sidebar work or a spec, and
+ * is never persisted.
+ */
 class TerminalViewModel(
   private val details: WorkDetailRepository,
   private val settings: SettingsRepository,
@@ -24,6 +27,7 @@ class TerminalViewModel(
   private val appSettings = MutableStateFlow(AppSettings())
   private val resolution = MutableStateFlow(Resolution(identity = null, directory = null))
   private var resolving: Job? = null
+  private var latestWork: WorkIdentity? = null
 
   val state: StateFlow<TerminalUiState> = combine(appSettings, resolution) { stored, resolved ->
     TerminalUiState(stored.terminalPaneOpen, stored.terminalPaneHeightDp, resolved.directory, resolved.identity)
@@ -42,11 +46,17 @@ class TerminalViewModel(
         settings.update { it.copy(terminalPaneHeightDp = height) }
       }
       is TerminalAction.SelectedWorkChanged -> select(action)
+      is TerminalAction.SpecSelected -> {
+        // The spec is now the latest selection, so the sidebar read in flight no longer decides the directory.
+        resolving?.cancel()
+        resolution.value = Resolution(latestWork, action.repositoryRoot)
+      }
     }
   }
 
   /** A newer selection cancels the read in flight, so a slow earlier read can never overwrite it. */
   private fun select(action: TerminalAction.SelectedWorkChanged) {
+    latestWork = action.identity
     resolving?.cancel()
     resolving = viewModelScope.launch {
       val directory = action.identity?.let { (details.detail(it) as? Outcome.Value)?.value?.item?.repositoryRoot }
@@ -54,6 +64,6 @@ class TerminalViewModel(
     }
   }
 
-  /** The selection a directory was read for, so a reader can tell a settled null from a read still in flight. */
+  /** The sidebar selection a directory is settled for, so a reader can tell a settled null from a read still in flight. */
   private data class Resolution(val identity: WorkIdentity?, val directory: String?)
 }

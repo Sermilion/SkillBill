@@ -113,7 +113,7 @@ class TerminalSessionsTest {
   fun `hiding a window keeps its shell and disposing it ends the shell once`() = runTest {
     val sessions = TerminalSessions(factory, { _, _ -> FakeView().also(views::add) }, addShutdownHook = {})
     val owner = registry().openMain()
-    val session = sessions.forWindow(owner)
+    val session = sessions.forWindow(owner, "/tmp")
     assertIs<TerminalStart.Started>(session.open(launch, settings))
 
     owner.hide()
@@ -127,5 +127,25 @@ class TerminalSessionsTest {
     assertEquals(1, factory.destroys)
     assertTrue(views.single().closed)
     assertEquals(TerminalStart.Closed, session.open(launch, settings))
+  }
+
+  @Test
+  fun `each starting directory keeps its own shell and disposing the window ends them all`() = runTest {
+    val sessions = TerminalSessions(factory, { _, _ -> FakeView().also(views::add) }, addShutdownHook = {})
+    val owner = registry().openMain()
+    val first = sessions.forWindow(owner, "/repo/a")
+    assertIs<TerminalStart.Started>(first.open(launch.copy(workingDirectory = "/repo/a"), settings))
+
+    val second = sessions.forWindow(owner, "/repo/b")
+    assertIs<TerminalStart.Started>(second.open(launch.copy(workingDirectory = "/repo/b"), settings))
+
+    assertSame(first, sessions.forWindow(owner, "/repo/a"))
+    assertEquals(2, factory.starts)
+    assertEquals(0, factory.destroys, "Opening another project's shell never ends the first one.")
+
+    owner.dispose()
+
+    assertEquals(2, factory.destroys)
+    assertTrue(views.all { it.closed })
   }
 }

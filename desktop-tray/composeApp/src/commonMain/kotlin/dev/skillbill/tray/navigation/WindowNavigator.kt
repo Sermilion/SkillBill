@@ -1,6 +1,7 @@
 package dev.skillbill.tray.navigation
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.savedstate.SavedState
@@ -53,6 +54,10 @@ class WindowNavigator(private val generation: () -> DatabaseGenerationRef?, init
 
   var status: ListStatus by mutableStateOf(ListStatus())
 
+  /** Counts every detail opened, re-opening the one already shown included, so a reader can tell a re-pick from no change. */
+  var picks: Int by mutableIntStateOf(0)
+    private set
+
   /** The item whose detail is open, or null when only the list shows. */
   val selected: WorkIdentity? get() = stack.top.detailIdentity()
 
@@ -74,6 +79,7 @@ class WindowNavigator(private val generation: () -> DatabaseGenerationRef?, init
       else -> return false
     }
     stack.open(route)
+    picks++
     return true
   }
 

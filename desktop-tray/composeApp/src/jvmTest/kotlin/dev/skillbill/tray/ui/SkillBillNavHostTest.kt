@@ -23,9 +23,19 @@ import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.WorkSection
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.testing.FakeWorkStoreSession
+import dev.skillbill.tray.core.domain.model.SpecProject
+import dev.skillbill.tray.core.testing.FakeSpecBrowserRepository
+import dev.skillbill.tray.core.testing.FakeWorkControlRepository
+import dev.skillbill.tray.core.testing.TestClock
 import dev.skillbill.tray.core.testing.board
+import dev.skillbill.tray.core.testing.fixtureInstant
+import dev.skillbill.tray.core.testing.detail
+import dev.skillbill.tray.core.testing.workItem
 import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import dev.skillbill.tray.core.ui.navigation.rememberEntryComponent
+import dev.skillbill.tray.core.ui.LaunchRequests
+import dev.skillbill.tray.feature.specs.SpecsAction
+import dev.skillbill.tray.feature.specs.SpecsViewModel
 import dev.skillbill.tray.feature.terminal.TerminalAction
 import dev.skillbill.tray.feature.terminal.TerminalViewModel
 import dev.skillbill.tray.lifetime.SessionState
@@ -41,6 +51,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotSame
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -112,6 +123,112 @@ class SkillBillNavHostTest {
       assertEquals(writes + 1, fakes.settings.updates.size, "One drag saves one height, not one per pixel.")
       val saved = fakes.settings.updates.last().terminalPaneHeightDp
       assertTrue(saved > AppSettings().terminalPaneHeightDp && saved <= AppSettings.TERMINAL_PANE_MAX_HEIGHT_DP, "Dragging up grows the pane: $saved.")
+      window.dispose()
+    } finally {
+      Dispatchers.resetMain()
+    }
+  }
+
+  @Test
+  fun `the terminal keeps its directory while open and the next opening takes the latest selection's project`() = runComposeUiTest {
+    Dispatchers.setMain(UnconfinedTestDispatcher())
+    try {
+      val window = windows.openMain()
+      val item = workItem("a")
+      fakes.details.onDetail = { Outcome.Value(detail(item)) }
+      val opened = mutableListOf<String?>()
+      lateinit var terminal: TerminalViewModel
+
+      setContent {
+        terminal = rememberTerminalViewModel(window)
+        SkillBillNavHost(
+          window,
+          SessionState.Active(DatabaseGenerationRef(0)),
+          null,
+          {},
+          {},
+          terminal = terminal,
+          terminalSurface = { directory -> opened += directory },
+        )
+      }
+      WorkSection.entries.forEach { fakes.boards.emit(it, Outcome.Value(board(emptyList()))) }
+      terminal.onAction(TerminalAction.TogglePane)
+      waitForIdle()
+      assertNull(opened.last())
+
+      runOnIdle { window.navigator.openDetail(item.identity) }
+      waitForIdle()
+      assertNull(opened.last(), "Selecting work while the pane is open never swaps its shell.")
+
+      terminal.onAction(TerminalAction.TogglePane)
+      waitForIdle()
+      terminal.onAction(TerminalAction.TogglePane)
+      waitForIdle()
+      assertEquals("/repo/a", opened.last())
+      window.dispose()
+    } finally {
+      Dispatchers.resetMain()
+    }
+  }
+
+  @Test
+  fun `the terminal opens in the project of the latest pick, a spec row or a re-picked sidebar item`() = runComposeUiTest {
+    Dispatchers.setMain(UnconfinedTestDispatcher())
+    try {
+      val window = windows.openMain()
+      val item = workItem("a")
+      fakes.details.onDetail = { Outcome.Value(detail(item)) }
+      val specRepository = FakeSpecBrowserRepository().apply {
+        onProjects = { Outcome.Value(listOf(SpecProject("p", "Specs", "/repo/specs/.feature-specs", "/repo/specs"))) }
+      }
+      val specs = SpecsViewModel(
+        specRepository,
+        fakes.details,
+        FakeWorkControlRepository(),
+        fakes.settings,
+        LaunchRequests(testScope.backgroundScope, FakeWorkControlRepository(), fakes.boards, TestClock(fixtureInstant)),
+      )
+      // Picked before the window composes, so it must never outrank what is picked later.
+      specs.onAction(SpecsAction.Select("earlier"))
+      val opened = mutableListOf<String?>()
+      lateinit var terminal: TerminalViewModel
+
+      setContent {
+        terminal = rememberTerminalViewModel(window)
+        SkillBillNavHost(
+          window,
+          SessionState.Active(DatabaseGenerationRef(0)),
+          null,
+          {},
+          {},
+          specs = specs,
+          terminal = terminal,
+          terminalSurface = { directory -> opened += directory },
+        )
+      }
+      WorkSection.entries.forEach { fakes.boards.emit(it, Outcome.Value(board(emptyList()))) }
+      // A pick and the toggle that follows it are separate input events, so the pick settles first.
+      val openAndClose = {
+        waitForIdle()
+        terminal.onAction(TerminalAction.TogglePane)
+        waitForIdle()
+        terminal.onAction(TerminalAction.TogglePane)
+        waitForIdle()
+      }
+      openAndClose()
+      assertNull(opened.last())
+
+      runOnIdle { window.navigator.openDetail(item.identity) }
+      openAndClose()
+      assertEquals("/repo/a", opened.last())
+
+      runOnIdle { specs.onAction(SpecsAction.Select("bundle")) }
+      openAndClose()
+      assertEquals("/repo/specs", opened.last())
+
+      runOnIdle { window.navigator.openDetail(item.identity) }
+      openAndClose()
+      assertEquals("/repo/a", opened.last(), "Re-picking the item already shown is still the latest pick.")
       window.dispose()
     } finally {
       Dispatchers.resetMain()

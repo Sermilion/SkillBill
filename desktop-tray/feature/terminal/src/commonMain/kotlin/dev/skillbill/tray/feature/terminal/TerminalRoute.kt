@@ -31,13 +31,13 @@ import dev.skillbill.tray.core.designsystem.mono
 import dev.skillbill.tray.core.designsystem.muted
 
 /**
- * The bottom pane chrome around a platform-supplied terminal [surface]. The surface receives the directory a session should
- * start in, or null when none is known. The shell draws the divider above the pane.
+ * The bottom pane chrome around a platform-supplied terminal [surface]. The shell picks the directory the surface opens in and
+ * draws the divider above the pane.
  */
 @Composable
 fun TerminalRoute(
   viewModel: TerminalViewModel,
-  surface: @Composable (workingDirectory: String?) -> Unit,
+  surface: @Composable () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val state by viewModel.state.collectAsState()
@@ -51,7 +51,7 @@ fun TerminalRoute(
       Spacer(Modifier.weight(1f))
       CloseButton { viewModel.onAction(TerminalAction.ClosePane) }
     }
-    Box(Modifier.weight(1f).fillMaxWidth()) { surface(state.workingDirectory) }
+    Box(Modifier.weight(1f).fillMaxWidth()) { surface() }
   }
 }
 

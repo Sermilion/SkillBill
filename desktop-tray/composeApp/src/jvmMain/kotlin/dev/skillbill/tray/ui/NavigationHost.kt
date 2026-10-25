@@ -110,6 +110,7 @@ import dev.skillbill.tray.lifetime.SessionState
 import dev.skillbill.tray.lifetime.WindowOwner
 import dev.skillbill.tray.navigation.ListStatus
 import dev.skillbill.tray.navigation.Section
+import dev.skillbill.tray.navigation.WindowNavigator
 import java.awt.Cursor
 import kotlin.math.roundToInt
 
@@ -151,6 +152,7 @@ fun SkillBillNavHost(
   terminalSurface: @Composable (workingDirectory: String?) -> Unit = {},
 ) {
   val actions = remember(onOpenSettings, onCloseWindow, onRefreshShell) { WindowActions(onOpenSettings, onCloseWindow, onRefreshShell) }
+  if (terminal != null) TerminalSelections(window.navigator, specs, terminal)
   FeedbackHost(modifier.fillMaxSize()) {
     CompositionLocalProvider(LocalViewModelStoreOwner provides window.entryStoreOwner, LocalWindowActions provides actions) {
       key(window.entryStoreOwner) {
@@ -229,10 +231,27 @@ private fun RowScope.SpecsPaneHost(specs: SpecsViewModel, selected: WorkIdentity
 }
 
 /**
+ * Feeds the terminal every pick as it happens: a sidebar pick, re-picking the shown item included, and a spec row pick, so the
+ * latest one decides the directory. It sits outside the window content, so content re-entering composition never sends an old
+ * sidebar pick again over a newer spec pick, and a spec picked before it started is never replayed.
+ */
+@Composable
+private fun TerminalSelections(navigator: WindowNavigator, specs: SpecsViewModel?, terminal: TerminalViewModel) {
+  val selected = navigator.selected
+  LaunchedEffect(terminal, selected, navigator.picks) { terminal.onAction(TerminalAction.SelectedWorkChanged(selected)) }
+  if (specs != null) {
+    LaunchedEffect(specs, terminal) { specs.picks.collect { terminal.onAction(TerminalAction.SpecSelected(it.checkoutRoot)) } }
+  }
+}
+
+/** The directory one opening of the pane settled on; null [workingDirectory] is a settled "none" that falls back to home. */
+private data class OpenedIn(val workingDirectory: String?)
+
+/**
  * The terminal pane under the detail, while it is open, with a divider above it that drags the pane taller or shorter. The drag
  * only moves local state; the height is saved once, when the drag stops. The detail always keeps [DETAIL_MIN_HEIGHT].
- * The surface is withheld until the first selection and its directory are known ([listPending] covers the startup list read), because
- * a session only takes its directory at its first launch; after that it never waits, so a later selection cannot flicker it.
+ * Each opening of the pane takes the directory of the latest selection, sidebar work or a spec, once that is known ([listPending]
+ * covers the startup list read), and keeps it until the pane closes, so selecting something else never swaps the shell underneath.
  */
 @Composable
 private fun TerminalPaneHost(
@@ -243,10 +262,9 @@ private fun TerminalPaneHost(
   columnHeight: Dp,
 ) {
   val state by terminal.state.collectAsState()
-  LaunchedEffect(terminal, selected) { terminal.onAction(TerminalAction.SelectedWorkChanged(selected)) }
   if (!state.paneOpen) return
-  var directorySettled by remember { mutableStateOf(false) }
-  if (!listPending && state.resolvedFor == selected) directorySettled = true
+  var openedIn by remember { mutableStateOf<OpenedIn?>(null) }
+  if (openedIn == null && !listPending && state.resolvedFor == selected) openedIn = OpenedIn(state.workingDirectory)
   val density = LocalDensity.current
   val min = AppSettings.TERMINAL_PANE_MIN_HEIGHT_DP.dp
   val max = maxOf(min, minOf(AppSettings.TERMINAL_PANE_MAX_HEIGHT_DP.dp, columnHeight - DETAIL_MIN_HEIGHT))
@@ -286,7 +304,7 @@ private fun TerminalPaneHost(
   }
   TerminalRoute(
     terminal,
-    { directory -> if (directorySettled) surface(directory) },
+    { openedIn?.let { surface(it.workingDirectory) } },
     Modifier.fillMaxWidth().height(paneHeight.coerceIn(min, max)),
   )
 }
