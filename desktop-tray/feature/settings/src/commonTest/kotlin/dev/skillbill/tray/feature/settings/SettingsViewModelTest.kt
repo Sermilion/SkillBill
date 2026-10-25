@@ -117,10 +117,6 @@ class SettingsViewModelTest {
     vm.onAction(SettingsAction.ClaudeConfigDirChosen("/home/.claude-work"))
     runCurrent()
     assertEquals("/home/.claude-work", vm.state.value.settings.claudeConfigDir)
-
-    vm.onAction(SettingsAction.ClaudeConfigDirChosen(null))
-    runCurrent()
-    assertNull(vm.state.value.settings.claudeConfigDir)
   }
 
   @Test

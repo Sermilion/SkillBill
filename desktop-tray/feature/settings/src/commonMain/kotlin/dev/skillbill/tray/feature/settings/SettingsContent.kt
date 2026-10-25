@@ -116,20 +116,24 @@ private fun ReadySettings(state: SettingsUiState, saved: Boolean, onAction: (Set
   }
 }
 
-/** Runs started from the app use the chosen directory as CLAUDE_CONFIG_DIR; a saved one no longer found stays listed. */
+/**
+ * Runs started from the app use the chosen directory as CLAUDE_CONFIG_DIR; a saved one no longer found stays listed. With
+ * nothing saved, the runtime's first directory, the default `~/.claude`, shows as selected.
+ */
 @Composable
 private fun ClaudeConfigDirPicker(chosen: String?, directories: List<String>, onAction: (SettingsAction) -> Unit) {
   var open by remember { mutableStateOf(false) }
-  val choices = listOf(null) + (directories + listOfNotNull(chosen)).distinct()
+  val choices = (directories + listOfNotNull(chosen)).distinct()
+  val shown = chosen ?: directories.firstOrNull()
   Text("Claude account", color = ink)
   Box {
-    OutlinedButton(onClick = { open = true }, Modifier.fillMaxWidth()) {
-      Text(claudeDirLabel(chosen), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    OutlinedButton(onClick = { open = true }, Modifier.fillMaxWidth(), enabled = choices.isNotEmpty()) {
+      Text(shown ?: "No Claude directory found", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
       Text("▾", color = muted)
     }
     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
       choices.forEach { directory ->
-        DropdownMenuItem(text = { Text(claudeDirLabel(directory)) }, onClick = {
+        DropdownMenuItem(text = { Text(directory) }, onClick = {
           open = false
           onAction(SettingsAction.ClaudeConfigDirChosen(directory))
         })
@@ -138,5 +142,3 @@ private fun ClaudeConfigDirPicker(chosen: String?, directories: List<String>, on
   }
   Text("Runs started here use it as CLAUDE_CONFIG_DIR.", color = muted, style = MaterialTheme.typography.bodySmall)
 }
-
-private fun claudeDirLabel(directory: String?): String = directory ?: "App environment"

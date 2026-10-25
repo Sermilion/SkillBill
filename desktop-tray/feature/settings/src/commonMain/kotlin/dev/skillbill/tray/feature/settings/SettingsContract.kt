@@ -38,8 +38,7 @@ sealed interface SettingsAction {
   data class PathChanged(val text: String) : SettingsAction
   data object SavePath : SettingsAction
 
-  /** Null leaves runs on the app's own environment. */
-  data class ClaudeConfigDirChosen(val directory: String?) : SettingsAction
+  data class ClaudeConfigDirChosen(val directory: String) : SettingsAction
   data class RetentionChosen(val retention: Retention) : SettingsAction
   data class NotificationToggled(val key: String, val enabled: Boolean) : SettingsAction
   data class StartAtLoginChanged(val enabled: Boolean) : SettingsAction
