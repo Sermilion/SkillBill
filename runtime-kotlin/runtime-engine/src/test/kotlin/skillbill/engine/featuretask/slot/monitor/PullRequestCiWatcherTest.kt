@@ -34,6 +34,24 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
+  fun `green checks pass on the current pull request head without a recorded publication`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))))
+
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
+  }
+
+  @Test
+  fun `green checks pass on a pull request head pushed after the recorded publication`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))))
+
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHead = ExpectedCiHead("older-head"))
+
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
+  }
+
+  @Test
   fun `failing and cancelled checks settle as failed with the failing checks only`() {
     val checks =
       ScriptedChecks(
