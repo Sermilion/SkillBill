@@ -131,6 +131,37 @@ class DataStoreSettingsRepositoryTest {
   }
 
   @Test
+  fun `a settings file from before the terminal pane loads defaults, persists the pane and clamps an out-of-range height`() = runBlocking<Unit> {
+    val home = SettingsFixture.newHome("desktop-settings-terminal-pane")
+    val old = SettingsFixture(home)
+    Files.createDirectories(old.file.parent)
+    Files.writeString(old.file, """{"migrated":true,"retention":"7d"}""")
+    try {
+      val loaded = old.repository.ready()
+      assertFalse(loaded.terminalPaneOpen)
+      assertEquals(240, loaded.terminalPaneHeightDp)
+      old.repository.update { it.copy(terminalPaneOpen = true, terminalPaneHeightDp = 400) }
+    } finally {
+      old.handle.closeAndJoin()
+    }
+    val restarted = SettingsFixture(home)
+    try {
+      val reloaded = restarted.repository.ready()
+      assertTrue(reloaded.terminalPaneOpen)
+      assertEquals(400, reloaded.terminalPaneHeightDp)
+    } finally {
+      restarted.handle.closeAndJoin()
+    }
+    Files.writeString(restarted.file, """{"migrated":true,"retention":"7d","terminalPaneHeightDp":5}""")
+    val clamped = SettingsFixture(home)
+    try {
+      assertEquals(120, clamped.repository.ready().terminalPaneHeightDp)
+    } finally {
+      clamped.handle.closeAndJoin()
+    }
+  }
+
+  @Test
   fun `a settings file from before the claude config directory loads and the directory survives a restart`() = runBlocking {
     val home = SettingsFixture.newHome("desktop-settings-claude-config")
     val old = SettingsFixture(home)

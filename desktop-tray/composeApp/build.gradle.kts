@@ -37,6 +37,7 @@ kotlin {
     implementation(projects.feature.detail)
     implementation(projects.feature.settings)
     implementation(projects.feature.specs)
+    implementation(projects.feature.terminal)
   }
   sourceSets.jvmMain.dependencies {
     implementation(compose.materialIconsExtended)

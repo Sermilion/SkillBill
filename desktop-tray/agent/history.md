@@ -1,3 +1,13 @@
+## [2026-10-25] SKILL-445 subtask 1 desktop terminal state module
+Areas: desktop-tray (core/domain AppSettings, core/datastore StoredSettings, new feature/terminal module, composeApp WindowComponent and build, architecture guards, ARCHITECTURE.md, docs/architecture-parity.md)
+- MEDIUM feature. AppSettings gains terminalPaneOpen (default closed) and terminalPaneHeightDp with a companion MIN 120, MAX 1200 and DEFAULT 240; the init block rejects out-of-range heights. StoredSettings keeps both as nullable fields, so old settings files load with defaults and no migration, and a stored height outside the range is clamped on read rather than rejected. reusable
+- New :feature:terminal module (plugin skillbill.feature, same build shape as feature/specs) registered in settings.gradle.kts, composeApp dependencies, ModuleGraphRules.features and the ModuleGraphRulesTest baseline manifest.
+- TerminalViewModel takes WorkDetailRepository and SettingsRepository and has no navigator. TogglePane, ClosePane and ResizeTo (clamped to the range) write settings; SelectedWorkChanged cancels the previous resolving job, then reads the work detail and takes its repository root, or null on a null identity or failed read, so a slow stale read never overwrites a newer selection. It uses no System, filesystem or process API.
+- TerminalRoute takes a surface slot taking the working directory: returns early when closed, otherwise a 28dp header with a "Terminal" label and a close button (Button role, "Close terminal" description set through clearAndSetSemantics), then the slot filling the rest. It imports no AWT interop, JediTerm or pty4j; the real terminal surface is a later subtask. reusable
+- Limits: no Compose UI test for the route; the pane is not yet hosted in the window and no shell runs. Validate ran clean (check, createDistributable, packagedDataSmoke, runtime check); npx agnix was unavailable.
+Feature flag: N/A (terminalPaneOpen setting, default closed)
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-24] SKILL-444 subtask 6 desktop spec pane run actions and purge
 Areas: desktop-tray (feature/specs contract, ViewModel, route, toolbar and dialog composables; composeApp WindowComponent wiring)
 - MEDIUM feature. SpecsViewModel now takes specs, details, controls and settings. A selected bundle loads its SpecBundleControl through one control job on selection, on every snapshot emission and after every action; stale answers are dropped by project and bundle path. A file selection resolves to its nearest bundle's key (issueKey, else name) by walking roots in runtime order with no sorting.

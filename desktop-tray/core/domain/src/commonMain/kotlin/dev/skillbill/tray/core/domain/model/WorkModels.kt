@@ -428,11 +428,20 @@ data class AppSettings(
   val specPaneOpen: Boolean = false,
   /** Expanded spec node paths per project id; collapsed nodes are never stored. */
   val specExpandedPaths: Map<String, Set<String>> = emptyMap(),
+  val terminalPaneOpen: Boolean = false,
+  val terminalPaneHeightDp: Int = TERMINAL_PANE_DEFAULT_HEIGHT_DP,
   /** The Claude Code config directory runs started here use when they recorded none; null leaves the app's environment. */
   val claudeConfigDir: String? = null,
 ) {
   init {
     require(lastPopoverTab in setOf("Goals", "Phases"))
+    require(terminalPaneHeightDp in TERMINAL_PANE_MIN_HEIGHT_DP..TERMINAL_PANE_MAX_HEIGHT_DP)
+  }
+
+  companion object {
+    const val TERMINAL_PANE_MIN_HEIGHT_DP = 120
+    const val TERMINAL_PANE_MAX_HEIGHT_DP = 1200
+    const val TERMINAL_PANE_DEFAULT_HEIGHT_DP = 240
   }
 }
 
