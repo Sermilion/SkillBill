@@ -1,3 +1,14 @@
+## [2026-10-25] SKILL-445 subtask 3 desktop terminal split layout and toggle
+Areas: desktop-tray (composeApp jvmMain ui NavigationHost and TerminalToggle, composition Main, bootstrap DesktopBootstrap; composeApp jvmTest SkillBillNavHostTest)
+- MEDIUM feature. SkillBillNavHost gains an optional terminal ViewModel and a terminalSurface slot; the center column is wrapped in BoxWithConstraints and a private TerminalPaneHost draws a 6dp draggable divider plus TerminalRoute below the detail pane only while the pane is open. Sidebar and SpecsPaneHost are untouched.
+- Pane height is clamped between the settings minimum and the smaller of the settings maximum and column height minus a 160dp detail minimum. The drag updates local state and ResizeTo is sent once on drag stop. The divider also resizes by keyboard and accessibility actions. reusable
+- TerminalToggle copies the SpecsToggle pill (amber when open, Button role, Open/Closed state) with no dot; rememberTerminalViewModel mirrors rememberSpecsViewModel and is created only for SessionState.Active; the toggle sits in the accessory slot after SpecsToggle. No shared toggle helper was extracted.
+- Main.kt wires TerminalSurface over the window owner; compose.interop.blending is set first in both main() and DesktopBootstrap.main so the heavyweight Swing panel blends with Compose.
+- Test: one nav-host test covers surface presence closed/open and a multi-step drag saving exactly one height; a mutant saving per drag delta was killed once the drag used four steps.
+- Limits: the heavyweight panel's bottom corners against the 12dp rounded window clip are QA-owned; bottom padding on the pane host is the pre-approved fix. Settings window and tray popover show no terminal.
+Feature flag: N/A (terminalPaneOpen setting, default closed)
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-25] SKILL-445 subtask 2 desktop JVM terminal host
 Areas: desktop-tray (composeApp jvmMain terminal package and build, core/designsystem Theme, gradle catalog, settings.gradle.kts, DeletionRules guard, ARCHITECTURE.md)
 - MEDIUM feature. composeApp jvmMain gains JediTerm 3.57 (core, ui) and pty4j 0.13.10 behind a terminal package: pure terminalLaunch (login shell, TERM set, zsh fallback on macOS, home directory when the folder is missing), a PtyTerminalProcessFactory with an idempotent destroy, and a TerminalSession that opens once, reuses its view, and returns Failed so a later open retries. reusable

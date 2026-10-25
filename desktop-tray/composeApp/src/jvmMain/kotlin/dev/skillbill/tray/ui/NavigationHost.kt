@@ -6,14 +6,20 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -33,6 +39,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key as pressedKey
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -45,6 +66,7 @@ import dev.skillbill.tray.core.designsystem.border
 import dev.skillbill.tray.core.designsystem.canvas
 import dev.skillbill.tray.core.designsystem.ink
 import dev.skillbill.tray.core.designsystem.muted
+import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.WorkIdentity
@@ -73,6 +95,9 @@ import dev.skillbill.tray.feature.specs.SPECS_PANE_WIDTH
 import dev.skillbill.tray.feature.specs.SpecsAction
 import dev.skillbill.tray.feature.specs.SpecsRoute
 import dev.skillbill.tray.feature.specs.SpecsViewModel
+import dev.skillbill.tray.feature.terminal.TerminalAction
+import dev.skillbill.tray.feature.terminal.TerminalRoute
+import dev.skillbill.tray.feature.terminal.TerminalViewModel
 import dev.skillbill.tray.feature.work.WorkAction
 import dev.skillbill.tray.feature.work.WorkEffect
 import dev.skillbill.tray.feature.work.WorkRoute
@@ -81,6 +106,8 @@ import dev.skillbill.tray.lifetime.SessionState
 import dev.skillbill.tray.lifetime.WindowOwner
 import dev.skillbill.tray.navigation.ListStatus
 import dev.skillbill.tray.navigation.Section
+import java.awt.Cursor
+import kotlin.math.roundToInt
 
 /**
  * What an entry can ask of the application around it: open the settings window, close the window it is in, or refresh through
@@ -116,6 +143,8 @@ fun SkillBillNavHost(
   modifier: Modifier = Modifier,
   onRefreshShell: () -> Unit = {},
   specs: SpecsViewModel? = null,
+  terminal: TerminalViewModel? = null,
+  terminalSurface: @Composable (workingDirectory: String?) -> Unit = {},
 ) {
   val actions = remember(onOpenSettings, onCloseWindow, onRefreshShell) { WindowActions(onOpenSettings, onCloseWindow, onRefreshShell) }
   FeedbackHost(modifier.fillMaxSize()) {
@@ -145,19 +174,23 @@ fun SkillBillNavHost(
           Row(modifier.fillMaxSize().background(canvas)) {
             NavigationPane(listOf(routes.first()), onBack = {}, window, Modifier.width(SIDEBAR_PANE_WIDTH).fillMaxHeight())
             Box(Modifier.width(1.dp).fillMaxHeight().background(border))
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-              val status = navigator.status
-              // A refused runtime build explains every other read failure, and only a shell refresh can clear it.
-              val runtimeRefusal = shellProblem?.takeIf { it.runtimeBuild != null }
-              val problem = runtimeRefusal ?: status.problem ?: shellProblem
-              val retry = if (runtimeRefusal != null) onRefreshShell else { { onRefreshShell(); status.onRefresh() } }
-              if (problem != null) ProblemBanner(problem, status, retry)
-              NavigationPane(
-                routes.drop(1).ifEmpty { listOf(NoSelection) },
-                onBack = { navigator.back() },
-                window,
-                Modifier.weight(1f).fillMaxWidth(),
-              )
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+              val columnHeight = maxHeight
+              Column(Modifier.fillMaxSize()) {
+                val status = navigator.status
+                // A refused runtime build explains every other read failure, and only a shell refresh can clear it.
+                val runtimeRefusal = shellProblem?.takeIf { it.runtimeBuild != null }
+                val problem = runtimeRefusal ?: status.problem ?: shellProblem
+                val retry = if (runtimeRefusal != null) onRefreshShell else { { onRefreshShell(); status.onRefresh() } }
+                if (problem != null) ProblemBanner(problem, status, retry)
+                NavigationPane(
+                  routes.drop(1).ifEmpty { listOf(NoSelection) },
+                  onBack = { navigator.back() },
+                  window,
+                  Modifier.weight(1f).fillMaxWidth(),
+                )
+                if (terminal != null) TerminalPaneHost(terminal, navigator.selected, terminalSurface, columnHeight)
+              }
             }
             if (specs != null) SpecsPaneHost(specs, navigator.selected)
           }
@@ -168,6 +201,10 @@ fun SkillBillNavHost(
 }
 
 private val SIDEBAR_PANE_WIDTH = 250.dp
+private val DETAIL_MIN_HEIGHT = 160.dp
+private val TERMINAL_DIVIDER_HEIGHT = 6.dp
+private val TERMINAL_RESIZE_STEP = 24.dp
+internal const val TERMINAL_DIVIDER_TAG = "terminal-divider"
 
 /**
  * The spec pane to the right of the detail, while it is open. The sidebar's selection goes in read-only; nothing here opens a
@@ -181,6 +218,60 @@ private fun RowScope.SpecsPaneHost(specs: SpecsViewModel, selected: WorkIdentity
     Box(Modifier.width(1.dp).fillMaxHeight().background(border))
     SpecsRoute(specs, Modifier.width(SPECS_PANE_WIDTH).fillMaxHeight())
   }
+}
+
+/**
+ * The terminal pane under the detail, while it is open, with a divider above it that drags the pane taller or shorter. The drag
+ * only moves local state; the height is saved once, when the drag stops. The detail always keeps [DETAIL_MIN_HEIGHT].
+ */
+@Composable
+private fun TerminalPaneHost(
+  terminal: TerminalViewModel,
+  selected: WorkIdentity?,
+  surface: @Composable (workingDirectory: String?) -> Unit,
+  columnHeight: Dp,
+) {
+  val state by terminal.state.collectAsState()
+  LaunchedEffect(terminal, selected) { terminal.onAction(TerminalAction.SelectedWorkChanged(selected)) }
+  if (!state.paneOpen) return
+  val density = LocalDensity.current
+  val min = AppSettings.TERMINAL_PANE_MIN_HEIGHT_DP.dp
+  val max = maxOf(min, minOf(AppSettings.TERMINAL_PANE_MAX_HEIGHT_DP.dp, columnHeight - DETAIL_MIN_HEIGHT))
+  var paneHeight by remember(state.heightDp) { mutableStateOf(state.heightDp.dp) }
+  // A key press is one discrete step, so it saves at once; a drag saves only when it stops.
+  val stepBy: (Dp) -> Unit = { step ->
+    paneHeight = (paneHeight.coerceIn(min, max) + step).coerceIn(min, max)
+    terminal.onAction(TerminalAction.ResizeTo(paneHeight.value.roundToInt()))
+  }
+  Box(
+    Modifier.fillMaxWidth().height(TERMINAL_DIVIDER_HEIGHT).testTag(TERMINAL_DIVIDER_TAG)
+      .semantics {
+        contentDescription = "Resize terminal"
+        stateDescription = "${paneHeight.coerceIn(min, max).value.roundToInt()} dp"
+        customActions = listOf(
+          CustomAccessibilityAction("Make terminal taller") { stepBy(TERMINAL_RESIZE_STEP); true },
+          CustomAccessibilityAction("Make terminal shorter") { stepBy(-TERMINAL_RESIZE_STEP); true },
+        )
+      }
+      .onKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+        when (event.pressedKey) {
+          Key.DirectionUp -> { stepBy(TERMINAL_RESIZE_STEP); true }
+          Key.DirectionDown -> { stepBy(-TERMINAL_RESIZE_STEP); true }
+          else -> false
+        }
+      }
+      .focusable()
+      .pointerHoverIcon(PointerIcon(Cursor(Cursor.N_RESIZE_CURSOR)))
+      .draggable(
+        rememberDraggableState { delta -> paneHeight = (paneHeight.coerceIn(min, max) - with(density) { delta.toDp() }).coerceIn(min, max) },
+        Orientation.Vertical,
+        onDragStopped = { terminal.onAction(TerminalAction.ResizeTo(paneHeight.coerceIn(min, max).value.roundToInt())) },
+      ),
+  ) {
+    Box(Modifier.align(Alignment.Center).fillMaxWidth().height(1.dp).background(border))
+  }
+  TerminalRoute(terminal, surface, Modifier.fillMaxWidth().height(paneHeight.coerceIn(min, max)))
 }
 
 @Composable
