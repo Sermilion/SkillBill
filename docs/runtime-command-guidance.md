@@ -464,10 +464,12 @@ An empty check report keeps goal monitoring active until checks arrive and pass
 or the monitor reaches its timeout. It never counts as CI success. A timeout or
 exhausted repair loop reports a blocked goal rather than completion.
 
-A long-running child's phase ledger retains its latest bounded window. Resume
-checks planning-import entries that remain in that window alongside the durable
-planning provenance and completed phase records. Normal removal of older ledger
-entries does not require replan or discard the child's execution progress.
+A long-running child's phase ledger retains recent entries and the retry and
+settlement entries needed to preserve repair budgets. Those older entries can
+leave sequence gaps before the recent contiguous entries. Resume validates this
+retention shape and checks surviving planning-import entries alongside the durable
+planning provenance and completed phase records. Normal ledger retention does not
+require replan or discard the child's execution progress.
 
 ## Edited subtask specs on resume
 

@@ -43,6 +43,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.phase.isRetainedPhaseLedgerEvidenceWindow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
@@ -558,14 +559,7 @@ private class GoalChildPlanningImportMatcher(
   ): Boolean {
     val ledger = decodePhaseLedger(artifacts)
     val firstSequence = ledger.firstOrNull()?.sequenceNumber ?: return false
-    val admissibleWindow =
-      ledger.size <= FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT &&
-        (firstSequence == 0 || ledger.size == FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
-    val consecutive =
-      ledger.withIndex().all { (index, entry) ->
-        entry.sequenceNumber.toLong() == firstSequence.toLong() + index
-      }
-    if (!admissibleWindow || !consecutive) return false
+    if (!isRetainedPhaseLedgerEvidenceWindow(ledger, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)) return false
     val retainedImport = ledger.takeWhile { it.sequenceNumber < phaseIds.size }
     return (firstSequence > 0 || retainedImport.size == phaseIds.size) &&
       retainedImport.all { entry ->
