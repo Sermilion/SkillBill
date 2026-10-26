@@ -26,7 +26,11 @@ internal fun FeatureTaskPhaseSettlementService.restoreAcceptanceRepairResumeEvid
   val phaseId =
     steps?.audit?.takeIf {
       state?.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED &&
-        state.stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
+        state.stage in
+        setOf(
+          AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+          AcceptanceCriterionRepairStage.REPAIR_RESERVED,
+        )
     } ?: return null
   val record = records[phaseId]?.takeIf { it.outputArtifact.isNullOrBlank() } ?: return null
   val completion =
