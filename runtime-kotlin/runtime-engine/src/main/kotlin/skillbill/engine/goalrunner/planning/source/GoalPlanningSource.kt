@@ -161,7 +161,12 @@ class PlanWorkflowGoalPlanningSource(
     val issueKey = scope.state.manifest.issueKey
     val agentId = request.configuredAgentOverrideId ?: request.invokedAgentId
     val progress = progressRecorder.sink(scope.state.parentWorkflowId, issueKey, agentId)
-    val inputFor = { specPath: String -> planInput(request, agentId, specPath).copy(eventSink = progress) }
+    val inputFor = { specPath: String ->
+      planInput(request, agentId, specPath).copy(
+        eventSink = progress,
+        activityParentWorkflowId = scope.state.parentWorkflowId,
+      )
+    }
     val linked = linkedPlan(scope)
     val replanned =
       if (linked == null) {

@@ -365,6 +365,10 @@ and other provider failures retain the normal blocked-run behavior.
 
 Agent-specific behavior uses injectable strategies on `AgentRunProcessRequest`, not identity branching in the process runner: `progressProbe`, `declaredProgressProbe`, `activityProbe`, `progressEmitter`, `idlePolicy` (`HEARTBEAT_EXTENDED` | `DB_PROGRESS_ONLY`). `ProcessWaitLoop` calls strategies only; new agents add a strategy constant. Crash reconciliation: `FeatureTaskRuntimeWorkerSupervisor` self-heals expired-lease rows to resumable at startup.
 
+Goal planning forwards observed agent activity to the parent goal. Status reads its
+active planning phase instead of the preceding child's progress. A verified live
+planning owner can clear a stale blocked label; operator pauses still apply.
+
 Status heartbeats report that a child process remains active. Workflow progress
 labels and observed file activity report separate facts; process activity alone
 does not establish source progress. A passing local check reports only a local

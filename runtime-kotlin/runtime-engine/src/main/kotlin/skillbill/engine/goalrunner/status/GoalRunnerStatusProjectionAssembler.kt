@@ -22,6 +22,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.telemetry.GOAL_PLANNING_OPERATION_KIND
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
@@ -62,6 +63,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
@@ -246,24 +248,31 @@ class GoalRunnerStatusProjectionAssembler(
       }
     }
     val liveParent =
-      liveGoalFinalizationProgress(parentWorkflowId)
+      liveGoalOperationProgress(parentWorkflowId)
     if (childProgress != null && liveParent == null) {
       return childProgress
     }
     return liveParent
   }
 
-  private fun goalFinalizationAgent(parentWorkflowId: String): String? =
+  private fun goalOperationAgent(parentWorkflowId: String): String? =
     resolveParentExecutionLiveness(parentWorkflowId, GoalRunnerStatusDurableReadTracker(diagnostics))
       .takeIf { it == ExecutionLiveness.LIVE }
-      ?.let { liveGoalFinalizationProgress(parentWorkflowId) }
+      ?.let { liveGoalOperationProgress(parentWorkflowId) }
       ?.latestDeclaredProgressEvent
       ?.agentId
       ?.takeIf(String::isNotBlank)
 
-  private fun liveGoalFinalizationProgress(parentWorkflowId: String): GoalRunnerWorkflowProgress? =
+  private fun liveGoalOperationProgress(parentWorkflowId: String): GoalRunnerWorkflowProgress? =
     outcomeStore.progress(parentWorkflowId)
-      ?.takeIf { it.latestDeclaredProgressEvent?.operationKind == GOAL_FINALIZATION_OPERATION_KIND }
+      ?.takeIf {
+        val event = it.latestDeclaredProgressEvent
+        event?.operationKind == GOAL_FINALIZATION_OPERATION_KIND ||
+          (
+            event?.operationKind == GOAL_PLANNING_OPERATION_KIND &&
+              event.eventKind == GoalProgressEventKind.PHASE_STARTED
+          )
+      }
       ?.let { parent ->
         val liveStepId = parent.latestDeclaredProgressEvent?.stepId.orEmpty()
         parent.copy(
@@ -766,7 +775,7 @@ class GoalRunnerStatusProjectionAssembler(
     currentSubtask: DecompositionSubtask?,
     parentWorkflowId: String,
   ): String? {
-    if (currentSubtask == null) return goalFinalizationAgent(parentWorkflowId)
+    if (currentSubtask == null) return goalOperationAgent(parentWorkflowId)
     val workflowId = currentSubtask.workflowId?.takeIf(String::isNotBlank)
     if (workflowId != null &&
       phaseQuery.existingWorkflowMode(workflowId) == FeatureTaskWorkflowMode.RUNTIME
@@ -778,7 +787,8 @@ class GoalRunnerStatusProjectionAssembler(
       )?.takeIf(String::isNotBlank)
         ?.let { return it }
     }
-    return currentSubtask.finalizingAgentId?.takeIf(String::isNotBlank)
+    return goalOperationAgent(parentWorkflowId)
+      ?: currentSubtask.finalizingAgentId?.takeIf(String::isNotBlank)
       ?: currentSubtask.participatingAgentIds.firstOrNull()?.takeIf(String::isNotBlank)
   }
 

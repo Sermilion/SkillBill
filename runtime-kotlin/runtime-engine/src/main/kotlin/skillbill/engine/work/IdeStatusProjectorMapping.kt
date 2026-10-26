@@ -23,6 +23,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -170,7 +171,12 @@ internal fun goalProjectsLiveResume(
   if (projection == null || projection.executionLiveness != ExecutionLiveness.LIVE || projection.paused) return false
   return when (lifecycle) {
     IdeStatusLifecycleState.PAUSED -> true
-    IdeStatusLifecycleState.BLOCKED -> goalProjectsLiveFinalizationStep(projection)
+    IdeStatusLifecycleState.BLOCKED ->
+      goalProjectsLiveFinalizationStep(projection) ||
+        (
+          projection.planning?.state?.let { it != GoalPlanningStatusState.PREPARED } == true &&
+            projection.currentStep in ACTIVE_PLANNING_PHASE_IDS
+        )
     else -> false
   }
 }
@@ -216,8 +222,16 @@ internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress
 
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
 
+private val ACTIVE_PLANNING_PHASE_IDS =
+  setOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+  )
+
 internal val LIVE_PLANNING_STEP_IDS: Set<String> =
-  setOf("plan", "preplan", "planning", "pending_launch", "initializing")
+  ACTIVE_PLANNING_PHASE_IDS + setOf("planning", "pending_launch", "initializing")
 
 internal fun goalSummary(
   issueKey: String,

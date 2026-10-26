@@ -231,6 +231,7 @@ class FeatureTaskRuntimeRunEntry(
       timeout = input.timeout,
       requestedCodeReviewMode = input.requestedCodeReviewMode,
       goalContinuation = input.goalContinuation,
+      activityParentWorkflowId = input.activityParentWorkflowId,
       operatorDecision = input.operatorDecision,
       agentAddonSelection = input.agentAddonSelection,
       eventSink = input.eventSink,
