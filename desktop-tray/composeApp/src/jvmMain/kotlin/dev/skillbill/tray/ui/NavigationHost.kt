@@ -299,7 +299,7 @@ private fun TerminalPaneHost(
   LaunchedEffect(openedIn) {
     val opened = openedIn ?: return@LaunchedEffect
     val directory = tabs.resolveDirectory(opened.workingDirectory)
-    terminal.onAction(TerminalAction.PaneOpened(tabs.newTabId(), directory.path, directory.isHome))
+    terminal.onAction(TerminalAction.PaneOpened(tabs.newTabId(), directory.path, directory.name))
   }
   val density = LocalDensity.current
   val min = AppSettings.TERMINAL_PANE_MIN_HEIGHT_DP.dp
@@ -342,7 +342,7 @@ private fun TerminalPaneHost(
     terminal,
     onNewTab = {
       val directory = tabs.resolveDirectory(terminal.state.value.workingDirectory)
-      terminal.onAction(TerminalAction.NewTab(tabs.newTabId(), directory.path, directory.isHome))
+      terminal.onAction(TerminalAction.NewTab(tabs.newTabId(), directory.path, directory.name))
     },
     // No shell starts before the opening has settled on its directory.
     surface = { tab -> if (openedIn != null) surface(tab) },

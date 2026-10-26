@@ -16,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -188,5 +189,20 @@ class TerminalSessionsTest {
     assertEquals(setOf(1L), sessions.endedTabs(owner).value, "Closing tab 2 on purpose is not an own exit.")
     assertEquals(2, factory.destroys)
     assertEquals(1, views[1].closes)
+  }
+
+  @Test
+  fun `a window keeps one tab list until it is disposed`() = runTest {
+    val sessions = TerminalSessions(factory, { _, _ -> FakeView().also(views::add) }, addShutdownHook = {})
+    val windows = registry()
+    val owner = windows.openMain()
+    val tabs = sessions.tabsFor(owner)
+
+    assertSame(tabs, sessions.tabsFor(owner))
+    assertNotSame(tabs, sessions.tabsFor(windows.openMain()))
+
+    owner.dispose()
+
+    assertNotSame(tabs, sessions.tabsFor(owner), "A disposed window's tab list is dropped, not kept for the process.")
   }
 }

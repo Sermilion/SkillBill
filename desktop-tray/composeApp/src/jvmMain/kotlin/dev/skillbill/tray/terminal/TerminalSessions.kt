@@ -1,6 +1,7 @@
 package dev.skillbill.tray.terminal
 
 import com.jediterm.terminal.ui.settings.SettingsProvider
+import dev.skillbill.tray.feature.terminal.TerminalTabs
 import dev.skillbill.tray.lifetime.WindowOwner
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -18,8 +19,9 @@ import kotlinx.coroutines.job
  * triggers), and, for every session still open, when the JVM shuts down. A window whose scope has already completed gets a
  * session that is closed and removed at once.
  *
- * Tab ids come from [newTabId], a process-wide counter, so a view model recreated at a database generation change can never
- * claim the id of a shell that is still running.
+ * Tab ids come from [newTabId], a process-wide counter, so no tab ever claims the id of an earlier shell. Each window's tab list
+ * ([tabsFor]) is kept here with its shells and for as long, so the view model a database switch recreates finds the same tabs and
+ * a switch ends no shell.
  */
 class TerminalSessions(
   private val processFactory: TerminalProcessFactory,
@@ -28,6 +30,7 @@ class TerminalSessions(
 ) {
   private val sessions = ConcurrentHashMap<Key, TerminalSession>()
   private val ended = ConcurrentHashMap<Int, MutableStateFlow<Set<Long>>>()
+  private val tabLists = ConcurrentHashMap<Int, TerminalTabs>()
   private val hookInstalled = AtomicBoolean(false)
   private val nextTabId = AtomicLong(1)
 
@@ -38,6 +41,15 @@ class TerminalSessions(
    * happens while nothing collects (pane closed, window hidden) is still delivered to the next collector.
    */
   fun endedTabs(window: WindowOwner): StateFlow<Set<Long>> = endedFor(window).asStateFlow()
+
+  /** The tab list of [window]; the same instance until the window's scope completes. */
+  fun tabsFor(window: WindowOwner): TerminalTabs {
+    tabLists[window.id]?.let { return it }
+    val created = TerminalTabs()
+    tabLists.putIfAbsent(window.id, created)?.let { return it }
+    window.scope.coroutineContext.job.invokeOnCompletion { tabLists.remove(window.id, created) }
+    return created
+  }
 
   fun forTab(window: WindowOwner, tabId: Long): TerminalSession {
     if (hookInstalled.compareAndSet(false, true)) {

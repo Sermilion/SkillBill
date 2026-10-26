@@ -33,4 +33,16 @@ class TerminalLaunchTest {
     assertEquals("/home/user", terminalLaunch(environment, "Linux", "/home/user", "/deleted/worktree") { false }.workingDirectory)
     assertEquals("/home/user", terminalLaunch(environment, "Linux", "/home/user", null) { true }.workingDirectory)
   }
+
+  @Test
+  fun `a tab is named after the checkout that holds its directory, a worktree after its main checkout`() {
+    val gitDirectories = setOf("/code/skill-bill/.git")
+    val gitFiles = mapOf("/code/skill-bill/.git/skill-bill/worktrees/w1/.git" to "gitdir: /code/skill-bill/.git/worktrees/w1\n")
+    fun name(path: String) = terminalProjectName(path, "/home/user", { it in gitDirectories }) { gitFiles[it] }
+
+    assertEquals("skill-bill", name("/code/skill-bill/desktop-tray/feature"))
+    assertEquals("skill-bill", name("/code/skill-bill/.git/skill-bill/worktrees/w1"))
+    assertEquals("notes", name("/tmp/notes/"), "A directory outside any checkout is named after itself.")
+    assertEquals("~", name("/home/user/"))
+  }
 }

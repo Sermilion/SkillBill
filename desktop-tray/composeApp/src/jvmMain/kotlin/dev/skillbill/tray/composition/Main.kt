@@ -259,7 +259,7 @@ private fun MainWindow(
         // The pane's ViewModel starts once a database is open, so its first read never lands before the session is.
         val specs = if (session is SessionState.Active) rememberSpecsViewModel(windowOwner) else null
         val specsState = specs?.state?.collectAsState()?.value
-        val terminal = if (session is SessionState.Active) rememberTerminalViewModel(windowOwner) else null
+        val terminal = if (session is SessionState.Active) rememberTerminalViewModel(windowOwner, AppTerminalTabHost.tabs(windowOwner)) else null
         val terminalState = terminal?.state?.collectAsState()?.value
         DesignWindow(
           mainWindowState,

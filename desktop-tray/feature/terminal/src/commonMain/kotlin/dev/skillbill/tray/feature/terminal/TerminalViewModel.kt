@@ -18,21 +18,19 @@ import kotlinx.coroutines.launch
 
 /**
  * Pane visibility and height persist in settings; the working directory follows the latest selection, sidebar work or a spec, and
- * is never persisted. The tabs are window-lifetime state and are never persisted either: the host mints their ids, and this
- * keeps the list, the labels and which tab was used most recently.
+ * is never persisted. The tabs are never persisted either: they live in the window's [TerminalTabs], which outlives this
+ * ViewModel, the host mints their ids, and this keeps the list, the labels and which tab was used most recently.
  */
 class TerminalViewModel(
   private val details: WorkDetailRepository,
   private val settings: SettingsRepository,
+  private val tabStore: TerminalTabs,
 ) : ViewModel() {
   private val appSettings = MutableStateFlow(AppSettings())
   private val resolution = MutableStateFlow(Resolution(identity = null, directory = null))
-  private val tabs = MutableStateFlow(Tabs(emptyList(), null, emptyList()))
+  private val tabs = tabStore.state
   private var resolving: Job? = null
   private var latestWork: WorkIdentity? = null
-
-  // The host reports every composition of an opening; only the first one picks a tab.
-  private var openingApplied = false
 
   val state: StateFlow<TerminalUiState> = combine(appSettings, resolution, tabs) { stored, resolved, tabState ->
     TerminalUiState(
@@ -50,7 +48,7 @@ class TerminalViewModel(
       settings.settings.collect {
         if (it !is SettingsState.Ready) return@collect
         appSettings.value = it.settings
-        if (!it.settings.terminalPaneOpen) openingApplied = false
+        if (!it.settings.terminalPaneOpen) tabStore.openingApplied = false
       }
     }
   }
@@ -69,10 +67,11 @@ class TerminalViewModel(
         resolving?.cancel()
         resolution.value = Resolution(latestWork, action.repositoryRoot)
       }
-      is TerminalAction.NewTab -> add(action.id, action.directory, action.isHome)
+      is TerminalAction.NewTab -> add(action.id, action.directory, action.name)
       is TerminalAction.SelectTab -> if (tabs.value.list.any { it.id == action.id }) activate(action.id)
       is TerminalAction.PaneOpened -> paneOpened(action)
       is TerminalAction.CloseTab -> remove(setOf(action.id))
+      is TerminalAction.RenameTab -> rename(action.id, action.name.trim().ifEmpty { null })
       is TerminalAction.TabsEnded -> remove(action.ids)
     }
   }
@@ -88,15 +87,21 @@ class TerminalViewModel(
   }
 
   private fun paneOpened(action: TerminalAction.PaneOpened) {
-    if (openingApplied) return
-    openingApplied = true
+    if (tabStore.openingApplied) return
+    tabStore.openingApplied = true
     val existing = tabs.value.recent.firstOrNull { id -> tabs.value.list.any { it.id == id && it.directory == action.directory } }
-    if (existing != null) activate(existing) else add(action.id, action.directory, action.isHome)
+    if (existing != null) activate(existing) else add(action.id, action.directory, action.name)
   }
 
-  private fun add(id: Long, directory: String, isHome: Boolean) {
-    val list = terminalTabLabels(tabs.value.list + TerminalTab(id, directory, isHome, label = ""))
-    tabs.value = Tabs(list, id, tabs.value.recent.touched(id))
+  private fun add(id: Long, directory: String, name: String) {
+    val list = terminalTabLabels(tabs.value.list + TerminalTab(id, directory, name, label = ""))
+    tabs.value = TabState(list, id, tabs.value.recent.touched(id))
+  }
+
+  private fun rename(id: Long, name: String?) {
+    val current = tabs.value
+    if (current.list.none { it.id == id }) return
+    tabs.value = current.copy(list = terminalTabLabels(current.list.map { if (it.id == id) it.copy(customName = name) else it }))
   }
 
   private fun activate(id: Long) {
@@ -111,13 +116,10 @@ class TerminalViewModel(
     if (current.list.none { it.id in ids }) return
     val list = terminalTabLabels(current.list.filterNot { it.id in ids })
     val recent = current.recent - ids
-    tabs.value = Tabs(list, current.activeId?.takeIf { it !in ids } ?: recent.firstOrNull(), recent)
+    tabs.value = TabState(list, current.activeId?.takeIf { it !in ids } ?: recent.firstOrNull(), recent)
     if (list.isEmpty()) viewModelScope.launch { settings.update { it.copy(terminalPaneOpen = false) } }
   }
 
   /** The sidebar selection a directory is settled for, so a reader can tell a settled null from a read still in flight. */
   private data class Resolution(val identity: WorkIdentity?, val directory: String?)
-
-  // [recent] holds tab ids, most recently used first. It stays out of the UI state: only the successor rule and PaneOpened read it.
-  private data class Tabs(val list: List<TerminalTab>, val activeId: Long?, val recent: List<Long>)
 }

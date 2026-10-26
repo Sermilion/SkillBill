@@ -51,6 +51,7 @@ fun TerminalRoute(
         state.activeTabId,
         onSelect = { viewModel.onAction(TerminalAction.SelectTab(it)) },
         onClose = { viewModel.onAction(TerminalAction.CloseTab(it)) },
+        onRename = { id, name -> viewModel.onAction(TerminalAction.RenameTab(id, name)) },
         Modifier.weight(1f),
       )
       NewTabButton(onNewTab)

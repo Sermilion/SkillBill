@@ -24,7 +24,11 @@ data class TerminalUiState(
  * One shell in the pane. [id] is minted by the host so it is never reused; [label] is computed from the live tab list, so it
  * can change when another tab opens or closes.
  */
-data class TerminalTab(val id: Long, val directory: String, val isHome: Boolean, val label: String)
+/**
+ * One tab. [name] is its default name, the project its [directory] belongs to (`~` for the home directory), which [label] numbers
+ * when several tabs share it; [customName] is the name the user gave it, shown as it is, null until then.
+ */
+data class TerminalTab(val id: Long, val directory: String, val name: String, val label: String, val customName: String? = null)
 
 sealed interface TerminalAction {
   data object TogglePane : TerminalAction
@@ -39,15 +43,18 @@ sealed interface TerminalAction {
   data class SpecSelected(val repositoryRoot: String?) : TerminalAction
 
   /** Appends a tab and makes it active, even when another tab already has [directory]. */
-  data class NewTab(val id: Long, val directory: String, val isHome: Boolean) : TerminalAction
+  data class NewTab(val id: Long, val directory: String, val name: String) : TerminalAction
 
   /** Makes an existing tab active; an unknown id changes nothing. */
   data class SelectTab(val id: Long) : TerminalAction
 
   /** The host's report that the pane opened in [directory]; only the first one per opening applies. */
-  data class PaneOpened(val id: Long, val directory: String, val isHome: Boolean) : TerminalAction
+  data class PaneOpened(val id: Long, val directory: String, val name: String) : TerminalAction
 
   data class CloseTab(val id: Long) : TerminalAction
+
+  /** Names a tab; a blank [name] gives it back its automatic label. An unknown id changes nothing. */
+  data class RenameTab(val id: Long, val name: String) : TerminalAction
 
   /** Shells that exited on their own; ids with no tab are ignored. */
   data class TabsEnded(val ids: Set<Long>) : TerminalAction

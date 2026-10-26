@@ -1,25 +1,23 @@
 package dev.skillbill.tray.feature.terminal
 
 /**
- * The tabs in the same order with each label recomputed: `~` for the home directory, else the last path segment, and `/` for a
- * directory made only of separators. Tabs that share a label are numbered `label n` in creation order, so a label is only
- * numbered while its group has two or more members.
+ * The tabs in the same order with each label recomputed. A tab the user named shows that name as it is. The others show their
+ * project name; those that share one are numbered `name n` in creation order, so a name is only numbered while two or more tabs
+ * show it.
  */
 internal fun terminalTabLabels(tabs: List<TerminalTab>): List<TerminalTab> {
-  val bases = tabs.map(::baseLabel)
-  val sizes = bases.groupingBy { it }.eachCount()
+  val sizes = tabs.filter { it.customName == null }.groupingBy { it.name }.eachCount()
   val seen = mutableMapOf<String, Int>()
-  return tabs.mapIndexed { index, tab ->
-    val base = bases[index]
-    if (sizes.getValue(base) == 1) {
-      tab.copy(label = base)
-    } else {
-      val position = (seen[base] ?: 0) + 1
-      seen[base] = position
-      tab.copy(label = "$base $position")
+  return tabs.map { tab ->
+    val custom = tab.customName
+    when {
+      custom != null -> tab.copy(label = custom)
+      sizes.getValue(tab.name) == 1 -> tab.copy(label = tab.name)
+      else -> {
+        val position = (seen[tab.name] ?: 0) + 1
+        seen[tab.name] = position
+        tab.copy(label = "${tab.name} $position")
+      }
     }
   }
 }
-
-private fun baseLabel(tab: TerminalTab): String =
-  if (tab.isHome) "~" else tab.directory.trimEnd('/', '\\').split('/', '\\').last().ifEmpty { "/" }

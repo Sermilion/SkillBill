@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -25,6 +26,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runComposeUiTest
@@ -51,6 +53,7 @@ import dev.skillbill.tray.core.ui.LaunchRequests
 import dev.skillbill.tray.feature.specs.SpecsAction
 import dev.skillbill.tray.feature.specs.SpecsViewModel
 import dev.skillbill.tray.feature.terminal.TerminalAction
+import dev.skillbill.tray.feature.terminal.TerminalTabs
 import dev.skillbill.tray.feature.terminal.TerminalViewModel
 import dev.skillbill.tray.lifetime.SessionState
 import dev.skillbill.tray.lifetime.SessionTransitionCoordinator
@@ -107,7 +110,7 @@ class SkillBillNavHostTest {
       lateinit var terminal: TerminalViewModel
 
       setContent {
-        terminal = rememberTerminalViewModel(window)
+        terminal = rememberTerminalViewModel(window, remember { TerminalTabs() })
         SkillBillNavHost(
           window,
           SessionState.Active(DatabaseGenerationRef(0)),
@@ -159,7 +162,7 @@ class SkillBillNavHostTest {
       lateinit var terminal: TerminalViewModel
 
       setContent {
-        terminal = rememberTerminalViewModel(window)
+        terminal = rememberTerminalViewModel(window, remember { TerminalTabs() })
         SkillBillNavHost(
           window,
           SessionState.Active(DatabaseGenerationRef(0)),
@@ -210,7 +213,7 @@ class SkillBillNavHostTest {
       lateinit var terminal: TerminalViewModel
 
       setContent {
-        terminal = rememberTerminalViewModel(window)
+        terminal = rememberTerminalViewModel(window, remember { TerminalTabs() })
         SkillBillNavHost(
           window,
           SessionState.Active(DatabaseGenerationRef(0)),
@@ -251,6 +254,91 @@ class SkillBillNavHostTest {
   }
 
   @Test
+  fun `a tab is renamed in place from its rename action, Escape keeps the old name and Enter saves the typed one`() = runComposeUiTest {
+    Dispatchers.setMain(UnconfinedTestDispatcher())
+    try {
+      val window = windows.openMain()
+      lateinit var terminal: TerminalViewModel
+
+      setContent {
+        terminal = rememberTerminalViewModel(window, remember { TerminalTabs() })
+        SkillBillNavHost(
+          window,
+          SessionState.Active(DatabaseGenerationRef(0)),
+          null,
+          {},
+          {},
+          terminal = terminal,
+          terminalTabs = FakeTerminalTabHost(),
+          terminalSurface = { Box(Modifier.testTag("terminal-surface")) },
+        )
+      }
+      WorkSection.entries.forEach { fakes.boards.emit(it, Outcome.Value(board(emptyList()))) }
+      terminal.onAction(TerminalAction.TogglePane)
+      waitForIdle()
+      val rename = { label: String ->
+        val actions = onNodeWithText(label).fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        runOnIdle { actions.single { it.label == "Rename tab" }.action() }
+        waitForIdle()
+      }
+
+      rename("~")
+      onNodeWithContentDescription("Tab name").performTextReplacement("discarded")
+      onNodeWithContentDescription("Tab name").performKeyInput { pressKey(Key.Escape) }
+      waitForIdle()
+      assertEquals(listOf("~"), terminal.state.value.tabs.map { it.label })
+
+      rename("~")
+      onNodeWithContentDescription("Tab name").performTextReplacement("server")
+      onNodeWithContentDescription("Tab name").performKeyInput { pressKey(Key.Enter) }
+      waitForIdle()
+      onNodeWithText("server").assertIsSelected()
+      onNodeWithContentDescription("Close server tab").assertExists()
+      window.dispose()
+    } finally {
+      Dispatchers.resetMain()
+    }
+  }
+
+  @Test
+  fun `a view model recreated by a database switch keeps the window's tabs and ends no shell`() = runComposeUiTest {
+    Dispatchers.setMain(UnconfinedTestDispatcher())
+    try {
+      val window = windows.openMain()
+      val host = FakeTerminalTabHost()
+      var terminal by mutableStateOf(TerminalViewModel(fakes.details, fakes.settings, host.tabs(window)))
+
+      setContent {
+        SkillBillNavHost(
+          window,
+          SessionState.Active(DatabaseGenerationRef(0)),
+          null,
+          {},
+          {},
+          terminal = terminal,
+          terminalTabs = host,
+          terminalSurface = { Box(Modifier.testTag("terminal-surface")) },
+        )
+      }
+      WorkSection.entries.forEach { fakes.boards.emit(it, Outcome.Value(board(emptyList()))) }
+      terminal.onAction(TerminalAction.TogglePane)
+      waitForIdle()
+      val tab = terminal.state.value.activeTabId!!
+      val before = host.retained.size
+
+      terminal = TerminalViewModel(fakes.details, fakes.settings, host.tabs(window))
+      waitForIdle()
+
+      assertEquals(listOf(tab), terminal.state.value.tabs.map { it.id })
+      val afterSwap = host.retained.drop(before)
+      assertTrue(afterSwap.isNotEmpty() && afterSwap.all { tab in it }, "No reconciliation may drop the open tab's shell: $afterSwap.")
+      window.dispose()
+    } finally {
+      Dispatchers.resetMain()
+    }
+  }
+
+  @Test
   fun `a shell that ended on its own removes its tab and the last one closes the pane`() = runComposeUiTest {
     Dispatchers.setMain(UnconfinedTestDispatcher())
     try {
@@ -259,7 +347,7 @@ class SkillBillNavHostTest {
       lateinit var terminal: TerminalViewModel
 
       setContent {
-        terminal = rememberTerminalViewModel(window)
+        terminal = rememberTerminalViewModel(window, remember { TerminalTabs() })
         SkillBillNavHost(
           window,
           SessionState.Active(DatabaseGenerationRef(0)),
@@ -290,12 +378,16 @@ class SkillBillNavHostTest {
 
   private class FakeTerminalTabHost : TerminalTabHost {
     private var next = 1L
+    private val tabList = TerminalTabs()
     val ended = MutableStateFlow<Set<Long>>(emptySet())
     val retained = mutableListOf<Set<Long>>()
 
+    override fun tabs(window: WindowOwner): TerminalTabs = tabList
+
     override fun newTabId(): Long = next++
 
-    override fun resolveDirectory(requested: String?) = ResolvedTerminalDirectory(requested ?: "/home", isHome = requested == null)
+    override fun resolveDirectory(requested: String?) =
+      ResolvedTerminalDirectory(requested ?: "/home", requested?.substringAfterLast('/') ?: "~")
 
     override fun endedTabs(window: WindowOwner): StateFlow<Set<Long>> = ended
 
@@ -327,7 +419,7 @@ class SkillBillNavHostTest {
       lateinit var terminal: TerminalViewModel
 
       setContent {
-        terminal = rememberTerminalViewModel(window)
+        terminal = rememberTerminalViewModel(window, remember { TerminalTabs() })
         SkillBillNavHost(
           window,
           SessionState.Active(DatabaseGenerationRef(0)),
