@@ -33,13 +33,19 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 import java.time.ZoneOffset
 
@@ -165,6 +171,18 @@ internal class WorkflowServiceBlockedPhaseRetry(
       )
     }
     val artifacts = existing.artifacts
+    val repairFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+    val auditRetry = request.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+    val repairState =
+      if (auditRetry && repairFamily.contains(artifacts)) {
+        FeatureTaskRuntimeWorkflowArtifactMap.from(repairFamily.value(artifacts))
+          .toAcceptanceCriterionRepairState(repairFamily.label())
+      } else {
+        null
+      }
+    val exhaustedAudit =
+      existing.workflowStatus == WorkflowStatus.BLOCKED &&
+        repairState?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED
     val phaseRecords = decodeFeatureTaskRuntimePhaseRecords(artifacts)
     val ledger = FeatureTaskRuntimePhaseLedgerDecoder.decode(artifacts)
     val blockedRecord =
@@ -176,7 +194,7 @@ internal class WorkflowServiceBlockedPhaseRetry(
             unitOfWork.dbPath.toString(),
           ),
         )
-    return if (blockedRecord.status.workflowStepStatus() != WorkflowStepStatus.BLOCKED) {
+    return if (blockedRecord.status.workflowStepStatus() != WorkflowStepStatus.BLOCKED && !exhaustedAudit) {
       BlockedPhaseRetryPersistence.error(
         WorkflowUpdateResult.Error(
           request.workflowId,
@@ -190,7 +208,7 @@ internal class WorkflowServiceBlockedPhaseRetry(
         unitOfWork,
         existing,
         request,
-        BlockedPhaseRetryState(phaseRecords, ledger, blockedRecord),
+        BlockedPhaseRetryState(phaseRecords, ledger, blockedRecord, repairState?.resetBudgetForOperatorResume()),
       )
     }
   }
@@ -315,7 +333,11 @@ private fun blockedPhaseRetryInput(
               "previous_blocked_record" to state.blockedRecord.asWorkflowArtifactEntry(),
             ),
           ),
-        ),
+        ) +
+          state.repairState?.let {
+            val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+            mapOf(family.entry(it.asRepairWireMap()))
+          }.orEmpty(),
       ),
     sessionId = "",
   )
@@ -332,6 +354,7 @@ private data class BlockedPhaseRetryState(
   val phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   val blockedRecord: FeatureTaskRuntimePhaseRecord,
+  val repairState: AcceptanceCriterionRepairState?,
 ) {
   fun reopenedPhaseRecords(): Map<String, FeatureTaskRuntimePhaseRecord> =
     LinkedHashMap(phaseRecords).apply {

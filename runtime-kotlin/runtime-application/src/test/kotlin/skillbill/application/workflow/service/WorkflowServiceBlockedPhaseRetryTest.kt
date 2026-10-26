@@ -11,13 +11,27 @@ import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestSt
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
+import skillbill.workflow.taskruntime.model.audit.recordProseAudit
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -29,6 +43,57 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 
 class WorkflowServiceBlockedPhaseRetryTest {
+  @Test
+  fun `operator retry resets an exhausted criterion even after the audit record completed`() {
+    val fixture = retryFixture()
+    val before = assertNotNull(fixture.states.get(WorkflowFamily.TASK_RUNTIME, WORKFLOW_ID))
+    val repair = exhaustedRepair()
+    val audit =
+      FeatureTaskRuntimePhaseRecord(
+        phaseId = "audit",
+        status = WorkflowStepStatus.COMPLETED,
+        attemptCount = 4,
+        startedAt = Instant.EPOCH,
+        finishedAt = Instant.EPOCH,
+        resolvedAgentId = "codex",
+        outputArtifact = "Retained source audit gap",
+      )
+    val repairFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+    fixture.states.save(
+      WorkflowFamily.TASK_RUNTIME,
+      before.copy(
+        currentStepId = "review",
+        artifacts =
+          DurableWorkflowArtifacts.fromMap(
+            before.artifacts +
+              repairFamily.entry(repair.asRepairWireMap()) +
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+                mapOf("audit" to audit.asWorkflowArtifactEntry()),
+              ),
+          ),
+      ),
+    )
+
+    assertIs<WorkflowUpdateResult.Ok>(
+      fixture.service.retry(FakeDatabaseSessionFactory(fixture.states), WORKFLOW_ID, "audit", "Resume repairs"),
+    )
+
+    val saved = assertNotNull(fixture.states.get(WorkflowFamily.TASK_RUNTIME, WORKFLOW_ID))
+    val resumed =
+      FeatureTaskRuntimeWorkflowArtifactMap.from(repairFamily.value(saved.artifacts))
+        .toAcceptanceCriterionRepairState(repairFamily.label())
+    assertEquals(repair.resetBudgetForOperatorResume(), resumed)
+    assertEquals(repair.outcomes, resumed.outcomes)
+    assertEquals(WorkflowStatus.RUNNING, saved.workflowStatus)
+    assertEquals("audit", saved.currentStepId)
+    assertEquals(WorkflowStepStatus.PENDING, saved.steps.single { it.stepId == "audit" }.status)
+    val beforeRepeat = fixture.states.runtimeRecord(WORKFLOW_ID)
+    assertIs<WorkflowUpdateResult.Error>(
+      fixture.service.retry(FakeDatabaseSessionFactory(fixture.states), WORKFLOW_ID, "audit", "Repeat retry"),
+    )
+    assertEquals(beforeRepeat, fixture.states.runtimeRecord(WORKFLOW_ID))
+  }
+
   @Test
   fun `explicit run mandate is saved with retry while ordinary retry reasons stay phase scoped`() {
     listOf(null, "Preserve the installed compatibility prerequisites outside AC-007 scope.").forEach { mandate ->
@@ -71,6 +136,67 @@ class WorkflowServiceBlockedPhaseRetryTest {
 
     assertEquals(before, fixture.states.runtimeRecord(WORKFLOW_ID))
   }
+}
+
+private fun exhaustedRepair(): AcceptanceCriterionRepairState {
+  val initial =
+    assertNotNull(
+      AcceptanceCriterionRepairState.admit(
+        AcceptanceCriterionRepairAdmission(
+          "catalog",
+          WORKFLOW_ID,
+          "a".repeat(64),
+          listOf("Retain evidence"),
+          listOf(
+            AcceptanceCriterionRepairCriterion(
+              "AC-001",
+              null,
+              "Retain evidence",
+              1,
+              AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
+              AcceptanceCriterionValidationObligation.REQUIRED,
+              true,
+              "discovery",
+            ),
+          ),
+          emptyList(),
+        ),
+      ),
+    )
+  var state =
+    assertNotNull(
+      initial.recordProseAudit(
+        AcceptanceCriterionProseAudit(
+          "discovery",
+          1,
+          null,
+          false,
+          "b".repeat(64),
+          "Open criteria: AC-001",
+          "c".repeat(64),
+          "checkpoint",
+        ),
+      ),
+    )
+  repeat(3) { index ->
+    val id = "repair-$index"
+    state = assertNotNull(state.reserve(id))
+    state =
+      assertNotNull(
+        state.record(
+          AcceptanceCriterionRepairOutcome(
+            id,
+            id,
+            "AC-001",
+            "d".repeat(64),
+            AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
+            id,
+          ),
+        ),
+      )
+  }
+  assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, state.stage)
+  return state
 }
 
 private const val WORKFLOW_ID = "wftr-mandate"

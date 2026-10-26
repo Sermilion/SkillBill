@@ -66,6 +66,10 @@ through their governed briefings. This does not change the spec, acceptance
 criteria, comparison baseline, or other workflows. A retry without `--mandate`
 does not promote its reason to a run mandate.
 
+For an exhausted acceptance-criterion budget, retry the child's `audit` phase.
+This explicit retry grants a fresh budget and preserves prior outcomes. It also
+reopens the audit when its phase record completed before the workflow blocked.
+
 ## Block incident recovery
 
 Work detail includes the runtime-built `incident` projection and `incident_history`. Status and run output use that same projection for the diagnosis, next action, report, and telemetry lines. The detail JSON adds `recover_command` only when recovery is available or prerequisites need confirmation; it includes the incident revision and one `--confirm-prerequisite` flag for each unmet prerequisite.
