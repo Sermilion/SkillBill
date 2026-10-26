@@ -1,3 +1,9 @@
+## [2026-10-26] One project store per repository, and only projects with specs in the spec picker
+Context: The desktop spec picker listed five projects for two repositories: scratch clones of skill-bill got their own stores (`…-2`, `…-3`) because their remote was the same repository in another URL form (`https://` against `git@`) or a local path to the working copy, non-git directories inside `~/.skill-bill` (the state folder, installed skills) became `d-…` stores, and a store whose checkout was gone showed its raw id.
+Decision: A second clone of a lineage shares the existing store when its remote names the same repository in any form git accepts (user, port, `.git` suffix, trailing slash and host case ignored) or is a local path to one of the store's checkouts; a remote elsewhere is still a fork with its own suffixed store. A non-git directory inside the state folder gets a location but never a record. The catalog reports `hasSpecs` and `lastCheckoutRoot`, the spec browser lists only projects with spec bundles, and a project without a live checkout is named after the checkout it was last recorded at.
+Reason: A scratch clone is the same project, so splitting it hides its specs and clutters every picker; the state folder is Skill Bill's own, never a user project; a raw id names nothing a user recognises.
+Alternatives considered: Matching clones by root commit alone (merges real forks); naming a gone project after its remote's repository name (differs from the folder name the user knows it by).
+
 ## [2026-10-25] SKILL-442: read the goal assessment record through one path and decode it strictly
 Context: PR body, status projection, CLI, work detail and desktop all need the assessment record, and a stale or lenient reader would show a wrong verdict.
 Decision: Every surface derives state from the single durable record read; corrupt or failing reads degrade to null with a warning, and the desktop maps enums by exact name.

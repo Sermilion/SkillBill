@@ -9,4 +9,6 @@ data class ProjectCatalogEntry(
   val specsRoot: Path,
   val checkoutRoots: List<Path>,
   val lastSeen: Instant?,
+  val lastCheckoutRoot: Path,
+  val hasSpecs: Boolean,
 )
