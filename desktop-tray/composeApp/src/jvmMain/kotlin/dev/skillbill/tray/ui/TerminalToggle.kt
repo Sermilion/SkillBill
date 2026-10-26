@@ -25,17 +25,18 @@ import dev.skillbill.tray.core.designsystem.border
 import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.ui.navigation.EntryComponentHolder
 import dev.skillbill.tray.core.ui.rememberViewModel
+import dev.skillbill.tray.feature.terminal.TerminalTabs
 import dev.skillbill.tray.feature.terminal.TerminalViewModel
 import dev.skillbill.tray.lifetime.WindowOwner
 
 /**
  * The window's one terminal-pane ViewModel, held by the window's current entry store: it feeds both the title-bar toggle and the
- * pane, and it ends with the store when a database generation ends.
+ * pane, and it ends with the store when a database generation ends. The window's [tabs] outlive it, so the next one keeps them.
  */
 @Composable
-fun rememberTerminalViewModel(window: WindowOwner): TerminalViewModel {
+fun rememberTerminalViewModel(window: WindowOwner, tabs: TerminalTabs): TerminalViewModel {
   val component = rememberViewModel(window.entryStoreOwner, "entry-component:terminal") { EntryComponentHolder<EntryComponent>(window.entries.create()) }.component
-  return rememberViewModel(window.entryStoreOwner, "terminal") { component.viewModels.terminal() }
+  return rememberViewModel(window.entryStoreOwner, "terminal") { component.viewModels.terminal(tabs) }
 }
 
 /** The title-bar button for the terminal pane: amber while the pane is open. */

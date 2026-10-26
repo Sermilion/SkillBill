@@ -42,6 +42,7 @@ import dev.skillbill.tray.infrastructure.TrayIconRenderer
 import dev.skillbill.tray.infrastructure.resolveDesktopUiScale
 import dev.skillbill.tray.lifetime.SessionState
 import dev.skillbill.tray.lifetime.WindowOwner
+import dev.skillbill.tray.terminal.AppTerminalTabHost
 import dev.skillbill.tray.terminal.TerminalSurface
 import dev.skillbill.tray.ui.DesignWindow
 import dev.skillbill.tray.ui.SkillBillNavHost
@@ -258,7 +259,7 @@ private fun MainWindow(
         // The pane's ViewModel starts once a database is open, so its first read never lands before the session is.
         val specs = if (session is SessionState.Active) rememberSpecsViewModel(windowOwner) else null
         val specsState = specs?.state?.collectAsState()?.value
-        val terminal = if (session is SessionState.Active) rememberTerminalViewModel(windowOwner) else null
+        val terminal = if (session is SessionState.Active) rememberTerminalViewModel(windowOwner, AppTerminalTabHost.tabs(windowOwner)) else null
         val terminalState = terminal?.state?.collectAsState()?.value
         DesignWindow(
           mainWindowState,
@@ -281,7 +282,8 @@ private fun MainWindow(
             onCloseWindow = closeRequest,
             specs = specs,
             terminal = terminal,
-            terminalSurface = { dir -> TerminalSurface(windowOwner, dir, Modifier.fillMaxSize()) },
+            terminalTabs = AppTerminalTabHost,
+            terminalSurface = { tab -> TerminalSurface(windowOwner, tab.id, tab.directory, Modifier.fillMaxSize()) },
           )
         }
       }

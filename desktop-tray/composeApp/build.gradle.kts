@@ -114,3 +114,23 @@ tasks.named<Test>("jvmTest") {
     exclude("**/build/**", "**/.gradle/**")
   }).withPropertyName("runtimeArchitectureProductionSources")
 }
+
+// `./gradlew :composeApp:run -PagainstInstalledApp` runs this checkout's desktop against the installed runtime. The bootstrap only
+// accepts a desktop whose build identity matches the installed runtime's, so the run borrows the installed app's identity record
+// (its only app resource); desktop-only changes can then be tried without ./install.sh. A runtime or schema change still needs one.
+// The property's value can name another installed resources directory; it defaults to the macOS install location. The run also
+// takes its own Nucleus app id, so its single-instance lock does not hand it off to an installed app that is already running.
+val installedAppResources = providers.gradleProperty("againstInstalledApp").map { value ->
+  value.ifBlank { "${System.getProperty("user.home")}/Applications/Skill Bill.app/Contents/app/resources" }
+}
+tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
+  val borrowed = installedAppResources
+  doFirst {
+    val resources = borrowed.orNull ?: return@doFirst
+    val property = "compose.application.resources.dir"
+    systemProperties.remove(property)
+    jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-D$property=") }
+    systemProperty(property, resources)
+    systemProperty("nucleus.app.id", "dev.skillbill.tray.dev")
+  }
+}
