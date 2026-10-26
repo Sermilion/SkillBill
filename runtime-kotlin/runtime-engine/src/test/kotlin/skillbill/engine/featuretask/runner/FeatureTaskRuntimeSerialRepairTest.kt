@@ -60,7 +60,7 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class FeatureTaskRuntimeSerialRepairTest {
   @Test
-  fun `partial progress keeps one reservation and plan until independent verification accepts the repair`() {
+  fun `two unfinished repairs consume attempts before a third repair passes independent verification`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val git = AtomicReference<RecordingWorkflowGitOperations>()
     val reservations = mutableListOf<String>()
@@ -84,17 +84,17 @@ class FeatureTaskRuntimeSerialRepairTest {
             "audit_implement_fix" -> {
               repairs++
               reservations += assertNotNull(state?.reservation?.reservationId)
-              check(repairs <= 5) { "The completed repair did not reach independent verification." }
+              check(repairs <= 3) { "The completed repair did not reach independent verification." }
               git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
-              assertEquals(0, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
-              assertTrue(state.outcomes.isEmpty())
+              assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
+              assertEquals(repairs - 1, state.outcomes.size)
               assertEquals(
                 AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
                 state.criteria.first().sourceDisposition,
               )
               defaultPhaseOutput(request).replace(
                 "\"status\": \"completed\",",
-                "\"status\": \"completed\", \"verdict\": \"${if (repairs < 5) "progress" else "satisfied"}\",",
+                "\"status\": \"completed\", \"verdict\": \"${if (repairs < 3) "progress" else "satisfied"}\",",
               )
             }
             else -> defaultPhaseOutput(request)
@@ -113,12 +113,12 @@ class FeatureTaskRuntimeSerialRepairTest {
           worker,
         )
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(5, repairs)
-      assertEquals(1, plans)
-      assertEquals(1, reservations.distinct().size)
-      assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
+      assertEquals(3, repairs)
+      assertEquals(3, plans)
+      assertEquals(3, reservations.distinct().size)
+      assertEquals(2, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
-      assertEquals(1, scope.snapshot?.outcomes?.size)
+      assertEquals(3, scope.snapshot?.outcomes?.size)
       assertTrue(assertNotNull(scope.snapshot).interactionTrace.pendingRechecks.isEmpty())
       assertContains(harness.launchOrder(), "review")
       assertContains(harness.launchOrder(), "validate")
@@ -126,8 +126,18 @@ class FeatureTaskRuntimeSerialRepairTest {
   }
 
   @Test
-  fun `progress reports that change no source spend the criterion budget instead of continuing indefinitely`() {
+  fun `progress reports that change no source block after three attempts`() =
+    assertProgressReportsBlock(changesSource = false)
+
+  @Test
+  fun `progress reports that change source block after three attempts`() =
+    assertProgressReportsBlock(
+      changesSource = true,
+    )
+
+  private fun assertProgressReportsBlock(changesSource: Boolean) {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val git = AtomicReference<RecordingWorkflowGitOperations>()
     val reservations = mutableListOf<String>()
     var repairs = 0
     var plans = 0
@@ -149,7 +159,8 @@ class FeatureTaskRuntimeSerialRepairTest {
             "audit_implement_fix" -> {
               repairs++
               reservations += assertNotNull(state?.reservation?.reservationId)
-              check(repairs <= 3) { "Idle progress reports bypassed the criterion budget." }
+              check(repairs <= 3) { "Unfinished repair reports bypassed the criterion budget." }
+              if (changesSource) git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
               assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
               defaultPhaseOutput(request).replace(
                 "\"status\": \"completed\",",
@@ -162,6 +173,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       }
     val harness =
       runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    git.set(harness.gitOperations)
     harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
     runOwnedSerial(harness) { admitted, worker, scope ->
       accounting.set(scope)

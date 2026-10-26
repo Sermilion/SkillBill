@@ -42,7 +42,6 @@ import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.admitQaReaudit
-import skillbill.workflow.taskruntime.model.audit.continueReservedRepair
 import skillbill.workflow.taskruntime.model.audit.interaction.recordInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import skillbill.workflow.taskruntime.model.audit.retainClarification
@@ -427,7 +426,7 @@ class AcceptanceCriterionRepairPersistence(
         refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
       else -> {
         val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
-        val raw = transition(previous, request.mutation, digest, request.expected.revision, binding)
+        val raw = transition(previous, request.mutation, digest, binding)
         val update = AcceptanceCriterionInteractionTraceRound.recheckUpdate(previous, raw, request.repairChangedPaths)
         val next = AcceptanceCriterionInteractionTraceRound.scheduleRechecks(raw, update, binding)
         val legacySafe =
@@ -721,7 +720,6 @@ class AcceptanceCriterionRepairPersistence(
     state: AcceptanceCriterionRepairState?,
     mutation: AcceptanceCriterionRepairMutation,
     auditDigest: String?,
-    expectedRevision: Long?,
     binding: AcceptanceCriterionRepairBinding,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
@@ -732,7 +730,7 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.InteractionTrace,
       AcceptanceCriterionRepairMutation.PrepareInteractionTrace,
       -> proseTransition(state, mutation)
-      else -> repairTransition(state, mutation, auditDigest, expectedRevision, binding)
+      else -> repairTransition(state, mutation, auditDigest, binding)
     }
 
   private fun proseTransition(
@@ -755,7 +753,6 @@ class AcceptanceCriterionRepairPersistence(
     state: AcceptanceCriterionRepairState?,
     mutation: AcceptanceCriterionRepairMutation,
     auditDigest: String?,
-    expectedRevision: Long?,
     binding: AcceptanceCriterionRepairBinding,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
@@ -773,8 +770,6 @@ class AcceptanceCriterionRepairPersistence(
           )?.clearPendingClarification()
         }
       }
-      is AcceptanceCriterionRepairMutation.ContinueRepair ->
-        expectedRevision?.let { state?.continueReservedRepair(mutation.reservationId, mutation.evidenceRef, it) }
       is AcceptanceCriterionRepairMutation.RepairCompleted -> {
         if (repairCompletedReplays(state, mutation)) {
           state
@@ -859,10 +854,6 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.Reserve ->
         expected.revision == state?.reservation?.revision?.minus(1) &&
           expected.currentCriterionRef == state?.currentCriterionRef && expected.reservationId == null
-      is AcceptanceCriterionRepairMutation.ContinueRepair ->
-        expected.revision == state?.revision?.minus(1) &&
-          expected.currentCriterionRef == state?.currentCriterionRef &&
-          expected.reservationId == state?.reservation?.reservationId
       is AcceptanceCriterionRepairMutation.RepairCompleted ->
         expected.revision ==
           state

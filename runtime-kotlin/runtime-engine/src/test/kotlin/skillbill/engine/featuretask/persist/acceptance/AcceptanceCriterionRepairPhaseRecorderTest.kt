@@ -536,27 +536,19 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
   }
 
   @Test
-  fun `admitted partial work survives recovery with the same reservation and no failed outcome`() =
-    assertPartialWorkSurvivesRecovery(directProgress = false)
+  fun `admitted unfinished work consumes an attempt that survives recovery and replay`() =
+    assertUnfinishedWorkConsumesBudget(directProgress = false)
 
   @Test
-  fun `direct partial work survives recovery with the same reservation and incomplete attempt`() =
-    assertPartialWorkSurvivesRecovery(directProgress = true)
+  fun `direct unfinished work consumes an attempt that survives recovery and replay`() =
+    assertUnfinishedWorkConsumesBudget(directProgress = true)
 
-  private fun assertPartialWorkSurvivesRecovery(directProgress: Boolean) {
+  private fun assertUnfinishedWorkConsumesBudget(directProgress: Boolean) {
     SerialRepairSqliteFixture().use { f ->
       var reservationId: String? = null
       f.owned { worker ->
-        val scope =
-          AcceptanceCriterionRepairRunState(
-            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
-            f.binding,
-          )
-        val recorder =
-          requireNotNull(
-            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows, f.diagnostics)
-              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
-          )
+        val scope = openScope(f, worker)
+        val recorder = recorderFor(f, worker, scope)
         audit(f, recorder, 1, false, "The first requirement needs a caller.")
         val repair = phase(f, "audit_implement_fix", 1)
         assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
@@ -578,7 +570,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(continued))
         assertEquals(saved, scope.snapshot)
         assertEquals(ledger, decodePhaseLedger(f.snapshot().artifacts))
-        assertEquals("audit_implement_fix", f.snapshot().currentStepId)
+        assertEquals("audit_plan_fix", f.snapshot().currentStepId)
         assertEquals(
           FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE,
           decodeImplementationAttemptsFromArtifact(
@@ -587,24 +579,31 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         )
       }
       f.owned { worker ->
-        val scope =
-          AcceptanceCriterionRepairRunState(
-            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
-            f.binding,
-          )
+        val scope = openScope(f, worker)
         val state = assertNotNull(scope.snapshot)
-        assertEquals(reservationId, state.reservation?.reservationId)
-        assertEquals(AcceptanceCriterionRepairStage.REPAIR_RESERVED, state.stage)
+        assertNull(state.reservation)
+        assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, state.stage)
         assertNull(state.pendingClarificationQuestion)
-        assertTrue(state.unsuccessfulTotals.isEmpty())
-        assertTrue(state.outcomes.isEmpty())
-        val recorder =
-          requireNotNull(
-            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git, f.workflows, f.diagnostics)
-              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
-          )
-        assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(phase(f, "audit_implement_fix", 2)))
-        assertEquals(reservationId, scope.snapshot?.reservation?.reservationId)
+        assertEquals(1, state.unsuccessfulTotals["AC-001"])
+        assertEquals(1, state.outcomes.size)
+        val recorder = recorderFor(f, worker, scope)
+        for (attempt in 2..3) {
+          val repair = phase(f, "audit_implement_fix", attempt)
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(repair))
+          assertTrue(reservationId != scope.snapshot?.reservation?.reservationId)
+          val unfinished = output(repair, "progress", "The caller still needs production work.")
+          assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(unfinished))
+          val committed = scope.snapshot
+          if (attempt < 3) {
+            assertEquals(RequiredPhaseWrite.Acknowledged, recorder.complete(unfinished))
+          } else {
+            assertIs<RequiredPhaseWrite.Rejected>(recorder.complete(unfinished))
+          }
+          assertEquals(committed, scope.snapshot)
+          assertEquals(attempt, openScope(f, worker).snapshot?.unsuccessfulTotals?.get("AC-001"))
+        }
+        assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, openScope(f, worker).snapshot?.stage)
+        assertIs<RequiredPhaseWrite.Rejected>(recorder.start(phase(f, "audit_implement_fix", 4)))
       }
     }
   }

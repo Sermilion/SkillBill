@@ -518,29 +518,23 @@ markers, or a strict adoption receipt in an audit or repair plan.
 criterion's remaining defect class: the latest gap plus sibling production paths of
 the same forbidden pattern. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
-repair cycle records at most one unsuccessful outcome. A partial source-work report with
-verdict `progress` stays in the same reserved repair cycle, retains its saved plan
-and edits, and does not consume a criterion failure when that round changed source
-files. A `progress` report from a round that changed no source files is charged like
-`no_progress`, so three idle rounds block the criterion. A retryable block first goes
-to read-only report admission. That admission returns `progress` for unfinished
-implementation that can continue, `satisfied` for a completed repair awaiting
+repair cycle records at most one unsuccessful outcome. Every repair implementation
+that leaves the selected criterion unfinished consumes one unsuccessful attempt,
+including a report with verdict `progress` or `no_progress`, whether or not that
+round changed source files. Saved edits and reports remain available to the next
+attempt, which receives a new reservation and repair plan.
+A retryable block first goes to read-only report admission. That admission returns
+`progress` for unfinished implementation, `satisfied` for a completed repair awaiting
 independent source verification, or `advance` for a concrete external obstacle.
-An agent stopping after one partial edit is not an external obstacle. Explicit
-`no_progress` reports, failed independent verification, and admitted failures
-retain the per-criterion cap.
+Both `progress` and `advance` consume the attempt. An agent stopping after one
+partial edit is not an external obstacle.
 A completed repair claim, with verdict `completed`, `satisfied`, or no verdict,
 goes directly to independent source verification. A verifier's `progress` verdict
-rejects that completion claim and consumes one unsuccessful outcome. It cannot
-turn the completed claim into an uncharged partial repair.
-The third unsuccessful
-outcome blocks that criterion. Explicit operator resume of the blocked goal resets
-the active failure counts to zero and grants three new outcomes per criterion,
-while retaining prior outcome identities and source evidence. Repair reports
-marked `progress` or `no_progress` still leave the selected criterion unfinished.
-Only `no_progress` consumes an unsuccessful outcome; `progress` continues the
-reserved cycle with its saved plan and existing failure count. An ordinary state
-reload does not reset the budget. A successful outcome closes source work for it
+rejects that completion claim and consumes one unsuccessful outcome.
+The third unsuccessful outcome blocks that criterion. Explicit operator resume of
+the blocked goal resets the active failure counts to zero and grants three new
+outcomes per criterion, while retaining prior outcome identities and source evidence.
+An ordinary state reload does not reset the budget. A successful outcome closes source work for it
 without erasing earlier failures.
 
 Finding gaps and routing to repair are normal transitions and consume no repair

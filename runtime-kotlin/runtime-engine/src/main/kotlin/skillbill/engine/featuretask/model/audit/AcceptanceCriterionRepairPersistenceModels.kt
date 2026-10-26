@@ -62,8 +62,6 @@ sealed interface AcceptanceCriterionRepairMutation {
 
   data class Reserve(val reservationId: String) : AcceptanceCriterionRepairMutation
 
-  data class ContinueRepair(val reservationId: String, val evidenceRef: String) : AcceptanceCriterionRepairMutation
-
   data class RepairCompleted(
     val reservationId: String,
     val evidenceRef: String,

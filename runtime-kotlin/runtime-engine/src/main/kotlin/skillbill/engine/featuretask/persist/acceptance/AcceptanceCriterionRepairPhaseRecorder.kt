@@ -244,7 +244,8 @@ class AcceptanceCriterionRepairPhaseRecorder(
         checkpoint,
         satisfied,
         clarification,
-        conclusion == FeatureTaskRuntimeVerdict.PROGRESS.wireValue,
+        conclusion == FeatureTaskRuntimeVerdict.PROGRESS.wireValue ||
+          conclusion == FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue,
       )
     return completionMutation(state, phase.phaseId, evidence, session.steps)?.let { mutation ->
       commit(
@@ -256,7 +257,8 @@ class AcceptanceCriterionRepairPhaseRecorder(
           expectedState = state,
           attemptStatus =
             FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE.takeIf {
-              phase.phaseId == session.steps.repair && mutation is AcceptanceCriterionRepairMutation.ContinueRepair
+              phase.phaseId == session.steps.repair && mutation is AcceptanceCriterionRepairMutation.Outcome &&
+                mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
             },
         ),
       )
@@ -352,7 +354,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val checkpoint: String,
     val satisfied: Boolean,
     val clarification: Boolean,
-    val continuing: Boolean,
+    val unfinished: Boolean,
   )
 
   private fun sourceFingerprint(root: Path): WorkflowGitOperationResult {
@@ -435,15 +437,15 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): AcceptanceCriterionRepairMutation? =
     with(evidence) {
       val live = state.reservation ?: return@with null
-      if (continuing) {
-        AcceptanceCriterionRepairMutation.ContinueRepair(live.reservationId, prose)
+      if (unfinished) {
+        incompleteRepairOutcome(state, evidence)
       } else if (satisfied) {
         AcceptanceCriterionRepairMutation.RepairCompleted(live.reservationId, prose, tree, checkpoint)
       } else {
         AcceptanceCriterionRepairMutation.Clarification(
           "$REPAIR_ADMISSION_CLARIFICATION_PREFIX Inspect the report and current source for this criterion. " +
-            "Report progress when production work remains and can continue, " +
-            "including an agent stopping after a partial edit. " +
+            "Report progress when production work remains, including after a partial edit. " +
+            "An unfinished implementation consumes one unsuccessful repair attempt. " +
             "Report satisfied only when the repair is complete. Report advance only for a concrete external " +
             "obstacle that prevents further repair, naming the missing input or external action. " +
             "Task size and unfinished implementation are not external obstacles. " + prose,
@@ -458,8 +460,8 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): AcceptanceCriterionRepairMutation? =
     with(evidence) {
       val live = state.reservation ?: return@with null
-      if (continuing) {
-        AcceptanceCriterionRepairMutation.ContinueRepair(live.reservationId, prose)
+      if (unfinished) {
+        incompleteRepairOutcome(state, evidence)
       } else if (clarification) {
         AcceptanceCriterionRepairMutation.Clarification(prose)
       } else if (satisfied) {
@@ -470,18 +472,26 @@ class AcceptanceCriterionRepairPhaseRecorder(
           checkpoint,
         )
       } else {
-        AcceptanceCriterionRepairMutation.Outcome(
-          AcceptanceCriterionRepairOutcome(
-            ref,
-            live.reservationId,
-            live.criterionRef,
-            digest,
-            AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
-            prose,
-          ),
-        )
+        incompleteRepairOutcome(state, evidence)
       }
     }
+
+  private fun incompleteRepairOutcome(
+    state: AcceptanceCriterionRepairState,
+    evidence: CompletionEvidence,
+  ): AcceptanceCriterionRepairMutation.Outcome? {
+    val live = state.reservation ?: return null
+    return AcceptanceCriterionRepairMutation.Outcome(
+      AcceptanceCriterionRepairOutcome(
+        evidence.ref,
+        live.reservationId,
+        live.criterionRef,
+        evidence.digest,
+        AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
+        evidence.prose,
+      ),
+    )
+  }
 
   internal fun unsuccessful(
     session: AcceptanceCriterionRepairSession,
@@ -587,8 +597,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val additionalPhaseId =
       session.steps.repair.takeIf {
         phase.phaseId == session.steps.audit && (
-          mutation is AcceptanceCriterionRepairMutation.ContinueRepair ||
-            mutation is AcceptanceCriterionRepairMutation.Outcome &&
+          mutation is AcceptanceCriterionRepairMutation.Outcome &&
             mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
         )
       }
