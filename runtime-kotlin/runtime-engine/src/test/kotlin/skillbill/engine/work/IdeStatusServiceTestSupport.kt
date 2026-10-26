@@ -10,6 +10,7 @@ import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
@@ -38,6 +39,8 @@ import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.toStatusWireMap
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.goalrunner.model.GoalChildHistoryDraft
+import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -830,6 +833,19 @@ internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
 }
 
 internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun saveGoalChildHistoryDraft(
+    draft: GoalChildHistoryDraft,
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
+  ): GoalChildHistoryDraftSaveResult = GoalChildHistoryDraftSaveResult.Saved(draft)
+
+  override fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft> = emptyList()
+
+  override fun hasRequiredGoalChildHistoryDraft(
+    parentWorkflowId: String,
+    subtaskId: Int,
+    childWorkflowId: String,
+  ): Boolean = true
+
   override fun hasQaComposedPlan(workflowId: String): Boolean = false
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
@@ -842,6 +858,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recoverAndPersistTerminalOutcome(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     repoRoot: Path,
@@ -849,6 +866,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recoverMissingResultPrefixOutput(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     output: GoalRunnerWirePayload,

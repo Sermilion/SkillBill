@@ -223,7 +223,13 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val value = (outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>)?.get(SharedPayloadKeys.VALUE)
       val continuationOutput =
         normalizedOutput.takeIf { run.policy.mutating && !(value as? String).isNullOrBlank() }
-      return AttemptResult.RetryableTerminal(reason, fileManifest, disposition, normalizedOutput, continuationOutput)
+      return AttemptResult.RetryableTerminal(
+        reason,
+        fileManifest,
+        disposition,
+        normalizedOutput,
+        continuationOutput,
+      )
     }
     return AttemptResult.settled(
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -554,7 +560,6 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val observability = accepted.observability
       val fileManifest = accepted.fileManifest
       val repositoryFingerprint = accepted.repositoryFingerprint
-      val outputText = args.outputText
       val phaseState =
         FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
           request,
@@ -567,7 +572,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
                 iteration = iteration,
                 status = STATUS_COMPLETED,
                 finished = true,
-                outputArtifact = outputText,
+                outputArtifact = args.outputText,
               ),
             extras =
               PhaseStateRequestAttachments(
@@ -582,7 +587,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         FeatureTaskRuntimePhaseOutput(
           run.phaseId,
           iteration,
-          outputText,
+          args.outputText,
           normalizedOutput,
           repairEvidence,
         )
@@ -612,6 +617,29 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       }
       return null
     }
+  }
+
+  internal fun blockRequiredOutput(
+    context: PhaseOutputSettlementContext,
+    accepted: PersistAcceptedOutputArgs,
+    failure: String,
+  ): AttemptResult {
+    val coupling = context.settlementCoupling()
+    return AttemptResult.settled(
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        coupling.progress,
+        coupling.transitions,
+        context.recorder,
+        PhaseBlockRequest(
+          run = accepted.run,
+          attemptCount = accepted.iteration,
+          reason = failure,
+          observability = accepted.observability,
+          payload = BlockAndPersistPayload(fileManifest = accepted.fileManifest),
+          failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+        ),
+      ),
+    )
   }
 
   internal fun completedAttemptResult(

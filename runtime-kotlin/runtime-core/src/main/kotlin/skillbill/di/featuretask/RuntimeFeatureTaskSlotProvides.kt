@@ -29,6 +29,7 @@ import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
 import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
 import skillbill.infrastructure.workflow.featuretask.FileSystemPhaseInstructionFileSource
 import skillbill.model.EnvironmentContext
@@ -109,6 +110,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
         PackBuildStrategy(),
         AgentValidateStrategy(),
         BoundaryHistoryStrategy(),
+        GoalChildHistoryDraftStrategy(),
         RuntimeCommitStrategy(),
         pullRequest.prDescription,
         pullRequest.monitor,

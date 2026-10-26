@@ -8,9 +8,13 @@ import skillbill.engine.goalrunner.execution.support.staleRunningReason
 import skillbill.engine.goalrunner.model.GoalContinuationCandidate
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.StaleRunningCandidatesBlockRequest
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.STALENESS_EVIDENCE_WINDOW
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
+import skillbill.goalrunner.model.GoalContinuation
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.terminalOutcomeFor
@@ -19,11 +23,15 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
@@ -47,6 +55,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
   private val gitOperations: WorkflowGitOperations,
   private val blockWrites: WorkflowGoalRunnerBlockWrites,
   private val terminalPersistence: WorkflowGoalRunnerOutcomeTerminalPersistence,
+  private val progressRecording: WorkflowGoalRunnerProgressRecording,
   private val clock: Clock,
 ) {
   fun reconcileAuthoritativeOutcomesInTransaction(
@@ -63,7 +72,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
         request.parentWorkflowId,
         request.repoRoot,
       )
-    persistMeasuredCompletions(unitOfWork, initialCandidates, request.repoRoot)
+    persistMeasuredCompletions(unitOfWork, initialCandidates, request.repoRoot, request.parentWorkflowId)
     val initialAuthoritative = initialCandidates.authoritativeOutcomesBySubtask()
     val blockObservations =
       blockStaleRunningCandidates(
@@ -107,16 +116,30 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
     unitOfWork: UnitOfWork,
     candidates: List<GoalContinuationCandidate>,
     repoRoot: Path?,
+    parentWorkflowId: String,
   ) {
     if (repoRoot == null) return
     candidates
       .filter { candidate -> candidate.outcome?.status == GoalRunnerTerminalStatus.COMPLETE }
       .forEach { candidate ->
+        if (!progressRecording.isCurrentGoalChild(
+            unitOfWork,
+            parentWorkflowId,
+            candidate.goalContinuation.subtaskId,
+            candidate.snapshot.workflowId,
+          )
+        ) {
+          return@forEach
+        }
+        requireHistoryDraft(unitOfWork, candidate, parentWorkflowId, candidate.goalContinuation.subtaskId)
         terminalPersistence.persistMeasuredCompletion(
-          unitOfWork.workflowStates,
-          candidate.snapshot.workflowId,
-          candidate.goalContinuation.issueKey,
-          candidate.goalContinuation.subtaskId,
+          unitOfWork,
+          parentWorkflowId,
+          GoalSubtaskIdentity(
+            candidate.snapshot.workflowId,
+            candidate.goalContinuation.issueKey,
+            candidate.goalContinuation.subtaskId,
+          ),
           requireNotNull(candidate.outcome),
         )
       }
@@ -178,6 +201,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
     repoRoot: Path?,
   ): List<GoalContinuationCandidate> =
     buildList {
+      val candidates = linkedMapOf<String, WorkflowStateSnapshot>()
       var offset = 0
       do {
         val page =
@@ -189,26 +213,109 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
           )
         page.forEach { projected ->
           val snapshot = workflowStates.getFeatureTaskWorkflow(projected.workflowId)?.toSnapshot() ?: return@forEach
-          engine.snapshotView(WorkflowFamily.TASK_RUNTIME.definition, snapshot)
-          val continuation = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation() ?: return@forEach
-          add(
-            GoalContinuationCandidate(
-              family = WorkflowFamily.TASK_RUNTIME,
-              snapshot = snapshot,
-              goalContinuation = continuation,
-              outcome =
-                terminalOutcomeFor(snapshot, snapshot.artifacts, continuation) {
-                  repoRoot?.let { root -> gitOperations.headCommitSha(root).measuredCommitSha() }
-                }?.withAcceptedBlockReference(snapshot),
-            ),
-          )
+          candidates[snapshot.workflowId] = snapshot
         }
         offset += page.size
       } while (page.size == WorkPaginationLimits.MAX_PAGE_SIZE)
+      val currentChildren = currentChildren(workflowStates, parentWorkflowId)
+      currentChildren.keys.forEach { childId ->
+        val snapshot =
+          workflowStates.getFeatureTaskWorkflow(childId)?.toSnapshot()
+            ?: throw SkillBillRuntimeException(
+              WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+              "Current goal child $childId is missing during outcome reconciliation.",
+            )
+        candidates.putIfAbsent(childId, snapshot)
+      }
+      candidates.values.forEach { snapshot ->
+        engine.snapshotView(WorkflowFamily.TASK_RUNTIME.definition, snapshot)
+        val continuation = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation()
+        if (continuation == null) {
+          if (snapshot.workflowId in currentChildren) {
+            throw SkillBillRuntimeException(
+              WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+              "Current goal child ${snapshot.workflowId} has no continuation during outcome reconciliation.",
+            )
+          }
+          return@forEach
+        }
+        currentChildren[snapshot.workflowId]?.let { subtaskId ->
+          validateCurrentContinuation(snapshot, continuation, issueKey, parentWorkflowId, subtaskId)
+        }
+        if (continuation.issueKey != issueKey.trim()) return@forEach
+        add(
+          GoalContinuationCandidate(
+            family = WorkflowFamily.TASK_RUNTIME,
+            snapshot = snapshot,
+            goalContinuation = continuation,
+            outcome =
+              terminalOutcomeFor(snapshot, snapshot.artifacts, continuation) {
+                repoRoot?.let { root -> gitOperations.headCommitSha(root).measuredCommitSha() }
+              }?.withAcceptedBlockReference(snapshot),
+          ),
+        )
+      }
     }
 
-  fun authoritativeOutcomesForSubtasks(
+  private fun validateCurrentContinuation(
+    snapshot: WorkflowStateSnapshot,
+    continuation: GoalContinuation,
+    issueKey: String,
+    parentWorkflowId: String,
+    subtaskId: Int,
+  ) {
+    val parentId = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuationArtifact()?.parentWorkflowId
+    val parentMismatch = parentId != null && parentId != parentWorkflowId
+    if (continuation.issueKey != issueKey.trim() || continuation.subtaskId != subtaskId || parentMismatch) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+        "Current child ${snapshot.workflowId} has a mismatched parent or subtask continuation.",
+      )
+    }
+  }
+
+  private fun currentChildren(
     workflowStates: WorkflowStateRepository,
+    parentWorkflowId: String,
+  ): Map<String, Int> {
+    val parent =
+      workflowStates.getFeatureTaskWorkflow(parentWorkflowId)?.toSnapshot()
+        ?: throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Goal parent $parentWorkflowId is missing during outcome reconciliation.",
+        )
+    val currentSubtasks =
+      parent.decompositionRuntime()?.subtasks
+        ?: throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Goal parent $parentWorkflowId has no durable manifest during outcome reconciliation.",
+        )
+    val currentChildEntries = validateCurrentChildren(currentSubtasks, parentWorkflowId)
+    return currentChildEntries.toMap()
+  }
+
+  private fun validateCurrentChildren(
+    currentSubtasks: List<DecompositionSubtask>,
+    parentWorkflowId: String,
+  ): List<Pair<String, Int>> {
+    if (currentSubtasks.any { it.workflowId?.isBlank() == true }) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+        "Goal parent $parentWorkflowId contains a blank child workflow identity.",
+      )
+    }
+    val currentChildEntries = currentSubtasks.mapNotNull { subtask -> subtask.workflowId?.let { it to subtask.id } }
+    if (currentChildEntries.map { it.first }.distinct().size != currentChildEntries.size) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+        "Goal parent $parentWorkflowId assigns one child to multiple subtasks.",
+      )
+    }
+    return currentChildEntries
+  }
+
+  fun authoritativeOutcomesForSubtasks(
+    unitOfWork: UnitOfWork,
     issueKey: String,
     parentWorkflowId: String,
     subtaskIds: Set<Int>?,
@@ -217,7 +324,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
     var offset = 0
     do {
       val page =
-        workflowStates.readGoalStatusChildPage(
+        unitOfWork.workflowStates.readGoalStatusChildPage(
           issueKey.trim(),
           offset,
           WorkPaginationLimits.MAX_PAGE_SIZE,
@@ -234,12 +341,106 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
             continuation,
             terminalOutcomeFor(snapshot, snapshot.artifacts, continuation)?.withAcceptedBlockReference(snapshot),
           )
+        if (!progressRecording.isCurrentGoalChild(
+            unitOfWork,
+            parentWorkflowId,
+            continuation.subtaskId,
+            snapshot.workflowId,
+          )
+        ) {
+          return@forEach
+        }
+        if (candidate.outcome?.status == GoalRunnerTerminalStatus.COMPLETE) {
+          requireHistoryDraft(unitOfWork, candidate, parentWorkflowId, continuation.subtaskId)
+        }
         listOfNotNull(winners[continuation.subtaskId], candidate).selectAuthoritativeCandidate()
           ?.let { winners[continuation.subtaskId] = it }
       }
       offset += page.size
     } while (page.size == WorkPaginationLimits.MAX_PAGE_SIZE)
+    addCurrentChildOutcomes(unitOfWork, issueKey, parentWorkflowId, subtaskIds, winners)
     return winners.mapValues { requireNotNull(it.value.outcome) }
+  }
+
+  private fun addCurrentChildOutcomes(
+    unitOfWork: UnitOfWork,
+    issueKey: String,
+    parentWorkflowId: String,
+    subtaskIds: Set<Int>?,
+    winners: MutableMap<Int, GoalContinuationCandidate>,
+  ) {
+    val parent =
+      unitOfWork.workflowStates.getFeatureTaskWorkflow(parentWorkflowId)?.toSnapshot()?.decompositionRuntime()
+        ?: throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Goal parent $parentWorkflowId is missing its durable manifest during outcome reconciliation.",
+        )
+    parent.subtasks
+      .filter { subtaskIds == null || it.id in subtaskIds }
+      .forEach { subtask ->
+        val childId = subtask.workflowId ?: return@forEach
+        if (childId.isBlank()) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+            "Goal parent $parentWorkflowId contains a blank child workflow identity.",
+          )
+        }
+        val (snapshot, continuation) = currentChildContinuation(unitOfWork, childId)
+        validateCurrentContinuation(snapshot, continuation, issueKey, parentWorkflowId, subtask.id)
+        val candidate =
+          GoalContinuationCandidate(
+            WorkflowFamily.TASK_RUNTIME,
+            snapshot,
+            continuation,
+            terminalOutcomeFor(snapshot, snapshot.artifacts, continuation)?.withAcceptedBlockReference(snapshot),
+          )
+        if (candidate.outcome?.status == GoalRunnerTerminalStatus.COMPLETE) {
+          requireHistoryDraft(unitOfWork, candidate, parentWorkflowId, continuation.subtaskId)
+        }
+        listOfNotNull(winners[continuation.subtaskId], candidate).selectAuthoritativeCandidate()
+          ?.let { winners[continuation.subtaskId] = it }
+      }
+  }
+
+  private fun currentChildContinuation(
+    unitOfWork: UnitOfWork,
+    childId: String,
+  ): Pair<WorkflowStateSnapshot, GoalContinuation> {
+    val snapshot =
+      unitOfWork.workflowStates.getFeatureTaskWorkflow(childId)?.toSnapshot()
+        ?: throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Current goal child $childId is missing during outcome reconciliation.",
+        )
+    engine.snapshotView(WorkflowFamily.TASK_RUNTIME.definition, snapshot)
+    val continuation =
+      DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation()
+        ?: throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Current goal child $childId has no continuation during outcome reconciliation.",
+        )
+    return snapshot to continuation
+  }
+
+  private fun requireHistoryDraft(
+    unitOfWork: UnitOfWork,
+    candidate: GoalContinuationCandidate,
+    parentWorkflowId: String,
+    subtaskId: Int,
+  ) {
+    if (!progressRecording.hasRequiredGoalChildHistoryDraft(
+        unitOfWork,
+        parentWorkflowId,
+        subtaskId,
+        candidate.snapshot.workflowId,
+      )
+    ) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+        "Goal child ${candidate.snapshot.workflowId} cannot be recovered as complete " +
+          "without its accepted history draft or skip.",
+      )
+    }
   }
 
   private fun candidateIsStale(candidate: GoalContinuationCandidate): Boolean =

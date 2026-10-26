@@ -191,7 +191,14 @@ class GoalRunnerStatusProjectionLivenessTest {
           finished.copy(
             status = "complete",
             currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 0, action = "complete"),
-            subtasks = finished.subtasks.map { it.copy(status = "complete", commitSha = "sha-1") },
+            subtasks =
+              finished.subtasks.map {
+                it.copy(
+                  status = "complete",
+                  workflowId = "completed-child",
+                  commitSha = "sha-1",
+                )
+              },
           ),
       ).apply { executionLeaseForTest = liveLease() }
     val outcomes = RecordingOutcomeStore()

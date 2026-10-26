@@ -39,7 +39,10 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.goalrunner.model.GoalChildHistoryDraft
+import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -53,6 +56,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEn
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
@@ -412,7 +416,11 @@ private fun <T> AdmittedFeatureTaskRuntimeExecution.ownedWrite(
 internal class DurablePhaseRunGoal(
   private val recorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution,
+  private val historyDraftStore: GoalRunnerGoalChildHistoryDraftStore,
 ) : PhaseRunGoal {
+  override fun saveGoalChildHistoryDraft(draft: GoalChildHistoryDraft): GoalChildHistoryDraftSaveResult =
+    historyDraftStore.saveGoalChildHistoryDraft(draft, admitted)
+
   override fun recordGoalContinuationState(request: GoalContinuationStateRecordRequest): Boolean =
     recorder.recordGoalContinuationState(request, admitted)
 
@@ -477,6 +485,13 @@ internal class DurablePhaseRunSettlements(
       unitOfWork.featureTaskPhaseSettlements.delete(workflowId, phaseId, attempt)
       true
     }
+
+  override fun persistAcceptedOutput(
+    workflowId: String,
+    phaseId: String,
+    attempt: Int,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): Boolean = service.persistAcceptedOutput(workflowId, phaseId, attempt, envelope)
 }
 
 internal class DurablePhaseRunCheckpoints(

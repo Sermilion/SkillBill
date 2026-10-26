@@ -1,14 +1,18 @@
 package skillbill.engine.goalrunner.reset
 
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
+import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestProjectionPersistence
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.afterReplanChildDeletion
+import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -22,6 +26,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 
 internal class WorkflowGoalRunnerScopedReplanPersistence(
   private val projectionPersistence: WorkflowGoalRunnerManifestProjectionPersistence,
+  private val historyEvidence: GoalChildHistoryEvidenceStore,
 ) {
   private val engine = WorkflowEngine()
 
@@ -32,7 +37,7 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
     options: GoalRunnerScopedReplanOptions,
   ): Pair<GoalRunnerScopedReplanWriteResult, DurableWorkflowArtifacts> {
     val discard = discardPlannedDetails(unitOfWork, state, subtaskId, options)
-    val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, listOf(subtaskId))
+    val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, listOf(subtaskId), historyEvidence)
     val projection =
       projectionPersistence.saveInTransaction(
         unitOfWork,
@@ -54,7 +59,7 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
     state: GoalRunnerManifestState,
     subtaskIds: List<Int>,
   ): Pair<GoalRunnerManifestState, DurableWorkflowArtifacts?> {
-    val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, subtaskIds)
+    val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, subtaskIds, historyEvidence)
     if (clearedChildIds.isEmpty()) return state to null
     val projection =
       projectionPersistence.saveInTransaction(
@@ -124,6 +129,7 @@ internal fun deleteStaleReplanChildren(
   unitOfWork: UnitOfWork,
   state: GoalRunnerManifestState,
   subtaskIds: List<Int>,
+  historyEvidence: GoalChildHistoryEvidenceStore,
 ): List<Int> =
   subtaskIds.distinct().sorted().filter { id ->
     val subtask = state.manifest.subtasks.singleOrNull { it.id == id }
@@ -135,11 +141,36 @@ internal fun deleteStaleReplanChildren(
     ) {
       false
     } else {
-      unitOfWork.workflowStates.deleteGoalChildWorkflow(
-        state.parentWorkflowId,
-        id,
-        childWorkflowId,
-        GoalChildWorkflowDeletionScope.TERMINAL_OR_RESUMABLE,
-      ) == 1
+      val durableSubtask =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+          ?.decompositionRuntime()?.subtasks?.singleOrNull { it.id == id }
+      if (durableSubtask?.workflowId != childWorkflowId) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Durable parent no longer assigns child '$childWorkflowId' to subtask '$id'.",
+        )
+      }
+      val child = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, childWorkflowId)
+      if (child != null &&
+        child.workflowStatus !in GoalChildWorkflowDeletionScope.TERMINAL_OR_RESUMABLE.deletableStatuses
+      ) {
+        return@filter false
+      }
+      historyEvidence.capture(unitOfWork, state.parentWorkflowId, id, childWorkflowId)
+      val deleted =
+        unitOfWork.workflowStates.deleteGoalChildWorkflow(
+          state.parentWorkflowId,
+          id,
+          childWorkflowId,
+          GoalChildWorkflowDeletionScope.TERMINAL_OR_RESUMABLE,
+        )
+      if (deleted != 1) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Child workflow '$childWorkflowId' could not be deleted with its preserved evidence.",
+        )
+      }
+      historyEvidence.retire(unitOfWork, state.parentWorkflowId, id)
+      true
     }
   }

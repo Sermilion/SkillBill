@@ -186,8 +186,10 @@ internal class GoalRunnerControlCoordinator(
   fun saveCompletedSubtaskAtBoundary(
     state: GoalRunnerManifestState,
     subtaskId: Int,
+    validateHistory: (UnitOfWork) -> Unit,
   ): GoalRunnerCompletionPersistenceResult =
     database.transaction { unitOfWork ->
+      validateHistory(unitOfWork)
       val parent = requireParent(unitOfWork, state.parentWorkflowId)
       val controls = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
       val persistedManifest = parent.decompositionRuntime() ?: state.manifest

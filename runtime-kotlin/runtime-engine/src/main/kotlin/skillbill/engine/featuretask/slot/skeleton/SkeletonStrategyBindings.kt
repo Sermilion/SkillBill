@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -53,6 +54,10 @@ object SkeletonStrategyBindings {
       SkeletonDefinition.GOAL_CHILD_REVISION_3 to
         goalChildRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
       SkeletonDefinition.GOAL_CHILD to goalChildRevision2Bindings,
+      SkeletonDefinition.GOAL_CHILD_REVISION_5 to
+        goalChildRevision2Bindings + (
+          PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(GoalChildHistoryDraftStrategy.ID)
+        ),
       SkeletonDefinition.REVIEW to
         mapOf(
           PhaseSlot.STANDALONE_REVIEW to

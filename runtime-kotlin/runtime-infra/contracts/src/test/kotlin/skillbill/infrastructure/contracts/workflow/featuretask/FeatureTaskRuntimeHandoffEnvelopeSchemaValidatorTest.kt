@@ -57,6 +57,10 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
           "InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE to
           "InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA",
+        FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_EVIDENCE to
+          "WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE",
+        FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_DRAFT to
+          "WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT",
       )
 
     FeatureTaskRuntimeWireArtifactKind.entries.forEach { kind ->

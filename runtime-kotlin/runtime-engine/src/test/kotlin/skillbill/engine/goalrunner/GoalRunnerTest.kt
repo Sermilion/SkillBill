@@ -16,6 +16,8 @@ import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.ownership
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
@@ -72,6 +74,8 @@ import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
+import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
+import skillbill.engine.goalrunner.persist.withSettledLegacyHistorySkip
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
@@ -87,6 +91,8 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
+import skillbill.goalrunner.model.GoalChildHistoryDraft
+import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalObservabilityProgressEvent
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
 import skillbill.goalrunner.model.GoalPlanningStatusReasons
@@ -130,6 +136,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
+import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -211,6 +218,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeReas
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -243,6 +251,22 @@ class GoalRunnerTest {
       )
     val workflowId = "goal-parent-sqlite-resume"
     seedGoalRunnerResumeWorkflow(database, workflowId)
+    database.transaction { unit ->
+      val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD)
+      val child = taskRuntimeWorkflowRecord("wfl-1", workflowId, "SKILL-352").withSettledLegacyHistorySkip()
+      unit.workflowStates.saveFeatureTaskWorkflow(
+        child.copy(
+          issueKey = "SKILL-352",
+          artifactsJson =
+            JsonCodec.mapToJsonString(
+              child.toSnapshot().artifacts.toMap() +
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(execution.descriptor()),
+            ),
+        ),
+        FeatureTaskWorkflowMode.RUNTIME,
+      )
+      unit.workflowStates.saveFeatureTaskExecutionIdentity(execution.identity("wfl-1", "SKILL-352"))
+    }
     val manifestStore =
       testWorkflowGoalRunnerManifestStore(
         database = database,
@@ -506,7 +530,12 @@ class GoalRunnerTest {
       )
     val launcher =
       RecordingSubtaskLauncher { request ->
-        store.mutate { current -> current.withWorkflowId(requireNotNull(request.skillRunRequest.subtaskId), "wfl-1") }
+        store.mutate { current ->
+          current.withWorkflowId(
+            requireNotNull(request.skillRunRequest.subtaskId),
+            "wfl-1",
+          )
+        }
         outcomes["wfl-1"] = completeOutcome(1)
         launchFacts()
       }
@@ -1183,7 +1212,15 @@ class GoalRunnerQualityGateSelectionTest {
         initialControlState = GoalRunnerControlState(qaSelection = FeatureTaskRuntimeQaSelection.AUTO),
       )
     val launcher = RecordingSubtaskLauncher { launchFacts() }
-    val runner = testGoalRunner(goalRunnerDeps(store, launcher, RecordingOutcomeStore(), RecordingPullRequestPort()))
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          store,
+          launcher,
+          RecordingOutcomeStore(),
+          RecordingPullRequestPort(),
+        ),
+      )
 
     val report = runner.run(runRequest().copy(qaSelection = FeatureTaskRuntimeQaSelection.OFF))
 
@@ -1235,7 +1272,12 @@ class GoalRunnerQualityGateSelectionTest {
   fun `resumed child keeps its recorded build selection while new children stamp validate`() {
     val store =
       InMemoryGoalManifestStore(
-        manifest = manifest(subtaskCount = 2).withBlockedSubtask(1, workflowId = "wfl-1", reason = "build blocked"),
+        manifest =
+          manifest(subtaskCount = 2).withBlockedSubtask(
+            1,
+            workflowId = "wfl-1",
+            reason = "build blocked",
+          ),
       )
     val outcomes = RecordingOutcomeStore()
     outcomes.seedReviewState("wfl-1")
@@ -1708,7 +1750,11 @@ class GoalRunnerLinearScratchFinalizeTest {
   @Test
   fun `rerunning a finalized goal reports already complete without committing or opening a PR`() {
     val repoRoot = Files.createTempDirectory("goal-already-complete")
-    val git = CommitAllRecordingGitOperations(dirtyPorcelain = " M .gitignore", currentBranch = "feat/SKILL-56-goal")
+    val git =
+      CommitAllRecordingGitOperations(
+        dirtyPorcelain = " M .gitignore",
+        currentBranch = "feat/SKILL-56-goal",
+      )
     val pullRequests = RecordingPullRequestPort()
     val store =
       InMemoryGoalManifestStore(
@@ -1848,7 +1894,15 @@ class GoalRunnerLinearScratchFinalizeTest {
     val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(request))
     assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
     assertEquals("monitor", stopped.stop.lastResumableStep)
-    assertEquals(requireNotNull(store.loadByIssueKey("SKILL-56", repoRoot)).parentWorkflowId, stopped.stop.workflowId)
+    assertEquals(
+      requireNotNull(
+        store.loadByIssueKey(
+          "SKILL-56",
+          repoRoot,
+        ),
+      ).parentWorkflowId,
+      stopped.stop.workflowId,
+    )
     assertContains(stopped.stop.blockedReason, "CI still fails")
     assertEquals(stopped.stop.blockedReason, store.controlState.goalBlockedReason)
     assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
@@ -2026,7 +2080,12 @@ class GoalRunnerLinearScratchFinalizeTest {
         goalRunnerDeps(
           manifestStore =
             InMemoryGoalManifestStore(
-              manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+              manifest =
+                manifest(subtaskCount = 1).withCompletedSubtask(
+                  1,
+                  workflowId = "wfl-1",
+                  commitSha = "sha-1",
+                ),
             ),
           subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
           outcomeStore = RecordingOutcomeStore(),
@@ -2163,7 +2222,15 @@ class GoalRunnerPauseLaunchBoundaryTest {
             .withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
       )
     val launcher = RecordingSubtaskLauncher { launchFacts() }
-    val runner = testGoalRunner(goalRunnerDeps(store, launcher, RecordingOutcomeStore(), RecordingPullRequestPort()))
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          store,
+          launcher,
+          RecordingOutcomeStore(),
+          RecordingPullRequestPort(),
+        ),
+      )
 
     val report = runner.run(runRequest().copy(stopAfterSubtaskId = 1))
 
@@ -2437,7 +2504,15 @@ class GoalRunnerNoTerminalOutcomeDiagnosisTest {
           stderr = stderr,
         )
       }
-    val runner = testGoalRunner(goalRunnerDeps(store, launcher, RecordingOutcomeStore(), RecordingPullRequestPort()))
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          store,
+          launcher,
+          RecordingOutcomeStore(),
+          RecordingPullRequestPort(),
+        ),
+      )
 
     val report = runner.run(runRequest())
 
@@ -2670,7 +2745,14 @@ class GoalRunnerStatusProjectionTest {
     val missingCurrentSubtaskStore =
       InMemoryGoalManifestStore(
         manifest(subtaskCount = 1)
-          .copy(status = "in_progress", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 2, action = "resume")),
+          .copy(
+            status = "in_progress",
+            currentSubtaskIntent =
+              CurrentSubtaskIntent(
+                subtaskId = 2,
+                action = "resume",
+              ),
+          ),
       )
     assertEquals(
       ExecutionLiveness.IDLE,
@@ -2786,7 +2868,14 @@ class GoalRunnerStatusProjectionTest {
       InMemoryGoalManifestStore(
         manifest =
           manifest(subtaskCount = 1)
-            .copy(status = "in_progress", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"))
+            .copy(
+              status = "in_progress",
+              currentSubtaskIntent =
+                CurrentSubtaskIntent(
+                  subtaskId = 1,
+                  action = "resume",
+                ),
+            )
             .withWorkflowId(1, "wfl-1"),
       )
     val outcomes = RecordingOutcomeStore()
@@ -2842,8 +2931,17 @@ class GoalRunnerStatusProjectionTest {
     val store =
       InMemoryGoalManifestStore(
         manifest =
-          manifest(subtaskCount = 1)
-            .copy(status = "in_progress", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"))
+          manifest(subtaskCount = 1).let { m ->
+            m.copy(subtasks = m.subtasks.map { it.copy(status = "in_progress") })
+          }
+            .copy(
+              status = "in_progress",
+              currentSubtaskIntent =
+                CurrentSubtaskIntent(
+                  subtaskId = 1,
+                  action = "resume",
+                ),
+            )
             .withWorkflowId(1, "wfl-1"),
       )
     val outcomes = RecordingOutcomeStore()
@@ -2871,7 +2969,7 @@ class GoalRunnerStatusProjectionTest {
     assertEquals(null, status.currentStep)
     assertEquals("in_progress", store.manifest.status)
     assertEquals("resume", store.manifest.currentSubtaskIntent.action)
-    assertEquals("pending", store.manifest.subtasks.single().status)
+    assertEquals("in_progress", store.manifest.subtasks.single().status)
     assertEquals(0, store.saveCount)
     assertEquals("SKILL-56", outcomes.lastAuthoritativeOutcomeRequest)
     assertEquals(null, outcomes.lastReconcileRequest)
@@ -2881,8 +2979,23 @@ class GoalRunnerStatusProjectionTest {
   fun `status projection does not persist terminal child reconciliation`() {
     val stored =
       manifest(subtaskCount = 2)
-        .copy(status = "in_progress", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"))
+        .copy(
+          status = "in_progress",
+          currentSubtaskIntent =
+            CurrentSubtaskIntent(
+              subtaskId = 1,
+              action = "resume",
+            ),
+        )
         .withWorkflowId(1, "wfl-1")
+        .let { state ->
+          state.copy(
+            subtasks =
+              state.subtasks.map { subtask ->
+                if (subtask.id == 1) subtask.copy(status = "in_progress") else subtask
+              },
+          )
+        }
     val store = InMemoryGoalManifestStore(stored)
     val outcomes =
       RecordingOutcomeStore().apply {
@@ -2911,7 +3024,7 @@ class GoalRunnerStatusProjectionTest {
   }
 
   @Test
-  fun `status projection prefers authoritative complete child outcome over stale blocked projection`() {
+  fun `status projection rejects a complete outcome for a different child`() {
     val staleManifest =
       manifest(subtaskCount = 1)
         .copy(status = "blocked", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "blocked"))
@@ -2937,16 +3050,35 @@ class GoalRunnerStatusProjectionTest {
       )
 
     requireNotNull(status)
-    assertEquals(1, status.completeCount)
+    assertEquals(0, status.completeCount)
     assertEquals(0, status.pendingCount)
-    assertEquals(0, status.blockedCount)
-    assertEquals(null, status.currentSubtaskId)
+    assertEquals(1, status.blockedCount)
+    assertEquals(1, status.currentSubtaskId)
     assertEquals("blocked", store.manifest.status)
     assertEquals("blocked", store.manifest.currentSubtaskIntent.action)
     val subtask = store.manifest.subtasks.single()
     assertEquals("blocked", subtask.status)
     assertEquals("wfl-stale", subtask.workflowId)
     assertEquals(0, store.saveCount)
+  }
+
+  @Test
+  fun `pending subtask does not adopt a terminal outcome through the child lookup`() {
+    val store = InMemoryGoalManifestStore(manifest(subtaskCount = 1).withWorkflowId(1, "wfl-old"))
+    val outcomes =
+      RecordingOutcomeStore().apply { this["wfl-old"] = completeOutcome(1).copy(workflowId = "wfl-old") }
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = store,
+        outcomeStore = outcomes,
+        phaseRecorder = goalTestPhaseRecorder(),
+      )
+
+    val status =
+      requireNotNull(service.status(GoalRunnerStatusRequest(issueKey = "SKILL-56", invokedAgentId = "codex")))
+
+    assertEquals(0, status.completeCount)
+    assertEquals(1, status.pendingCount)
   }
 
   @Test
@@ -3160,8 +3292,17 @@ class GoalRunnerStatusProjectionTest {
     val store =
       InMemoryGoalManifestStore(
         manifest =
-          manifest(subtaskCount = 1)
-            .copy(status = "in_progress", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"))
+          manifest(subtaskCount = 1).let { m ->
+            m.copy(subtasks = m.subtasks.map { it.copy(status = "in_progress") })
+          }
+            .copy(
+              status = "in_progress",
+              currentSubtaskIntent =
+                CurrentSubtaskIntent(
+                  subtaskId = 1,
+                  action = "resume",
+                ),
+            )
             .withWorkflowId(1, "wfl-1"),
       )
     val outcomes = RecordingOutcomeStore()
@@ -3197,7 +3338,7 @@ class GoalRunnerStatusProjectionTest {
     assertEquals("in_progress", store.manifest.status)
     assertEquals("resume", store.manifest.currentSubtaskIntent.action)
     val subtask = store.manifest.subtasks.single()
-    assertEquals("pending", subtask.status)
+    assertEquals("in_progress", subtask.status)
     assertEquals(null, subtask.blockedReason)
     assertEquals(null, subtask.lastResumableStep)
     assertEquals(0, store.saveCount)
@@ -3208,8 +3349,17 @@ class GoalRunnerStatusProjectionTest {
     val store =
       InMemoryGoalManifestStore(
         manifest =
-          manifest(subtaskCount = 1)
-            .copy(status = "in_progress", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"))
+          manifest(subtaskCount = 1).let { m ->
+            m.copy(subtasks = m.subtasks.map { it.copy(status = "in_progress") })
+          }
+            .copy(
+              status = "in_progress",
+              currentSubtaskIntent =
+                CurrentSubtaskIntent(
+                  subtaskId = 1,
+                  action = "resume",
+                ),
+            )
             .withWorkflowId(1, "wfl-1"),
       )
     val outcomes = RecordingOutcomeStore()
@@ -3838,7 +3988,7 @@ class GoalRunnerAcceptResetTest {
   }
 
   @Test
-  fun `status reconciliation keeps an accepted subtask complete across later reads`() {
+  fun `status reconciliation refuses an acceptance without preserved child evidence`() {
     val store =
       InMemoryGoalManifestStore(
         manifest =
@@ -3860,11 +4010,19 @@ class GoalRunnerAcceptResetTest {
           acceptedAt = "2026-01-01T00:00:00Z",
         ),
     )
+    val controls =
+      object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+        override fun outOfBandAcceptancesForSubtasks(
+          parentWorkflowId: String,
+          subtaskIds: Set<Int>,
+        ): Map<Int, GoalRunnerOutOfBandAcceptance> = store.acceptances.filterKeys(subtaskIds::contains)
+      }
     val service =
       testGoalRunnerStatusService(
         manifestStore = store,
         outcomeStore = RecordingOutcomeStore(),
         phaseRecorder = goalTestPhaseRecorder(),
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates(), goalRunnerControls = controls),
         ports =
           GoalRunnerStatusTestPorts(
             gitOperations = AcceptGitOperations(),
@@ -3877,8 +4035,8 @@ class GoalRunnerAcceptResetTest {
       )
 
     requireNotNull(projection)
-    assertEquals(1, projection.completeCount)
-    assertEquals(2, projection.currentSubtaskId)
+    assertEquals(0, projection.completeCount)
+    assertEquals(1, projection.currentSubtaskId)
 
     val accepted = projection.outOfBandAcceptances.single()
     assertEquals(1, accepted.subtaskId)
@@ -3892,7 +4050,14 @@ class GoalRunnerAcceptResetTest {
       InMemoryGoalManifestStore(
         manifest =
           manifest(subtaskCount = 1)
-            .copy(status = "in_progress", currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"))
+            .copy(
+              status = "in_progress",
+              currentSubtaskIntent =
+                CurrentSubtaskIntent(
+                  subtaskId = 1,
+                  action = "resume",
+                ),
+            )
             .withWorkflowId(1, "wfl-active")
             .copy(
               subtasks =
@@ -4101,7 +4266,7 @@ class GoalRunnerAcceptResetTest {
   }
 
   @Test
-  fun `hard reset lists discarded acceptance and only explicit restoration recreates it`() {
+  fun `hard reset lists discarded acceptance but a commit alone cannot restore it`() {
     val acceptedSha = "abc1234abc1234abc1234abc1234abc1234abcd"
     val acceptedAt = "2026-01-01T00:00:00Z"
     val store =
@@ -4125,15 +4290,15 @@ class GoalRunnerAcceptResetTest {
     service.reset(GoalRunnerResetRequest(issueKey = "SKILL-56", hard = true, repoRoot = Path.of(".")))
     assertEquals(emptyList(), service.hardResetPreflight("SKILL-56"))
     assertIs<GoalRunnerAcceptResult.Rejected>(service.accept(acceptRequest(acceptedSha)))
-    val restored =
-      assertIs<GoalRunnerAcceptResult.Accepted>(
-        service.accept(acceptRequest(acceptedSha, restoreAfterHardReset = true)),
-      )
-    assertEquals("2026-07-27T12:00Z", restored.acceptedAt)
-    assertEquals(
-      listOf(GoalRunnerAcceptedSubtask(1, acceptedSha, "reviewed; ship it", "2026-07-27T12:00Z")),
-      service.hardResetPreflight("SKILL-56"),
+    assertIs<GoalRunnerAcceptResult.Rejected>(
+      service.accept(
+        acceptRequest(
+          acceptedSha,
+          restoreAfterHardReset = true,
+        ),
+      ),
     )
+    assertEquals(emptyList(), service.hardResetPreflight("SKILL-56"))
   }
 
   private fun acceptingStatusService(
@@ -4193,7 +4358,7 @@ class GoalRunnerManifestReconciliationTest {
         currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"),
         subtasks =
           manifest(subtaskCount = 2).subtasks.map { subtask ->
-            if (subtask.id == 1) subtask.copy(status = "pending", workflowId = "wfl-1") else subtask
+            if (subtask.id == 1) subtask.copy(status = "in_progress", workflowId = "wfl-1") else subtask
           },
       )
     val store = InMemoryGoalManifestStore(staleManifest)
@@ -4385,7 +4550,12 @@ internal class InMemoryGoalManifestStore(
     if (!controlState.requiresPauseBoundary(state.manifest)) return state
     controlState =
       when {
-        controlState.paused -> controlState.copy(stopAfterConsumed = controlState.stopAfterConsumed || targetReached)
+        controlState.paused ->
+          controlState.copy(
+            stopAfterConsumed =
+              controlState.stopAfterConsumed ||
+                targetReached,
+          )
         controlState.pauseRequested ->
           controlState.copy(
             pauseConsumed = true,
@@ -4565,7 +4735,11 @@ internal class InMemoryGoalManifestStore(
     return GoalRunnerChildWorkflowSaveResult.Saved(save(state))
   }
 
-  override fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance> = acceptances
+  override fun outOfBandAcceptances(parentWorkflowId: String): Map<
+    Int,
+    GoalRunnerOutOfBandAcceptance,
+  > =
+    acceptances
 
   override fun persistOutOfBandAcceptance(
     parentWorkflowId: String,
@@ -5140,6 +5314,19 @@ class GoalRunnerLaunchReconcilerWiringTest {
 }
 
 internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun saveGoalChildHistoryDraft(
+    draft: GoalChildHistoryDraft,
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
+  ): GoalChildHistoryDraftSaveResult = GoalChildHistoryDraftSaveResult.Saved(draft)
+
+  override fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft> = emptyList()
+
+  override fun hasRequiredGoalChildHistoryDraft(
+    parentWorkflowId: String,
+    subtaskId: Int,
+    childWorkflowId: String,
+  ): Boolean = true
+
   val qaSelections: MutableMap<String, FeatureTaskRuntimeQaSelection> = mutableMapOf()
 
   override fun hasQaComposedPlan(workflowId: String): Boolean = false
@@ -5241,6 +5428,7 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recoverAndPersistTerminalOutcome(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     repoRoot: Path,
@@ -5248,6 +5436,7 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recoverMissingResultPrefixOutput(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     output: GoalRunnerWirePayload,
@@ -5915,7 +6104,12 @@ class GoalRunnerStatusAttributionTest {
     harness.recordCompletedPhase(workflowId, phaseId = "implement", resolvedAgentId = "cursor")
     val store =
       InMemoryGoalManifestStore(
-        manifest = manifest(subtaskCount = 1).withBlockedSubtask(1, workflowId = workflowId, reason = "needs review"),
+        manifest =
+          manifest(subtaskCount = 1).withBlockedSubtask(
+            1,
+            workflowId = workflowId,
+            reason = "needs review",
+          ),
       )
     val service =
       testGoalRunnerStatusService(
@@ -5943,8 +6137,20 @@ class GoalRunnerStatusAttributionTest {
     val workflowId = "wfl-agent-switch"
     harness.openRuntimeWorkflow(workflowId)
     harness.recordCompletedPhase(workflowId, phaseId = "implement", resolvedAgentId = "cursor")
-    harness.recordPhase(workflowId, phaseId = "validate", resolvedAgentId = "cursor", status = "blocked", attempt = 1)
-    harness.recordPhase(workflowId, phaseId = "validate", resolvedAgentId = "claude", status = "running", attempt = 2)
+    harness.recordPhase(
+      workflowId,
+      phaseId = "validate",
+      resolvedAgentId = "cursor",
+      status = "blocked",
+      attempt = 1,
+    )
+    harness.recordPhase(
+      workflowId,
+      phaseId = "validate",
+      resolvedAgentId = "claude",
+      status = "running",
+      attempt = 2,
+    )
     val store =
       InMemoryGoalManifestStore(
         manifest = manifest(subtaskCount = 1).withBlockedSubtask(1, workflowId = workflowId, reason = "resumed"),
@@ -6373,7 +6579,11 @@ class GoalRunnerUnaddressedFindingsSummaryTest {
           outcomeStore = RecordingOutcomeStore(),
           pullRequestPort = pullRequestPort,
         ).copy(
-          unaddressedFindingsLedgerService = UnaddressedFindingsLedgerService(sessionFactory, NoopRuntimeDiagnostics),
+          unaddressedFindingsLedgerService =
+            UnaddressedFindingsLedgerService(
+              sessionFactory,
+              NoopRuntimeDiagnostics,
+            ),
         ),
       )
 

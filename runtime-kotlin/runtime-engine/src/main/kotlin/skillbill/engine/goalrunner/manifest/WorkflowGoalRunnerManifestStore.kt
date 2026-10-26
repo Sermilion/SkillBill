@@ -1,8 +1,10 @@
 package skillbill.engine.goalrunner.manifest
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
+import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
+import skillbill.engine.goalrunner.history.restoreGoalChildHistoryAcceptance
+import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
@@ -17,24 +19,29 @@ import skillbill.engine.goalrunner.status.bindRepositoryIdentity
 import skillbill.engine.goalrunner.status.executionLease
 import skillbill.engine.goalrunner.status.persistStopAfterSubtask
 import skillbill.engine.goalrunner.status.planningSpawnAuthorization
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusSummary
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.goalrunner.model.planningStatusSnapshot
-import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.ports.workflow.WorkflowSnapshotValidator
-import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.afterIncompatibleChildDeletion
+import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Path
 import java.time.Clock
 
@@ -42,19 +49,20 @@ class WorkflowGoalRunnerManifestStore
   @Inject
   constructor(
     private val database: DatabaseSessionFactory,
-    private val workflowSnapshotValidator: WorkflowSnapshotValidator,
     private val decompositionManifestValidator: DecompositionManifestValidator,
-    private val decompositionManifestStore: DecompositionManifestStore,
     private val clock: Clock,
     private val manifestLoader: WorkflowGoalRunnerManifestLoader,
-    private val decompositionManifestWriter: DecompositionManifestWriter,
-    private val repositoryRoot: RepositoryRoot,
     private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
     private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
     private val childWorkflowPersistence: WorkflowGoalRunnerChildWorkflowPersistence,
+    private val historyEvidence: GoalChildHistoryEvidenceStore,
+    private val projectionPersistence: WorkflowGoalRunnerManifestProjectionPersistence,
   ) : GoalRunnerManifestStore,
     GoalRunnerManifestPurgeCommands by WorkflowGoalRunnerPurgePersistence(database, repositoryEnclosingRootPort),
-    GoalRunnerStatusManifestQueries by WorkflowGoalRunnerStatusManifestQueries(database, repositoryEnclosingRootPort),
+    GoalRunnerStatusManifestQueries by WorkflowGoalRunnerStatusManifestQueries(
+      database,
+      repositoryEnclosingRootPort,
+    ),
     GoalRunnerManifestExecutionCommands by WorkflowGoalRunnerExecutionCommands(
       GoalRunnerControlCoordinator(
         database,
@@ -62,33 +70,16 @@ class WorkflowGoalRunnerManifestStore
         clock,
         repositoryEnclosingRootPort,
       ) { unitOfWork, state ->
-        WorkflowGoalRunnerManifestProjectionPersistence(
-          database,
-          WorkflowEngine(),
-          GoalParentProjectionWriter(WorkflowEngine(), decompositionManifestValidator),
-          workflowSnapshotValidator,
-          decompositionManifestWriter,
-          repositoryRoot,
-          decompositionManifestValidator,
-          decompositionManifestStore,
-        ).saveInTransaction(unitOfWork, state)
+        projectionPersistence.saveInTransaction(unitOfWork, state)
       },
       executionAdmission,
     ) {
-    private val engine: WorkflowEngine = WorkflowEngine()
-    private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
-    private val projectionPersistence =
-      WorkflowGoalRunnerManifestProjectionPersistence(
-        database,
-        engine,
-        parentProjection,
-        workflowSnapshotValidator,
-        decompositionManifestWriter,
-        repositoryRoot,
-        decompositionManifestValidator,
-        decompositionManifestStore,
+    private val parentProjection = GoalParentProjectionWriter(WorkflowEngine(), decompositionManifestValidator)
+    private val scopedReplanPersistence =
+      WorkflowGoalRunnerScopedReplanPersistence(
+        projectionPersistence,
+        historyEvidence,
       )
-    private val scopedReplanPersistence = WorkflowGoalRunnerScopedReplanPersistence(projectionPersistence)
     private val controls =
       GoalRunnerControlCoordinator(
         database,
@@ -241,7 +232,24 @@ class WorkflowGoalRunnerManifestStore
     override fun saveCompletedSubtaskAtBoundary(
       state: GoalRunnerManifestState,
       subtaskId: Int,
-    ): GoalRunnerCompletionPersistenceResult = controls.saveCompletedSubtaskAtBoundary(state, subtaskId)
+    ): GoalRunnerCompletionPersistenceResult =
+      controls.saveCompletedSubtaskAtBoundary(state, subtaskId) { unit ->
+        val childId = state.manifest.subtasks.single { it.id == subtaskId }.workflowId
+        val current =
+          unit.workflowStates.get(
+            WorkflowFamily.TASK_RUNTIME,
+            state.parentWorkflowId,
+          )?.decompositionRuntime()
+            ?.subtasks?.singleOrNull { it.id == subtaskId }
+        if (childId == null || current?.workflowId != childId ||
+          !historyEvidence.hasRequired(unit, state.parentWorkflowId, subtaskId, childId)
+        ) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+            "Current goal child cannot complete without its accepted history disposition.",
+          )
+        }
+      }
 
     override fun saveHardReset(
       state: GoalRunnerManifestState,
@@ -249,8 +257,21 @@ class WorkflowGoalRunnerManifestStore
     ): GoalRunnerManifestState {
       val saved =
         database.transaction { unitOfWork ->
+          val parent =
+            unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+              ?: throw SkillBillRuntimeException(
+                WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+                "Goal parent is missing during hard reset.",
+              )
+          val manifest =
+            parent.decompositionRuntime()
+              ?: throw SkillBillRuntimeException(
+                WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+                "Goal manifest is missing during hard reset.",
+              )
+          captureSelectedChildren(unitOfWork, state.parentWorkflowId, manifest)
           if (!preservePlanning) unitOfWork.goalPlanningPreparations.deleteByGoal(state.parentWorkflowId)
-          unitOfWork.workflowStates.deleteGoalChildWorkflowsByParent(state.parentWorkflowId)
+          deleteCapturedChildren(unitOfWork, state.parentWorkflowId, manifest)
           val repositoryIdentity = unitOfWork.goalRunnerControls.controlState(state.parentWorkflowId).repositoryIdentity
           val projection =
             projectionPersistence.saveInTransaction(
@@ -276,6 +297,137 @@ class WorkflowGoalRunnerManifestStore
       return saved.state
     }
 
+    private fun deleteCapturedChildren(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      manifest: DecompositionManifest,
+    ) {
+      val childIds = unitOfWork.workflowStates.listGoalChildWorkflowIdsByParent(parentWorkflowId).distinct()
+      val referencedChildIds = manifest.subtasks.mapNotNull { it.workflowId }
+      if (referencedChildIds.any { it !in childIds }) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "A manifest child is not an owned goal-child row during hard reset.",
+        )
+      }
+      childIds.forEach { childId -> captureUnselectedChild(unitOfWork, parentWorkflowId, manifest, childId) }
+      val deleted = unitOfWork.workflowStates.deleteGoalChildWorkflowsByParent(parentWorkflowId)
+      if (deleted != childIds.size) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Hard reset deleted $deleted of ${childIds.size} selected child workflows.",
+        )
+      }
+    }
+
+    private fun captureUnselectedChild(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      manifest: DecompositionManifest,
+      childId: String,
+    ) {
+      val child =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, childId)
+          ?: throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+            "Selected child '$childId' disappeared during hard reset.",
+          )
+      if (manifest.subtasks.none { it.workflowId == childId }) {
+        captureRetiredChild(unitOfWork, parentWorkflowId, manifest, childId, child.artifacts)
+      }
+    }
+
+    private fun captureRetiredChild(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      manifest: DecompositionManifest,
+      childId: String,
+      artifacts: DurableWorkflowArtifacts,
+    ) {
+      val continuation =
+        DurableWorkflowArtifacts.fromMap(artifacts).goalContinuationArtifact()
+          ?: throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+            "Selected child '$childId' has no continuation during hard reset.",
+          )
+      if (manifest.subtasks.none { it.id == continuation.subtaskId }) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Selected child '$childId' continuation names an unknown subtask.",
+        )
+      }
+      historyEvidence.capture(unitOfWork, parentWorkflowId, continuation.subtaskId, childId)
+      historyEvidence.retireChildEvidence(
+        unitOfWork,
+        parentWorkflowId,
+        continuation.subtaskId,
+        childId,
+      )
+    }
+
+    private fun captureSelectedChildren(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      manifest: DecompositionManifest,
+    ) {
+      val acceptances = unitOfWork.goalRunnerControls.outOfBandAcceptances(parentWorkflowId)
+      manifest.subtasks.forEach { subtask ->
+        if (subtask.workflowId?.isBlank() == true) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+            "Subtask '${subtask.id}' has a blank child workflow identity during hard reset.",
+          )
+        }
+        val restoredChildId =
+          if (subtask.workflowId == null) {
+            historyEvidence.restoredChildId(unitOfWork, parentWorkflowId, subtask.id)
+          } else {
+            null
+          }
+        if (subtask.workflowId == null && subtask.id in acceptances && restoredChildId == null) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+            "Subtask '${subtask.id}' acceptance has no verified child association during hard reset.",
+          )
+        }
+        val childId = subtask.workflowId ?: restoredChildId
+        if (childId != null) {
+          captureSelectedChild(unitOfWork, parentWorkflowId, subtask, childId, acceptances[subtask.id])
+        }
+      }
+    }
+
+    private fun captureSelectedChild(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      subtask: DecompositionSubtask,
+      childId: String,
+      acceptance: GoalRunnerOutOfBandAcceptance?,
+    ) {
+      if (acceptance != null && acceptance.commitSha != subtask.commitSha) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Subtask '${subtask.id}' acceptance does not match its durable child association.",
+        )
+      }
+      historyEvidence.retireOtherChildren(unitOfWork, parentWorkflowId, subtask.id, childId)
+      if (subtask.workflowId != null &&
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, childId) == null
+      ) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+          "Selected child '$childId' is missing during hard reset.",
+        )
+      }
+      historyEvidence.capture(
+        unitOfWork,
+        parentWorkflowId,
+        subtask.id,
+        childId,
+        acceptance,
+      )
+    }
+
     override fun deleteIncompatibleChildWorkflow(
       state: GoalRunnerManifestState,
       subtaskId: Int,
@@ -289,15 +441,33 @@ class WorkflowGoalRunnerManifestStore
           require(selected.workflowId == workflowId) {
             "Selected subtask '$subtaskId' does not own child workflow '$workflowId'."
           }
+          val parent =
+            unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+              ?: throw SkillBillRuntimeException(
+                WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+                "Goal parent is missing while deleting child '$workflowId'.",
+              )
+          val durableSubtask = parent.decompositionRuntime()?.subtasks?.singleOrNull { it.id == subtaskId }
+          if (durableSubtask?.workflowId != workflowId) {
+            throw SkillBillRuntimeException(
+              WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+              "Durable parent no longer assigns child '$workflowId' to subtask '$subtaskId'.",
+            )
+          }
+          historyEvidence.capture(unitOfWork, state.parentWorkflowId, subtaskId, workflowId)
           val deleted =
             unitOfWork.workflowStates.deleteGoalChildWorkflow(
               state.parentWorkflowId,
               subtaskId,
               workflowId,
             )
-          require(deleted == 1) {
-            "Child workflow '$workflowId' is absent, compatible, or not owned by subtask '$subtaskId'."
+          if (deleted != 1) {
+            throw SkillBillRuntimeException(
+              WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE,
+              "Child workflow '$workflowId' could not be deleted with its preserved evidence.",
+            )
           }
+          historyEvidence.retire(unitOfWork, state.parentWorkflowId, subtaskId)
           val recoveredManifest = state.manifest.afterIncompatibleChildDeletion(subtaskId)
           projectionPersistence.saveInTransaction(unitOfWork, state.copy(manifest = recoveredManifest))
         }
@@ -404,16 +574,29 @@ class WorkflowGoalRunnerManifestStore
         unitOfWork.goalRunnerControls.outOfBandAcceptances(parentWorkflowId)
       }
 
-    override fun persistOutOfBandAcceptance(
-      parentWorkflowId: String,
+    override fun restoreOutOfBandAcceptance(
+      state: GoalRunnerManifestState,
       acceptance: GoalRunnerOutOfBandAcceptance,
-    ): GoalRunnerOutOfBandAcceptance =
-      database.transaction { unitOfWork ->
-        val record =
-          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId)
-            ?: error("Goal parent workflow '$parentWorkflowId' no longer exists.")
-        unitOfWork.goalRunnerControls.persistOutOfBandAcceptance(parentWorkflowId, acceptance)
-        parentProjection.rewrite(unitOfWork, record)
-        acceptance
-      }
+    ): GoalChildHistoryAcceptanceRestoreResult {
+      val result =
+        database.transaction { unit ->
+          when (val restored = restoreGoalChildHistoryAcceptance(unit, state, acceptance, historyEvidence)) {
+            is GoalChildHistoryAcceptanceRestoreResult.Refused -> restored to null
+            is GoalChildHistoryAcceptanceRestoreResult.Restored -> {
+              val projection =
+                projectionPersistence.saveInTransaction(
+                  unit,
+                  restored.state,
+                  mergeConcurrentProgress = false,
+                )
+              GoalChildHistoryAcceptanceRestoreResult.Restored(
+                projection.state,
+                restored.acceptance,
+              ) to projection.projectionArtifacts
+            }
+          }
+        }
+      result.second?.let { projectionPersistence.writeProjectionFile(state, it) }
+      return result.first
+    }
   }

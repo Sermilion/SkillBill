@@ -14,6 +14,8 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeQuarantineSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.QaRepairStateSchemaValidator
+import skillbill.infrastructure.contracts.workflow.goal.GoalChildHistoryDraftSchemaValidator
+import skillbill.infrastructure.contracts.workflow.goal.GoalChildHistoryEvidenceSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalObservabilityEventSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalPlanningPreparationSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalProgressEventSchemaValidator
@@ -33,7 +35,11 @@ class FeatureTaskRuntimeWireArtifactValidator(
     sourceLabel: String,
   ): InvalidFeatureTaskRuntimeHandoffProjectionContext? =
     FeatureTaskRuntimeHandoffEnvelopeSchemaValidator.rejection(
-      requireFeatureTaskRuntimeArtifactMap(FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE, payload, sourceLabel),
+      requireFeatureTaskRuntimeArtifactMap(
+        FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE,
+        payload,
+        sourceLabel,
+      ),
       sourceLabel,
     )
 
@@ -76,6 +82,10 @@ class FeatureTaskRuntimeWireArtifactValidator(
     sourceLabel: String,
   ) {
     when (kind) {
+      FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_EVIDENCE ->
+        GoalChildHistoryEvidenceSchemaValidator.validate(wireMap, sourceLabel)
+      FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_DRAFT ->
+        GoalChildHistoryDraftSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
         AcceptanceCriterionRepairStateSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT ->

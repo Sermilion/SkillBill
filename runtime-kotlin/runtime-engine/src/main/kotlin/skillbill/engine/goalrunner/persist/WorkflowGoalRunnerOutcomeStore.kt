@@ -6,17 +6,23 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPla
 import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentCaptureOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
+import skillbill.engine.goalrunner.model.GoalRunnerManifestReconciliationInputs
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.model.GoalRunnerRestoredChildReference
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
+import skillbill.goalrunner.model.GoalChildHistoryDraft
+import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
@@ -54,12 +60,14 @@ import java.nio.file.Path
 import java.time.Clock
 
 internal data class RecoverMissingResultPrefixTerminalOutcomeArgs(
+  internal val unitOfWork: UnitOfWork,
   internal val workflowStates: WorkflowStateRepository,
   internal val family: WorkflowFamily,
   internal val record: WorkflowStateSnapshot,
   internal val output: GoalRunnerWirePayload,
   internal val issueKey: String,
   internal val subtaskId: Int,
+  internal val parentWorkflowId: String,
   internal val workflowId: String,
 )
 
@@ -69,6 +77,7 @@ class WorkflowGoalRunnerOutcomeStore
     private val database: DatabaseSessionFactory,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
     wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
+    private val historyEvidence: GoalChildHistoryEvidenceStore,
     gitOperations: WorkflowGitOperations,
     workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
     crashReconciler: FeatureTaskRuntimeCrashReconciler,
@@ -78,11 +87,20 @@ class WorkflowGoalRunnerOutcomeStore
     GoalRunnerAttemptLedgerStore {
     private val engine = WorkflowEngine()
     private val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
+    private val progressRecording =
+      WorkflowGoalRunnerProgressRecording(
+        database,
+        engine,
+        workflowSnapshotValidator,
+        wireArtifactValidator,
+        historyEvidence,
+      )
     private val terminalPersistence =
       WorkflowGoalRunnerOutcomeTerminalPersistence(
         engine,
         gitOperations,
         workerSupervisor,
+        progressRecording,
         clock,
       )
     private val outcomeReconcile =
@@ -91,14 +109,8 @@ class WorkflowGoalRunnerOutcomeStore
         gitOperations,
         blockWrites,
         terminalPersistence,
+        progressRecording,
         clock,
-      )
-    private val progressRecording =
-      WorkflowGoalRunnerProgressRecording(
-        database,
-        engine,
-        workflowSnapshotValidator,
-        wireArtifactValidator,
       )
     private val terminal =
       WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations, crashReconciler)
@@ -112,19 +124,42 @@ class WorkflowGoalRunnerOutcomeStore
       subtaskId: Int,
     ): GoalRunnerStoredOutcome? = terminal.terminalOutcome(workflowId, issueKey, subtaskId)
 
+    override fun terminalOutcome(
+      unitOfWork: UnitOfWork,
+      workflowId: String,
+      issueKey: String,
+      subtaskId: Int,
+    ): GoalRunnerStoredOutcome? = terminal.terminalOutcome(unitOfWork, workflowId, issueKey, subtaskId)
+
     override fun recoverAndPersistTerminalOutcome(
       workflowId: String,
+      parentWorkflowId: String,
       issueKey: String,
       subtaskId: Int,
       repoRoot: Path,
-    ): GoalRunnerStoredOutcome? = terminal.recoverAndPersistTerminalOutcome(workflowId, issueKey, subtaskId, repoRoot)
+    ): GoalRunnerStoredOutcome? =
+      terminal.recoverAndPersistTerminalOutcome(
+        workflowId,
+        parentWorkflowId,
+        issueKey,
+        subtaskId,
+        repoRoot,
+      )
 
     override fun recoverMissingResultPrefixOutput(
       workflowId: String,
+      parentWorkflowId: String,
       issueKey: String,
       subtaskId: Int,
       output: GoalRunnerWirePayload,
-    ): GoalRunnerStoredOutcome? = terminal.recoverMissingResultPrefixOutput(workflowId, issueKey, subtaskId, output)
+    ): GoalRunnerStoredOutcome? =
+      terminal.recoverMissingResultPrefixOutput(
+        workflowId,
+        parentWorkflowId,
+        issueKey,
+        subtaskId,
+        output,
+      )
 
     override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? =
       review.goalSubtaskReviewState(workflowId)
@@ -157,6 +192,11 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun progress(workflowId: String): GoalRunnerWorkflowProgress? = progressRecording.progress(workflowId)
 
+    override fun progress(
+      unitOfWork: UnitOfWork,
+      workflowId: String,
+    ): GoalRunnerWorkflowProgress? = progressRecording.progress(unitOfWork, workflowId)
+
     override fun recordObservabilityEvent(request: GoalRunnerObservabilityRecordRequest): Boolean =
       progressRecording.recordObservabilityEvent(request)
 
@@ -168,6 +208,52 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun recordAttemptLedgerEntry(request: GoalRunnerAttemptLedgerRecordRequest): Boolean =
       progressRecording.recordAttemptLedgerEntry(request)
+
+    override fun saveGoalChildHistoryDraft(
+      draft: GoalChildHistoryDraft,
+      admitted: AdmittedFeatureTaskRuntimeExecution?,
+    ): GoalChildHistoryDraftSaveResult = progressRecording.saveGoalChildHistoryDraft(draft, admitted)
+
+    override fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft> =
+      progressRecording.goalChildHistoryDrafts(parentWorkflowId)
+
+    override fun hasRequiredGoalChildHistoryDraft(
+      parentWorkflowId: String,
+      subtaskId: Int,
+      childWorkflowId: String,
+    ): Boolean = progressRecording.hasRequiredGoalChildHistoryDraft(parentWorkflowId, subtaskId, childWorkflowId)
+
+    override fun hasRequiredGoalChildHistoryDraft(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      subtaskId: Int,
+      childWorkflowId: String,
+    ): Boolean =
+      progressRecording.hasRequiredGoalChildHistoryDraft(
+        unitOfWork,
+        parentWorkflowId,
+        subtaskId,
+        childWorkflowId,
+      )
+
+    override fun restoredGoalChildWorkflowId(
+      parentWorkflowId: String,
+      subtaskId: Int,
+    ): String? = database.read { historyEvidence.restoredChildId(it, parentWorkflowId, subtaskId) }
+
+    override fun restoredGoalChildWorkflowId(
+      unitOfWork: UnitOfWork,
+      parentWorkflowId: String,
+      subtaskId: Int,
+    ): String? = historyEvidence.restoredChildId(unitOfWork, parentWorkflowId, subtaskId)
+
+    override fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference> =
+      database.read { unitOfWork ->
+        unitOfWork.goalRunnerControls.outOfBandAcceptances(parentWorkflowId).mapNotNull { (subtaskId, acceptance) ->
+          historyEvidence.restoredChildId(unitOfWork, parentWorkflowId, subtaskId)
+            ?.let { childId -> subtaskId to GoalRunnerRestoredChildReference(childId, acceptance) }
+        }.toMap()
+      }
 
     override fun recordWorkerSubtaskRequestOutcomes(
       workflowId: String,
@@ -185,6 +271,27 @@ class WorkflowGoalRunnerOutcomeStore
       parentWorkflowId: String,
     ): Map<Int, GoalRunnerStoredOutcome> = reconcile.authoritativeOutcomes(issueKey, parentWorkflowId)
 
+    override fun manifestReconciliationInputs(
+      issueKey: String,
+      parentWorkflowId: String,
+    ): GoalRunnerManifestReconciliationInputs =
+      database.read { unitOfWork ->
+        val restoredChildren =
+          unitOfWork.goalRunnerControls.outOfBandAcceptances(parentWorkflowId).mapNotNull { (subtaskId, acceptance) ->
+            historyEvidence.restoredChildId(unitOfWork, parentWorkflowId, subtaskId)
+              ?.let { childId -> subtaskId to GoalRunnerRestoredChildReference(childId, acceptance) }
+          }.toMap()
+        GoalRunnerManifestReconciliationInputs(
+          outcomeReconcile.authoritativeOutcomesForSubtasks(
+            unitOfWork,
+            issueKey,
+            parentWorkflowId,
+            null,
+          ),
+          restoredChildren,
+        )
+      }
+
     override fun authoritativeOutcomesForSubtasks(
       issueKey: String,
       parentWorkflowId: String,
@@ -195,6 +302,14 @@ class WorkflowGoalRunnerOutcomeStore
         parentWorkflowId,
         subtaskIds,
       )
+
+    override fun authoritativeOutcomesForSubtasks(
+      unitOfWork: UnitOfWork,
+      issueKey: String,
+      parentWorkflowId: String,
+      subtaskIds: Set<Int>,
+    ): Map<Int, GoalRunnerStoredOutcome> =
+      reconcile.authoritativeOutcomesForSubtasks(unitOfWork, issueKey, parentWorkflowId, subtaskIds)
 
     override fun reconcileAuthoritativeOutcomes(
       issueKey: String,
@@ -243,11 +358,25 @@ internal class WorkflowGoalRunnerTerminalBridge(
     subtaskId: Int,
   ): GoalRunnerStoredOutcome? =
     database.read { unitOfWork ->
-      terminalPersistence.resolveTerminalOutcome(unitOfWork.workflowStates, workflowId, issueKey, subtaskId) { null }
+      terminalPersistence.resolveTerminalOutcome(
+        unitOfWork.workflowStates,
+        workflowId,
+        issueKey,
+        subtaskId,
+      ) { null }
     }
+
+  override fun terminalOutcome(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    issueKey: String,
+    subtaskId: Int,
+  ): GoalRunnerStoredOutcome? =
+    terminalPersistence.resolveTerminalOutcome(unitOfWork.workflowStates, workflowId, issueKey, subtaskId) { null }
 
   override fun recoverAndPersistTerminalOutcome(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     repoRoot: Path,
@@ -278,10 +407,9 @@ internal class WorkflowGoalRunnerTerminalBridge(
           ) ?: resolved
         recovered.also { outcome ->
           terminalPersistence.persistMeasuredCompletion(
-            unitOfWork.workflowStates,
-            workflowId,
-            issueKey,
-            subtaskId,
+            unitOfWork,
+            parentWorkflowId,
+            GoalSubtaskIdentity(workflowId, issueKey, subtaskId),
             outcome,
           )
         }
@@ -296,10 +424,11 @@ internal class WorkflowGoalRunnerTerminalBridge(
           subtaskId,
         )
       }
-    return expiredLease ?: persistReconciledTerminalOutcome(workflowId, issueKey, subtaskId)
+    return expiredLease ?: persistReconciledTerminalOutcome(parentWorkflowId, workflowId, issueKey, subtaskId)
   }
 
   private fun persistReconciledTerminalOutcome(
+    parentWorkflowId: String,
     workflowId: String,
     issueKey: String,
     subtaskId: Int,
@@ -327,10 +456,9 @@ internal class WorkflowGoalRunnerTerminalBridge(
       } ?: return null
     database.transaction { unitOfWork ->
       terminalPersistence.persistMeasuredCompletion(
-        unitOfWork.workflowStates,
-        workflowId,
-        issueKey,
-        subtaskId,
+        unitOfWork,
+        parentWorkflowId,
+        GoalSubtaskIdentity(workflowId, issueKey, subtaskId),
         reconcilableOutcome,
       )
     }
@@ -339,6 +467,7 @@ internal class WorkflowGoalRunnerTerminalBridge(
 
   override fun recoverMissingResultPrefixOutput(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     output: GoalRunnerWirePayload,
@@ -348,12 +477,14 @@ internal class WorkflowGoalRunnerTerminalBridge(
       val record = unitOfWork.workflowStates.get(family, workflowId) ?: return@transaction null
       terminalPersistence.recoverMissingResultPrefixTerminalOutcome(
         RecoverMissingResultPrefixTerminalOutcomeArgs(
+          unitOfWork = unitOfWork,
           workflowStates = unitOfWork.workflowStates,
           family = family,
           record = record,
           output = output,
           issueKey = issueKey,
           subtaskId = subtaskId,
+          parentWorkflowId = parentWorkflowId,
           workflowId = workflowId,
         ),
       )
@@ -478,19 +609,27 @@ internal class WorkflowGoalRunnerReconcileBridge(
     database.read {
         unitOfWork ->
       outcomeReconcile.authoritativeOutcomesForSubtasks(
-        unitOfWork.workflowStates,
+        unitOfWork,
         issueKey,
         parentWorkflowId,
         subtaskIds,
       )
     }
 
+  fun authoritativeOutcomesForSubtasks(
+    unitOfWork: UnitOfWork,
+    issueKey: String,
+    parentWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerStoredOutcome> =
+    outcomeReconcile.authoritativeOutcomesForSubtasks(unitOfWork, issueKey, parentWorkflowId, subtaskIds)
+
   fun authoritativeOutcomes(
     issueKey: String,
     parentWorkflowId: String,
   ): Map<Int, GoalRunnerStoredOutcome> =
     database.read { unitOfWork ->
-      outcomeReconcile.authoritativeOutcomesForSubtasks(unitOfWork.workflowStates, issueKey, parentWorkflowId, null)
+      outcomeReconcile.authoritativeOutcomesForSubtasks(unitOfWork, issueKey, parentWorkflowId, null)
     }
 }
 

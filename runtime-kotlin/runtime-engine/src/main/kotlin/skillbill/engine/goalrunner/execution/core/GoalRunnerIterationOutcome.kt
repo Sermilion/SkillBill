@@ -24,6 +24,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerBackwardEdge
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
+import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.StoppedLedgerContextValues
 import skillbill.engine.goalrunner.status.completed
@@ -34,6 +35,8 @@ import skillbill.engine.goalrunner.status.withStopDiagnostics
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
@@ -61,6 +64,13 @@ class GoalRunnerIterationOutcome(
   private val clock: Clock,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery?,
 ) {
+  internal fun closeAcceptedNoChange(
+    closer: GoalRunnerNoChangeChildCloser,
+    parentWorkflowId: String,
+    subtaskId: Int,
+    childWorkflowId: String,
+  ): Boolean = closer.closeAccepted(parentWorkflowId, subtaskId, childWorkflowId, outcomeStore)
+
   internal fun stoppedIteration(
     args: StoppedIterationArgs,
     pendingState: GoalRunnerIterationPendingState,
@@ -215,6 +225,12 @@ class GoalRunnerIterationOutcome(
     val observability = session.observability
     val ledger = session.ledger
     val attemptStartMillis = session.attemptStartMillis
+    if (!outcomeStore.hasRequiredGoalChildHistoryDraft(state.parentWorkflowId, subtaskId, reconciled.workflowId)) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+        "Goal child ${reconciled.workflowId} cannot complete without its accepted history draft or skip.",
+      )
+    }
     val completedTransition =
       manifestStore.saveCompletedSubtaskAtBoundary(
         state.copy(manifest = state.manifest.withCompletedSubtask(subtaskId, reconciled)),

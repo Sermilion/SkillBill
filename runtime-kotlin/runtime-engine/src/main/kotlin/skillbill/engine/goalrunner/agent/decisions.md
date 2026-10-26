@@ -1,5 +1,16 @@
 # goalrunner boundary decisions
 
+## [2026-10-27] Save child history drafts before completion
+Context: Goal children must leave history for final publication, but scratch cleanup and the bounded attempt ledger can remove child state before finalization.
+Decision: Store a validated draft or skip in a separate parent-owned durable artifact before authoritative phase settlement, and require it before child completion or scratch deletion. Keep recorded older revisions on their original history strategies.
+Reason: A best-effort ledger write cannot guarantee the draft survives completion or trimming. Idempotent replay recovers a save interrupted before settlement, while conflicting payloads must stop rather than replace accepted evidence. Older children may already have written or skipped history, so fabricating drafts would change their recorded disposition.
+
+## [2026-10-26] Preserve child history evidence before deleting workflow rows
+Context: Hard reset and scoped recovery delete child workflow rows. A commit and a parent draft alone cannot prove the deleted child's definition, continuation, or legacy history disposition.
+Decision: The parent workflow owns versioned `goal_child_history_evidence` records outside the bounded attempt ledger. Each record retains the actual execution plan, continuation, history phase record and step disposition, and original acceptance association. Reset saves evidence and clears progress in one SQLite transaction. Restoration validates the preserved definition and disposition, then writes the acceptance, restored reference, and completed projection in one transaction. The restored reference remains separate from the live workflow ID. New admission and scoped deletion retire restoration eligibility and clear the selected acceptance while retaining historical evidence. Already-deleted children without evidence remain refused.
+Reason: The runtime must preserve actual legacy writes and skips without manufacturing drafts, and must not promote a new child using an older child's acceptance. Additive artifact families need no SQL table migration; absent evidence on older parent records grants no restoration authority.
+Evidence: `GoalChildHistoryRecoveryTest` covers reopen, rollback, legacy retention, repeated restoration, retirement, and missing or malformed evidence.
+
 ## [2026-10-24] Purge resets a project-store bundle by rewriting only its manifest
 Context: Spec bundles now live in the project store, and purge reset only handled in-repo bundles, so a store manifest kept launched subtask state after purge.
 Decision: Add a store branch that atomically rewrites just the manifest to the unlaunched YAML. It never deletes, reads HEAD, or enumerates subtask spec paths.

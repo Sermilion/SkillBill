@@ -34,7 +34,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
   fun `detail pagination projects validation only for the selected subtask ids`() {
     val manifest =
       manifest(2).let { original ->
-        original.copy(subtasks = original.subtasks.map { it.copy(status = "complete") })
+        original.copy(subtasks = original.subtasks.map { it.copy(status = "complete", workflowId = "child-${it.id}") })
       }
     val service =
       testGoalRunnerStatusService(

@@ -1,19 +1,25 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
+import skillbill.engine.goalrunner.model.GoalRunnerManifestReconciliationInputs
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.model.GoalRunnerRestoredChildReference
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.goalrunner.model.GoalChildHistoryDraft
+import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -30,8 +36,16 @@ interface GoalRunnerTerminalOutcomeStore {
     subtaskId: Int,
   ): GoalRunnerStoredOutcome?
 
+  fun terminalOutcome(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    issueKey: String,
+    subtaskId: Int,
+  ): GoalRunnerStoredOutcome? = terminalOutcome(workflowId, issueKey, subtaskId)
+
   fun recoverAndPersistTerminalOutcome(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     repoRoot: Path,
@@ -39,6 +53,7 @@ interface GoalRunnerTerminalOutcomeStore {
 
   fun recoverMissingResultPrefixOutput(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     output: GoalRunnerWirePayload,
@@ -52,7 +67,8 @@ interface GoalRunnerReviewOutcomeStore {
 
   fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded
 
-  /** The admitted plan's QA selection once the child has a stored plan, else [requested]; null keeps a pre-QA plan. */
+  /** The admitted plan's QA selection once the child has a stored plan,
+   else [requested]; null keeps a pre-QA plan. */
   fun childQaSelection(
     workflowId: String,
     requested: FeatureTaskRuntimeQaSelection?,
@@ -71,10 +87,20 @@ interface GoalRunnerWorkflowOutcomeStore :
   GoalRunnerReviewOutcomeStore,
   GoalRunnerWorkflowProgressStore,
   GoalRunnerWorkflowLedgerWriteStore,
+  GoalRunnerGoalChildHistoryDraftStore,
   GoalRunnerWorkflowOutcomeMutationStore {
   fun hasQaComposedPlan(workflowId: String): Boolean
 
   fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
+
+  fun manifestReconciliationInputs(
+    issueKey: String,
+    parentWorkflowId: String,
+  ): GoalRunnerManifestReconciliationInputs =
+    GoalRunnerManifestReconciliationInputs(
+      authoritativeOutcomes(issueKey, parentWorkflowId),
+      restoredGoalChildReferences(parentWorkflowId),
+    )
 }
 
 interface GoalRunnerAttemptLedgerStore {
@@ -111,6 +137,13 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
       parentWorkflowId,
     ).filterKeys(subtaskIds::contains)
 
+  fun authoritativeOutcomesForSubtasks(
+    unitOfWork: UnitOfWork,
+    issueKey: String,
+    parentWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerStoredOutcome> = authoritativeOutcomesForSubtasks(issueKey, parentWorkflowId, subtaskIds)
+
   fun reconcileAuthoritativeOutcomes(
     issueKey: String,
     parentWorkflowId: String,
@@ -130,8 +163,48 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
   ): Boolean
 }
 
+interface GoalRunnerGoalChildHistoryDraftStore {
+  fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference> = emptyMap()
+
+  fun restoredGoalChildWorkflowId(
+    parentWorkflowId: String,
+    subtaskId: Int,
+  ): String? = null
+
+  fun restoredGoalChildWorkflowId(
+    unitOfWork: UnitOfWork,
+    parentWorkflowId: String,
+    subtaskId: Int,
+  ): String? = restoredGoalChildWorkflowId(parentWorkflowId, subtaskId)
+
+  fun saveGoalChildHistoryDraft(
+    draft: GoalChildHistoryDraft,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  ): GoalChildHistoryDraftSaveResult
+
+  fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft>
+
+  fun hasRequiredGoalChildHistoryDraft(
+    parentWorkflowId: String,
+    subtaskId: Int,
+    childWorkflowId: String,
+  ): Boolean
+
+  fun hasRequiredGoalChildHistoryDraft(
+    unitOfWork: UnitOfWork,
+    parentWorkflowId: String,
+    subtaskId: Int,
+    childWorkflowId: String,
+  ): Boolean = hasRequiredGoalChildHistoryDraft(parentWorkflowId, subtaskId, childWorkflowId)
+}
+
 interface GoalRunnerWorkflowProgressStore {
   fun progress(workflowId: String): GoalRunnerWorkflowProgress?
+
+  fun progress(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+  ): GoalRunnerWorkflowProgress? = progress(workflowId)
 
   fun recordObservabilityEvent(request: GoalRunnerObservabilityRecordRequest): Boolean
 

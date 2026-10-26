@@ -11,12 +11,18 @@ import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.error.featuretask.InMemoryPhaseRunUnsupportedError
+import skillbill.goalrunner.model.GoalChildHistoryDraft
+import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.nio.file.Path
 
 internal object InMemoryPhaseRunGoal : PhaseRunGoal {
+  override fun saveGoalChildHistoryDraft(draft: GoalChildHistoryDraft): GoalChildHistoryDraftSaveResult =
+    error("In-memory phases cannot persist goal-child history drafts.")
+
   override fun recordGoalContinuationState(request: GoalContinuationStateRecordRequest): Boolean = false
 
   override fun reserveGoalReviewPass(workflowId: String): GoalSubtaskReviewPassReservation =
@@ -59,6 +65,13 @@ internal object InMemoryPhaseRunSettlements : PhaseRunSettlements {
     phaseId: String,
     attempt: Int,
   ): Boolean = false
+
+  override fun persistAcceptedOutput(
+    workflowId: String,
+    phaseId: String,
+    attempt: Int,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): Boolean = true
 }
 
 internal object InMemoryPhaseRunCheckpoints : PhaseRunCheckpoints {

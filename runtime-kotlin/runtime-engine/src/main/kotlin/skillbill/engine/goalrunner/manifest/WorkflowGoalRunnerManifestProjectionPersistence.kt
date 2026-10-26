@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.manifest
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
 import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
@@ -28,20 +29,22 @@ internal data class SavedManifestProjection(
   internal val projectionArtifacts: DurableWorkflowArtifacts,
 )
 
-internal class WorkflowGoalRunnerManifestProjectionPersistence(
+@Inject
+class WorkflowGoalRunnerManifestProjectionPersistence(
   private val database: DatabaseSessionFactory,
-  private val engine: WorkflowEngine,
-  private val parentProjection: GoalParentProjectionWriter,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val decompositionManifestWriter: DecompositionManifestWriter,
   private val repositoryRoot: RepositoryRoot,
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val decompositionManifestStore: DecompositionManifestStore,
 ) {
-  fun save(state: GoalRunnerManifestState): SavedManifestProjection =
+  private val engine = WorkflowEngine()
+  private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
+
+  internal fun save(state: GoalRunnerManifestState): SavedManifestProjection =
     database.transaction { unitOfWork -> saveInTransaction(unitOfWork, state) }
 
-  fun saveInTransaction(
+  internal fun saveInTransaction(
     unitOfWork: UnitOfWork,
     state: GoalRunnerManifestState,
     clearOutOfBandAcceptances: Boolean = false,
@@ -101,7 +104,7 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
     )
   }
 
-  fun writeProjectionFile(
+  internal fun writeProjectionFile(
     state: GoalRunnerManifestState,
     projectionArtifacts: DurableWorkflowArtifacts,
   ): DecompositionManifestProjectionOutcome {

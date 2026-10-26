@@ -31,11 +31,15 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.unknownGoal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 import java.time.Clock
 
@@ -88,7 +92,10 @@ class GoalRunner(
       intakePreparation.prepare(request) == null
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport =
-    runPreparation.guardEntry({ it is GoalRunnerRunReport.Stopped && it.stop.reason in ACCEPTED_GOAL_BLOCK_REASONS }) {
+    runPreparation.guardEntry({
+      it is GoalRunnerRunReport.Stopped &&
+        it.stop.reason in ACCEPTED_GOAL_BLOCK_REASONS
+    }) {
       runAfterReconciliation(request)
     }
 
@@ -176,6 +183,26 @@ class GoalRunner(
   private fun alreadyCompleteReport(state: GoalRunnerManifestState): GoalRunnerRunReport.AlreadyComplete? {
     val completedAt = state.controlState.goalCompletedAt ?: return null
     if (GoalRunnerPlanner.selectNext(state.manifest) !is GoalRunnerSelection.Done) return null
+    state.manifest.subtasks
+      .filter {
+        it.status.decompositionStatus() in
+          setOf(DecompositionStatus.COMPLETE, DecompositionStatus.COMPLETED_NO_CHANGE)
+      }
+      .forEach { subtask ->
+        val childWorkflowId =
+          subtask.workflowId?.takeIf(String::isNotBlank)
+            ?: outcomeStore.restoredGoalChildWorkflowId(state.parentWorkflowId, subtask.id)
+            ?: throw SkillBillRuntimeException(
+              WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+              "Completed subtask ${subtask.id} has no child identity to verify before reporting goal completion.",
+            )
+        if (!outcomeStore.hasRequiredGoalChildHistoryDraft(state.parentWorkflowId, subtask.id, childWorkflowId)) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+            "Goal child $childWorkflowId cannot be reported complete without its accepted history draft or skip.",
+          )
+        }
+      }
     return GoalRunnerRunReport.AlreadyComplete(
       issueKey = state.manifest.issueKey,
       completedAt = completedAt,
@@ -233,12 +260,16 @@ class GoalRunner(
     ).withParentWorkflowId(loadedState.parentWorkflowId)
 
   private fun reconcileStateBeforeRun(state: GoalRunnerManifestState): GoalRunnerManifestState {
+    val reconciliationInputs =
+      outcomeStore.manifestReconciliationInputs(state.manifest.issueKey, state.parentWorkflowId)
+    val restoredChildren = reconciliationInputs.restoredChildren
     val reconciled =
       reconcileGoalManifest(
-        manifest = state.manifest,
-        authoritativeOutcomes = outcomeStore.authoritativeOutcomes(state.manifest.issueKey, state.parentWorkflowId),
-        acceptances = manifestStore.outOfBandAcceptances(state.parentWorkflowId),
+        state = state,
+        authoritativeOutcomes = reconciliationInputs.outcomes,
+        acceptances = restoredChildren.mapValues { it.value.acceptance },
         outcomeStore = outcomeStore,
+        restoredChildren = restoredChildren,
       )
     return if (reconciled == state.manifest) {
       state
@@ -271,7 +302,13 @@ class GoalRunner(
           goalPlanningSource.prepare(state, effectiveRequest)
         }
       if (sweepOutcome is GoalPlanningSweepOutcome.Stopped) {
-        return@runCatching planningStoppedReport(effectiveRequest, state, telemetryEmitter, emptyList(), sweepOutcome)
+        return@runCatching planningStoppedReport(
+          effectiveRequest,
+          state,
+          telemetryEmitter,
+          emptyList(),
+          sweepOutcome,
+        )
       }
       val prepared = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll
       state = prepared.state ?: state

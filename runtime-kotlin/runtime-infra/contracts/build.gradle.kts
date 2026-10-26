@@ -76,6 +76,16 @@ governedResources {
     "SKILL-61: canonical goal-observability event schema",
   )
   copy(
+    "copyGoalChildHistoryEvidenceSchema",
+    "goal-child-history-evidence-schema.yaml",
+    "SKILL-446: canonical goal-child history evidence schema",
+  )
+  copy(
+    "copyGoalChildHistoryDraftSchema",
+    "goal-child-history-draft-schema.yaml",
+    "SKILL-446: canonical goal-child history draft schema",
+  )
+  copy(
     "copyGoalProgressEventSchema",
     "goal-progress-event-schema.yaml",
     "SKILL-64: canonical goal progress event schema",

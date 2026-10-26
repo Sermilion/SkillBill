@@ -7,9 +7,14 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
 import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
+import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
+import skillbill.goalrunner.model.GoalChildHistoryDraft
+import skillbill.goalrunner.model.GoalChildHistoryDraftDisposition
+import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.withGoalRunnerControlRepository
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
@@ -50,6 +55,8 @@ import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 internal fun startRunningRuntimeGoalChild(fixture: GoalCliFixture): String {
@@ -60,6 +67,15 @@ internal fun startRunningRuntimeGoalChild(fixture: GoalCliFixture): String {
       fixture.context(launcher = NoopGoalTestAgentRunLauncher),
     )
   ensureTestDatabase(fixture.dbPath).use { connection ->
+    connection.prepareStatement(
+      "UPDATE feature_task_workflows SET artifacts_json = json_set(artifacts_json, '$.goal_continuation', " +
+        "json((SELECT json_extract(artifacts_json, '$.goal_continuation') FROM feature_task_workflows " +
+        "WHERE workflow_id = ?))) WHERE workflow_id = ? AND mode = 'runtime'",
+    ).use { statement ->
+      statement.setString(1, childWorkflowId)
+      statement.setString(2, runtimeWorkflow["workflow_id"] as String)
+      assertEquals(1, statement.executeUpdate())
+    }
     connection.prepareStatement(
       "UPDATE feature_task_workflows SET artifacts_json = replace(artifacts_json, ?, ?) " +
         "WHERE mode = 'runtime' AND instr(artifacts_json, ?) > 0",
@@ -285,6 +301,23 @@ internal fun completeRunningGoalChild(
   fixture: GoalCliFixture,
   childWorkflowId: String,
 ) {
+  val database =
+    sqliteDatabaseSessionFactory(
+      userHome = fixture.tempDir,
+      dbPathOverride = fixture.dbPath.toString(),
+      environment = emptyMap(),
+    )
+  assertIs<GoalChildHistoryDraftSaveResult.Saved>(
+    testWorkflowGoalRunnerOutcomeStore(database).saveGoalChildHistoryDraft(
+      GoalChildHistoryDraft(
+        parentWorkflowId = goalParentWorkflowId(fixture, childWorkflowId),
+        subtaskId = 1,
+        childWorkflowId = childWorkflowId,
+        disposition = GoalChildHistoryDraftDisposition.SKIP,
+        skipReason = "Fixture child has no history change.",
+      ),
+    ),
+  )
   runtimeWorkflowUpdate(
     fixture,
     WorkflowUpdateFixture(
@@ -317,19 +350,7 @@ internal fun recordGoalCompletion(
   childWorkflowId: String,
   completedAt: String,
 ) {
-  val parentWorkflowId =
-    ensureTestDatabase(fixture.dbPath).use { connection ->
-      connection.prepareStatement(
-        "SELECT workflow_id FROM feature_task_workflows WHERE issue_key = ? AND workflow_id <> ?",
-      ).use { statement ->
-        statement.setString(1, "SKILL-901")
-        statement.setString(2, childWorkflowId)
-        statement.executeQuery().use { rows ->
-          check(rows.next()) { "goal completion needs the decomposed parent workflow" }
-          rows.getString(1)
-        }
-      }
-    }
+  val parentWorkflowId = goalParentWorkflowId(fixture, childWorkflowId)
   withGoalRunnerControlRepository(fixture.dbPath) { controls ->
     controls.persistControlState(
       parentWorkflowId,
@@ -337,6 +358,23 @@ internal fun recordGoalCompletion(
     )
   }
 }
+
+private fun goalParentWorkflowId(
+  fixture: GoalCliFixture,
+  childWorkflowId: String,
+): String =
+  ensureTestDatabase(fixture.dbPath).use { connection ->
+    connection.prepareStatement(
+      "SELECT workflow_id FROM feature_task_workflows WHERE issue_key = ? AND workflow_id <> ?",
+    ).use { statement ->
+      statement.setString(1, "SKILL-901")
+      statement.setString(2, childWorkflowId)
+      statement.executeQuery().use { rows ->
+        check(rows.next()) { "goal completion needs the decomposed parent workflow" }
+        rows.getString(1)
+      }
+    }
+  }
 
 internal data class GoalCliFixture(
   val tempDir: Path,
@@ -439,7 +477,12 @@ internal class GoalFixtureAgentRunLauncher(
     } else if (subtaskId == noTerminalSubtask) {
       stampImplementRunning(workflowId, Path.of(selectedDbPath))
     } else {
-      completeSubtaskWorkflow(workflowId, subtaskId, Path.of(selectedDbPath))
+      completeSubtaskWorkflow(
+        workflowId,
+        subtaskId,
+        Path.of(selectedDbPath),
+        requireNotNull(skillRequest.goalContinuation?.parentWorkflowId),
+      )
     }
     return agentRunLaunchFacts(
       agent = SupportedAgent.CODEX,
@@ -502,7 +545,25 @@ internal class GoalFixtureAgentRunLauncher(
     workflowId: String,
     subtaskId: Int,
     dbPath: Path,
+    parentId: String,
   ) {
+    val database =
+      sqliteDatabaseSessionFactory(
+        userHome = fixture.tempDir,
+        dbPathOverride = dbPath.toString(),
+        environment = emptyMap(),
+      )
+    assertIs<GoalChildHistoryDraftSaveResult.Saved>(
+      testWorkflowGoalRunnerOutcomeStore(database).saveGoalChildHistoryDraft(
+        GoalChildHistoryDraft(
+          parentWorkflowId = parentId,
+          subtaskId = subtaskId,
+          childWorkflowId = workflowId,
+          disposition = GoalChildHistoryDraftDisposition.SKIP,
+          skipReason = "Fixture child has no history change.",
+        ),
+      ),
+    )
     runtimeWorkflowUpdate(
       fixture,
       WorkflowUpdateFixture(

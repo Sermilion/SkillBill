@@ -6,6 +6,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.featuretask.qa.invalidQaRepairStateSchema
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairAdoptionSchema
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairHandoffSchema
@@ -107,6 +108,10 @@ private fun serialWireArtifactNonObjectError(
   reason: String,
 ): SkillBillRuntimeException =
   when (kind) {
+    FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_EVIDENCE ->
+      SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE, "$sourceLabel: $reason")
+    FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_DRAFT ->
+      SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT, "$sourceLabel: $reason")
     FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
       invalidAcceptanceCriterionRepairStateSchema(sourceLabel, reason)
     FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT ->

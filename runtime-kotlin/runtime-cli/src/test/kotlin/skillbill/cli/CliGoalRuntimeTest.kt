@@ -162,7 +162,7 @@ class CliGoalWatchRuntimeTest {
         fixture.context(launcher = launcher, liveStdout = { liveStdout.append(it) }),
       )
 
-    assertEquals(0, watch.exitCode, watch.stdout)
+    assertEquals(0, watch.exitCode, watch.stdout + watch.stderr)
     assertContains(liveStdout.toString(), "watch_refresh: index=1 status=ok")
     assertEquals(false, watch.stdout.contains("watch_refresh: index=1 status=ok"), watch.stdout)
     assertContains(watch.stdout, "watch_refresh: index=2 status=ok")
@@ -198,7 +198,7 @@ class CliGoalWatchRuntimeTest {
         fixture.context(launcher = launcher),
       )
 
-    assertEquals(0, watch.exitCode, watch.stdout)
+    assertEquals(0, watch.exitCode, watch.stdout + watch.stderr)
     assertEquals("ok", watch.payload?.get("status"))
     assertEquals("SKILL-901", watch.payload?.get("issue_key"))
     assertEquals(1, watch.payload?.get("refresh_count"))
@@ -278,7 +278,11 @@ class CliGoalWatchRuntimeTest {
   @Test
   fun `goal watch default follows until the first terminal projection`() {
     val fixture = goalFixture(subtaskCount = 1)
-    val childWorkflowId = startRunningGoalChild(fixture)
+    val setupLauncher = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+    val setup = CliRuntime.run(fixture.goalCommand(), fixture.context(launcher = setupLauncher))
+    assertEquals(3, setup.exitCode, setup.stdout + setup.stderr)
+    val continuation = requireNotNull(setupLauncher.childLaunches.single().skillRunRequest.goalContinuation)
+    val childWorkflowId = requireNotNull(continuation.assignedWorkflowId ?: continuation.childWorkflowId)
     recordRunningGoalChildProgress(fixture, childWorkflowId, sequence = 1)
     val launcher = GoalFixtureAgentRunLauncher(fixture)
     val liveStdout = StringBuilder()
@@ -309,7 +313,7 @@ class CliGoalWatchRuntimeTest {
         ),
       )
 
-    assertEquals(0, watch.exitCode, watch.stdout)
+    assertEquals(0, watch.exitCode, watch.stdout + watch.stderr)
     assertEquals(2, watch.payload?.get("refresh_count"))
     assertEquals("goal_terminal", watch.payload?.get("stop_reason"))
     assertContains(liveStdout.toString(), "watch_refresh: index=1 status=ok")

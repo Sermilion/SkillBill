@@ -1,0 +1,55 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/goal-child-history-draft-schema.yaml"
+title: "Goal child history draft"
+description: "Immutable history draft or skip accepted by a goal child and retained on its parent workflow."
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - parent_workflow_id
+  - subtask_id
+  - child_workflow_id
+  - disposition
+properties:
+  contract_version:
+    type: string
+    const: "0.1"
+  parent_workflow_id:
+    type: string
+    minLength: 1
+  subtask_id:
+    type: integer
+    minimum: 1
+    maximum: 2147483647
+  child_workflow_id:
+    type: string
+    minLength: 1
+  disposition:
+    enum: [draft, skip]
+  boundary:
+    type: string
+    minLength: 1
+  history:
+    type: string
+    minLength: 1
+  decisions:
+    type: string
+  skip_reason:
+    type: string
+    minLength: 1
+oneOf:
+  - required: [boundary, history, decisions]
+    properties:
+      disposition:
+        const: draft
+    not:
+      required: [skip_reason]
+  - required: [skip_reason]
+    properties:
+      disposition:
+        const: skip
+    not:
+      anyOf:
+        - required: [boundary]
+        - required: [history]
+        - required: [decisions]

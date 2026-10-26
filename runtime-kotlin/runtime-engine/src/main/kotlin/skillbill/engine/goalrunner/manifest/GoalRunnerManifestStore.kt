@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
@@ -140,6 +141,11 @@ interface GoalRunnerManifestExecutionCommands :
   GoalRunnerManifestLeaseCommands
 
 interface GoalRunnerManifestControlWrites {
+  fun restoreOutOfBandAcceptance(
+    state: GoalRunnerManifestState,
+    acceptance: GoalRunnerOutOfBandAcceptance,
+  ): GoalChildHistoryAcceptanceRestoreResult
+
   fun bindRepositoryIdentity(
     parentWorkflowId: String,
     repositoryIdentity: String,
@@ -178,11 +184,6 @@ interface GoalRunnerManifestControlWrites {
     parentWorkflowId: String,
     policy: GoalRunnerReviewPolicy,
   ): GoalRunnerReviewPolicy
-
-  fun persistOutOfBandAcceptance(
-    parentWorkflowId: String,
-    acceptance: GoalRunnerOutOfBandAcceptance,
-  ): GoalRunnerOutOfBandAcceptance
 }
 
 interface GoalRunnerManifestStateWrites {

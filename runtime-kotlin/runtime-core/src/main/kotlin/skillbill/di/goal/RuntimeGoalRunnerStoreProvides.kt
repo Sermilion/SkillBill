@@ -3,6 +3,7 @@ package skillbill.di.goal
 import me.tatarka.inject.annotations.Provides
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
@@ -16,6 +17,11 @@ internal interface RuntimeGoalRunnerStoreProvides {
 
   @Provides
   fun goalRunnerWorkflowOutcomeStore(store: WorkflowGoalRunnerOutcomeStore): GoalRunnerWorkflowOutcomeStore = store
+
+  @Provides
+  fun goalRunnerGoalChildHistoryDraftStore(
+    store: WorkflowGoalRunnerOutcomeStore,
+  ): GoalRunnerGoalChildHistoryDraftStore = store
 
   @Provides
   fun goalRunnerChildRepairExecutorPort(operations: GoalRunnerChildRepairOperations): GoalRunnerChildRepairRunnerPort =

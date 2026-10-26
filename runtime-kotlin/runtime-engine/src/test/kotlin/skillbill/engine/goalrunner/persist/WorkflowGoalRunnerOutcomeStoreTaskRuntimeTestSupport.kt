@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -30,6 +31,7 @@ import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
@@ -301,7 +303,11 @@ internal fun runtimeCandidateRecord(
   ).toRecord()
 }
 
-internal fun taskRuntimeWorkflowRecord(workflowId: String): WorkflowStateRecord {
+internal fun taskRuntimeWorkflowRecord(
+  workflowId: String,
+  parentWorkflowId: String? = null,
+  issueKey: String = "SKILL-446",
+): WorkflowStateRecord {
   val definition = WorkflowFamily.TASK_RUNTIME.definition
   val engine = WorkflowEngine()
   val opened = engine.openRecord(definition, workflowId, "fis-001", "preplan")
@@ -313,7 +319,19 @@ internal fun taskRuntimeWorkflowRecord(workflowId: String): WorkflowStateRecord 
       workflowStatus = WorkflowStatus.RUNNING,
       currentStepId = "implement",
       stepUpdates = null,
-      artifactsPatch = WorkflowArtifactPatch.from(emptyMap()),
+      artifactsPatch =
+        WorkflowArtifactPatch.from(
+          parentWorkflowId?.let {
+            FeatureTaskRuntimeGoalContinuationArtifact(
+              issueKey = issueKey,
+              subtaskId = 1,
+              suppressPr = true,
+              parentWorkflowId = it,
+              goalBranch = "feat/SKILL-446",
+              codeReviewMode = CodeReviewExecutionMode.AUTO,
+            ).toWorkflowArtifactPatch()
+          } ?: emptyMap(),
+        ),
       sessionId = "ftr-001",
     ),
   ).toRecord()
@@ -483,4 +501,51 @@ internal fun blockedBuildStepsJson(record: WorkflowStateRecord): String =
         "attempt_count" to step.attemptCount,
       )
     },
+  )
+
+internal fun WorkflowStateRecord.withSettledLegacyHistorySkip(): WorkflowStateRecord {
+  val history =
+    FeatureTaskRuntimePhaseRecord(
+      phaseId = "write_history",
+      status = "skipped",
+      attemptCount = 1,
+      startedAt = "2026-10-26T10:00:00Z",
+      resolvedAgentId = "codex",
+    )
+  return copy(
+    artifactsJson =
+      JsonCodec.mapToJsonString(
+        toSnapshot().artifacts.toMap() +
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(toSnapshot().artifacts)
+              ?: ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).descriptor(),
+          ) +
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+            mapOf("write_history" to history.asWorkflowArtifactEntry()),
+          ),
+      ),
+  )
+}
+
+internal fun blockedBuildContinuation(
+  record: WorkflowStateRecord,
+  newReason: String,
+): WorkflowStateRecord =
+  record.copy(
+    workflowStatus = "blocked",
+    currentStepId = "build",
+    stepsJson = blockedBuildStepsJson(record),
+    artifactsJson =
+      JsonCodec.valueToJsonString(
+        record.toSnapshot().artifacts + (
+          "goal_continuation_outcome" to
+            mapOf(
+              "issue_key" to "SKILL-191",
+              "subtask_id" to 9,
+              "status" to "blocked",
+              "blocked_reason" to newReason,
+              "last_resumable_step" to "build",
+            )
+        ),
+      ),
   )

@@ -25,3 +25,8 @@ data class StaleRunningCandidatesBlockRequest(
   val activeSet: Set<String>,
   val gate: GoalRunnerReconcileGate,
 )
+
+data class GoalRunnerManifestReconciliationInputs(
+  val outcomes: Map<Int, GoalRunnerStoredOutcome>,
+  val restoredChildren: Map<Int, GoalRunnerRestoredChildReference>,
+)

@@ -1,0 +1,42 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/goal-child-history-evidence-schema.yaml"
+title: "Goal child history evidence"
+description: "Parent-owned child identity and history evidence retained before child deletion."
+type: object
+additionalProperties: false
+required: [contract_version, parent_workflow_id, subtask_id, child_workflow_id, execution_plan, continuation, history_record, history_step_status, acceptance, restore_eligible, restored]
+properties:
+  contract_version: {const: "0.1"}
+  parent_workflow_id: {type: string, minLength: 1}
+  subtask_id: {type: integer, minimum: 1, maximum: 2147483647}
+  child_workflow_id: {type: string, minLength: 1}
+  execution_plan: {type: [object, 'null']}
+  continuation: {type: object}
+  history_step_status: {enum: [null, pending, running, completed, failed, blocked, skipped, paused]}
+  history_record: {type: [object, 'null']}
+  acceptance:
+    oneOf:
+      - type: 'null'
+      - type: object
+        additionalProperties: false
+        required: [commit_sha, reason, accepted_at]
+        properties:
+          commit_sha: {type: string, minLength: 1}
+          reason: {type: string, minLength: 1}
+          accepted_at: {type: string, minLength: 1}
+  restore_eligible: {type: boolean}
+  restored: {type: boolean}
+allOf:
+  - if:
+      properties:
+        restored: {const: true}
+    then:
+      properties:
+        restore_eligible: {const: true}
+        acceptance: {type: object}
+  - if:
+      properties:
+        restore_eligible: {const: true}
+    then:
+      properties:
+        acceptance: {type: object}

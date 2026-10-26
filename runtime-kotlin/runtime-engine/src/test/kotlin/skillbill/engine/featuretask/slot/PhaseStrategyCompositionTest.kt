@@ -40,6 +40,7 @@ import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneRev
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
 import skillbill.engine.goalrunner.intake.testPlanIntake
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -154,6 +155,7 @@ class PhaseStrategyCompositionTest {
       PackBuildStrategy(),
       AgentValidateStrategy(),
       BoundaryHistoryStrategy(),
+      GoalChildHistoryDraftStrategy(),
       RuntimeCommitStrategy(),
       prDescriptionStrategy,
       monitorStrategy,
@@ -164,6 +166,18 @@ class PhaseStrategyCompositionTest {
     val actual = strategies.flatMap { strategy -> strategy.steps.map { it to strategy.policyFor(it) } }.toMap()
 
     assertEquals(EXPECTED_POLICIES, actual)
+    assertTrue(BoundaryHistoryStrategy().policyFor(PHASE_WRITE_HISTORY).fileMutating)
+    val draft = GoalChildHistoryDraftStrategy()
+    assertFalse(draft.policyFor(PHASE_WRITE_HISTORY).fileMutating)
+    assertTrue(
+      draft.promptSections(
+        PHASE_WRITE_HISTORY,
+        FeatureTaskRuntimePhasePromptComposeInputs(
+          PROMPT_COMPOSER_ISSUE_KEY,
+          promptComposerBriefingFor(PHASE_WRITE_HISTORY),
+        ),
+      ).valueContent.contains("disposition"),
+    )
   }
 
   @Test
@@ -576,7 +590,7 @@ class PhaseStrategyCompositionTest {
         PHASE_BUILD to policy(FILE_MUTATING),
         PHASE_VALIDATE to
           policy(SINGLE, FILE_MUTATING).extendingInventory(),
-        PHASE_WRITE_HISTORY to policy(FILE_MUTATING).extendingInventory(),
+        PHASE_WRITE_HISTORY to policy(),
         PHASE_COMMIT_PUSH to policy(FILE_MUTATING),
         PHASE_PR to policy(FILE_MUTATING),
         PHASE_MONITOR to policy(),

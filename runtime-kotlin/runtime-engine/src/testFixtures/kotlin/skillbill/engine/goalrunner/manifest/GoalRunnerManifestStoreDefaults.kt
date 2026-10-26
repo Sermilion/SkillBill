@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
@@ -112,7 +113,12 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean {
     if (executionLease(parentWorkflowId) != expectedOwner) return false
-    return acquireExecutionLeaseWithChildAdmission(parentWorkflowId, lease, expectedOwner?.ownerToken, childAdmission)
+    return acquireExecutionLeaseWithChildAdmission(
+      parentWorkflowId,
+      lease,
+      expectedOwner?.ownerToken,
+      childAdmission,
+    )
   }
 
   override fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease? = null
@@ -270,7 +276,13 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
 
   override fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance> = emptyMap()
 
-  override fun persistOutOfBandAcceptance(
+  override fun restoreOutOfBandAcceptance(
+    state: GoalRunnerManifestState,
+    acceptance: GoalRunnerOutOfBandAcceptance,
+  ): GoalChildHistoryAcceptanceRestoreResult =
+    GoalChildHistoryAcceptanceRestoreResult.Refused("No preserved reset evidence in this test store.")
+
+  open fun persistOutOfBandAcceptance(
     parentWorkflowId: String,
     acceptance: GoalRunnerOutOfBandAcceptance,
   ): GoalRunnerOutOfBandAcceptance =

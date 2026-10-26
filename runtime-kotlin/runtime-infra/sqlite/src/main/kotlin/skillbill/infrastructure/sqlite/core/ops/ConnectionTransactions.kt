@@ -36,7 +36,7 @@ internal inline fun <T> Connection.inDatabaseTransaction(
   commitWhen: (T) -> Boolean,
   block: Connection.() -> T,
 ): T {
-  executeTransactionStatement(spec.beginMode.sql)
+  beginTransaction(spec)
   var committed = false
   var primaryFailure: Throwable? = null
   return try {
@@ -56,7 +56,7 @@ internal inline fun <T> Connection.inDatabaseTransaction(
         throw primaryFailure
       }
     if (commitWhen(result)) {
-      commitWriteTransaction { failure -> primaryFailure = failure }
+      commitWriteTransaction(spec) { failure -> primaryFailure = failure }
       committed = true
     }
     result
@@ -66,6 +66,19 @@ internal inline fun <T> Connection.inDatabaseTransaction(
     }
   }
 }
+
+private fun Connection.beginTransaction(spec: DatabaseTransactionSpec) {
+  try {
+    executeTransactionStatement(spec.beginMode.sql)
+  } catch (failure: SQLException) {
+    throw mappedTransactionFailure(spec, failure)
+  }
+}
+
+private fun mappedTransactionFailure(
+  spec: DatabaseTransactionSpec,
+  failure: SQLException,
+): Throwable = if (spec.mapSqlExceptions) mapTransactionBlockFailure(spec.dbPath, spec.operation, failure) else failure
 
 private fun mapTransactionBlockFailure(
   dbPath: Path,
@@ -82,12 +95,16 @@ private fun Connection.executeTransactionStatement(sql: String) {
   createStatement().use { it.execute(sql) }
 }
 
-private inline fun Connection.commitWriteTransaction(onFailure: (SQLException) -> Unit) {
+private inline fun Connection.commitWriteTransaction(
+  spec: DatabaseTransactionSpec,
+  onFailure: (Throwable) -> Unit,
+) {
   try {
     executeTransactionStatement("COMMIT")
   } catch (failure: SQLException) {
-    onFailure(failure)
-    throw failure
+    val mapped = mappedTransactionFailure(spec, failure)
+    onFailure(mapped)
+    throw mapped
   }
 }
 

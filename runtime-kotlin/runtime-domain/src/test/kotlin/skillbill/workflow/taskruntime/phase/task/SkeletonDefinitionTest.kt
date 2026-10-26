@@ -190,10 +190,11 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `recorded goal-child revisions keep their composition while new lookup selects revision four without QA`() {
+  fun `recorded goal-child revisions keep their composition while new lookup selects revision five without QA`() {
     val current = SkeletonDefinition.byId("goal-child")
-    assertEquals(SkeletonDefinition.GOAL_CHILD, current)
-    assertEquals(4, current.semanticRevision)
+    assertEquals(SkeletonDefinition.GOAL_CHILD_REVISION_5, current)
+    assertEquals(5, current.semanticRevision)
+    assertEquals(4, SkeletonDefinition.GOAL_CHILD.semanticRevision)
     assertTrue(current.stepIds.none { it == "qa" || it == "qa_fix" })
     assertEquals(3, SkeletonDefinition.GOAL_CHILD_REVISION_3.semanticRevision)
     assertTrue(PhaseSlot.QA in SkeletonDefinition.GOAL_CHILD_REVISION_3.slots)
@@ -266,7 +267,10 @@ class SkeletonDefinitionTest {
       SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),
     )
     assertEquals(setOf(SkeletonDefinition.PLAN), SkeletonDefinition.admittedForRun(goalContinuation = false))
-    assertEquals(setOf(SkeletonDefinition.GOAL_CHILD), SkeletonDefinition.admittedForRun(goalContinuation = true))
+    assertEquals(
+      setOf(SkeletonDefinition.GOAL_CHILD_REVISION_5),
+      SkeletonDefinition.admittedForRun(goalContinuation = true),
+    )
   }
 
   @Test

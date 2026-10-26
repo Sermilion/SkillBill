@@ -24,6 +24,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 @Inject
@@ -58,15 +59,49 @@ class FeatureTaskRuntimeRunPreparation(
         )
       }
     val reportInvariants = persistedInvariants ?: request.runInvariants
-    return when (
-      val initial = continuationRecorder.readContinuation(request, "Goal-continuation review persistence is malformed")
-    ) {
+    val initial =
+      continuationRecorder.readContinuation(
+        request,
+        "Goal-continuation review persistence is malformed",
+      )
+    if (missingDraftParent(request, initial)) {
+      return blocked(
+        request,
+        reportInvariants,
+        "Revision 5 goal-child runs require a recorded continuation with a usable parent workflow id.",
+      )
+    }
+    return when (initial) {
       is ContinuationRead.Failure -> blocked(request, reportInvariants, initial.reason)
       ContinuationRead.None -> prepareWithContinuation(request, persistedInvariants, reportInvariants, null)
-      is ContinuationRead.Available -> prepareWithContinuation(request, persistedInvariants, reportInvariants, initial)
+      is ContinuationRead.Available ->
+        prepareWithContinuation(
+          request,
+          persistedInvariants,
+          reportInvariants,
+          initial,
+        )
       is ContinuationRead.AvailableWithoutReviewState ->
         prepareResumeWithoutReviewState(request, persistedInvariants, reportInvariants, initial)
     }
+  }
+
+  private fun missingDraftParent(
+    request: FeatureTaskRuntimeRunRequest,
+    initial: ContinuationRead,
+  ): Boolean {
+    if (request.skeletonDefinition != SkeletonDefinition.GOAL_CHILD_REVISION_5 ||
+      initial is ContinuationRead.Failure
+    ) {
+      return false
+    }
+    val parentId =
+      when (initial) {
+        is ContinuationRead.Available -> initial.continuation.parentWorkflowId
+        is ContinuationRead.AvailableWithoutReviewState -> initial.continuation.parentWorkflowId
+        else -> null
+      }
+    return parentId.isNullOrBlank()
   }
 
   private fun prepareResumeWithoutReviewState(
@@ -283,6 +318,15 @@ class FeatureTaskRuntimeRunPreparation(
         ) ?: proposed
       }
     val durableContinuation = continuation?.continuation
+    if (request.skeletonDefinition == SkeletonDefinition.GOAL_CHILD_REVISION_5 &&
+      durableContinuation?.parentWorkflowId.isNullOrBlank()
+    ) {
+      return blocked(
+        request,
+        durable,
+        "Revision 5 goal-child runs require a usable parent workflow id in the durable continuation.",
+      )
+    }
     if (durableContinuation != null && durable.codeReviewMode != durableContinuation.codeReviewMode) {
       return blocked(
         request,

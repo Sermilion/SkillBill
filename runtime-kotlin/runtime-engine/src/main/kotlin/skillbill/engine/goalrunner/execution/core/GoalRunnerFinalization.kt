@@ -30,6 +30,8 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -73,8 +75,36 @@ class GoalRunnerFinalization(
     attempted: List<Int>,
     ledger: GoalRunnerLedgerRecorder,
   ): GoalRunnerRunReport {
+    requireCompletedChildrenHaveDrafts(state)
     val finalState = reconciliation.reconcile(state, request, ledger)
+    requireCompletedChildrenHaveDrafts(finalState)
     return finalizePublication(finalState, request, attempted)
+  }
+
+  private fun requireCompletedChildrenHaveDrafts(state: GoalRunnerManifestState) {
+    state.manifest.subtasks
+      .filter {
+        it.status.decompositionStatus() in
+          setOf(
+            DecompositionStatus.COMPLETE,
+            DecompositionStatus.COMPLETED_NO_CHANGE,
+          )
+      }
+      .forEach { subtask ->
+        val childWorkflowId =
+          subtask.workflowId?.takeIf(String::isNotBlank)
+            ?: outcomeStore.restoredGoalChildWorkflowId(state.parentWorkflowId, subtask.id)
+            ?: throw SkillBillRuntimeException(
+              WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+              "Completed subtask ${subtask.id} has no child identity to verify before goal finalization.",
+            )
+        if (!outcomeStore.hasRequiredGoalChildHistoryDraft(state.parentWorkflowId, subtask.id, childWorkflowId)) {
+          throw SkillBillRuntimeException(
+            WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+            "Goal child $childWorkflowId cannot reach finalization without its accepted history draft or skip.",
+          )
+        }
+      }
   }
 
   private fun finalizePublication(

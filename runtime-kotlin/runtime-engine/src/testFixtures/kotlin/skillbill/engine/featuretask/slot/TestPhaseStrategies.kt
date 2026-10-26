@@ -27,6 +27,7 @@ import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -114,6 +115,7 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(PackBuildStrategy(), runner),
         PhaseStrategyRegistration(AgentValidateStrategy(), runner),
         PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner),
+        PhaseStrategyRegistration(GoalChildHistoryDraftStrategy(), runner),
         PhaseStrategyRegistration(RuntimeCommitStrategy(), runner),
         PhaseStrategyRegistration(
           PrDescriptionStrategy(pullRequestIdentityLookup, LocalPullRequestTemplateFiles),
@@ -302,6 +304,10 @@ fun testPhaseStrategyBindings(
       SkeletonDefinition.GOAL_CHILD_REVISION_2 to
         (bindings.getValue(SkeletonDefinition.GOAL_CHILD_REVISION_3) - PhaseSlot.QA),
       SkeletonDefinition.GOAL_CHILD to (bindings.getValue(SkeletonDefinition.GOAL_CHILD_REVISION_3) - PhaseSlot.QA),
+      SkeletonDefinition.GOAL_CHILD_REVISION_5 to (
+        bindings.getValue(SkeletonDefinition.GOAL_CHILD_REVISION_3) - PhaseSlot.QA - PhaseSlot.WRITE_HISTORY +
+          (PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(GoalChildHistoryDraftStrategy.ID))
+      ),
     )
 }
 

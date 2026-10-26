@@ -165,8 +165,32 @@ class GoalRunnerSelectedSubtaskLoop(
     workflowId: String,
     attempted: List<Int>,
   ): GoalRunnerIterationResult {
-    noChangeChildCloser.closeAccepted(workflowId)
     val subtask = args.selection.decision.subtask
+    if (!iterationOutcome.closeAcceptedNoChange(
+        noChangeChildCloser,
+        args.state.parentWorkflowId,
+        subtask.id,
+        workflowId,
+      )
+    ) {
+      return GoalRunnerIterationResult(
+        state = args.state,
+        attempted = attempted,
+        report =
+          stopped(
+            StoppedReportArgs(
+              issueKey = args.state.manifest.issueKey,
+              attempted = attempted,
+              subtaskId = subtask.id,
+              reason = GoalRunnerStopReason.BLOCKED,
+              blockedReason =
+                "Goal child $workflowId cannot advance as no-change until its accepted history draft or skip is saved.",
+              workflowId = workflowId,
+              lastResumableStep = subtask.lastResumableStep ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+            ),
+          ),
+      )
+    }
     val manifest = args.state.manifest
     val settled =
       manifest.copy(
