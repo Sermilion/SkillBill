@@ -51,6 +51,7 @@ import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFactsReader
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.block.report.ProductReportScheduler
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
@@ -292,6 +293,8 @@ abstract class RuntimeComponent(
   abstract val agentRunLauncher: AgentRunLauncher
   abstract val agentRunService: AgentRunService
   abstract val featureTaskRuntimeRunEntry: FeatureTaskRuntimeRunEntry
+
+  abstract val featureTaskRuntimeCrashReconciler: FeatureTaskRuntimeCrashReconciler
   abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver
   abstract val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService
   abstract val featureTaskRuntimeWorkerCoordinator: FeatureTaskRuntimeWorkerCoordinator

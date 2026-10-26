@@ -18,6 +18,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
@@ -137,6 +138,7 @@ class FeatureTaskRuntimeAbandonCommand(
 class FeatureTaskRuntimeRetryBlockedCommand(
   private val workflowService: WorkflowService,
   private val state: CliRunState,
+  private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
 ) : DocumentedCliCommand(
     "retry-blocked",
     "Reopen one blocked runtime phase after an operator-applied fix.",
@@ -151,6 +153,7 @@ class FeatureTaskRuntimeRetryBlockedCommand(
   private val format by formatOption()
 
   override fun run() {
+    crashReconciler.reconcile(workflowId)
     val result = workflowService.retryBlockedFeatureTaskRuntimePhase(workflowId, phaseId, reason, mandate)
     state.complete(result.toPayload(), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
   }

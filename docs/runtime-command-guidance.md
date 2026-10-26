@@ -69,6 +69,9 @@ does not promote its reason to a run mandate.
 For an exhausted acceptance-criterion budget, retry the child's `audit` phase.
 This explicit retry grants a fresh budget and preserves prior outcomes. It also
 reopens the audit when its phase record completed before the workflow blocked.
+The retry schedules a read-only source audit before further repairs. A stopped
+repair planner can also return to audit after scoped crash reconciliation confirms
+its worker is dead and releases ownership. A live or unverifiable worker blocks retry.
 
 ## Block incident recovery
 

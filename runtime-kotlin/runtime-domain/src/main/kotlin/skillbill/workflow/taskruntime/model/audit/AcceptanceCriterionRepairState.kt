@@ -158,6 +158,26 @@ data class AcceptanceCriterionRepairState internal constructor(
 ) {
   fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
 
+  fun reopenForOperatorAudit(): AcceptanceCriterionRepairState? {
+    val criterion = currentCriterionRef ?: return null
+    if (reservation != null || stage !in
+      setOf(
+        AcceptanceCriterionRepairStage.BUDGET_BLOCKED,
+        AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+        AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
+      )
+    ) {
+      return null
+    }
+    val resumed = resetBudgetForOperatorResume()
+    return resumed.copy(
+      mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
+      stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
+      pendingAuditRefs = (listOf(criterion) + pendingAuditRefs).distinct(),
+      revision = resumed.revision + 1,
+    )
+  }
+
   fun resetBudgetForOperatorResume(): AcceptanceCriterionRepairState {
     if (stage != AcceptanceCriterionRepairStage.BUDGET_BLOCKED) return this
     return copy(
