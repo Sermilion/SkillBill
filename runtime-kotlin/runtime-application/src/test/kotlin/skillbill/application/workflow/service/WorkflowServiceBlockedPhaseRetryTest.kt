@@ -47,8 +47,7 @@ import kotlin.test.assertNotNull
 class WorkflowServiceBlockedPhaseRetryTest {
   @Test
   fun `operator audit retry runs source audit after exhaustion or interrupted repair planning`() {
-    val exhausted = exhaustedRepair()
-    listOf(WorkflowStatus.BLOCKED to exhausted, WorkflowStatus.PENDING to exhausted.resetBudgetForOperatorResume())
+    listOf(WorkflowStatus.BLOCKED to repairWithFailures(3), WorkflowStatus.PENDING to repairWithFailures(1))
       .forEach { (status, repair) ->
         val fixture = retryFixture()
         val before = assertNotNull(fixture.states.get(WorkflowFamily.TASK_RUNTIME, WORKFLOW_ID))
@@ -87,7 +86,11 @@ class WorkflowServiceBlockedPhaseRetryTest {
         val resumed =
           FeatureTaskRuntimeWorkflowArtifactMap.from(repairFamily.value(saved.artifacts))
             .toAcceptanceCriterionRepairState(repairFamily.label())
-        assertEquals(repair.reopenForOperatorAudit(), resumed)
+        assertEquals(
+          if (status == WorkflowStatus.BLOCKED) emptyMap() else mapOf("AC-001" to 1),
+          resumed.unsuccessfulTotals,
+        )
+        assertEquals(if (status == WorkflowStatus.BLOCKED) 3 else 0, resumed.budgetStartOutcomeIndex)
         assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, resumed.stage)
         assertEquals(listOf("AC-001"), resumed.pendingAuditRefs)
         assertEquals(resumed, AcceptanceCriterionRepairState.restore(resumed))
@@ -163,7 +166,7 @@ class WorkflowServiceBlockedPhaseRetryTest {
   }
 }
 
-private fun exhaustedRepair(): AcceptanceCriterionRepairState {
+private fun repairWithFailures(count: Int): AcceptanceCriterionRepairState {
   val initial =
     assertNotNull(
       AcceptanceCriterionRepairState.admit(
@@ -203,7 +206,7 @@ private fun exhaustedRepair(): AcceptanceCriterionRepairState {
         ),
       ),
     )
-  repeat(3) { index ->
+  repeat(count) { index ->
     val id = "repair-$index"
     state = assertNotNull(state.reserve(id))
     state =
@@ -220,7 +223,6 @@ private fun exhaustedRepair(): AcceptanceCriterionRepairState {
         ),
       )
   }
-  assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, state.stage)
   return state
 }
 
