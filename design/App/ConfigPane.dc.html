@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skill Bill · config pane</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#0B0B0D}
+a{color:#F3C462}a:hover{color:#F5BC3E}
+@keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block}
+.ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tgl{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:6px;font:600 11px/1 Inter,system-ui,sans-serif;cursor:pointer}
+.tgl:focus-visible,.seg:focus-visible,.chip:focus-visible,.prow:focus-visible,.abtn:focus-visible,.ibtn:focus-visible,.sug:focus-visible,.agent:focus-visible{outline:2px solid #E9A81C;outline-offset:1px}
+.seg{all:unset;box-sizing:border-box;flex:1;display:inline-flex;align-items:center;justify-content:center;height:26px;border-radius:6px;font:600 11px/1 Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.agent{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:7px;font:500 11.5px/1 'JetBrains Mono',monospace;cursor:pointer}
+.agent[aria-disabled=true]{cursor:not-allowed}
+.prow{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:7px;width:100%;min-height:30px;padding:0 8px;border-radius:6px;cursor:pointer}
+.prow:hover{background:#1F1F24}
+.trow{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;width:100%;padding:9px 10px;border-radius:8px;cursor:pointer;background:#17171B;border:1px solid #26262C}
+.trow:hover{border-color:#383840}
+.chip{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:999px;font:500 11px/1 'JetBrains Mono',monospace;cursor:pointer}
+.abtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 11px;border-radius:7px;font:600 11.5px/1 Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+.abtn:disabled{cursor:not-allowed;opacity:.45}
+.ibtn{all:unset;box-sizing:border-box;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:#9C9CA6;cursor:pointer}
+.ibtn:hover{background:#1F1F24;color:#EDEDF0}
+.sug{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 10px;cursor:pointer}
+.sug:hover{background:#1F1F24}
+.ovl{font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8A8A94;text-transform:uppercase}
+.fld{all:unset;box-sizing:border-box;width:100%;height:30px;padding:0 10px;border-radius:7px;background:#0E0E11;font:500 12px/1 'JetBrains Mono',monospace;color:#EDEDF0}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 1392px; height: 900px; background: #0E0E11; font-family: Inter, system-ui, sans-serif; color: #EDEDF0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #26262C; border-radius: 12px">
+
+<div style="display: flex; align-items: center; height: 38px; flex: none; padding: 0 10px 0 14px; background: #08080A; border-bottom: 1px solid #26262C; gap: 10px">
+<div style="display: flex; gap: 7px; width: 170px" aria-hidden="true"><span style="width: 11px; height: 11px; border-radius: 50%; background: #3A3A42"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: #3A3A42"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: #3A3A42"></span></div>
+<div style="flex: 1; text-align: center; font: 600 12px/1 Inter, system-ui, sans-serif; color: #9C9CA6">Skill Bill</div>
+<div style="width: 170px; display: flex; justify-content: flex-end; gap: 6px">
+<button type="button" class="tgl" onClick="{{toggleSpecs}}" aria-pressed="{{specsPressed}}" style="{{specsToggleStyle}}">
+<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M10 2.5v11"></path></svg>
+<span>Specs</span>
+</button>
+<button type="button" class="tgl" onClick="{{toggleConfig}}" aria-pressed="{{configPressed}}" style="{{configToggleStyle}}">
+<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7"></path><circle cx="10.5" cy="4.5" r="1.5"></circle><circle cx="5.5" cy="11.5" r="1.5"></circle></svg>
+<span>Config</span>
+</button>
+</div>
+</div>
+
+<div style="display: flex; flex: 1; min-height: 0">
+
+<nav aria-label="Work" style="width: 250px; flex: none; border-right: 1px solid #26262C; background: #141417; display: flex; flex-direction: column">
+<div style="padding: 14px 14px 10px"><label style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; background: #2A2A31; border: 1px solid #26262C; font: 400 12px/1 Inter, sans-serif; color: #8A8A94"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg><input type="text" aria-label="Filter work" placeholder="Filter by repo, issue, branch" style="all: unset; flex: 1; min-width: 0; color: #EDEDF0; font: 400 12px/1 Inter, sans-serif"></label></div>
+<div class="ovl" style="padding: 4px 14px 6px">Goal runs · 1</div>
+<div style="display: flex; flex-direction: column; padding: 0 8px">
+<div style="display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; background: #1F1F24; box-shadow: inset 2px 0 0 #E9A81C"><span class="dot" style="background: #E9A81C; animation: sbpulse 1.8s ease-in-out infinite"></span><div style="flex: 1; min-width: 0"><div style="font: 700 12.5px/1.3 'Space Grotesk', sans-serif">skill-bill</div><div style="font: 400 10.5px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">SKILL-442 · implement</div></div><span style="font: 400 10.5px/1 'JetBrains Mono', monospace; color: #F3C462">3/8</span></div>
+</div>
+<div class="ovl" style="padding: 14px 14px 6px">History · 2</div>
+<div style="display: flex; flex-direction: column; padding: 0 8px">
+<div style="display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px"><span class="dot" style="background: #3FB950"></span><div style="flex: 1; min-width: 0"><div style="font: 700 12.5px/1.3 'Space Grotesk', sans-serif">skill-bill</div><div style="font: 400 10.5px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">SKILL-446 · done</div></div></div>
+<div style="display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px"><span class="dot" style="background: #3FB950"></span><div style="flex: 1; min-width: 0"><div style="font: 700 12.5px/1.3 'Space Grotesk', sans-serif">skill-bill</div><div style="font: 400 10.5px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">SKILL-445 · done</div></div></div>
+</div>
+<div style="margin-top: auto; padding: 12px 14px; border-top: 1px solid #26262C; display: flex; justify-content: flex-end; font: 400 11px/1 'JetBrains Mono', monospace; color: #8A8A94"><span>Settings</span></div>
+</nav>
+
+<main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: radial-gradient(120% 80% at 85% -10%, rgba(233,168,28,0.10), transparent 60%), #0E0E11">
+<div style="padding: 20px 26px 18px; border-bottom: 1px solid #26262C; display: flex; flex-direction: column; gap: 9px">
+<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+<span style="display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 'JetBrains Mono', monospace; border-radius: 999px; padding: 4px 8px; color: #F3C462; background: rgba(233,168,28,0.12); border: 1px solid rgba(233,168,28,0.35)"><span class="dot" style="background: #E9A81C"></span>active</span>
+<span style="font: 500 11px/1 'JetBrains Mono', monospace; border-radius: 999px; padding: 4px 8px; color: #9C9CA6; border: 1px solid #383840">SKILL-442</span>
+<span style="font: 500 11px/1 'JetBrains Mono', monospace; border-radius: 999px; padding: 4px 8px; color: #F49463; border: 1px solid rgba(226,112,60,.5)">goal</span>
+</div>
+<h1 style="margin: 0; font: 700 24px/1.2 'Space Grotesk', sans-serif; letter-spacing: -.02em">Cross-criterion audit, test-value probes and goal assessment</h1>
+<div class="ttl" style="font: 400 12px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">skill-bill · feat/SKILL-442-cross-criterion-audit-test-value-probes</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #26262C">
+<div style="padding: 15px 18px; display: flex; flex-direction: column; gap: 7px; border-right: 1px solid #26262C"><span class="ovl">Subtask</span><b style="font: 700 19px/1 'Space Grotesk', sans-serif"><span style="color: #F3C462">3</span><span style="color: #8A8A94">/8</span></b><small style="font: 400 11px/1 'JetBrains Mono', monospace; color: #9C9CA6">2 complete · 5 pending</small></div>
+<div style="padding: 15px 18px; display: flex; flex-direction: column; gap: 7px; border-right: 1px solid #26262C"><span class="ovl">Phase</span><b style="font: 700 19px/1 'Space Grotesk', sans-serif">implement</b><small style="font: 400 11px/1 'JetBrains Mono', monospace; color: #9C9CA6">implementation tier</small></div>
+<div style="padding: 15px 18px; display: flex; flex-direction: column; gap: 7px"><span class="ovl">Running on</span><b style="font: 700 19px/1 'Space Grotesk', sans-serif">claude</b><small style="font: 400 11px/1 'JetBrains Mono', monospace; color: #9C9CA6">claude-sonnet-5-5 · high (recorded)</small></div>
+</div>
+<div style="padding: 18px 26px; display: flex; flex-direction: column; gap: 12px">
+<div style="font: 600 14px/1 'Space Grotesk', sans-serif">Subtasks</div>
+<div style="display: flex; gap: 4px"><span style="flex: 1; height: 4px; border-radius: 2px; background: #3FB950"></span><span style="flex: 1; height: 4px; border-radius: 2px; background: #3FB950"></span><span style="flex: 1; height: 4px; border-radius: 2px; background: #E9A81C"></span><span style="flex: 5; height: 4px; border-radius: 2px; background: #26262C"></span></div>
+<div style="display: flex; flex-direction: column; gap: 14px; font: 500 13px/1.3 Inter, sans-serif">
+<div style="display: flex; gap: 12px"><span style="font: 400 11px/1.3 'JetBrains Mono', monospace; color: #8A8A94">01</span><span>Cross-criterion audit admission <span style="color: #8A8A94; font: 400 11px 'JetBrains Mono', monospace">· complete</span></span></div>
+<div style="display: flex; gap: 12px"><span style="font: 400 11px/1.3 'JetBrains Mono', monospace; color: #8A8A94">02</span><span>Test-value probe ledger <span style="color: #8A8A94; font: 400 11px 'JetBrains Mono', monospace">· complete</span></span></div>
+<div style="display: flex; gap: 12px"><span style="font: 400 11px/1.3 'JetBrains Mono', monospace; color: #F3C462">03</span><span>Goal assessment stage <span style="color: #F3C462; font: 400 11px 'JetBrains Mono', monospace">· implement</span></span></div>
+</div>
+</div>
+</main>
+
+<sc-if value="{{specsOpen}}" hint-placeholder-val="{{ false }}">
+<aside aria-label="Specs" style="width: 320px; flex: none; border-left: 1px solid #26262C; background: #141417; display: flex; flex-direction: column">
+<div style="padding: 14px; border-bottom: 1px solid #26262C; display: flex; align-items: center; gap: 8px"><span style="font: 700 14px/1 'Space Grotesk', sans-serif; flex: 1">Specs</span><span style="font: 400 10.5px/1 'JetBrains Mono', monospace; color: #8A8A94">skill-bill</span></div>
+<div style="padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; font: 400 12.5px/1 Inter, sans-serif">
+<div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px"><span class="dot" style="background: #E9A81C"></span>SKILL-442 cross-criterion audit</div>
+<div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px"><span class="dot" style="border: 1.5px solid #8A8A94; box-sizing: border-box"></span>SKILL-447 config pane</div>
+<div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; color: #9C9CA6"><span class="dot" style="background: #3FB950"></span>done · 41</div>
+</div>
+<p style="margin: auto 14px 14px; font: 400 11px/1.5 'JetBrains Mono', monospace; color: #8A8A94">Specs and Config share this slot. Opening one closes the other.</p>
+</aside>
+</sc-if>
+
+<sc-if value="{{configOpen}}" hint-placeholder-val="{{ true }}">
+<aside aria-label="Config" style="width: 320px; flex: none; border-left: 1px solid #26262C; background: #141417; display: flex; flex-direction: column; min-height: 0; position: relative">
+
+<div style="padding: 12px 14px 10px; border-bottom: 1px solid #26262C; display: flex; flex-direction: column; gap: 10px; flex: none">
+<div style="display: flex; align-items: center; gap: 6px">
+<h2 style="margin: 0; flex: 1; font: 700 14px/1 'Space Grotesk', sans-serif">Config</h2>
+<button type="button" class="ibtn" aria-label="Open the config file in your editor" title="Open file in editor"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 1.5h5.5L13 5v9.5H4z"></path><path d="M9.5 1.5V5H13"></path></svg></button>
+<button type="button" class="ibtn" aria-label="Close config pane" onClick="{{closePane}}"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"></path></svg></button>
+</div>
+<div role="tablist" aria-label="Config sections" style="display: flex; gap: 2px; padding: 2px; background: #0E0E11; border: 1px solid #26262C; border-radius: 8px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+<button type="button" role="tab" class="seg" aria-selected="{{t.selected}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+</sc-for>
+</div>
+<div class="ttl" style="font: 400 10px/1.3 'JetBrains Mono', monospace; color: #8A8A94">{{scopeLine}}</div>
+</div>
+
+<div style="flex: 1; min-height: 0; overflow-y: auto">
+
+<sc-if value="{{isModels}}" hint-placeholder-val="{{ true }}">
+<div style="padding: 12px 14px 8px; display: flex; flex-direction: column; gap: 8px">
+<span class="ovl">Agent</span>
+<div style="display: flex; gap: 5px; flex-wrap: wrap">
+<sc-for list="{{agentTabs}}" as="a" hint-placeholder-count="3">
+<button type="button" class="agent" aria-pressed="{{a.selected}}" onClick="{{a.pick}}" style="{{a.style}}"><span class="dot" style="{{a.dotStyle}}"></span>{{a.label}}</button>
+</sc-for>
+<button type="button" class="agent" aria-disabled="true" title="Junie can't take a model or effort setting" style="color: #8A8A94; border: 1px dashed #383840">junie</button>
+</div>
+<div style="font: 400 10.5px/1.45 'JetBrains Mono', monospace; color: #9C9CA6">{{agentNote}}</div>
+</div>
+
+<div style="padding: 2px 14px 8px">
+<label style="height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 9px; border-radius: 7px; background: #0E0E11; border: 1px solid #26262C; color: #8A8A94"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg><input type="text" aria-label="Filter phases" placeholder="Filter phases" value="{{filter}}" onChange="{{onFilter}}" style="all: unset; flex: 1; min-width: 0; color: #EDEDF0; font: 400 11.5px/1 'JetBrains Mono', monospace"></label>
+</div>
+
+<div style="padding: 0 8px 18px; display: flex; flex-direction: column; gap: 1px">
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="12">
+
+<sc-if value="{{row.isHeader}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; padding: 12px 8px 5px"><span class="ovl" style="flex: 1">{{row.label}}</span><span style="font: 400 9.5px/1 'JetBrains Mono', monospace; color: #8A8A94">{{row.meta}}</span></div>
+</sc-if>
+
+<sc-if value="{{row.isTier}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 0 0 6px">
+<button type="button" class="trow" onClick="{{row.toggle}}" aria-expanded="{{row.expanded}}">
+<span style="display: flex; align-items: center; gap: 8px; width: 100%"><span style="font: 600 12.5px/1 Inter, sans-serif; flex: 1">{{row.label}}</span><span style="font: 400 10px/1 'JetBrains Mono', monospace; color: #8A8A94">{{row.meta}}</span></span>
+<span style="display: flex; align-items: center; gap: 6px; width: 100%"><span class="ttl" style="font: 500 11.5px/1.2 'JetBrains Mono', monospace; color: #EDEDF0; flex: 1">{{row.model}}</span><sc-if value="{{row.hasEffort}}" hint-placeholder-val="{{ true }}"><span style="font: 500 10.5px/1 'JetBrains Mono', monospace; color: #F3C462; border: 1px solid rgba(233,168,28,.45); border-radius: 999px; padding: 3px 7px">{{row.effort}}</span></sc-if><sc-if value="{{row.hasTag}}" hint-placeholder-val="{{ false }}"><span style="{{row.tagStyle}}">{{row.tag}}</span></sc-if></span>
+</button>
+</div>
+</sc-if>
+
+<sc-if value="{{row.isPhase}}" hint-placeholder-val="{{ true }}">
+<button type="button" class="prow" onClick="{{row.toggle}}" aria-expanded="{{row.expanded}}" style="{{row.rowStyle}}">
+<span class="ttl" style="font: 500 11.5px/1 'JetBrains Mono', monospace; color: #EDEDF0; width: 118px; flex: none">{{row.label}}</span>
+<sc-if value="{{row.hasDoc}}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#6FA8DC" stroke-width="1.6" role="img" aria-label="Has phase instructions"><path d="M4 1.5h5.5L13 5v9.5H4z"></path><path d="M6.5 8.5h4M6.5 11h4"></path></svg></sc-if>
+<span title="{{row.tierTitle}}" style="{{row.tierStyle}}">{{row.tierLetter}}</span>
+<span class="ttl" style="{{row.valueStyle}}">{{row.value}}</span>
+<sc-if value="{{row.hasTag}}" hint-placeholder-val="{{ false }}"><span style="{{row.tagStyle}}">{{row.tag}}</span></sc-if>
+<sc-if value="{{row.isOverride}}" hint-placeholder-val="{{ false }}"><span class="dot" style="background: #E9A81C" title="Phase override"></span></sc-if>
+</button>
+</sc-if>
+
+<sc-if value="{{row.expanded}}" hint-placeholder-val="{{ false }}">
+<div style="margin: 2px 2px 10px; padding: 12px; background: #1F1F24; border: 1px solid #383840; border-radius: 10px; display: flex; flex-direction: column; gap: 11px">
+<div style="display: flex; align-items: baseline; gap: 6px"><span style="font: 600 12px/1 Inter, sans-serif; flex: 1">{{row.ed.title}}</span><span style="font: 400 10px/1 'JetBrains Mono', monospace; color: #8A8A94">{{row.ed.subtitle}}</span></div>
+
+<sc-if value="{{row.ed.showTier}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center"><span class="ovl" style="flex: 1">Tier</span><span style="font: 400 10px/1 'JetBrains Mono', monospace; color: #8A8A94">applies to every agent</span></div>
+<div style="display: flex; gap: 2px; padding: 2px; background: #0E0E11; border: 1px solid #26262C; border-radius: 8px">
+<sc-for list="{{row.ed.tiers}}" as="tr" hint-placeholder-count="2">
+<button type="button" class="seg" aria-pressed="{{tr.selected}}" onClick="{{tr.pick}}" style="{{tr.style}}">{{tr.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="cfg-model-input" class="ovl">Model</label>
+<input id="cfg-model-input" type="text" class="fld" value="{{row.ed.model}}" onChange="{{row.ed.onInput}}" onKeyDown="{{row.ed.onKey}}" spellcheck="false" autocomplete="off" aria-describedby="cfg-model-status" style="{{row.ed.inputStyle}}">
+<sc-if value="{{row.ed.showSugs}}" hint-placeholder-val="{{ true }}">
+<div role="listbox" aria-label="Suggested models" style="border: 1px solid #383840; border-radius: 8px; background: #17171B; overflow: hidden; display: flex; flex-direction: column">
+<sc-for list="{{row.ed.sugs}}" as="s" hint-placeholder-count="4">
+<button type="button" role="option" class="sug" aria-selected="{{s.active}}" onClick="{{s.pick}}" style="{{s.style}}"><span class="ttl" style="font: 500 11.5px/1 'JetBrains Mono', monospace; color: #EDEDF0; flex: 1">{{s.id}}</span><span class="ttl" style="font: 400 10.5px/1 Inter, sans-serif; color: #9C9CA6; max-width: 110px">{{s.label}}</span></button>
+</sc-for>
+<div style="display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-top: 1px solid #26262C; font: 400 9.5px/1.3 'JetBrains Mono', monospace; color: #8A8A94"><span style="flex: 1">{{row.ed.catalogLine}}</span><button type="button" class="ibtn" style="width: 20px; height: 20px" aria-label="Refresh model list" title="Refresh model list"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1"></path><path d="M13.5 2v3.5H10"></path></svg></button></div>
+</div>
+</sc-if>
+<div id="cfg-model-status" role="status" style="{{row.ed.statusStyle}}"><span aria-hidden="true" style="flex: none">{{row.ed.statusIcon}}</span><span>{{row.ed.statusText}}</span></div>
+<sc-if value="{{row.ed.isNear}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<button type="button" class="abtn" onClick="{{row.ed.useNear}}" style="background: rgba(233,168,28,.14); color: #F3C462; border: 1px solid rgba(233,168,28,.5)">Use {{row.ed.nearId}}</button>
+<button type="button" class="abtn" onClick="{{row.ed.keepTyped}}" style="color: #9C9CA6; border: 1px solid #383840">Keep as typed</button>
+</div>
+</sc-if>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center"><span class="ovl" style="flex: 1">Effort</span><span style="font: 400 10px/1 'JetBrains Mono', monospace; color: #8A8A94">{{row.ed.effortCaption}}</span></div>
+<sc-if value="{{row.ed.hasEfforts}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-wrap: wrap; gap: 4px">
+<sc-for list="{{row.ed.efforts}}" as="e" hint-placeholder-count="5">
+<button type="button" class="chip" aria-pressed="{{e.selected}}" onClick="{{e.pick}}" title="{{e.title}}" style="{{e.style}}">{{e.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{row.ed.noEfforts}}" hint-placeholder-val="{{ false }}">
+<div style="font: 400 10.5px/1.45 'JetBrains Mono', monospace; color: #9C9CA6">{{row.ed.effortNote}}</div>
+</sc-if>
+<sc-if value="{{row.ed.hasEffortWarning}}" hint-placeholder-val="{{ false }}">
+<div style="font: 500 10.5px/1.45 'JetBrains Mono', monospace; color: #F0555B">{{row.ed.effortWarning}}</div>
+</sc-if>
+</div>
+
+<sc-if value="{{row.ed.showDoc}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-radius: 7px; background: #17171B; border: 1px solid #26262C">
+<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#6FA8DC" stroke-width="1.5" aria-hidden="true"><path d="M4 1.5h5.5L13 5v9.5H4z"></path><path d="M6.5 8.5h4M6.5 11h4"></path></svg>
+<span class="ttl" style="flex: 1; font: 400 10.5px/1.3 'JetBrains Mono', monospace; color: #9C9CA6">{{row.ed.docText}}</span>
+<button type="button" class="abtn" style="height: 24px; padding: 0 8px; color: #6FA8DC; border: 1px solid rgba(111,168,220,.45)">{{row.ed.docAction}}</button>
+</div>
+</sc-if>
+
+<div style="display: flex; align-items: center; gap: 6px">
+<button type="button" class="abtn" onClick="{{row.ed.save}}" disabled="{{row.ed.saveDisabled}}" style="background: #E9A81C; color: #141417">Save</button>
+<button type="button" class="abtn" onClick="{{row.ed.cancel}}" style="color: #9C9CA6; border: 1px solid #383840">Cancel</button>
+<span style="flex: 1"></span>
+<sc-if value="{{row.ed.showReset}}" hint-placeholder-val="{{ false }}"><button type="button" class="abtn" onClick="{{row.ed.reset}}" style="padding: 0 4px; color: #F3C462">Reset to tier</button></sc-if>
+</div>
+</div>
+</sc-if>
+
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{isCompaction}}" hint-placeholder-val="{{ false }}"><dc-import name="ConfigPaneCompaction" embedded="{{yes}}" hint-size="320px,760px"></dc-import></sc-if>
+<sc-if value="{{isProject}}" hint-placeholder-val="{{ false }}"><dc-import name="ConfigPaneProject" embedded="{{yes}}" hint-size="320px,760px"></dc-import></sc-if>
+<sc-if value="{{isSystem}}" hint-placeholder-val="{{ false }}"><dc-import name="ConfigPaneSystem" embedded="{{yes}}" hint-size="320px,760px"></dc-import></sc-if>
+</div>
+
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 12px; right: 12px; bottom: 50px; display: flex; align-items: center; gap: 8px; padding: 9px 10px 9px 12px; border-radius: 9px; background: #26262C; border: 1px solid #383840; box-shadow: 0 10px 30px rgba(0,0,0,.5)">
+<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#3FB950" stroke-width="2" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"></path></svg>
+<span class="ttl" style="flex: 1; font: 500 11px/1.3 'JetBrains Mono', monospace">{{toastText}}</span>
+<button type="button" class="abtn" onClick="{{undo}}" style="height: 24px; padding: 0 8px; color: #F3C462">Undo</button>
+</div>
+</sc-if>
+
+<div style="flex: none; padding: 9px 14px; border-top: 1px solid #26262C; display: flex; gap: 7px; align-items: flex-start; font: 400 10px/1.45 'JetBrains Mono', monospace; color: #8A8A94">
+<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true" style="flex: none; margin-top: 1px"><circle cx="8" cy="8" r="6.5"></circle><path d="M8 7v4.5M8 4.6v.1"></path></svg>
+<span>{{footerNote}}</span>
+</div>
+</aside>
+</sc-if>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1392,"height":900}}'>
+const PHASE_GROUPS = [
+  ['Planning', [['intake', 'implementation'], ['preplan', 'implementation'], ['plan', 'reasoning'], ['plan_subtasks', 'reasoning']]],
+  ['Build', [['implement', 'implementation'], ['simplify', 'implementation'], ['implement_fix', 'implementation'], ['build', 'implementation']]],
+  ['Audit', [['audit', 'reasoning'], ['audit_plan_fix', 'reasoning'], ['audit_implement_fix', 'implementation']]],
+  ['Review', [['review', 'reasoning'], ['verify_findings', 'reasoning'], ['present_findings', 'reasoning']]],
+  ['Validate & QA', [['validate', 'reasoning'], ['qa', 'implementation'], ['qa_fix', 'implementation']]],
+  ['Ship', [['write_history', 'implementation'], ['commit_push', 'implementation'], ['pr', 'implementation'], ['monitor', 'implementation'], ['monitor_fix', 'implementation']]],
+  ['Goal finish', [['goal_assessment', 'reasoning'], ['goal_assessment_fix', 'implementation']]],
+];
+const CODEX_FULL = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+const CODEX_NO_ULTRA = ['low', 'medium', 'high', 'xhigh', 'max'];
+const CAT = {
+  claude: {
+    source: "Skill Bill's Claude list",
+    line: "Skill Bill's Claude list · ships with the runtime",
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    models: [
+      { id: 'opus', label: 'alias · newest Opus' },
+      { id: 'sonnet', label: 'alias · newest Sonnet' },
+      { id: 'haiku', label: 'alias · newest Haiku' },
+      { id: 'claude-opus-5-5', label: 'Opus 5.5' },
+      { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
+      { id: 'claude-haiku-5-5', label: 'Haiku 5.5' },
+      { id: 'claude-fable-5-1', label: 'Fable 5.1' },
+    ],
+  },
+  codex: {
+    source: "codex's model list",
+    line: 'codex debug models · read 2 min ago',
+    efforts: null,
+    models: [
+      { id: 'gpt-6.1-sol', label: 'GPT-6.1-Sol', efforts: CODEX_FULL, def: 'low' },
+      { id: 'gpt-6-astra', label: 'GPT-6-Astra', efforts: CODEX_FULL, def: 'medium' },
+      { id: 'gpt-6-sol', label: 'GPT-6-Sol', efforts: CODEX_FULL, def: 'medium' },
+      { id: 'gpt-6-luna', label: 'GPT-6-Luna', efforts: CODEX_NO_ULTRA, def: 'medium' },
+      { id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol', efforts: CODEX_FULL, def: 'low' },
+      { id: 'gpt-5.6-terra', label: 'GPT-5.6-Terra', efforts: CODEX_FULL, def: 'medium' },
+      { id: 'gpt-5.6-luna', label: 'GPT-5.6-Luna', efforts: CODEX_NO_ULTRA, def: 'medium' },
+    ],
+  },
+  cursor: {
+    source: "cursor's model list",
+    line: 'agent --list-models · read 2 min ago',
+    efforts: null,
+    models: [
+      { id: 'auto', label: 'Auto' },
+      { id: 'composer-2.5', label: 'Composer 2.5' },
+      { id: 'composer-2.5-fast', label: 'Composer 2.5 Fast' },
+      { id: 'cursor-grok-4.6-low', label: 'Grok 4.6 Low' },
+      { id: 'cursor-grok-4.6-medium', label: 'Grok 4.6 Medium' },
+      { id: 'cursor-grok-4.6-high', label: 'Grok 4.6' },
+      { id: 'cursor-grok-4.6-xhigh', label: 'Grok 4.6 Extra High' },
+      { id: 'claude-opus-5-5-medium', label: 'Claude Opus 5.5 1M' },
+      { id: 'claude-opus-5-5-high', label: 'Claude Opus 5.5 1M High' },
+      { id: 'claude-opus-5-5-xhigh', label: 'Claude Opus 5.5 1M Extra High' },
+      { id: 'claude-opus-5-5-max', label: 'Claude Opus 5.5 1M Max' },
+    ],
+  },
+};
+const INITIAL = {
+  matrix: {
+    claude: { reasoning: { model: 'claude-opus-5-5', effort: 'high' }, implementation: { model: 'claude-sonnet-5-5', effort: 'high' }, phases: { review: { model: 'claude-opus-5-5', effort: 'xhigh' } } },
+    codex: { reasoning: { model: 'gpt-6.1-sol', effort: 'high' }, implementation: { model: 'gpt-6-luna', effort: 'high' }, phases: {} },
+    cursor: { reasoning: { model: 'cursor-grok-4.6-high', effort: null }, implementation: { model: 'composer-2.5', effort: null }, phases: {} },
+  },
+  phaseTiers: {},
+};
+const DOCS = { review: 'review.md · 1.2 KiB' };
+const DEFAULT_TIER = {};
+PHASE_GROUPS.forEach(([, phases]) => phases.forEach(([id, tier]) => { DEFAULT_TIER[id] = tier; }));
+const TIER_LABEL = { reasoning: 'Reasoning', implementation: 'Implementation' };
+
+function clone(x) { return JSON.parse(JSON.stringify(x)); }
+function norm(s) { return String(s || '').toLowerCase().replace(/^claude-/, '').replace(/[^a-z0-9]/g, ''); }
+function letters(s) { return norm(s).replace(/[0-9]/g, ''); }
+function digits(s) { return norm(s).replace(/[^0-9]/g, ''); }
+function lev(a, b) {
+  const d = [];
+  for (let i = 0; i <= a.length; i++) { d[i] = [i]; }
+  for (let j = 0; j <= b.length; j++) { d[0][j] = j; }
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return d[a.length][b.length];
+}
+function check(agent, value) {
+  const cat = CAT[agent];
+  const t = String(value || '').trim();
+  if (!t) return { kind: 'error', text: 'A model is required. To drop an override, use Reset to tier.' };
+  const exact = cat.models.find((m) => m.id === t);
+  if (exact) return { kind: 'known', model: exact, text: exact.label + ' · in ' + cat.source };
+  const near = cat.models.find((m) => norm(m.id) === norm(t)) ||
+    cat.models.find((m) => digits(m.id) === digits(t) && lev(letters(m.id), letters(t)) <= 1);
+  if (near) return { kind: 'near', model: near, text: '"' + t + '" isn’t a ' + agent + ' model. Did you mean ' + near.id + '?' };
+  return { kind: 'unlisted', text: 'Not in ' + cat.source + '. It will be used as typed.' };
+}
+function suggestions(agent, query, status) {
+  const cat = CAT[agent];
+  const q = String(query || '').trim().toLowerCase();
+  if (status.kind === 'known') return [];
+  let list = cat.models.filter((m) => !q || m.id.includes(q) || norm(m.id).includes(norm(q)) || (status.model && status.model.id === m.id));
+  list = list.sort((a, b) => (b.id.startsWith(q) ? 1 : 0) - (a.id.startsWith(q) ? 1 : 0));
+  if (status.model) list = [status.model].concat(list.filter((m) => m.id !== status.model.id));
+  return list.slice(0, 5);
+}
+function effortsFor(agent, modelId) {
+  if (agent === 'claude') return { list: CAT.claude.efforts, def: null, known: true };
+  if (agent === 'codex') {
+    const m = CAT.codex.models.find((x) => x.id === modelId);
+    return m ? { list: m.efforts, def: m.def, known: true } : { list: CODEX_FULL, def: null, known: false };
+  }
+  return null;
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { pane: 'config', tab: 'models', agent: 'claude', data: clone(INITIAL), open: null, draft: null, filter: '', toast: null };
+  }
+
+  tierOf(id) { return this.state.data.phaseTiers[id] || DEFAULT_TIER[id]; }
+
+  directive(agent, target) {
+    const m = this.state.data.matrix[agent];
+    if (target.kind === 'tier') return { dir: m[target.id], override: false };
+    const o = m.phases[target.id];
+    return o ? { dir: o, override: true } : { dir: m[this.tierOf(target.id)], override: false };
+  }
+
+  openEditor(target) {
+    const key = target.kind + ':' + target.id;
+    if (this.state.open === key) { this.setState({ open: null, draft: null }); return; }
+    const { dir } = this.directive(this.state.agent, target);
+    this.setState({ open: key, draft: { target, model: dir.model, effort: dir.effort, tier: target.kind === 'phase' ? this.tierOf(target.id) : null, keepTyped: false, typed: false } });
+  }
+
+  save() {
+    const { draft, agent } = this.state;
+    if (!draft) return;
+    const before = clone(this.state.data);
+    const data = clone(this.state.data);
+    const m = data.matrix[agent];
+    const dirText = draft.model + (draft.effort ? ' · ' + draft.effort : '');
+    if (draft.target.kind === 'tier') {
+      m[draft.target.id] = { model: draft.model.trim(), effort: draft.effort };
+    } else {
+      const id = draft.target.id;
+      if (draft.tier === DEFAULT_TIER[id]) delete data.phaseTiers[id]; else data.phaseTiers[id] = draft.tier;
+      const tierDir = m[draft.tier];
+      if (tierDir.model === draft.model.trim() && tierDir.effort === draft.effort) delete m.phases[id];
+      else m.phases[id] = { model: draft.model.trim(), effort: draft.effort };
+    }
+    this.setState({ data, open: null, draft: null, toast: { text: 'Saved ' + draft.target.id + ' → ' + dirText, before } });
+  }
+
+  resetOverride() {
+    const { draft, agent } = this.state;
+    const before = clone(this.state.data);
+    const data = clone(this.state.data);
+    delete data.matrix[agent].phases[draft.target.id];
+    this.setState({ data, open: null, draft: null, toast: { text: draft.target.id + ' uses the ' + this.tierOf(draft.target.id) + ' tier again', before } });
+  }
+
+  editorVals(agent) {
+    const { draft } = this.state;
+    const status = check(agent, draft.model);
+    const eff = effortsFor(agent, status.kind === 'known' ? status.model.id : draft.model);
+    const sugs = draft.typed || status.kind !== 'known' ? suggestions(agent, draft.model, status) : [];
+    const effortUnsupported = eff && eff.known && draft.effort && !eff.list.includes(draft.effort);
+    const blocked = status.kind === 'error' || (status.kind === 'near' && !draft.keepTyped) || effortUnsupported;
+    const colors = { known: '#3FB950', near: '#F0555B', error: '#F0555B', unlisted: '#9C9CA6' };
+    const icons = { known: '✓', near: '✗', error: '✗', unlisted: 'i' };
+    const borders = { known: 'rgba(63,185,80,.55)', near: '#F0555B', error: '#F0555B', unlisted: '#383840' };
+    const isPhase = draft.target.kind === 'phase';
+    const hasOverride = isPhase && !!this.state.data.matrix[agent].phases[draft.target.id];
+    const effortList = eff ? [null].concat(eff.list) : [];
+    let statusText = status.text;
+    if (status.kind === 'near' && draft.keepTyped) statusText = 'Kept as typed. Runs will fail if ' + agent + ' rejects it.';
+    return {
+      title: isPhase ? draft.target.id : TIER_LABEL[draft.target.id] + ' tier',
+      subtitle: agent + (isPhase ? (hasOverride ? ' · override' : ' · from tier') : ' · default'),
+      showTier: isPhase,
+      tiers: ['reasoning', 'implementation'].map((t) => ({
+        label: TIER_LABEL[t],
+        selected: draft.tier === t,
+        style: draft.tier === t ? 'background: #2A2A31; color: #F3C462' : 'color: #9C9CA6',
+        pick: () => this.setState({ draft: Object.assign({}, draft, { tier: t }) }),
+      })),
+      model: draft.model,
+      onInput: (e) => this.setState({ draft: Object.assign({}, draft, { model: e.target.value, keepTyped: false, typed: true }) }),
+      onKey: (e) => {
+        if (e.key === 'Enter' && !blocked) this.save();
+        if (e.key === 'Escape') this.setState({ open: null, draft: null });
+      },
+      inputStyle: 'border: 1px solid ' + borders[status.kind],
+      showSugs: sugs.length > 0,
+      sugs: sugs.map((m, i) => ({
+        id: m.id, label: m.label, active: status.model && status.model.id === m.id,
+        style: status.model && status.model.id === m.id ? 'background: rgba(233,168,28,.10)' : '',
+        pick: () => this.setState({ draft: Object.assign({}, draft, { model: m.id, keepTyped: false, typed: false }) }),
+      })),
+      catalogLine: CAT[agent].line,
+      statusStyle: 'display: flex; gap: 6px; font: 500 10.5px/1.45 \'JetBrains Mono\', monospace; color: ' + (draft.keepTyped && status.kind === 'near' ? '#F3C462' : colors[status.kind]),
+      statusIcon: draft.keepTyped && status.kind === 'near' ? '!' : icons[status.kind],
+      statusText,
+      isNear: status.kind === 'near' && !draft.keepTyped,
+      nearId: status.model ? status.model.id : '',
+      useNear: () => this.setState({ draft: Object.assign({}, draft, { model: status.model.id, typed: false }) }),
+      keepTyped: () => this.setState({ draft: Object.assign({}, draft, { keepTyped: true }) }),
+      hasEfforts: !!eff,
+      noEfforts: !eff,
+      effortNote: 'Cursor model IDs carry the effort (e.g. -high). Pick the variant above.',
+      effortCaption: eff ? (eff.def ? 'model default: ' + eff.def : (eff.known ? '— = agent default' : 'not checked for this model')) : '',
+      efforts: effortList.map((x) => {
+        const sel = draft.effort === x;
+        return {
+          label: x === null ? '—' : x,
+          selected: sel,
+          title: x === null ? 'Leave effort unset' : (eff.def === x ? 'Default for this model' : ''),
+          style: sel ? 'background: rgba(233,168,28,.16); color: #F3C462; border: 1px solid rgba(233,168,28,.6)' : 'color: #9C9CA6; border: 1px solid ' + (eff.def === x ? '#6A6A74' : '#383840'),
+          pick: () => this.setState({ draft: Object.assign({}, draft, { effort: x }) }),
+        };
+      }),
+      hasEffortWarning: !!effortUnsupported,
+      effortWarning: effortUnsupported ? draft.model + ' doesn’t support ' + draft.effort + '. Pick another effort.' : '',
+      showDoc: isPhase,
+      docText: DOCS[isPhase ? draft.target.id : ''] || 'No instructions for this phase',
+      docAction: DOCS[isPhase ? draft.target.id : ''] ? 'Open' : 'Create',
+      save: () => this.save(),
+      saveDisabled: !!blocked,
+      cancel: () => this.setState({ open: null, draft: null }),
+      showReset: hasOverride,
+      reset: () => this.resetOverride(),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const agent = s.agent;
+    const m = s.data.matrix[agent];
+    const on = 'background: rgba(233,168,28,.16); border: 1px solid rgba(233,168,28,.55); color: #F3C462';
+    const off = 'background: transparent; border: 1px solid #26262C; color: #9C9CA6';
+    const tagFor = (model) => {
+      const k = check(agent, model).kind;
+      if (k === 'unlisted') return { tag: 'unlisted', tagStyle: 'font: 500 9.5px/1 \'JetBrains Mono\', monospace; color: #9C9CA6; border: 1px solid #383840; border-radius: 4px; padding: 2px 4px; flex: none' };
+      if (k === 'near') return { tag: 'typo?', tagStyle: 'font: 500 9.5px/1 \'JetBrains Mono\', monospace; color: #F3C462; border: 1px solid rgba(233,168,28,.5); border-radius: 4px; padding: 2px 4px; flex: none' };
+      return { tag: '', tagStyle: '' };
+    };
+
+    const rows = [];
+    const counts = { reasoning: 0, implementation: 0 };
+    Object.keys(DEFAULT_TIER).forEach((id) => { counts[this.tierOf(id)] += 1; });
+    rows.push({ isHeader: true, label: 'Tiers', meta: 'default for every phase' });
+    ['reasoning', 'implementation'].forEach((t) => {
+      const key = 'tier:' + t;
+      const dir = m[t];
+      const tg = tagFor(dir.model);
+      rows.push(Object.assign({
+        isTier: true, label: TIER_LABEL[t], meta: counts[t] + ' phases', model: dir.model, effort: dir.effort || '', hasEffort: !!dir.effort,
+        hasTag: !!tg.tag, expanded: s.open === key, toggle: () => this.openEditor({ kind: 'tier', id: t }),
+      }, tg));
+    });
+    const f = s.filter.trim().toLowerCase();
+    PHASE_GROUPS.forEach(([group, phases]) => {
+      const visible = phases.filter(([id]) => !f || id.includes(f));
+      if (!visible.length) return;
+      const overrides = visible.filter(([id]) => m.phases[id]).length;
+      rows.push({ isHeader: true, label: group, meta: overrides ? overrides + ' override' + (overrides > 1 ? 's' : '') : '' });
+      visible.forEach(([id]) => {
+        const tier = this.tierOf(id);
+        const moved = tier !== DEFAULT_TIER[id];
+        const o = m.phases[id];
+        const dir = o || m[tier];
+        const key = 'phase:' + id;
+        const tg = tagFor(dir.model);
+        rows.push(Object.assign({
+          isPhase: true, label: id, hasDoc: !!DOCS[id], expanded: s.open === key,
+          rowStyle: s.open === key ? 'background: #1F1F24' : '',
+          tierLetter: tier === 'reasoning' ? 'R' : 'I',
+          tierTitle: TIER_LABEL[tier] + ' tier' + (moved ? ' (moved from ' + DEFAULT_TIER[id] + ')' : ''),
+          tierStyle: 'flex: none; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; font: 600 9.5px/1 \'JetBrains Mono\', monospace; ' +
+            (moved ? 'color: #141417; background: #6FA8DC' : (tier === 'reasoning' ? 'color: #6FA8DC; border: 1px solid rgba(111,168,220,.45)' : 'color: #9C9CA6; border: 1px solid #383840')),
+          value: dir.model + (dir.effort ? ' · ' + dir.effort : ''),
+          valueStyle: 'flex: 1; text-align: right; font: ' + (o ? '600' : '400') + ' 10.5px/1 \'JetBrains Mono\', monospace; color: ' + (o ? '#EDEDF0' : '#8A8A94'),
+          isOverride: !!o, hasTag: !!tg.tag,
+          toggle: () => this.openEditor({ kind: 'phase', id }),
+        }, tg));
+      });
+    });
+    if (s.draft) {
+      const ed = this.editorVals(agent);
+      rows.forEach((r) => { if (r.expanded) r.ed = ed; });
+    }
+
+    const tabNames = [['models', 'Models'], ['compaction', 'Compaction'], ['project', 'Project'], ['system', 'System']];
+    const scope = {
+      models: 'machine-wide · ~/.config/skill-bill/config.json',
+      compaction: 'machine-wide · ~/.config/skill-bill/config.json',
+      project: 'skill-bill · ~/.skill-bill/projects/l-f2eab7f5…/config.yaml',
+      system: 'install selection, telemetry and pack sources',
+    };
+    const agentIds = ['claude', 'codex', 'cursor'];
+    return {
+      yes: true,
+      specsOpen: s.pane === 'specs',
+      configOpen: s.pane === 'config',
+      specsPressed: s.pane === 'specs',
+      configPressed: s.pane === 'config',
+      specsToggleStyle: s.pane === 'specs' ? on : off,
+      configToggleStyle: s.pane === 'config' ? on : off,
+      toggleSpecs: () => this.setState({ pane: s.pane === 'specs' ? null : 'specs' }),
+      toggleConfig: () => this.setState({ pane: s.pane === 'config' ? null : 'config' }),
+      closePane: () => this.setState({ pane: null }),
+      tabs: tabNames.map(([id, label]) => ({
+        label, selected: s.tab === id,
+        style: s.tab === id ? 'background: #2A2A31; color: #EDEDF0' : 'color: #9C9CA6',
+        pick: () => this.setState({ tab: id, open: null, draft: null }),
+      })),
+      scopeLine: scope[s.tab],
+      isModels: s.tab === 'models',
+      isCompaction: s.tab === 'compaction',
+      isProject: s.tab === 'project',
+      isSystem: s.tab === 'system',
+      agentTabs: agentIds.map((id) => ({
+        label: id, selected: agent === id,
+        style: agent === id ? 'background: #1F1F24; border: 1px solid rgba(233,168,28,.55); color: #EDEDF0' : 'background: transparent; border: 1px solid #26262C; color: #9C9CA6',
+        dotStyle: id === 'claude' ? 'background: #E9A81C; animation: sbpulse 1.8s ease-in-out infinite' : 'background: #383840',
+        pick: () => this.setState({ agent: id, open: null, draft: null }),
+      })),
+      agentNote: agent === 'claude' ? 'Runs SKILL-442 now. The matrix picks the model for the agent that runs a phase; it never switches agents.' :
+        'Not running anything now. Shown for runs you start with ' + agent + '.',
+      filter: s.filter,
+      onFilter: (e) => this.setState({ filter: e.target.value }),
+      rows,
+      hasToast: !!s.toast,
+      toastText: s.toast ? s.toast.text : '',
+      undo: () => this.setState({ data: s.toast.before, toast: null }),
+      footerNote: s.tab === 'project' ? 'Applies to new runs in skill-bill.' : 'Applies to new runs. SKILL-442 keeps the models it recorded at launch.',
+    };
+  }
+}
+</script>
+</body>
+</html>

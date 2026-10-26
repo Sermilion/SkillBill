@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Config · model field states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.card{box-sizing:border-box;background:#141417;border:1px solid #26262C;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:9px}
+.hd{display:flex;align-items:center;gap:8px}
+.num{font:500 10px/1 'JetBrains Mono',monospace;color:#8A8A94}
+.name{flex:1;font:600 12.5px/1.2 Inter,sans-serif;color:#EDEDF0}
+.ag{font:500 10px/1 'JetBrains Mono',monospace;color:#9C9CA6;border:1px solid #383840;border-radius:999px;padding:3px 7px}
+.ovl{font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8A8A94;text-transform:uppercase}
+.fld{all:unset;box-sizing:border-box;width:100%;height:30px;padding:0 10px;border-radius:7px;background:#0E0E11;font:500 12px/1 'JetBrains Mono',monospace;color:#EDEDF0}
+.st{display:flex;gap:6px;font:500 10.5px/1.45 'JetBrains Mono',monospace}
+.rule{margin-top:auto;padding-top:9px;border-top:1px solid #26262C;font:400 10px/1.5 'JetBrains Mono',monospace;color:#8A8A94}
+.abtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:26px;padding:0 10px;border-radius:7px;font:600 11px/1 Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+.abtn:focus-visible,.chip:focus-visible{outline:2px solid #E9A81C;outline-offset:1px}
+.abtn:disabled{opacity:.45;cursor:not-allowed}
+.sugs{border:1px solid #383840;border-radius:8px;background:#17171B;overflow:hidden;display:flex;flex-direction:column}
+.sug{display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;font:500 11px/1 'JetBrains Mono',monospace;color:#EDEDF0}
+.sug small{margin-left:auto;font:400 10px/1 Inter,sans-serif;color:#9C9CA6}
+.chip{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:999px;font:500 11px/1 'JetBrains Mono',monospace;cursor:pointer;color:#9C9CA6;border:1px solid #383840}
+.chip.on{background:rgba(233,168,28,.16);color:#F3C462;border-color:rgba(233,168,28,.6)}
+.chip.def{border-color:#6A6A74}
+.chip.bad{background:rgba(240,85,91,.12);color:#F0555B;border-color:#F0555B}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 1392px; min-height: 1100px; background: #0E0E11; font-family: Inter, system-ui, sans-serif; color: #EDEDF0; padding: 36px 40px 40px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap">
+<div style="flex: 1; min-width: 420px; display: flex; flex-direction: column; gap: 8px">
+<h1 style="margin: 0; font: 700 22px/1.2 'Space Grotesk', sans-serif; letter-spacing: -.01em">The model field checks as you type</h1>
+<p style="margin: 0; max-width: 720px; font: 400 12.5px/1.55 Inter, sans-serif; color: #9C9CA6">Codex and Cursor lists come from the agent CLI (<span style="font-family: 'JetBrains Mono', monospace">codex debug models</span>, <span style="font-family: 'JetBrains Mono', monospace">agent --list-models</span>). Claude's list ships with Skill Bill. No check sends a request.</p>
+</div>
+<div style="display: flex; gap: 16px; font: 500 11px/1 'JetBrains Mono', monospace">
+<span style="color: #3FB950">✓ known · saves</span>
+<span style="color: #F0555B">✗ typo · waits for a choice</span>
+<span style="color: #9C9CA6">i unlisted · saves, tagged</span>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="card">
+<div class="hd"><span class="num">01</span><span class="name">Known model</span><span class="ag">claude</span></div>
+<label class="ovl" for="f1">Model</label>
+<input id="f1" class="fld" value="claude-opus-5-5" style="border: 1px solid rgba(63,185,80,.55)">
+<div class="st" style="color: #3FB950"><span aria-hidden="true">✓</span><span>Opus 5.5 · in Skill Bill's Claude list</span></div>
+<div class="rule">Exact match in the list. Save is enabled; the row shows no tag.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">02</span><span class="name">Typo caught</span><span class="ag">claude</span></div>
+<label class="ovl" for="f2">Model</label>
+<input id="f2" class="fld" value="opus5-5" style="border: 1px solid #F0555B">
+<div class="sugs" role="listbox" aria-label="Suggested models">
+<div class="sug" role="option" aria-selected="true" style="background: rgba(233,168,28,.10)">claude-opus-5-5<small>Opus 5.5</small></div>
+<div class="sug" role="option" aria-selected="false">opus<small>alias</small></div>
+</div>
+<div class="st" style="color: #F0555B"><span aria-hidden="true">✗</span><span>"opus5-5" isn't a claude model. Did you mean claude-opus-5-5?</span></div>
+<div style="display: flex; gap: 6px"><button type="button" class="abtn" style="background: rgba(233,168,28,.14); color: #F3C462; border: 1px solid rgba(233,168,28,.5)">Use claude-opus-5-5</button><button type="button" class="abtn" style="color: #9C9CA6; border: 1px solid #383840">Keep as typed</button></div>
+<div class="rule">Near miss: identical once separators and "claude-" are dropped, or the same digits with letters one edit apart. Save waits for a choice.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">03</span><span class="name">New model, not listed yet</span><span class="ag">claude</span></div>
+<label class="ovl" for="f3">Model</label>
+<input id="f3" class="fld" value="claude-opus-6-0" style="border: 1px solid #383840">
+<div class="st" style="color: #9C9CA6"><span aria-hidden="true">i</span><span>Not in Skill Bill's Claude list. It will be used as typed.</span></div>
+<div style="display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 6px; background: #17171B"><span style="font: 500 11px/1 'JetBrains Mono', monospace; flex: 1">review</span><span style="font: 600 10.5px/1 'JetBrains Mono', monospace">claude-opus-6-0</span><span style="font: 500 9.5px/1 'JetBrains Mono', monospace; color: #9C9CA6; border: 1px solid #383840; border-radius: 4px; padding: 2px 4px">unlisted</span></div>
+<div class="rule">Different digits, so not a typo. Saves right away. A new release is usable before Skill Bill updates its list.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">04</span><span class="name">Kept as typed</span><span class="ag">claude</span></div>
+<label class="ovl" for="f4">Model</label>
+<input id="f4" class="fld" value="opus5-5" style="border: 1px solid rgba(233,168,28,.55)">
+<div class="st" style="color: #F3C462"><span aria-hidden="true">!</span><span>Kept as typed. Runs will fail if claude rejects it.</span></div>
+<div style="display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 6px; background: #17171B"><span style="font: 500 11px/1 'JetBrains Mono', monospace; flex: 1">review</span><span style="font: 600 10.5px/1 'JetBrains Mono', monospace">opus5-5</span><span style="font: 500 9.5px/1 'JetBrains Mono', monospace; color: #F3C462; border: 1px solid rgba(233,168,28,.5); border-radius: 4px; padding: 2px 4px">typo?</span></div>
+<div class="rule">The override is the operator's call. The row keeps a "typo?" tag, and the goal preflight lists it as a warning.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">05</span><span class="name">Effort follows the model</span><span class="ag">codex</span></div>
+<label class="ovl" for="f5">Model</label>
+<input id="f5" class="fld" value="gpt-6-luna" style="border: 1px solid rgba(63,185,80,.55)">
+<div class="st" style="color: #3FB950"><span aria-hidden="true">✓</span><span>GPT-6-Luna · in codex's model list</span></div>
+<div style="display: flex; align-items: center"><span class="ovl" style="flex: 1">Effort</span><span style="font: 400 10px/1 'JetBrains Mono', monospace; color: #8A8A94">model default: medium</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 4px"><button type="button" class="chip">—</button><button type="button" class="chip">low</button><button type="button" class="chip def">medium</button><button type="button" class="chip on" aria-pressed="true">high</button><button type="button" class="chip">xhigh</button><button type="button" class="chip">max</button></div>
+<div class="rule">Chips come from the model's own effort list. gpt-6-luna has no "ultra", so it isn't offered. "—" leaves effort unset.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">06</span><span class="name">Effort the model rejects</span><span class="ag">codex</span></div>
+<label class="ovl" for="f6">Model</label>
+<input id="f6" class="fld" value="gpt-6-luna" style="border: 1px solid rgba(63,185,80,.55)">
+<div style="display: flex; flex-wrap: wrap; gap: 4px"><button type="button" class="chip">—</button><button type="button" class="chip">low</button><button type="button" class="chip def">medium</button><button type="button" class="chip">high</button><button type="button" class="chip">xhigh</button><button type="button" class="chip">max</button><button type="button" class="chip bad" aria-pressed="true">ultra</button></div>
+<div class="st" style="color: #F0555B"><span aria-hidden="true">✗</span><span>gpt-6-luna doesn't support ultra. Pick another effort.</span></div>
+<div style="display: flex; gap: 6px"><button type="button" class="abtn" disabled style="background: #E9A81C; color: #141417">Save</button></div>
+<div class="rule">Happens when the model changes under a saved effort (gpt-6.1-sol → gpt-6-luna). Codex would reject it with a 400, so Save is blocked.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">07</span><span class="name">Suggestions while typing</span><span class="ag">cursor</span></div>
+<label class="ovl" for="f7">Model</label>
+<input id="f7" class="fld" value="grok" style="border: 1px solid #383840">
+<div class="sugs" role="listbox" aria-label="Suggested models">
+<div class="sug" role="option" aria-selected="false">cursor-grok-4.6-low<small>Low</small></div>
+<div class="sug" role="option" aria-selected="false">cursor-grok-4.6-medium<small>Medium</small></div>
+<div class="sug" role="option" aria-selected="true" style="background: rgba(233,168,28,.10)">cursor-grok-4.6-high<small>Grok 4.6</small></div>
+<div class="sug" role="option" aria-selected="false">cursor-grok-4.6-xhigh<small>Extra High</small></div>
+<div style="padding: 6px 10px; border-top: 1px solid #26262C; font: 400 9.5px/1.3 'JetBrains Mono', monospace; color: #8A8A94">agent --list-models · read 2 min ago</div>
+</div>
+<div class="st" style="color: #9C9CA6"><span aria-hidden="true">i</span><span>Cursor IDs carry the effort. No effort chips.</span></div>
+<div class="rule">↑/↓ to move, Enter to pick, Esc to close. Matches ignore case and separators.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">08</span><span class="name">List couldn't be read</span><span class="ag">codex</span></div>
+<label class="ovl" for="f8">Model</label>
+<input id="f8" class="fld" value="gpt-6-sol" style="border: 1px solid #383840">
+<div class="st" style="color: #F3C462"><span aria-hidden="true">!</span><span>Couldn't read codex's model list: codex isn't on PATH. Saved without a check.</span></div>
+<button type="button" class="abtn" style="align-self: flex-start; color: #F3C462; border: 1px solid rgba(233,168,28,.5)">Try again</button>
+<div class="rule">"Can't check" never means "wrong". The value saves; the row shows "unchecked" until a later read confirms it.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">09</span><span class="name">Deprecated model</span><span class="ag">claude</span></div>
+<label class="ovl" for="f9">Model</label>
+<input id="f9" class="fld" value="[retired model id]" style="border: 1px solid rgba(233,168,28,.55)">
+<div class="st" style="color: #F3C462"><span aria-hidden="true">!</span><span>Deprecated in Skill Bill's Claude list. It still runs today.</span></div>
+<div class="rule">The list marks retired models instead of dropping them, so an old config gets a warning, not an error.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">10</span><span class="name">Bedrock or Vertex</span><span class="ag">claude</span></div>
+<label class="ovl" for="f10">Model</label>
+<input id="f10" class="fld" value="anthropic.claude-opus-5-5" style="border: 1px solid #383840">
+<div class="st" style="color: #9C9CA6"><span aria-hidden="true">i</span><span>Bedrock is on (CLAUDE_CODE_USE_BEDROCK). Bedrock IDs aren't checked.</span></div>
+<div class="rule">Reads the provider from the same environment real launches use, so the panel and the run agree.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">11</span><span class="name">Overridden by the environment</span><span class="ag">claude</span></div>
+<label class="ovl" for="f11">Model</label>
+<input id="f11" class="fld" value="claude-opus-5-5" style="border: 1px solid rgba(233,168,28,.55)">
+<div class="st" style="color: #F3C462"><span aria-hidden="true">!</span><span>A custom ANTHROPIC_BASE_URL with ANTHROPIC_MODEL set replaces this. Runs use [ANTHROPIC_MODEL value].</span></div>
+<div class="rule">Mirrors the runtime's provider remap, so the panel never shows a model the run won't use.</div>
+</div>
+
+<div class="card">
+<div class="hd"><span class="num">12</span><span class="name">Agent without model settings</span><span class="ag">junie</span></div>
+<div style="display: flex; gap: 5px"><span style="font: 500 11.5px/1 'JetBrains Mono', monospace; color: #8A8A94; border: 1px dashed #383840; border-radius: 7px; padding: 8px 10px">junie</span></div>
+<div class="st" style="color: #9C9CA6"><span aria-hidden="true">i</span><span>Junie can't take a model or effort setting. A directive for junie fails before launch, so the panel doesn't offer one.</span></div>
+<div class="rule">The tab is disabled, with this text as its tooltip.</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1392,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

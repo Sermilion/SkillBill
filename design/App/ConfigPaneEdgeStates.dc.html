@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Config · edge states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.col{display:flex;flex-direction:column;gap:12px;width:320px;flex:none}
+.cap{display:flex;flex-direction:column;gap:6px;min-height:58px}
+.cap b{font:600 13px/1.2 Inter,sans-serif;color:#EDEDF0}
+.cap span{font:400 11px/1.5 Inter,sans-serif;color:#9C9CA6}
+.pane{box-sizing:border-box;width:320px;height:700px;background:#141417;border:1px solid #26262C;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.ph{padding:12px 14px 10px;border-bottom:1px solid #26262C;display:flex;flex-direction:column;gap:10px}
+.tabs{display:flex;gap:2px;padding:2px;background:#0E0E11;border:1px solid #26262C;border-radius:8px}
+.tab{flex:1;display:inline-flex;align-items:center;justify-content:center;height:26px;border-radius:6px;font:600 11px/1 Inter,sans-serif;color:#9C9CA6}
+.tab.on{background:#2A2A31;color:#EDEDF0}
+.ovl{font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8A8A94;text-transform:uppercase}
+.abtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 11px;border-radius:7px;font:600 11.5px/1 Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+.abtn:focus-visible{outline:2px solid #E9A81C;outline-offset:1px}
+.mono{font:400 10.5px/1.5 'JetBrains Mono',monospace}
+.prow{display:flex;align-items:center;gap:7px;height:30px;padding:0 8px;border-radius:6px}
+.prow .n{font:500 11.5px/1 'JetBrains Mono',monospace;width:118px}
+.prow .v{flex:1;text-align:right;font:400 10.5px/1 'JetBrains Mono',monospace;color:#8A8A94}
+.tl{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;font:600 9.5px/1 'JetBrains Mono',monospace}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 1480px; min-height: 860px; background: #0E0E11; font-family: Inter, system-ui, sans-serif; color: #EDEDF0; padding: 36px 40px; display: flex; gap: 24px; align-items: flex-start">
+
+<div class="col">
+<div class="cap"><b>config.json can't be read</b><span>The file is never overwritten. The panel shows the runtime's own error, with its key path.</span></div>
+<div class="pane">
+<div class="ph"><span style="font: 700 14px/1 'Space Grotesk', sans-serif">Config</span><div class="tabs"><span class="tab on">Models</span><span class="tab">Compaction</span><span class="tab">Project</span><span class="tab">System</span></div></div>
+<div style="padding: 14px; display: flex; flex-direction: column; gap: 12px">
+<div role="alert" style="padding: 12px; border-radius: 9px; background: rgba(240,85,91,.08); border: 1px solid rgba(240,85,91,.5); display: flex; flex-direction: column; gap: 9px">
+<span style="font: 600 12px/1.3 Inter, sans-serif; color: #F0555B">Models can't be shown</span>
+<span class="mono" style="color: #EDEDF0">execution_matrix.agents.claude.review.effort is "" — must be a non-blank string when provided.</span>
+<span class="mono" style="color: #8A8A94">~/.config/skill-bill/config.json</span>
+<div style="display: flex; gap: 6px"><button type="button" class="abtn" style="background: #E9A81C; color: #141417">Open file</button><button type="button" class="abtn" style="color: #9C9CA6; border: 1px solid #383840">Reload</button></div>
+</div>
+<span class="mono" style="color: #8A8A94">Runs fail with the same message until the file is fixed. Saving from the panel stays off until then.</span>
+</div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap"><b>Changed on disk</b><span>Someone edited the file while a field was open. Nothing is overwritten silently.</span></div>
+<div class="pane">
+<div class="ph"><span style="font: 700 14px/1 'Space Grotesk', sans-serif">Config</span><div class="tabs"><span class="tab on">Models</span><span class="tab">Compaction</span><span class="tab">Project</span><span class="tab">System</span></div></div>
+<div role="status" style="margin: 12px 14px 4px; padding: 10px 12px; border-radius: 9px; background: rgba(111,168,220,.10); border: 1px solid rgba(111,168,220,.5); display: flex; flex-direction: column; gap: 8px">
+<span class="mono" style="color: #EDEDF0">config.json changed outside Skill Bill. Reloading drops your unsaved edit to review.</span>
+<div style="display: flex; gap: 6px"><button type="button" class="abtn" style="color: #6FA8DC; border: 1px solid rgba(111,168,220,.6)">Reload</button><button type="button" class="abtn" style="color: #9C9CA6">Keep editing</button></div>
+</div>
+<div style="padding: 6px 8px; display: flex; flex-direction: column; gap: 1px">
+<div class="prow"><span class="n">verify_findings</span><span class="tl" style="color: #6FA8DC; border: 1px solid rgba(111,168,220,.45)">R</span><span class="v">claude-opus-5-5 · high</span></div>
+<div class="prow" style="background: #1F1F24"><span class="n">review</span><span class="tl" style="color: #6FA8DC; border: 1px solid rgba(111,168,220,.45)">R</span><span class="v" style="color: #EDEDF0; font-weight: 600">claude-opus-5-5 · max</span><span style="width: 7px; height: 7px; border-radius: 50%; background: #E9A81C"></span></div>
+<div class="prow"><span class="n">present_findings</span><span class="tl" style="color: #6FA8DC; border: 1px solid rgba(111,168,220,.45)">R</span><span class="v">claude-opus-5-5 · high</span></div>
+</div>
+<p class="mono" style="margin: auto 14px 14px; color: #8A8A94">With no field open, the panel reloads by itself and keeps scroll and selection.</p>
+</div>
+</div>
+
+<div class="col">
+<div class="cap"><b>config.yaml has comments</b><span>Rewriting YAML drops comments. Asked once per file, before the first save.</span></div>
+<div class="pane">
+<div class="ph"><span style="font: 700 14px/1 'Space Grotesk', sans-serif">Config</span><div class="tabs"><span class="tab">Models</span><span class="tab">Compaction</span><span class="tab on">Project</span><span class="tab">System</span></div></div>
+<div style="padding: 14px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 7px"><span class="ovl">Gradle wrapper</span><span style="box-sizing: border-box; height: 30px; padding: 0 10px; display: flex; align-items: center; border-radius: 7px; background: #0E0E11; border: 1px solid rgba(233,168,28,.55); font: 500 12px/1 'JetBrains Mono', monospace">runtime-kotlin/gradlew</span></div>
+<div role="alertdialog" aria-label="Saving drops comments" style="padding: 12px; border-radius: 9px; background: #1F1F24; border: 1px solid #383840; display: flex; flex-direction: column; gap: 9px">
+<span style="font: 600 12px/1.3 Inter, sans-serif">Save drops 3 comments</span>
+<span class="mono" style="color: #9C9CA6">config.yaml has comments. Skill Bill rewrites only the keys it changes, but YAML comments don't survive the rewrite.</span>
+<div style="display: flex; gap: 6px; flex-wrap: wrap"><button type="button" class="abtn" style="background: #E9A81C; color: #141417">Save anyway</button><button type="button" class="abtn" style="color: #9C9CA6; border: 1px solid #383840">Edit the file instead</button></div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap"><b>Goal launch preflight</b><span>The same check runs before a goal starts, so a typo fails in a second, not hours in.</span></div>
+<div class="pane">
+<div class="ph"><div style="display: flex; align-items: center"><span style="font: 700 14px/1 'Space Grotesk', sans-serif; flex: 1">Specs</span><span class="mono" style="color: #8A8A94">skill-bill</span></div></div>
+<div style="padding: 14px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px; font: 500 12.5px/1 Inter, sans-serif"><span style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #8A8A94; box-sizing: border-box"></span>SKILL-447 config pane</div>
+<div role="alert" style="padding: 12px; border-radius: 9px; background: rgba(240,85,91,.08); border: 1px solid rgba(240,85,91,.5); display: flex; flex-direction: column; gap: 9px">
+<span style="font: 600 12px/1.3 Inter, sans-serif; color: #F0555B">Can't start: 1 model looks wrong</span>
+<div style="display: flex; flex-direction: column; gap: 3px"><span class="mono" style="color: #8A8A94">claude · review</span><span class="mono" style="color: #EDEDF0">"opus5-5" isn't a claude model. Did you mean claude-opus-5-5?</span></div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap"><button type="button" class="abtn" style="background: #E9A81C; color: #141417">Use claude-opus-5-5</button><button type="button" class="abtn" style="color: #9C9CA6; border: 1px solid #383840">Open in Config</button></div>
+</div>
+<div style="padding: 12px; border-radius: 9px; background: #17171B; border: 1px solid #26262C; display: flex; flex-direction: column; gap: 6px">
+<span style="font: 600 12px/1.3 Inter, sans-serif; color: #9C9CA6">Warnings · don't block</span>
+<span class="mono" style="color: #9C9CA6">claude · implementation: claude-opus-6-0 isn't listed, used as typed.</span>
+</div>
+<span class="mono" style="color: #8A8A94">Only the agent the goal runs on is checked. Same rule on the CLI: skill-bill goal exits with the same message.</span>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1480,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
