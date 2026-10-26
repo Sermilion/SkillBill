@@ -125,6 +125,29 @@ class AcceptanceCriterionInteractionTraceTest {
   }
 
   @Test
+  fun `rechecks accept multiple line ranges for one file`() {
+    val parsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(
+          "Recheck AC-001: holds evidence src/Flow.kt:71-93,123-133, src/State.kt:10,20",
+          emptyList(),
+          listOf("AC-001"),
+        ),
+      )
+    assertEquals(
+      "src/Flow.kt:71-93, src/Flow.kt:123-133, src/State.kt:10, src/State.kt:20",
+      parsed.rechecks.single().evidenceRef,
+    )
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "Recheck AC-001: holds evidence 71-93, src/Flow.kt:123",
+        emptyList(),
+        listOf("AC-001"),
+      ),
+    )
+  }
+
+  @Test
   fun `a broken owner reopens its criterion and a later hold repairs the scenario`() {
     val accepted = acceptedState()
     val stamped = accepted.requireInteractionTrace(emptyList())

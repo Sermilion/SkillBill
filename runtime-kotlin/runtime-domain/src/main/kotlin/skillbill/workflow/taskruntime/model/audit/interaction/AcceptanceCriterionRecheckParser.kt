@@ -48,7 +48,16 @@ internal object AcceptanceCriterionRecheckParser {
   private fun citationsOf(rest: String): String? {
     val listed = EVIDENCE.matchEntire(rest)?.groupValues?.get(1) ?: return null
     val parts = listed.split(',').map { it.trim().trimEnd('*', '`', '_', '.') }
-    return parts.takeIf { list -> list.isNotEmpty() && list.all(CITATION::matches) }?.joinToString(", ")
+    var path: String? = null
+    val expanded =
+      parts.map { part ->
+        when {
+          CITATION.matches(part) -> part.also { path = it.substringBeforeLast(':') }
+          LINE_RANGE.matches(part) && path != null -> "$path:$part"
+          else -> return null
+        }
+      }
+    return expanded.takeIf { it.isNotEmpty() }?.joinToString(", ")
   }
 
   private fun rejected(reason: String) = AcceptanceCriterionRecheckParse.Rejected(reason)
@@ -90,4 +99,5 @@ internal object AcceptanceCriterionRecheckParser {
   private val NATURAL_LINE =
     Regex("""^\W*(?:Recheck\s+)?(AC-\d{3})\s+(?:still\s+)?(holds|regressed)\b[.:]?\s*(.*)$""", RegexOption.IGNORE_CASE)
   private val CITATION = Regex("""[\w./\\-]+:\d+(?:-\d+)?""")
+  private val LINE_RANGE = Regex("""\d+(?:-\d+)?""")
 }
