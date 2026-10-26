@@ -75,6 +75,56 @@ class AcceptanceCriterionInteractionTraceTest {
   }
 
   @Test
+  fun `extra rechecks do not prevent requested rechecks from settling`() {
+    val prose =
+      """
+      Interaction IS-001: holds trace src/Flow.kt:10
+      Recheck AC-001: holds evidence src/Flow.kt:10
+      Recheck AC-003: holds evidence src/Other.kt:20
+      """.trimIndent()
+    val parsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(prose, listOf(scenario), listOf("AC-001")),
+      )
+
+    assertEquals(listOf("AC-003"), parsed.ignoredRefs)
+    assertEquals(listOf(AcceptanceCriterionRecheckEntry("AC-001", HOLDS, "src/Flow.kt:10")), parsed.rechecks)
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(prose, listOf(scenario), listOf("AC-002")),
+    )
+  }
+
+  @Test
+  fun `audit accepts clear prose with source citations`() {
+    val prose =
+      """
+      IS-001 (tap Profiles) holds. Navigation reaches the right route at src/Flow.kt:10.
+      AC-001 still holds. The selection is checked at src/Flow.kt:11 and src/State.kt:20.
+      """.trimIndent()
+    val parsed =
+      assertIs<AcceptanceCriterionInteractionTraceParse.Parsed>(
+        AcceptanceCriterionInteractionTraceParser.parse(prose, listOf(scenario), listOf("AC-001")),
+      )
+
+    assertEquals(AcceptanceCriterionInteractionVerdict.HOLDS, parsed.entries.single().verdict)
+    assertEquals("src/Flow.kt:11, src/State.kt:20", parsed.rechecks.single().evidenceRef)
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "IS-001 (tap Profiles) holds, but the route is not known.\nAC-001 still holds.",
+        listOf(scenario),
+        listOf("AC-001"),
+      ),
+    )
+    assertIs<AcceptanceCriterionInteractionTraceParse.Malformed>(
+      AcceptanceCriterionInteractionTraceParser.parse(
+        "AC-001 still regressed. See src/Flow.kt:11.\nRecheck AC-001: holds evidence src/Flow.kt:11",
+        emptyList(),
+        listOf("AC-001"),
+      ),
+    )
+  }
+
+  @Test
   fun `a broken owner reopens its criterion and a later hold repairs the scenario`() {
     val accepted = acceptedState()
     val stamped = accepted.requireInteractionTrace(emptyList())

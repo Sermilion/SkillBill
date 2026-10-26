@@ -22,7 +22,13 @@ object AcceptanceCriterionInteractionTraceParser {
     recheckRefs: List<String> = emptyList(),
   ): AcceptanceCriterionInteractionTraceParse {
     val wanted = targets.map { it.scenarioRef }.toSet()
-    val lines = prose.lineSequence().mapNotNull(::traceLine).toList()
+    val source = prose.lines()
+    val explicit = source.mapNotNull(::traceLine)
+    val natural =
+      source.mapNotNull(::naturalTraceLine).filter { line ->
+        explicit.none { it.ref == line.ref && it.verdict == line.verdict }
+      }
+    val lines = explicit + natural
     val ignored = lines.map { it.ref }.filter { it !in wanted }.distinct()
     val entries =
       when (val result = entriesFor(targets, lines.filter { it.ref in wanted })) {
@@ -31,10 +37,14 @@ object AcceptanceCriterionInteractionTraceParser {
       }
     val rechecks =
       when (val result = AcceptanceCriterionRecheckParser.parse(prose, recheckRefs)) {
-        is AcceptanceCriterionRecheckParse.Parsed -> result.entries
+        is AcceptanceCriterionRecheckParse.Parsed -> result
         is AcceptanceCriterionRecheckParse.Rejected -> return malformed(result.reason)
       }
-    return AcceptanceCriterionInteractionTraceParse.Parsed(entries, ignored, rechecks)
+    return AcceptanceCriterionInteractionTraceParse.Parsed(
+      entries,
+      (ignored + rechecks.ignoredRefs).distinct(),
+      rechecks.entries,
+    )
   }
 
   private fun entriesFor(
@@ -69,6 +79,16 @@ object AcceptanceCriterionInteractionTraceParser {
       }
     val rest = match.groupValues[REST_GROUP].trim().trimEnd('*', '`', '_', ' ')
     return TraceLine(match.groupValues[REF_GROUP].uppercase(), verdict, rest)
+  }
+
+  private fun naturalTraceLine(line: String): TraceLine? {
+    val match = NATURAL_LINE.find(line.trim()) ?: return null
+    if (match.groupValues[REST_GROUP].isBlank()) return null
+    val verdict =
+      AcceptanceCriterionInteractionVerdict.entries.first {
+        it.wireValue.equals(match.groupValues[VERDICT_GROUP], ignoreCase = true)
+      }
+    return TraceLine(match.groupValues[REF_GROUP].uppercase(), verdict, "trace ${match.groupValues[REST_GROUP]}")
   }
 
   private fun entryFor(
@@ -131,6 +151,8 @@ object AcceptanceCriterionInteractionTraceParser {
       RegexOption.IGNORE_CASE,
     )
   private val TRACE = Regex("""^trace\s+(.+)$""", RegexOption.IGNORE_CASE)
+  private val NATURAL_LINE =
+    Regex("""^\W*(IS-\d{3})\s*(?:\([^)]*\)\s*)?(holds|unknown)\b[.:]?\s*(.*)$""", RegexOption.IGNORE_CASE)
   private val BROKEN_REST = Regex("""^owner\s+(AC-\d{3})\s+trace\s+(.+)$""", RegexOption.IGNORE_CASE)
   private val CITATION = Regex("""[\w./\\-]+:\d+(?:-\d+)?""")
 }

@@ -1,7 +1,10 @@
 package skillbill.workflow.taskruntime.model.audit.interaction
 
 internal sealed interface AcceptanceCriterionRecheckParse {
-  data class Parsed(val entries: List<AcceptanceCriterionRecheckEntry>) : AcceptanceCriterionRecheckParse
+  data class Parsed(
+    val entries: List<AcceptanceCriterionRecheckEntry>,
+    val ignoredRefs: List<String>,
+  ) : AcceptanceCriterionRecheckParse
 
   data class Rejected(val reason: String) : AcceptanceCriterionRecheckParse
 }
@@ -11,27 +14,35 @@ internal object AcceptanceCriterionRecheckParser {
     prose: String,
     refs: List<String>,
   ): AcceptanceCriterionRecheckParse {
-    if (refs.isEmpty()) return AcceptanceCriterionRecheckParse.Parsed(emptyList())
-    val lines = prose.lineSequence().mapNotNull { LINE.find(it.trim()) }.map(::recheckLine).toList()
-    val unlisted = lines.firstOrNull { it.ref !in refs }
+    val source = prose.lines()
+    val explicit = source.mapNotNull { LINE.find(it.trim()) }.map(::recheckLine)
+    val natural =
+      source.mapNotNull(::naturalLine).filter { line ->
+        explicit.none { it.ref == line.ref && it.verdict == line.verdict }
+      }
+    val allLines = explicit + natural
+    val ignored = allLines.map { it.ref }.filter { it !in refs }.distinct()
+    val lines = allLines.filter { it.ref in refs }
     val duplicated = lines.groupingBy { it.ref }.eachCount().entries.firstOrNull { it.value > 1 }
     val missing = refs.firstOrNull { ref -> lines.none { it.ref == ref } }
     return when {
-      unlisted != null -> rejected("Recheck ${unlisted.ref} is not a listed re-check.")
       duplicated != null -> rejected("Recheck ${duplicated.key} appears more than once.")
       missing != null -> rejected("Recheck $missing has no line.")
-      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } })
+      else -> entriesOf(refs.map { ref -> lines.single { it.ref == ref } }, ignored)
     }
   }
 
-  private fun entriesOf(lines: List<RecheckLine>): AcceptanceCriterionRecheckParse {
+  private fun entriesOf(
+    lines: List<RecheckLine>,
+    ignoredRefs: List<String>,
+  ): AcceptanceCriterionRecheckParse {
     val entries =
       lines.map { line ->
         val citations =
           citationsOf(line.rest) ?: return rejected("Recheck ${line.ref} needs `evidence <path:line list>`.")
         AcceptanceCriterionRecheckEntry(line.ref, line.verdict, citations)
       }
-    return AcceptanceCriterionRecheckParse.Parsed(entries)
+    return AcceptanceCriterionRecheckParse.Parsed(entries, ignoredRefs)
   }
 
   private fun citationsOf(rest: String): String? {
@@ -51,6 +62,16 @@ internal object AcceptanceCriterionRecheckParser {
     return RecheckLine(match.groupValues[REF_GROUP].uppercase(), verdict, rest)
   }
 
+  private fun naturalLine(text: String): RecheckLine? {
+    val match = NATURAL_LINE.find(text.trim()) ?: return null
+    val verdict =
+      AcceptanceCriterionRecheckVerdict.entries.first {
+        it.wireValue.equals(match.groupValues[VERDICT_GROUP], ignoreCase = true)
+      }
+    val citations = CITATION.findAll(match.groupValues[REST_GROUP]).map { it.value }.toList()
+    return RecheckLine(match.groupValues[REF_GROUP].uppercase(), verdict, "evidence ${citations.joinToString(", ")}")
+  }
+
   private data class RecheckLine(
     val ref: String,
     val verdict: AcceptanceCriterionRecheckVerdict,
@@ -66,5 +87,7 @@ internal object AcceptanceCriterionRecheckParser {
       RegexOption.IGNORE_CASE,
     )
   private val EVIDENCE = Regex("""^evidence\s+(.+)$""", RegexOption.IGNORE_CASE)
+  private val NATURAL_LINE =
+    Regex("""^\W*(?:Recheck\s+)?(AC-\d{3})\s+(?:still\s+)?(holds|regressed)\b[.:]?\s*(.*)$""", RegexOption.IGNORE_CASE)
   private val CITATION = Regex("""[\w./\\-]+:\d+(?:-\d+)?""")
 }

@@ -298,6 +298,18 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val predicted =
       state.recordInteractionTrace(settlement)
         ?: return rejected(phase, "The interaction trace does not match the pending scenarios.")
+    if (parsed.ignoredRefs.isNotEmpty()) {
+      AcceptanceCriterionTraceDiagnostics.warn(
+        diagnostics,
+        phase.workflowId,
+        AcceptanceCriterionTraceDiagnostics.Warning(
+          "out_of_scope",
+          "pending_refs",
+          "ignored",
+          "refs=${parsed.ignoredRefs.joinToString(",")}".take(AcceptanceCriterionTraceDiagnostics.MAX_REASON),
+        ),
+      )
+    }
     return commit(
       session,
       phase,

@@ -281,9 +281,17 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
 
           val trace = phase(f, "audit", 4)
           assertEquals(RequiredPhaseWrite.Acknowledged, recorder.start(trace))
-          val settled = recorder.complete(output(trace, "advance", "Recheck AC-001: $verdict evidence src/Flow.kt:11"))
+          val settled =
+            recorder.complete(
+              output(
+                trace,
+                "advance",
+                "Recheck AC-001: $verdict evidence src/Flow.kt:11\nRecheck AC-002: holds evidence src/Other.kt:3",
+              ),
+            )
 
           assertEquals(RequiredPhaseWrite.Acknowledged, settled)
+          assertTrue(f.warnings.any { it.contains("record_kind=out_of_scope") && it.contains("AC-002") })
           val state = assertNotNull(scope.snapshot)
           assertEquals(stage, state.stage)
           assertEquals(emptyList(), state.interactionTrace.pendingRechecks)
