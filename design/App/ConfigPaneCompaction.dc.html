@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Config · compaction</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.ovl{font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8A8A94;text-transform:uppercase}
+.abtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 11px;border-radius:7px;font:600 11.5px/1 Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+.abtn:disabled{cursor:not-allowed;opacity:.45}
+.abtn:focus-visible,.sw:focus-visible{outline:2px solid #E9A81C;outline-offset:1px}
+.sw{all:unset;box-sizing:border-box;width:34px;height:20px;border-radius:999px;position:relative;cursor:pointer;flex:none}
+.rng{width:100%;accent-color:#E9A81C;margin:0}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 320px; min-height: 760px; background: #141417; font-family: Inter, system-ui, sans-serif; color: #EDEDF0; padding: 14px; display: flex; flex-direction: column; gap: 16px">
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="flex: 1; font: 600 12.5px/1 Inter, sans-serif">Compact long phases</span>
+<button type="button" class="sw" role="switch" aria-checked="{{enabled}}" aria-label="Compaction" onClick="{{toggle}}" style="{{switchStyle}}"><span style="{{knobStyle}}"></span></button>
+</div>
+<p style="margin: 0; font: 400 10.5px/1.5 'JetBrains Mono', monospace; color: #9C9CA6">Shrinks an agent's context before it fills, so long phases keep going instead of stalling.</p>
+</div>
+
+<sc-if value="{{enabled}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="cmp-window" class="ovl">Context window</label>
+<div style="display: flex; align-items: center; gap: 8px">
+<input id="cmp-window" type="text" inputmode="numeric" value="{{windowText}}" onChange="{{onWindow}}" style="all: unset; box-sizing: border-box; flex: 1; height: 30px; padding: 0 10px; border-radius: 7px; background: #0E0E11; border: 1px solid #383840; font: 500 12px/1 'JetBrains Mono', monospace; color: #EDEDF0">
+<span style="font: 400 11px/1 'JetBrains Mono', monospace; color: #9C9CA6">tokens</span>
+</div>
+<span style="font: 400 10px/1.4 'JetBrains Mono', monospace; color: #8A8A94">default 400,000</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: baseline"><label for="cmp-pct" class="ovl" style="flex: 1">Compact at</label><span style="font: 700 15px/1 'Space Grotesk', sans-serif; color: #F3C462">{{pct}}%</span></div>
+<input id="cmp-pct" class="rng" type="range" min="1" max="100" value="{{pct}}" onChange="{{onPct}}" aria-valuetext="{{pct}} percent, compacts at {{triggerText}} tokens">
+<div aria-hidden="true" style="position: relative; height: 26px; border-radius: 6px; background: #0E0E11; border: 1px solid #26262C; overflow: hidden">
+<div style="{{floorStyle}}"></div>
+<div style="{{fillStyle}}"></div>
+<div style="{{floorLineStyle}}"></div>
+</div>
+<div style="display: flex; font: 400 10px/1.3 'JetBrains Mono', monospace; color: #8A8A94"><span style="flex: 1">0</span><span>floor 200,000</span><span style="flex: 1; text-align: right">{{windowText}}</span></div>
+<div role="status" style="{{readoutStyle}}">{{readout}}</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center"><span class="ovl" style="flex: 1">Per-phase</span><span style="font: 400 10px/1 'JetBrains Mono', monospace; color: #8A8A94">0 overrides</span></div>
+<div style="padding: 12px; border: 1px dashed #383840; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start">
+<span style="font: 400 10.5px/1.5 'JetBrains Mono', monospace; color: #9C9CA6">Every phase uses the setting above.</span>
+<button type="button" class="abtn" style="color: #F3C462; border: 1px solid rgba(233,168,28,.5)">Add phase override</button>
+</div>
+</div>
+
+</div>
+</sc-if>
+
+<sc-if value="{{dirty}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 6px; padding-top: 4px">
+<button type="button" class="abtn" onClick="{{save}}" disabled="{{blocked}}" style="background: #E9A81C; color: #141417">Save</button>
+<button type="button" class="abtn" onClick="{{revert}}" style="color: #9C9CA6; border: 1px solid #383840">Cancel</button>
+</div>
+</sc-if>
+<sc-if value="{{saved}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="font: 500 10.5px/1 'JetBrains Mono', monospace; color: #3FB950">Saved to config.json</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"embedded":{"editor":null,"default":false},"$preview":{"width":320,"height":860}}'>
+const FLOOR = 200000;
+const fmt = (n) => n.toLocaleString('en-US');
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { enabled: true, window: 400000, pct: 70, saved: { enabled: true, window: 400000, pct: 70 }, justSaved: false };
+  }
+  renderVals() {
+    const s = this.state;
+    const trigger = Math.floor(s.window / 100) * s.pct;
+    const below = trigger < FLOOR;
+    const invalid = !(s.window > 0);
+    const floorPct = Math.min(100, (FLOOR / Math.max(s.window, 1)) * 100);
+    const dirty = s.enabled !== s.saved.enabled || s.window !== s.saved.window || s.pct !== s.saved.pct;
+    return {
+      enabled: s.enabled,
+      toggle: () => this.setState({ enabled: !s.enabled, justSaved: false }),
+      switchStyle: s.enabled ? 'background: #E9A81C' : 'background: #383840',
+      knobStyle: 'position: absolute; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #141417; left: ' + (s.enabled ? '17px' : '3px'),
+      windowText: fmt(s.window),
+      onWindow: (e) => this.setState({ window: parseInt(String(e.target.value).replace(/[^0-9]/g, ''), 10) || 0, justSaved: false }),
+      pct: s.pct,
+      onPct: (e) => this.setState({ pct: parseInt(e.target.value, 10), justSaved: false }),
+      triggerText: fmt(trigger),
+      floorStyle: 'position: absolute; left: 0; top: 0; bottom: 0; width: ' + floorPct + '%; background: repeating-linear-gradient(135deg, rgba(240,85,91,.10) 0 6px, transparent 6px 12px)',
+      fillStyle: 'position: absolute; left: 0; top: 7px; height: 10px; border-radius: 0 3px 3px 0; width: ' + s.pct + '%; background: ' + (below ? '#F0555B' : '#E9A81C'),
+      floorLineStyle: 'position: absolute; top: 0; bottom: 0; width: 1px; background: #F0555B; left: ' + floorPct + '%',
+      readout: invalid ? 'The window must be a positive number of tokens.' : (below ? 'Compacts at ' + fmt(trigger) + ' tokens, below the 200,000 floor. The context would refill within a few turns and the provider aborts the run.' : 'Compacts at ' + fmt(trigger) + ' tokens.'),
+      readoutStyle: 'font: 500 10.5px/1.5 \'JetBrains Mono\', monospace; color: ' + (below || invalid ? '#F0555B' : '#3FB950'),
+      dirty,
+      blocked: below || invalid,
+      save: () => this.setState({ saved: { enabled: s.enabled, window: s.window, pct: s.pct }, justSaved: true }),
+      revert: () => this.setState({ enabled: s.saved.enabled, window: s.saved.window, pct: s.saved.pct }),
+      saved: s.justSaved && !dirty,
+    };
+  }
+}
+</script>
+</body>
+</html>
