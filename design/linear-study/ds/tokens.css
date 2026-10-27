@@ -1,0 +1,100 @@
+/* Skill Bill — Linear study · design tokens
+ * Layout concept: darker app frame, one inset content panel with a 12px radius,
+ * dense 13px UI type, hairline borders, a single amber accent used sparingly.
+ * Dark only, like the desktop app.
+ * Components read tokens; no component rule holds a literal color. */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces: frame < panel < raised < overlay */
+  --bg-frame: #0B0B0D;
+  --bg-panel: #111114;
+  --bg-raised: #17171B;
+  --bg-overlay: #1C1C21;
+  --bg-inset: #08080A;
+  --bg-hover: rgba(255, 255, 255, 0.035);
+  --bg-active: rgba(255, 255, 255, 0.065);
+  --bg-selected: rgba(233, 168, 28, 0.08);
+  --scrim: rgba(4, 4, 6, 0.6);
+
+  /* Lines */
+  --border-subtle: rgba(255, 255, 255, 0.055);
+  --border: #26262C;
+  --border-strong: #383840;
+
+  /* Text */
+  --fg: #EDEDF0;
+  --fg-2: #C4C4CC;
+  --fg-muted: #9C9CA6;
+  --fg-faint: #6A6A74;
+
+  /* Accent: Skill Bill amber */
+  --accent: #E9A81C;
+  --accent-hover: #F3C462;
+  --accent-fg: #14100A;
+  --accent-text: #F3C462;
+  --accent-tint: rgba(233, 168, 28, 0.12);
+  --accent-ring: rgba(233, 168, 28, 0.5);
+
+  /* Lifecycle states (semantic, separate from the accent) */
+  --st-active: #E9A81C;
+  --st-planning: #6FA8DC;
+  --st-blocked: #E2703C;
+  --st-failed: #F0555B;
+  --st-done: #3FB950;
+  --st-paused: #9C9CA6;
+  --st-pending: #6A6A74;
+
+  /* Data colors for repositories and agents (labels only) */
+  --data-1: #E9A81C;
+  --data-2: #6FA8DC;
+  --data-3: #3FB950;
+  --data-4: #E2703C;
+  --data-5: #B48EAD;
+  --data-6: #9C9CA6;
+
+  /* Elevation */
+  --shadow-pop: 0 0 0 0.5px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  /* Type */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --t-2xs: 10.5px;
+  --t-xs: 11.5px;
+  --t-sm: 12px;
+  --t-base: 13px;
+  --t-md: 14px;
+  --t-lg: 16px;
+  --t-xl: 20px;
+  --t-2xl: 24px;
+
+  /* Space: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* Radius */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-full: 999px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --dur-fast: 90ms;
+  --dur: 160ms;
+
+  /* Sizes */
+  --row-h: 36px;
+  --header-h: 44px;
+  --sidebar-w: 236px;
+  --props-w: 272px;
+}
