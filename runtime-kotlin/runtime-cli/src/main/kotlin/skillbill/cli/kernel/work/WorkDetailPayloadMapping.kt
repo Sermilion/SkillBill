@@ -9,12 +9,14 @@ import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
+import skillbill.goalrunner.model.GoalRunnerAssessmentResult
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailPhase
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.contracts.workflow.featuretask.GoalAssessmentRecordPayloadKeys as AssessmentKeys
 
 internal fun workBoardDiagnosticWireMap(diagnostic: WorkBoardDiagnostic): Map<String, Any?> =
   buildMap {
@@ -150,4 +152,27 @@ private fun goalStatusWireMap(projection: GoalRunnerStatusProjection): Map<Strin
       WorkDetailPayloadKeys.COMPLETED_SUBTASK_VALIDATION,
       projection.completedSubtaskValidation.map { it.toStatusWire().toMap() },
     )
+    projection.goalAssessmentResult?.let { put(WorkDetailPayloadKeys.GOAL_ASSESSMENT, goalAssessmentWireMap(it)) }
   }
+
+private fun goalAssessmentWireMap(result: GoalRunnerAssessmentResult): Map<String, Any?> =
+  linkedMapOf(
+    AssessmentKeys.STATE to result.state.wireValue,
+    AssessmentKeys.ROUND to result.round,
+    AssessmentKeys.EXIT_REASON to result.exitReason?.wireValue,
+    WorkDetailPayloadKeys.FIX_RAN to result.fixRan,
+    AssessmentKeys.OPEN_FINDING_REFS to result.openFindingRefs,
+    AssessmentKeys.FINDINGS to
+      result.findings.map { finding ->
+        linkedMapOf(
+          AssessmentKeys.FINDING_REF to finding.ref,
+          AssessmentKeys.SEVERITY to finding.severity.wireValue,
+          AssessmentKeys.PATH to finding.path,
+          AssessmentKeys.LINE to finding.line,
+          AssessmentKeys.FAILURE_SCENARIO to finding.failureScenario,
+          AssessmentKeys.VERIFICATION to finding.verification.wireValue,
+          AssessmentKeys.STATE to finding.state.wireValue,
+          AssessmentKeys.EVIDENCE to finding.evidence,
+        )
+      },
+  )

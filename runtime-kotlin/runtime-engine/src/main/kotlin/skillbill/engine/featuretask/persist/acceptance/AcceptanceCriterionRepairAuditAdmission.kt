@@ -9,6 +9,8 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCrite
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionAuditResultMode
+import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterionInteractionTraceSettlement
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
@@ -19,14 +21,20 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
     next: AcceptanceCriterionRepairState,
     mutation: AcceptanceCriterionRepairMutation,
     evidence: AcceptanceCriterionRepairAuditEvidence?,
+  ): Boolean =
+    if (evidence == null) {
+      !requiresEvidence(mutation)
+    } else {
+      acceptsEvidence(mutation) && evidenceMatches(next, mutation, evidence.payload)
+    }
+
+  private fun evidenceMatches(
+    next: AcceptanceCriterionRepairState,
+    mutation: AcceptanceCriterionRepairMutation,
+    wire: FeatureTaskRuntimeWorkflowArtifactMap,
   ): Boolean {
-    if (!needsAudit(mutation)) return evidence == null
-    val wire = evidence?.payload ?: return false
-    validator.validate(
-      FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT,
-      wire,
-      "serial-audit-admission",
-    )
+    val kind = FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT
+    if (validator.violation(kind, wire, "serial-audit-admission") != null) return false
     val identity =
       wire[Keys.CATALOG_ID] == next.catalogId && wire[Keys.SPEC_DIGEST] == next.specDigest &&
         wire[Keys.EXECUTION_ID] == next.executionId
@@ -34,12 +42,16 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
     return when (mutation) {
       is AcceptanceCriterionRepairMutation.Discover -> discoveryMatches(wire, next)
       is AcceptanceCriterionRepairMutation.Outcome -> targetedMatches(wire, next, mutation)
+      is AcceptanceCriterionRepairMutation.InteractionTrace -> interactionTraceMatches(wire, next, mutation)
       else -> false
     }
   }
 
-  private fun needsAudit(mutation: AcceptanceCriterionRepairMutation): Boolean =
-    mutation is AcceptanceCriterionRepairMutation.Discover ||
+  private fun requiresEvidence(mutation: AcceptanceCriterionRepairMutation): Boolean =
+    mutation is AcceptanceCriterionRepairMutation.InteractionTrace
+
+  private fun acceptsEvidence(mutation: AcceptanceCriterionRepairMutation): Boolean =
+    requiresEvidence(mutation) || mutation is AcceptanceCriterionRepairMutation.Discover ||
       mutation is AcceptanceCriterionRepairMutation.Outcome && mutation.outcome.kind in
       setOf(
         AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,
@@ -92,6 +104,64 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
       noGraphChanges(
         wire,
       )
+  }
+
+  private fun interactionTraceMatches(
+    wire: FeatureTaskRuntimeWorkflowArtifactMap,
+    next: AcceptanceCriterionRepairState,
+    mutation: AcceptanceCriterionRepairMutation.InteractionTrace,
+  ): Boolean {
+    val settlement = mutation.settlement
+    val unbound = wire[Keys.EXPECTED_REVISION] == null && wire[Keys.RESERVATION_ID] == null
+    val output =
+      wire[Keys.PRODUCING_OUTPUT_ID] == settlement.outputId &&
+        wire[Keys.PRODUCING_OUTPUT_DIGEST] == settlement.outputDigest
+    val source = wire[Keys.TREE_DIGEST] == settlement.treeDigest && wire[Keys.CHECKPOINT_ID] == settlement.checkpointId
+    val regressed = (wire[Keys.REGRESSED_REFS] as List<*>).toSet() == settlement.reopenedRefs.toSet()
+    val noEdges = (wire[Keys.EDGE_CHANGES] as List<*>).isEmpty()
+    val traced = wire[Keys.MODE] == AcceptanceCriterionAuditResultMode.INTERACTION_TRACE.wireValue
+    return traced && unbound && output && source && regressed && noEdges &&
+      interactionsMatch(wire, settlement) && recheckEntriesMatch(wire, settlement) && criteriaMatch(wire, next)
+  }
+
+  private fun recheckEntriesMatch(
+    wire: FeatureTaskRuntimeWorkflowArtifactMap,
+    settlement: AcceptanceCriterionInteractionTraceSettlement,
+  ): Boolean {
+    val rechecks = (wire[Keys.RECHECKS] as List<*>).map { FeatureTaskRuntimeWorkflowArtifactMap.from(it) }
+    return rechecks.size == settlement.rechecks.size &&
+      settlement.rechecks.all { entry ->
+        rechecks.any {
+          it[Keys.CRITERION_REF] == entry.criterionRef && it[Keys.VERDICT] == entry.verdict.wireValue &&
+            it[Keys.EVIDENCE_REF] == entry.evidenceRef
+        }
+      }
+  }
+
+  private fun interactionsMatch(
+    wire: FeatureTaskRuntimeWorkflowArtifactMap,
+    settlement: AcceptanceCriterionInteractionTraceSettlement,
+  ): Boolean {
+    val interactions = (wire[Keys.INTERACTIONS] as List<*>).map { FeatureTaskRuntimeWorkflowArtifactMap.from(it) }
+    return interactions.size == settlement.entries.size &&
+      settlement.entries.all { entry ->
+        interactions.any {
+          it[Keys.SCENARIO_REF] == entry.scenarioRef && it[Keys.VERDICT] == entry.verdict.wireValue &&
+            it[Keys.OWNER_REF] == entry.ownerRef && it[Keys.TRACE_REF] == entry.traceRef
+        }
+      }
+  }
+
+  private fun criteriaMatch(
+    wire: FeatureTaskRuntimeWorkflowArtifactMap,
+    next: AcceptanceCriterionRepairState,
+  ): Boolean {
+    val facts = facts(wire)
+    return facts.size == next.criteria.size &&
+      facts.all { fact ->
+        val criterion = next.criteria.singleOrNull { it.canonicalRef == fact[Keys.CANONICAL_REF] }
+        criterion != null && criterionMatches(fact, criterion)
+      }
   }
 
   private fun noGraphChanges(wire: FeatureTaskRuntimeWorkflowArtifactMap): Boolean =

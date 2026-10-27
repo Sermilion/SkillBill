@@ -1,5 +1,8 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
+import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceScope
+import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
+import skillbill.engine.featuretask.model.audit.ValidateProbeScope
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationTurn
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -32,6 +35,8 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val priorAcceptanceAudit: String? = null,
   val currentAcceptanceCriterion: String? = null,
   val priorAcceptanceRepairFailures: String? = null,
+  val interactionTraceScope: AcceptanceAuditInteractionTraceScope? = null,
+  val unknownInteractionScenarios: List<UnknownInteractionScenarioContext> = emptyList(),
   val noChangeClaim: String? = null,
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry? = null,
   val implementationContinuation: FeatureTaskRuntimeImplementationContinuation? = null,
@@ -40,6 +45,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val validationGateTriagePlan: String? = null,
   val validationGateRepair: Boolean = false,
   val validationGateTriage: Boolean = false,
+  val validateProbeScopeSource: () -> ValidateProbeScope? = { null },
   val agentRunValidateFallback: Boolean = false,
   val packConfirmationGateCommand: String? = null,
   val packBuildCommand: String? = null,
@@ -53,4 +59,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val implementationChecklistAddress: String? = null,
   val projectInstructions: PhaseProjectInstructionsResolution.Injected? = null,
   val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
-)
+) {
+  val validateProbeScope: ValidateProbeScope? get() = validateProbeScopeSource()
+  val validateProbesActive: Boolean get() = validateProbeScope != null
+}

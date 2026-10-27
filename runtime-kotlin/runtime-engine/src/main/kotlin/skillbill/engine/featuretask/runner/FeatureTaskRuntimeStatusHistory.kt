@@ -18,9 +18,9 @@ internal fun statusPhaseHistory(
   val edges = mutableMapOf<String, FeatureTaskRuntimePhaseLedgerEntry>()
   val continuations = mutableMapOf<String, FeatureTaskRuntimePhaseLedgerEntry>()
   val declaredLoops = FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges.map { it.loopId }.toSet()
-  query.visitPhaseLedger(workflowId) { raw ->
-    val selectedRecords = records.filterKeys { it == raw.phaseId }
-    history.normalize(selectedRecords, listOf(raw)).ledger.forEach { entry ->
+  val keepEntry = history.ledgerEntryFilter(records)
+  query.visitPhaseLedger(workflowId) { entry ->
+    if (keepEntry(entry)) {
       actions.retainLatest(entry.phaseId to entry.action, entry)
       val loopId = entry.loopId
       if (entry.action == FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE && loopId in declaredLoops) {

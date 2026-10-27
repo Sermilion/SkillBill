@@ -108,7 +108,10 @@ class WorkDetailCommand(
   private val format by option("--format", help = "Output format.")
     .choice("json")
     .default("json")
-  private val pageSize by option("--page-size", help = "Maximum records from each detail list per page, from 1 to 100.")
+  private val pageSize by option(
+    "--page-size",
+    help = "Maximum records from each detail list per page, from 1 to 100. Goal subtasks fill one page of up to 100.",
+  )
     .int().default(WorkPaginationLimits.DEFAULT_PAGE_SIZE).validate {
       require(it in 1..WorkPaginationLimits.MAX_PAGE_SIZE) { "Page size must be from 1 to 100." }
     }

@@ -20,6 +20,7 @@ import skillbill.ports.projectstore.model.ProjectStoreLocation
 import skillbill.ports.projectstore.model.RepositoryLineage
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import java.io.IOException
+import java.net.URI
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -38,8 +39,8 @@ class ProjectStoreResolver(
   private val clock: Clock,
 ) : ProjectStorePort, ProjectCatalogPort {
   private val resolvedContext = context.withProcessDefaults()
-  private val storeParent: Path =
-    resolveTelemetryStateDir(resolvedContext.environment, resolvedContext.userHome).resolve(PROJECTS_DIRECTORY)
+  private val stateDir: Path = resolveTelemetryStateDir(resolvedContext.environment, resolvedContext.userHome)
+  private val storeParent: Path = stateDir.resolve(PROJECTS_DIRECTORY)
   private val cache = ConcurrentHashMap<Path, ProjectStoreLocation>()
   private val lock = Any()
 
@@ -84,7 +85,17 @@ class ProjectStoreResolver(
       specsRoot = store.dir.resolve(ProjectStoreLayout.SPECS_DIRECTORY),
       checkoutRoots = store.liveCheckouts().map(::workingTreeOf).distinct(),
       lastSeen = parseInstantOrNull(store.record.lastSeen),
+      lastCheckoutRoot = workingTreeOf(store.record.commonDir),
+      hasSpecs = hasBundles(store.dir.resolve(ProjectStoreLayout.SPECS_DIRECTORY)),
     )
+
+  private fun hasBundles(specsRoot: Path): Boolean =
+    Files.isDirectory(specsRoot) &&
+      try {
+        Files.list(specsRoot).use { entries -> entries.anyMatch(Files::isDirectory) }
+      } catch (_: IOException) {
+        false
+      }
 
   private fun workingTreeOf(commonDir: String): Path {
     val path = Path.of(commonDir)
@@ -108,7 +119,7 @@ class ProjectStoreResolver(
   }
 
   private fun bind(checkout: Checkout): ProjectStoreLocation {
-    val gitRoot = checkout.gitRoot ?: return bindNonGit(checkout, NON_GIT_OUTCOME)
+    val gitRoot = checkout.gitRoot ?: return bindNonGitOutsideState(checkout)
     val stores = scan()
     val exact = exactMatch(stores, checkout)
     if (exact != null && exact.record.keyKind != ProjectKeyKind.NO_COMMITS_PATH) return touch(exact)
@@ -127,6 +138,20 @@ class ProjectStoreResolver(
     stores.firstOrNull {
       checkout.commonDir.toString() in it.record.checkoutCommonDirs && it.record.linkedTo == null
     }
+
+  private fun bindNonGitOutsideState(checkout: Checkout): ProjectStoreLocation =
+    if (checkout.commonDir.startsWith(canonicalStateDir())) {
+      location(nonGitProjectId(checkout.commonDir))
+    } else {
+      bindNonGit(checkout, NON_GIT_OUTCOME)
+    }
+
+  private fun canonicalStateDir(): Path =
+    runCatching { repositories.canonicalPath(stateDir) }
+      .getOrElse { failure ->
+        failure.rethrowIfCancellation()
+        stateDir.toAbsolutePath().normalize()
+      }
 
   private fun bindNonGit(
     checkout: Checkout,
@@ -151,8 +176,7 @@ class ProjectStoreResolver(
     return when {
       candidates.isEmpty() -> createStore(null, baseId, checkout, lineage)
       only != null && only.liveCheckouts().isEmpty() -> adopt(only, checkout, lineage)
-      only != null && lineage.remoteUrl != null && only.record.remoteUrl == lineage.remoteUrl ->
-        share(only, checkout)
+      only != null && isSameRepository(only, lineage) -> share(only, checkout)
       only != null -> createStore("$SECOND_CLONE_OUTCOME matched=${only.id}", baseId, checkout, lineage)
       else ->
         createStore(
@@ -163,6 +187,25 @@ class ProjectStoreResolver(
         )
     }
   }
+
+  private fun isSameRepository(
+    candidate: StoredProject,
+    lineage: RepositoryLineage,
+  ): Boolean {
+    val remote = lineage.remoteUrl ?: return false
+    if (sameRemote(candidate.record.remoteUrl, remote)) return true
+    val local = localRemoteCommonDir(remote) ?: return false
+    return local in candidate.record.checkoutCommonDirs
+  }
+
+  private fun localRemoteCommonDir(remote: String): String? =
+    runCatching {
+      val path = if (remote.startsWith(FILE_SCHEME)) Path.of(URI(remote)) else Path.of(remote).takeIf { it.isAbsolute }
+      path?.takeIf(Files::isDirectory)?.let(::locate)?.takeIf { it.gitRoot != null }?.commonDir?.toString()
+    }.getOrElse { failure ->
+      failure.rethrowIfCancellation()
+      null
+    }
 
   private fun adopt(
     candidate: StoredProject,
@@ -435,6 +478,7 @@ class ProjectStoreResolver(
     const val PROJECTS_DIRECTORY = "projects"
     const val RECORD_FILE = "project.json"
     const val GIT_MARKER = ".git"
+    const val FILE_SCHEME = "file:"
     const val NON_GIT_OUTCOME = "non_git_path_hash"
     const val NO_COMMITS_OUTCOME = "no_commits_path_key"
     const val ADOPTED_OUTCOME = "lineage_adopted"

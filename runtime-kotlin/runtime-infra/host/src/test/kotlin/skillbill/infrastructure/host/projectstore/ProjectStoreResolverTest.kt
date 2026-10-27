@@ -90,6 +90,43 @@ class ProjectStoreResolverTest {
   }
 
   @Test
+  fun `a clone whose remote is the same repository in another URL form shares the original store`() {
+    val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
+    val https = gitCheckout("https")
+    lineages.set(https, LINEAGE_A.copy(remoteUrl = "https://example.com/org/repo"))
+
+    val first = resolver().resolve(original)
+
+    assertEquals(first.projectId, resolver().resolve(https).projectId)
+    assertEquals(listOf(first.projectId), storeNames())
+  }
+
+  @Test
+  fun `a scratch clone whose remote is a local checkout of the project shares that checkout's store`() {
+    val original = gitCheckout("original").also { lineages.set(it, LINEAGE_A) }
+    val scratch = gitCheckout("scratch").also { lineages.set(it, LINEAGE_A.copy(remoteUrl = original.toString())) }
+    val elsewhere = Files.createDirectories(home.resolve("elsewhere"))
+    val stray = gitCheckout("stray").also { lineages.set(it, LINEAGE_A.copy(remoteUrl = elsewhere.toString())) }
+
+    val first = resolver().resolve(original)
+
+    assertEquals(first.projectId, resolver().resolve(scratch).projectId)
+    val strayId = resolver().resolve(stray).projectId
+    assertEquals("${first.projectId}-2", strayId, "A local remote that is no checkout of it stays apart.")
+  }
+
+  @Test
+  fun `a directory inside the state folder gets a location but no store record`() {
+    val installedSkills = Files.createDirectories(stateDir.resolve("installed-skills").resolve("skill-bill"))
+
+    val location = resolver().resolve(installedSkills)
+
+    assertTrue(location.root.startsWith(storeParent))
+    val recorded = Files.exists(storeParent) && storeNames().isNotEmpty()
+    assertTrue(!recorded, "No store is recorded for Skill Bill's own folders.")
+  }
+
+  @Test
   fun `a no-commit repository is re-keyed to its lineage after the first commit`() {
     val repo = gitCheckout("fresh")
     val noCommits = resolver().resolve(repo)

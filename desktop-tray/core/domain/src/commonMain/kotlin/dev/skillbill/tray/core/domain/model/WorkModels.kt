@@ -123,6 +123,7 @@ data class Detail(
   val validation: List<SubtaskValidation> = emptyList(),
   val phaseResults: List<SubtaskPhaseResults> = emptyList(),
   val goalQa: GoalQaResult? = null,
+  val goalAssessment: GoalAssessmentResult? = null,
   val latestActivity: LatestActivity = LatestActivity(),
   val executionHistory: List<ExecutionInstance> = emptyList(),
   val observedAt: Instant? = null,
@@ -238,6 +239,27 @@ data class GoalQaResult(
 )
 /** One finding goal QA reported; [fixed] is true when a later QA run no longer saw it. */
 data class GoalQaFinding(val id: String, val title: String, val evidencePath: String?, val fixed: Boolean)
+enum class GoalAssessmentState { PENDING, RUNNING, COMPLETED, SKIPPED }
+enum class GoalAssessmentVerification { CONFIRMED, REFUTED, UNVERIFIED, NOT_REQUIRED }
+enum class GoalAssessmentFindingState { OPEN, FIXED, REFUTED }
+/** The goal assessment stage; [exitReason] is null until the stage settles, and a skipped stage carries no findings. */
+data class GoalAssessmentResult(
+  val state: GoalAssessmentState,
+  val round: Int,
+  val exitReason: String?,
+  val fixRan: Boolean,
+  val findings: List<GoalAssessmentFinding> = emptyList(),
+)
+data class GoalAssessmentFinding(
+  val ref: String,
+  val severity: String,
+  val path: String,
+  val line: Int,
+  val failureScenario: String,
+  val verification: GoalAssessmentVerification,
+  val state: GoalAssessmentFindingState,
+  val evidence: String,
+)
 data class ValidationCommand(val command: String, val exitCode: Int)
 data class ValidationResult(val status: String, val checks: List<String>, val gateRunCount: Int?, val gates: List<ValidationGateRun>)
 data class ValidationGateRun(
@@ -406,11 +428,20 @@ data class AppSettings(
   val specPaneOpen: Boolean = false,
   /** Expanded spec node paths per project id; collapsed nodes are never stored. */
   val specExpandedPaths: Map<String, Set<String>> = emptyMap(),
+  val terminalPaneOpen: Boolean = false,
+  val terminalPaneHeightDp: Int = TERMINAL_PANE_DEFAULT_HEIGHT_DP,
   /** The Claude Code config directory runs started here use when they recorded none; null leaves the app's environment. */
   val claudeConfigDir: String? = null,
 ) {
   init {
     require(lastPopoverTab in setOf("Goals", "Phases"))
+    require(terminalPaneHeightDp in TERMINAL_PANE_MIN_HEIGHT_DP..TERMINAL_PANE_MAX_HEIGHT_DP)
+  }
+
+  companion object {
+    const val TERMINAL_PANE_MIN_HEIGHT_DP = 120
+    const val TERMINAL_PANE_MAX_HEIGHT_DP = 1200
+    const val TERMINAL_PANE_DEFAULT_HEIGHT_DP = 240
   }
 }
 

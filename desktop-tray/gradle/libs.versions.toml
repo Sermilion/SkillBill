@@ -20,6 +20,12 @@ sqlite-jdbc = "3.53.0.0"
 slf4j = "2.0.17"
 datastore = "1.2.1"
 paging = "3.5.2"
+# JetBrains intellij-dependencies: org.jetbrains.jediterm
+jediterm = "3.57"
+# Maven Central: org.jetbrains.pty4j
+pty4j = "0.13.10"
+# The runtime's version (runtime-kotlin/gradle/libs.versions.toml); JediTerm asks for a newer one.
+jetbrains-annotations = "23.0.0"
 
 [libraries]
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -60,3 +66,7 @@ sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "datastore" }
 paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }
+jediterm-core = { module = "org.jetbrains.jediterm:jediterm-core", version.ref = "jediterm" }
+jediterm-ui = { module = "org.jetbrains.jediterm:jediterm-ui", version.ref = "jediterm" }
+pty4j = { module = "org.jetbrains.pty4j:pty4j", version.ref = "pty4j" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }

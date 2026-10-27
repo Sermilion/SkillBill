@@ -36,13 +36,21 @@ object FeatureTaskRuntimeRunStateReconstruction {
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     rawRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
     rules: (String) -> PhaseResumeRules,
-  ): List<FeatureTaskRuntimePhaseLedgerEntry> {
+  ): List<FeatureTaskRuntimePhaseLedgerEntry> = ledger.filter(statelessAuditLedgerEntryFilter(rawRecords, rules))
+
+  internal fun statelessAuditLedgerEntryFilter(
+    rawRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
+    rules: (String) -> PhaseResumeRules,
+  ): (FeatureTaskRuntimePhaseLedgerEntry) -> Boolean {
     val normalizedRecords = normalizeInitialRecordsForStatelessAudit(rawRecords, rules)
-    return ledger.filterNot { entry ->
-      isRetiredAuditGapLoop(entry.loopId) ||
+    val droppedBlockedPhases = mutableMapOf<String, Boolean>()
+    return { entry ->
+      !isRetiredAuditGapLoop(entry.loopId) &&
         (
-          entry.action == FeatureTaskRuntimePhaseLedgerAction.BLOCKED &&
-            rules(entry.phaseId).dropsBlockedLedgerEntry(rawRecords[entry.phaseId], normalizedRecords[entry.phaseId])
+          entry.action != FeatureTaskRuntimePhaseLedgerAction.BLOCKED ||
+            !droppedBlockedPhases.getOrPut(entry.phaseId) {
+              rules(entry.phaseId).dropsBlockedLedgerEntry(rawRecords[entry.phaseId], normalizedRecords[entry.phaseId])
+            }
         )
     }
   }

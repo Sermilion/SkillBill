@@ -362,6 +362,32 @@ class DetailViewModelTest {
   }
 
   @Test
+  fun `an append read after a later store write still adds its rows`() = runTest(dispatcher) {
+    val stored = controllable().copy(databaseStoreId = "store", databaseRevision = 7)
+    val vm = viewModel(detail(stored).copy(subtasks = listOf(subtask(1)), cursors = mapOf(DetailList.SUBTASKS to "s1")))
+    details.onDetail = { Outcome.Value(detail(stored.copy(databaseRevision = 8)).copy(subtasks = listOf(subtask(2)))) }
+
+    vm.onAction(DetailAction.LoadMore(DetailList.SUBTASKS))
+    runCurrent()
+
+    assertEquals(listOf(1, 2), vm.subtaskIds())
+    assertEquals(AppendState.Exhausted, vm.state.value.append(DetailList.SUBTASKS))
+  }
+
+  @Test
+  fun `an append read from another store is refused and keeps the rows`() = runTest(dispatcher) {
+    val stored = controllable().copy(databaseStoreId = "store", databaseRevision = 7)
+    val vm = viewModel(detail(stored).copy(subtasks = listOf(subtask(1)), cursors = mapOf(DetailList.SUBTASKS to "s1")))
+    details.onDetail = { Outcome.Value(detail(stored.copy(databaseStoreId = "replaced")).copy(subtasks = listOf(subtask(2)))) }
+
+    vm.onAction(DetailAction.LoadMore(DetailList.SUBTASKS))
+    runCurrent()
+
+    assertEquals(listOf(1), vm.subtaskIds())
+    assertIs<AppendState.Failed>(vm.state.value.append(DetailList.SUBTASKS))
+  }
+
+  @Test
   fun `a failed append keeps the rows and can be retried while a second request waits for the first`() = runTest(dispatcher) {
     val vm = viewModel(detail(controllable()).copy(subtasks = listOf(subtask(1)), cursors = mapOf(DetailList.SUBTASKS to "s1")))
     val problem = Problem(ProblemCode.DATABASE_ACCESS, "Timed out")

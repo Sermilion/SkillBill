@@ -11,6 +11,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PROJECTION_
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_TEST_PROBES_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
@@ -21,6 +22,7 @@ import skillbill.error.shellcontent.invalidFeatureTaskRuntimeProjectionMeasureme
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeReadinessEvidenceSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeSharedEvidenceProjectionSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
+import skillbill.error.shellcontent.invalidValidationTestProbes
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeBuildReceiptSchemaPaths
@@ -30,8 +32,11 @@ import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeProjectionMe
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeSharedEvidenceProjectionSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeValidationEvidenceSchemaPaths
+import skillbill.infrastructure.contracts.locator.ValidationTestProbesSchemaPaths
 import skillbill.infrastructure.contracts.review.offendingValue
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
+import skillbill.workflow.taskruntime.model.validation.ValidationTestProbeShape
+import skillbill.contracts.workflow.featuretask.ValidationTestProbePayloadKeys as ProbeKeys
 
 private const val MAX_REPORTED_SCHEMA_FAILURES = 3
 
@@ -136,6 +141,29 @@ object FeatureTaskRuntimeValidationEvidenceSchemaValidator {
       error = { reason -> invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, reason) },
     ),
   )
+}
+
+object ValidationTestProbesSchemaValidator {
+  fun validate(
+    payload: Map<String, Any?>,
+    sourceLabel: String,
+  ) {
+    val request =
+      FeatureTaskRuntimeSchemaValidationRequest(
+        payload = payload,
+        classpathResource = ValidationTestProbesSchemaPaths.CLASSPATH_RESOURCE,
+        expectedId = ValidationTestProbesSchemaPaths.EXPECTED_SCHEMA_ID,
+        expectedContractVersion = FEATURE_TASK_RUNTIME_VALIDATION_TEST_PROBES_CONTRACT_VERSION,
+        error = { reason -> invalidValidationTestProbes(sourceLabel, reason) },
+      )
+    (violationAgainst(request) ?: duplicateTestRef(payload))?.let { throw request.error(it) }
+  }
+
+  private fun duplicateTestRef(payload: Map<String, Any?>): String? =
+    ValidationTestProbeShape.duplicateRef(
+      (payload[ProbeKeys.TEST_PROBES] as? List<*>).orEmpty()
+        .mapNotNull { (it as? Map<*, *>)?.get(ProbeKeys.TEST_REF) as? String },
+    )
 }
 
 object FeatureTaskRuntimeReadinessEvidenceSchemaValidator {

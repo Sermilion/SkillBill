@@ -3,6 +3,8 @@ package dev.skillbill.tray.feature.detail
 import dev.skillbill.tray.core.domain.model.ExecutionInstance
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
+import dev.skillbill.tray.core.domain.model.GoalAssessmentResult
+import dev.skillbill.tray.core.domain.model.GoalAssessmentState
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.PlanRunReport
 import dev.skillbill.tray.core.domain.model.PlannedSubtask
@@ -153,6 +155,37 @@ class DetailPresentationTest {
       List(3) { PipelineStepState.COMPLETE },
       states(workItem("a", lifecycle = Lifecycle.TERMINAL).copy(currentStepId = "complete")),
     )
+  }
+
+  @Test
+  fun `running assessment pills follow the reported step and a settled assessment follows the record`() {
+    val pipeline = listOf("goal_assessment", "goal_assessment_fix", "pr")
+    val done = workItem("a", lifecycle = Lifecycle.TERMINAL).copy(currentStepId = "complete")
+    fun states(item: WorkItem, assessment: GoalAssessmentResult?) =
+      goalFinishSteps(item, detail(item).copy(goalFinishPipeline = pipeline, goalAssessment = assessment)).map { it.state }
+
+    assertEquals(
+      listOf(PipelineStepState.SKIPPED, PipelineStepState.SKIPPED, PipelineStepState.COMPLETE),
+      states(done, GoalAssessmentResult(GoalAssessmentState.SKIPPED, 0, "skipped_no_changes", false)),
+    )
+    val running = GoalAssessmentResult(GoalAssessmentState.RUNNING, 2, null, true)
+    assertEquals(
+      listOf(PipelineStepState.ACTIVE, PipelineStepState.PENDING, PipelineStepState.PENDING),
+      states(workItem("a").copy(currentStepId = "goal_assessment"), running),
+    )
+    assertEquals(
+      listOf(PipelineStepState.COMPLETE, PipelineStepState.ACTIVE, PipelineStepState.PENDING),
+      states(workItem("a").copy(currentStepId = "goal_assessment_fix"), running),
+    )
+    assertEquals(
+      listOf(PipelineStepState.ACTIVE, PipelineStepState.PENDING, PipelineStepState.PENDING),
+      states(workItem("a").copy(currentStepId = "goal_assessment"), GoalAssessmentResult(GoalAssessmentState.PENDING, 1, null, false)),
+    )
+    assertEquals(
+      List(3) { PipelineStepState.COMPLETE },
+      states(done, GoalAssessmentResult(GoalAssessmentState.COMPLETED, 2, "clean", true)),
+    )
+    assertEquals(List(3) { PipelineStepState.COMPLETE }, states(done, null))
   }
 
   @Test

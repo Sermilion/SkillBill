@@ -132,8 +132,10 @@ internal fun parseFallbackCapabilities(
 
 internal const val CODE_REVIEW_FALLBACK_CAPABILITY = "code-review"
 
-internal fun extractCustomFields(manifest: Map<String, Any?>): Map<String, Any?> =
-  manifest.filterKeys { it !in anchoredTopLevelFieldNames() }
+internal fun extractCustomFields(manifest: Map<String, Any?>): Map<String, Any?> {
+  val anchoredFields = anchoredTopLevelFieldNames()
+  return manifest.filterKeys { it !in anchoredFields }
+}
 
 internal fun validatedCustomFields(
   slug: String,

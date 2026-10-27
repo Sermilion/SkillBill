@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeEx
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairAuditAdmission
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairLegacyAdoption
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
@@ -37,6 +38,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
@@ -58,7 +60,7 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class FeatureTaskRuntimeSerialRepairTest {
   @Test
-  fun `partial progress keeps one reservation and plan until independent verification accepts the repair`() {
+  fun `two unfinished repairs consume attempts before a third repair passes independent verification`() {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
     val git = AtomicReference<RecordingWorkflowGitOperations>()
     val reservations = mutableListOf<String>()
@@ -82,17 +84,17 @@ class FeatureTaskRuntimeSerialRepairTest {
             "audit_implement_fix" -> {
               repairs++
               reservations += assertNotNull(state?.reservation?.reservationId)
-              check(repairs <= 5) { "The completed repair did not reach independent verification." }
+              check(repairs <= 3) { "The completed repair did not reach independent verification." }
               git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
-              assertEquals(0, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
-              assertTrue(state.outcomes.isEmpty())
+              assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
+              assertEquals(repairs - 1, state.outcomes.size)
               assertEquals(
                 AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
                 state.criteria.first().sourceDisposition,
               )
               defaultPhaseOutput(request).replace(
                 "\"status\": \"completed\",",
-                "\"status\": \"completed\", \"verdict\": \"${if (repairs < 5) "progress" else "satisfied"}\",",
+                "\"status\": \"completed\", \"verdict\": \"${if (repairs < 3) "progress" else "satisfied"}\",",
               )
             }
             else -> defaultPhaseOutput(request)
@@ -111,20 +113,31 @@ class FeatureTaskRuntimeSerialRepairTest {
           worker,
         )
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(5, repairs)
-      assertEquals(1, plans)
-      assertEquals(1, reservations.distinct().size)
-      assertTrue(assertNotNull(scope.snapshot).unsuccessfulTotals.isEmpty())
+      assertEquals(3, repairs)
+      assertEquals(3, plans)
+      assertEquals(3, reservations.distinct().size)
+      assertEquals(2, assertNotNull(scope.snapshot).unsuccessfulTotals["AC-001"])
       assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
-      assertEquals(1, scope.snapshot?.outcomes?.size)
+      assertEquals(3, scope.snapshot?.outcomes?.size)
+      assertTrue(assertNotNull(scope.snapshot).interactionTrace.pendingRechecks.isEmpty())
       assertContains(harness.launchOrder(), "review")
       assertContains(harness.launchOrder(), "validate")
     }
   }
 
   @Test
-  fun `progress reports that change no source spend the criterion budget instead of continuing indefinitely`() {
+  fun `progress reports that change no source block after three attempts`() =
+    assertProgressReportsBlock(changesSource = false)
+
+  @Test
+  fun `progress reports that change source block after three attempts`() =
+    assertProgressReportsBlock(
+      changesSource = true,
+    )
+
+  private fun assertProgressReportsBlock(changesSource: Boolean) {
     val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val git = AtomicReference<RecordingWorkflowGitOperations>()
     val reservations = mutableListOf<String>()
     var repairs = 0
     var plans = 0
@@ -146,7 +159,8 @@ class FeatureTaskRuntimeSerialRepairTest {
             "audit_implement_fix" -> {
               repairs++
               reservations += assertNotNull(state?.reservation?.reservationId)
-              check(repairs <= 3) { "Idle progress reports bypassed the criterion budget." }
+              check(repairs <= 3) { "Unfinished repair reports bypassed the criterion budget." }
+              if (changesSource) git.get().contentIdentities["src/Foo.kt"] = "repair-$repairs"
               assertEquals(repairs - 1, assertNotNull(state).unsuccessfulTotals.getOrDefault("AC-001", 0))
               defaultPhaseOutput(request).replace(
                 "\"status\": \"completed\",",
@@ -159,6 +173,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       }
     val harness =
       runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    git.set(harness.gitOperations)
     harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
     runOwnedSerial(harness) { admitted, worker, scope ->
       accounting.set(scope)
@@ -908,6 +923,10 @@ class FeatureTaskRuntimeSerialRepairTest {
       state == null -> serialDiscoveryOutput()
       state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
         serialStructuredAuditOutput(audits, state, "The complete production repair is present.")
+      state.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED ->
+        auditRemainingAcOutput(
+          state.interactionTrace.pendingRechecks.joinToString("\n") { "Recheck $it: holds evidence src/Foo.kt:1" },
+        ).replace("\"status\": \"completed\",", "\"status\": \"completed\", \"verdict\": \"satisfied\",")
       else ->
         auditRemainingAcOutput("Open criteria: AC-001").replace(
           "\"status\": \"completed\",",
@@ -1051,6 +1070,8 @@ class FeatureTaskRuntimeSerialRepairTest {
         Keys.DEPENDENCIES to emptyList<Any>(),
         Keys.REGRESSED_REFS to emptyList<String>(),
         Keys.EDGE_CHANGES to emptyList<Any>(),
+        Keys.INTERACTIONS to emptyList<Any>(),
+        Keys.RECHECKS to emptyList<Any>(),
       )
     return JsonCodec.mapToJsonString(
       mapOf(
@@ -1105,25 +1126,12 @@ class FeatureTaskRuntimeSerialRepairTest {
         Keys.EXPECTED_REVISION to current.revision.takeIf { targeted },
         Keys.CURRENT_CRITERION_REF to current.currentCriterionRef.takeIf { targeted },
         Keys.RESERVATION_ID to current.reservation?.reservationId.takeIf { targeted },
-        Keys.CRITERIA to
-          selected.map { criterion ->
-            val disposition =
-              if (targeted) {
-                AcceptanceCriterionSourceDisposition.SOURCE_CLOSED
-              } else {
-                criterion.sourceDisposition
-              }
-            mapOf(
-              Keys.CANONICAL_REF to criterion.canonicalRef,
-              Keys.SOURCE_DISPOSITION to disposition.wireValue,
-              Keys.VALIDATION_OBLIGATION to criterion.validationObligation.wireValue,
-              Keys.VALIDATION_OWNER_AVAILABLE to criterion.validationOwnerAvailable,
-              Keys.EVIDENCE_REF to prose,
-            )
-          },
+        Keys.CRITERIA to selected.map { criterionFact(it, targeted, prose) },
         Keys.DEPENDENCIES to current.asRepairWireMap()[Keys.DEPENDENCIES],
         Keys.REGRESSED_REFS to emptyList<String>(),
         Keys.EDGE_CHANGES to emptyList<Any>(),
+        Keys.INTERACTIONS to emptyList<Any>(),
+        Keys.RECHECKS to emptyList<Any>(),
       )
     return JsonCodec.mapToJsonString(
       mapOf(
@@ -1138,6 +1146,21 @@ class FeatureTaskRuntimeSerialRepairTest {
             Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to auditResult,
           ),
       ),
+    )
+  }
+
+  private fun criterionFact(
+    criterion: AcceptanceCriterionRepairCriterion,
+    targeted: Boolean,
+    prose: String,
+  ): Map<String, Any?> {
+    val disposition = if (targeted) AcceptanceCriterionSourceDisposition.SOURCE_CLOSED else criterion.sourceDisposition
+    return mapOf(
+      Keys.CANONICAL_REF to criterion.canonicalRef,
+      Keys.SOURCE_DISPOSITION to disposition.wireValue,
+      Keys.VALIDATION_OBLIGATION to criterion.validationObligation.wireValue,
+      Keys.VALIDATION_OWNER_AVAILABLE to criterion.validationOwnerAvailable,
+      Keys.EVIDENCE_REF to prose,
     )
   }
 
@@ -1182,6 +1205,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         source,
         RUNNER_TEST_PROJECT_STORE,
       ),
+      AcceptanceCriterionRepairAuditAdmission(validator),
     )
   }
 }

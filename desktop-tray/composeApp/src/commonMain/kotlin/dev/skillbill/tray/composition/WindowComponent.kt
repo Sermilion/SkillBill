@@ -16,6 +16,8 @@ import dev.skillbill.tray.feature.detail.DetailViewModel
 import dev.skillbill.tray.feature.history.HistoryViewModel
 import dev.skillbill.tray.feature.settings.SettingsViewModel
 import dev.skillbill.tray.feature.specs.SpecsViewModel
+import dev.skillbill.tray.feature.terminal.TerminalTabs
+import dev.skillbill.tray.feature.terminal.TerminalViewModel
 import dev.skillbill.tray.feature.work.WorkViewModel
 import kotlin.time.Clock
 import me.tatarka.inject.annotations.Inject
@@ -93,4 +95,6 @@ class EntryViewModels(
   fun settings() = SettingsViewModel(settings, storeStatus, agentHomes)
 
   fun specs() = SpecsViewModel(specs, details, controls, settings, launches)
+
+  fun terminal(tabs: TerminalTabs) = TerminalViewModel(details, settings, tabs)
 }

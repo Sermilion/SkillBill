@@ -2317,4 +2317,6 @@ private val expectedMigrationDefinitions =
     82 to "persist-pending-product-report-comments",
     83 to "record-qa-report-text",
     84 to "record-qa-failure-kind",
+    85 to "record-goal-subtask-trace-probe-counts",
+    86 to "record-goal-assessment-counts",
   )

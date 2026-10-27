@@ -33,13 +33,18 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 import java.time.ZoneOffset
 
@@ -155,16 +160,9 @@ internal class WorkflowServiceBlockedPhaseRetry(
             unitOfWork.dbPath.toString(),
           ),
         )
-    if (family.definition.isTerminalStatus(existing.workflowStatus)) {
-      return BlockedPhaseRetryPersistence.error(
-        WorkflowUpdateResult.Error(
-          request.workflowId,
-          "Runtime workflow '${request.workflowId}' is already terminal with status '${existing.workflowStatus}'.",
-          unitOfWork.dbPath.toString(),
-        ),
-      )
-    }
+    retryRejection(unitOfWork, existing)?.let { return BlockedPhaseRetryPersistence.error(it) }
     val artifacts = existing.artifacts
+    val auditState = operatorAuditState(existing, request.phaseId)
     val phaseRecords = decodeFeatureTaskRuntimePhaseRecords(artifacts)
     val ledger = FeatureTaskRuntimePhaseLedgerDecoder.decode(artifacts)
     val blockedRecord =
@@ -176,7 +174,7 @@ internal class WorkflowServiceBlockedPhaseRetry(
             unitOfWork.dbPath.toString(),
           ),
         )
-    return if (blockedRecord.status.workflowStepStatus() != WorkflowStepStatus.BLOCKED) {
+    return if (blockedRecord.status.workflowStepStatus() != WorkflowStepStatus.BLOCKED && auditState == null) {
       BlockedPhaseRetryPersistence.error(
         WorkflowUpdateResult.Error(
           request.workflowId,
@@ -190,9 +188,39 @@ internal class WorkflowServiceBlockedPhaseRetry(
         unitOfWork,
         existing,
         request,
-        BlockedPhaseRetryState(phaseRecords, ledger, blockedRecord),
+        BlockedPhaseRetryState(phaseRecords, ledger, blockedRecord, auditState),
       )
     }
+  }
+
+  private fun operatorAuditState(
+    existing: WorkflowStateSnapshot,
+    phaseId: String,
+  ): AcceptanceCriterionRepairState? {
+    if (phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT ||
+      existing.workflowStatus !in setOf(WorkflowStatus.BLOCKED, WorkflowStatus.PENDING)
+    ) {
+      return null
+    }
+    val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+    if (!family.contains(existing.artifacts)) return null
+    return FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(existing.artifacts))
+      .toAcceptanceCriterionRepairState(family.label()).reopenForOperatorAudit()
+  }
+
+  private fun retryRejection(
+    unitOfWork: UnitOfWork,
+    existing: WorkflowStateSnapshot,
+  ): WorkflowUpdateResult.Error? {
+    val reason =
+      when {
+        WorkflowFamily.TASK_RUNTIME.definition.isTerminalStatus(existing.workflowStatus) ->
+          "Runtime workflow '${existing.workflowId}' is already terminal with status '${existing.workflowStatus}'."
+        unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId) != null ->
+          "Runtime workflow still has worker ownership. Stop its worker before retrying."
+        else -> null
+      }
+    return reason?.let { WorkflowUpdateResult.Error(existing.workflowId, it, unitOfWork.dbPath.toString()) }
   }
 
   private fun persistBlockedPhaseRetry(
@@ -315,7 +343,11 @@ private fun blockedPhaseRetryInput(
               "previous_blocked_record" to state.blockedRecord.asWorkflowArtifactEntry(),
             ),
           ),
-        ),
+        ) +
+          state.repairState?.let {
+            val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+            mapOf(family.entry(it.asRepairWireMap()))
+          }.orEmpty(),
       ),
     sessionId = "",
   )
@@ -332,6 +364,7 @@ private data class BlockedPhaseRetryState(
   val phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   val blockedRecord: FeatureTaskRuntimePhaseRecord,
+  val repairState: AcceptanceCriterionRepairState?,
 ) {
   fun reopenedPhaseRecords(): Map<String, FeatureTaskRuntimePhaseRecord> =
     LinkedHashMap(phaseRecords).apply {

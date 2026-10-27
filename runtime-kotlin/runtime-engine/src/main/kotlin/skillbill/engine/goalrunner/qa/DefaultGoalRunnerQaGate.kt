@@ -6,6 +6,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
@@ -52,7 +53,6 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Clock
-import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -86,16 +86,9 @@ class DefaultGoalRunnerQaGate(
       ) {
         throw failure
       }
-      containFailure(state, request, containable(failure), invocationId)
+      containFailure(state, request, containableFailure(failure), invocationId)
     }
   }
-
-  private fun containable(failure: Throwable): Exception =
-    if (failure is Exception && failure !is CancellationException && failure !is InterruptedException) {
-      failure
-    } else {
-      throw failure
-    }
 
   private fun containFailure(
     state: GoalRunnerManifestState,
@@ -169,7 +162,7 @@ class DefaultGoalRunnerQaGate(
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "goal_qa_gate: could not record the QA warning for '${state.parentWorkflowId}'.",
-        containable(recordingFailure),
+        containableFailure(recordingFailure),
       )
     }
   }

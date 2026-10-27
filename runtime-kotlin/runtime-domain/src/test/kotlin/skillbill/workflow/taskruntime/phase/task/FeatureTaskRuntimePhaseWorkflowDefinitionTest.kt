@@ -165,6 +165,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR to "Phase 9: Pull Request",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR to "Phase 10: Monitor",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX to "Phase 10b: Monitor Fix",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT to "Goal Assessment",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX to "Goal Assessment Fix",
       ),
       definition.stepLabels,
     )

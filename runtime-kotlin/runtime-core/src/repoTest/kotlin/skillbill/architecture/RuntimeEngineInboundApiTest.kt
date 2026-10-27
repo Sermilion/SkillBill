@@ -89,6 +89,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService",
         "skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService",
         "skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver",
+        "skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler",
         "skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver",
         "skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry",
         "skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService",

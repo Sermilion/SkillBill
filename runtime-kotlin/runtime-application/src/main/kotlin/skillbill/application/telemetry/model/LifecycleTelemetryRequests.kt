@@ -1,5 +1,8 @@
 package skillbill.application.telemetry.model
 
+import skillbill.telemetry.model.GoalAssessmentTelemetryCounts
+import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts
+
 data class FeatureTaskRuntimeStartedRequest(
   val featureSize: String,
   val issueKey: String,
@@ -132,6 +135,7 @@ data class GoalSubtaskFinishedRequest(
   val blockedReason: String?,
   val finalizingAgentId: String? = null,
   val participatingAgentIds: List<String> = emptyList(),
+  val traceProbeCounts: GoalSubtaskTraceProbeCounts = GoalSubtaskTraceProbeCounts(),
 )
 
 data class GoalFinishedRequest(
@@ -148,6 +152,7 @@ data class GoalFinishedRequest(
   val stopReason: String? = null,
   val noChangeReason: String? = null,
   val parentWorkflowId: String? = null,
+  val assessmentCounts: GoalAssessmentTelemetryCounts = GoalAssessmentTelemetryCounts(),
 )
 
 data class GoalIssueFinishedRequest(

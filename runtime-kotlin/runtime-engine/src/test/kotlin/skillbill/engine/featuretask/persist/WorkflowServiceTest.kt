@@ -142,6 +142,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.decodePhaseLedgerEntryFromArtifact
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleSubtask
@@ -149,6 +150,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
@@ -4223,6 +4225,31 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
   }
 
   @Test
+  fun `resume preserves retry anchors outside the recent ledger window`() {
+    val harness = hydrationHarness()
+    harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+    val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    val artifacts = parseChildArtifacts(child)
+    val recent = retainedPlanningLedger(artifacts, 184)
+    val retry = recent.first() + mapOf("action" to "retry", "sequence_number" to 182)
+    val ledger =
+      retainPhaseLedgerEvidence(
+        (listOf(retry) + recent).map { requireNotNull(decodePhaseLedgerEntryFromArtifact(it)) },
+        FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
+      ).map { it.asWorkflowArtifactEntry() }
+    artifacts["feature_task_runtime_phase_ledger"] = ledger
+    val before = child.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts))
+    harness.workflows.saveFeatureTaskWorkflow(before, RUNTIME)
+
+    assertEquals(182, ledger.first()["sequence_number"])
+    assertEquals(185, ledger[1]["sequence_number"])
+    assertIs<GoalRunnerChildWorkflowSaveResult.Saved>(
+      harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+    )
+    assertEquals(before, harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+  }
+
+  @Test
   fun `retained planning admission rejects incomplete windows sequence gaps and altered surviving import entries`() {
     val harness = hydrationHarness()
     harness.store.saveNewChildWorkflow(harness.state, harness.setup)
@@ -4232,6 +4259,13 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     val damaged =
       listOf(
         ledger.dropLast(1),
+        ledger.mapIndexed { index, entry ->
+          if (index >= ledger.size / 2) {
+            entry + ("sequence_number" to (entry["sequence_number"] as Int) + 1)
+          } else {
+            entry
+          }
+        },
         ledger.mapIndexed { index, entry ->
           if (index == 1) entry + ("sequence_number" to 3) else entry
         },

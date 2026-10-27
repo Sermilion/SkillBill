@@ -130,6 +130,32 @@ class SpecBrowserServiceTest {
   }
 
   @Test
+  fun `the project list holds only projects with spec bundles, named after their checkout or the last one recorded`() {
+    val root = Files.createTempDirectory("spec-browser-projects").toRealPath()
+    val environment = mapOf("HOME" to root.toString())
+    val database = sqliteSessionFactoryForTests(root, root.resolve("absent.db").toString(), environment)
+
+    fun entry(
+      id: String,
+      checkouts: List<Path>,
+      last: Path,
+      hasSpecs: Boolean,
+    ) = ProjectCatalogEntry(id, root.resolve(id), root.resolve(id).resolve("specs"), checkouts, null, last, hasSpecs)
+    val live = Files.createDirectories(root.resolve("skill-bill"))
+    val entries =
+      listOf(
+        entry("l-live", listOf(live), live, hasSpecs = true),
+        entry("l-moved", emptyList(), root.resolve("old-clone"), hasSpecs = true),
+        entry("d-state", listOf(root), root, hasSpecs = false),
+      )
+
+    val projects = harness(database, root, entries).service.projects()
+
+    assertEquals(listOf("l-live", "l-moved"), projects.map { it.projectId })
+    assertEquals(listOf("skill-bill", "old-clone"), projects.map { it.displayName })
+  }
+
+  @Test
   fun `a live goal overrides the manifest status`() {
     assertLiveGoalOverrides(manifestStatus = "in_progress", subtasks = listOf(1 to "complete", 2 to "pending"))
   }
@@ -190,6 +216,7 @@ class SpecBrowserServiceTest {
   private fun harness(
     database: DatabaseSessionFactory,
     repo: Path,
+    entries: List<ProjectCatalogEntry>? = null,
   ): Harness {
     val storeRoot = repo.resolve("store")
     val manifests = testWorkflowGoalRunnerManifestStore(database, TestDecompositionManifestStore, ideStatusClock)
@@ -217,7 +244,9 @@ class SpecBrowserServiceTest {
     val catalog =
       object : ProjectCatalogPort {
         override fun list() =
-          listOf(ProjectCatalogEntry("test-project", storeRoot, storeRoot.resolve("specs"), listOf(repo), null))
+          entries ?: listOf(
+            ProjectCatalogEntry("test-project", storeRoot, storeRoot.resolve("specs"), listOf(repo), null, repo, true),
+          )
       }
     return Harness(
       SpecBrowserService(

@@ -43,6 +43,23 @@ class ProjectStoreCatalogTest {
     assertTrue(warnings.any { it.startsWith("seam=project_store_record ") && "broken" in it })
   }
 
+  @Test
+  fun `catalog reports whether a store holds spec bundles and the checkout it was last recorded at`() {
+    val gone = home.resolve("gone-clone").resolve(".git")
+    writeRecord("with-bundle", "2026-01-01T00:00:00Z", gone, emptyList())
+    writeRecord("files-only", "2026-01-01T00:00:00Z", gone, emptyList())
+    Files.createDirectories(storeParent.resolve("with-bundle").resolve("specs").resolve("SKILL-1-thing"))
+    Files.createDirectories(storeParent.resolve("files-only").resolve("specs"))
+    Files.writeString(storeParent.resolve("files-only").resolve("specs").resolve("notes.md"), "notes")
+
+    val entries = catalog().list().associateBy { it.projectId }
+
+    assertEquals(true, entries.getValue("with-bundle").hasSpecs)
+    assertEquals(false, entries.getValue("files-only").hasSpecs)
+    assertEquals(home.resolve("gone-clone"), entries.getValue("with-bundle").lastCheckoutRoot)
+    assertEquals(emptyList(), entries.getValue("with-bundle").checkoutRoots)
+  }
+
   private fun writeRecord(
     id: String,
     lastSeen: String,

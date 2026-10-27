@@ -23,6 +23,9 @@ val body: FontFamily
 val display: FontFamily
   @Composable get() = Font(Res.font.space_grotesk).let { font -> remember(font) { FontFamily(font) } }
 
+/** The bundled JetBrains Mono bytes, for hosts that need the font outside Compose (a Swing terminal); [Res] is internal. */
+suspend fun monoFontBytes(): ByteArray = Res.readBytes("font/jetbrains_mono.ttf")
+
 @Composable
 fun DesignSystemTheme(content: @Composable () -> Unit) {
   val displayFont = display

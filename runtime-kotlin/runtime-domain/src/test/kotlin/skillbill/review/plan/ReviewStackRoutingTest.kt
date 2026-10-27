@@ -14,6 +14,21 @@ import kotlin.test.assertEquals
 
 class ReviewStackRoutingTest {
   @Test
+  fun `routing many paths does not hash unrelated pack metadata`() {
+    val metadata =
+      object : Map<String, String> by emptyMap() {
+        override fun hashCode(): Int = error("Routing must not hash rubric metadata for each path.")
+      }
+    val manifest = pack("kotlin", path = listOf("*.kt"), content = emptyList()).copy(areaMetadata = metadata)
+    val paths = (1..1000).map { "src/main/kotlin/Source$it.kt" }
+
+    val result = ReviewStackRouting.routeByPath(listOf(manifest), paths)
+
+    assertEquals(setOf("kotlin"), result.routedSlugs)
+    assertEquals(paths.toSet(), result.ownedPathsBySlug["kotlin"])
+  }
+
+  @Test
   fun `content without path ownership does not select a concrete pack`() {
     val result =
       ReviewStackRouting.route(

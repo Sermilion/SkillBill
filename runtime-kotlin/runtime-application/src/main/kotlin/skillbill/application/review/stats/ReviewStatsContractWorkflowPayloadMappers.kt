@@ -3,9 +3,12 @@ package skillbill.application.review.stats
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.review.model.FeatureTaskRuntimeWorkflowStats
 import skillbill.review.model.FeatureVerifyWorkflowStats
+import skillbill.review.model.GoalAssessmentStats
 import skillbill.review.model.GoalBlockedSubtaskSummary
+import skillbill.review.model.GoalInteractionScenarioStats
 import skillbill.review.model.GoalModeStats
 import skillbill.review.model.GoalRunSummary
+import skillbill.review.model.GoalTestProbeStats
 import skillbill.review.model.GoalWorkflowStats
 
 internal fun FeatureTaskRuntimeWorkflowStats.toPayload(): Map<String, Any?> =
@@ -55,6 +58,40 @@ internal fun GoalWorkflowStats.toPayload(): Map<String, Any?> =
     "top_blocked_subtasks" to topBlockedSubtasks.map(GoalBlockedSubtaskSummary::toPayload),
     "most_recent_run" to mostRecentRun?.toPayload(),
     "by_mode" to byMode.mapValues { (_, v) -> v.toPayload() },
+    GoalStatsPayloadKeys.INTERACTION_SCENARIOS to interactionScenarios.toPayload(),
+    GoalStatsPayloadKeys.TEST_PROBES to testProbes.toPayload(),
+    GoalStatsPayloadKeys.GOAL_ASSESSMENT to goalAssessment.toPayload(),
+  )
+
+internal fun GoalInteractionScenarioStats.toPayload(): Map<String, Any?> =
+  linkedMapOf(
+    GoalStatsPayloadKeys.TRACED to traced,
+    GoalStatsPayloadKeys.BROKEN to broken,
+    GoalStatsPayloadKeys.REPAIRED to repaired,
+    GoalStatsPayloadKeys.UNKNOWN to unknown,
+  )
+
+internal fun GoalTestProbeStats.toPayload(): Map<String, Any?> =
+  linkedMapOf(
+    GoalStatsPayloadKeys.KILLED to killed,
+    GoalStatsPayloadKeys.SURVIVED to survived,
+    GoalStatsPayloadKeys.REPAIRED to repaired,
+    GoalStatsPayloadKeys.NOT_RUN to notRun,
+  )
+
+internal fun GoalAssessmentStats.toPayload(): Map<String, Any?> =
+  linkedMapOf(
+    GoalStatsPayloadKeys.FINDINGS_BY_SEVERITY to
+      linkedMapOf(
+        GoalStatsPayloadKeys.BLOCKER to blockerFindings,
+        GoalStatsPayloadKeys.MAJOR to majorFindings,
+        GoalStatsPayloadKeys.MINOR to minorFindings,
+      ),
+    GoalStatsPayloadKeys.CONFIRMED to confirmed,
+    GoalStatsPayloadKeys.REFUTED to refuted,
+    GoalStatsPayloadKeys.ROUNDS to rounds,
+    GoalStatsPayloadKeys.OPEN_FINDINGS to openFindings,
+    GoalStatsPayloadKeys.EXIT_REASONS to exitReasonCounts,
   )
 
 internal fun GoalModeStats.toPayload(): Map<String, Any?> =

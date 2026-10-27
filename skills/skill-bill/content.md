@@ -493,7 +493,10 @@ once and relay its output as a phase form.
 Review routes to the dominant pack for the current unit of work. Validation uses
 the same full project validation strategy as goal validate. Its agent discovers
 required checks from the repository instructions, build configuration, scripts,
-and CI, then runs and repairs those checks. Compilation alone is insufficient.
+and CI, then runs and repairs those checks. Confirmed unavailable tooling skips only
+dependent checks, with warnings naming the commands or targets, missing prerequisites,
+and evidence. Validation completes when every runnable required check passes. Skipped
+coverage is never reported as passed. Compilation alone is insufficient.
 
 ## Operation Forms
 

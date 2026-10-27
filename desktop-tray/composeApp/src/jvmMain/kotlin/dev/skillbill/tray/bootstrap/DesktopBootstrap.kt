@@ -31,6 +31,7 @@ internal sealed interface BootstrapOutcome {
 }
 
 fun main(args: Array<String>) {
+  System.setProperty("compose.interop.blending", "true")
   while (true) {
     when (val outcome = resolveBootstrapOutcome()) {
       is BootstrapOutcome.Launch -> {

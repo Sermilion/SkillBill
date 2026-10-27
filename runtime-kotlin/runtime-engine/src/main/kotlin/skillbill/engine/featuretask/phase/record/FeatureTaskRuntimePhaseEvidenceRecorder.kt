@@ -145,28 +145,8 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     val record =
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
         ?: return false
-    val artifacts = record.artifacts
-    val existing = quarantineEntriesFrom(artifacts)
-    val alreadyRecorded =
-      existing.any {
-        it.producingPhaseId == entry.producingPhaseId &&
-          it.producingIteration == entry.producingIteration &&
-          it.regenerationAttempt == entry.regenerationAttempt
-      }
-    if (alreadyRecorded) {
-      return true
-    }
-    val wire = (existing + entry).asQuarantineWorkflowArtifactEntry()
-    quarantineValidator.validate(
-      FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD,
-      FeatureTaskRuntimeWorkflowArtifactMap.from(wire),
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS.label(),
-    )
-    workflowPersistence.persistArtifactsPatch(
-      unitOfWork.workflowStates,
-      record,
-      mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS.entry(wire)),
-    )
+    val patch = quarantineEntryPatch(record.artifacts, entry, quarantineValidator) ?: return true
+    workflowPersistence.persistArtifactsPatch(unitOfWork.workflowStates, record, patch)
     return true
   }
 
@@ -350,13 +330,57 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
 
 fun FeatureTaskRuntimePhaseEvidenceRecorder.quarantineEntriesFrom(
   artifacts: Map<String, Any?>,
+): List<FeatureTaskRuntimeQuarantineEntry> = decodeQuarantineEntries(artifacts, quarantineValidator)
+
+internal fun quarantineEntryPatch(
+  artifacts: Map<String, Any?>,
+  entry: FeatureTaskRuntimeQuarantineEntry,
+  validator: FeatureTaskRuntimeWireArtifactValidator,
+): Map<String, Any?>? {
+  val existing = decodeQuarantineEntries(artifacts, validator)
+  val alreadyRecorded =
+    existing.any {
+      it.producingPhaseId == entry.producingPhaseId &&
+        it.producingIteration == entry.producingIteration &&
+        it.regenerationAttempt == entry.regenerationAttempt &&
+        it.rejectionClass == entry.rejectionClass
+    }
+  if (alreadyRecorded) return null
+  val wire = (existing + entry).asQuarantineWorkflowArtifactEntry()
+  validator.validate(
+    FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(wire),
+    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS.label(),
+  )
+  return mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS.entry(wire))
+}
+
+internal fun nextQuarantineRegenerationAttempt(
+  artifacts: Map<String, Any?>,
+  validator: FeatureTaskRuntimeWireArtifactValidator,
+  producingPhaseId: String,
+  producingIteration: Int,
+  rejectionClass: String,
+): Int =
+  decodeQuarantineEntries(artifacts, validator)
+    .filter {
+      it.producingPhaseId == producingPhaseId &&
+        it.producingIteration == producingIteration &&
+        it.rejectionClass == rejectionClass
+    }
+    .maxOfOrNull { it.regenerationAttempt }
+    ?.plus(1) ?: 1
+
+private fun decodeQuarantineEntries(
+  artifacts: Map<String, Any?>,
+  validator: FeatureTaskRuntimeWireArtifactValidator,
 ): List<FeatureTaskRuntimeQuarantineEntry> {
   val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS
   val raw = family.value(artifacts) ?: return emptyList()
   val map =
     JsonCodec.anyToStringAnyMap(raw)
       ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime quarantine record must be an object.")
-  quarantineValidator.validate(
+  validator.validate(
     FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD,
     FeatureTaskRuntimeWorkflowArtifactMap.from(map),
     family.label(),

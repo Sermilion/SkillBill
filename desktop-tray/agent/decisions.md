@@ -1,3 +1,57 @@
+## [2026-10-26] Terminal tabs are named after their project and can be renamed
+Context: Tabs were labelled with their directory's last path segment, so a goal worktree showed its worktree folder rather than the project, and a user could not tell two tabs of one project apart by purpose.
+Decision: The host names a tab after the checkout that holds its directory: it walks up to the nearest `.git`, and a linked worktree's `.git` file names its main checkout (`…/.git/worktrees/…`); outside any checkout the folder's own name is used, and the home directory is `~`. Tabs that share a name are numbered in creation order. A right-click menu (and F2 or the "Rename tab" accessibility action) renames a tab in place; a custom name is shown as typed and never numbered, and a blank name restores the project name. Names are window-lifetime state like the tabs and are not persisted.
+Reason: The project is what a user looks for in the strip; reading `.git` keeps the name local and works for worktrees without starting a process.
+Alternatives considered: `git rev-parse --git-common-dir` (an OS process outside the approved terminal files); the spec pane's project display name (only known for projects that have a spec store).
+
+## [2026-10-26] Terminal tabs survive a database switch
+Context: The terminal view model is held by the window's entry store, which a database switch clears. With the tab list inside the view model, the replacement started with no tabs, so the navigation host's retainOnly reconciliation ended every shell of the window, including long-running commands such as an agent session.
+Decision: The tab list, the active tab, the most-recently-used order and the per-opening "tab already picked" flag live in a TerminalTabs holder that TerminalSessions keeps per window, next to its shells and for as long (TerminalSessions.tabsFor, reached through TerminalTabHost.tabs). The view model receives the window's holder and works on it; a replacement view model sees the same tabs, so reconciliation ends no shell and a switch while the pane is open neither creates nor switches a tab. This amends the decision below, whose retainOnly reconciliation stays for closed tabs.
+Reason: A database switch changes which data the window reads, not the user's shells; ending them lost running work for an unrelated action.
+Alternatives considered: Scoping the terminal view model to the window instead of the entry store (it reads WorkDetailRepository, which is bound to the database generation); restoring the list into the new view model from a snapshot (two copies of the state and an ordering race with the first reconciliation).
+
+## [2026-10-25] Terminal tabs replace one shell per directory
+Context: One shell per window and starting directory meant a user could not run two shells in the same project, and a shell that exited on its own left a dead entry that was never reported.
+Decision: The terminal view model owns the window's tab list, its labels and the most-recently-used order, and never persists them. TerminalSessions keeps one shell per window and tab, so two tabs in one directory get two shells. Tab ids are minted by the host from a process-wide counter, never by the view model. Shells end in four ways: the navigation host reconciles with TerminalSessions.retainOnly whenever the view model's tab ids change, so a closed tab's shell ends; a shell that exits on its own is detected through Process.onExit() and published as a tab id in a per-window StateFlow that the host turns into TabsEnded; the window's scope completing ends the rest; the JVM shutdown hook ends whatever is left. No composition disposal ends a shell. This supersedes the 2026-10-25 "one shell per directory" decision below; picks still never switch or create tabs, and each opening of the pane activates or creates the latest pick's tab once.
+Reason: A view model recreated when a database generation ends starts with no tabs, so with view-model ids it would reuse an id whose shell is still running and reattach it; host-minted ids never repeat, and retainOnly ends the orphans. A state flow keeps an exit that happens while the pane is closed or the window hidden until a collector returns, which an event would lose.
+Alternatives considered: View-model-minted ids (reuse across generations); DisposableEffect cleanup (wrong for a hidden window, which leaves composition while its shells must keep running); a JediTerm termination listener (ties exit detection to a widget that may not be attached).
+
+## [2026-10-25] Terminal opens in the latest selection's project, one shell per directory
+Context: A window had one shell that took its directory only at its first launch, so the terminal never followed the selected goal, phase, operation or spec.
+Decision: Each opening of the pane fixes the directory of the latest pick (a sidebar item, re-picks included, or a spec row picked in the spec pane, at the checkout the pane reads it from) and keeps it until the pane closes; a spec project with no checkout falls back to the home directory like an unreadable selection. Picks reach the terminal as events (WindowNavigator.picks, SpecsViewModel.picks), not as inferred state changes. TerminalSessions keys sessions by window id and starting directory, and all of a window's sessions end on its disposal.
+Reason: Restarting or cd-ing the one shell on reopen would kill or disturb a running process; a shell per directory keeps each project's scrollback and running commands, and fixing the directory per opening means a click never swaps the shell underneath.
+Alternatives considered: Swapping the shell live on every selection change surprises a user mid-command; inferring spec picks from the selected path missed re-picks of the selected row.
+Superseded by: Terminal tabs replace one shell per directory (2026-10-25)
+
+## [2026-10-25] Persist terminal pane height once, on drag release
+Context: The divider drag emits a delta per pointer move, and every ResizeTo writes AppSettings to disk.
+Decision: The host keeps the dragged height in local state seeded from settings and sends ResizeTo only in onDragStopped.
+Reason: Saving per delta would write the settings file once per pixel; one write on release stores the final height.
+Alternatives considered: Per-delta saving persists live but floods the datastore; the test uses a multi-step drag so that variant fails.
+
+## [2026-10-25] Enable interop blending before any Swing window
+Context: The terminal is a heavyweight Swing panel inside an undecorated, transparent Compose window.
+Decision: The compose.interop.blending property is set to true as the first statement of both composition main() and DesktopBootstrap.main(), as an inline literal.
+Reason: It must be set before the first Swing window can appear, and DesktopBootstrap can show Swing windows before main() runs.
+Revisit when: QA finds the panel's bottom corners escape the 12dp window clip and bottom padding does not fix it.
+
+## [2026-10-25] Terminal files join the approved OS-process set
+Context: The deletion guard allowed process types in four named native files, but the terminal needs a pty launch and a JVM shutdown hook, which can only be registered through Runtime.
+Decision: DeletionRules lists terminal/TerminalProcess.kt and terminal/TerminalSessions.kt in approvedProcessFiles, and the guard now also flags PtyProcess and PtyProcessBuilder, with a rejection fixture.
+Reason: The terminal is an approved new OS-process owner; widening to two named files keeps every other file banned, and the pty types were an unguarded gap.
+Alternatives considered: A suppression or baseline would hide future violations; avoiding Runtime would drop the shutdown hook that prevents orphaned shells.
+
+## [2026-10-25] Pin jetbrains-annotations to the runtime version
+Context: JediTerm pulls org.jetbrains:annotations 24.0.1, but verifySharedRuntimeVersions requires the desktop classpath to match the runtime's 23.0.0.
+Decision: A strict jvmMainImplementation constraint on the catalog's jetbrains-annotations 23.0.0, with no new consumed library.
+Reason: It keeps the shared-version convention satisfied without excluding the artifact JediTerm needs.
+Revisit when: The runtime bumps annotations, or JediTerm requires an API newer than 23.0.0.
+
+## [2026-10-25] Group-filtered JetBrains repository for JediTerm
+Context: JediTerm is not on Maven Central, and settings.gradle.kts uses FAIL_ON_PROJECT_REPOS.
+Decision: Declare the intellij-dependencies repository in settings only, restricted to the org.jetbrains.jediterm group.
+Reason: Nothing else can resolve from it, so the supply surface stays one group, and no project declares its own repository.
+
 ## [2026-10-24] Filtering expands ancestors for display only
 Context: The spec tree filter must reveal matches inside collapsed bundles, while expansion is persisted in AppSettings.specExpandedPaths.
 Decision: visibleRows shows ancestors of a match expanded without writing the saved set; ClearFilters restores the saved expansion.

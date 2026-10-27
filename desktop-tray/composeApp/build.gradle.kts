@@ -37,6 +37,7 @@ kotlin {
     implementation(projects.feature.detail)
     implementation(projects.feature.settings)
     implementation(projects.feature.specs)
+    implementation(projects.feature.terminal)
   }
   sourceSets.jvmMain.dependencies {
     implementation(compose.materialIconsExtended)
@@ -46,6 +47,9 @@ kotlin {
     implementation(libs.nucleus.notification.common)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.autolaunch)
+    implementation(libs.jediterm.core)
+    implementation(libs.jediterm.ui)
+    implementation(libs.pty4j)
     // The bootstrap loads runtime classes from the installed runtime after checking its build identity.
     compileOnly("dev.skillbill:runtime-core")
     compileOnly("dev.skillbill:runtime-contracts")
@@ -63,6 +67,12 @@ kotlin {
 }
 
 dependencies {
+  // verifySharedRuntimeVersions keeps every library the desktop shares with the runtime at the runtime's version.
+  constraints {
+    add("jvmMainImplementation", libs.jetbrains.annotations) {
+      version { strictly(libs.versions.jetbrains.annotations.get()) }
+    }
+  }
   add("jvmTestImplementation", testFixtures("dev.skillbill:runtime-infra-sqlite"))
   // Projects without a build script (the implicit ":core" parent) own no sources and no manifest.
   rootProject.subprojects.filter { it.buildFile.exists() }.forEach { add("architectureManifests", project(it.path)) }
@@ -103,4 +113,24 @@ tasks.named<Test>("jvmTest") {
     include("**/src/main/kotlin/**/*.kt")
     exclude("**/build/**", "**/.gradle/**")
   }).withPropertyName("runtimeArchitectureProductionSources")
+}
+
+// `./gradlew :composeApp:run -PagainstInstalledApp` runs this checkout's desktop against the installed runtime. The bootstrap only
+// accepts a desktop whose build identity matches the installed runtime's, so the run borrows the installed app's identity record
+// (its only app resource); desktop-only changes can then be tried without ./install.sh. A runtime or schema change still needs one.
+// The property's value can name another installed resources directory; it defaults to the macOS install location. The run also
+// takes its own Nucleus app id, so its single-instance lock does not hand it off to an installed app that is already running.
+val installedAppResources = providers.gradleProperty("againstInstalledApp").map { value ->
+  value.ifBlank { "${System.getProperty("user.home")}/Applications/Skill Bill.app/Contents/app/resources" }
+}
+tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
+  val borrowed = installedAppResources
+  doFirst {
+    val resources = borrowed.orNull ?: return@doFirst
+    val property = "compose.application.resources.dir"
+    systemProperties.remove(property)
+    jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-D$property=") }
+    systemProperty(property, resources)
+    systemProperty("nucleus.app.id", "dev.skillbill.tray.dev")
+  }
 }

@@ -68,11 +68,13 @@ import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
 import skillbill.engine.goalrunner.persist.withSettledLegacyHistorySkip
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
@@ -88,6 +90,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.goalrunner.GoalObservabilityArtifacts
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
 import skillbill.goalrunner.model.GoalObservabilityProgressEvent
@@ -394,6 +397,35 @@ class GoalRunnerTest {
   }
 
   @Test
+  fun `goal assessment runs once after the subtasks and before goal QA`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher {
+        store.mutate { current -> current.withWorkflowId(1, "wfl-1") }
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val events = mutableListOf<String>()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(
+          assessmentGate = RecordingGoalRunnerAssessmentGate(events),
+          qaGate =
+            GoalRunnerQaGate { _, _ ->
+              events += "qa"
+              GoalQaGateResult.Passed
+            },
+        ),
+      )
+
+    val report = runner.run(runRequest())
+
+    assertIs<GoalRunnerRunReport.Completed>(report, "$report")
+    assertEquals(listOf("assessment", "qa"), events)
+  }
+
+  @Test
   fun `an undecided historical no-change pause resumes its child instead of asking for approval`() {
     val recorder = goalRunnerDefaultPhaseRecorder()
     recorder.openTestWorkflow("wfl-1", "goal-child-no-change")
@@ -438,15 +470,21 @@ class GoalRunnerTest {
       )
     val launcher = RecordingSubtaskLauncher { launchFacts() }
     val pr = RecordingPullRequestPort()
+    val events = mutableListOf<String>()
     val runner =
       testGoalRunner(
         goalRunnerDeps(store, launcher, RecordingOutcomeStore(), pr)
-          .copy(phaseRecorder = recorder, childWorkflowDatabase = database),
+          .copy(
+            phaseRecorder = recorder,
+            childWorkflowDatabase = database,
+            assessmentGate = RecordingGoalRunnerAssessmentGate(events),
+          ),
       )
 
     val report = runner.run(runRequest())
 
     val noChange = assertIs<GoalRunnerRunReport.CompletedNoChange>(report)
+    assertEquals(listOf("assessment_skipped_no_changes"), events)
     assertEquals(
       WorkflowStatus.COMPLETED,
       database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, "wfl-1") }?.workflowStatus,
@@ -5340,6 +5378,22 @@ internal class RecordingOutcomeStore : TestGoalQualityOutcomeStore(settled = tru
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = goalQaOutcome
 
+  val goalAssessmentRecords: MutableMap<String, GoalAssessmentRecord> = mutableMapOf()
+  var goalAssessmentRecordRead: GoalAssessmentRecordRead? = null
+
+  override fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
+    goalAssessmentRecordRead
+      ?: goalAssessmentRecords[parentWorkflowId]?.let(GoalAssessmentRecordRead::Recorded)
+      ?: GoalAssessmentRecordRead.Absent
+
+  override fun recordGoalAssessmentRecord(
+    parentWorkflowId: String,
+    record: GoalAssessmentRecord,
+  ): Boolean {
+    goalAssessmentRecords[parentWorkflowId] = record
+    return true
+  }
+
   private val outcomes: MutableMap<String, GoalRunnerStoredOutcome> = mutableMapOf()
   private val reviewStates: MutableMap<String, GoalSubtaskReviewState> = mutableMapOf()
   val qualityGateSelections: MutableMap<String, FeatureTaskRuntimeQualityGateSelection> = mutableMapOf()
@@ -5386,6 +5440,11 @@ internal class RecordingOutcomeStore : TestGoalQualityOutcomeStore(settled = tru
 
   override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
     qualityGateSelections[workflowId]
+
+  val unknownScenarios: MutableMap<String, GoalSubtaskUnknownScenarios> = mutableMapOf()
+
+  override fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios =
+    unknownScenarios[workflowId] ?: GoalSubtaskUnknownScenarios.Absent
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
     unemittedReviewPasses[workflowId].orEmpty()

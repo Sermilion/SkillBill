@@ -6,9 +6,17 @@ import skillbill.application.telemetry.model.GoalIssueFinishedRequest
 import skillbill.application.telemetry.model.GoalStartedRequest
 import skillbill.application.telemetry.model.GoalSubtaskFinishedRequest
 import skillbill.contracts.telemetry.GoalRunTerminalReason
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.engine.goalrunner.persist.assessment.toTelemetryCounts
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.telemetry.model.GoalAssessmentTelemetryCounts
+import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
@@ -23,6 +31,8 @@ class GoalRunnerTelemetryEmitter(
   private val telemetry: GoalLifecycleTelemetryEmitter,
   private val clock: Clock,
   private val state: GoalRunnerManifestState,
+  private val outcomes: GoalRunnerWorkflowOutcomeStore,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   private val segmentStartedAt: Instant = clock.instant()
   private val segmentWorkflowId: String = "${state.parentWorkflowId}:seg:$segmentStartedAt"
@@ -71,12 +81,13 @@ class GoalRunnerTelemetryEmitter(
       .forEach { subtask ->
         subtasksEmittedThisSegment += subtask.id
         val startedAt = subtaskStartedAt[subtask.id] ?: finishedAtInstant
+        val subtaskWorkflowId =
+          subtask.workflowId?.takeIf(String::isNotBlank)
+            ?: "${manifest.issueKey}:subtask:${subtask.id}"
         telemetry.goalSubtaskFinished(
           GoalSubtaskFinishedRequest(
             issueKey = manifest.issueKey,
-            workflowId =
-              subtask.workflowId?.takeIf(String::isNotBlank)
-                ?: "${manifest.issueKey}:subtask:${subtask.id}",
+            workflowId = subtaskWorkflowId,
             subtaskId = subtask.id,
             subtaskName = subtask.name,
             status = subtask.status,
@@ -87,6 +98,7 @@ class GoalRunnerTelemetryEmitter(
             blockedReason = subtask.blockedReasonForTelemetry(),
             finalizingAgentId = subtask.finalizingAgentId,
             participatingAgentIds = subtask.participatingAgentIds,
+            traceProbeCounts = traceProbeCounts(subtaskWorkflowId),
           ),
         )
       }
@@ -135,6 +147,7 @@ class GoalRunnerTelemetryEmitter(
         stopReason = stopReason,
         noChangeReason = noChangeReasonOf(report),
         parentWorkflowId = state.parentWorkflowId,
+        assessmentCounts = assessmentCounts(),
       ),
     )
     terminalSettled = true
@@ -158,10 +171,48 @@ class GoalRunnerTelemetryEmitter(
         stopReason = GoalRunTerminalReason.GOAL_RUN_FAILED.wireValue,
         noChangeReason = null,
         parentWorkflowId = state.parentWorkflowId,
+        assessmentCounts = assessmentCounts(),
       ),
     )
     terminalSettled = true
   }
+
+  private fun traceProbeCounts(workflowId: String): GoalSubtaskTraceProbeCounts =
+    sampled("trace and probe counts for $workflowId", GoalSubtaskTraceProbeCounts()) {
+      outcomes.recordedTraceProbeCounts(workflowId)
+    }
+
+  private fun assessmentCounts(): GoalAssessmentTelemetryCounts =
+    sampled("assessment counts for ${state.parentWorkflowId}", GoalAssessmentTelemetryCounts()) {
+      when (val read = outcomes.readGoalAssessmentRecord(state.parentWorkflowId)) {
+        GoalAssessmentRecordRead.Absent -> GoalAssessmentTelemetryCounts()
+        is GoalAssessmentRecordRead.Recorded -> read.record.toTelemetryCounts()
+        is GoalAssessmentRecordRead.Corrupt -> {
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Goal telemetry read of assessment counts for ${state.parentWorkflowId} failed; " +
+              "the event carries zero counts. Cause: ${read.reason}",
+          )
+          GoalAssessmentTelemetryCounts()
+        }
+      }
+    }
+
+  private fun <T> sampled(
+    label: String,
+    fallback: T,
+    read: () -> T,
+  ): T =
+    try {
+      read()
+    } catch (failure: SkillBillRuntimeException) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Goal telemetry read of $label failed; the event carries zero counts. Cause: ${failure.message}",
+        failure,
+      )
+      fallback
+    }
 
   private fun noChangeReasonOf(report: GoalRunnerRunReport): String? =
     when (report) {

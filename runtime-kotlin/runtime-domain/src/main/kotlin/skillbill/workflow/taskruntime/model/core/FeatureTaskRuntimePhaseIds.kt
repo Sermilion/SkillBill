@@ -23,6 +23,8 @@ internal object FeatureTaskRuntimePhaseIds {
   const val MONITOR: String = "monitor"
   const val MONITOR_FIX: String = "monitor_fix"
   const val PRESENT_FINDINGS: String = "present_findings"
+  const val GOAL_ASSESSMENT: String = "goal_assessment"
+  const val GOAL_ASSESSMENT_FIX: String = "goal_assessment_fix"
 
   private const val PLAN_SUBTASK_UNIT_SEPARATOR: String = ":"
 
@@ -58,5 +60,7 @@ internal object FeatureTaskRuntimePhaseIds {
       MONITOR,
       MONITOR_FIX,
       PRESENT_FINDINGS,
+      GOAL_ASSESSMENT,
+      GOAL_ASSESSMENT_FIX,
     )
 }

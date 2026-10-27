@@ -44,9 +44,7 @@ class McpTelemetrySchemaEnumParityTest {
       FeatureTaskRuntimeFailureDisposition.entries.map(FeatureTaskRuntimeFailureDisposition::wireValue),
       enumOnBranch(defs, "featureTaskPhaseBlockEvent", "failure_disposition"),
     )
-    val settleablePhaseIds =
-      FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
-        .filter { it !in FeatureTaskRuntimePhaseWorkflowDefinition.runtimeSettledPhaseIds }.sorted()
+    val settleablePhaseIds = FeatureTaskRuntimePhaseWorkflowDefinition.agentSettledPhaseIds.sorted()
     assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseCompleteEvent", "phase_id").sorted())
     assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseBlockEvent", "phase_id").sorted())
     assertEquals(

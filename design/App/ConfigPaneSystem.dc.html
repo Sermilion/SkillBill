@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Config · system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.ovl{font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8A8A94;text-transform:uppercase}
+.seg{all:unset;box-sizing:border-box;flex:1;display:inline-flex;align-items:center;justify-content:center;height:26px;border-radius:6px;font:600 11px/1 Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.abtn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 11px;border-radius:7px;font:600 11.5px/1 Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer}
+.seg:focus-visible,.abtn:focus-visible{outline:2px solid #E9A81C;outline-offset:1px}
+.kv{display:flex;align-items:center;gap:8px;min-height:24px;font:400 10.5px/1.3 'JetBrains Mono',monospace}
+.pill{font:500 11px/1 'JetBrains Mono',monospace;border-radius:999px;padding:5px 9px}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 320px; min-height: 760px; background: #141417; font-family: Inter, system-ui, sans-serif; color: #EDEDF0; padding: 14px; display: flex; flex-direction: column; gap: 18px">
+
+<div style="display: flex; flex-direction: column; gap: 7px">
+<span class="ovl" id="tel">Telemetry</span>
+<div role="group" aria-labelledby="tel" style="display: flex; gap: 2px; padding: 2px; background: #0E0E11; border: 1px solid #26262C; border-radius: 8px">
+<sc-for list="{{levels}}" as="l" hint-placeholder-count="3">
+<button type="button" class="seg" aria-pressed="{{l.selected}}" onClick="{{l.pick}}" style="{{l.style}}">{{l.label}}</button>
+</sc-for>
+</div>
+<span style="font: 400 10px/1.45 'JetBrains Mono', monospace; color: #8A8A94">{{levelNote}}</span>
+<div class="kv"><span style="flex: 1; color: #9C9CA6">Proxy</span><span style="color: #8A8A94">default</span></div>
+<div class="kv"><span style="flex: 1; color: #9C9CA6">Batch size</span><span style="color: #8A8A94">50</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center"><span class="ovl" style="flex: 1">Installed agents</span><span style="font: 400 10px/1 'JetBrains Mono', monospace; color: #8A8A94">read-only</span></div>
+<div style="display: flex; gap: 5px; flex-wrap: wrap">
+<span class="pill" style="color: #EDEDF0; border: 1px solid #383840">claude</span>
+<span class="pill" style="color: #EDEDF0; border: 1px solid #383840">codex</span>
+<span class="pill" style="color: #EDEDF0; border: 1px solid #383840">cursor</span>
+<span class="pill" style="color: #8A8A94; border: 1px dashed #383840">junie · not installed</span>
+</div>
+<div class="kv"><span style="flex: 1; color: #9C9CA6">Platform packs</span><span>all</span></div>
+<div class="kv"><span style="flex: 1; color: #9C9CA6">MCP server</span><span style="color: #3FB950">registered</span></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-radius: 7px; background: #17171B; border: 1px solid #26262C">
+<span style="flex: 1; font: 400 10.5px/1.4 'JetBrains Mono', monospace; color: #9C9CA6">Change these by re-running the installer.</span>
+<button type="button" class="abtn" style="height: 24px; padding: 0 8px; color: #F3C462; border: 1px solid rgba(233,168,28,.5)">Copy command</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="ovl">External sources</span>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px dashed #383840; border-radius: 8px">
+<div class="kv"><span style="flex: 1; color: #9C9CA6">Platform packs</span><span style="color: #8A8A94">none</span></div>
+<div class="kv"><span style="flex: 1; color: #9C9CA6">Agent add-ons</span><span style="color: #8A8A94">none</span></div>
+<button type="button" class="abtn" style="align-self: flex-start; margin-top: 4px; color: #F3C462; border: 1px solid rgba(233,168,28,.5)">Register a pack folder</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span class="ovl">Files</span>
+<div class="kv"><span style="flex: 1; color: #9C9CA6">~/.config/skill-bill/config.json</span><button type="button" class="abtn" style="height: 22px; padding: 0 7px; color: #9C9CA6">Open</button></div>
+<div class="kv"><span style="flex: 1; color: #9C9CA6">~/.skill-bill/install-selection.json</span><button type="button" class="abtn" style="height: 22px; padding: 0 7px; color: #9C9CA6">Open</button></div>
+</div>
+
+<p style="margin: auto 0 0; font: 400 10.5px/1.5 'JetBrains Mono', monospace; color: #8A8A94">App preferences (notifications, retention, start at login) stay in <a href="#settings">Settings</a>.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"embedded":{"editor":null,"default":false},"$preview":{"width":320,"height":860}}'>
+const NOTES = {
+  off: 'Nothing is sent. Switching off clears the unsent queue.',
+  anonymous: 'Switching down from full clears the unsent queue.',
+  full: 'The most detailed level.',
+};
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { level: 'full' }; }
+  renderVals() {
+    const s = this.state;
+    return {
+      levels: [['off', 'Off'], ['anonymous', 'Anonymous'], ['full', 'Full']].map(([id, label]) => ({
+        label, selected: s.level === id,
+        style: s.level === id ? 'background: #2A2A31; color: #F3C462' : 'color: #9C9CA6',
+        pick: () => this.setState({ level: id }),
+      })),
+      levelNote: NOTES[s.level],
+    };
+  }
+}
+</script>
+</body>
+</html>

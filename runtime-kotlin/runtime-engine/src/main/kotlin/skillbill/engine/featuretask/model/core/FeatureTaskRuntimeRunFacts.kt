@@ -64,6 +64,9 @@ interface FeatureTaskRuntimeRunFacts {
   /** The goal-continuation context of a goal child run, null for a standalone run. */
   val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?
 
+  /** The parent goal receiving activity from a planning run, without goal-child execution policy. */
+  val activityParentWorkflowId: String? get() = null
+
   /** The agent add-ons selected for the run. */
   val agentAddonSelection: HydratedAgentAddonSelection
 

@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.runner.SCHEMA_GATE_DETAIL_MAX_CHARS
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 
 internal fun rejectionPath(detail: String): String {
   Regex("""(?:instance location|path|pointer)\s*[:=]\s*['"]?(/[^\s,'"]*)""", RegexOption.IGNORE_CASE)
@@ -17,10 +18,14 @@ internal fun rejectionPath(detail: String): String {
     .replace(Regex("""\[([0-9]+)]"""), "/${'$'}1")
 }
 
+internal fun rejectionRuleMarker(rule: String): String = "'$rule'"
+
 internal fun payloadFreeRejectionReason(
   rule: String,
   path: String,
-): String = "Rejected output violated '$rule' at '$path'. Inspect the private diagnostic for the exact response."
+): String =
+  "Rejected output violated ${rejectionRuleMarker(rule)} at '$path'. " +
+    "Inspect the private diagnostic for the exact response."
 
 internal fun retryRejectionReason(
   payloadFreeReason: String,
@@ -50,6 +55,7 @@ internal fun payloadFreeSemanticGateConstraint(
     "producer-projection",
     "consumer-projection",
     "output-verification",
+    FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_TEST_PROBES.name,
     -> scrubResponseDerivedGateDetail(detail, rejectedOutput)
     else -> scrubBoundedReferenceGateConstraint(detail)
   }

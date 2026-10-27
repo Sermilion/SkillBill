@@ -11,6 +11,7 @@ import androidx.compose.runtime.snapshotFlow
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.ExecutionInstance
 import dev.skillbill.tray.core.domain.model.ExecutionScope
+import dev.skillbill.tray.core.domain.model.GoalAssessmentState
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.ReasonRestoration
 import dev.skillbill.tray.core.domain.model.RunOutcome
@@ -99,7 +100,7 @@ internal fun standalonePlanNote(detail: Detail): String =
     ?.subtasks?.size?.let { count -> if (count == 1) "1 subtask spec" else "$count subtask specs" }
     .orEmpty()
 
-internal enum class PipelineStepState { PENDING, ACTIVE, COMPLETE }
+internal enum class PipelineStepState { PENDING, ACTIVE, COMPLETE, SKIPPED }
 
 internal data class PipelineStep(val id: String, val state: PipelineStepState)
 
@@ -115,6 +116,23 @@ internal fun pipelineSteps(item: WorkItem, pipeline: List<String>): List<Pipelin
       else -> PipelineStepState.PENDING
     }
     PipelineStep(id, state)
+  }
+}
+
+private val ASSESSMENT_STEPS = setOf("goal_assessment", "goal_assessment_fix")
+
+/**
+ * The goal finish steps. While the assessment runs, its pills follow the reported step like every other finish step;
+ * a finished assessment completes its pills and a skipped one stays skipped.
+ */
+internal fun goalFinishSteps(item: WorkItem, detail: Detail): List<PipelineStep> {
+  val settled = when (detail.goalAssessment?.state) {
+    GoalAssessmentState.COMPLETED -> PipelineStepState.COMPLETE
+    GoalAssessmentState.SKIPPED -> PipelineStepState.SKIPPED
+    else -> null
+  }
+  return pipelineSteps(item, detail.goalFinishPipeline).map { step ->
+    if (settled != null && step.id in ASSESSMENT_STEPS) step.copy(state = settled) else step
   }
 }
 

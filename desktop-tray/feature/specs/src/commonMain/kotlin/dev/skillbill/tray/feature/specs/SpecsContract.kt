@@ -155,6 +155,12 @@ internal fun startFailure(summary: String) = "Couldn't start: $summary"
 
 internal fun purgeFailure(summary: String) = "Couldn't purge: $summary"
 
+/**
+ * A row the user picked, re-picks of the selected row included. [checkoutRoot] is the checkout the pane reads the tree from, the
+ * followed work item's root or the project's own, and null when the project has no checkout on this machine.
+ */
+data class SpecPick(val path: String, val checkoutRoot: String?)
+
 /** Nothing here opens a detail or names a navigator: the pane never changes what the main panel shows. */
 sealed interface SpecsEffect {
   data class OpenFile(val absolutePath: String) : SpecsEffect

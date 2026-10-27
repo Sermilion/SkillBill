@@ -24,7 +24,9 @@ import dev.skillbill.tray.core.ui.acknowledged
 import dev.skillbill.tray.core.ui.withFeedback
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +55,7 @@ class SpecsViewModel(
   private val local = MutableStateFlow(Local())
   private val appSettings = MutableStateFlow(AppSettings())
   private val outbox = NavigationEffects<SpecsEffect>()
+  private val pickEvents = MutableSharedFlow<SpecPick>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
   private val feedbackIds = FeedbackIds()
 
   private var selectedWork: WorkIdentity? = null
@@ -70,6 +73,9 @@ class SpecsViewModel(
     .stateIn(viewModelScope, SharingStarted.Eagerly, SpecsUiState())
 
   val effects: Flow<SpecsEffect> = outbox.flow
+
+  /** Every row pick as it happens; nothing is replayed, so a collector never sees a pick made before it started. */
+  val picks: Flow<SpecPick> = pickEvents
 
   init {
     viewModelScope.launch { settings.settings.collect { if (it is SettingsState.Ready) appSettings.value = it.settings } }
@@ -301,7 +307,9 @@ class SpecsViewModel(
   )
 
   private fun select(path: String) {
-    if (local.value.selectedPath == path) return
+    val current = local.value
+    pickEvents.tryEmit(SpecPick(path, current.followedRoot ?: current.project?.repoRoot))
+    if (current.selectedPath == path) return
     local.update { resetToolbar(it.copy(selectedPath = path)) }
     loadControl()
   }

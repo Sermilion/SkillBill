@@ -1,3 +1,21 @@
+## [2026-10-25] Interaction-trace re-ask marker stays in memory
+Context: A malformed interaction-trace audit gets one re-ask before the trace degrades to unknown, and the runtime needs to remember that the re-ask was spent.
+Decision: Hold the marker on the run state (traceReaskScope) rather than a persisted pending-clarification marker.
+Reason: The marker only bounds one in-flight attempt, so a persisted field would need a new schema field and migration for little value. The cost is one extra re-ask after a process restart.
+Revisit when: restarts during a trace re-ask are common enough that the repeated re-ask shows up in cost or latency.
+
+## [2026-10-25] Repair-state and audit-result 0.1 records fail loudly after the 0.2 bump
+Context: Interaction-trace mode added required fields, so the schemas moved from 0.1 to 0.2.
+Decision: Add no 0.1 recovery path; decoding a 0.1 record fails on the version mismatch.
+Reason: A silent upgrade would invent an empty interaction trace and hide that the run was never traced. Failing loudly keeps the mode's coherence guarantees honest.
+Alternatives considered: a version-upgrade shim that defaults the trace to empty, rejected because it would pass untraced runs as traced.
+
+## [2026-10-25] Operator-authored parent specs are exempt from the Transitional Regressions requirement
+Context: Authored-bundle verification now requires `## Transitional Regressions` on a bundle parent with two or more subtasks, but an operator can supply the parent spec themselves.
+Decision: Require the section only when the parent is rewritable (no protectedSpecSha256); a protected parent is accepted and yields a best-effort diagnostics warning.
+Reason: The planner cannot rewrite or block on a spec the operator owns, so rejecting it would strand the plan phase with no repair path. Reusing the invalid-preparation-request block keeps the rule inside the existing in-phase budget.
+Alternatives considered: rejecting protected parents too, rejected because the agent cannot repair a file it may not edit.
+
 ## [2026-10-25] Validation owns rebuilds and build failure repairs
 
 GV-2 validation repaired source, then blocked because its release package was stale
@@ -636,3 +654,11 @@ Reason: Later phases own their repairs. An earlier phase's accepted result recor
 Context: Monitoring 0AC-64 blocked with "The pull request head moved to c3df18f while monitoring expected e4951ad". `e4951ad` was the monitor's own repair commit and `c3df18f` was the PR owner's fast-forward on top of it. The watcher treated every unrecognized head as foreign and blocked, so the owner pushing to their own pull request ended monitoring.
 Decision: While no repair is pending, the watcher adopts a new head. `StandaloneMonitorResources.adoptHead` fetches the head into the owned ref, requires it to still be that commit and the owned worktree to have no tracked changes, resets the owned branch with `git reset --keep`, and records it as published. The ledger appends it to its heads without a published-repair receipt, so the next push leases against it. A failure on an adopted commit routes to repair as initial progress; only a commit the monitor published counts toward the failed repair budget. A head that moves while a repair is pending still blocks at publication, because the repair was built on the older commit.
 Reason: Pushing to your own pull request is normal and does not threaten the monitor's work when nothing is in flight. Blocking only where the monitor would overwrite or misattribute work keeps the safety guarantees without stopping on routine pushes.
+
+## [2026-10-26] Count every unfinished audit repair implementation
+
+Context: SKILL-446 launched 115 repair implementation attempts while AC-001 remained unresolved. Source-changing `progress` reports retained one reservation and bypassed the three-attempt budget.
+
+Decision: Supersede the partial-progress continuation exception. Every unfinished repair implementation, including `progress` and `no_progress`, records one unsuccessful outcome through the existing serial repair owner. Source edits do not exempt an attempt. Remove the continuation mutation and domain transition. Read-only admission of unfinished work consumes that same attempt once. Preserve the existing independent verification, per-criterion budgets and explicit operator reset.
+
+Evidence: Runner tests cover three source-changing unfinished repairs blocking before review, and a successful third repair after two failures. SQLite recorder tests cover direct settlement, read-only admission, replay and state reload without resetting or double-charging the budget.

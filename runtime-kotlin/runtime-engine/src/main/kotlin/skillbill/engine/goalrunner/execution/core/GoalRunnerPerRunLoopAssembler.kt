@@ -8,6 +8,7 @@ import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 class GoalRunnerPerRunLoopAssembler(
   private val manifestStore: GoalRunnerManifestStore,
   private val goalPlanningSource: GoalPlanningSource,
+  private val reconciliation: GoalRunnerFinalReconciliation,
   private val finalization: GoalRunnerFinalization,
   private val selectedSubtaskLoop: GoalRunnerSelectedSubtaskLoop,
   private val pauseBoundary: GoalRunnerPauseBoundary,
@@ -17,6 +18,7 @@ class GoalRunnerPerRunLoopAssembler(
     GoalRunnerGoalLoop(
       manifestStore,
       goalPlanningSource,
+      reconciliation,
       finalization,
       selectedSubtaskLoop,
       pauseBoundary,

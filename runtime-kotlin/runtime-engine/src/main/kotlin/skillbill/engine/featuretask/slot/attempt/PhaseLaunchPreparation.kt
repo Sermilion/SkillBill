@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseProjectInstructionsRecord
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
@@ -42,6 +43,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
+import skillbill.engine.featuretask.slot.qualitygate.ValidateProbeActivation
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -458,6 +460,7 @@ object PhaseLaunchPreparation {
     if (implementationTurn == null) {
       ImplementationChecklistLaunchPreparation.prepare(this, run, implementationContinuation)
     }
+    val acceptanceRepair = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
     return FeatureTaskRuntimePhasePromptComposeInputs(
       issueKey = run.request.issueKey,
       briefing = briefing,
@@ -474,14 +477,12 @@ object PhaseLaunchPreparation {
       priorReviewContext = null,
       priorTerminalFailure = args.priorCorrection?.retryableTerminalReason,
       priorFindingCoverage = args.priorCorrection?.findingCoverageReason,
-      priorAcceptanceAudit =
-        auditProseValue(
-          progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
-            .output?.normalizedOutput?.envelopeWireMap(),
-        ),
+      priorAcceptanceAudit = priorAcceptanceAudit(),
       currentAcceptanceCriterion = acceptanceCriterionContext(run),
-      priorAcceptanceRepairFailures =
-        (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.priorRepairFailures,
+      priorAcceptanceRepairFailures = acceptanceRepair?.priorRepairFailures,
+      interactionTraceScope = acceptanceRepair?.let(AcceptanceCriterionInteractionTraceRound::promptScope),
+      unknownInteractionScenarios =
+        acceptanceRepair?.let(AcceptanceCriterionInteractionTraceRound::unknownContext).orEmpty(),
       noChangeClaim = auditNoChangeClaim(run),
       operatorBlockRetry =
         session.operatorBlockRetry
@@ -492,6 +493,7 @@ object PhaseLaunchPreparation {
       validationGateTriagePlan = run.validationGateTriagePlan,
       validationGateRepair = run.validationGateRepair,
       validationGateTriage = run.validationGateTriage,
+      validateProbeScopeSource = { ValidateProbeActivation.scopeFor(run.request, run.validationGateTriage) },
       agentRunValidateFallback = run.agentRunValidateFallback,
       packBuildCommand = packCommand(run, checkpointArgs, carriesBuild = true),
       mutating = run.policy.mutating,
@@ -501,6 +503,11 @@ object PhaseLaunchPreparation {
       implementationChecklistAddress = implementationChecklistAddress(run),
     )
   }
+
+  private fun PhaseAttemptLaunchPreparationContext.priorAcceptanceAudit(): String? =
+    auditProseValue(
+      progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).output?.normalizedOutput?.envelopeWireMap(),
+    )
 
   private fun PhaseAttemptLaunchPreparationContext.implementationChecklistAddress(run: PhaseRun): String? =
     run.request.workflowId.takeIf(String::isNotBlank)?.let { workflowId ->

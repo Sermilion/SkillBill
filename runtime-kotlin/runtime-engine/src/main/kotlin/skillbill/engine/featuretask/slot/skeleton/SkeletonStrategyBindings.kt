@@ -4,6 +4,8 @@ import skillbill.engine.featuretask.slot.PhaseStrategyBinding
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
+import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
@@ -78,6 +80,10 @@ object SkeletonStrategyBindings {
           PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
           PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID),
         ),
+      SkeletonDefinition.GOAL_ASSESSMENT to
+        mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentStrategy.ID)),
+      SkeletonDefinition.GOAL_ASSESSMENT_FIX to
+        mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentFixStrategy.ID)),
       SkeletonDefinition.GOAL_HISTORY to
         mapOf(PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID)),
       SkeletonDefinition.PLAN to

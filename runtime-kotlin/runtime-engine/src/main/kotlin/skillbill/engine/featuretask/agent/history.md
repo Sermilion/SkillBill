@@ -1,5 +1,52 @@
 # featuretask runtime boundary history
 
+## [2026-10-25] SKILL-442 subtask 4 - Validate test probes
+Areas: runtime-engine featuretask slot/qualitygate (ValidateProbePrompt, ValidateProbeActivation) and slot/qualitygate/agentvalidate (strategy, step hooks, ValidateProbeSettlement), slot/attempt launch preparation, prompt compose inputs, runloop record rejection and progress observations, opus-5-5-agent-validate.md; runtime-domain model/validation (ValidationTestProbe, parser) and artifact wire; runtime-contracts payload keys and failure code; runtime-infra contracts validator and schema paths; orchestration/contracts; docs/block-incident-classification
+- MEDIUM feature. Goal-child agent validate (not gate triage) asks for up to 6 test probes per run, one `survived`, `repaired` or `not_run` line each; `not_run` needs a reason, and survived or not_run imply repaired false. The ordered list is stored as `produced_outputs.test_probes` and never changes the verdict.
+- Probe scope comes from repaired scenarios in the bound catalog plus required criteria; prompt text and the md `## Test probes` section are included only when the scope is set, so standalone, post-QA and triage prompts stay probe-free.
+- New contract: validation-test-probes schema (cap 6), wire kind VALIDATION_TEST_PROBES with a duplicate `test_ref` check, failure code INVALID_VALIDATION_TEST_PROBES classified as a Skill Bill defect. Domain parser counts zero probe lines as malformed. reusable
+- Settlement: first malformed report is re-asked once through completionRejection; a second stores an empty list plus a best-effort diagnostics warning; `not_run` raises an unavailable-probe warning.
+- Pattern: pure functions split out of the settlement (correction, storing, applies) for tests; the correction budget is the durable phase attempt count, so it survives resume. blockedReasons moved to the progress snapshot sub-interface for the detekt function ceiling; scope builder and activation merged into one qualitygate file for the 12-file ceiling.
+- Limits: goal-child validate prose with no probe lines blocks at attempt 1 until the durable correction (confirm against "degrade, not block"); other retries of validate also consume the correction; no full PhaseRun resume test; goal-child fixtures and slotbaseline goldens now carry a probe line.
+Feature flag: N/A
+Acceptance criteria: all implemented for this subtask (validate passed ./gradlew check).
+
+## [2026-10-25] SKILL-442 subtask 3 - Accepted-criterion re-check and unknown-scenario surfacing
+Areas: runtime-engine featuretask persist/acceptance (repair persistence, interaction trace round, phase recorder, trace diagnostics, audit admission), slot/audit and slot/codereview prompt sections, slot/attempt launch preparation, model/audit; runtime-engine goalrunner (finalization, branch plan, run models, outcome stores); runtime-domain model/audit and model/audit/interaction; runtime-infra contracts auxiliary validator
+- MEDIUM feature. After a repair round, accepted closed criteria whose cited production paths intersect the round's changed paths join recheck_refs; criteria citing no paths join recheck_any_change_refs on any change, with one warning each. Replays do not re-add refs.
+- The trace stage is entered when scenarios or rechecks are pending; one batched audit answers `Recheck AC-NNN: holds|regressed evidence <paths>` lines. A holds verdict replaces closure evidence; regressed reopens the criterion inside the 3-outcome budget and routes to audit_plan_fix. Domain: AcceptanceCriterionRecheckSchedule and AcceptanceCriterionRecheckParser. reusable
+- After a re-ask and a second malformed output, rechecks are treated as holds with prior evidence and pending scenarios as unknown with reason `malformed audit output`.
+- Unknown scenarios store their reasons in a null-criterion prose audit and are projected by AcceptanceCriterionUnknownScenario. They surface as warnings, as a context-only section in the CODE_REVIEW prompt, and as an `## Interaction Trace` section in the goal PR body per subtask, via the new recordedUnknownScenarios on GoalRunnerReviewOutcomeStore. Unknown never changes a criterion's stage or blocks. reusable
+- Coherence relaxed: recheck refs are criterion refs and must be disjoint; CLOSED to CLOSED prose reaffirmation is allowed.
+- Pattern: recheck helpers live in the interaction trace round file to keep the 12-file sibling ceiling and detekt function limits.
+- Limits: no serial-repair end-to-end case for a regressed recheck (covered at recorder level); unknownInteractionScenarios is populated for every phase but rendered only in CODE_REVIEW.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented for this subtask (validate passed ./gradlew check).
+
+## [2026-10-25] SKILL-442 subtask 2 - Interaction-trace audit mode for acceptance repair
+Areas: runtime-engine featuretask persist/acceptance (repair persistence, phase recorder, audit admission, interaction targets and trace round), slot/audit prompt sections and audit round, runner run entry and status, prompt compose inputs; runtime-domain model/audit and model/audit/interaction, artifact wire; runtime-infra contracts auxiliary validator; runtime-contracts payload keys and failure code; orchestration/contracts; docs/block-incident-classification
+- MEDIUM feature. After the last criterion is accepted, repair state enters INTERACTION_TRACE_REQUIRED and the audit traces each authored interaction scenario instead of re-auditing criteria.
+- Audit-result and repair-state schemas moved to 0.2: mode `interaction_trace`, required `interactions` and `rechecks` arrays, a required `interaction_trace` state field and a coherence check binding regressed refs to the scenario owners.
+- Domain: AcceptanceCriterionInteractionTraceParser (anchored, case-insensitive line grammar) reads the audit prose; a broken owner reopens its criterion as SOURCE_UNRESOLVED. Interaction types live in the new model.audit.interaction package. reusable
+- Engine: persistence calls requireInteractionTrace after each mutation in the same transaction; PhaseRecorder.completeInteractionTrace settles the trace, with one re-ask and then degradation to unknown. Run entry loads the spec's scenarios into the binding; the prompt lists the trace and re-check scope.
+- New failure code INVALID_INTERACTION_TRACE_AUDIT_OUTPUT is classified as a Skill Bill defect.
+- Pattern: the interaction types were split into a package so the 12-file model.audit ceiling holds without moving AcceptanceCriterionInteractionTrace away from the repair state, which keeps the domain cycle census empty.
+- Limits: the re-ask marker is in memory, so a restart grants one extra re-ask; 0.1 records fail loudly at decode; the admission InteractionTrace branch is exercised only by tests; no serial-repair end-to-end case for the scenarios.
+Feature flag: N/A
+Acceptance criteria: all implemented for this subtask (validate passed ./gradlew check).
+
+## [2026-10-25] SKILL-442 subtask 1 - Interaction scenario authoring rules and catalog contract
+Areas: runtime-engine featuretask prepare (FeatureSpecPreparationWriter, AuthoredInteractionScenarioCheck), phase/planning decomposition planner, runloop/planning PlanDecompositionStop, slot/plan (feature-spec-directive, AgentPlanStrategy); runtime-domain review/spec parser and catalog model; runtime-contracts payload keys and failure code; runtime-infra contracts schema; orchestration/contracts; docs/block-incident-classification
+- MEDIUM feature. The plan directive and spec-bundle requirement teach authors a `## Interaction Scenarios` section for subtasks and a `## Transitional Regressions` section for the parent spec.
+- InteractionScenarioSectionParser (runtime-domain) beside GovernedSpecSectionParser returns Parsed or Rejected with field-path issues. Subtask and Parent contexts check criterion refs against the spec's own ACs, unique labels and restoration order. reusable
+- A versioned catalog contract (interaction-scenario-catalog-schema.yaml, version 0.1) has a wire codec that fails loudly on both encode and decode, plus failure code INVALID_INTERACTION_SCENARIO_CATALOG and a block-incident classification row.
+- Authored-bundle verification requires scenarios for a subtask with two or more criteria and regressions for a rewritable parent of a bundle with two or more subtasks. Rejections reuse the existing invalid-preparation-request path and in-phase block, with no new block reason or budget.
+- Pattern: verifyAuthored takes parentRewritable, threaded from protectedSpecSha256 == null at both PlanDecompositionStop call sites.
+- Operator-authored (protected) parents are exempt and only produce a best-effort diagnostics warning.
+- Limits: no planning settlement test for the in-phase block of a rejected bundle; the section must be the last content of the parent since trailing prose joins its body; prompt text avoids "at least two" because a prompt-composer guard bans it.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented for this subtask.
+
 ## [2026-10-24] SKILL-420 subtask 5 - Per-target coverage, reason vocabulary and unverified passes in the QA report
 Areas: runtime-engine featuretask qa/report (report model, parser, settlement, outcome records), slot/qa prompt sections, model/execution QaSkipReason, phaserun/qa, operation/verify VerifyQaStep; docs/runtime-command-guidance
 - MEDIUM feature. The prose QA report gains a `## Coverage` section with one line per target kind (verdict, optional reason and backend attribution real, mocked or none), plus `## Assertions` and `## Isolation` sections; the QA briefing's Report block asks for all of them and a `Reason:` token line.

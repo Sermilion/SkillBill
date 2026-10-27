@@ -204,7 +204,7 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
       activityStampSink =
         activityStampWriter.sink(
           workflowId = facts.workflowId,
-          parentWorkflowId = facts.goalContinuation?.parentWorkflowId,
+          parentWorkflowId = facts.goalContinuation?.parentWorkflowId ?: facts.activityParentWorkflowId,
         ),
       worktreeEditObserver =
         worktreeEditJournalWriter.observer(

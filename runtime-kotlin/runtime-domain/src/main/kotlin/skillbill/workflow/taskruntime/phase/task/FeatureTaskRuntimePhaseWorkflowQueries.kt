@@ -11,6 +11,14 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
 object FeatureTaskRuntimePhaseWorkflowQueries {
+  private val PHASES_WITHOUT_UPSTREAM_PROJECTIONS: Set<String> =
+    setOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
+    )
+
   fun backwardEdgeForLoop(loopId: String): FeatureTaskRuntimeBackwardEdge? =
     FeatureTaskRuntimePhaseWorkflowTransitions.backwardEdgeForLoop(
       FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
@@ -47,9 +55,7 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
     phaseId: String,
     featureSize: FeatureTaskRuntimeFeatureSize,
   ): FeatureTaskRuntimePhaseDeclaration {
-    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS ||
-      phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA
-    ) {
+    if (phaseId in PHASES_WITHOUT_UPSTREAM_PROJECTIONS) {
       return FeatureTaskRuntimePhaseDeclaration(
         phaseId = phaseId,
         projectionDeclarations = emptyList(),

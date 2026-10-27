@@ -14,6 +14,8 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeQuarantineSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.QaRepairStateSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.ValidationTestProbesSchemaValidator
+import skillbill.infrastructure.contracts.workflow.goal.GoalAssessmentRecordSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalChildHistoryDraftSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalChildHistoryEvidenceSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalFinalizationHistorySchemaValidator
@@ -109,6 +111,10 @@ class FeatureTaskRuntimeWireArtifactValidator(
         QaRepairStateSchemaValidator.validate(wireMap)
       FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS ->
         FeatureTaskRuntimeImplementationProgressSchemaValidator.validate(wireMap, sourceLabel)
+      FeatureTaskRuntimeWireArtifactKind.VALIDATION_TEST_PROBES ->
+        ValidationTestProbesSchemaValidator.validate(wireMap, sourceLabel)
+      FeatureTaskRuntimeWireArtifactKind.GOAL_ASSESSMENT_RECORD ->
+        GoalAssessmentRecordSchemaValidator.validate(wireMap, sourceLabel)
       else -> error("Unexpected non-serial wire artifact $kind")
     }
   }

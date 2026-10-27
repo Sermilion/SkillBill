@@ -9,10 +9,12 @@ import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetrySto
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
+import skillbill.telemetry.model.GoalAssessmentTelemetryCounts
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
 import skillbill.telemetry.model.GoalStartedRecord
 import skillbill.telemetry.model.GoalSubtaskFinishedRecord
+import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts
 import java.nio.file.Files
 import java.sql.Connection
 import kotlin.test.Test
@@ -82,6 +84,52 @@ class GoalTelemetryStoreTest {
       assertEquals(2, blocked.subtaskId)
       assertEquals("validation failed", blocked.blockedReason)
       assertEquals(2, blocked.attemptCount)
+    }
+  }
+
+  @Test
+  fun `trace probe and assessment counters reach payloads and stats and a duplicate terminal keeps the first`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      val assessment =
+        GoalAssessmentTelemetryCounts(
+          blockerFindings = 1,
+          majorFindings = 2,
+          minorFindings = 3,
+          confirmed = 4,
+          refuted = 5,
+          rounds = 2,
+          openFindings = 1,
+          exitReason = "round_cap",
+        )
+      store.goalStarted(startedRecord("wf-1", subtaskTotal = 1, resumed = false), level = "full")
+      val traceProbeCounts = GoalSubtaskTraceProbeCounts(scenariosTraced = 6, scenariosBroken = 2, probesKilled = 3)
+      store.goalSubtaskFinished(
+        subtask(
+          id = 1,
+          status = "complete",
+          durationMs = 60_000,
+          attempts = 1,
+        ).copy(traceProbeCounts = traceProbeCounts),
+        "full",
+      )
+      val finished = finishedRecord("wf-1", "completed", "2026-06-04T10:00:00Z").copy(assessmentCounts = assessment)
+      store.goalFinished(finished, level = "full")
+      store.goalFinished(finished.copy(assessmentCounts = GoalAssessmentTelemetryCounts()), level = "full")
+
+      val payloads = pendingOutbox(connection).map { it.eventName to parsePayload(it.payloadJson) }.toMap()
+      val subtaskPayload = payloads.getValue("skillbill_goal_subtask_finished")
+      val goalPayload = payloads.getValue("skillbill_goal_finished")
+      assertEquals(6L, assertIs<Number>(subtaskPayload["interaction_scenarios_traced"]).toLong())
+      assertEquals(3L, assertIs<Number>(subtaskPayload["test_probes_killed"]).toLong())
+      assertEquals(2L, assertIs<Number>(goalPayload["goal_assessment_major_findings"]).toLong())
+      assertEquals("round_cap", goalPayload["goal_assessment_exit_reason"])
+
+      val stats = ReviewStatsRuntime.goalStats(connection)
+      assertEquals(6L, stats.interactionScenarios.traced)
+      assertEquals(3L, stats.testProbes.killed)
+      assertEquals(3L, stats.goalAssessment.minorFindings)
+      assertEquals(mapOf("round_cap" to 1), stats.goalAssessment.exitReasonCounts)
     }
   }
 

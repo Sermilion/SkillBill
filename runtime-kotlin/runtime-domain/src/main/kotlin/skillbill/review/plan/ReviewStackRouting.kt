@@ -19,13 +19,14 @@ object ReviewStackRouting {
     val changedFiles = files.filterNot { ReviewPathMatcher.isIgnored(it.path) }
     val concreteManifests = manifests.filterNot { CODE_REVIEW_CAPABILITY in it.fallbackCapabilities }
     val contentSignals =
-      concreteManifests.associateWith { manifest ->
-        manifest.routingSignals.content.distinct().map(::contentSignalPattern)
+      concreteManifests.associate { manifest ->
+        manifest.slug to manifest.routingSignals.content.distinct().map(::contentSignalPattern)
       }
     val signalOwners =
       concreteManifests.flatMap { manifest ->
         manifest.routingSignals.path.distinct().map { it to manifest.slug }
       }.groupBy({ it.first }, { it.second })
+    val pathMatchers = signalOwners.keys.associateWith(::CompiledReviewPathMatcher)
 
     val fallback by lazy { ReviewFallbackResolver.resolveOptional(manifests) }
     if (changedFiles.isEmpty()) {
@@ -38,9 +39,9 @@ object ReviewStackRouting {
 
     changedFiles.forEach { changed ->
       val scores =
-        concreteManifests.associateWith { manifest ->
-          score(manifest, changed, signalOwners, contentSignals.getValue(manifest))
-        }.filterValues { (pathScore, _) -> pathScore > 0 }
+        concreteManifests.map { manifest ->
+          manifest to score(manifest, changed, signalOwners, contentSignals.getValue(manifest.slug), pathMatchers)
+        }.filter { (_, score) -> score.first > 0 }
 
       val winners = strongestOwners(scores)
       val resolved = resolveComposition(winners)
@@ -82,10 +83,11 @@ object ReviewStackRouting {
     changed: ReviewRoutingChangedFile,
     signalOwners: Map<String, List<String>>,
     contentPatterns: List<Regex>,
+    pathMatchers: Map<String, CompiledReviewPathMatcher>,
   ): Pair<Int, Int> {
     val pathScore =
       manifest.routingSignals.path.distinct().sumOf { signal ->
-        if (!ReviewPathMatcher.matches(changed.path, signal)) {
+        if (!pathMatchers.getValue(signal).matches(changed.path)) {
           0
         } else if (signalOwners.getValue(signal).size == 1) {
           UNIQUE_PATH_SIGNAL_SCORE
@@ -97,15 +99,15 @@ object ReviewStackRouting {
     return pathScore to contentScore
   }
 
-  private fun strongestOwners(scores: Map<PlatformManifest, Pair<Int, Int>>): Set<PlatformManifest> {
-    if (scores.isEmpty()) return emptySet()
-    val strongestPath = scores.values.maxOf { it.first }
-    val pathWinners = scores.filterValues { it.first == strongestPath }
-    val strongestContent = pathWinners.values.maxOf { it.second }
-    return pathWinners.filterValues { it.second == strongestContent }.keys
+  private fun strongestOwners(scores: List<Pair<PlatformManifest, Pair<Int, Int>>>): List<PlatformManifest> {
+    if (scores.isEmpty()) return emptyList()
+    val strongestPath = scores.maxOf { (_, score) -> score.first }
+    val pathWinners = scores.filter { (_, score) -> score.first == strongestPath }
+    val strongestContent = pathWinners.maxOf { (_, score) -> score.second }
+    return pathWinners.filter { (_, score) -> score.second == strongestContent }.map { it.first }
   }
 
-  private fun resolveComposition(winners: Set<PlatformManifest>): PlatformManifest? {
+  private fun resolveComposition(winners: List<PlatformManifest>): PlatformManifest? {
     if (winners.size == 1) return winners.single()
     val survivors =
       winners.filterNot { candidate ->

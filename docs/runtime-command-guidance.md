@@ -66,6 +66,13 @@ through their governed briefings. This does not change the spec, acceptance
 criteria, comparison baseline, or other workflows. A retry without `--mandate`
 does not promote its reason to a run mandate.
 
+For an exhausted acceptance-criterion budget, retry the child's `audit` phase.
+This explicit retry grants a fresh budget and preserves prior outcomes. It also
+reopens the audit when its phase record completed before the workflow blocked.
+The retry schedules a read-only source audit before further repairs. A stopped
+repair planner can also return to audit after scoped crash reconciliation confirms
+its worker is dead and releases ownership. A live or unverifiable worker blocks retry.
+
 ## Block incident recovery
 
 Work detail includes the runtime-built `incident` projection and `incident_history`. Status and run output use that same projection for the diagnosis, next action, report, and telemetry lines. The detail JSON adds `recover_command` only when recovery is available or prerequisites need confirmation; it includes the incident revision and one `--confirm-prerequisite` flag for each unmet prerequisite.
@@ -249,7 +256,7 @@ supplied briefing without starting standalone phase or operation commands.
 Validation runs the project's required checks and fixes every failure in the same
 session, including build failures. It may run repository build and packaging commands,
 including the pack build command, to prepare missing or stale validation artifacts.
-After source repairs it rebuilds the affected artifacts and reruns all required checks
+After source repairs it rebuilds the affected artifacts and reruns all runnable required checks
 against the current candidate. The separate compile-only build gate does not reserve
 these commands away from validation. A rebuild does not complete validation, and
 artifact identity and integrity checks remain mandatory. Monitor repair uses the same
@@ -280,6 +287,22 @@ project regardless of which files changed and requires no platform pack or decla
 validation command. If discovery finds no applicable commands, the agent prints a
 warning and completes the step so the workflow can advance. Unreadable configuration
 or failed discovery remains an obstacle and does not count as an empty check list.
+
+Confirmed unavailable tools, SDKs, or host platforms skip only the checks that
+depend on them. Validation continues all independent checks and completes when
+every runnable required check passes. Each skip produces a warning naming the
+command or target, missing prerequisite, and confirming preflight or error evidence.
+Skipped coverage never counts as passed. If an aggregate command stops solely at
+unavailable tooling, run the remaining independent tasks separately. An artifact
+check may skip when it depends on an artifact that the unavailable tooling must
+produce, with that dependency reported. If no checks can run, complete with warnings
+and state that no checks ran. Missing tooling alone does not block validation or
+authorize package installation, project configuration changes, disabled targets, or
+test skips. Source, dependency, test, analysis, formatting, fixture, and configuration
+failures still require repair. Failed discovery and unexplained command failures
+retain the existing failure behavior. This applies to standalone and workflow
+validation and the local validation performed during monitor repair; remote CI
+results keep their existing completion rules.
 
 A monitor retry rechecks an abandoned owner's retained `publication_unknown` state
 under the admission lock after confirming that the previous owner process is dead
@@ -345,6 +368,10 @@ and other provider failures retain the normal blocked-run behavior.
 
 Agent-specific behavior uses injectable strategies on `AgentRunProcessRequest`, not identity branching in the process runner: `progressProbe`, `declaredProgressProbe`, `activityProbe`, `progressEmitter`, `idlePolicy` (`HEARTBEAT_EXTENDED` | `DB_PROGRESS_ONLY`). `ProcessWaitLoop` calls strategies only; new agents add a strategy constant. Crash reconciliation: `FeatureTaskRuntimeWorkerSupervisor` self-heals expired-lease rows to resumable at startup.
 
+Goal planning forwards observed agent activity to the parent goal. Status reads its
+active planning phase instead of the preceding child's progress. A verified live
+planning owner can clear a stale blocked label; operator pauses still apply.
+
 Status heartbeats report that a child process remains active. Workflow progress
 labels and observed file activity report separate facts; process activity alone
 does not establish source progress. A passing local check reports only a local
@@ -353,13 +380,14 @@ checks remain pending, the existing monitor progress event can refresh status
 every 30 seconds. That update reports waiting activity; it does not change the
 CI verdict, deadline, or repair attempt count.
 
-Every non-skipped goal child runs `audit -> review -> validate -> write_history`, so each subtask runs the full project validation gate and records its own validation result. Goal children no longer run `qa` or `qa_fix`. QA runs once per goal, in goal finalization, after every child completes: `qa -> commit_push -> pr -> monitor`. It tests the goal branch HEAD (the final stack branch for a stacked goal) against the parent spec acceptance criteria. The runtime reads the verdict from the QA report's first verdict word and never rewrites it: a `passed` report that lists findings keeps `passed` with a warning and opens no repair, and a report naming no verdict settles `incomplete`. QA findings enter `qa_fix -> build -> qa`, with three repair attempts counted across goal relaunches. `build` is the runtime-owned compile-only gate with its own repair turns, so QA re-tests only a fix that compiles; `qa_fix` itself never builds, tests, or validates. When build still fails after its repair turns, QA does not re-test: the goal records `qa_fix left the app without a passing build, so QA did not re-test the fix` with the build gate's reason in the QA outcome and the PR body, then continues to validation and `commit_push`. `qa_fix` gets each finding's steps, expected and observed behavior, and evidence, edits the goal branch working tree, and goal finalization commits its edits with the goal. `qa_fix` must fix every finding in source and report each as `<finding-id>: fixed: <files and how>`; a `qa_fix` that changes no file, or marks a finding `not changed`, is sent back for those findings. When the QA loop changed code, including build repairs, the full project validation gate runs once after QA settles. Nothing after QA re-runs it: a validation repair that changes the tested tree adds a warning to the PR body. QA never blocks the goal. Findings left after the third attempt are recorded as `findings` with `findings left open: <ids>` and the run continues to `commit_push`. The goal QA outcome keeps every finding QA reported during the loop, marked `fixed` when a later QA run no longer saw it and `not_fixed` otherwise; the desktop goal activity panel lists both, `skill-bill goal status` prints `qa_findings: fixed=<n> not_fixed=<m>` with the open ids, and the PR body names the not-fixed findings for the operator to review, and a goal QA run that cannot settle prints a `Warning:` line and reaches the PR body as a warning. QA warnings recorded with the report, including an unavailable QA capability and a HEAD, tree, or worktree status change made during QA, are listed in the QA output's `qa_warnings` and appended to the QA outcome in the PR body. The full run selects QA with the dispatcher token `qa:auto|off`, which the runtime receives as `--qa <auto|off>` or the `SKILL_BILL_QA_SELECTION` environment variable and persists in the goal continuation artifact. Omission resolves to `auto`. The goal records the selection on first run, and a resume that requests a different one is refused. `off` settles goal QA as skipped with `disabled_policy` and never probes a device or launches a QA agent. When the routed platform pack declares no `qa_capability`, goal finalization omits the `goal-qa` skeleton entirely. It records no QA phase or report, and the desktop progress pipeline omits the `qa` and `qa_fix` pills. An explicit standalone `phase qa` still reports an `unsupported_target` skip. An unknown, duplicate, or conflicting value (flag and environment disagreeing) is a usage error. Goals already in flight keep each recorded child's step list, so a child recorded on goal-child revision 3 still runs child-level `qa` and `qa_fix`. On such a child a tree change after QA sends `write_history` back to audit and QA up to three times; after that the child continues to history and commit with the warning `QA results are stale: code changed after the last QA pass`, which reaches the goal PR body. An in-flight goal with no recorded selection takes the first child's. Goal QA is skipped when every child ran and recorded child-level QA, or when a goal-level QA outcome already passed or skipped on the current tree. Otherwise it runs once. Build is the compile-only quality gate. It runs only when a launch explicitly selects it with `--quality-gate-selection build` (or the matching environment variable), or when a resumed child already recorded build; the runtime never switches a recorded child to a different gate. When build is selected and the dominant platform pack declares `validation_gate.build_command`, build is one agent session that runs only that pack's `build_command` (Kotlin: `./gradlew compileKotlin`), reads that output, fixes every finding in that session, then runs `cache_bypassing_build_command` once to confirm. Build is compile/buildability proof only: no suite tests, no full check, no substitute agent-run gate. Do not run `collect_all_full_gate_command`, `./gradlew check`, `check --continue`, `skill-bill validate`, `skill-bill phase validation`, or any other repo-root checklist. The runtime does not start another agent for repair turns. It may still run one cache-bypassing verify after the agent signals complete; remaining findings persist `findings_open` and block, and an operator resume starts one new build session. Do not rerun the pack build command after each individual finding, and do not launch delegated subagents. Targeted compile tasks are allowed while repairing when they are part of that same pack gate. Default standalone runs skip build (`review -> validate`); only a child recorded with build uses `review -> build -> write_history`. `implement` and `implement_fix` never run `./gradlew check` or any other full check; validate owns the full gate on every subtask.
+Every non-skipped goal child runs `audit -> review -> validate -> write_history`, so each subtask runs the full project validation gate and records its own validation result. Goal children no longer run `qa` or `qa_fix`. Goal finalization runs, after every child completes: `goal_assessment -> qa -> commit_push -> pr -> monitor`. The assessment stage runs once per goal, after the published goal result and immediately before goal QA. It never blocks the goal and has no push authority. A recorded `exit_reason` skips it on resume, and a goal that finished without changes records `skipped_no_changes` with a skip entry instead of assessing. A confirmed blocking defect enters `goal_assessment_fix`, which runs at the implementation tier on the goal branch. The fix gets only the fix-disposition findings and the `not_restored` regressions, never the pipeline verdicts, and reports each as `<ref>: fixed: <files and how>` or `<ref>: not fixed: <reason>`. After a `completed` fix the shared post-change validation runs; a validation failure is recorded and only warns. Each fix round makes one commit. Later rounds re-assess only the subtasks and cross-subtask scenarios the previous fix touched and re-verify the carried findings. The stage exits as `converged`, `round_cap` after three rounds, `persistent_finding` when a confirmed finding survived two fix rounds, or `assessment_unavailable`, which exits at once. QA runs once per goal, after the assessment stage. It tests the goal branch HEAD (the final stack branch for a stacked goal) against the parent spec acceptance criteria. The runtime reads the verdict from the QA report's first verdict word and never rewrites it: a `passed` report that lists findings keeps `passed` with a warning and opens no repair, and a report naming no verdict settles `incomplete`. QA findings enter `qa_fix -> build -> qa`, with three repair attempts counted across goal relaunches. `build` is the runtime-owned compile-only gate with its own repair turns, so QA re-tests only a fix that compiles; `qa_fix` itself never builds, tests, or validates. When build still fails after its repair turns, QA does not re-test: the goal records `qa_fix left the app without a passing build, so QA did not re-test the fix` with the build gate's reason in the QA outcome and the PR body, then continues to validation and `commit_push`. `qa_fix` gets each finding's steps, expected and observed behavior, and evidence, edits the goal branch working tree, and goal finalization commits its edits with the goal. `qa_fix` must fix every finding in source and report each as `<finding-id>: fixed: <files and how>`; a `qa_fix` that changes no file, or marks a finding `not changed`, is sent back for those findings. When the QA loop changed code, including build repairs, the full project validation gate runs once after QA settles. Nothing after QA re-runs it: a validation repair that changes the tested tree adds a warning to the PR body. QA never blocks the goal. Findings left after the third attempt are recorded as `findings` with `findings left open: <ids>` and the run continues to `commit_push`. The goal QA outcome keeps every finding QA reported during the loop, marked `fixed` when a later QA run no longer saw it and `not_fixed` otherwise; the desktop goal activity panel lists both, `skill-bill goal status` prints `qa_findings: fixed=<n> not_fixed=<m>` with the open ids, and the PR body names the not-fixed findings for the operator to review, and a goal QA run that cannot settle prints a `Warning:` line and reaches the PR body as a warning. QA warnings recorded with the report, including an unavailable QA capability and a HEAD, tree, or worktree status change made during QA, are listed in the QA output's `qa_warnings` and appended to the QA outcome in the PR body. The full run selects QA with the dispatcher token `qa:auto|off`, which the runtime receives as `--qa <auto|off>` or the `SKILL_BILL_QA_SELECTION` environment variable and persists in the goal continuation artifact. Omission resolves to `auto`. The goal records the selection on first run, and a resume that requests a different one is refused. `off` settles goal QA as skipped with `disabled_policy` and never probes a device or launches a QA agent. When the routed platform pack declares no `qa_capability`, goal finalization omits the `goal-qa` skeleton entirely. It records no QA phase or report, and the desktop progress pipeline omits the `qa` and `qa_fix` pills. An explicit standalone `phase qa` still reports an `unsupported_target` skip. An unknown, duplicate, or conflicting value (flag and environment disagreeing) is a usage error. Goals already in flight keep each recorded child's step list, so a child recorded on goal-child revision 3 still runs child-level `qa` and `qa_fix`. On such a child a tree change after QA sends `write_history` back to audit and QA up to three times; after that the child continues to history and commit with the warning `QA results are stale: code changed after the last QA pass`, which reaches the goal PR body. An in-flight goal with no recorded selection takes the first child's. Goal QA is skipped when every child ran and recorded child-level QA, or when a goal-level QA outcome already passed or skipped on the current tree. Otherwise it runs once. Build is the compile-only quality gate. It runs only when a launch explicitly selects it with `--quality-gate-selection build` (or the matching environment variable), or when a resumed child already recorded build; the runtime never switches a recorded child to a different gate. When build is selected and the dominant platform pack declares `validation_gate.build_command`, build is one agent session that runs only that pack's `build_command` (Kotlin: `./gradlew compileKotlin`), reads that output, fixes every finding in that session, then runs `cache_bypassing_build_command` once to confirm. Build is compile/buildability proof only: no suite tests, no full check, no substitute agent-run gate. Do not run `collect_all_full_gate_command`, `./gradlew check`, `check --continue`, `skill-bill validate`, `skill-bill phase validation`, or any other repo-root checklist. The runtime does not start another agent for repair turns. It may still run one cache-bypassing verify after the agent signals complete; remaining findings persist `findings_open` and block, and an operator resume starts one new build session. Do not rerun the pack build command after each individual finding, and do not launch delegated subagents. Targeted compile tasks are allowed while repairing when they are part of that same pack gate. Default standalone runs skip build (`review -> validate`); only a child recorded with build uses `review -> build -> write_history`. `implement` and `implement_fix` never run `./gradlew check` or any other full check; validate owns the full gate on every subtask.
 
 ## Commit Structure (feature-task / goal subtasks)
 
 Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtask leaves exactly one commit on the feature branch, not a chain of checkpoint commits in branch history.
 
 - Before review, the runtime creates the active subtask commit or amends its proven owned HEAD, records the exact reviewed target/tree identities, and launches review only after durable identity persistence. A message-only amend with the same tree may carry approval forward. `write_history` and `commit_push` never reopen earlier phases. After the bounded `review_fix` round, `commit_push` does not launch an agent. Commit/push runs no validation, CI discovery, readiness check, or agent. The preceding quality-gate phase owns local checks. PR publication requires no additional validation-evidence gate. Before that commit, the runtime marks the decomposition manifest complete so the committed file carries the completed status. The runtime then stages every non-runtime-private dirty path as this subtask's work, including files written after implement or by another process. Feature-spec files are included only when they are not gitignored. It commits with a subject from the issue key and subtask name, pushes, and records `commit_sha` into workflow state. The git-tracked manifest keeps `commit_sha` null. Extra dirty content does not block and does not re-enter audit or review.
+- After the subtask commits, the goal assessment stage adds up to three `goal_assessment` round commits, one per fix round that changed files, each with the subject `<issue_key>: goal assessment round <n>`. The runtime stages every non-runtime-private dirty path for that commit and records its `commit_sha` in the assessment record. Assessment commits are local; they are pushed with the goal by `commit_push`.
 - Checkpoint history lives under `refs/skill-bill/checkpoints/<issue-key>/<subtask-id>/<sequence>`. Those refs preserve pre-amend commits the branch no longer names; they are not reachable through `git log` on the branch without an explicit ref argument.
 - Pruning deletes a subtask's checkpoint refs only after that subtask's commit is pushed and its manifest entry records a non-blank `commit_sha`. Pruning is idempotent; a hard manifest reset prunes the refs of the subtasks it reset. Blocked or abandoned subtasks keep their refs for recovery.
 
@@ -391,7 +419,7 @@ Reuse only caches and mutable state that invocation may own, never another
 worktree's mutable state. Recheck the relevant instructions and scripts after a
 change to their setup, configuration, toolchain, or workspace requirements. A
 previously working setup does not validate a change you have not inspected.
-Setup reuse does not skip checks: run all required local checks for every repair
+Setup reuse does not skip runnable checks: run all runnable required local checks for every repair
 candidate before the runtime publishes it. Preserve clean and cache-bypass
 requirements, and do not carry a prior candidate's local pass forward as evidence.
 Explain setup retries and any missing tool, permission, or display problem in the
@@ -403,7 +431,7 @@ assertion, or error. The repair agent traces that evidence through the repositor
 and fixes the cause. A passing local rerun does not resolve a CI failure.
 Intermittent failures require investigation of timing, concurrency, isolation,
 or environment differences as the evidence warrants. Repair completion requires
-a repository fix and passing required local checks. If investigation cannot
+a repository fix and passing runnable required local checks. If investigation cannot
 establish a fix, the agent blocks with the failed check URL, inspected evidence,
 and unresolved cause or missing evidence. An unchanged tree and green local
 checks cannot complete repair. The runtime owns commit, push, and subsequent CI
@@ -447,10 +475,12 @@ An empty check report keeps goal monitoring active until checks arrive and pass
 or the monitor reaches its timeout. It never counts as CI success. A timeout or
 exhausted repair loop reports a blocked goal rather than completion.
 
-A long-running child's phase ledger retains its latest bounded window. Resume
-checks planning-import entries that remain in that window alongside the durable
-planning provenance and completed phase records. Normal removal of older ledger
-entries does not require replan or discard the child's execution progress.
+A long-running child's phase ledger retains recent entries and the retry and
+settlement entries needed to preserve repair budgets. Those older entries can
+leave sequence gaps before the recent contiguous entries. Resume validates this
+retention shape and checks surviving planning-import entries alongside the durable
+planning provenance and completed phase records. Normal ledger retention does not
+require replan or discard the child's execution progress.
 
 ## Edited subtask specs on resume
 
@@ -501,29 +531,23 @@ markers, or a strict adoption receipt in an audit or repair plan.
 criterion's remaining defect class: the latest gap plus sibling production paths of
 the same forbidden pattern. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
-repair cycle records at most one unsuccessful outcome. A partial source-work report with
-verdict `progress` stays in the same reserved repair cycle, retains its saved plan
-and edits, and does not consume a criterion failure when that round changed source
-files. A `progress` report from a round that changed no source files is charged like
-`no_progress`, so three idle rounds block the criterion. A retryable block first goes
-to read-only report admission. That admission returns `progress` for unfinished
-implementation that can continue, `satisfied` for a completed repair awaiting
+repair cycle records at most one unsuccessful outcome. Every repair implementation
+that leaves the selected criterion unfinished consumes one unsuccessful attempt,
+including a report with verdict `progress` or `no_progress`, whether or not that
+round changed source files. Saved edits and reports remain available to the next
+attempt, which receives a new reservation and repair plan.
+A retryable block first goes to read-only report admission. That admission returns
+`progress` for unfinished implementation, `satisfied` for a completed repair awaiting
 independent source verification, or `advance` for a concrete external obstacle.
-An agent stopping after one partial edit is not an external obstacle. Explicit
-`no_progress` reports, failed independent verification, and admitted failures
-retain the per-criterion cap.
+Both `progress` and `advance` consume the attempt. An agent stopping after one
+partial edit is not an external obstacle.
 A completed repair claim, with verdict `completed`, `satisfied`, or no verdict,
 goes directly to independent source verification. A verifier's `progress` verdict
-rejects that completion claim and consumes one unsuccessful outcome. It cannot
-turn the completed claim into an uncharged partial repair.
-The third unsuccessful
-outcome blocks that criterion. Explicit operator resume of the blocked goal resets
-the active failure counts to zero and grants three new outcomes per criterion,
-while retaining prior outcome identities and source evidence. Repair reports
-marked `progress` or `no_progress` still leave the selected criterion unfinished.
-Only `no_progress` consumes an unsuccessful outcome; `progress` continues the
-reserved cycle with its saved plan and existing failure count. An ordinary state
-reload does not reset the budget. A successful outcome closes source work for it
+rejects that completion claim and consumes one unsuccessful outcome.
+The third unsuccessful outcome blocks that criterion. Explicit operator resume of
+the blocked goal resets the active failure counts to zero and grants three new
+outcomes per criterion, while retaining prior outcome identities and source evidence.
+An ordinary state reload does not reset the budget. A successful outcome closes source work for it
 without erasing earlier failures.
 
 Finding gaps and routing to repair are normal transitions and consume no repair
@@ -532,9 +556,10 @@ Each criterion has its own allowance of three unsuccessful repair outcomes. If
 AC-002 fails verification once and passes after its second repair, AC-003 starts
 with zero failures used and three available. AC-002's failure remains in history
 and does not reduce AC-003's allowance. Phase execution counts identify launches;
-they are not the per-criterion repair budget. The desktop audit header and active
-phase chip show the current criterion's repair attempt, which advances after an
-unsuccessful repair outcome and starts at one for the next criterion.
+they are not the per-criterion repair budget. The desktop audit header shows the
+current criterion's repair attempt, which advances after an unsuccessful repair
+outcome and starts at one for the next criterion. Phase chips always show only
+their phase names, including active and skipped phases.
 
 Only the initial discovery audits the whole authored set. After it, the runtime
 settles one criterion at a time and trusts each settled result: an accepted

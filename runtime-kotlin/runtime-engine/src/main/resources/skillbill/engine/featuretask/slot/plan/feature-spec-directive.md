@@ -90,6 +90,19 @@ An authored parent spec has at most five feature-level outcome criteria; the sub
 the detailed outcomes. An existing operator-authored parent is immutable input and may contain
 more than five criteria. Preserve it and distribute all of its requirements across compliant subtasks.
 
+Behavior that spans several criteria goes in a `## Interaction Scenarios` section, not inside one
+criterion. Write it in every subtask spec with two or more criteria and in every authored parent spec
+whose subtasks share state, files, or user-facing entry points. A spec with fewer than two criteria and
+no parent-level sharing needs no scenario section. Write each scenario as one top-level list item that
+starts with `IS-001.` (three digits) and carries labeled fields, each starting a sentence on the item's
+first line or an indented continuation line: `Criteria:` (comma-separated `AC-NNN` refs, two or more
+distinct refs that exist in the same spec), `Subtasks:` (comma-separated subtask ids, parent spec only,
+two or more), `Entry point:`, `Preconditions:`, `Steps:`, `Outcome:`. Write at most six scenarios per
+subtask spec and at most six per parent spec. Every criterion that describes a failure, rejection,
+retry, or recovery gets a scenario that starts in that failure state and continues through the next
+dependent user action, for example "the stored config is invalid, then submit the form, then the
+redirect happens" or "the cache is corrupt, then run the command, then the process exits".
+
 ## Service / Spec Source Mode
 
 `bill-feature-spec` accepts an optional `service:default/linear` argument that selects where
@@ -213,6 +226,16 @@ contract or the runtime fails the run with "must list at least one criterion":
   commit message, the commit sha, the PR title or body, or history entries.
   Ask for a file under the spec folder instead (for example
   `census_subtask_N.md`).
+- Every authored parent of a bundle with two or more subtasks MUST contain a
+  `## Transitional Regressions` section. List each shipped behavior that a subtask disables until a
+  later subtask restores it as one top-level list item that starts with `TR-001.` (three digits) and
+  carries `Behavior:`, `Disabled by: subtask N.`, and `Restored by: subtask M.`, where M is later than
+  N. Examples: an old file format rejected before its migration lands; an endpoint removed before its
+  replacement lands. When no subtask disables shipped behavior, the section reads only `None.`.
+- `## Interaction Scenarios` follows the item grammar under Writing Acceptance Criteria. The runtime
+  rejects a subtask spec with two or more criteria that lacks the section, and rejects any scenario
+  or regression that is malformed, cites a criterion missing from its own spec, or names an unknown
+  subtask. An existing operator-authored parent is not changed and needs neither section.
 
 Prefer the canonical numbered form the runtime writer emits, with each criterion unwrapped over
 several sentences on indented continuation lines:

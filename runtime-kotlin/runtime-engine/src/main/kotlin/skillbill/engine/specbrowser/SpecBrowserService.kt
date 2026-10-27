@@ -37,7 +37,7 @@ class SpecBrowserService(
   private val treeReader = SpecTreeReader(manifests, manifestCache)
   private val liveGoals = SpecLiveGoalReader(database, status, runs, repositoryEnclosingRootPort)
 
-  fun projects(): List<SpecBrowserProject> = catalog.list().map { project(it, null) }
+  fun projects(): List<SpecBrowserProject> = catalog.list().filter { it.hasSpecs }.map { project(it, null) }
 
   fun projectFor(repoRoot: Path): SpecBrowserProject {
     val location = projectStore.resolve(repoRoot)
@@ -134,7 +134,8 @@ class SpecBrowserService(
     val repoRoot =
       preferredRepoRoot?.takeIf { projectStore.resolve(it).projectId == entry.projectId }
         ?: entry.checkoutRoots.firstOrNull()
-    return SpecBrowserProject(entry.projectId, displayName(repoRoot, entry.projectId), entry.specsRoot, repoRoot)
+    val name = displayName(repoRoot ?: entry.lastCheckoutRoot, entry.projectId)
+    return SpecBrowserProject(entry.projectId, name, entry.specsRoot, repoRoot)
   }
 
   private fun displayName(

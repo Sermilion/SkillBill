@@ -1,3 +1,15 @@
+## [2026-10-26] One project store per repository, and only projects with specs in the spec picker
+Context: The desktop spec picker listed five projects for two repositories: scratch clones of skill-bill got their own stores (`…-2`, `…-3`) because their remote was the same repository in another URL form (`https://` against `git@`) or a local path to the working copy, non-git directories inside `~/.skill-bill` (the state folder, installed skills) became `d-…` stores, and a store whose checkout was gone showed its raw id.
+Decision: A second clone of a lineage shares the existing store when its remote names the same repository in any form git accepts (user, port, `.git` suffix, trailing slash and host case ignored) or is a local path to one of the store's checkouts; a remote elsewhere is still a fork with its own suffixed store. A non-git directory inside the state folder gets a location but never a record. The catalog reports `hasSpecs` and `lastCheckoutRoot`, the spec browser lists only projects with spec bundles, and a project without a live checkout is named after the checkout it was last recorded at.
+Reason: A scratch clone is the same project, so splitting it hides its specs and clutters every picker; the state folder is Skill Bill's own, never a user project; a raw id names nothing a user recognises.
+Alternatives considered: Matching clones by root commit alone (merges real forks); naming a gone project after its remote's repository name (differs from the folder name the user knows it by).
+
+## [2026-10-25] SKILL-442: read the goal assessment record through one path and decode it strictly
+Context: PR body, status projection, CLI, work detail and desktop all need the assessment record, and a stale or lenient reader would show a wrong verdict.
+Decision: Every surface derives state from the single durable record read; corrupt or failing reads degrade to null with a warning, and the desktop maps enums by exact name.
+Reason: A second derivation path could disagree with the PR body, and a defaulting decoder would turn an unknown verification token into confirmed. The work-detail contract version moved to 1.3 so older readers are not silently fed the new object.
+Revisit when: the assessment record persists a fixed-not-re-verified flag, which would let status and desktop show what the PR renderer computes.
+
 ## [2026-10-23] SKILL-441: one plan-report builder serves standalone and goal plan phases
 Context: The spec assumed goal plan phases settle through the feature-task run loop, so bundle files would need a second report path next to the standalone one.
 Decision: `StandalonePlanReportBuilder` is the only producer of `StandalonePlanReport`, including `bundleFiles`. Goal plan phases already run `StandalonePlanRun` with goal scope and publish through the same status sink, so no parallel model exists.

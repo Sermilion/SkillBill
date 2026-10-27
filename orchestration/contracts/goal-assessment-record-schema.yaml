@@ -1,0 +1,119 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/goal-assessment-record.yaml
+title: Goal assessment record
+type: object
+additionalProperties: false
+required: [contract_version, issue_key, rounds, exit_reason, open_finding_refs]
+properties:
+  contract_version: { const: '0.1' }
+  issue_key: { type: string, pattern: '\S' }
+  rounds:
+    type: array
+    maxItems: 3
+    items:
+      type: object
+      additionalProperties: false
+      required: [round, head_sha, scope_files, assessor_runs, findings, scenarios, regressions, fix]
+      properties:
+        round: { type: integer, minimum: 1, maximum: 3 }
+        head_sha: { type: string, pattern: '^[a-fA-F0-9]{7,64}$' }
+        scope_files:
+          type: array
+          items: { type: string, pattern: '\S' }
+        assessor_runs:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [role, subtask_id, status]
+            properties:
+              role: { enum: [subtask, cross_subtask, verifier] }
+              subtask_id: { type: [integer, 'null'], minimum: 1 }
+              status: { enum: [completed, failed, malformed] }
+        findings:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - finding_ref
+              - kind
+              - severity
+              - path
+              - line
+              - failure_scenario
+              - guarded_ref
+              - subtask_id
+              - origin_round
+              - verification
+              - verification_evidence
+              - fix_rounds_survived
+              - disposition
+              - state
+            properties:
+              finding_ref: { type: string, pattern: '^GA-[0-9]{3}$' }
+              kind: { enum: [defect, test_value] }
+              severity: { enum: [blocker, major, minor] }
+              path: { type: string, pattern: '\S' }
+              line: { type: integer, minimum: 1 }
+              failure_scenario: { type: string, pattern: '\S' }
+              guarded_ref: { type: [string, 'null'], pattern: '\S' }
+              subtask_id: { type: [integer, 'null'], minimum: 1 }
+              origin_round: { type: integer, minimum: 1, maximum: 3 }
+              verification: { enum: [confirmed, refuted, unverified, not_required] }
+              verification_evidence: { type: string }
+              fix_rounds_survived: { type: integer, minimum: 0 }
+              disposition: { enum: [fix, pr_only] }
+              state: { enum: [open, fixed, refuted] }
+        scenarios:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [scenario_ref, verdict, evidence]
+            properties:
+              scenario_ref: { type: string, pattern: '^IS-[0-9]{3}$' }
+              verdict: { enum: [holds, broken] }
+              evidence: { type: string }
+        regressions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [regression_ref, state, evidence]
+            properties:
+              regression_ref: { type: string, pattern: '^TR-[0-9]{3}$' }
+              state: { enum: [restored, not_restored] }
+              evidence: { type: string }
+        fix:
+          oneOf:
+            - { type: 'null' }
+            - type: object
+              additionalProperties: false
+              required: [status, changed_files, commit_sha, validation]
+              properties:
+                status: { enum: [completed, no_change, failed, not_run] }
+                changed_files:
+                  type: array
+                  items: { type: string, pattern: '\S' }
+                commit_sha: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{7,64}$' }
+                validation: { enum: [passed, failed, not_run] }
+  exit_reason:
+    oneOf:
+      - { type: 'null' }
+      - { enum: [converged, round_cap, persistent_finding, assessment_unavailable, skipped_no_changes] }
+  open_finding_refs:
+    type: array
+    uniqueItems: true
+    items: { type: string, pattern: '^GA-[0-9]{3}$' }
+x-coherence-checks:
+  - id: unique-finding-refs
+    description: Finding refs are unique across every round of the record; the codec owns this check.
+  - id: ordered-rounds
+    description: Round numbers start at 1 and increase by exactly 1; the codec owns this check.
+  - id: unique-run-identity
+    description: A role plus subtask id pair appears at most once within a round, and only subtask runs carry a subtask id; the codec owns this check.
+  - id: resolvable-open-refs
+    description: Every open finding ref names a recorded finding whose state is open; the codec owns this check.
+  - id: guarded-ref-by-kind
+    description: A defect finding has a null guarded ref and a test-value finding names the guarded path and line; the codec owns this check.

@@ -13,6 +13,7 @@ enum class AcceptanceCriterionRepairStage(val wireValue: String) {
   REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION("repair_completed_awaiting_targeted_verification"),
   ACCEPTED("accepted"),
   BUDGET_BLOCKED("budget_blocked"),
+  INTERACTION_TRACE_REQUIRED("interaction_trace_required"),
 }
 
 enum class AcceptanceCriterionRepairAdoptionComposition(val wireValue: String) {
@@ -113,6 +114,24 @@ data class AcceptanceCriterionRepairSourceTransition(
   val checkpointId: String?,
 )
 
+data class AcceptanceCriterionInteractionTrace(
+  val pendingScenarioRefs: List<String> = emptyList(),
+  val tracedScenarioRefs: List<String> = emptyList(),
+  val brokenScenarioRefs: List<String> = emptyList(),
+  val repairedScenarioRefs: List<String> = emptyList(),
+  val unknownScenarioRefs: List<String> = emptyList(),
+  val recheckRefs: List<String> = emptyList(),
+  val recheckAnyChangeRefs: List<String> = emptyList(),
+  val tracedSpecDigest: String? = null,
+) {
+  val pendingRechecks: List<String> get() = (recheckRefs + recheckAnyChangeRefs).distinct().sorted()
+
+  companion object {
+    val EMPTY: AcceptanceCriterionInteractionTrace = AcceptanceCriterionInteractionTrace()
+    const val MAX_SCENARIO_REFS: Int = 64
+  }
+}
+
 data class AcceptanceCriterionRepairState internal constructor(
   val catalogId: String,
   val executionId: String,
@@ -135,8 +154,29 @@ data class AcceptanceCriterionRepairState internal constructor(
   val proseAudits: List<AcceptanceCriterionProseAudit> = emptyList(),
   val pendingClarificationQuestion: String? = null,
   val budgetStartOutcomeIndex: Int = 0,
+  val interactionTrace: AcceptanceCriterionInteractionTrace = AcceptanceCriterionInteractionTrace.EMPTY,
 ) {
   fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
+
+  fun reopenForOperatorAudit(): AcceptanceCriterionRepairState? {
+    val criterion = currentCriterionRef ?: return null
+    if (reservation != null || stage !in
+      setOf(
+        AcceptanceCriterionRepairStage.BUDGET_BLOCKED,
+        AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+        AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
+      )
+    ) {
+      return null
+    }
+    val resumed = resetBudgetForOperatorResume()
+    return resumed.copy(
+      mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
+      stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
+      pendingAuditRefs = (listOf(criterion) + pendingAuditRefs).distinct(),
+      revision = resumed.revision + 1,
+    )
+  }
 
   fun resetBudgetForOperatorResume(): AcceptanceCriterionRepairState {
     if (stage != AcceptanceCriterionRepairStage.BUDGET_BLOCKED) return this

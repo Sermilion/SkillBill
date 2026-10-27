@@ -20,6 +20,8 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
+import skillbill.goalrunner.model.GoalRunnerAssessmentResult
+import skillbill.goalrunner.model.GoalRunnerAssessmentState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -46,6 +48,7 @@ import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Instant
@@ -119,14 +122,25 @@ class IdeStatusProjector(
     repoRoot: Path,
   ): StandalonePlanReport = planReports.report(manifest, repoRoot)
 
-  internal fun goalFinishPipeline(repoRoot: Path): List<String> =
-    when (val capability = qaCapabilities.resolve(repoRoot)) {
-      is QaCapabilityResolution.Absent -> GOAL_FINISH_PIPELINE.filterNot { it in PhaseSlot.QA.steps }
-      is QaCapabilityResolution.Declared -> GOAL_FINISH_PIPELINE
-      is QaCapabilityResolution.Incompatible -> {
-        RuntimeDiagnosticsBestEffortWarning.record(diagnostics, capability.reason)
-        GOAL_FINISH_PIPELINE
+  internal fun goalFinishPipeline(
+    repoRoot: Path,
+    assessment: GoalRunnerAssessmentResult? = null,
+  ): List<String> =
+    assessmentFinishSteps(assessment) +
+      when (val capability = qaCapabilities.resolve(repoRoot)) {
+        is QaCapabilityResolution.Absent -> GOAL_FINISH_PIPELINE.filterNot { it in PhaseSlot.QA.steps }
+        is QaCapabilityResolution.Declared -> GOAL_FINISH_PIPELINE
+        is QaCapabilityResolution.Incompatible -> {
+          RuntimeDiagnosticsBestEffortWarning.record(diagnostics, capability.reason)
+          GOAL_FINISH_PIPELINE
+        }
       }
+
+  private fun assessmentFinishSteps(assessment: GoalRunnerAssessmentResult?): List<String> =
+    when {
+      assessment == null -> emptyList()
+      assessment.fixRan || assessment.state in IN_PROGRESS_ASSESSMENT -> GOAL_ASSESSMENT_STEPS
+      else -> listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT)
     }
 
   internal fun project(
@@ -644,3 +658,11 @@ class IdeStatusProjector(
       workflowId = candidate.workflowId,
     )
 }
+
+internal val GOAL_ASSESSMENT_STEPS =
+  listOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_GOAL_ASSESSMENT_FIX,
+  )
+
+private val IN_PROGRESS_ASSESSMENT = setOf(GoalRunnerAssessmentState.PENDING, GoalRunnerAssessmentState.RUNNING)

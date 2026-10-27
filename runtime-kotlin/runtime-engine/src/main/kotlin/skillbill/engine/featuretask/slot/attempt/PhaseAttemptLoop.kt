@@ -242,6 +242,9 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
         loopId = run.reentry?.loopId,
         edgeIteration = run.reentry?.edgeIteration,
         mutating = run.policy.mutating,
+        fileManifestBefore = attempt.fileManifest?.before.orEmpty(),
+        fileManifestAfter = attempt.fileManifest?.after.orEmpty(),
+        fileManifestIntroduced = attempt.fileManifest?.introduced.orEmpty(),
       )
     val committed =
       if (attempt.retryableTerminal?.failureDisposition == FeatureTaskRuntimeFailureDisposition.RETRYABLE) {

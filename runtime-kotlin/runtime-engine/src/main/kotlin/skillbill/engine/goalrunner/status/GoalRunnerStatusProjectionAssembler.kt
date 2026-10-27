@@ -22,6 +22,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.telemetry.GOAL_PLANNING_OPERATION_KIND
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
@@ -29,6 +30,7 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.ExecutionProgressStall
 import skillbill.goalrunner.model.GoalNoChangeState
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
+import skillbill.goalrunner.model.GoalRunnerAssessmentResult
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
 import skillbill.goalrunner.model.GoalRunnerPhaseConclusion
@@ -61,6 +63,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
@@ -153,6 +156,7 @@ class GoalRunnerStatusProjectionAssembler(
                 emptyList()
               },
             goalQaResult = goalQaResult(parentWorkflowId, durableRead),
+            goalAssessmentResult = outcomeStore.goalAssessmentResult(parentWorkflowId, durableRead),
             currentSubtask = subject.current,
             acceptances = subject.acceptances,
             durableRead = durableRead,
@@ -250,24 +254,31 @@ class GoalRunnerStatusProjectionAssembler(
       }
     }
     val liveParent =
-      liveGoalFinalizationProgress(parentWorkflowId)
+      liveGoalOperationProgress(parentWorkflowId)
     if (childProgress != null && liveParent == null) {
       return childProgress
     }
     return liveParent
   }
 
-  private fun goalFinalizationAgent(parentWorkflowId: String): String? =
+  private fun goalOperationAgent(parentWorkflowId: String): String? =
     resolveParentExecutionLiveness(parentWorkflowId, GoalRunnerStatusDurableReadTracker(diagnostics))
       .takeIf { it == ExecutionLiveness.LIVE }
-      ?.let { liveGoalFinalizationProgress(parentWorkflowId) }
+      ?.let { liveGoalOperationProgress(parentWorkflowId) }
       ?.latestDeclaredProgressEvent
       ?.agentId
       ?.takeIf(String::isNotBlank)
 
-  private fun liveGoalFinalizationProgress(parentWorkflowId: String): GoalRunnerWorkflowProgress? =
+  private fun liveGoalOperationProgress(parentWorkflowId: String): GoalRunnerWorkflowProgress? =
     outcomeStore.progress(parentWorkflowId)
-      ?.takeIf { it.latestDeclaredProgressEvent?.operationKind == GOAL_FINALIZATION_OPERATION_KIND }
+      ?.takeIf {
+        val event = it.latestDeclaredProgressEvent
+        event?.operationKind == GOAL_FINALIZATION_OPERATION_KIND ||
+          (
+            event?.operationKind == GOAL_PLANNING_OPERATION_KIND &&
+              event.eventKind == GoalProgressEventKind.PHASE_STARTED
+          )
+      }
       ?.let { parent ->
         val liveStepId = parent.latestDeclaredProgressEvent?.stepId.orEmpty()
         parent.copy(
@@ -305,6 +316,7 @@ class GoalRunnerStatusProjectionAssembler(
             emptyList()
           },
         goalQaResult = goalQaResult(loadedState.parentWorkflowId, durableRead),
+        goalAssessmentResult = outcomeStore.goalAssessmentResult(loadedState.parentWorkflowId, durableRead),
         currentSubtask = currentSubtask,
         acceptances = acceptances,
         durableRead = durableRead,
@@ -325,6 +337,7 @@ class GoalRunnerStatusProjectionAssembler(
     val validation: List<GoalRunnerSubtaskValidationEvidence>,
     val phaseResults: List<GoalRunnerSubtaskPhaseResults>,
     val goalQaResult: GoalRunnerQaResult?,
+    val goalAssessmentResult: GoalRunnerAssessmentResult?,
     val currentSubtask: DecompositionSubtask?,
     val acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
     val durableRead: GoalRunnerStatusDurableReadTracker,
@@ -341,7 +354,8 @@ class GoalRunnerStatusProjectionAssembler(
   ): GoalRunnerStatusProjectionRuntimeInputs {
     val goalCompletedAt = assembly.loadedState.controlState.goalCompletedAt
     val currentStepOverride =
-      assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId)
+      (assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId))
+        .let { step -> if (assembly.childWorkflowId == null) assembly.goalAssessmentResult.stageStep(step) else step }
     val executionLiveness =
       resolveExecutionLiveness(
         parentWorkflowId = assembly.loadedState.parentWorkflowId,
@@ -368,6 +382,7 @@ class GoalRunnerStatusProjectionAssembler(
       completedSubtaskValidation = assembly.validation,
       completedSubtaskPhaseResults = assembly.phaseResults,
       goalQaResult = assembly.goalQaResult,
+      goalAssessmentResult = assembly.goalAssessmentResult?.reconciledWith(executionLiveness),
       paused = assembly.loadedState.controlState.paused,
       pauseRequested = assembly.loadedState.controlState.pauseRequested,
       pauseReason = assembly.loadedState.controlState.pauseReason,
@@ -770,7 +785,7 @@ class GoalRunnerStatusProjectionAssembler(
     currentSubtask: DecompositionSubtask?,
     parentWorkflowId: String,
   ): String? {
-    if (currentSubtask == null) return goalFinalizationAgent(parentWorkflowId)
+    if (currentSubtask == null) return goalOperationAgent(parentWorkflowId)
     val workflowId = currentSubtask.workflowId?.takeIf(String::isNotBlank)
     if (workflowId != null &&
       phaseQuery.existingWorkflowMode(workflowId) == FeatureTaskWorkflowMode.RUNTIME
@@ -782,7 +797,8 @@ class GoalRunnerStatusProjectionAssembler(
       )?.takeIf(String::isNotBlank)
         ?.let { return it }
     }
-    return currentSubtask.finalizingAgentId?.takeIf(String::isNotBlank)
+    return goalOperationAgent(parentWorkflowId)
+      ?: currentSubtask.finalizingAgentId?.takeIf(String::isNotBlank)
       ?: currentSubtask.participatingAgentIds.firstOrNull()?.takeIf(String::isNotBlank)
   }
 

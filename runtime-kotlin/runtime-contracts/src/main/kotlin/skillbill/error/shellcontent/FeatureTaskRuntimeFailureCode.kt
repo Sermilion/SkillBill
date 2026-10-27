@@ -24,6 +24,10 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
   INVALID_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_SCHEMA,
   INVALID_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_SCHEMA,
+  INVALID_INTERACTION_SCENARIO_CATALOG,
+  INVALID_INTERACTION_TRACE_AUDIT_OUTPUT,
+  INVALID_VALIDATION_TEST_PROBES,
+  INVALID_GOAL_ASSESSMENT_RECORD,
   INVALID_EXECUTION_IDENTITY_SCHEMA,
   INVALID_WORKER_OWNERSHIP_SCHEMA,
   PHASE_SETTLEMENT_CONFLICT,
@@ -235,6 +239,39 @@ fun invalidAcceptanceCriterionAuditResultSchema(
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
     "Acceptance criterion audit result '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidInteractionScenarioCatalog(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_INTERACTION_SCENARIO_CATALOG,
+    "Interaction scenario catalog '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidGoalAssessmentRecord(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_GOAL_ASSESSMENT_RECORD,
+    "Goal assessment record '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidValidationTestProbes(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_TEST_PROBES,
+    "Validation test probes '${sourceLabel.ifBlank { "<unknown>" }}' fail schema validation: $reason",
     cause,
   )
 

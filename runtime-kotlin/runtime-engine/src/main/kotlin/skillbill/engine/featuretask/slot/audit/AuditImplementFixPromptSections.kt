@@ -58,9 +58,9 @@ internal object AuditImplementFixPromptSections {
       "Finish every production item in the saved plan before reporting the repair satisfied. " +
       "One guard or one safe edit is not completion when the saved plan still has missing behavior. " +
       "If the session ends with unfinished source work, call feature_task_phase_complete with verdict progress " +
-      "and explain the remaining work in prose. The runtime retains the same reservation and continues repair, " +
-      "without replanning or charging a failed criterion outcome when this session changed source files. " +
-      "A progress report from a session that changed no source files counts as a failed repair attempt. " +
+      "and explain the remaining work in prose. Every unfinished repair implementation consumes one of the " +
+      "selected criterion's three unsuccessful repair attempts, whether or not it changed source files. " +
+      "The runtime preserves edits and reports, then blocks after the third unsuccessful attempt. " +
       "Never use feature_task_phase_block or a " +
       "retryable failure to hand off unfinished implementation. " +
       "The runtime preserves applied edits and saved repair reports across continuation sessions. " +

@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.runner.serializeTokenData
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.goalrunner.status.completed
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
@@ -428,6 +429,56 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     assertNull(state.phase("audit").blockedReason)
     assertEquals(WorkflowStepStatus.PENDING, state.phase("audit").record?.status)
     assertFalse(state.phase("audit").completed)
+  }
+
+  @Test
+  fun `streamed ledger filtering evaluates phase evidence once across repeated attempts`() {
+    val records =
+      listOf("audit", "implement").associateWith { phaseId ->
+        FeatureTaskRuntimePhaseRecord(
+          phaseId = phaseId,
+          status = WorkflowStepStatus.BLOCKED,
+          attemptCount = 1,
+          startedAt = "2026-01-01T00:00:00Z",
+          resolvedAgentId = "codex",
+        )
+      }
+    val resumed = mutableListOf<String>()
+    val blockEvidence = mutableListOf<String>()
+    val rules =
+      object : PhaseResumeRules {
+        override fun resumedRecord(
+          record: FeatureTaskRuntimePhaseRecord,
+          stripped: FeatureTaskRuntimePhaseRecord,
+        ): FeatureTaskRuntimePhaseRecord {
+          resumed += record.phaseId
+          return stripped
+        }
+
+        override fun dropsBlockedLedgerEntry(
+          raw: FeatureTaskRuntimePhaseRecord?,
+          resumed: FeatureTaskRuntimePhaseRecord?,
+        ): Boolean {
+          val phaseId = requireNotNull(raw).phaseId
+          blockEvidence += phaseId
+          return phaseId == "audit"
+        }
+      }
+    val keepEntry = FeatureTaskRuntimeRunStateReconstruction.statelessAuditLedgerEntryFilter(records) { rules }
+    val ledger =
+      (1..5000).map { sequence ->
+        FeatureTaskRuntimePhaseLedgerEntry(
+          action = FeatureTaskRuntimePhaseLedgerAction.BLOCKED,
+          sequenceNumber = sequence,
+          timestamp = "2026-01-01T00:00:00Z",
+          phaseId = if (sequence % 2 == 0) "audit" else "implement",
+          attemptCount = sequence,
+        )
+      }
+
+    assertEquals(ledger.filter { it.phaseId == "implement" }, ledger.filter(keepEntry))
+    assertEquals(listOf("audit", "implement"), resumed)
+    assertEquals(listOf("implement", "audit"), blockEvidence)
   }
 
   @Test

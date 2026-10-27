@@ -15,6 +15,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
+import skillbill.engine.goalrunner.assessment.GoalAssessmentRoundResult
+import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -38,6 +40,7 @@ import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.engine.goalrunner.status.GoalRunnerStatusControlVerbs
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
@@ -66,6 +69,22 @@ internal object NoopGoalRunnerQaGate : GoalRunnerQaGate {
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalQaGateResult = GoalQaGateResult.Skipped(GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA)
+}
+
+internal object NoopGoalRunnerAssessmentGate : GoalRunnerAssessmentGate {
+  override fun runRound(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    round: Int,
+  ): GoalAssessmentRoundResult =
+    GoalAssessmentRoundResult.Unavailable(GoalAssessmentRecord(state.manifest.issueKey), "no assessment in this test")
+
+  override fun run(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalAssessmentRecord = GoalAssessmentRecord(state.manifest.issueKey)
+
+  override fun skipNoChanges(state: GoalRunnerManifestState) = Unit
 }
 
 fun goalRunnerDefaultPhaseRecorder(): FeatureTaskRuntimePhaseRecorder =

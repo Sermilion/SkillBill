@@ -8,7 +8,7 @@ loads desktop jars with the jars in `runtime-cli/lib` through an application
 class loader. Work reads and controls run in process. The modules are
 `:core:common`, `:core:domain`, `:core:designsystem`, `:core:ui`, `:core:data`,
 `:core:datastore`, `:core:testing`, the screens `:feature:work`, `:feature:detail`,
-`:feature:history`, `:feature:settings` and `:feature:specs` (the spec-store browser pane, whose selection is pane-local), and the `:composeApp` shell. There is no
+`:feature:history`, `:feature:settings`, `:feature:specs` (the spec-store browser pane, whose selection is pane-local) and `:feature:terminal` (bottom terminal pane state and route; the JVM terminal surface is supplied by `:composeApp`), and the `:composeApp` shell. There is no
 root source set: the root build is an aggregator whose `check` depends on every child
 project's `check` and on the convention build's `:convention:check`, whose `test` runs
 every module's `jvmTest`, and which aliases the `:composeApp` distribution tasks
@@ -60,7 +60,7 @@ Guards run in `:composeApp:jvmTest` over Gradle-supplied manifests, each with no
 input assertions and synthetic rejection fixtures: `ModuleGraphRulesTest` (the settings
 project list and module edges), `DesktopArchitectureTest` and `SourceRulesTest` (source
 rules), `NavigationTypingRulesTest` (typed routes and arguments) and `DeletionRulesTest`
-(no combined work port, no process launcher outside the approved native files, no retired
+(no combined work port, no process launcher outside the approved native and terminal files, no retired
 `cliOverride` or `pollSeconds` preference names, no repeating timers in data or feature
 code, no retired `ReasonTooltip` renderer).
 No baseline, exemption or suppression list backs any of them.
@@ -149,7 +149,9 @@ separate connections. History has its own retention and family filter. Sidebar,
 history, and detail cursors are separate at the desktop boundary, and retained
 windows cap at five pages. Detail cursors carry the store id, revision,
 repository identity, list, and page size; a cursor from another store, list, or
-revision is refused and the read retries against one coherent snapshot.
+revision is refused. Detail reads publish the runtime snapshot and its revision
+without retrying when another writer commits during projection. Run options reuse
+that detail snapshot; control requests still validate their target when invoked.
 Generation-bound cursors reject stale appends and details after a path change or
 same-path replacement. Failed reads retain prior data with a stale indication.
 
@@ -189,8 +191,10 @@ longer expose `cliOverride` or `pollSeconds`; `LegacySettingsMigration` only
 records and discards those saved values. The only process launcher in the
 desktop source set is Linux AppImage `AppRun`, which starts the packaged app.
 Native notification/autolaunch libraries, the macOS status-item JNI bridge, and
-Linux AppRun are host integration code owned by `:composeApp`; `DeletionRulesTest`
-limits process use to four named files. Desktop CI watches runtime-library and
+Linux AppRun are host integration code owned by `:composeApp`. The embedded
+terminal starts the user's shell on a pty4j PTY from `terminal/TerminalProcess.kt`,
+and `terminal/TerminalSessions.kt` keeps one shell per window and tab, plus the window's tab list so a database switch keeps both, and ends a shell when its tab closes, its shell exits, its window is disposed or the JVM shuts down.
+`DeletionRulesTest` limits process use to those six named files. Desktop CI watches runtime-library and
 build-identity changes and builds the runtime before packaging. The
 `verifyPackagedRuntimeFree` task fails if the application image contains a Skill
 Bill runtime module jar.

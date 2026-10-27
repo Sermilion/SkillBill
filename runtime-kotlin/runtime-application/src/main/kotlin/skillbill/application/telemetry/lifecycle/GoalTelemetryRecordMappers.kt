@@ -37,6 +37,7 @@ fun GoalSubtaskFinishedRequest.toRecord(): GoalSubtaskFinishedRecord =
     blockedReason = blockedReason,
     finalizingAgentId = finalizingAgentId,
     participatingAgentIds = participatingAgentIds,
+    traceProbeCounts = traceProbeCounts,
   )
 
 fun GoalFinishedRequest.toRecord(): GoalFinishedRecord =
@@ -54,6 +55,7 @@ fun GoalFinishedRequest.toRecord(): GoalFinishedRecord =
     stopReason = stopReason,
     noChangeReason = noChangeReason,
     parentWorkflowId = parentWorkflowId,
+    assessmentCounts = assessmentCounts,
   )
 
 fun GoalIssueFinishedRequest.toRecord(): GoalIssueFinishedRecord =

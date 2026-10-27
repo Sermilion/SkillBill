@@ -113,6 +113,7 @@ import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.model.history.GoalChildHistoryDraft
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.idestatus.model.AgentActivityStamp
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
@@ -154,11 +155,13 @@ import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
+import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectStorePort
+import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
@@ -1628,7 +1631,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
   ): FeatureTaskRuntimeRunReport = delegate?.run(context, beforeDrive) ?: super.run(context, beforeDrive)
 }
 
-private fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
+internal fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
   FeatureTaskRuntimeDecompositionPlanner(
     preparationRuntime = FeatureSpecPreparationRuntime(),
     preparationWriter =
@@ -1962,6 +1965,17 @@ internal fun writePlanBundle(
   repoRoot: Path,
   issueKey: String,
   projectStore: ProjectStorePort = RUNNER_TEST_PROJECT_STORE,
+): FeatureSpecWriteResult {
+  val written = writePlanBundleSpecs(repoRoot, issueKey, projectStore)
+  val parentSpec = projectStore.resolve(repoRoot).resolveSpecPath(written.parentSpecPath, repoRoot)
+  Files.writeString(parentSpec, Files.readString(parentSpec) + "\n## Transitional Regressions\n\nNone.\n")
+  return written
+}
+
+private fun writePlanBundleSpecs(
+  repoRoot: Path,
+  issueKey: String,
+  projectStore: ProjectStorePort,
 ): FeatureSpecWriteResult =
   FeatureSpecPreparationWriter(
     decompositionManifestValidator = testDecompositionManifestValidator,
@@ -2153,6 +2167,18 @@ internal class RuntimeFakeDatabaseSessionFactory(
   private val knownIssue: Boolean = true,
 ) : DatabaseSessionFactory {
   private val dbPath = Path.of("/fake/metrics.db")
+  val activityStamps = linkedMapOf<String, AgentActivityStamp>()
+  private val activityStampRepository =
+    object : AgentActivityStampRepository {
+      override fun record(
+        workflowId: String,
+        stamp: AgentActivityStamp,
+      ) {
+        activityStamps[workflowId] = stamp
+      }
+
+      override fun read(workflowId: String): AgentActivityStamp? = activityStamps[workflowId]
+    }
   var transactionCount: Int = 0
   val ledgerRows = mutableListOf<UnaddressedFinding>()
   val outcomeRows = mutableListOf<ReviewFindingOutcomeRecord>()
@@ -2208,6 +2234,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
 
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
+      override val agentActivityStamps = activityStampRepository
       override val dbPath: Path = this@RuntimeFakeDatabaseSessionFactory.dbPath
       override val reviews: ReviewRepository = this@RuntimeFakeDatabaseSessionFactory.reviewsPort
       override val learnings: LearningRepository = this@RuntimeFakeDatabaseSessionFactory.learningsPort

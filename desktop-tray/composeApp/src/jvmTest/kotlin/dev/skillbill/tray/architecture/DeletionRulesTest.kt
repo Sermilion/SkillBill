@@ -60,6 +60,7 @@ class DeletionRulesTest {
       "OS process" to (app to "fun go() = ProcessHandle.current()"),
       "OS process" to (domain to "class Bad(val running: Process)"),
       "OS process" to (work to "val launch = ::ProcessBuilder"),
+      "OS process" to (app to "import com.pty4j.PtyProcessBuilder\nfun go() = PtyProcessBuilder(arrayOf(\"sh\")).start()"),
       "retired ReasonTooltip" to (work to "fun reason() = ReasonTooltip(\"truncated\")"),
       "retired ReasonTooltip" to (work to "import dev.skillbill.tray.core.ui.ReasonTooltip as OldReason\nfun reason() = OldReason(\"truncated\")"),
       "retired preference pollSeconds" to (dataCommon to "val pollSeconds = 5"),

@@ -68,7 +68,6 @@ import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
-import dev.skillbill.tray.core.domain.model.PhaseExecution
 import dev.skillbill.tray.core.domain.model.RuntimeBuildReason
 import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.showsAsStandalonePhase
@@ -279,7 +278,7 @@ private fun LoadedDetail(
                   )
                   task.blockedReason?.let { ExpandableReason(it, "Subtask block reason", color = orange, fontSize = 12.sp, lineHeight = 18.sp) }
                   if (active && pipeline.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), phase.attemptCount, item.phaseExecution?.takeIf { it.phaseId == phase.id }) }
+                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase)) }
                   }
                 }
                 if (active) Text(subtaskTime, color = blue, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
@@ -287,16 +286,16 @@ private fun LoadedDetail(
               HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
             }
             this.item(key = detail.key("goal-finish", "")) {
-              val finishSteps = pipelineSteps(item, detail.goalFinishPipeline)
+              val finishSteps = goalFinishSteps(item, detail)
               val finishActive = finishSteps.any { it.state == PipelineStepState.ACTIVE }
-              val finishDone = finishSteps.isNotEmpty() && finishSteps.all { it.state == PipelineStepState.COMPLETE }
+              val finishDone = finishSteps.isNotEmpty() && finishSteps.all { it.state == PipelineStepState.COMPLETE || it.state == PipelineStepState.SKIPPED }
               if (finishSteps.isNotEmpty()) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("—", Modifier.width(18.dp), color = if (finishActive) blue else dim, fontFamily = mono, fontSize = 11.sp)
                 WorkDot(if (finishActive) Lifecycle.ACTIVE else if (finishDone) Lifecycle.TERMINAL else Lifecycle.IDLE, Modifier.padding(top = 5.dp))
                 Column(Modifier.weight(1f)) {
                   Text("Goal finish", color = ink.copy(alpha = if (finishActive || finishDone) 1f else .55f), fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                   FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    finishSteps.forEach { PhaseChip(it.id, it.state == PipelineStepState.COMPLETE, it.state == PipelineStepState.ACTIVE, 0) }
+                    finishSteps.forEach { PhaseChip(it.id, it.state == PipelineStepState.COMPLETE, it.state == PipelineStepState.ACTIVE) }
                   }
                 }
               }
@@ -307,7 +306,7 @@ private fun LoadedDetail(
         } else if (!operation && detail.stepPipeline.isNotEmpty()) {
           DesignLabel("Phase pipeline")
           FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            pipelineSteps(item, detail.stepPipeline).forEach { PhaseChip(it.id, it.state == PipelineStepState.COMPLETE, it.state == PipelineStepState.ACTIVE, 0) }
+            pipelineSteps(item, detail.stepPipeline).forEach { PhaseChip(it.id, it.state == PipelineStepState.COMPLETE, it.state == PipelineStepState.ACTIVE) }
           }
         }
         if (detail.dependencies.isNotEmpty() || detail.cursors[DetailList.DEPENDENCIES] != null) {
@@ -336,7 +335,7 @@ private fun LoadedDetail(
           event?.let { add("Event" to listOfNotNull(it.workflowPhase, it.workerRole, it.summary).joinToString(" · ")) }
           item.activity?.let { add((if (operation) "Operation event" else "Phase event") to it) }
         }
-        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || stopped || detail.phaseResults.isNotEmpty() || detail.goalQa != null || workflowQaOutcome(item) != null || hasIncident) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || stopped || detail.phaseResults.isNotEmpty() || detail.goalQa != null || detail.goalAssessment != null || workflowQaOutcome(item) != null || hasIncident) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           DesignLabel(if (operation) "Operation activity" else if (standalone) "Phase activity" else "Goal activity")
           if (hasIncident) {
             IncidentPanel(
@@ -366,6 +365,7 @@ private fun LoadedDetail(
           PhaseResultsSection(detail.phaseResults, detail.goalQa) { id -> detail.subtasks.firstOrNull { it.id == id }?.name }
           workflowQaOutcome(item)?.let { WorkflowQaSection(it) }
           QaFindingsSection(detail.goalQa)
+          GoalAssessmentSection(detail.goalAssessment)
           detail.goalQa?.reportText?.let { QaReportSection(it) }
           LazyColumn(state = executionScroll, modifier = Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(detail.executionHistory, key = { detail.key("execution", "${it.invocationId}:${it.executionId}") }) { instance ->
@@ -462,11 +462,10 @@ private fun StatusChip(label: String, color: Color, lifecycle: Lifecycle? = null
 }
 
 @Composable
-private fun PhaseChip(id: String, complete: Boolean, active: Boolean, attempts: Int, execution: PhaseExecution? = null) {
+private fun PhaseChip(id: String, complete: Boolean, active: Boolean) {
   val color = if (active) Color(0xFF14100A) else if (complete) green else dim
-  val progress = if (active) execution?.label() ?: attempts.takeIf { it > 1 }?.let { "$it runs" } else null
   Text(
-    id + progress?.let { " · $it" }.orEmpty(),
+    id,
     Modifier.background(if (active) green else Color.Transparent, RoundedCornerShape(5.dp))
       .border(1.dp, if (complete) green.copy(alpha = .35f) else dev.skillbill.tray.core.designsystem.border, RoundedCornerShape(5.dp))
       .padding(horizontal = 7.dp, vertical = 4.dp),

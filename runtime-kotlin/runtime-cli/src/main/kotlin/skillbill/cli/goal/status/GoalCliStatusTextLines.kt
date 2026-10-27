@@ -1,6 +1,7 @@
 package skillbill.cli.goal.status
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.goalrunner.assessment.model.GoalAssessmentVerification
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 
 internal fun StringBuilder.appendOperatorSurfaceLines(projection: GoalRunnerStatusProjection) {
@@ -47,6 +48,27 @@ internal fun StringBuilder.appendQaFindingsLines(projection: GoalRunnerStatusPro
   val notFixedIds = notFixed.takeIf { it.isNotEmpty() }?.joinToString(",", prefix = " not_fixed_ids=") { it.id }
   appendLine("qa_findings: fixed=${fixed.size} not_fixed=${notFixed.size}${notFixedIds.orEmpty()}")
 }
+
+internal fun StringBuilder.appendAssessmentLines(projection: GoalRunnerStatusProjection) {
+  val assessment = projection.goalAssessmentResult ?: return
+  val confirmed = assessment.findings.count { it.verification == GoalAssessmentVerification.CONFIRMED }
+  val refuted = assessment.findings.count { it.verification == GoalAssessmentVerification.REFUTED }
+  val open = assessment.openFindingRefs.takeIf { it.isNotEmpty() }?.joinToString(",") ?: "none"
+  val exit = assessment.exitReason?.wireValue ?: "pending"
+  appendLine("goal_assessment: round=${assessment.round} exit=$exit confirmed=$confirmed refuted=$refuted open=$open")
+  assessment.findings.forEach { finding ->
+    appendLine(
+      "goal_assessment_finding: ref=${finding.ref} severity=${finding.severity.wireValue} " +
+        "location=${"${finding.path}:${finding.line}".goalCliToken()} state=${finding.state.wireValue} " +
+        "verification=${finding.verification.wireValue} scenario=${finding.failureScenario.assessmentToken()} " +
+        "evidence=${finding.evidence.assessmentToken()}",
+    )
+  }
+}
+
+private val ASSESSMENT_WHITESPACE = Regex("""\s+""")
+
+private fun String.assessmentToken(): String = trim().replace(ASSESSMENT_WHITESPACE, " ").goalCliToken()
 
 internal fun StringBuilder.appendDiffStatusLines(
   projection: GoalRunnerStatusProjection,

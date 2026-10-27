@@ -7,6 +7,7 @@ import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentCaptureOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
@@ -19,8 +20,15 @@ import skillbill.engine.goalrunner.model.GoalRunnerRestoredChildReference
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
+import skillbill.engine.goalrunner.model.GoalUnknownScenario
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.engine.goalrunner.persist.assessment.WorkflowGoalRunnerAssessmentRecording
+import skillbill.engine.goalrunner.persist.assessment.toTraceProbeCounts
 import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.workflow.support.workflowFamilyFor
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -47,6 +55,7 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -58,10 +67,15 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionInteractionTrace
+import skillbill.workflow.taskruntime.model.audit.interaction.unknownScenarios
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 
@@ -121,6 +135,7 @@ class WorkflowGoalRunnerOutcomeStore
         progressRecording,
         clock,
       )
+    private val assessmentRecording = WorkflowGoalRunnerAssessmentRecording(database, engine, wireArtifactValidator)
     private val terminal =
       WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations, crashReconciler)
     private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile, blockIncidentCapture)
@@ -188,6 +203,14 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? =
       progressRecording.goalFinalRepairContext(parentWorkflowId)
+
+    override fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
+      assessmentRecording.read(parentWorkflowId)
+
+    override fun recordGoalAssessmentRecord(
+      parentWorkflowId: String,
+      record: GoalAssessmentRecord,
+    ): Boolean = assessmentRecording.record(parentWorkflowId, record)
 
     override fun saveGoalHistoryCompletion(
       parentWorkflowId: String,
@@ -572,6 +595,44 @@ internal class WorkflowGoalRunnerReviewBridge(
         } else {
           GoalSubtaskQaSummary.NotComposed
         }
+    }
+
+  override fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios =
+    database.read { unitOfWork ->
+      val artifacts = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+      if (artifacts == null || !family.contains(artifacts)) return@read GoalSubtaskUnknownScenarios.Absent
+      val state =
+        try {
+          FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+            .toAcceptanceCriterionRepairState(family.label())
+        } catch (failure: SkillBillRuntimeException) {
+          return@read GoalSubtaskUnknownScenarios.Malformed(failure.message.orEmpty())
+        }
+      state.unknownScenarios()
+        .map { GoalUnknownScenario(it.scenarioRef, it.reason) }
+        .takeIf { it.isNotEmpty() }
+        ?.let(GoalSubtaskUnknownScenarios::Recorded)
+        ?: GoalSubtaskUnknownScenarios.Empty
+    }
+
+  override fun recordedTraceProbeCounts(workflowId: String): GoalSubtaskTraceProbeCounts =
+    database.read { unitOfWork ->
+      val artifacts =
+        taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts
+          ?: return@read GoalSubtaskTraceProbeCounts()
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+      val trace =
+        if (family.contains(artifacts)) {
+          FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+            .toAcceptanceCriterionRepairState(family.label())
+            .interactionTrace
+        } else {
+          AcceptanceCriterionInteractionTrace.EMPTY
+        }
+      trace.toTraceProbeCounts(
+        decodePhaseRecords(artifacts)[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE]?.outputArtifact,
+      )
     }
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =

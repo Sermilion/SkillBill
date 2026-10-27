@@ -18,7 +18,7 @@ import skillbill.mcp.shared.McpToolPayloadKeys
 import java.io.IOException
 import java.util.Locale
 
-internal const val TELEMETRY_EVENT_CONTRACT_VERSION: String = "1.12.0"
+internal const val TELEMETRY_EVENT_CONTRACT_VERSION: String = "1.13.0"
 
 private val LOCALE_STABLE_SCHEMA_CONFIG: SchemaValidatorsConfig =
   SchemaValidatorsConfig.builder().locale(Locale.ENGLISH).pathType(PathType.LEGACY).build()

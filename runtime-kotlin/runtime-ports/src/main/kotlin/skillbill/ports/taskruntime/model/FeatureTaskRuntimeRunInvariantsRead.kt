@@ -7,6 +7,7 @@ sealed interface FeatureTaskRuntimeRunInvariantsRead {
     val invariants: FeatureTaskRuntimeRunInvariants,
     val sourceDigest: String? =
       null,
+    val sourceText: String? = null,
   ) : FeatureTaskRuntimeRunInvariantsRead
 
   data class Rejected(val reason: String) : FeatureTaskRuntimeRunInvariantsRead

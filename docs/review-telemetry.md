@@ -473,6 +473,15 @@ Segments recorded before the parent id existed are not attributable and are neve
 a per-invocation rate, which is a different question from how often goals succeed — say which one it
 answers.
 
+`goal-stats` also reports trace, probe, and assessment totals as nested objects. `interaction_scenarios`
+(`traced`, `broken`, `repaired`, `unknown`) and `test_probes` (`killed`, `survived`, `repaired`, `not_run`)
+sum the per-subtask counters on `skillbill_goal_subtask_finished`. `goal_assessment` sums the per-goal
+counters on `skillbill_goal_finished` into `findings_by_severity` (`blocker`, `major`, `minor`), `confirmed`,
+`refuted`, `rounds`, and `open_findings`, and adds `exit_reasons`, a goals-per-exit-reason map. Every
+resume segment re-reads the goal's cumulative assessment record, so the aggregate takes one snapshot per
+logical goal (the latest finished segment that carries an exit reason) instead of summing segments.
+Rows written before these counters existed read as zero and carry no exit reason.
+
 Remotely, the same split already exists as two events: `skillbill_goal_finished` is per invocation
 segment, and `skillbill_goal_issue_finished` is the goal, carrying `parent_workflow_id`,
 `total_invocations`, `total_resumes`, and `total_blocks`. Build goal-level rates on

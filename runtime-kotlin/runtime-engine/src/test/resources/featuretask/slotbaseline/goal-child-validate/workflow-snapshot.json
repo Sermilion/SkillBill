@@ -463,7 +463,7 @@
                                 {
                                     "kind": "text",
                                     "name": "value",
-                                    "text": "Project checks passed."
+                                    "text": "Project checks passed.\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test"
                                 }
                             ],
                             "producer_iteration": {
@@ -1564,7 +1564,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue:\n```\nImplement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\n\nAC-001\nWorker 1: Fixture implement prose for downstream audit.\n\nAC-002\nWorker 1: Fixture implement prose for downstream audit.\n```\n### from: implement\nchanged_paths:\n  - src/Foo.kt\nboundary_candidates:\n  - src\n### from: validate\nvalue: Project checks passed.\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  - src/Foo.kt\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue:\n```\nImplement closed 2 acceptance criteria one at a time. Each criterion closed after a fresh read-only check found it satisfied.\n\nAC-001\nWorker 1: Fixture implement prose for downstream audit.\n\nAC-002\nWorker 1: Fixture implement prose for downstream audit.\n```\n### from: implement\nchanged_paths:\n  - src/Foo.kt\nboundary_candidates:\n  - src\n### from: validate\nvalue:\n```\nProject checks passed.\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test\n```\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  - src/Foo.kt\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -1622,7 +1622,7 @@
                                 {
                                     "kind": "text",
                                     "name": "value",
-                                    "text": "Project checks passed."
+                                    "text": "Project checks passed.\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test"
                                 }
                             ],
                             "producer_iteration": {
@@ -2100,7 +2100,7 @@
                 "execution_origin": "agent-executed",
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"validate\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Project checks passed.\"}}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"validate\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Project checks passed.\\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test\",\"test_probes\":[{\"test_ref\":\"FooTest.guards\",\"guarded_ref\":\"src/Foo.kt:1\",\"result\":\"killed\",\"reason\":\"removing the guard failed the test\",\"repaired\":false}]}}",
                 "phase_id": "validate",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-validate",

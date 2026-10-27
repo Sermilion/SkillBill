@@ -3,10 +3,10 @@ $id: https://skill-bill.dev/contracts/acceptance-criterion-audit-result.yaml
 title: Acceptance criterion audit result
 type: object
 additionalProperties: false
-required: [contract_version, mode, catalog_id, spec_digest, execution_id, tree_digest, checkpoint_id, producing_output_id, producing_output_digest, criteria, dependencies, regressed_refs, edge_changes]
+required: [contract_version, mode, catalog_id, spec_digest, execution_id, tree_digest, checkpoint_id, producing_output_id, producing_output_digest, criteria, dependencies, regressed_refs, edge_changes, interactions, rechecks]
 properties:
-  contract_version: { const: '0.1' }
-  mode: { enum: [initial_discovery, current_criterion_targeted] }
+  contract_version: { const: '0.2' }
+  mode: { enum: [initial_discovery, current_criterion_targeted, interaction_trace] }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
   spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
   execution_id: { type: string, minLength: 1, maxLength: 256 }
@@ -62,7 +62,40 @@ properties:
         reason: { type: string, minLength: 1, maxLength: 1024 }
         declaring_output_ref: { type: string, minLength: 1, maxLength: 512 }
         source_evidence_ref: { type: string, minLength: 1 }
+  interactions:
+    type: array
+    maxItems: 64
+    items:
+      type: object
+      additionalProperties: false
+      required: [scenario_ref, verdict, owner_ref, trace_ref]
+      properties:
+        scenario_ref:
+          type: string
+          oneOf:
+            - pattern: '^IS-[0-9]{3}$'
+            - pattern: '^AC-[0-9]{3}\+AC-[0-9]{3}$'
+        verdict: { enum: [holds, broken, unknown] }
+        owner_ref: { type: [string, 'null'], pattern: '^AC-[0-9]{3}$' }
+        trace_ref: { type: string, pattern: '\S' }
+      allOf:
+        - if: { properties: { verdict: { const: broken } } }
+          then: { properties: { owner_ref: { type: string } } }
+          else: { properties: { owner_ref: { type: 'null' } } }
+  rechecks:
+    type: array
+    maxItems: 256
+    items:
+      type: object
+      additionalProperties: false
+      required: [criterion_ref, verdict, evidence_ref]
+      properties:
+        criterion_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
+        verdict: { enum: [holds, regressed] }
+        evidence_ref: { type: string, minLength: 1 }
 x-coherence-checks:
+  - id: interaction-trace-binding
+    description: The interactions and rechecks arrays are empty outside interaction_trace mode. In interaction_trace mode regressed_refs equals the union of the owner_ref values of broken interactions and the criterion_ref values of regressed rechecks, and edge_changes is empty.
   - id: complete-discovery
     description: Initial discovery contains exactly one source and validation disposition for every authored criterion.
   - id: targeted-binding

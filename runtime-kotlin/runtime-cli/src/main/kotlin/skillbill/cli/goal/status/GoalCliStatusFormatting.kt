@@ -270,6 +270,7 @@ internal fun goalStatusText(
       appendValidationStatusLines(it)
       appendQaOutcomeLines(it)
       appendQaFindingsLines(it)
+      appendAssessmentLines(it)
       appendDiffStatusLines(it)
     }
     incidentDetails.incidentText(verbose).forEach { line -> appendLine(line) }

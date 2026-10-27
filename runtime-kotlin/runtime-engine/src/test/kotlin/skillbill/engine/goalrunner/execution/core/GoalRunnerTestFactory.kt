@@ -26,6 +26,7 @@ import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
+import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
@@ -135,6 +136,7 @@ internal data class GoalRunnerTestWiring(
       )
     },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
+  val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
 )
 
 internal data class GoalRunnerTestWiringParams(
@@ -196,6 +198,7 @@ internal data class GoalRunnerTestInputs(
       )
     },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
+  val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -218,6 +221,7 @@ internal data class GoalRunnerTestInputs(
       qaGate = qaGate,
       pullRequestIdentityLookup = pullRequestIdentityLookup,
       finalHistoryWriter = finalHistoryWriter,
+      assessmentGate = assessmentGate,
     )
 }
 
@@ -245,10 +249,10 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
       finalizationTestGit(wiring.gitOperations),
       wiring.diagnostics,
-      GoalRunnerFinalReconciliation(wiring.manifestStore, wiring.outcomeStore, progressReader),
       wiring.phaseRecorder,
       wiring.ciMonitor,
       wiring.qaGate,
+      wiring.assessmentGate,
       wiring.finalHistoryWriter,
       GoalRunnerPullRequests(
         wiring.outcomeStore,
@@ -256,6 +260,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         wiring.pullRequestIdentityLookup,
         GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
         wiring.unaddressedFindingsLedgerService,
+        wiring.diagnostics,
       ),
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
@@ -380,6 +385,7 @@ private fun testGoalRunnerLoopAssembler(
   return GoalRunnerPerRunLoopAssembler(
     manifestStore = wiring.manifestStore,
     goalPlanningSource = wiring.goalPlanningSource,
+    reconciliation = GoalRunnerFinalReconciliation(wiring.manifestStore, wiring.outcomeStore, progressReader),
     finalization = finalization,
     selectedSubtaskLoop = selectedSubtaskLoop,
     pauseBoundary = pauseBoundary,

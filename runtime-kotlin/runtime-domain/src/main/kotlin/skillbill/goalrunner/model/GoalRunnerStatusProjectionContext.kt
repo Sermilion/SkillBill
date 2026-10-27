@@ -73,6 +73,7 @@ internal fun assembleGoalRunnerStatusProjection(
     completedSubtaskValidation = extras.completedSubtaskValidation,
     completedSubtaskPhaseResults = extras.completedSubtaskPhaseResults,
     goalQaResult = extras.goalQaResult,
+    goalAssessmentResult = extras.goalAssessmentResult,
     paused = extras.paused,
     pauseRequested = extras.pauseRequested,
     pauseReason = extras.pauseReason,

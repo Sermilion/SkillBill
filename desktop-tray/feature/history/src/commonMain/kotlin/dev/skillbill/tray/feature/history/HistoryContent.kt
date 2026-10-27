@@ -1,6 +1,5 @@
 package dev.skillbill.tray.feature.history
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,7 +27,6 @@ import dev.skillbill.tray.core.ui.FeedbackMessages
 import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.PagedListState
-import dev.skillbill.tray.core.ui.ProblemMessage
 import dev.skillbill.tray.core.ui.SidebarWorkRow
 
 private const val FOOTER_KEY = "history:footer"
@@ -54,12 +52,12 @@ fun LazyListScope.historySection(state: HistoryUiState, selected: WorkIdentity?,
   }
   when (list) {
     PagedListState.InitialLoading -> item(key = "history:loading") { Note("Loading...") }
-    is PagedListState.InitialError -> item(key = "history:problem") { Problem(list.problem.summary) { onAction(HistoryAction.Retry) } }
+    // Read failures are reported once, in the window's status line, so the list only says it has nothing to show.
+    is PagedListState.InitialError -> item(key = "history:problem") { Note("Couldn't load") }
     is PagedListState.LoadedEmpty -> {
       item(key = "history:empty") { Note(if (state.filter.isNotBlank()) "No matching work" else "No finished work") }
     }
     is PagedListState.Content -> {
-      list.readError?.let { problem -> item(key = "history:problem") { Problem(problem.summary) { onAction(HistoryAction.Retry) } } }
       items(rows, key = { "history:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
         SidebarWorkRow(item, selected == item.identity) { onAction(HistoryAction.Select(item.identity)) }
       }
@@ -74,12 +72,4 @@ fun LazyListScope.historySection(state: HistoryUiState, selected: WorkIdentity?,
 @Composable
 private fun Note(text: String) {
   Text(text, Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall)
-}
-
-@Composable
-private fun Problem(summary: String, retry: () -> Unit) {
-  Column(Modifier.padding(horizontal = 16.dp)) {
-    ProblemMessage(summary)
-    TextButton(onClick = retry) { Text("Retry", color = amber) }
-  }
 }

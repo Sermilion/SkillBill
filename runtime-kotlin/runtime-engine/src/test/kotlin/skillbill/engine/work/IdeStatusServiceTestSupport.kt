@@ -33,12 +33,15 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.toStatusWireMap
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -870,6 +873,14 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
 
+  override fun readGoalAssessmentRecord(parentWorkflowId: String): GoalAssessmentRecordRead =
+    GoalAssessmentRecordRead.Absent
+
+  override fun recordGoalAssessmentRecord(
+    parentWorkflowId: String,
+    record: GoalAssessmentRecord,
+  ): Boolean = false
+
   override fun terminalOutcome(
     workflowId: String,
     issueKey: String,
@@ -934,6 +945,9 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? = null
 
   override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? = null
+
+  override fun recordedUnknownScenarios(workflowId: String): GoalSubtaskUnknownScenarios =
+    GoalSubtaskUnknownScenarios.Absent
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> = emptyList()
 

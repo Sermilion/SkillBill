@@ -10,12 +10,17 @@ internal object DeletionRules {
   /** The four work ports; one class implementing two of them is the combined board source the feature split retired. */
   val ports = setOf("WorkBoardRepository", "WorkDetailRepository", "WorkControlRepository", "WorkStoreSession")
 
-  /** The only production files that start or inspect an OS process, all native tray and display helpers. */
+  /**
+   * The only production files that start or inspect an OS process: the native tray and display helpers, and the embedded
+   * terminal's host, which starts the user's shell on a PTY and ends it when its window closes or the JVM shuts down.
+   */
   val approvedProcessFiles = setOf(
     "$DESKTOP_PACKAGE_ROOT/infrastructure/NativeServicesImpl.kt",
     "$DESKTOP_PACKAGE_ROOT/infrastructure/NativeTrayHost.kt",
     "$DESKTOP_PACKAGE_ROOT/infrastructure/TrayPopoverPlacement.kt",
     "$DESKTOP_PACKAGE_ROOT/infrastructure/macos/MacStatusItemBridge.kt",
+    "$DESKTOP_PACKAGE_ROOT/terminal/TerminalProcess.kt",
+    "$DESKTOP_PACKAGE_ROOT/terminal/TerminalSessions.kt",
   )
 
   /** The one file that may name the retired preference keys, because it reads and discards them with attributed diagnostics. */
@@ -32,7 +37,7 @@ internal object DeletionRules {
     """\bkotlin\s*\(|org\.jetbrains\.(?:kotlin|compose)|devtools\.ksp|"skillbill\.(?:kmp|desktop|kotlin)|libs\.plugins\.(?:kotlin|compose|ksp)""",
   )
   // Matched against referenced names, imports and qualified uses included; a comment or string that mentions one is not a use.
-  private val processTypes = setOf("Process", "ProcessBuilder", "ProcessHandle", "Runtime")
+  private val processTypes = setOf("Process", "ProcessBuilder", "ProcessHandle", "Runtime", "PtyProcess", "PtyProcessBuilder")
 
   /** A scan that reached no production source, or none of a rule's modules, proves nothing and fails. */
   fun requireNonEmptyScan(sources: List<Source>) {

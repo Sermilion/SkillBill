@@ -144,7 +144,7 @@
         "execution_origin": "agent-executed",
         "finished_at": "__NORMALIZED_TIMESTAMP__",
         "first_started_at": "__NORMALIZED_TIMESTAMP__",
-        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"validate\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Project checks passed.\"}}",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"validate\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Project checks passed.\\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test\",\"test_probes\":[{\"test_ref\":\"FooTest.guards\",\"guarded_ref\":\"src/Foo.kt:1\",\"result\":\"killed\",\"reason\":\"removing the guard failed the test\",\"repaired\":false}]}}",
         "phase_id": "validate",
         "record_kind": "private_phase_record",
         "resolved_agent_id": "agent-validate",

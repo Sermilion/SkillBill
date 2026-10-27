@@ -451,47 +451,6 @@ class AcceptanceCriterionRepairStateTest {
     )
   }
 
-  @Test
-  fun `repeated progress advances its revision without clearing failures and only the same completion replays`() {
-    val initial =
-      assertNotNull(
-        AcceptanceCriterionRepairState.admit(
-          AcceptanceCriterionRepairAdmission(
-            "catalog",
-            "execution",
-            "a".repeat(64),
-            listOf("first"),
-            listOf(criterion("AC-001", 1, "first")),
-            emptyList(),
-          ),
-        ),
-      )
-    val first = assertNotNull(initial.reserve("failed-cycle"))
-    val failed =
-      assertNotNull(
-        first.record(
-          outcome(
-            "failure",
-            "failed-cycle",
-            "AC-001",
-            false,
-          ).copy(kind = AcceptanceCriterionRepairOutcomeKind.INCOMPLETE),
-        ),
-      )
-    val reserved = assertNotNull(failed.reserve("continued-cycle"))
-    val continued =
-      assertNotNull(reserved.continueReservedRepair("continued-cycle", "Work remains.", reserved.revision))
-    assertEquals(reserved.reservation, continued.reservation)
-    assertEquals(failed.unsuccessfulTotals, continued.unsuccessfulTotals)
-    assertEquals(failed.outcomes, continued.outcomes)
-    assertEquals(reserved.revision + 1, continued.revision)
-    assertEquals(continued, continued.continueReservedRepair("continued-cycle", "Work remains.", reserved.revision))
-    val next = assertNotNull(continued.continueReservedRepair("continued-cycle", "Work remains.", continued.revision))
-    assertEquals(continued.revision + 1, next.revision)
-    assertNull(next.continueReservedRepair("continued-cycle", "Work remains.", reserved.revision))
-    assertEquals(next, AcceptanceCriterionRepairState.restore(next))
-  }
-
   private fun criterion(
     ref: String,
     ordinal: Int,

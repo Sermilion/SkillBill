@@ -102,6 +102,28 @@ data class GoalStartedRecord(
   val parentWorkflowId: String? = null,
 )
 
+data class GoalSubtaskTraceProbeCounts(
+  val scenariosTraced: Int = 0,
+  val scenariosBroken: Int = 0,
+  val scenariosRepaired: Int = 0,
+  val scenariosUnknown: Int = 0,
+  val probesKilled: Int = 0,
+  val probesSurvived: Int = 0,
+  val probesRepaired: Int = 0,
+  val probesNotRun: Int = 0,
+)
+
+data class GoalAssessmentTelemetryCounts(
+  val blockerFindings: Int = 0,
+  val majorFindings: Int = 0,
+  val minorFindings: Int = 0,
+  val confirmed: Int = 0,
+  val refuted: Int = 0,
+  val rounds: Int = 0,
+  val openFindings: Int = 0,
+  val exitReason: String? = null,
+)
+
 data class GoalSubtaskFinishedRecord(
   val issueKey: String,
   val workflowId: String,
@@ -115,6 +137,7 @@ data class GoalSubtaskFinishedRecord(
   val blockedReason: String?,
   val finalizingAgentId: String? = null,
   val participatingAgentIds: List<String> = emptyList(),
+  val traceProbeCounts: GoalSubtaskTraceProbeCounts = GoalSubtaskTraceProbeCounts(),
 )
 
 data class GoalFinishedRecord(
@@ -131,6 +154,7 @@ data class GoalFinishedRecord(
   val stopReason: String? = null,
   val noChangeReason: String? = null,
   val parentWorkflowId: String? = null,
+  val assessmentCounts: GoalAssessmentTelemetryCounts = GoalAssessmentTelemetryCounts(),
 )
 
 data class GoalIssueFinishedRecord(

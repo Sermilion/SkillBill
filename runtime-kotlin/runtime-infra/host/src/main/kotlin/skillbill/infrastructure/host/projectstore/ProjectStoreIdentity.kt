@@ -23,8 +23,38 @@ internal fun lineageCandidates(
     }
   val remoteUrl = lineage.remoteUrl
   if (sharing.size < 2 || remoteUrl == null) return sharing
-  return sharing.filter { it.record.remoteUrl == remoteUrl }.singleOrNull()?.let(::listOf) ?: sharing
+  return sharing.filter { sameRemote(it.record.remoteUrl, remoteUrl) }.singleOrNull()?.let(::listOf) ?: sharing
 }
+
+internal fun sameRemote(
+  first: String?,
+  second: String?,
+): Boolean {
+  if (first == null || second == null) return false
+  if (first == second) return true
+  val key = remoteKey(first) ?: return false
+  return key == remoteKey(second)
+}
+
+private fun remoteKey(url: String): String? {
+  val trimmed = url.trim().removeSuffix("/").removeSuffix(".git")
+  val scp = SCP_REMOTE.matchEntire(trimmed)
+  val (authority, path) =
+    when {
+      scp != null -> scp.groupValues[1] to scp.groupValues[2]
+      SCHEME_SEPARATOR in trimmed -> {
+        val rest = trimmed.substringAfter(SCHEME_SEPARATOR)
+        rest.substringBefore('/') to rest.substringAfter('/', "")
+      }
+      else -> return null
+    }
+  val host = authority.substringAfter('@').substringBefore(':').lowercase()
+  return if (host.isEmpty() || path.isEmpty()) null else "$host/${path.trimStart('/')}"
+}
+
+private const val SCHEME_SEPARATOR = "://"
+
+private val SCP_REMOTE = Regex("""((?:[^@/:]+@)?[^@/:]{2,}):(?!//)(.+)""")
 
 private fun hash16(text: String): String =
   MessageDigest.getInstance("SHA-256")

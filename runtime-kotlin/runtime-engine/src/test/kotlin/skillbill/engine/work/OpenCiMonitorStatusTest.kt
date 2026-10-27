@@ -2,6 +2,7 @@ package skillbill.engine.work
 
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.goalrunner.model.planningStatusSnapshot
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -67,6 +68,19 @@ class OpenCiMonitorStatusTest {
   }
 
   @Test
+  fun `a live goal in its assessment projects finalization when children are complete`() {
+    listOf("goal_assessment", "goal_assessment_fix").forEach { step ->
+      assertTrue(
+        goalProjectsLiveFinalizationStep(
+          projection(complete = 1, pending = 0, blocked = 0)
+            .copy(executionLiveness = ExecutionLiveness.LIVE, currentStep = step),
+        ),
+        step,
+      )
+    }
+  }
+
+  @Test
   fun `a live goal on implement does not project finalization`() {
     assertFalse(
       goalProjectsLiveFinalizationStep(
@@ -81,6 +95,27 @@ class OpenCiMonitorStatusTest {
     assertFalse(
       goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0).copy(paused = true)),
     )
+  }
+
+  @Test
+  fun `resumed planning leaves a stale blocked lane only while its owner is live`() {
+    val planning =
+      projection(complete = 1, pending = 2, blocked = 0).copy(
+        executionLiveness = ExecutionLiveness.LIVE,
+        currentStep = "preplan",
+        planning = planningStatusSnapshot(listOf(1, 2, 3), emptyList(), false, null, null),
+      )
+
+    assertTrue(goalProjectsLiveResume(IdeStatusLifecycleState.BLOCKED, planning))
+    assertFalse(goalProjectsLiveResume(IdeStatusLifecycleState.BLOCKED, planning.copy(paused = true)))
+    assertFalse(
+      goalProjectsLiveResume(
+        IdeStatusLifecycleState.BLOCKED,
+        planning.copy(executionLiveness = ExecutionLiveness.IDLE),
+      ),
+    )
+    assertFalse(goalProjectsLiveResume(IdeStatusLifecycleState.BLOCKED, planning.copy(currentStep = "validate")))
+    assertFalse(goalProjectsLiveResume(IdeStatusLifecycleState.BLOCKED, planning.copy(planning = null)))
   }
 
   private fun projection(

@@ -64,6 +64,10 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
   val checksImmediateConsumerProjection: Boolean
     get() = false
 
+  /** The rule a [completionRejection] of this step is recorded under in the durable block reason. */
+  val completionRejectionRule: String
+    get() = PhaseStepOutputCheck.OUTPUT_VERIFICATION_RULE
+
   /** The failure disposition a blocked terminal output of this step gets when it names none. */
   val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
     get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION

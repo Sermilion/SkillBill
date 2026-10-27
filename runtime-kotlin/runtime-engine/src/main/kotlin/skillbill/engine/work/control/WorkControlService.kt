@@ -14,6 +14,7 @@ import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
+import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.WorkIncidentRecoveryCommands
 import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
@@ -48,6 +49,11 @@ class WorkControlService(
   fun options(target: WorkRunTarget): WorkRunOptions? =
     database.read { unit ->
       matchingRun(status, target)?.let { runs.options(it, unit) }
+    }
+
+  fun options(item: WorkDetailItem): WorkRunOptions? =
+    database.read { unit ->
+      item.takeIf { it.observation == unit.workList.observation() }?.let { runs.options(it, unit) }
     }
 
   fun request(

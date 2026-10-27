@@ -47,6 +47,7 @@ data class FeatureTaskRuntimeRunRequest(
   override val planIntake: String? = null,
   override val stopAfterIntake: Boolean = false,
   val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
+  override val activityParentWorkflowId: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }
@@ -79,6 +80,7 @@ data class FeatureTaskRuntimeRunInput(
   val planIntake: String? = null,
   val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val inheritRecordedPlanningTimeout: Boolean = false,
+  val activityParentWorkflowId: String? = null,
 )
 
 data class FeatureTaskRuntimeGoalContinuationContext(

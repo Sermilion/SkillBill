@@ -108,11 +108,11 @@ class RuntimeFeatureTaskSlotProvidesTest {
   }
 
   @Test
-  fun `production registrations are exactly the eighteen strategies live selection reaches`() {
+  fun `production registrations are exactly the twenty strategies live selection reaches`() {
     val registered = strategies.registry.strategies.map { it.slot to it.strategyId }
 
     assertEquals(registered.toSet(), strategies.reachableStrategyPairs())
-    assertEquals(18, registered.size)
+    assertEquals(20, registered.size)
     assertFalse(registered.contains(PhaseSlot.CODE_REVIEW to "delegated"))
     assertFalse(registered.contains(PhaseSlot.PLAN to "agent-plan"))
   }
@@ -122,7 +122,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
     val runners = strategies.registry.registeredRunners()
     val reviewRunners = strategies.registry.reviewStrategyRunners()
 
-    assertEquals(18, runners.size)
+    assertEquals(20, runners.size)
     assertEquals(3, reviewRunners.size)
     (runners + reviewRunners).forEach { assertSame(runners.first(), it) }
   }

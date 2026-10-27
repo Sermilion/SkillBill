@@ -14,6 +14,7 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
+import skillbill.engine.goalrunner.telemetry.GOAL_PLANNING_OPERATION_KIND
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerProgressEvent
@@ -235,6 +236,42 @@ class GoalRunnerStatusProjectionLivenessTest {
 
     assertEquals(ExecutionLiveness.LIVE, status.executionLiveness)
     assertNull(status.progressStall)
+  }
+
+  @Test
+  fun `active planning replaces stale child progress and can still report a real stall`() {
+    val planningStartedAt = stallObservedAt.minus(Duration.ofMinutes(5))
+    val parent =
+      qaProgress(stallObservedAt.minus(Duration.ofHours(2))).copy(
+        latestDeclaredProgressEvent =
+          GoalProgressEvent(
+            eventKind = GoalProgressEventKind.PHASE_STARTED,
+            workflowId = "wfl-parent",
+            workflowPhase = "planning",
+            processAlive = true,
+            sequenceNumber = 10,
+            timestamp = planningStartedAt,
+            stepId = "preplan",
+            operationKind = GOAL_PLANNING_OPERATION_KIND,
+            agentId = "codex",
+          ),
+      )
+
+    val active = liveGoalStatus(parent)
+    assertEquals("preplan", active.currentStep)
+    assertEquals("codex", active.activeAgent)
+    assertNull(active.progressStall)
+
+    val stalled =
+      liveGoalStatus(
+        parent.copy(
+          latestDeclaredProgressEvent =
+            parent.latestDeclaredProgressEvent?.copy(
+              timestamp = stallObservedAt.minus(Duration.ofMinutes(90)),
+            ),
+        ),
+      )
+    assertEquals(stallObservedAt.minus(Duration.ofMinutes(90)), stalled.progressStall?.lastProgressAt)
   }
 
   private val stallObservedAt: Instant = Instant.parse("2026-10-20T11:35:00Z")

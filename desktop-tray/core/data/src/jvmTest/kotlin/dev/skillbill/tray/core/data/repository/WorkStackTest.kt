@@ -134,6 +134,33 @@ class WorkStackTest {
   }
 
   @Test
+  fun `detail publishes its snapshot without retrying unrelated commits after projection`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-detail-snapshot-writer").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "selected", now, "main")) }
+      var armed = false
+      val writes = AtomicInteger()
+      val source = workStack(fixture.tempDir.toRealPath(), TestClock(now.toKotlinInstant()), afterSnapshot = {
+        if (armed) factory.transaction {
+          it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "writer-${writes.incrementAndGet()}", now, "main"))
+        }
+      })
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        val selected = value(source.board(WorkSection.PHASES, Retention.WEEK)).items.single()
+        armed = true
+        val detail = assertIs<Outcome.Value<Detail>>(source.detail(selected.identity)).value
+        assertEquals(selected.identity, detail.item.identity)
+        assertEquals(1, writes.get())
+        armed = false
+        val live = value(source.board(WorkSection.PHASES, Retention.WEEK))
+        assertTrue(live.revision!! > detail.item.databaseRevision!!)
+        assertTrue(live.items.any { it.identity.id == "writer-1" })
+      } finally { source.closeAndJoin() }
+    }
+  }
+
+  @Test
   fun `history publishes a coherent snapshot when an unrelated writer commits after projection`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-history-concurrent-writer").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
@@ -426,7 +453,8 @@ class WorkStackTest {
         Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/checked-out-now\n")
         val selectedDetail = (source.detail(goals.items.single().identity) as Outcome.Value).value
         assertEquals("feat/checked-out-now", selectedDetail.item.branch)
-        assertEquals((1..10).toList(), selectedDetail.subtasks.map { it.id })
+        // The subtask list fills its head page up to the runtime's page-size cap, whatever page size the tray asks for.
+        assertEquals((1..100).toList(), selectedDetail.subtasks.map { it.id })
         assertEquals(1000, selectedDetail.completeCount + selectedDetail.pendingCount + selectedDetail.blockedCount)
         assertNotNull(selectedDetail.cursors[DetailList.SUBTASKS])
         // Lists page by their own continuation, never by offset, so the tail is reached by following the subtask cursor.
@@ -443,6 +471,15 @@ class WorkStackTest {
         val nextDependencies = (source.detail(goals.items.single().identity, dependenciesCursor,
           DetailList.DEPENDENCIES) as Outcome.Value).value
         assertEquals((11..20).toList(), nextDependencies.dependencies.map { it.dependency.subtaskId })
+        // A store write between pages keeps a list's continuation usable: it resumes after a row, not at an offset.
+        fixture.connection.createStatement().use { statement ->
+          statement.executeUpdate("UPDATE ${DesktopReadSchema.REVISIONS_TABLE} SET revision = revision + 1 " +
+            "WHERE topic = '${DesktopReadSchema.GOALS_TOPIC}'")
+        }
+        assertTrue(value(source.board(WorkSection.GOALS, Retention.SIX_HOURS)).revision!! > selectedDetail.item.databaseRevision!!)
+        val afterWrite = assertIs<Outcome.Value<Detail>>(source.detail(goals.items.single().identity,
+          assertNotNull(nextDependencies.cursors[DetailList.DEPENDENCIES]), DetailList.DEPENDENCIES)).value
+        assertEquals((21..30).toList(), afterWrite.dependencies.map { it.dependency.subtaskId })
         // A continuation belongs to its own list: presenting it for another list is refused, never applied to that list.
         assertIs<Outcome.Failure>(source.detail(goals.items.single().identity, dependenciesCursor, DetailList.SUBTASKS))
         val target = goals.items.single()

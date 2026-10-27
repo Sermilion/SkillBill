@@ -5,6 +5,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.application.decomposition.branchName
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.mcp.core.McpToolRegistry
 import skillbill.review.model.ReviewStageDegradationReason
@@ -404,6 +405,90 @@ class GoalTelemetryEmissionEventParityTest {
       schemaValues,
       "goalRunnerStopReasonEnum must accept every runtime GoalRunnerStopReason.",
     )
+  }
+
+  @Test
+  fun `goal assessment exit reason schema enum matches runtime enum`() {
+    val schemaValues =
+      schemaNode.path("\$defs")
+        .path("goalAssessmentExitReasonEnum")
+        .path("enum")
+        .elements()
+        .asSequence()
+        .map { it.asText() }
+        .toSet()
+
+    assertEquals(
+      GoalAssessmentExitReason.entries.map { it.wireValue }.toSet(),
+      schemaValues,
+      "goalAssessmentExitReasonEnum must accept every runtime GoalAssessmentExitReason.wireValue.",
+    )
+  }
+
+  @Test
+  fun `trace probe and assessment counters validate clean and reject unknown exit reasons`() {
+    TelemetryEventSchemaValidator.validate(
+      envelope =
+        linkedMapOf<String, Any?>(
+          "event_name" to "goal_subtask_finished",
+          "contract_version" to TELEMETRY_EVENT_CONTRACT_VERSION,
+          "issue_key" to "SKILL-442",
+          "workflow_id" to "wfl-goal-1",
+          "subtask_id" to 1,
+          "subtask_name" to "trace-probe-and-assessment-telemetry",
+          "status" to "complete",
+          "started_at" to "2026-06-04T10:15:30Z",
+          "finished_at" to "2026-06-04T10:42:05Z",
+          "duration_seconds" to 1_595,
+          "attempt_count" to 1,
+          "blocked_reason" to null,
+          "interaction_scenarios_traced" to 6,
+          "interaction_scenarios_broken" to 2,
+          "interaction_scenarios_repaired" to 2,
+          "interaction_scenarios_unknown" to 0,
+          "test_probes_killed" to 3,
+          "test_probes_survived" to 1,
+          "test_probes_repaired" to 1,
+          "test_probes_not_run" to 0,
+        ),
+      eventName = "goal_subtask_finished",
+    )
+
+    val goalFinished =
+      linkedMapOf<String, Any?>(
+        "event_name" to "goal_finished",
+        "contract_version" to TELEMETRY_EVENT_CONTRACT_VERSION,
+        "issue_key" to "SKILL-442",
+        "workflow_id" to "wfl-goal-1",
+        "status" to "completed",
+        "started_at" to "2026-06-04T10:15:30Z",
+        "finished_at" to "2026-06-04T12:01:44Z",
+        "duration_seconds" to 6_374,
+        "subtasks_complete" to 3,
+        "subtasks_blocked" to 0,
+        "subtasks_skipped" to 0,
+        "mode" to "runtime",
+        "stop_reason" to null,
+        "goal_assessment_blocker_findings" to 1,
+        "goal_assessment_major_findings" to 2,
+        "goal_assessment_minor_findings" to 3,
+        "goal_assessment_confirmed" to 4,
+        "goal_assessment_refuted" to 5,
+        "goal_assessment_rounds" to 2,
+        "goal_assessment_open_findings" to 1,
+        "goal_assessment_exit_reason" to "round_cap",
+      )
+    TelemetryEventSchemaValidator.validate(envelope = goalFinished, eventName = "goal_finished")
+    TelemetryEventSchemaValidator.validate(
+      envelope = LinkedHashMap(goalFinished).apply { put("goal_assessment_exit_reason", null) },
+      eventName = "goal_finished",
+    )
+    assertFailsWith<SkillBillRuntimeException> {
+      TelemetryEventSchemaValidator.validate(
+        envelope = LinkedHashMap(goalFinished).apply { put("goal_assessment_exit_reason", "gave_up") },
+        eventName = "goal_finished",
+      )
+    }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
   }
 
   @Test

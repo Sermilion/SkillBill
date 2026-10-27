@@ -41,6 +41,8 @@ internal val DEFAULT_PHASE_TIERS: Map<String, ExecutionTier> =
     FeatureTaskRuntimePhaseIds.MONITOR to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.MONITOR_FIX to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS to ExecutionTier.REASONING,
+    FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT to ExecutionTier.REASONING,
+    FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT_FIX to ExecutionTier.IMPLEMENTATION,
   )
 
 data class PhaseModelDirective(

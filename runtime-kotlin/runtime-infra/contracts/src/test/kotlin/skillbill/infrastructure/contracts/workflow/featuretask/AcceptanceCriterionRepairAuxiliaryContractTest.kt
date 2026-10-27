@@ -70,6 +70,27 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
   }
 
   @Test
+  fun `interaction trace audit binds regressed refs to broken owners and rejects the 0_1 shape`() {
+    val valid = traceAudit("broken", "AC-001", listOf("AC-001"))
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(valid, "valid")
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(
+      traceAudit("holds", null, emptyList()),
+      "holds",
+    )
+    listOf(
+      traceAudit("broken", "AC-001", emptyList()),
+      traceAudit("holds", null, listOf("AC-001")),
+      valid + (Keys.CONTRACT_VERSION to "0.1"),
+      valid + (Keys.INTERACTIONS to emptyList<Any>()),
+      audit() + (Keys.INTERACTIONS to traceAudit("holds", null, emptyList())[Keys.INTERACTIONS]),
+    ).forEach { bad ->
+      assertFailsWith<SkillBillRuntimeException> {
+        AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(bad, "bad")
+      }
+    }
+  }
+
+  @Test
   fun `handoff refuses invented remaining budget and awaiting verification without reservation`() {
     val valid =
       identity() +
@@ -196,6 +217,32 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
         Keys
           .REGRESSED_REFS to emptyList<Any>(),
         Keys.EDGE_CHANGES to emptyList<Any>(),
+        Keys.INTERACTIONS to emptyList<Any>(),
+        Keys.RECHECKS to emptyList<Any>(),
+        Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
+      )
+
+  private fun traceAudit(
+    verdict: String,
+    owner: String?,
+    regressed: List<String>,
+  ): Map<String, Any?> =
+    audit() +
+      mapOf(
+        Keys.MODE to "interaction_trace",
+        Keys.CURRENT_CRITERION_REF to null,
+        Keys.RESERVATION_ID to null,
+        Keys.EXPECTED_REVISION to null,
+        Keys.REGRESSED_REFS to regressed,
+        Keys.INTERACTIONS to
+          listOf(
+            mapOf(
+              Keys.SCENARIO_REF to "IS-001",
+              Keys.VERDICT to verdict,
+              Keys.OWNER_REF to owner,
+              Keys.TRACE_REF to "src/Flow.kt:10 then src/Store.kt:44",
+            ),
+          ),
       )
 
   private fun criterion(): Map<String, Any?> =

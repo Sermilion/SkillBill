@@ -31,6 +31,10 @@ enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
   PULL_REQUEST("pull_request", listOf(FeatureTaskRuntimePhaseIds.PR)),
   MONITOR("monitor", listOf(FeatureTaskRuntimePhaseIds.MONITOR, FeatureTaskRuntimePhaseIds.MONITOR_FIX)),
   STANDALONE_REVIEW("standalone_review", listOf(FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS)),
+  GOAL_ASSESSMENT(
+    "goal_assessment",
+    listOf(FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT, FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT_FIX),
+  ),
   ;
 
   companion object {
