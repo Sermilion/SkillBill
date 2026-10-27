@@ -31,6 +31,8 @@ import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -425,9 +427,13 @@ class WorkflowGoalRunnerQualityExecutionStore
             add(subtask.id.toString())
             val childId =
               subtask.workflowId ?: historyEvidence.restoredChildId(unitOfWork, parent.workflowId, subtask.id)
-                ?: invalid("Selected subtask '${subtask.id}' has no recorded child identity.")
-            add(childId)
-            val child = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, childId)
+            if (childId == null && subtask.status.decompositionStatus() == DecompositionStatus.SKIPPED) {
+              add(DecompositionStatus.SKIPPED.wireValue)
+              return@forEach
+            }
+            val selectedChildId = childId ?: invalid("Selected subtask '${subtask.id}' has no recorded child identity.")
+            add(selectedChildId)
+            val child = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedChildId)
             val currentPlan =
               child?.let {
                 JsonCodec.anyToStringAnyMap(
@@ -436,13 +442,13 @@ class WorkflowGoalRunnerQualityExecutionStore
               }
             val retained =
               retainedEvidence.singleOrNull {
-                it.subtaskId == subtask.id && it.childWorkflowId == childId
+                it.subtaskId == subtask.id && it.childWorkflowId == selectedChildId
               }
             val plan = currentPlan ?: retained?.executionPlan
             val definition = historyEvidence.definition(plan)
             val retainedDefinition = retained?.executionPlan?.let(historyEvidence::definition)
             if (currentPlan != null && retainedDefinition != null && retainedDefinition != definition) {
-              invalid("Selected child '$childId' conflicts with its preserved definition.")
+              invalid("Selected child '$selectedChildId' conflicts with its preserved definition.")
             }
             add(definition.id)
             add(definition.semanticRevision.toString())

@@ -22,7 +22,10 @@ internal class GoalQualityRepairOutputs(private val outcomeStore: GoalRunnerWork
           definition == SkeletonDefinition.GOAL_QA &&
             phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX
         ) ||
-          definition == SkeletonDefinition.VALIDATION
+          (
+            definition == SkeletonDefinition.VALIDATION &&
+              phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
+          )
       if (accepted) {
         try {
           if (!outcomeStore.recordGoalFinalRepairOutput(
