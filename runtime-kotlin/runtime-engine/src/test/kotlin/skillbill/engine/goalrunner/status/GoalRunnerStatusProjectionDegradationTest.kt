@@ -88,24 +88,21 @@ class GoalRunnerStatusProjectionDegradationTest {
   fun `journal and audit retry read failures omit values and name both seams`() {
     val diagnostics = RecordingStatusDiagnostics()
     val throwingJournalDatabase =
-      object : DatabaseSessionFactory {
-        override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-          OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+      StatusJournalDatabaseSessionFactory(
+        object : WorktreeEditJournalRepository {
+          override fun append(
+            workflowId: String,
+            tick: WorktreeEditTick,
+          ) = error("unused")
 
-        private val dbPath = Path.of("/fake/goal-status-journal-fail.db")
+          override fun latestTick(workflowId: String): WorktreeEditTick? = error("journal unavailable")
 
-        override fun resolveDbPath(): Path = dbPath
-
-        override fun databaseExists(): Boolean = true
-
-        override fun <T> read(block: (UnitOfWork) -> T): T = error("journal unavailable")
-
-        override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? = error("journal unavailable")
-
-        override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = error("unused")
-
-        override fun <T> transaction(block: (UnitOfWork) -> T): T = error("unused")
-      }
+          override fun trimToCap(
+            workflowId: String,
+            maxRows: Int,
+          ): Int = error("unused")
+        },
+      )
     val ledgerFailingStates =
       object : WorkflowStateRepository by InMemoryWorkflowStates() {
         override fun readFeatureTaskPhaseLedgerPage(
@@ -323,8 +320,7 @@ private class StatusJournalDatabaseSessionFactory(
     object : UnitOfWorkDefaults() {
       override val dbPath: Path = this@StatusJournalDatabaseSessionFactory.dbPath
       override val worktreeEditJournal: WorktreeEditJournalRepository = journal
-      override val workflowStates: WorkflowStateRepository
-        get() = error("unused")
+      override val workflowStates: WorkflowStateRepository = InMemoryWorkflowStates()
       override val learnings: LearningRepository
         get() = error("unused")
       override val reviews: ReviewRepository

@@ -70,19 +70,19 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       requireBuildGate(recordedInputs, recorded = true)
       return ValidatedFeatureTaskRuntimeExecutionPlan.read(requireNotNull(recorded), validator)
     }
-    val inputs = resolveInputs(repoRoot, qualityGate, validationDepth, timeout)
     val plan =
       strategies.executionPlan(
         PhaseStrategySelectionFacts(
           definition,
           setOfNotNull(
             reviewMode,
-            plannedQualityGate(qualityGate, inputs),
+            qualityGate,
             request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO.takeIf { PhaseSlot.QA in definition.slots },
           ),
           request.stepLaunchAssignments,
         ),
       )
+    val inputs = resolveInputs(repoRoot, plan.qualityGateSelection, validationDepth, timeout)
     recordSelectedStrategies(plan)
     requireBuildGate(inputs, recorded = false)
     return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encodeExecution(plan, inputs), validator)
@@ -92,22 +92,11 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     repoRoot: Path,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
   ): FeatureTaskRuntimeQualityGateSelection? {
-    if (qualityGate != FeatureTaskRuntimeQualityGateSelection.BUILD) return qualityGate
-    return plannedQualityGate(qualityGate, resolveInputs(repoRoot, qualityGate, ValidationDepth.DEFAULT, null))
-  }
-
-  private fun plannedQualityGate(
-    qualityGate: FeatureTaskRuntimeQualityGateSelection?,
-    inputs: EffectiveGatePolicyInputs,
-  ): FeatureTaskRuntimeQualityGateSelection? =
-    if (
-      qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD &&
-      inputs.commandFamily == ValidationGateCommandFamily.VALIDATION
-    ) {
-      FeatureTaskRuntimeQualityGateSelection.VALIDATE
-    } else {
-      qualityGate
+    if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
+      requireBuildGate(resolveInputs(repoRoot, qualityGate, ValidationDepth.DEFAULT, null), recorded = false)
     }
+    return qualityGate
+  }
 
   fun resolveInputs(
     repoRoot: Path,
@@ -133,7 +122,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     val declaration = (resolution as? ValidationGateResolution.Declared)?.declaration
     return EffectiveGatePolicyInputs(
       commandFamily =
-        if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD && pack != null) {
+        if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
           ValidationGateCommandFamily.BUILD
         } else {
           ValidationGateCommandFamily.VALIDATION

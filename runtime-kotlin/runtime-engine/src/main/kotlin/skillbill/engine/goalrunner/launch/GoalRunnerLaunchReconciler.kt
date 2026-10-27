@@ -259,6 +259,7 @@ class GoalRunnerLaunchReconciler(
         workflowId?.let { resolvedWorkflowId ->
           outcomeStore.recoverMissingResultPrefixOutput(
             workflowId = resolvedWorkflowId,
+            parentWorkflowId = refreshed.parentWorkflowId,
             issueKey = request.issueKey,
             subtaskId = subtaskId,
             output = candidate.output,
@@ -281,6 +282,7 @@ class GoalRunnerLaunchReconciler(
     if (manifestWorkflowId != null) {
       return outcomeStore.recoverAndPersistTerminalOutcome(
         workflowId = manifestWorkflowId,
+        parentWorkflowId = state.parentWorkflowId,
         issueKey = state.manifest.issueKey,
         subtaskId = subtaskId,
         repoRoot = request.repoRoot,

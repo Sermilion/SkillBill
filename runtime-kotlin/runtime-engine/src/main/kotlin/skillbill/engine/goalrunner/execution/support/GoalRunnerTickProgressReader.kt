@@ -6,8 +6,12 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import java.nio.file.Path
 import java.time.Clock
 
 val RUNTIME_WORKFLOW_ID_PREFIX: String = WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix
@@ -26,6 +30,22 @@ fun isFeatureSpecPath(path: String): Boolean {
   val dotted = if (normalized.startsWith(".")) normalized else ".$normalized"
   return dotted == LegacyProjectStatePaths.FEATURE_SPECS_DIRECTORY ||
     dotted.startsWith(LegacyProjectStatePaths.FEATURE_SPECS_PREFIX)
+}
+
+internal fun goalRunnerRepositoryContentIdentity(
+  gitOperations: WorkflowGitOperations,
+  repoRoot: Path,
+): WorkflowGitOperationResult {
+  val tracked = gitOperations.trackedPaths(repoRoot)
+  if (tracked !is WorkflowGitNameListResult.Listed) {
+    return WorkflowGitOperationResult.Failed(error = "Could not enumerate tracked repository paths.")
+  }
+  val owned = gitOperations.repositoryOwnedPaths(repoRoot)
+  if (owned !is WorkflowGitNameListResult.Listed) {
+    return WorkflowGitOperationResult.Failed(error = "Could not enumerate untracked repository paths.")
+  }
+  val paths = (tracked.names + owned.names).distinct().filterNot(::isFeatureSpecPath)
+  return gitOperations.scopedContentFingerprint(repoRoot, paths)
 }
 
 internal data class GoalRunnerProgressState(

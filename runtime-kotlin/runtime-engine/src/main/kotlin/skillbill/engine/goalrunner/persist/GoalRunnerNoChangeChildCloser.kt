@@ -21,11 +21,19 @@ class GoalRunnerNoChangeChildCloser(
 ) {
   private val engine = WorkflowEngine()
 
-  fun closeAccepted(workflowId: String) {
+  fun closeAccepted(
+    parentWorkflowId: String,
+    subtaskId: Int,
+    workflowId: String,
+    outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  ): Boolean =
     database.transaction { unitOfWork ->
       val family = WorkflowFamily.TASK_RUNTIME
-      val existing = unitOfWork.workflowStates.get(family, workflowId) ?: return@transaction
-      if (family.definition.isTerminalStatus(existing.workflowStatus)) return@transaction
+      val existing = unitOfWork.workflowStates.get(family, workflowId) ?: return@transaction false
+      if (!outcomeStore.hasRequiredGoalChildHistoryDraft(unitOfWork, parentWorkflowId, subtaskId, workflowId)) {
+        return@transaction false
+      }
+      if (family.definition.isTerminalStatus(existing.workflowStatus)) return@transaction true
       val updated =
         engine.updateRecord(
           family.definition,
@@ -40,8 +48,8 @@ class GoalRunnerNoChangeChildCloser(
           ),
         )
       unitOfWork.workflowStates.save(family, updated)
+      true
     }
-  }
 
   fun abandon(
     workflowId: String,

@@ -2,7 +2,7 @@
 
 ## Project Context
 
-skill-bill governs authoring, routing, validation, installation, and measurement of agent skills. It ships shared orchestration, tooling, telemetry, workflow state, and shells for review, quality checks, feature work, verification, and PRs.
+skill-bill governs agent skill authoring, routing, validation, installation, and measurement. It ships orchestration, tooling, telemetry, workflow state, and shells for review, quality checks, feature work, verification, and PRs.
 
 Non-negotiable contracts:
 
@@ -22,7 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Keep phase edits in the repository root and branch supplied by the active workflow briefing. Reconcile any separate worktree changes into the workflow checkout before reporting implementation complete.
+Keep phase edits in the repository root and branch from the active workflow briefing. Reconcile separate worktree changes into that checkout before reporting implementation complete.
 
 ## Product Intent
 
@@ -72,13 +72,9 @@ Scaffold with `skill-bill new` (or `--payload <file>`). Author via `skill-bill s
 
 Code review: pack root + conforming manifest/`content.md`, manifest-registered pointers, README catalog, pack tests, validate. Quality-check: declare `validation_gate` on packs that can win dominant-stack routing; goal build runs the dominant pack's build gate; `skill-bill phase validation` uses the same full project validation strategy as goal validate (optional `declared_quality_check_file` may still parse on leftover custom packs but routing, install, and scaffold do not consume it). Feature-task/verify: stay on horizontal + manifest surfaces — no legacy `skills/<platform>/` overrides.
 
-## Runtime Agent Behavior
+## Runtime Agent Behavior And Commits
 
-Read [Runtime command guidance](docs/runtime-command-guidance.md) for injected agent strategies and build-gate rules.
-
-## Commit Structure (feature-task / goal subtasks)
-
-Read [Runtime command guidance](docs/runtime-command-guidance.md) for one-commit-per-subtask and checkpoint rules.
+[Runtime command guidance](docs/runtime-command-guidance.md) owns injected agent strategies, build gates, one-commit-per-subtask, and checkpoint rules.
 
 ## Writing And Comments
 
@@ -102,11 +98,11 @@ comments. `CommentAndInterfaceKdocArchitectureTest` enforces this alongside
 
 ## Coding Conventions
 
-**Required reading.** Before planning, designing, changing, or reviewing anything under `runtime-kotlin`, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md). It sets the rules that regressed in earlier refactor rounds (A1–A12), the enforcement contract for architecture guards (G1–G7), and the change process (P1–P8): acceptance criteria state end states, fixes delete instead of moving, landed specs are verified, and guards, baselines, and exemptions only tighten. Every runtime-kotlin review runs its section 5 checklist and cites rule IDs.
+**Required reading.** Before planning, designing, changing, or reviewing `runtime-kotlin`, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md). Apply A1–A12, G1–G7, and P1–P8. Every runtime-kotlin review runs its section 5 checklist and cites rule IDs.
 
-Before designing, changing, or reviewing `runtime-kotlin`, read and apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles). That section owns requirements for dependency direction, state and resource ownership, persistence, contract enforcement, simplicity, and test value. Its enforcement status distinguishes mechanically checked rules, each paired with its proving test in `PrincipleEnforcementInventory.enforceableRules`, from the requirements that stay review-only. Existing violations do not authorize new ones.
+Before designing, changing, or reviewing `runtime-kotlin`, apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles). It owns dependency direction, state and resource ownership, persistence, contracts, simplicity, and test value. `PrincipleEnforcementInventory.enforceableRules` pairs mechanical rules with proving tests; other requirements stay review-only. Existing violations do not authorize new ones.
 
-Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, package clustering, imports, file-size limits, and architecture guards. Mechanical enforcement lives under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/` (`CommentAndInterfaceKdocArchitectureTest`, `InlineFqnArchitectureTest`, `ProductionFileLineCeilingArchitectureTest`, `PrincipleEnforcementInventory`, and siblings).
+Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, package clustering, imports, file-size limits, and architecture guards. Mechanical enforcement lives under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`.
 
 **Wire and payload keys.** Never inline contract or wire map keys as string literals in `get`, `put`, `mapOf("key" to …)`, or bracket access at governed payload seams (see `runtime-kotlin/ARCHITECTURE.md` Wire vocabulary). Declare each key once in an owning `*Keys` or `*PayloadKeys` object. A key object lives in `runtime-contracts` only when two or more production modules read it or a `runtime-ports` signature exposes it (`SharedPayloadKeys` for workflow phase-output envelope keys; `DecompositionManifestPayloadKeys` and `DecompositionPlanningPayloadKeys` for decomposition manifests; area-owned keys such as `ReviewVerificationSignalKeys` beside their contract family; `TelemetryProxyPayloadKeys` for the telemetry proxy wire vocabulary; `LifecycleTelemetryPayloadKeys` for the telemetry envelope). A key object with a single owner lives in that owner's module instead — for example `SqliteReviewTelemetryPayloadKeys` in `runtime-infra/sqlite` and `GoalRunnerResetPayloadKeys` in `runtime-cli` — and it must not restate a value one of the shared owners already declares. Downstream modules reference those constants; they do not restate wire strings. Enum wire tokens use `wireValue` on the owning enum; do not restate them in local `setOf`/`mapOf` collections. `WireVocabularyArchitectureTest` enforces governed seams via `WireVocabularyGovernedSeamInventory`.
 

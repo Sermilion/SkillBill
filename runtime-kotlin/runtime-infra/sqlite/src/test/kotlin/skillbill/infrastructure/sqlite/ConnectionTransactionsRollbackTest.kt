@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
 import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
@@ -10,6 +11,7 @@ import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.lang.reflect.Proxy
+import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
 import java.sql.DriverManager
@@ -25,6 +27,28 @@ import kotlin.test.assertTrue
 
 @Execution(ExecutionMode.SAME_THREAD)
 class ConnectionTransactionsRollbackTest {
+  @Test
+  fun `session transaction start and commit failures cross the port as typed database failures`() {
+    val path = createTempDirectory("typed-transaction-failure").resolve("runtime.db")
+    Files.createFile(path)
+    for (statement in listOf("BEGIN IMMEDIATE", "COMMIT")) {
+      val failure = SQLException("injected transaction failure")
+      val connection = failingConnection(mapOf(statement to failure))
+      val error =
+        assertFailsWith<SkillBillRuntimeException> {
+          connection.inDatabaseTransaction(
+            DatabaseTransactionSpec(
+              path,
+              DatabaseTransactionBeginMode.IMMEDIATE,
+              DatabaseAccessOperation.WRITE,
+              SqliteTestDiagnostics,
+            ),
+          ) { }
+        }
+      assertSame(failure, error.cause)
+    }
+  }
+
   @Test
   fun `a changed target outcome rolls back writes before returning the refusal`() {
     val path = createTempDirectory("skillbill-fenced-rollback").resolve("rollback.db")

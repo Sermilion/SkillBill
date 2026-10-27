@@ -47,7 +47,7 @@ internal class QaRepairHooks(
     if (findings.isEmpty()) return ""
     return QaPromptSections.repairSupplement(
       findings,
-      openFindingSections(run.request.workflowId, run.request.repoRoot, findings, state),
+      openFindingSections(run.request.qaOutcomeWorkflowId, run.request.repoRoot, findings, state),
       run.request.repoRoot.toString(),
     )
   }
@@ -96,7 +96,7 @@ internal class QaRepairHooks(
         outcome = QaRepairAttemptOutcome.COMPLETED,
       )
     if (run.request.admittedExecution == null && run.request.qaSelection != null) {
-      outcomes.recordRepairAttempts(run.request.workflowId, number)
+      outcomes.recordRepairAttempts(run.request.qaOutcomeWorkflowId, number)
     }
     return output.copy(qaRepairState = previous.recordRepair(attempt))
   }

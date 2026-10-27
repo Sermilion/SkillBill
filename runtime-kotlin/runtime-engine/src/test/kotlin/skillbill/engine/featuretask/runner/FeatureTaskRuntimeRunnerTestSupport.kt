@@ -39,6 +39,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -98,6 +99,7 @@ import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValida
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
@@ -109,6 +111,8 @@ import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.idestatus.model.AgentActivityStamp
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -1119,6 +1123,7 @@ private fun harnessRunner(
           RuntimeOwnedPersistenceBoundary(deps.database, deps.diagnostics),
           testHarnessClock,
         ),
+        testHistoryDraftStore(),
       ),
     )
   return assembleHarnessRunner(deps, strategies, executePrepared, lifecycleTelemetry, entry)
@@ -1336,9 +1341,26 @@ private class TelemetryExecutePreparedSetup(
           RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics),
           testHarnessClock,
         ),
+        testHistoryDraftStore(),
       ),
     )
 }
+
+private fun testHistoryDraftStore(): GoalRunnerGoalChildHistoryDraftStore =
+  object : GoalRunnerGoalChildHistoryDraftStore {
+    override fun saveGoalChildHistoryDraft(
+      draft: GoalChildHistoryDraft,
+      admitted: AdmittedFeatureTaskRuntimeExecution?,
+    ): GoalChildHistoryDraftSaveResult = GoalChildHistoryDraftSaveResult.Saved(draft)
+
+    override fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft> = emptyList()
+
+    override fun hasRequiredGoalChildHistoryDraft(
+      parentWorkflowId: String,
+      subtaskId: Int,
+      childWorkflowId: String,
+    ): Boolean = true
+  }
 
 private fun enabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory): FeatureTaskRuntimeLifecycleTelemetry =
   FeatureTaskRuntimeLifecycleTelemetry(

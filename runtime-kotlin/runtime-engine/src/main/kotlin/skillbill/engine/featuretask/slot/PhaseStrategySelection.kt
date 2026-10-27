@@ -89,6 +89,11 @@ class PhaseStrategySelection(
     }
   }
 
+  internal fun usesFact(
+    slot: PhaseSlot,
+    definition: SkeletonDefinition,
+  ): Boolean = bindings[definition]?.get(slot) is PhaseStrategyBinding.ByFact
+
   fun binds(
     slot: PhaseSlot,
     facts: PhaseStrategySelectionFacts,

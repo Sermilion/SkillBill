@@ -86,6 +86,7 @@ data class SkeletonDefinition(
         LEGACY_FEATURE_RUN_SLOTS_REVISION_2.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
         semanticRevision = 4,
       )
+    val GOAL_CHILD_REVISION_5: SkeletonDefinition = GOAL_CHILD.copy(semanticRevision = 5)
     val REVIEW: SkeletonDefinition =
       SkeletonDefinition(
         "review",
@@ -115,7 +116,11 @@ data class SkeletonDefinition(
         listOf(PhaseSlot.QA, PhaseSlot.QUALITY_GATE),
         runStateKind = SkeletonRunStateKind.IN_MEMORY,
         stepIds =
-          listOf(FeatureTaskRuntimePhaseIds.QA, FeatureTaskRuntimePhaseIds.QA_FIX, FeatureTaskRuntimePhaseIds.BUILD),
+          listOf(
+            FeatureTaskRuntimePhaseIds.QA,
+            FeatureTaskRuntimePhaseIds.QA_FIX,
+            FeatureTaskRuntimePhaseIds.BUILD,
+          ),
         loopOnlyStepIds = setOf(FeatureTaskRuntimePhaseIds.BUILD),
       )
     val GOAL_ASSESSMENT: SkeletonDefinition =
@@ -132,6 +137,8 @@ data class SkeletonDefinition(
         runStateKind = SkeletonRunStateKind.IN_MEMORY,
         stepIds = listOf(FeatureTaskRuntimePhaseIds.GOAL_ASSESSMENT_FIX),
       )
+    val GOAL_HISTORY: SkeletonDefinition =
+      SkeletonDefinition("goal-history", listOf(PhaseSlot.WRITE_HISTORY), runStateKind = SkeletonRunStateKind.IN_MEMORY)
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
@@ -171,12 +178,14 @@ data class SkeletonDefinition(
           STANDALONE,
           GOAL_CHILD_REVISION_3,
           GOAL_CHILD,
+          GOAL_CHILD_REVISION_5,
           REVIEW,
           VALIDATION,
           QA,
           GOAL_QA,
           GOAL_ASSESSMENT,
           GOAL_ASSESSMENT_FIX,
+          GOAL_HISTORY,
           PLAN,
           PR,
           MONITOR,
@@ -184,7 +193,7 @@ data class SkeletonDefinition(
         )
 
     fun admittedForRun(goalContinuation: Boolean): Set<SkeletonDefinition> =
-      if (goalContinuation) setOf(GOAL_CHILD) else setOf(PLAN)
+      if (goalContinuation) setOf(GOAL_CHILD_REVISION_5) else setOf(PLAN)
 
     fun preparedExecutionFor(publicId: String): SkeletonDefinition? =
       entries.singleOrNull { it.preparedExecutionOf == publicId }
@@ -195,5 +204,15 @@ data class SkeletonDefinition(
     fun byId(id: String): SkeletonDefinition =
       entries.filter { it.id == id }.maxByOrNull(SkeletonDefinition::semanticRevision)
         ?: throw UnknownSkeletonDefinitionError(id, entries.map(SkeletonDefinition::id))
+
+    fun byIdAndRevision(
+      id: String,
+      revision: Int,
+    ): SkeletonDefinition =
+      entries.singleOrNull { it.id == id && it.semanticRevision == revision }
+        ?: throw UnknownSkeletonDefinitionError(
+          "$id@$revision",
+          entries.map { "${it.id}@${it.semanticRevision}" },
+        )
   }
 }

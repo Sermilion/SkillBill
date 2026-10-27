@@ -1,5 +1,26 @@
 # goalrunner boundary history
 
+## [2026-10-27] SKILL-446 subtask 2: publish goal history after final checks
+Areas: runtime-engine goalrunner and featuretask, runtime-domain, runtime-application workflow, runtime-contracts, runtime-core goal wiring, runtime-infra contracts, orchestration/contracts
+- MEDIUM feature. Goal finalization runs the existing boundary writer after goal QA, repairs and already-required validation, before the remaining-worktree commit and PR. No-change and already-published exits remain.
+- Writer inputs follow manifest order with stable parent, subtask and child identities. New children require retained drafts or explicit skips; recorded legacy dispositions prevent republishing older writes.
+- Accepted QA and validation repair prose persists under the parent before acknowledgement, survives interruption and warnings, and reaches the writer alongside drafts. Skipped QA retains explicit empty repair context when no repair occurred.
+- Reusable: versioned parent history and quality-execution artifacts retain repair occurrences, accepted plans and writer completion outside the bounded attempt ledger, with schema validation and typed failures.
+- Accepted writer reuse requires matching ordered inputs and the saved post-writer content identity. Missing records, writer failure or required persistence failure stop at write_history before publication; interrupted writers inspect current files to avoid duplicates.
+- Validation repairs preserve raw completion envelopes beside normalized prose, recover interrupted phases, retain legacy validation evidence and distinguish QA findings from environment warnings.
+- Limits: unchanged retries reuse completion without another writer; changed inputs or contents require a fresh write. No additional quality cycle, per-entry edit protocol or multi-file transaction was added.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
+## [2026-10-27] SKILL-446 subtask 1: durable goal-child history drafts
+Areas: runtime-engine goalrunner and featuretask, runtime-domain skeleton, runtime-contracts, runtime-infra contracts and sqlite, orchestration/contracts
+- New goal children use skeleton revision 5 to return a history and decision draft or an explicit skip without editing boundary memory. Recorded revisions 2 through 4 and standalone writing keep their strategies.
+- The parent ledger stores validated drafts by parent, subtask and child identity. Identical replays reuse the record; conflicts and malformed records block completion. Draft retention is independent of the bounded attempt ledger.
+- Completion and recovery require the matching draft before settling a revision 5 child or deleting scratch. Parent-owned evidence preserves child history disposition across reset and recovery.
+- Reusable: versioned draft and evidence contracts and typed ledger operations provide durable reads for goal finalization.
+- Limit: final writer invocation and publication belong to subtask 2. New revision 5 children require a parent workflow identity.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
 ## [2026-10-25] SKILL-442 subtask 6: goal assessment fix loop and exit rules
 Areas: runtime-engine goalrunner (assessment, qa, execution/core) and featuretask slot/goalassessment and skeleton, runtime-domain goalrunner/assessment and skeleton, runtime-core DI, docs/runtime-command-guidance.md
 - GoalRunnerFinalization calls the assessment gate after the published goal result and immediately before goal QA; the no-change path records skipped_no_changes instead. GoalAssessmentLoop drives up to three rounds from the durable record alone, so a recorded exit skips the stage and resume continues from the first missing step.

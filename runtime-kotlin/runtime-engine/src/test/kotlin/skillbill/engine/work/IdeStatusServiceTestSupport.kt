@@ -10,6 +10,7 @@ import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.diagnostics.block.testWorkIncidentProjectionBuilder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
@@ -49,6 +50,10 @@ import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -833,6 +838,37 @@ internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
 }
 
 internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun recordGoalFinalRepairOutput(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    output: GoalFinalRepairOutput,
+  ): Boolean = false
+
+  override fun recordGoalFinalRepairWarning(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    warning: String?,
+  ): Boolean = false
+
+  override fun saveGoalHistoryCompletion(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    completion: GoalHistoryCompletion,
+  ): Boolean = false
+
+  override fun saveGoalChildHistoryDraft(
+    draft: GoalChildHistoryDraft,
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
+  ): GoalChildHistoryDraftSaveResult = GoalChildHistoryDraftSaveResult.Saved(draft)
+
+  override fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft> = emptyList()
+
+  override fun hasRequiredGoalChildHistoryDraft(
+    parentWorkflowId: String,
+    subtaskId: Int,
+    childWorkflowId: String,
+  ): Boolean = true
+
   override fun hasQaComposedPlan(workflowId: String): Boolean = false
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
@@ -853,6 +889,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recoverAndPersistTerminalOutcome(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     repoRoot: Path,
@@ -860,6 +897,7 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun recoverMissingResultPrefixOutput(
     workflowId: String,
+    parentWorkflowId: String,
     issueKey: String,
     subtaskId: Int,
     output: GoalRunnerWirePayload,

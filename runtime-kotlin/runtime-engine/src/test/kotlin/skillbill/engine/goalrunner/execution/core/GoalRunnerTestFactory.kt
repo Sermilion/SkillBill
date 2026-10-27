@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
+import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -41,6 +42,7 @@ import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOU
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
@@ -71,6 +73,8 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.specscratch.UnavailableSpecScratchStore
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -121,6 +125,16 @@ internal data class GoalRunnerTestWiring(
   val qaGate: GoalRunnerQaGate = NoopGoalRunnerQaGate,
   val pullRequestIdentityLookup: PullRequestIdentityLookup =
     PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+  val finalHistoryWriter: GoalRunnerFinalHistoryWriter =
+    GoalRunnerFinalHistoryWriter { _, _, _ ->
+      PhaseRunResult.Completed(
+        "test-history",
+        listOf("write_history"),
+        null,
+        "history written",
+        acceptedOutput = "history written",
+      )
+    },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
 )
@@ -173,6 +187,16 @@ internal data class GoalRunnerTestInputs(
   val qaGate: GoalRunnerQaGate = NoopGoalRunnerQaGate,
   val pullRequestIdentityLookup: PullRequestIdentityLookup =
     PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+  val finalHistoryWriter: GoalRunnerFinalHistoryWriter =
+    GoalRunnerFinalHistoryWriter { _, _, _ ->
+      PhaseRunResult.Completed(
+        "test-history",
+        listOf("write_history"),
+        null,
+        "history written",
+        acceptedOutput = "history written",
+      )
+    },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
   val assessmentGate: GoalRunnerAssessmentGate = NoopGoalRunnerAssessmentGate,
 ) {
@@ -196,6 +220,7 @@ internal data class GoalRunnerTestInputs(
       ciMonitor = ciMonitor,
       qaGate = qaGate,
       pullRequestIdentityLookup = pullRequestIdentityLookup,
+      finalHistoryWriter = finalHistoryWriter,
       assessmentGate = assessmentGate,
     )
 }
@@ -220,17 +245,23 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   val progressReader = GoalRunnerProgressReader(wiring.outcomeStore)
   val finalization =
     GoalRunnerFinalization(
-      wiring.outcomeStore,
-      wiring.pullRequestPort,
+      finalizationTestOutcomes(wiring.outcomeStore),
       GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
-      wiring.gitOperations,
+      finalizationTestGit(wiring.gitOperations),
       wiring.diagnostics,
-      wiring.unaddressedFindingsLedgerService,
       wiring.phaseRecorder,
       wiring.ciMonitor,
       wiring.qaGate,
       wiring.assessmentGate,
-      wiring.pullRequestIdentityLookup,
+      wiring.finalHistoryWriter,
+      GoalRunnerPullRequests(
+        wiring.outcomeStore,
+        wiring.pullRequestPort,
+        wiring.pullRequestIdentityLookup,
+        GoalSpecScratchCleanup(wiring.specScratchStore, testProjectStore, wiring.diagnostics),
+        wiring.unaddressedFindingsLedgerService,
+        wiring.diagnostics,
+      ),
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
   val perRunLoopAssembler =
@@ -480,3 +511,39 @@ private fun testAgentRunLauncher(): AgentRunLauncher =
     override fun launch(request: AgentRunLaunchRequest) =
       error("Goal runner tests must not launch through the assignment resolver.")
   }
+
+private fun finalizationTestGit(delegate: WorkflowGitOperations): WorkflowGitOperations =
+  object : WorkflowGitOperations by delegate {
+    override fun trackedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(emptyList())
+
+    override fun repositoryOwnedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(emptyList())
+
+    override fun scopedContentFingerprint(
+      repoRoot: Path,
+      paths: List<String>,
+    ) = WorkflowGitOperationResult.Ok(
+      "test-content",
+    )
+  }
+
+private fun finalizationTestOutcomes(delegate: GoalRunnerWorkflowOutcomeStore): GoalRunnerWorkflowOutcomeStore {
+  val fallback = TestGoalQualityOutcomeStore(settled = true)
+  return object : GoalRunnerWorkflowOutcomeStore by delegate {
+    override fun goalQualityExecution(parentWorkflowId: String) =
+      delegate.goalQualityExecution(parentWorkflowId) ?: fallback.goalQualityExecution(parentWorkflowId)
+
+    override fun goalFinalRepairContext(parentWorkflowId: String) =
+      delegate.goalFinalRepairContext(parentWorkflowId) ?: fallback.goalFinalRepairContext(parentWorkflowId)
+
+    override fun saveGoalHistoryCompletion(
+      parentWorkflowId: String,
+      expectedInvocationId: String,
+      completion: GoalHistoryCompletion,
+    ): Boolean =
+      if (delegate.goalQualityExecution(parentWorkflowId) == null) {
+        fallback.saveGoalHistoryCompletion(parentWorkflowId, expectedInvocationId, completion)
+      } else {
+        delegate.saveGoalHistoryCompletion(parentWorkflowId, expectedInvocationId, completion)
+      }
+  }
+}

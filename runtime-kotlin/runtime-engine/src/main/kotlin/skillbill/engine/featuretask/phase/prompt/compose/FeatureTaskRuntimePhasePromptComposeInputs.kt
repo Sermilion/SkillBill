@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.phase.planning.PlanBundleTarget
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimePriorReviewContext
@@ -57,6 +58,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val stepProfile: PhaseModelProfile = PhaseModelProfile.CANONICAL,
   val implementationChecklistAddress: String? = null,
   val projectInstructions: PhaseProjectInstructionsResolution.Injected? = null,
+  val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
 ) {
   val validateProbeScope: ValidateProbeScope? get() = validateProbeScopeSource()
   val validateProbesActive: Boolean get() = validateProbeScope != null

@@ -24,6 +24,7 @@ import skillbill.engine.featuretask.slot.state.PhasePullRequestStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
@@ -614,4 +615,12 @@ internal fun interface PhaseFailureContinuation {
     run: PhaseRun,
     failure: PhaseStepFailure,
   ): PhaseFailureContinuationOutput?
+}
+
+internal interface PhaseAcceptedOutputPersistence {
+  fun persistAcceptedOutput(
+    recorder: PhaseRunGoal,
+    run: PhaseRun,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): String?
 }

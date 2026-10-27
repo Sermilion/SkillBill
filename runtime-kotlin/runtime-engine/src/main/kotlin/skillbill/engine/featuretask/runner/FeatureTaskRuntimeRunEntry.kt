@@ -45,6 +45,7 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelecti
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -126,7 +127,7 @@ class FeatureTaskRuntimeRunEntry(
       if (request.explicitWorkflowId != null) {
         warnIfResumeAssignmentDiffers(request, admittedExecution)
       }
-      val definition = resolveRunDefinition(request.definition, goalContinuation != null)
+      val definition = admittedDefinition(request, admittedExecution)
       if (PhaseSlot.INTAKE in definition.slots && !intakeCompleted(workflowId)) {
         val invariants = intakePassInvariants(request, specPath, admittedExecution)
         val intakeReport =
@@ -136,6 +137,16 @@ class FeatureTaskRuntimeRunEntry(
       runWithRepairState(request, specPath, admittedExecution, acquiredWorker)
     }
   }
+
+  private fun admittedDefinition(
+    request: FeatureTaskRuntimeRunInput,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): SkeletonDefinition =
+    if (request.goalContinuation != null) {
+      SkeletonDefinition.byIdAndRevision(admitted.plan.definitionId, admitted.plan.definitionSemanticRevision)
+    } else {
+      resolveRunDefinition(request.definition, goalContinuation = false)
+    }
 
   private fun runWithRepairState(
     request: FeatureTaskRuntimeRunInput,
@@ -235,7 +246,11 @@ class FeatureTaskRuntimeRunEntry(
       operatorDecision = input.operatorDecision,
       agentAddonSelection = input.agentAddonSelection,
       eventSink = input.eventSink,
-      skeletonDefinition = input.definition,
+      skeletonDefinition =
+        SkeletonDefinition.byIdAndRevision(
+          admittedExecution.plan.definitionId,
+          admittedExecution.plan.definitionSemanticRevision,
+        ),
       protectedSpecSha256 = input.protectedSpecSha256,
       planIntake = input.planIntake,
     )
@@ -350,6 +365,24 @@ class FeatureTaskRuntimeRunEntry(
     )
   }
 
+  private fun creationReviewMode(
+    input: FeatureTaskRuntimeRunInput,
+    definition: SkeletonDefinition,
+  ): CodeReviewExecutionMode =
+    input.goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
+      ?: if (PhaseSlot.INTAKE in definition.slots) {
+        CodeReviewExecutionMode.AUTO
+      } else {
+        runInvariantsSource.read(Path.of(input.specPath)).requireInvariants().codeReviewMode
+      }
+
+  private fun creationQaSelection(input: FeatureTaskRuntimeRunInput): FeatureTaskRuntimeQaSelection? =
+    if (input.goalContinuation != null) {
+      input.goalContinuation.qaSelection
+    } else {
+      input.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
+    }
+
   private fun open(
     input: FeatureTaskRuntimeRunInput,
     scope: FeatureTaskRouteScope,
@@ -358,26 +391,24 @@ class FeatureTaskRuntimeRunEntry(
     val goalContinuation = input.goalContinuation
     val specPath = Path.of(input.specPath)
     val definition = resolveRunDefinition(input.definition, goalContinuation != null)
-    val reviewMode =
-      goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
-        ?: if (PhaseSlot.INTAKE in definition.slots) {
-          CodeReviewExecutionMode.AUTO
-        } else {
-          runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
-        }
-    val qualityGate = goalContinuation?.qualityGateSelection
-    val qaSelection =
-      if (goalContinuation != null) {
-        goalContinuation.qaSelection
-      } else {
-        input.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
-      }
+    if (input.explicitWorkflowId == null && definition == SkeletonDefinition.GOAL_CHILD_REVISION_5 &&
+      goalContinuation?.parentWorkflowId.isNullOrBlank()
+    ) {
+      onOpenFailure(
+        WorkflowOpenResult.Error(
+          "",
+          "New goal-child runs require a usable parent workflow id before admission.",
+        ),
+      )
+    }
+    val reviewMode = creationReviewMode(input, definition)
+    val qaSelection = creationQaSelection(input)
     val facts =
       PhaseStrategySelectionFacts(
         definition,
         setOfNotNull(
           reviewMode,
-          executionPlans.creationQualityGate(input.repoRoot, qualityGate),
+          executionPlans.creationQualityGate(input.repoRoot, goalContinuation?.qualityGateSelection),
           qaSelection,
         ),
       )
@@ -398,7 +429,7 @@ class FeatureTaskRuntimeRunEntry(
                 repoRoot = input.repoRoot,
                 definition = definition,
                 reviewMode = reviewMode,
-                qualityGate = qualityGate,
+                qualityGate = goalContinuation?.qualityGateSelection,
                 qaSelection = qaSelection,
                 validationDepth = goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
                 timeout = input.timeout,
@@ -427,7 +458,15 @@ class FeatureTaskRuntimeRunEntry(
     admittedExecution: AdmittedFeatureTaskRuntimeExecution,
   ) {
     val goalContinuation = input.goalContinuation
-    val definition = resolveRunDefinition(input.definition, goalContinuation != null)
+    val definition =
+      if (goalContinuation != null) {
+        SkeletonDefinition.byIdAndRevision(
+          admittedExecution.plan.definitionId,
+          admittedExecution.plan.definitionSemanticRevision,
+        )
+      } else {
+        resolveRunDefinition(input.definition, goalContinuation = false)
+      }
     val reviewMode = admittedExecution.reviewMode ?: input.requestedCodeReviewMode
     val qualityGate = admittedExecution.plan.qualityGateSelection
     val facts =
@@ -458,7 +497,11 @@ class FeatureTaskRuntimeRunEntry(
           admittedExecution.plan.stepLaunchAssignments,
           resolved,
         ) { stepId ->
-          FeatureTaskRuntimeAgentResolver.resolve(stepId, input.agentAssignment, input.invokedAgentId).resolvedAgentId
+          FeatureTaskRuntimeAgentResolver.resolve(
+            stepId,
+            input.agentAssignment,
+            input.invokedAgentId,
+          ).resolvedAgentId
         },
       )
     if (expected != current) {

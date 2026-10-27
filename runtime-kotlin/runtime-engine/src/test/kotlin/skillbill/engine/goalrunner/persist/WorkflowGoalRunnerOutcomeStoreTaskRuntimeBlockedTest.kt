@@ -3,11 +3,13 @@ package skillbill.engine.goalrunner.persist
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -73,6 +75,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeBlockedTest {
     val recovered =
       requireNotNull(
         store.recoverAndPersistTerminalOutcome(
+          parentWorkflowId = "wfl-parent",
           workflowId = "wftr-standing-nested-reason",
           issueKey = "SKILL-176.4",
           subtaskId = 4,
@@ -123,6 +126,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeBlockedTest {
     val recovered =
       requireNotNull(
         store.recoverAndPersistTerminalOutcome(
+          parentWorkflowId = "wfl-parent",
           workflowId = "wftr-20260808-175505-c5po",
           issueKey = "SKILL-176.4",
           subtaskId = 4,
@@ -146,6 +150,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeBlockedTest {
     val staleReason =
       "Owned paths already staged outside this workflow; run git restore --staged and retry."
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "wftr-stale-idempotent", "SKILL-176.4", 4)
     workflows.saveFeatureTaskWorkflow(
       blockedContinuationRecord(
         BlockedContinuationRecordFixture(
@@ -211,7 +216,12 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeBlockedTest {
   @Test
   fun `COMPLETE without sha still falls through to the measure branch alongside corroboration`() {
     val workflows = InMemoryWorkflowStates()
-    workflows.saveFeatureTaskWorkflow(completeWithoutShaContinuationRecord("wftr-complete-no-sha"), RUNTIME)
+    seedCurrentParent(workflows, "wftr-complete-no-sha", "SKILL-176.4", 4)
+    workflows.saveFeatureTaskWorkflow(
+      completeWithoutShaContinuationRecord("wftr-complete-no-sha").withSettledLegacyHistorySkip(),
+      RUNTIME,
+    )
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(workflows, "wftr-complete-no-sha", "SKILL-176.4")
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         database = FakeDatabaseSessionFactory(workflows),
@@ -226,6 +236,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeBlockedTest {
     val recovered =
       requireNotNull(
         store.recoverAndPersistTerminalOutcome(
+          parentWorkflowId = "wfl-parent",
           workflowId = "wftr-complete-no-sha",
           issueKey = "SKILL-176.4",
           subtaskId = 4,

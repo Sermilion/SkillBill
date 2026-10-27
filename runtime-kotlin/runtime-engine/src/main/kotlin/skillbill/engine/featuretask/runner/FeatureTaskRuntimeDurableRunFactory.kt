@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDur
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -29,6 +30,7 @@ class FeatureTaskRuntimeDurableRunFactory(
   private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
   private val database: DatabaseSessionFactory,
   private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
+  private val historyDraftStore: GoalRunnerGoalChildHistoryDraftStore,
 ) {
   internal fun create(
     runRequest: FeatureTaskRuntimeRunRequest,
@@ -43,7 +45,7 @@ class FeatureTaskRuntimeDurableRunFactory(
       specSource,
       executionPlan,
       strategies,
-      DurablePhaseRunGoal(goalContinuationRecorder, requireNotNull(runRequest.admittedExecution)),
+      DurablePhaseRunGoal(goalContinuationRecorder, requireNotNull(runRequest.admittedExecution), historyDraftStore),
       DurablePhaseRunSettlements(
         database,
         requireNotNull(runRequest.admittedExecution),

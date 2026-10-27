@@ -95,6 +95,27 @@ class FeatureTaskPhaseSettlementService(
     )
   }
 
+  fun persistAcceptedOutput(
+    workflowId: String,
+    phaseId: String,
+    attempt: Int,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): Boolean {
+    require(isSettleablePhase(phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
+    val result =
+      persist(
+        PersistRequest(
+          workflowId = workflowId,
+          phaseId = phaseId,
+          attempt = attempt,
+          kind = KIND_COMPLETE,
+          envelope = envelope,
+        ),
+        repository,
+      )
+    return result.status == FeatureTaskPhaseSettlementAckStatus.OK
+  }
+
   fun block(request: FeatureTaskPhaseSettlementBlockRequest): FeatureTaskPhaseSettlementAcknowledgment {
     require(isSettleablePhase(request.phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
     require(request.failureDisposition.any { !it.isWhitespace() }) {

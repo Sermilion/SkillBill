@@ -86,6 +86,7 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -171,6 +172,12 @@ private abstract class FeatureTaskRuntimeRunLoopAgentStepBinding(
   }
 
   override fun nextStepIteration(): Int = environment.progress.phase(run.phaseId).nextIteration
+
+  override fun nextGateIteration(): Int =
+    environment.progress.phase(run.phaseId).record
+      ?.takeIf { it.status == WorkflowStepStatus.RUNNING }
+      ?.attemptCount
+      ?: nextStepIteration()
 
   override fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? = environment.recorder.loadResolvedBranch(workflowId)
 

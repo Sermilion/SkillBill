@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.featuretask.slot.writehistory.GoalChildHistoryDraftStrategy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -55,6 +56,10 @@ object SkeletonStrategyBindings {
       SkeletonDefinition.GOAL_CHILD_REVISION_3 to
         goalChildRevision2Bindings + (PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID)),
       SkeletonDefinition.GOAL_CHILD to goalChildRevision2Bindings,
+      SkeletonDefinition.GOAL_CHILD_REVISION_5 to
+        goalChildRevision2Bindings + (
+          PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(GoalChildHistoryDraftStrategy.ID)
+        ),
       SkeletonDefinition.REVIEW to
         mapOf(
           PhaseSlot.STANDALONE_REVIEW to
@@ -79,6 +84,8 @@ object SkeletonStrategyBindings {
         mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentStrategy.ID)),
       SkeletonDefinition.GOAL_ASSESSMENT_FIX to
         mapOf(PhaseSlot.GOAL_ASSESSMENT to PhaseStrategyBinding.Fixed(GoalAssessmentFixStrategy.ID)),
+      SkeletonDefinition.GOAL_HISTORY to
+        mapOf(PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID)),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),

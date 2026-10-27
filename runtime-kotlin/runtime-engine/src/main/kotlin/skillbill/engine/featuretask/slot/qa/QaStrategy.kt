@@ -133,7 +133,7 @@ class QaStrategy(
     val target = run.qaExecution?.target
     if (run.phaseId != entryStep) return runAgentStep(run, state)
     if (target !is QaExecutionTarget.Skipped) {
-      if (run.request.admittedExecution != null) outcomes.recordAttempted(run.request.workflowId)
+      if (run.request.admittedExecution != null) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
       return runAgentStep(run, state)
     }
     return runtimeCompletion(run, state, target.detail, QaReports.skipped(target.reason, target.detail))
@@ -328,7 +328,7 @@ private class QaPreparedRun(
         FeatureTaskRuntimeQaSelection.AUTO -> QaPolicy.AUTO
         FeatureTaskRuntimeQaSelection.OFF -> QaPolicy.OFF
       }
-    if (recordsGoalOutcome) outcomes.recordAttempted(run.request.workflowId)
+    if (recordsGoalOutcome) outcomes.recordAttempted(run.request.qaOutcomeWorkflowId)
     val result =
       execution.withExecution(run.request.repoRoot, policy) { qa -> execute(run.copy(qaExecution = qa)) }
     if (recordsGoalOutcome) {
@@ -338,7 +338,7 @@ private class QaPreparedRun(
         check(output.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA && output.status == "completed") {
           "completed QA step has no accepted completed QA output."
         }
-        recordGoalOutcome(run.request.workflowId, output, result.expected.treeIdentity)
+        recordGoalOutcome(run.request.qaOutcomeWorkflowId, output, result.expected.treeIdentity)
       }
     }
     return result.value

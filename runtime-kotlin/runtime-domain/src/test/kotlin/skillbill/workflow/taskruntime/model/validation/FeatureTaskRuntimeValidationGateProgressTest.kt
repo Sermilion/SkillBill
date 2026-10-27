@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.model.validation
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
@@ -19,7 +20,7 @@ class FeatureTaskRuntimeValidationGateProgressTest {
 
     assertEquals(2, progress.gateRuns.size)
     assertTrue(progress.gateRuns.all { it.legacyUnverified })
-    assertEquals(raw, progress.toArtifactMap())
+    assertEquals(upgradedProgressArtifact(raw), progress.toArtifactMap())
   }
 
   @Test
@@ -32,7 +33,7 @@ class FeatureTaskRuntimeValidationGateProgressTest {
 
     assertTrue(progress.gateRuns.all { it.legacyUnverified })
     assertEquals(listOf("runtime-core|test"), progress.gateRuns.first().executedChecks)
-    assertEquals(raw, progress.toArtifactMap())
+    assertEquals(upgradedProgressArtifact(raw), progress.toArtifactMap())
   }
 
   @Test
@@ -89,6 +90,20 @@ class FeatureTaskRuntimeValidationGateProgressTest {
       ).legacyUnverified,
     )
   }
+
+  private fun upgradedProgressArtifact(raw: Map<String, Any?>): Map<String, Any?> =
+    raw +
+      mapOf(
+        SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION,
+        ValidationEvidencePayloadKeys.TRIAGE_DISPOSITION to "unknown",
+        ValidationEvidencePayloadKeys.PENDING_EXTERNAL_OPERATION to null,
+        ValidationEvidencePayloadKeys.PENDING_EXTERNAL_CHECKPOINT to null,
+        ValidationEvidencePayloadKeys.ACCEPTED_REPAIR_OUTPUTS to emptyList<Any>(),
+        ValidationEvidencePayloadKeys.TERMINAL_OUTCOME to null,
+        ValidationEvidencePayloadKeys.TERMINAL_REASON to null,
+        ValidationEvidencePayloadKeys.TERMINAL_FAILURE_DISPOSITION to null,
+        ValidationEvidencePayloadKeys.TERMINAL_FAILURE_CODE to null,
+      )
 
   private fun legacyRun(outcome: String): Map<String, Any?> =
     linkedMapOf(

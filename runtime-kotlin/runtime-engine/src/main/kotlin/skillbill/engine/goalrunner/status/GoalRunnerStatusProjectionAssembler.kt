@@ -94,7 +94,7 @@ class GoalRunnerStatusProjectionAssembler(
     val acceptances = manifestStore.outOfBandAcceptances(loadedState.parentWorkflowId)
     val manifest =
       reconcileGoalManifest(
-        manifest = loadedState.manifest,
+        state = loadedState,
         authoritativeOutcomes =
           outcomeStore.authoritativeOutcomes(
             loadedState.manifest.issueKey,
@@ -126,8 +126,6 @@ class GoalRunnerStatusProjectionAssembler(
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusProjection? =
     database.read { unit ->
-      require(!request.pruneCheckpointRefs)
-      require(!request.includeCompletedSubtaskValidation || request.completedSubtaskValidationIds != null)
       require(request.completedSubtaskValidationIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
       val subject =
         GoalRunnerStatusSubtaskReader(manifestStore, outcomeStore, unit).read(parentWorkflowId, request)
@@ -191,7 +189,15 @@ class GoalRunnerStatusProjectionAssembler(
   ): List<DecompositionSubtask> =
     database.read { unit ->
       require(subtasks.size <= WorkPaginationLimits.MAX_PAGE_SIZE)
-      GoalRunnerStatusSubtaskReader(manifestStore, outcomeStore, unit).reconcile(parentWorkflowId, request, subtasks)
+      GoalRunnerStatusSubtaskReader(
+        manifestStore,
+        outcomeStore,
+        unit,
+      ).reconcile(
+        parentWorkflowId,
+        request,
+        subtasks,
+      )
     }
 
   internal fun resolveExecutionLiveness(
@@ -461,7 +467,11 @@ class GoalRunnerStatusProjectionAssembler(
       noChangeSubtasks.isNotEmpty() &&
         manifest.subtasks.all {
           it.status.decompositionStatus() in
-            setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE)
+            setOf(
+              DecompositionStatus.COMPLETE,
+              DecompositionStatus.SKIPPED,
+              DecompositionStatus.COMPLETED_NO_CHANGE,
+            )
         } &&
         manifest.subtasks.none { !it.commitSha.isNullOrBlank() }
     if (!finished) return null

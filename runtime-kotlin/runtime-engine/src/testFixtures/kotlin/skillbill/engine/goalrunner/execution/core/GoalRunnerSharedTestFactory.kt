@@ -146,7 +146,7 @@ fun testGoalRunnerStatusService(
         repairCoordinator,
       ),
     repairCoordinator = repairCoordinator,
-    acceptanceCoordinator = GoalRunnerAcceptanceCoordinator(manifestStore, outcomeStore, ports.gitOperations, clock),
+    acceptanceCoordinator = GoalRunnerAcceptanceCoordinator(manifestStore, ports.gitOperations, clock),
     repositoryRoot = testRepositoryRoot,
     projectionAssembler = projectionAssembler,
     resetReplanCoordinator =
@@ -183,7 +183,12 @@ fun testGoalRunnerRepairCoordinator(
 ): GoalRunnerRepairCoordinator =
   GoalRunnerRepairCoordinator(
     manifestStore, phaseRecorder.phaseQuery, ports.workerSupervisor,
-    ports.childRepairStore, outcomeStore, testRepositoryRoot, TestRepositoryEnclosingRoot, clock, ports.diagnostics,
+    ports.childRepairStore,
+    outcomeStore,
+    testRepositoryRoot,
+    TestRepositoryEnclosingRoot,
+    clock,
+    ports.diagnostics,
   )
 
 private val testGoalChildPlanningHydratorPort = GoalChildPlanningHydratorPortAdapter(testHarnessClock)

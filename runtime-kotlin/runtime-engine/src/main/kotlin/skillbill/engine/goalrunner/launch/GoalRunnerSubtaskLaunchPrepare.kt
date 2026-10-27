@@ -334,7 +334,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     return executionPlans.resolveCreation(
       FeatureTaskRuntimeExecutionPlanCreationRequest(
         repoRoot = request.repoRoot,
-        definition = SkeletonDefinition.GOAL_CHILD,
+        definition = SkeletonDefinition.GOAL_CHILD_REVISION_5,
         reviewMode = reviewMode,
         qualityGate = qualityGate,
         validationDepth = ValidationDepth.FULL,
@@ -346,7 +346,7 @@ class GoalRunnerSubtaskLaunchPrepare(
             lookup = strategies,
             facts =
               PhaseStrategySelectionFacts(
-                SkeletonDefinition.GOAL_CHILD,
+                SkeletonDefinition.GOAL_CHILD_REVISION_5,
                 setOfNotNull(reviewMode, assignedQualityGate),
               ),
             inputs =

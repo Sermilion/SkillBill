@@ -54,11 +54,14 @@ internal class GoalRunnerGoalLoop(
         when (selection) {
           is GoalRunnerSelection.Done ->
             terminalReport =
-              finalization.finalizePublication(
-                reconciliation.reconcile(state, args.request, args.ledger),
-                args.request,
-                attemptState.attempted,
-              )
+              finalization.run {
+                requireCompletedChildrenHaveDrafts(state)
+                finalizePublication(
+                  reconciliation.reconcile(state, args.request, args.ledger),
+                  args.request,
+                  attemptState.attempted,
+                )
+              }
           is GoalRunnerSelection.Blocked ->
             blockedSelectionIteration(
               BlockedSelectionIterationArgs(

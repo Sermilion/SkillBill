@@ -2,12 +2,11 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toResetSnapshot
+import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptanceEvidence
-import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -22,7 +21,6 @@ import java.time.ZoneOffset
 @Inject
 class GoalRunnerAcceptanceCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
-  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val gitOperations: WorkflowGitOperations,
   private val clock: Clock,
 ) {
@@ -45,27 +43,19 @@ class GoalRunnerAcceptanceCoordinator(
         reason = request.reason,
         acceptedAt = clock.instant().atOffset(ZoneOffset.UTC).toString(),
       )
-    manifestStore.persistOutOfBandAcceptance(loaded.parentWorkflowId, acceptance)
-    val refreshed = manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) ?: loaded
-    val reconciled =
-      reconcileGoalManifest(
-        manifest = refreshed.manifest,
-        authoritativeOutcomes =
-          outcomeStore.authoritativeOutcomes(
-            refreshed.manifest.issueKey,
-            refreshed.parentWorkflowId,
-          ),
-        acceptances = manifestStore.outOfBandAcceptances(refreshed.parentWorkflowId),
-        outcomeStore = outcomeStore,
-      )
-    val saved = manifestStore.save(refreshed.copy(manifest = reconciled))
+    val restored =
+      when (val result = manifestStore.restoreOutOfBandAcceptance(loaded, acceptance)) {
+        is GoalChildHistoryAcceptanceRestoreResult.Refused -> return rejected(request, result.reason)
+        is GoalChildHistoryAcceptanceRestoreResult.Restored -> result
+      }
+    val saved = restored.state
     return GoalRunnerAcceptResult.Accepted(
       issueKey = saved.manifest.issueKey,
       parentWorkflowId = saved.parentWorkflowId,
       subtaskId = acceptance.subtaskId,
-      commitSha = acceptance.commitSha,
-      reason = acceptance.reason,
-      acceptedAt = acceptance.acceptedAt,
+      commitSha = restored.acceptance.commitSha,
+      reason = restored.acceptance.reason,
+      acceptedAt = restored.acceptance.acceptedAt,
       after = saved.manifest.toResetSnapshot(),
     )
   }
@@ -120,9 +110,10 @@ class GoalRunnerAcceptanceCoordinator(
         subtask.blockedReason == null &&
         subtask.lastResumableStep == null
     return when {
-      request.restoreAfterHardReset && !clearedByHardReset ->
+      request.restoreAfterHardReset && !clearedByHardReset &&
+        subtask.status.decompositionStatus() != DecompositionStatus.COMPLETE ->
         "Subtask ${request.subtaskId} is not in the cleared reset state required for acceptance restoration."
-      subtask.status.decompositionStatus() == DecompositionStatus.COMPLETE ->
+      subtask.status.decompositionStatus() == DecompositionStatus.COMPLETE && !request.restoreAfterHardReset ->
         "Subtask ${request.subtaskId} is already complete."
       else -> null
     }

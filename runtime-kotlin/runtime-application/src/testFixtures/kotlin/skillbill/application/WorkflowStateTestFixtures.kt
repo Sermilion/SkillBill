@@ -17,6 +17,7 @@ import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
 import skillbill.ports.work.EmptyWorkListRepository
+import skillbill.ports.work.WorkListRepository
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
@@ -59,6 +60,7 @@ class FakeDatabaseSessionFactory(
     EmptyGoalPlanningPreparationRepository,
   private val goalRunnerControls: GoalRunnerControlRepository =
     EmptyGoalRunnerControlRepository,
+  private val workList: WorkListRepository = EmptyWorkListRepository,
 ) : DatabaseSessionFactory {
   override fun resolveDbPath(): Path = fakeDbPath
 
@@ -86,7 +88,7 @@ class FakeDatabaseSessionFactory(
         get() = error("TelemetryReconciliationRepository is not exercised in WorkflowServiceTest.")
       override val telemetryOutbox: TelemetryOutboxRepository
         get() = error("TelemetryOutboxRepository is not exercised in WorkflowServiceTest.")
-      override val workList = EmptyWorkListRepository
+      override val workList = this@FakeDatabaseSessionFactory.workList
       override val goalPlanningPreparations = planningPreparations
       override val goalRunnerControls = this@FakeDatabaseSessionFactory.goalRunnerControls
     }

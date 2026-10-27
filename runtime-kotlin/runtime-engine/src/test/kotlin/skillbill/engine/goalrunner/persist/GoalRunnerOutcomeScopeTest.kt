@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.persist
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
@@ -13,6 +14,7 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,6 +24,7 @@ class GoalRunnerOutcomeScopeTest {
   @Test
   fun `completed child from another goal cannot replace the current validating child in status`() {
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "current-child")
     workflows.saveFeatureTaskWorkflow(child("current-child", "wfl-parent"), RUNTIME)
     workflows.saveFeatureTaskWorkflow(child("old-child", "old-parent", complete = true), RUNTIME)
     val database = FakeDatabaseSessionFactory(workflows)
@@ -55,6 +58,7 @@ class GoalRunnerOutcomeScopeTest {
   @Test
   fun `reconciliation neither imports another goal completion nor blocks its running children`() {
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "current-child")
     workflows.saveFeatureTaskWorkflow(child("current-child", "wfl-parent"), RUNTIME)
     workflows.saveFeatureTaskWorkflow(child("old-child", "old-parent", complete = true), RUNTIME)
     workflows.saveFeatureTaskWorkflow(child("other-running-child", "other-parent"), RUNTIME)
@@ -79,8 +83,10 @@ class GoalRunnerOutcomeScopeTest {
   @Test
   fun `completed sibling within the same goal remains authoritative`() {
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "completed-child")
     workflows.saveFeatureTaskWorkflow(child("current-child", "wfl-parent"), RUNTIME)
     workflows.saveFeatureTaskWorkflow(child("completed-child", "wfl-parent", complete = true), RUNTIME)
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(workflows, "completed-child", "SKILL-87.1")
     val outcomes = testWorkflowGoalRunnerOutcomeStore(FakeDatabaseSessionFactory(workflows))
 
     val completed = requireNotNull(outcomes.authoritativeOutcomes("SKILL-87.1", "wfl-parent")[1])
@@ -116,6 +122,6 @@ class GoalRunnerOutcomeScopeTest {
       workflowStatus = if (complete) "completed" else "running",
       currentStepId = if (complete) "commit_push" else "validate",
       artifactsJson = JsonCodec.valueToJsonString(artifacts),
-    )
+    ).let { if (complete) it.withSettledLegacyHistorySkip() else it }
   }
 }

@@ -301,7 +301,9 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
     val definitionId = definition[PlanKeys.ID] as? String ?: return null
     val gate = canonical[PlanKeys.QUALITY_GATE_SELECTION] as? String
     return when {
-      definitionId == "standalone" && gate == null -> AcceptanceCriterionRepairAdoptionComposition.STANDALONE.wireValue
+      definitionId == "standalone" &&
+        (gate == null || gate == FeatureTaskRuntimeQualityGateSelection.VALIDATE.wireValue) ->
+        AcceptanceCriterionRepairAdoptionComposition.STANDALONE.wireValue
       definitionId == "goal-child" && gate == FeatureTaskRuntimeQualityGateSelection.BUILD.wireValue ->
         AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_BUILD.wireValue
       definitionId == "goal-child" && gate == FeatureTaskRuntimeQualityGateSelection.VALIDATE.wireValue ->

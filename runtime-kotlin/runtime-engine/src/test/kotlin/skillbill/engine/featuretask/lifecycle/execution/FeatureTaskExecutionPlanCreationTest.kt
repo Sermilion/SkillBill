@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
+import skillbill.engine.goalrunner.history.GoalChildHistoryEvidenceStore
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
@@ -32,6 +33,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.persist.OperatorBlockedPhaseReopenRequest
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.testWorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPortAdapter
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
@@ -40,6 +42,7 @@ import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanEr
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.seedLegacySharedPreplan
 import skillbill.infrastructure.sqlite.seedLegacySubtaskPlan
@@ -248,7 +251,13 @@ class FeatureTaskExecutionPlanCreationTest {
         assertEquals(before, unit.workflowStates.getFeatureTaskWorkflow(PARENT))
         assertNull(unit.workflowStates.getFeatureTaskWorkflow(CHILD))
         assertNull(unit.workflowStates.getFeatureTaskExecutionIdentity(CHILD))
-        assertEquals(listOf(PARENT), unit.workflowStates.list(WorkflowFamily.TASK_RUNTIME, 100).map { it.workflowId })
+        assertEquals(
+          listOf(PARENT),
+          unit.workflowStates.list(
+            WorkflowFamily.TASK_RUNTIME,
+            100,
+          ).map { it.workflowId },
+        )
         assertEquals(
           fixture.preplan,
           unit.goalPlanningPreparations.findSharedPreplan(fixture.identity).foundCheckpoint()?.preplanPayload,
@@ -447,7 +456,11 @@ class FeatureTaskExecutionPlanCreationTest {
         database.read { unit ->
           assertEquals(before, unit.workflowStates.getFeatureTaskWorkflow(workflowId), changedFact)
           assertEquals(identity, unit.workflowStates.getFeatureTaskExecutionIdentity(workflowId), changedFact)
-          assertEquals(ownerBefore, unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId), changedFact)
+          assertEquals(
+            ownerBefore,
+            unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId),
+            changedFact,
+          )
         }
         assertEquals(0, execution.launches)
       }
@@ -542,7 +555,13 @@ class FeatureTaskExecutionPlanCreationTest {
         fixture.save(database, fixture.setup.copy(executionPlan = null))
       }
       database.read {
-        assertEquals(before, it.workflowStates.list(WorkflowFamily.TASK_RUNTIME, 100).map { row -> row.toRecord() })
+        assertEquals(
+          before,
+          it.workflowStates.list(
+            WorkflowFamily.TASK_RUNTIME,
+            100,
+          ).map { row -> row.toRecord() },
+        )
       }
     }
 
@@ -596,6 +615,12 @@ class FeatureTaskExecutionPlanCreationTest {
         testHarnessClock,
         TestRepositoryEnclosingRoot,
         testProjectStore,
+        GoalChildHistoryEvidenceStore(
+          testWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
+          FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+        ),
+        testWorkflowGoalRunnerQualityExecutionStore(database, testWorkflowSnapshotValidator),
       )
 
     fun store() =

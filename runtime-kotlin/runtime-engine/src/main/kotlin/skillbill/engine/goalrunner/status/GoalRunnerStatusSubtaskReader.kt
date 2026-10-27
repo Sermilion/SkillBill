@@ -2,10 +2,10 @@ package skillbill.engine.goalrunner.status
 
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.engine.goalrunner.manifest.GoalManifestReconciliationContext
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.goalDependencySatisfied
 import skillbill.engine.goalrunner.manifest.planWorkflowPlanningProgress
-import skillbill.engine.goalrunner.manifest.reconcileGoalSubtasks
 import skillbill.engine.goalrunner.manifest.selectGoalCurrentSubtask
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
@@ -40,7 +40,13 @@ internal class GoalRunnerStatusSubtaskReader(
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusSubtasks? {
     val first =
-      manifests.statusManifestPage(parentId, request.issueKey, 0, WorkPaginationLimits.MAX_PAGE_SIZE, request.repoRoot)
+      manifests.statusManifestPage(
+        parentId,
+        request.issueKey,
+        0,
+        WorkPaginationLimits.MAX_PAGE_SIZE,
+        request.repoRoot,
+      )
         ?: return null
     val accumulator = SubtaskAccumulator()
     val planWorkflowPlanned = unit.planWorkflowPlanningProgress(parentId)?.plannedSubtaskIds.orEmpty()
@@ -82,13 +88,16 @@ internal class GoalRunnerStatusSubtaskReader(
     subtasks: List<DecompositionSubtask>,
   ): List<DecompositionSubtask> {
     val ids = subtasks.mapTo(mutableSetOf()) { it.id }
-    return reconcileGoalSubtasks(
-      request.issueKey,
-      subtasks,
-      outcomes.authoritativeOutcomesForSubtasks(request.issueKey, parentId, ids),
-      unit.goalRunnerControls.outOfBandAcceptancesForSubtasks(parentId, ids),
-      outcomes,
-    )
+    val context =
+      GoalManifestReconciliationContext(
+        request.issueKey,
+        parentId,
+        outcomes.authoritativeOutcomesForSubtasks(unit, request.issueKey, parentId, ids),
+        unit.goalRunnerControls.outOfBandAcceptancesForSubtasks(parentId, ids),
+        outcomes,
+        unit,
+      )
+    return subtasks.map(context::reconcile)
   }
 
   private fun dependenciesSatisfied(
@@ -102,7 +111,15 @@ internal class GoalRunnerStatusSubtaskReader(
       val dependencies = page.entries.map { it.dependency }
       val required = dependencies.filterNot { it.optional && it.skipped }
       val ids = required.mapTo(mutableSetOf()) { it.subtaskId }
-      val resolved = reconcile(parentId, request, unit.workList.goalSubtasksByIds(parentId, ids)).associateBy { it.id }
+      val resolved =
+        reconcile(
+          parentId,
+          request,
+          unit.workList.goalSubtasksByIds(
+            parentId,
+            ids,
+          ),
+        ).associateBy { it.id }
       if (!dependencies.all {
           goalDependencySatisfied(it, resolved[it.subtaskId]?.status.decompositionStatus())
         }
@@ -151,7 +168,7 @@ internal class GoalRunnerStatusSubtaskReader(
       }
       val selectedValidation =
         request.includeCompletedSubtaskValidation &&
-          subtask.id in request.completedSubtaskValidationIds.orEmpty()
+          (request.completedSubtaskValidationIds == null || subtask.id in request.completedSubtaskValidationIds)
       if (selectedValidation && status == DecompositionStatus.COMPLETE) {
         validation += subtask
       }
@@ -197,7 +214,8 @@ internal class GoalRunnerStatusSubtaskReader(
           planningBlock?.id,
           planningBlock?.blockedReason,
         )
-      val selected = request.completedSubtaskValidationIds.orEmpty() + listOfNotNull(current?.id)
+      val selected =
+        (request.completedSubtaskValidationIds ?: validation.map { it.id }.toSet()) + listOfNotNull(current?.id)
       val acceptances =
         selected.chunked(WorkPaginationLimits.MAX_PAGE_SIZE)
           .flatMap { unit.goalRunnerControls.outOfBandAcceptancesForSubtasks(parentId, it.toSet()).entries }

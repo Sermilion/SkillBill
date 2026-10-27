@@ -7,13 +7,5 @@
     "invocation_id": "__NORMALIZED_INVOCATION_ID__",
     "review_result": null,
     "status": "completed",
-    "value": {
-        "contract_version": "0.7",
-        "phase_id": "validate",
-        "produced_outputs": {
-            "value": "Project checks passed.\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test"
-        },
-        "status": "completed",
-        "summary": "Project checks passed."
-    }
+    "value": "Project checks passed.\nTest probe FooTest.guards: killed guards src/Foo.kt:1 repaired no reason removing the guard failed the test"
 }

@@ -2,11 +2,9 @@ package skillbill.engine.featuretask.phaserun
 
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
-import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
-import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
@@ -15,14 +13,20 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFo
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunRecords
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
+import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.state.FeatureTaskRuntimeImplementationTurnWrite
 import skillbill.engine.featuretask.slot.state.PhaseImplementationProgressRecords
+import skillbill.engine.featuretask.slot.state.PhaseLaunchRecords
 import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.goalrunner.model.quality.GoalQualityAcceptedEnvelope
+import skillbill.goalrunner.model.quality.GoalQualityAcceptedOutput
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.WorkflowStepStatus
@@ -31,15 +35,13 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEn
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
-import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeAppendImplementationAttempt
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -55,8 +57,13 @@ internal class InMemoryPhaseRunRecords private constructor(
   private val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
   private val phaseRecords: LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>,
   override val standaloneMonitorLedger: StandaloneMonitorLedger?,
+  private val acceptedGoalRepairOutput: ((String, Int, String) -> Unit)?,
+  private val goalQualityProgressSink: ((GoalQualityPhaseProgress) -> Boolean)?,
+  private val initialGoalQualityProgress: GoalQualityPhaseProgress?,
+  private val goalQualityWorkflowId: String,
 ) : PhaseRunRecords,
   StandaloneMonitorRunRecords,
+  PhaseLaunchRecords by InMemoryPhaseLaunchRecords(),
   PhasePlanRecords by InMemoryPhasePlanRecords(phaseRecords),
   FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses(),
   PhaseImplementationProgressRecords by InMemoryImplementationProgressRecords(clock, phaseRecords) {
@@ -65,8 +72,36 @@ internal class InMemoryPhaseRunRecords private constructor(
     resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
     standaloneMonitorLedger: StandaloneMonitorLedger? = null,
     initialQaRepairState: QaRepairState? = null,
-  ) : this(clock, resolvedBranch, LinkedHashMap(), standaloneMonitorLedger) {
-    qaState = initialQaRepairState
+    acceptedGoalRepairOutput: ((String, String, Int, String) -> Unit)? = null,
+    invocationId: String = "",
+    goalQualityPhaseProgress: GoalQualityPhaseProgress? = null,
+    persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress) -> Boolean)? = null,
+    goalQualityWorkflowId: String = "",
+  ) : this(
+    clock,
+    resolvedBranch,
+    LinkedHashMap(goalQualityPhaseProgress?.phaseRecords.orEmpty()),
+    standaloneMonitorLedger,
+    acceptedGoalRepairOutput?.let { sink -> { phase, attempt, output -> sink(phase, invocationId, attempt, output) } },
+    persistGoalQualityPhaseProgress,
+    goalQualityPhaseProgress,
+    goalQualityWorkflowId,
+  ) {
+    qaState = goalQualityPhaseProgress?.qaRepairState ?: initialQaRepairState
+    goalQualityPhaseProgress?.let { progress ->
+      phaseLedger.addAll(progress.phaseLedger)
+      progress.acceptedOutputs.forEach { acceptedOutputs[it.phaseId] = it.output }
+      progress.buildGateProgress?.let {
+        currentBuildGateProgressKey = progress.buildGateProgressKey
+        progress.buildGateProgressKey?.let { key -> buildGateProgress[key] = it.detached() }
+      }
+      progress.validationGateProgress?.let {
+        currentValidationGateProgressKey = progress.validationGateProgressKey
+        progress.validationGateProgressKey?.let { key -> validationGateProgress[key] = it.detached() }
+      }
+      verificationCheckpoint = progress.verificationCheckpoint?.detachedDispositions()
+      verificationBoundary = progress.verificationBoundary?.detachedBoundary()
+    }
   }
 
   val acceptedOutputs = mutableMapOf<String, String>()
@@ -74,11 +109,17 @@ internal class InMemoryPhaseRunRecords private constructor(
   private val phaseLedger = mutableListOf<FeatureTaskRuntimePhaseLedgerEntry>()
   private val validationGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
   private val buildGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
+  private var currentBuildGateProgressKey: String? = null
+  private var currentValidationGateProgressKey: String? = null
   private val unaddressedLedger = mutableListOf<UnaddressedFinding>()
   private var verificationCheckpoint: List<FeatureTaskRuntimeFindingVerificationDisposition>? = null
   private var verificationBoundary: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? = null
   private var reviewGeneration: Int = 0
   private var qaState: QaRepairState? = null
+  private var qualityProgressRevision: Long = initialGoalQualityProgress?.revision ?: 0
+
+  private val acceptedOccurrences = initialGoalQualityProgress?.acceptedOutputs?.toMutableList() ?: mutableListOf()
+  private val acceptedEnvelopes = initialGoalQualityProgress?.acceptedEnvelopes?.toMutableList() ?: mutableListOf()
 
   override fun loadQaRepairState(workflowId: String): QaRepairState? = qaState
 
@@ -125,16 +166,48 @@ internal class InMemoryPhaseRunRecords private constructor(
   }
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
+    val existing = phaseRecords[request.phaseId]
+    if (goalQualityProgressSink != null && existing?.status == WorkflowStepStatus.RUNNING &&
+      existing.attemptCount == request.attemptCount
+    ) {
+      val replacement = recoverPhaseStart(request, existing, phaseLedger, goalQualityWorkflowId)
+      if (replacement == null) {
+        return RequiredPhaseWrite.Rejected(
+          RequiredPhaseWriteKind.START,
+          request.workflowId,
+          request.phaseId,
+          request.attemptCount,
+        )
+      }
+      if (replacement == existing) return RequiredPhaseWrite.Acknowledged
+      val proposed =
+        goalQualityProgress().copy(
+          phaseRecords = phaseRecords + (request.phaseId to replacement.detached()),
+        )
+      persistGoalQualityProgress(proposed)
+      phaseRecords[request.phaseId] = replacement.detached()
+      return RequiredPhaseWrite.Acknowledged
+    }
     recordPhaseState(request)
-    phaseLedger += phaseLedgerEntry(FeatureTaskRuntimePhaseLedgerAction.START, request)
+    phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.START, request)
+    persistGoalQualityProgress()
     return RequiredPhaseWrite.Acknowledged
   }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
     request.normalizedOutput?.qaRepairState?.let { qaState = it }
-    request.normalizedOutput?.output?.value?.let { acceptedOutputs[request.phaseId] = it }
+    (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)?.let {
+      acceptedOutputs[request.phaseId] = it
+    }
     recordPhaseState(request)
-    phaseLedger += phaseLedgerEntry(FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
+    phaseLedger += phaseLedgerEntry(clock, phaseLedger.size + 1, FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
+    (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)?.let {
+      acceptedOccurrences += GoalQualityAcceptedOutput(request.phaseId, request.attemptCount, it)
+    }
+    persistGoalQualityProgress()
+    (request.normalizedOutput?.output?.value ?: request.outputArtifact)?.takeIf(String::isNotBlank)?.let { output ->
+      acceptedGoalRepairOutput?.invoke(request.phaseId, request.attemptCount, output)
+    }
     return RequiredPhaseWrite.Acknowledged
   }
 
@@ -142,6 +215,18 @@ internal class InMemoryPhaseRunRecords private constructor(
 
   override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord> =
     phaseRecords.mapValues { (_, record) -> record.detached() }.toMap()
+
+  fun identifiedCompletedOutputs(stepIds: List<String>): List<PhaseRunCompletedOutput> =
+    if (goalQualityProgressSink != null) {
+      acceptedOccurrences.map { PhaseRunCompletedOutput(it.phaseId, it.occurrence, it.output) }
+        .filter { it.phaseId in stepIds }
+    } else {
+      stepIds.mapNotNull { phaseId ->
+        phaseRecords[phaseId]?.takeIf { it.status == WorkflowStepStatus.COMPLETED }
+          ?.let { acceptedOutputs[phaseId] }?.takeIf(String::isNotBlank)
+          ?.let { output -> PhaseRunCompletedOutput(phaseId, phaseRecords.getValue(phaseId).attemptCount, output) }
+      }
+    }
 
   override fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
     recordCompletedPhase(completion.phaseState) == RequiredPhaseWrite.Acknowledged
@@ -200,6 +285,7 @@ internal class InMemoryPhaseRunRecords private constructor(
     selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
   ): Boolean {
     verificationBoundary = selections.detachedBoundary()
+    persistGoalQualityProgress()
     return true
   }
 
@@ -208,27 +294,9 @@ internal class InMemoryPhaseRunRecords private constructor(
     dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
   ): Boolean {
     verificationCheckpoint = dispositions.detachedDispositions()
+    persistGoalQualityProgress()
     return true
   }
-
-  override fun recordPhaseBriefing(
-    workflowId: String,
-    briefing: FeatureTaskRuntimePhaseLaunchBriefing,
-    sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
-    attempt: Int,
-  ): RequiredPhaseWrite = RequiredPhaseWrite.Acknowledged
-
-  override fun recordProjectionRejection(
-    context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
-    repositoryCheckpointFingerprint: String?,
-  ): Boolean = true
-
-  override fun recordProjectionRejection(rejection: FeatureTaskRuntimeProjectionRejection): Boolean = true
-
-  override fun validateHandoffDeclarations(declarations: List<PhaseHandoffProjectionDeclaration>) = Unit
-
-  override fun loadDeliveredProjections(workflowId: String): Map<String, FeatureTaskRuntimeDeliveredProjectionRecord> =
-    emptyMap()
 
   override fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     validationGateProgress[workflowId]?.detached()
@@ -238,6 +306,8 @@ internal class InMemoryPhaseRunRecords private constructor(
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
     validationGateProgress[workflowId] = progress.detached()
+    currentValidationGateProgressKey = workflowId
+    persistGoalQualityProgress()
   }
 
   override fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
@@ -248,6 +318,8 @@ internal class InMemoryPhaseRunRecords private constructor(
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
     buildGateProgress[workflowId] = progress.detached()
+    currentBuildGateProgressKey = workflowId
+    persistGoalQualityProgress()
   }
 
   override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean {
@@ -263,22 +335,72 @@ internal class InMemoryPhaseRunRecords private constructor(
         edgeIteration = request.edgeIteration,
         blockedReason = request.blockedReason,
       )
+    persistGoalQualityProgress()
+    return true
+  }
+
+  fun loadAcceptedEnvelope(
+    phaseId: String,
+    attempt: Int,
+  ): FeatureTaskRuntimeWorkflowArtifactMap? =
+    acceptedEnvelopes.lastOrNull { it.phaseId == phaseId && it.attempt == attempt }?.envelope
+
+  fun recordAcceptedEnvelope(
+    phaseId: String,
+    attempt: Int,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): Boolean {
+    val existing = acceptedEnvelopes.singleOrNull { it.phaseId == phaseId && it.attempt == attempt }
+    if (existing != null) return existing.envelope == envelope
+    acceptedEnvelopes += GoalQualityAcceptedEnvelope(phaseId, attempt, envelope)
+    return persistGoalQualityProgress()
+  }
+
+  fun clearAcceptedEnvelope(
+    phaseId: String,
+    attempt: Int,
+  ): Boolean {
+    val removed = acceptedEnvelopes.removeAll { it.phaseId == phaseId && it.attempt == attempt }
+    return !removed || persistGoalQualityProgress()
+  }
+
+  fun goalQualityProgress(
+    terminalBlockedStep: String? = null,
+    terminalBlockedReason: String? = null,
+    terminalCompleted: Boolean = false,
+  ): GoalQualityPhaseProgress =
+    GoalQualityPhaseProgress(
+      phaseRecords = phaseRecords.mapValues { (_, record) -> record.detached() },
+      phaseLedger = phaseLedger.toList(),
+      acceptedOutputs = acceptedOccurrences.toList(),
+      acceptedEnvelopes = acceptedEnvelopes.toList(),
+      qaRepairState = qaState,
+      buildGateProgress = currentBuildGateProgressKey?.let(buildGateProgress::get)?.detached(),
+      buildGateProgressKey = currentBuildGateProgressKey,
+      validationGateProgress = currentValidationGateProgressKey?.let(validationGateProgress::get)?.detached(),
+      validationGateProgressKey = currentValidationGateProgressKey,
+      verificationCheckpoint = verificationCheckpoint?.detachedDispositions(),
+      verificationBoundary = verificationBoundary?.detachedBoundary(),
+      terminalBlockedStep = terminalBlockedStep,
+      terminalBlockedReason = terminalBlockedReason,
+      terminalCompleted = terminalCompleted,
+      revision = qualityProgressRevision,
+    )
+
+  private fun persistGoalQualityProgress(progress: GoalQualityPhaseProgress = goalQualityProgress()): Boolean {
+    val sink = goalQualityProgressSink ?: return true
+    val proposed = progress.copy(revision = qualityProgressRevision + 1)
+    if (!sink(proposed)) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+        "Required goal-quality phase progress was not accepted.",
+      )
+    }
+    qualityProgressRevision = proposed.revision
     return true
   }
 
   override fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry> = phaseLedger.toList()
-
-  private fun phaseLedgerEntry(
-    action: FeatureTaskRuntimePhaseLedgerAction,
-    request: FeatureTaskRuntimePhaseStateRequest,
-  ) = FeatureTaskRuntimePhaseLedgerEntry(
-    action = action,
-    sequenceNumber = phaseLedger.size + 1,
-    timestamp = clock.instant(),
-    phaseId = request.phaseId,
-    attemptCount = request.attemptCount,
-    resolvedAgentId = request.resolvedAgentId,
-  )
 
   override fun appendQuarantineEntry(
     workflowId: String,
@@ -419,3 +541,87 @@ private fun FeatureTaskRuntimeValidationGateProgress.detached() =
     completeFindings = completeFindings.map { it.toMap() },
     lastAgentUnfixedCriteria = lastAgentUnfixedCriteria.toList(),
   )
+
+private fun phaseLedgerEntry(
+  clock: Clock,
+  sequenceNumber: Int,
+  action: FeatureTaskRuntimePhaseLedgerAction,
+  request: FeatureTaskRuntimePhaseStateRequest,
+) = FeatureTaskRuntimePhaseLedgerEntry(
+  action = action,
+  sequenceNumber = sequenceNumber,
+  timestamp = clock.instant(),
+  phaseId = request.phaseId,
+  attemptCount = request.attemptCount,
+  resolvedAgentId = request.resolvedAgentId,
+)
+
+private fun recoverPhaseStart(
+  request: FeatureTaskRuntimePhaseStateRequest,
+  existing: FeatureTaskRuntimePhaseRecord,
+  ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+  workflowId: String,
+): FeatureTaskRuntimePhaseRecord? {
+  val expected = featureTaskRuntimePhaseRecordFor(request, existing, existing.startedAt)
+  val sameIdentity =
+    request.workflowId == workflowId && request.phaseId == existing.phaseId &&
+      request.status == STATUS_RUNNING && !request.finished
+  val unfinished =
+    existing.finishedAt == null && existing.resolvedAgentId == request.resolvedAgentId &&
+      unfinishedPhaseStart(request, existing, ledger)
+  val sameRecord =
+    expected.copy(
+      launchedModel = existing.launchedModel,
+      launchedEffort = existing.launchedEffort,
+    ) ==
+      existing.copy(
+        fileManifestBefore = existing.fileManifestBefore.ifEmpty { expected.fileManifestBefore },
+        fileManifestAfter = existing.fileManifestAfter.ifEmpty { expected.fileManifestAfter },
+        fileManifestIntroduced = existing.fileManifestIntroduced.ifEmpty { expected.fileManifestIntroduced },
+      )
+  if (!sameIdentity || !unfinished) return null
+  if (!sameRecord || !compatibleLaunchMetadata(request, existing, expected)) return null
+  return expected.copy(
+    launchedModel = if (request.launchOutcomeKnown) expected.launchedModel else existing.launchedModel,
+    launchedEffort = if (request.launchOutcomeKnown) expected.launchedEffort else existing.launchedEffort,
+  )
+}
+
+private fun compatibleLaunchMetadata(
+  request: FeatureTaskRuntimePhaseStateRequest,
+  existing: FeatureTaskRuntimePhaseRecord,
+  expected: FeatureTaskRuntimePhaseRecord,
+): Boolean {
+  val model = existing.launchedModel == null || existing.launchedModel == expected.launchedModel
+  val effort = existing.launchedEffort == null || existing.launchedEffort == expected.launchedEffort
+  return !request.launchOutcomeKnown || (model && effort)
+}
+
+private fun unfinishedPhaseStart(
+  request: FeatureTaskRuntimePhaseStateRequest,
+  existing: FeatureTaskRuntimePhaseRecord,
+  ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+): Boolean {
+  val starts =
+    ledger.filter {
+      it.phaseId == request.phaseId && it.attemptCount == request.attemptCount &&
+        it.action == FeatureTaskRuntimePhaseLedgerAction.START
+    }
+  val start = starts.lastOrNull() ?: return false
+  val sameAgent =
+    starts.all { it.resolvedAgentId == existing.resolvedAgentId } &&
+      start.resolvedAgentId == request.resolvedAgentId
+  val hasTerminal =
+    ledger.any { entry ->
+      val sameAttempt = entry.phaseId == request.phaseId && entry.attemptCount == request.attemptCount
+      val terminal =
+        entry.action in
+          setOf(
+            FeatureTaskRuntimePhaseLedgerAction.BLOCKED,
+            FeatureTaskRuntimePhaseLedgerAction.PAUSED,
+            FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+          )
+      sameAttempt && entry.sequenceNumber > start.sequenceNumber && terminal
+    }
+  return sameAgent && !hasTerminal
+}

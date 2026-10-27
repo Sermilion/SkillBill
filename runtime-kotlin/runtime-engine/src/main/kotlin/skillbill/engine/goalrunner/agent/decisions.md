@@ -1,5 +1,31 @@
 # goalrunner boundary decisions
 
+## [2026-10-27] Write goal boundary memory after final repairs
+Context: SKILL-446 child drafts precede goal QA and validation repairs, so child-time file writes cannot describe the final published change.
+Decision: Run the existing boundary writer once in goal finalization after existing final checks and before commit and PR. Supply manifest-ordered drafts, explicit skips, stable identities and final repair context; honor recorded legacy dispositions.
+Reason: The ordinary writer already owns boundary selection, overlap removal and supersession policy. Reusing it includes final repairs without adding another quality cycle or republishing legacy child history.
+Alternatives considered: Reconstructing narrative from transcripts or Git ancestry and introducing a per-entry edit protocol are outside the spec's producer-owned draft design.
+
+## [2026-10-27] Persist final repair prose before acknowledging completion
+Context: A goal QA or validation run can accept a repair and then warn, block or stop before its in-memory result returns.
+Decision: Persist identified accepted repair prose under the parent at settlement, reconcile returned outputs without duplicate occurrences, and retain warnings separately. Required save failures stop publication even when ordinary QA failures warn and continue.
+Reason: Capturing only returned phase results loses repairs across interruption. The bounded attempt ledger and execution archives cannot replace producer-owned durable prose for the final writer.
+
+## [2026-10-27] Reuse writer completion against its post-write contents
+Context: The history writer changes repository files, and finalization can stop after those edits or after accepted writer completion.
+Decision: Save accepted output with ordered-input and pre-writer content fingerprints plus post-writer content identity. Reuse only when inputs and current post-writer contents match; otherwise invoke the writer against current files and stable references.
+Reason: Comparing only pre-writer contents invalidates the writer's own edits on every retry. Treating an interrupted edit or synthetic head receipt as completion could publish without accepted settlement. Current-file inspection follows existing duplicate-avoidance policy without promising semantic deduplication.
+
+## [2026-10-27] Save child history drafts before completion
+Context: Goal children must leave history for final publication, but scratch cleanup and the bounded attempt ledger can remove child state before finalization.
+Decision: Store a validated draft or skip in a separate parent-owned durable artifact before authoritative phase settlement, and require it before child completion or scratch deletion. Keep recorded older revisions on their original history strategies.
+Reason: A best-effort ledger write cannot guarantee the draft survives completion or trimming. Idempotent replay recovers a save interrupted before settlement, while conflicting payloads must stop rather than replace accepted evidence. Older children may already have written or skipped history, so fabricating drafts would change their recorded disposition.
+
+## [2026-10-26] Preserve child history evidence before deleting workflow rows
+Context: Hard reset and scoped recovery delete child workflow rows. A commit and a parent draft alone cannot prove the deleted child's definition, continuation, or legacy history disposition.
+Decision: The parent workflow owns versioned `goal_child_history_evidence` records outside the bounded attempt ledger. Each record retains the actual execution plan, continuation, history phase record and step disposition, and original acceptance association. Reset saves evidence and clears progress in one SQLite transaction. Restoration validates the preserved definition and disposition, then writes the acceptance, restored reference, and completed projection in one transaction. The restored reference remains separate from the live workflow ID. New admission and scoped deletion retire restoration eligibility and clear the selected acceptance while retaining historical evidence. Already-deleted children without evidence remain refused.
+Reason: The runtime must preserve actual legacy writes and skips without manufacturing drafts, and must not promote a new child using an older child's acceptance. Additive artifact families need no SQL table migration; absent evidence on older parent records grants no restoration authority.
+Evidence: `GoalChildHistoryRecoveryTest` covers reopen, rollback, legacy retention, repeated restoration, retirement, and missing or malformed evidence.
 ## [2026-10-25] Adopt an unrecorded assessment-fix commit by parent and paths, not tree identity
 Context: A crash between a round's fix commit and its record write would otherwise make resume commit the same fix twice.
 Decision: Adopt an existing commit only when its single parent equals the round head sha and its changed paths equal the recorded changed files.

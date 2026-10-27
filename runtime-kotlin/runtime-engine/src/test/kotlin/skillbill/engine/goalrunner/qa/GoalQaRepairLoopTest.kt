@@ -4,8 +4,10 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
+import skillbill.engine.featuretask.phaserun.PhaseRunEntryFixture
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
+import skillbill.engine.featuretask.phaserun.plans
 import skillbill.engine.featuretask.phaserun.qa.InMemoryQaWorkspaces
 import skillbill.engine.featuretask.phaserun.qa.RecordingQaLeases
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
@@ -24,17 +26,15 @@ import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.committedRepoBranchSetup
 import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.kotlinPackWithBuildGate
-import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.model.GoalQaSummary
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.work.EmptyOutcomeStore
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -80,7 +80,7 @@ class GoalQaRepairLoopTest {
 
     val result = fixture.gate.run(fixture.state, fixture.request)
 
-    assertEquals(listOf("qa", "qa_fix", "build", "qa", "validate"), fixture.startedPhases())
+    assertEquals(listOf("qa", "qa_fix", "build", "qa", "validate"), fixture.startedPhases(), result.toString())
     val repairPrompt = fixture.prompts("qa_fix").single()
     val evidence = "${qaTestEvidencePrefix("qa-1")}home-F-1.png"
     assertContains(
@@ -89,7 +89,7 @@ class GoalQaRepairLoopTest {
         "Steps: open the app, log in.\n" +
         "Expected: the home screen shows the user name.\n" +
         "Observed: the home screen stays blank.\n" +
-        "Evidence: $evidence\n\n\nEvidence: $evidence",
+        "Evidence: $evidence\n\n\n\nEvidence: $evidence",
     )
     val outcome = assertNotNull(fixture.storedOutcome())
     assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
@@ -117,7 +117,7 @@ class GoalQaRepairLoopTest {
     assertEquals(listOf("qa", "qa_fix", "build"), phases.take(3))
     assertEquals(1, phases.count { it == "qa" })
     assertEquals("validate", phases.last())
-    assertEquals(3, fixture.launchedPhases().count { it == "build" })
+    assertEquals(3, fixture.launchedPhases().count { it == "build" }, result.toString())
     val warning = assertIs<GoalQaGateResult.Warned>(result).reason
     assertContains(warning, "qa_fix left the app without a passing build, so QA did not re-test the fix")
     assertContains(warning, "after 3 repair turns")
@@ -168,7 +168,7 @@ class GoalQaRepairLoopTest {
 
     assertEquals(listOf("qa", "qa_fix", "qa", "validate"), fixture.launchedPhases())
     val outcome = assertNotNull(fixture.storedOutcome())
-    assertEquals(StandaloneQaOutcome.FINDINGS, outcome.outcome)
+    assertEquals(StandaloneQaOutcome.FINDINGS, outcome.outcome, outcome.reason)
     assertEquals(3, outcome.qaFixAttempts)
     assertContains(assertNotNull(outcome.reason), "remain after 3 qa_fix attempts")
   }
@@ -188,7 +188,7 @@ class GoalQaRepairLoopTest {
 
     assertEquals("validate", fixture.startedPhases().last())
     val outcome = assertNotNull(fixture.storedOutcome())
-    assertEquals(StandaloneQaOutcome.FINDINGS, outcome.outcome)
+    assertEquals(StandaloneQaOutcome.FINDINGS, outcome.outcome, outcome.reason)
     assertEquals(3, outcome.qaFixAttempts)
     assertEquals(
       listOf("F-1" to FeatureTaskQaFindingStatus.FIXED, "F-2" to FeatureTaskQaFindingStatus.NOT_FIXED),
@@ -230,7 +230,7 @@ class GoalQaRepairLoopTest {
     val result = fixture.gate.run(fixture.state, fixture.request)
 
     assertEquals(listOf("qa"), fixture.launchedPhases())
-    assertIs<GoalQaGateResult.Passed>(result)
+    assertContains(assertIs<GoalQaGateResult.Warned>(result).reason, "QA agent wrote no report.md")
     val outcome = assertNotNull(fixture.storedOutcome())
     assertEquals(StandaloneQaOutcome.INCOMPLETE, outcome.outcome)
     assertContains(assertNotNull(outcome.reason), "QA agent wrote no report.md")
@@ -293,6 +293,8 @@ class GoalQaRepairLoopTest {
                   verdict == null -> null
                   ids == null -> qaTestReport(verdict, identity)
                   else -> qaTestReport(verdict, identity, ids)
+                }?.let { report ->
+                  if (freeFormReport == null) "$report\n## Coverage\n- android: passed\n" else report
                 }
               "QA settled."
             }
@@ -325,10 +327,16 @@ class GoalQaRepairLoopTest {
 
     init {
       if (recordedAttempts > 0) {
-        outcomes.recordSettled(PARENT, QaVerdict.FINDINGS_OPEN, null, recordedAttempts, QaSettledRun(PREVIOUS_TREE))
+        outcomes.recordSettled(
+          "$PARENT:test-quality",
+          QaVerdict.FINDINGS_OPEN,
+          null,
+          recordedAttempts,
+          QaSettledRun(PREVIOUS_TREE),
+        )
       }
       val pack =
-        kotlinPackWithValidationGate().copy(
+        kotlinPackWithBuildGate().copy(
           qaCapability = QaCapabilityDeclaration(setOf(QaTargetKind("android")), "qa/android-qa.md"),
         )
       var invocations = 0
@@ -362,7 +370,13 @@ class GoalQaRepairLoopTest {
       gate =
         DefaultGoalRunnerQaGate(
           entry,
-          DefaultGoalRunnerPostChangeValidation(entry),
+          PhaseRunEntryFixture(
+            harness.strategies,
+            config.harnessGitOperations,
+            database,
+            clock,
+            qaManifests = listOf(pack),
+          ).plans(),
           progress,
           git,
           object : FeatureTaskRuntimeRunInvariantsSource {
@@ -392,12 +406,12 @@ class GoalQaRepairLoopTest {
     fun prompts(phase: String): List<String> =
       launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }.filter { phaseIdFromPrompt(it) == phase }
 
-    fun storedOutcome(): FeatureTaskQaOutcome? = database.read { it.featureTaskQaOutcomes.find(PARENT) }
+    fun storedOutcome(): FeatureTaskQaOutcome? = database.read { it.featureTaskQaOutcomes.find("$PARENT:test-quality") }
   }
 
   private class DatabaseGoalQaOutcomes(
     private val database: DatabaseSessionFactory,
-  ) : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+  ) : TestGoalQualityOutcomeStore() {
     override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? =
       database.read { it.featureTaskQaOutcomes.find(parentWorkflowId) }
 

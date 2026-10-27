@@ -196,7 +196,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     val inputs =
       resolver.resolveInputs(
         root,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
+        FeatureTaskRuntimeQualityGateSelection.VALIDATE,
         ValidationDepth.FULL,
         7.minutes,
       )
@@ -206,7 +206,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
           root,
           SkeletonDefinition.GOAL_CHILD,
           CodeReviewExecutionMode.INLINE,
-          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          FeatureTaskRuntimeQualityGateSelection.VALIDATE,
           ValidationDepth.FULL,
           7.minutes,
         ),

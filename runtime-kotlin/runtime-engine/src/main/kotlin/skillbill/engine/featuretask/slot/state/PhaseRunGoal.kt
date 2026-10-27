@@ -5,6 +5,8 @@ import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewPassComplet
 import skillbill.engine.featuretask.lifecycle.remediation.RemediationDegradationSignal
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import java.nio.file.Path
@@ -14,6 +16,8 @@ import java.nio.file.Path
  * its input, and the remediation degradation evidence. Every operation is keyed by the run's workflow id.
  */
 internal interface PhaseRunGoal {
+  fun saveGoalChildHistoryDraft(draft: GoalChildHistoryDraft): GoalChildHistoryDraftSaveResult
+
   /** Records the goal continuation state [request] carries. Returns false when the write did not apply. */
   fun recordGoalContinuationState(request: GoalContinuationStateRecordRequest): Boolean
 

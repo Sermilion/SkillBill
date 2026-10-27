@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Provides
 import skillbill.application.agentrun.AgentRunGoalRunnerSubtaskLauncher
 import skillbill.engine.goalrunner.assessment.DefaultGoalRunnerAssessmentGate
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.execution.core.GoalRunnerFinalHistoryWriter
+import skillbill.engine.goalrunner.execution.core.PhaseRunGoalFinalHistoryWriter
 import skillbill.engine.goalrunner.monitoring.DefaultGoalRunnerCiMonitor
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
@@ -17,6 +19,9 @@ import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 
 internal interface RuntimeGoalRunnerLaunchProvides {
+  @Provides
+  fun goalRunnerFinalHistoryWriter(writer: PhaseRunGoalFinalHistoryWriter): GoalRunnerFinalHistoryWriter = writer
+
   @Provides
   fun goalRunnerCiMonitor(monitor: DefaultGoalRunnerCiMonitor): GoalRunnerCiMonitor = monitor
 

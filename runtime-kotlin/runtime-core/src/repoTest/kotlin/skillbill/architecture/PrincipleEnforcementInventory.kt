@@ -679,6 +679,7 @@ object PrincipleEnforcementInventory {
       "featureTaskPhaseSettlementService",
       "featureTaskRuntimeRunInvariantsSource",
       "featureTaskRuntimeRunEntry",
+      "featureTaskRuntimeCrashReconciler",
       "featureTaskRuntimeExecutionPlanResolver",
       "featureTaskRuntimeStatusService",
       "featureTaskRuntimeWorkerCoordinator",

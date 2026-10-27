@@ -1,8 +1,12 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.child
 
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.workflow.GoalChildWorkflowStateRepository
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStatus
 import java.sql.Connection
 
@@ -18,11 +22,24 @@ internal class GoalChildWorkflowStore(
         ON identities.workflow_id = workflows.workflow_id
       WHERE identities.route_scope = 'goal_child'
         AND CASE WHEN json_valid(workflows.artifacts_json)
-          THEN json_extract(workflows.artifacts_json, '$.goal_continuation.parent_workflow_id') END = ?
-      ORDER BY workflows.workflow_id
+          THEN json_extract(workflows.artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') END = ?
+      UNION
+      SELECT children.workflow_id
+      FROM feature_task_workflows AS parent
+      JOIN json_each(
+        parent.artifacts_json,
+        '$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}.${DecompositionPlanningPayloadKeys.SUBTASKS}'
+      ) AS subtask
+      JOIN feature_task_workflows AS children
+        ON children.workflow_id = json_extract(subtask.value, '$.${SharedPayloadKeys.WORKFLOW_ID}')
+      JOIN feature_task_execution_identities AS identities
+        ON identities.workflow_id = children.workflow_id
+      WHERE parent.workflow_id = ?
+        AND identities.route_scope = 'goal_child'
+      ORDER BY 1
       """.trimIndent(),
     ).use { statement ->
-      statement.bindAll(parentWorkflowId)
+      statement.bindAll(parentWorkflowId, parentWorkflowId)
       statement.executeQuery().use { rows ->
         buildList {
           while (rows.next()) {
@@ -42,12 +59,23 @@ internal class GoalChildWorkflowStore(
         JOIN feature_task_execution_identities AS identities
           ON identities.workflow_id = workflows.workflow_id
         WHERE identities.route_scope = 'goal_child'
-          AND CASE WHEN json_valid(workflows.artifacts_json)
-          THEN json_extract(workflows.artifacts_json, '$.goal_continuation.parent_workflow_id') END = ?
+          AND (
+            CASE WHEN json_valid(workflows.artifacts_json)
+              THEN json_extract(workflows.artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') END = ?
+            OR EXISTS (
+              SELECT 1 FROM feature_task_workflows AS parent
+              JOIN json_each(
+                parent.artifacts_json,
+                '$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}.${DecompositionPlanningPayloadKeys.SUBTASKS}'
+              ) AS subtask
+              WHERE parent.workflow_id = ?
+                AND json_extract(subtask.value, '$.${SharedPayloadKeys.WORKFLOW_ID}') = workflows.workflow_id
+            )
+          )
       )
       """.trimIndent(),
     ).use { statement ->
-      statement.bindAll(parentWorkflowId)
+      statement.bindAll(parentWorkflowId, parentWorkflowId)
       statement.executeUpdate()
     }
 
@@ -69,14 +97,29 @@ internal class GoalChildWorkflowStore(
           WHERE identities.workflow_id = feature_task_workflows.workflow_id
             AND identities.route_scope = 'goal_child'
         )
-        AND json_extract(artifacts_json, '$.goal_continuation.parent_workflow_id') = ?
-        AND json_extract(artifacts_json, '$.goal_continuation.subtask_id') = ?
+        AND json_extract(artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUBTASK_ID}') = ?
+        AND (
+          json_extract(artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') = ?
+          OR (
+            json_extract(artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') IS NULL
+            AND EXISTS (
+              SELECT 1 FROM feature_task_workflows AS parent
+              JOIN json_each(
+                parent.artifacts_json,
+                '$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}.${DecompositionPlanningPayloadKeys.SUBTASKS}'
+              ) AS subtask
+              WHERE parent.workflow_id = ?
+                AND json_extract(subtask.value, '$.${DecompositionPlanningPayloadKeys.ID}') = ?
+                AND json_extract(subtask.value, '$.${SharedPayloadKeys.WORKFLOW_ID}') = feature_task_workflows.workflow_id
+            )
+          )
+        )
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
         listOf<Any?>(workflowId) +
           deletableStatuses.map(WorkflowStatus::wireValue) +
-          listOf(parentWorkflowId, subtaskId),
+          listOf(subtaskId, parentWorkflowId, parentWorkflowId, subtaskId),
       )
       statement.executeUpdate()
     }

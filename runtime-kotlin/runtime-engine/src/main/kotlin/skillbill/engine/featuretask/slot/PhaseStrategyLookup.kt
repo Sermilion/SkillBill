@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.engine.directive.directiveResource
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.prompt.compose.AbsentPhaseInstructionFileSource
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -117,6 +118,7 @@ class PhaseStrategyLookup(
     plan: ResolvedPhaseExecutionPlan,
     definition: SkeletonDefinition,
   ): Boolean {
+    if (qualityGateSelection(plan) != plan.qualityGateSelection) return false
     val recordedFacts =
       PhaseStrategySelectionFacts(
         definition,
@@ -134,6 +136,35 @@ class PhaseStrategyLookup(
         selection.strategyIdFor(identity.slot, recordedFacts) ==
         registry.canonicalStrategyId(identity.slot, identity.strategyId)
     }
+  }
+
+  internal fun qualityGateSelection(plan: ResolvedPhaseExecutionPlan): FeatureTaskRuntimeQualityGateSelection? {
+    val gateSteps = plan.selectedStepIds.filter { PhaseSlot.slotForStep(it) == PhaseSlot.QUALITY_GATE }
+    if (gateSteps.isEmpty()) return null
+    val operations =
+      gateSteps.map { stepId ->
+        val strategy = selectedOwnerOf(stepId, plan) ?: invalidComposition("step $stepId is not selected")
+        (strategy.stepDescriptor(stepId).family as? PhaseBindingFamily.QualityGate)?.operation
+          ?: invalidComposition("selected quality-gate step $stepId has no quality-gate operation")
+      }.distinct()
+    if (operations.size != 1) invalidComposition("selected quality-gate steps declare conflicting operations")
+    return when (val operation = operations.single()) {
+      is PhaseQualityGateOperation.PackGate ->
+        when (operation.commandFamily) {
+          ValidationGateCommandFamily.BUILD -> FeatureTaskRuntimeQualityGateSelection.BUILD
+          ValidationGateCommandFamily.VALIDATION -> FeatureTaskRuntimeQualityGateSelection.VALIDATE
+        }
+      PhaseQualityGateOperation.AgentValidation -> FeatureTaskRuntimeQualityGateSelection.VALIDATE
+    }
+  }
+
+  internal fun qualityGateOperation(
+    plan: ResolvedPhaseExecutionPlan,
+    stepId: String,
+  ): PhaseQualityGateOperation? {
+    if (PhaseSlot.slotForStep(stepId) != PhaseSlot.QUALITY_GATE) return null
+    val strategy = selectedOwnerOf(stepId, plan) ?: return null
+    return (strategy.stepDescriptor(stepId).family as? PhaseBindingFamily.QualityGate)?.operation
   }
 
   internal fun executionPlanMapping(recorded: ResolvedPhaseExecutionPlan): PhaseExecutionPlanMapping? {
@@ -210,6 +241,9 @@ class PhaseStrategyLookup(
 
   private fun resolve(facts: PhaseStrategySelectionFacts): ResolvedPhaseExecutionPlan {
     val copied = facts.copy(values = facts.values.toSet(), stepAssignments = facts.copiedAssignments())
+    val selectedStrategies =
+      copied.definition.slots.map { slot -> registry.strategy(slot, selection.strategyIdFor(slot, copied)) }
+    val canonicalQualitySelection = selectedQualityGateSelection(copied, selectedStrategies)
     val key =
       PlanKey(
         copied.definition.id,
@@ -218,7 +252,15 @@ class PhaseStrategyLookup(
         copied.definition.runStateKind.wireValue,
         copied.definition.intake.wireValue,
         copied.definition.semanticRevision,
-        copied.values.map { "${it.javaClass.name}:${it.name}" }.sorted(),
+        (
+          copied.values.filterNot { it is FeatureTaskRuntimeQualityGateSelection } +
+            setOfNotNull(
+              canonicalQualitySelection,
+            )
+        )
+          .map { "${it.javaClass.name}:${it.name}" }
+          .plus(selectedStrategies.map { "${it.slot.wireValue}:${it.strategyId}" })
+          .sorted(),
         copied.stepAssignments.map { (step, assignment) ->
           listOf(
             step,
@@ -272,7 +314,7 @@ class PhaseStrategyLookup(
         definitionSemanticRevision = facts.definition.semanticRevision,
         selectedStrategies = identities,
         reviewSelection = reviewSelection(facts),
-        qualityGateSelection = singleQualityGateSelection(facts),
+        qualityGateSelection = selectedQualityGateSelection(facts, selected),
         qaSelection = singleQaSelection(facts),
         traversal = declaration,
         stepRecords =
@@ -283,6 +325,38 @@ class PhaseStrategyLookup(
           ),
       )
     return plan
+  }
+
+  private fun selectedQualityGateSelection(
+    facts: PhaseStrategySelectionFacts,
+    selected: List<PhaseStrategy>,
+  ): FeatureTaskRuntimeQualityGateSelection? {
+    val selectedQuality = selected.singleOrNull { it.slot == PhaseSlot.QUALITY_GATE } ?: return null
+    val operation =
+      selectedQuality.steps.asSequence()
+        .filter { it in facts.definition.stepIds }
+        .mapNotNull {
+            step ->
+          (selectedQuality.stepDescriptor(step).family as? PhaseBindingFamily.QualityGate)?.operation
+        }
+        .distinct()
+        .singleOrNull() ?: invalidComposition("selected quality-gate strategy has no unique declared operation")
+    val canonical =
+      when (operation) {
+        is PhaseQualityGateOperation.PackGate ->
+          when (operation.commandFamily) {
+            ValidationGateCommandFamily.BUILD -> FeatureTaskRuntimeQualityGateSelection.BUILD
+            ValidationGateCommandFamily.VALIDATION -> FeatureTaskRuntimeQualityGateSelection.VALIDATE
+          }
+        PhaseQualityGateOperation.AgentValidation -> FeatureTaskRuntimeQualityGateSelection.VALIDATE
+      }
+    val explicit = singleQualityGateSelection(facts)
+    if (selection.usesFact(PhaseSlot.QUALITY_GATE, facts.definition) && explicit != null && explicit != canonical) {
+      invalidComposition(
+        "quality gate selection ${explicit.wireValue} contradicts selected operation ${canonical.wireValue}",
+      )
+    }
+    return canonical
   }
 
   private fun populateSelectedSteps(

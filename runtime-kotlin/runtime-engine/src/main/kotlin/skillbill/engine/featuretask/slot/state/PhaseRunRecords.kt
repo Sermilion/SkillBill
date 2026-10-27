@@ -43,6 +43,7 @@ internal interface PhaseRunRecords :
   PhaseStepRecords,
   PhaseReviewRecords,
   PhaseLaunchRecords,
+  PhaseGateProgressRecords,
   PhasePlanRecords,
   PhaseImplementationProgressRecords,
   FeatureTaskRuntimeNoChangePausePort {
@@ -247,7 +248,9 @@ internal interface PhaseLaunchRecords {
 
   /** The projections delivered to consumer steps of [workflowId]. */
   fun loadDeliveredProjections(workflowId: String): Map<String, FeatureTaskRuntimeDeliveredProjectionRecord>?
+}
 
+internal interface PhaseGateProgressRecords {
   /** The validate gate progress of [workflowId]. */
   fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress?
 

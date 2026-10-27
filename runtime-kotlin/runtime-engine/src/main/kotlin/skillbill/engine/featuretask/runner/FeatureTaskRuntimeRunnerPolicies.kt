@@ -36,7 +36,7 @@ fun resolveRunDefinition(
     require(goalContinuation) {
       "The standalone skeleton is retired; a run without a goal continuation needs an explicit skeleton definition."
     }
-    SkeletonDefinition.GOAL_CHILD
+    SkeletonDefinition.GOAL_CHILD_REVISION_5
   }
 
 fun boundedSchemaGateDetail(validationReason: String): String =

@@ -67,6 +67,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitio
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.terminalBlockedReasonFrom
+import skillbill.engine.featuretask.slot.PhaseAcceptedOutputPersistence
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
@@ -650,26 +651,47 @@ object PhaseOutputGate {
         ),
       )
     commitBlocked?.let { return it }
+    val accepted =
+      PersistAcceptedOutputArgs(
+        run = run,
+        iteration = capture.iteration,
+        normalizedOutput = finalised,
+        repairEvidence = repairEvidence,
+        observability = observability,
+        fileManifest = capture.fileManifest,
+        repositoryFingerprint = repositoryFingerprint,
+      )
+    val outputPersistence = args.stepHooks as? PhaseAcceptedOutputPersistence
+    if (
+      outputPersistence != null &&
+      !phaseSettlementService.persistAcceptedOutput(
+        workflowId = request.workflowId,
+        phaseId = run.phaseId,
+        attempt = capture.iteration,
+        envelope = finalised.envelopeWireMap(),
+      )
+    ) {
+      return FeatureTaskRuntimeRunLoopOutputVerification.blockRequiredOutput(
+        this,
+        accepted,
+        "Could not persist the accepted phase output for recovery.",
+      )
+    }
     PhaseOutputGate.retainSettledProducerOutput(request, progress, recorder, clock, capture)
+    outputPersistence?.persistAcceptedOutput(
+      goalContinuationRecorder,
+      run,
+      finalised,
+    )?.let {
+        failure ->
+      return FeatureTaskRuntimeRunLoopOutputVerification.blockRequiredOutput(this, accepted, failure)
+    }
     args.boundStep.boundHooks.recordAcceptedOutput(
       run,
       stepOutputContext(run, args.stepHooks),
       finalised.envelopeWireMap(),
     )
-    return with(FeatureTaskRuntimeRunLoopOutputVerification) {
-      FeatureTaskRuntimeRunLoopOutputVerification.persistAcceptedOutput(
-        this@finalizeValidatedOutputAcceptance,
-        PersistAcceptedOutputArgs(
-          run = run,
-          iteration = capture.iteration,
-          normalizedOutput = finalised,
-          repairEvidence = repairEvidence,
-          observability = observability,
-          fileManifest = capture.fileManifest,
-          repositoryFingerprint = repositoryFingerprint,
-        ),
-      )
-    }
+    return FeatureTaskRuntimeRunLoopOutputVerification.persistAcceptedOutput(this, accepted)
   }
 
   internal fun rejectValidatedOutput(

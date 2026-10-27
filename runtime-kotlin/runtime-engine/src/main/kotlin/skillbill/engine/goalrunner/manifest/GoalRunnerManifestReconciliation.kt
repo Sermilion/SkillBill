@@ -2,10 +2,15 @@ package skillbill.engine.goalrunner.manifest
 
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneCompletedSubtaskCheckpointRefs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerRestoredChildReference
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
@@ -20,40 +25,24 @@ import skillbill.workflow.model.workflowStatus
 import java.nio.file.Path
 
 fun reconcileGoalManifest(
-  manifest: DecompositionManifest,
+  state: GoalRunnerManifestState,
   authoritativeOutcomes: Map<Int, GoalRunnerStoredOutcome>,
   acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
   outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  restoredChildren: Map<Int, GoalRunnerRestoredChildReference>? = null,
 ): DecompositionManifest {
-  return manifest.copy(
-    subtasks =
-      reconcileGoalSubtasks(
-        manifest.issueKey,
-        manifest.subtasks,
-        authoritativeOutcomes,
-        acceptances,
-        outcomeStore,
-      ),
-  )
-    .withParentStatus()
-    .withDerivedCurrentIntent()
-}
-
-internal fun reconcileGoalSubtasks(
-  issueKey: String,
-  subtasks: List<DecompositionSubtask>,
-  authoritativeOutcomes: Map<Int, GoalRunnerStoredOutcome>,
-  acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
-  outcomeStore: GoalRunnerWorkflowOutcomeStore,
-): List<DecompositionSubtask> {
   val context =
     GoalManifestReconciliationContext(
-      issueKey = issueKey,
-      authoritativeOutcomes = authoritativeOutcomes,
-      acceptances = acceptances,
-      outcomeStore = outcomeStore,
+      state.manifest.issueKey,
+      state.parentWorkflowId,
+      authoritativeOutcomes,
+      acceptances,
+      outcomeStore,
+      null,
+      restoredChildren,
     )
-  return subtasks.map { subtask -> context.reconcile(subtask) }
+  return state.manifest.copy(subtasks = state.manifest.subtasks.map(context::reconcile))
+    .withParentStatus().withDerivedCurrentIntent()
 }
 
 fun pruneEligibleCheckpointRefsForManifest(
@@ -63,7 +52,9 @@ fun pruneEligibleCheckpointRefsForManifest(
   record: (String) -> Unit,
 ) {
   manifest.subtasks.forEach { subtask ->
-    if (subtask.status.decompositionStatus() == DecompositionStatus.COMPLETE && !subtask.commitSha.isNullOrBlank()) {
+    if (subtask.status.decompositionStatus() == DecompositionStatus.COMPLETE &&
+      !subtask.commitSha.isNullOrBlank()
+    ) {
       pruneCompletedSubtaskCheckpointRefs(
         gitOperations = gitOperations,
         repoRoot = repoRoot,
@@ -80,38 +71,80 @@ fun pruneEligibleCheckpointRefsForManifest(
   }
 }
 
-private data class GoalManifestReconciliationContext(
+internal class GoalManifestReconciliationContext(
   val issueKey: String,
+  val parentWorkflowId: String,
   val authoritativeOutcomes: Map<Int, GoalRunnerStoredOutcome>,
   val acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
   val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  val unitOfWork: UnitOfWork?,
+  val restoredChildren: Map<Int, GoalRunnerRestoredChildReference>? = null,
 ) {
   fun reconcile(subtask: DecompositionSubtask): DecompositionSubtask {
-    if (subtask.status.decompositionStatus() == DecompositionStatus.COMPLETED_NO_CHANGE) return subtask
+    val existingStatus = subtask.status.decompositionStatus()
+    validateCompletion(subtask)
+    if (existingStatus == DecompositionStatus.COMPLETED_NO_CHANGE) return subtask
     val workflowId = subtask.workflowId?.takeIf(String::isNotBlank)
-    val outcome = workflowId?.let { id -> preferredOutcome(subtask, id) }
+    val outcome =
+      workflowId?.takeIf { existingStatus != DecompositionStatus.PENDING }
+        ?.let { id -> preferredOutcome(subtask, id) }
+    restoredAcceptance(subtask, outcome)?.let { return it }
+    return reconcileOutcome(subtask, outcome)
+  }
 
-    acceptances[subtask.id]
-      ?.takeIf { outcome?.status != GoalRunnerTerminalStatus.COMPLETE }
-      ?.let { acceptance ->
-        return subtask.copy(
-          status = DecompositionStatus.COMPLETE.wireValue,
-          commitSha = acceptance.commitSha,
-          blockedReason = null,
-          lastResumableStep = null,
-        )
-      }
+  private fun restoredChildId(subtask: DecompositionSubtask): String? {
+    if (restoredChildren != null) return restoredChildren[subtask.id]?.childWorkflowId
+    return if (unitOfWork != null) {
+      outcomeStore.restoredGoalChildWorkflowId(unitOfWork, parentWorkflowId, subtask.id)
+    } else {
+      outcomeStore.restoredGoalChildWorkflowId(parentWorkflowId, subtask.id)
+    }
+  }
 
+  private fun validateCompletion(subtask: DecompositionSubtask) {
+    if (subtask.status.decompositionStatus() in
+      setOf(DecompositionStatus.COMPLETE, DecompositionStatus.COMPLETED_NO_CHANGE)
+    ) {
+      val childId = subtask.workflowId ?: restoredChildId(subtask) ?: return
+      requireDraft(childId, subtask.id)
+    }
+  }
+
+  private fun restoredAcceptance(
+    subtask: DecompositionSubtask,
+    outcome: GoalRunnerStoredOutcome?,
+  ): DecompositionSubtask? {
+    if (subtask.workflowId != null || outcome?.status == GoalRunnerTerminalStatus.COMPLETE) return null
+    val childId = restoredChildId(subtask) ?: return null
+    val acceptance = restoredChildren?.get(subtask.id)?.acceptance ?: acceptances[subtask.id] ?: return null
+    requireDraft(childId, subtask.id)
+    return subtask.copy(
+      status = DecompositionStatus.COMPLETE.wireValue,
+      commitSha = acceptance.commitSha,
+      blockedReason = null,
+      lastResumableStep = null,
+    )
+  }
+
+  private fun reconcileOutcome(
+    subtask: DecompositionSubtask,
+    outcome: GoalRunnerStoredOutcome?,
+  ): DecompositionSubtask {
+    val workflowId = subtask.workflowId
     val staleRetryOutcome =
       workflowId != null &&
         outcome?.workflowId == workflowId &&
         outcome.status != GoalRunnerTerminalStatus.COMPLETE &&
-        outcomeStore.progress(workflowId)?.workflowStatus == WorkflowStatus.RUNNING
+        (unitOfWork?.let { outcomeStore.progress(it, workflowId) } ?: outcomeStore.progress(workflowId))
+          ?.workflowStatus == WorkflowStatus.RUNNING
     return if (staleRetryOutcome) {
       subtask.copy(status = DecompositionStatus.IN_PROGRESS.wireValue, blockedReason = null)
     } else if (outcome == null || shouldPreserveCompletedSubtask(subtask, outcome)) {
       subtask
     } else {
+      if (outcome.status == GoalRunnerTerminalStatus.COMPLETE) {
+        requireDraft(outcome.workflowId, subtask.id)
+      }
       val status = outcome.toManifestStatus()
       subtask.copy(
         status = status,
@@ -126,17 +159,38 @@ private data class GoalManifestReconciliationContext(
     }
   }
 
+  private fun requireDraft(
+    childWorkflowId: String?,
+    subtaskId: Int,
+  ) {
+    val childId =
+      childWorkflowId?.takeIf(String::isNotBlank)
+        ?: throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+          "Completed goal subtask $subtaskId has no child identity to verify its accepted history draft or skip.",
+        )
+    val hasDraft =
+      unitOfWork?.let { outcomeStore.hasRequiredGoalChildHistoryDraft(it, parentWorkflowId, subtaskId, childId) }
+        ?: outcomeStore.hasRequiredGoalChildHistoryDraft(parentWorkflowId, subtaskId, childId)
+    if (!hasDraft) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT,
+        "Goal child $childId cannot be reconciled as complete without its accepted history draft or skip.",
+      )
+    }
+  }
+
   private fun preferredOutcome(
     subtask: DecompositionSubtask,
     workflowId: String,
   ): GoalRunnerStoredOutcome? =
     authoritativeOutcomes[subtask.id]
       ?.takeIf { outcome -> canApplyAuthoritativeOutcome(subtask, workflowId, outcome) }
-      ?: outcomeStore.terminalOutcome(
-        workflowId = workflowId,
-        issueKey = issueKey,
-        subtaskId = subtask.id,
-      )
+      ?: if (unitOfWork != null) {
+        outcomeStore.terminalOutcome(unitOfWork, workflowId, issueKey, subtask.id)
+      } else {
+        outcomeStore.terminalOutcome(workflowId, issueKey, subtask.id)
+      }
 }
 
 private fun canApplyAuthoritativeOutcome(
@@ -144,15 +198,9 @@ private fun canApplyAuthoritativeOutcome(
   workflowId: String,
   outcome: GoalRunnerStoredOutcome,
 ): Boolean {
-  val resetPendingSubtask =
-    subtask.status.decompositionStatus() == DecompositionStatus.PENDING &&
-      subtask.workflowId.isNullOrBlank()
-  if (resetPendingSubtask && outcome.status != GoalRunnerTerminalStatus.COMPLETE) {
-    return false
-  }
-
-  val nonCompleteSibling = outcome.workflowId != workflowId && outcome.status != GoalRunnerTerminalStatus.COMPLETE
-  return subtask.status.decompositionStatus() != DecompositionStatus.IN_PROGRESS || !nonCompleteSibling
+  return outcome.workflowId == workflowId &&
+    subtask.workflowId == workflowId &&
+    subtask.status.decompositionStatus() != DecompositionStatus.PENDING
 }
 
 private fun shouldPreserveCompletedSubtask(

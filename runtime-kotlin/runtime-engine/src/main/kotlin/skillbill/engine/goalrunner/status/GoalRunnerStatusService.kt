@@ -40,7 +40,7 @@ class GoalRunnerStatusService(
 ) {
   fun status(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? {
     return manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
-      ?.let { loadedState -> projectionAssembler.project(loadedState, request) }
+      ?.let { loadedState -> projectionAssembler.projectWorkflow(loadedState.parentWorkflowId, request) }
   }
 
   fun statusForWorkflow(

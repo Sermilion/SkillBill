@@ -36,6 +36,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.engine.featuretask.slot.testExecutionPlan
@@ -58,6 +59,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.persist.OutcomeStoreTestArtifactPorts
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
+import skillbill.engine.goalrunner.persist.seedCurrentParent
+import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
+import skillbill.engine.goalrunner.persist.withSettledLegacyHistorySkip
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.core.SkillBillRuntimeException
@@ -93,6 +97,9 @@ import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.work.EmptyWorkListRepository
+import skillbill.ports.work.WorkListRepository
+import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -1358,7 +1365,7 @@ class WorkflowServiceGoalManifestStoreTest {
       JsonCodec.parseObjectOrNull(parentRow.artifactsJson)
         ?.let(JsonCodec::jsonElementToValue)
         ?.let(JsonCodec::anyToStringAnyMap)
-    assertEquals(setOf(DECOMPOSITION_RUNTIME_ARTIFACT_KEY), importedArtifacts?.keys)
+    assertEquals(setOf(DECOMPOSITION_RUNTIME_ARTIFACT_KEY, "goal_quality_execution"), importedArtifacts?.keys)
   }
 
   @Test
@@ -1540,6 +1547,7 @@ class WorkflowServiceGoalManifestStoreTest {
   @Test
   fun `scoped replan keeps a live child that scoped deletion refuses to remove`() {
     val workflows = RecordingGoalChildDeletionWorkflowStates(childStatus = "running")
+    workflows.saveFeatureTaskWorkflow(taskRuntimeWorkflowRecord("wfl-child-1", "wfl-parent", "SKILL-52.1"), RUNTIME)
     val before =
       decompositionRuntime(status = "in_progress").copy(
         currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"),
@@ -1571,7 +1579,10 @@ class WorkflowServiceGoalManifestStoreTest {
     val pending =
       decompositionRuntime(status = "in_progress").copy(
         currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "resume"),
-        subtasks = decompositionRuntime(status = "in_progress").subtasks.map { it.copy(status = "pending") },
+        subtasks =
+          decompositionRuntime(status = "in_progress").subtasks.map {
+            it.copy(status = "in_progress", workflowId = "wfl-child")
+          },
       )
     workflows.saveFeatureTaskWorkflow(
       workflowRecord(
@@ -1587,6 +1598,11 @@ class WorkflowServiceGoalManifestStoreTest {
       ),
       RUNTIME,
     )
+    workflows.saveFeatureTaskWorkflow(
+      taskRuntimeWorkflowRecord("wfl-child", "wfl-parent", pending.issueKey).withSettledLegacyHistorySkip(),
+      RUNTIME,
+    )
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(workflows, "wfl-child", pending.issueKey)
     val store =
       testWorkflowGoalRunnerManifestStore(
         database = FakeDatabaseSessionFactory(workflows),
@@ -1714,6 +1730,7 @@ class WorkflowGoalStatusProjectionTest {
       ),
       PROSE,
     )
+    workflows.saveFeatureTaskWorkflow(taskRuntimeWorkflowRecord("wfl-child", "wfl-prose-parent", "SKILL-52.1"), RUNTIME)
     controls.persistControlState(
       "wfl-prose-parent",
       GoalRunnerControlState(
@@ -1828,7 +1845,8 @@ class WorkflowGoalStatusProjectionTest {
           sessionId = "ftr-done",
         ),
       )
-    workflows.saveFeatureTaskWorkflow(complete.toRecord(), PROSE)
+    workflows.saveFeatureTaskWorkflow(complete.toRecord().withSettledLegacyHistorySkip(), PROSE)
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(workflows, "wfl-authoritative", "SKILL-52.1")
   }
 
   private fun goalContinuationArtifact(): Map<String, Any?> =
@@ -1837,6 +1855,7 @@ class WorkflowGoalStatusProjectionTest {
         mapOf(
           "issue_key" to "SKILL-52.1",
           "subtask_id" to 1,
+          "parent_workflow_id" to "wfl-parent",
           "suppress_pr" to true,
           "goal_branch" to "feat/SKILL-52",
           "code_review_mode" to "auto",
@@ -1877,7 +1896,25 @@ class WorkflowGoalStatusProjectionTest {
     workflows: InMemoryWorkflowStates,
     controls: GoalRunnerControlRepository = EmptyGoalRunnerControlRepository,
   ): GoalRunnerStatusService {
-    val database = FakeDatabaseSessionFactory(workflows, goalRunnerControls = controls)
+    val workList =
+      object : WorkListRepository by EmptyWorkListRepository {
+        override fun goalSubtaskPage(
+          workflowId: String,
+          offset: Int,
+          limit: Int,
+          completedOnly: Boolean,
+          afterSubtaskId: Int?,
+        ): WorkGoalSubtaskPage? {
+          val manifest =
+            workflows.getFeatureTaskWorkflow(workflowId)?.toSnapshot()?.decompositionRuntime() ?: return null
+          return WorkGoalSubtaskPage(
+            manifest.copy(subtasks = manifest.subtasks.drop(offset).take(limit)),
+            manifest.subtasks.size,
+            null,
+          )
+        }
+      }
+    val database = FakeDatabaseSessionFactory(workflows, goalRunnerControls = controls, workList = workList)
     return testGoalRunnerStatusService(
       manifestStore =
         testWorkflowGoalRunnerManifestStore(
@@ -1901,6 +1938,7 @@ class WorkflowGoalStatusProjectionTest {
           AcceptingFeatureTaskRuntimeWireArtifactValidator,
           AcceptingFeatureTaskRuntimeWireArtifactValidator,
         ),
+      database = database,
     )
   }
 }
@@ -1936,6 +1974,7 @@ class GoalRunnerCommitShaRecoveryTest {
   fun `goal runner outcome store completes blocked commit push when remote contains head`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(blockedCommitPush("wfl-child"), PROSE)
+    seedLegacyChild(workflows)
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         database = FakeDatabaseSessionFactory(workflows),
@@ -1943,7 +1982,14 @@ class GoalRunnerCommitShaRecoveryTest {
         gitOperations = PushedHeadGitOperations,
       )
 
-    val outcome = store.recoverAndPersistTerminalOutcome("wfl-child", "SKILL-52.1", 1, repoRoot = Path.of("."))
+    val outcome =
+      store.recoverAndPersistTerminalOutcome(
+        "wfl-child",
+        "wfl-parent",
+        "SKILL-52.1",
+        1,
+        repoRoot = Path.of("."),
+      )
 
     requireNotNull(outcome)
     assertEquals(GoalRunnerTerminalStatus.COMPLETE, outcome.status)
@@ -1965,7 +2011,14 @@ class GoalRunnerCommitShaRecoveryTest {
         gitOperations = DivergedHeadGitOperations,
       )
 
-    val outcome = store.recoverAndPersistTerminalOutcome("wfl-child", "SKILL-52.1", 1, repoRoot = Path.of("."))
+    val outcome =
+      store.recoverAndPersistTerminalOutcome(
+        "wfl-child",
+        "wfl-parent",
+        "SKILL-52.1",
+        1,
+        repoRoot = Path.of("."),
+      )
 
     requireNotNull(outcome)
     assertEquals(GoalRunnerTerminalStatus.BLOCKED, outcome.status)
@@ -1976,6 +2029,7 @@ class GoalRunnerCommitShaRecoveryTest {
   fun `goal runner outcome store backfills missing commit sha from measured git head`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(commitPushCompletedWithoutCommitSha("wfl-child"), PROSE)
+    seedLegacyChild(workflows)
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         database = FakeDatabaseSessionFactory(workflows),
@@ -1983,7 +2037,14 @@ class GoalRunnerCommitShaRecoveryTest {
         gitOperations = HeadShaGitOperations,
       )
 
-    val outcome = store.recoverAndPersistTerminalOutcome("wfl-child", "SKILL-52.1", 1, repoRoot = Path.of("."))
+    val outcome =
+      store.recoverAndPersistTerminalOutcome(
+        "wfl-child",
+        "wfl-parent",
+        "SKILL-52.1",
+        1,
+        repoRoot = Path.of("."),
+      )
 
     requireNotNull(outcome)
     assertEquals(GoalRunnerTerminalStatus.COMPLETE, outcome.status)
@@ -1994,6 +2055,7 @@ class GoalRunnerCommitShaRecoveryTest {
   fun `goal runner outcome store durably persists the measured completion`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(commitPushCompletedWithoutCommitSha("wfl-child"), PROSE)
+    seedLegacyChild(workflows)
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         database = FakeDatabaseSessionFactory(workflows),
@@ -2001,7 +2063,7 @@ class GoalRunnerCommitShaRecoveryTest {
         gitOperations = HeadShaGitOperations,
       )
 
-    store.recoverAndPersistTerminalOutcome("wfl-child", "SKILL-52.1", 1, repoRoot = Path.of("."))
+    store.recoverAndPersistTerminalOutcome("wfl-child", "wfl-parent", "SKILL-52.1", 1, repoRoot = Path.of("."))
     val durable = store.terminalOutcome("wfl-child", "SKILL-52.1", 1)
 
     requireNotNull(durable)
@@ -2020,7 +2082,14 @@ class GoalRunnerCommitShaRecoveryTest {
         gitOperations = NoopWorkflowGitOperations,
       )
 
-    val outcome = store.recoverAndPersistTerminalOutcome("wfl-child", "SKILL-52.1", 1, repoRoot = Path.of("."))
+    val outcome =
+      store.recoverAndPersistTerminalOutcome(
+        "wfl-child",
+        "wfl-parent",
+        "SKILL-52.1",
+        1,
+        repoRoot = Path.of("."),
+      )
 
     requireNotNull(outcome)
     assertEquals(GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME, outcome.status)
@@ -2075,6 +2144,7 @@ class GoalRunnerCommitShaRecoveryTest {
     val outcome =
       store.recoverMissingResultPrefixOutput(
         workflowId = "wfl-child",
+        parentWorkflowId = "wfl-parent",
         issueKey = "SKILL-52.1",
         subtaskId = 1,
         output =
@@ -2101,6 +2171,7 @@ class GoalRunnerCommitShaRecoveryTest {
   fun `reconciliation backfills a pre-existing complete-without-sha outcome from measured git head`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(completeWithoutShaOutcome("wfl-child"), PROSE)
+    seedLegacyChild(workflows)
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         database = FakeDatabaseSessionFactory(workflows),
@@ -2127,6 +2198,7 @@ class GoalRunnerCommitShaRecoveryTest {
   fun `reconciliation without a repo root leaves a complete-without-sha outcome unmeasured`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(completeWithoutShaOutcome("wfl-child"), PROSE)
+    seedLegacyChild(workflows)
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         database = FakeDatabaseSessionFactory(workflows),
@@ -2138,6 +2210,11 @@ class GoalRunnerCommitShaRecoveryTest {
     val durable = requireNotNull(store.terminalOutcome("wfl-child", "SKILL-52.1", 1))
 
     assertNull(durable.commitSha, "a read-only reconciliation must not backfill a measured SHA")
+  }
+
+  private fun seedLegacyChild(workflows: InMemoryWorkflowStates) {
+    seedCurrentParent(workflows, "wfl-child", "SKILL-52.1")
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(workflows, "wfl-child", "SKILL-52.1")
   }
 
   private fun commitPushCompletedWithoutCommitSha(workflowId: String): WorkflowStateRecord {
@@ -2179,7 +2256,7 @@ class GoalRunnerCommitShaRecoveryTest {
           sessionId = "ftr-no-sha",
         ),
       )
-    return completed.toRecord()
+    return completed.toRecord().withSettledLegacyHistorySkip()
   }
 
   private fun blockedCommitPush(workflowId: String): WorkflowStateRecord {
@@ -2229,7 +2306,7 @@ class GoalRunnerCommitShaRecoveryTest {
           ),
         sessionId = "ftr-blocked-push",
       ),
-    ).toRecord()
+    ).toRecord().withSettledLegacyHistorySkip()
   }
 
   private fun completeWithoutShaOutcome(workflowId: String): WorkflowStateRecord {
@@ -2279,7 +2356,7 @@ class GoalRunnerCommitShaRecoveryTest {
           sessionId = "ftr-stale-complete",
         ),
       )
-    return completed.toRecord()
+    return completed.toRecord().withSettledLegacyHistorySkip()
   }
 }
 
@@ -2435,9 +2512,14 @@ class WorkflowGoalRunnerReconciliationTest {
   @Test
   fun `goal runner outcome reconciliation closes stale running child in favor of authoritative terminal workflow`() {
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "wfl-authoritative", "SKILL-52.1")
     val definition = FeatureTaskRuntimePhaseWorkflowDefinition.definition
     workflows.saveFeatureTaskWorkflow(staleRunningChildRecord(definition).toRecord(), PROSE)
-    workflows.saveFeatureTaskWorkflow(authoritativeCompleteChildRecord(definition).toRecord(), PROSE)
+    workflows.saveFeatureTaskWorkflow(
+      authoritativeCompleteChildRecord(definition).toRecord().withSettledLegacyHistorySkip(),
+      PROSE,
+    )
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(workflows, "wfl-authoritative", "SKILL-52.1")
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         FakeDatabaseSessionFactory(workflows),
@@ -2463,6 +2545,7 @@ class WorkflowGoalRunnerReconciliationTest {
   @Test
   fun `goal runner outcome reconciliation closes inactive running child without authoritative sibling`() {
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "wfl-orphan", "SKILL-52.1")
     val definition = FeatureTaskRuntimePhaseWorkflowDefinition.definition
     val opened = testWorkflowEngine.openRecord(definition, "wfl-orphan", "ftr-001", "preplan")
     val running =
@@ -2516,6 +2599,7 @@ class WorkflowGoalRunnerReconciliationTest {
   @Test
   fun `goal runner outcome reconciliation keeps active running child without authoritative terminal outcome`() {
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "wfl-active", "SKILL-52.1")
     val definition = FeatureTaskRuntimePhaseWorkflowDefinition.definition
     val opened = testWorkflowEngine.openRecord(definition, "wfl-active", "ftr-001", "preplan")
     val running =
@@ -2567,6 +2651,7 @@ class WorkflowGoalRunnerReconciliationTest {
   @Test
   fun `goal runner outcome reconciliation keeps active retry when only blocked sibling exists`() {
     val workflows = InMemoryWorkflowStates()
+    seedCurrentParent(workflows, "wfl-active", "SKILL-52.1")
     val definition = FeatureTaskRuntimePhaseWorkflowDefinition.definition
     workflows.saveFeatureTaskWorkflow(blockedSiblingChildRecord(definition).toRecord(), PROSE)
     workflows.saveFeatureTaskWorkflow(activeRetryChildRecord(definition).toRecord(), PROSE)
@@ -4401,7 +4486,34 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     val store = harness.newClockedStore()
 
     store.persistStopAfterSubtask("goal-parent", 1)
-    val result = store.saveCompletedSubtaskAtBoundary(harness.state, 1)
+    harness.workflows.saveFeatureTaskWorkflow(
+      taskRuntimeWorkflowRecord("pause-child", "goal-parent", harness.manifest.issueKey).withSettledLegacyHistorySkip(),
+      RUNTIME,
+    )
+    ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(
+      harness.workflows,
+      "pause-child",
+      harness.manifest.issueKey,
+    )
+    val active =
+      store.saveRuntimeState(
+        harness.state.copy(
+          manifest =
+            harness.manifest.copy(
+              subtasks = harness.manifest.subtasks.map { it.copy(status = "in_progress", workflowId = "pause-child") },
+            ),
+        ),
+      )
+    val result =
+      store.saveCompletedSubtaskAtBoundary(
+        active.copy(
+          manifest =
+            active.manifest.copy(
+              subtasks = active.manifest.subtasks.map { it.copy(status = "complete") },
+            ),
+        ),
+        1,
+      )
 
     assertTrue(result.paused)
     assertEquals("stop_after_subtask", result.state.controlState.pauseReason)

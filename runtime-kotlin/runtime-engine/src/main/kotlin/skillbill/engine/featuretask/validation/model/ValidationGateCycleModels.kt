@@ -11,6 +11,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateTriageDisposition
 import java.nio.file.Path
 
 sealed interface ValidationGateResolution {
@@ -94,6 +95,7 @@ data class ValidationGateProgressWrite(
   val completeFindings: List<ValidationGateFinding>,
   val repairsUsed: Int,
   val capturedTriagePlan: String?,
+  val triageDisposition: FeatureTaskRuntimeValidationGateTriageDisposition? = null,
 ) {
   companion object {
     fun findingsOpen(
@@ -101,6 +103,7 @@ data class ValidationGateProgressWrite(
       repairsUsed: Int,
       capturedTriagePlan: String?,
       remainingFindings: ValidationFindingSetProjection? = null,
+      triageDisposition: FeatureTaskRuntimeValidationGateTriageDisposition? = null,
     ): ValidationGateProgressWrite =
       ValidationGateProgressWrite(
         repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
@@ -108,6 +111,7 @@ data class ValidationGateProgressWrite(
         completeFindings = completeFindings,
         repairsUsed = repairsUsed,
         capturedTriagePlan = capturedTriagePlan,
+        triageDisposition = triageDisposition,
       )
   }
 }
@@ -127,4 +131,6 @@ data class ValidationGateCycleRequest(
     },
   val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
   val repositoryCheckpointProvider: () -> String? = { repositoryCheckpoint },
+  val preserveConsumedRepairTurns: Boolean = false,
+  val progressKey: String = request.workflowId,
 )

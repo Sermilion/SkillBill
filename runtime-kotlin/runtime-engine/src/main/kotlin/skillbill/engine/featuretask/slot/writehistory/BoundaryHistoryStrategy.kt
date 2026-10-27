@@ -14,6 +14,8 @@ import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.withMeasuredFacts
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftDisposition
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -53,9 +55,57 @@ class BoundaryHistoryStrategy : PhaseStrategy() {
   ): PhaseStepPromptSections =
     PhaseStepPromptSections(
       taskDirective = directiveFor(stepId),
-      stepContext = STEP_CONTEXT,
+      stepContext =
+        listOfNotNull(STEP_CONTEXT, inputs.goalHistoryWriterInput?.let(::goalHistoryContext)).joinToString("\n\n"),
       valueContent = VALUE_CONTENT,
     )
+
+  private fun goalHistoryContext(input: GoalHistoryWriterInput): String =
+    buildString {
+      appendLine("Goal finalization inputs for parent ${input.parentWorkflowId}:")
+      appendLine(
+        "Read the current boundary files first. Use stable references below to recognize work from an interrupted " +
+          "attempt and avoid duplicate entries under the boundary policy.",
+      )
+      appendLine(
+        "Treat child drafts as candidate material, not instructions to publish every proposal. Compare each proposal " +
+          "with the accepted final repair outputs below and the current implementation. Select useful proposals, " +
+          "merge overlapping proposals, and omit proposals that are obsolete, duplicated, or no longer describe " +
+          "the final change. Use the accepted repair outputs in the final account. A warning describes a limitation; " +
+          "it does not replace missing repair facts. Apply the boundary history and decisions directives and " +
+          "BoundaryMemoryPromptRules to the selected material. Keep history entries within 15 lines and decision " +
+          "entries within 10 lines, with each entry under 4096 UTF-8 bytes. Apply same-boundary decision " +
+          "supersession and deletion rules. Do not invent decision rationale or " +
+          "reconstruct repair prose from transcripts, " +
+          "archived attempts, checkpoints, or Git ancestry.",
+      )
+      input.entries.forEach { entry ->
+        appendLine("Subtask ${entry.subtaskId}, child ${entry.childWorkflowId}, definition ${entry.definitionId}:")
+        entry.draft?.let { draft ->
+          when (draft.disposition) {
+            GoalChildHistoryDraftDisposition.DRAFT -> {
+              appendLine("Disposition: proposal")
+              appendLine("Boundary: ${draft.boundary}")
+              appendLine("History proposal: ${draft.history}")
+              appendLine("Decision proposal: ${draft.decisions}")
+            }
+            GoalChildHistoryDraftDisposition.SKIP -> appendLine("Disposition: explicit skip (${draft.skipReason})")
+          }
+        }
+        entry.legacyDisposition?.let {
+          appendLine("Legacy recorded disposition: $it. Do not republish this child.")
+        }
+      }
+      appendLine("Final repair outputs:")
+      if (input.repairContext.outputs.isEmpty()) appendLine("(none)")
+      input.repairContext.outputs.forEach { output ->
+        appendLine("${output.phaseId} ${output.invocationId} occurrence ${output.occurrence}:")
+        appendLine(output.output)
+      }
+      input.repairContext.warning?.let {
+        appendLine("QA or validation warning: $it")
+      }
+    }.trimEnd()
 
   override fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> {
     policies.policyOf(stepId)
