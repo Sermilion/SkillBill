@@ -5,6 +5,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -38,6 +39,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
@@ -151,6 +153,59 @@ class PlanSubtasksReopeningTest {
       database.read { unit ->
         val reopened = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
         assertEquals(WorkflowStatus.PENDING, reopened.workflowStatus)
+      }
+    } finally {
+      home.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `reopening drops the decompose terminal so the replanned bundle completes the plan again`() {
+    val home = Files.createTempDirectory("plan-subtasks-terminal")
+    try {
+      val database = phaseRunDatabase(home, testHarnessClock)
+      val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN, database = database)
+      val selectedId = "wftr-terminal-plan"
+      seedPlans(database, execution, selectedId, "wftr-older-plan", acceptedRecords())
+      val recorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock)
+      val terminal =
+        FeatureTaskRuntimeDecomposeTerminal(
+          reason = FeatureTaskRuntimeDecompositionPlanner.AUTHORED_BUNDLE_REASON,
+          parentSpecPath = "spec.md",
+          decompositionManifestPath = "decomposition-manifest.yaml",
+          subtaskSpecPaths = listOf("spec_subtask_1.md"),
+        )
+      database.transaction { unit ->
+        val completed = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+        unit.workflowStates.saveAcceptedSnapshotMutation(
+          WorkflowFamily.TASK_RUNTIME,
+          completed.copy(
+            artifacts =
+              DurableWorkflowArtifacts.fromMap(
+                completed.artifacts +
+                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(
+                    terminal.asWorkflowArtifactEntry(),
+                  ),
+              ),
+          ),
+        )
+      }
+
+      assertTrue(reopening(database).reopenAtPlanSubtasks(selectedId))
+
+      database.read { unit ->
+        val reopened = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+        assertNull(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.value(reopened.artifacts))
+      }
+      assertTrue(recorder.recordDecomposeTerminal(selectedId, terminal, "plan_subtasks"))
+      val identity = execution.identity(selectedId)
+      database.read { unit ->
+        val completed = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+        assertEquals(WorkflowStatus.COMPLETED, completed.workflowStatus)
+        assertEquals(
+          selectedId,
+          unit.workflowStates.findCompletedPlanWorkflowId(identity.normalizedIssueKey, identity.repositoryIdentity),
+        )
       }
     } finally {
       home.toFile().deleteRecursively()

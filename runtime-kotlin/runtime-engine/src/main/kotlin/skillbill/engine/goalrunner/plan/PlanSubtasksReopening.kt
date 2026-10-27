@@ -12,6 +12,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerm
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -68,11 +70,19 @@ class PlanSubtasksReopening(
               clock = clock,
             ),
           )
+        // Drop the earlier decompose terminal so the re-planned bundle is verified and the plan completes again.
         val updated =
           engine.updateRecord(
             WorkflowFamily.TASK_RUNTIME.definition,
             snapshot,
-            update.copy(workflowStatus = WorkflowStatus.PENDING),
+            update.copy(
+              workflowStatus = WorkflowStatus.PENDING,
+              artifactsPatch =
+                WorkflowArtifactPatch.from(
+                  update.artifactsPatch.orEmpty() +
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(null),
+                ),
+            ),
           )
         unitOfWork.workflowStates.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, updated)
         true
