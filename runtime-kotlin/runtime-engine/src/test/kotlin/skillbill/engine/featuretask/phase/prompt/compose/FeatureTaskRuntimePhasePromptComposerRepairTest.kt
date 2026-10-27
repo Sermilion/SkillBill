@@ -135,6 +135,11 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
     assertContains(prompt, "Guard scanner repaired. Capability leaks remain.")
     assertContains(prompt, "Close the remaining authority paths.")
     assertContains(prompt, "needs_user_action")
+    assertContains(prompt, "Do not end the session after a small edit")
+    assertContains(prompt, "If a formatter cannot be scoped safely, record its deferral and continue editing.")
+    assertContains(prompt.replace(Regex("\\s+"), " "), "Every unfinished repair consumes one unsuccessful attempt")
+    assertFalse(prompt.contains("does not spend a criterion failure"))
+    assertFalse(prompt.contains("This retains the\nreservation"))
     assertFalse(prompt.contains("implementation_receipt"))
   }
 }

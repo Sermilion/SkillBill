@@ -662,3 +662,11 @@ Context: SKILL-446 launched 115 repair implementation attempts while AC-001 rema
 Decision: Supersede the partial-progress continuation exception. Every unfinished repair implementation, including `progress` and `no_progress`, records one unsuccessful outcome through the existing serial repair owner. Source edits do not exempt an attempt. Remove the continuation mutation and domain transition. Read-only admission of unfinished work consumes that same attempt once. Preserve the existing independent verification, per-criterion budgets and explicit operator reset.
 
 Evidence: Runner tests cover three source-changing unfinished repairs blocking before review, and a successful third repair after two failures. SQLite recorder tests cover direct settlement, read-only admission, replay and state reload without resetting or double-charging the budget.
+
+## [2026-10-27] Repair continuation instructions match the attempt budget
+
+Context: SKILL-446 exhausted three repair attempts after reports that reconciled the plan but left its production items unfinished. The resume prompt still said source-changing progress retained the reservation without spending a failure, contradicting the October 26 accounting change.
+
+Decision: Keep the three-attempt limit. Resumed repair prompts describe the charged attempt and new reservation. Require continued source work while authorized items remain, and reserve a partial progress settlement for an actual execution limit. A formatter that cannot be scoped safely is deferred without stopping production edits.
+
+Evidence: The rendered resume-prompt test checks the stopping rule, formatter deferral, charged attempt and absence of the obsolete budget exemption. Existing serial repair tests retain the accounting proof.

@@ -57,7 +57,13 @@ internal object AuditImplementFixPromptSections {
       "When every in-scope production finding is addressed, report that in ordinary prose. " +
       "Finish every production item in the saved plan before reporting the repair satisfied. " +
       "One guard or one safe edit is not completion when the saved plan still has missing behavior. " +
-      "If the session ends with unfinished source work, call feature_task_phase_complete with verdict progress " +
+      "Continue implementing while any in-scope production item remains and authorized source work can proceed. " +
+      "Do not end the session after a small edit, a plan reconciliation, or an inventory of remaining work. " +
+      "Task size, implementation complexity, and an unproven file-scoped formatter invocation are not reasons " +
+      "to stop source repair. If a formatter cannot be scoped safely, record its deferral and continue editing. " +
+      "Use compaction to retain the plan and unfinished items when context runs low. " +
+      "Only if an actual execution limit ends the session with unfinished source work, " +
+      "call feature_task_phase_complete with verdict progress " +
       "and explain the remaining work in prose. Every unfinished repair implementation consumes one of the " +
       "selected criterion's three unsuccessful repair attempts, whether or not it changed source files. " +
       "The runtime preserves edits and reports, then blocks after the third unsuccessful attempt. " +
@@ -110,10 +116,12 @@ internal object AuditImplementFixPromptSections {
       Prior repair sessions changed the current checkout but left unfinished work. Reconcile their reports
       with the latest audit and current source. Preserve completed edits and continue the saved plan for
       the runtime-selected criterion. Prior completion claims and test-only classifications remain claims
-      to verify. Continue every remaining production item in the saved plan in this repair reservation.
-      Report verdict progress only if the session ends before that work is finished. This retains the
-      reservation and does not spend a criterion failure only when this session changed source files; a
-      progress report with no source edits spends one. Do not replace the plan with another partial guard.
+      to verify. Continue every remaining production item in the saved plan under the current reservation.
+      Do not stop after another partial edit while authorized source work can proceed. Only an actual
+      execution limit justifies ending unfinished source work with verdict progress. Every unfinished
+      repair consumes one unsuccessful attempt, even when it changed source files. The runtime preserves
+      edits and reports; the next attempt receives a new reservation and repair plan. Do not replace the
+      plan with another partial guard.
 
       $reports
 
