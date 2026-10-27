@@ -57,7 +57,7 @@ internal class GoalQualityRepairOutputs(private val outcomeStore: GoalRunnerWork
           ?.execution
           ?.progress
           ?.validation
-          ?.buildGateProgress
+          ?.validationGateProgress
           ?.acceptedRepairOutputs
           .orEmpty()
       } else {
