@@ -47,6 +47,12 @@ import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanEr
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftDisposition
+import skillbill.goalrunner.model.history.GoalFinalRepairContext
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
@@ -178,6 +184,53 @@ class PhaseStrategyCompositionTest {
         ),
       ).valueContent.contains("disposition"),
     )
+  }
+
+  @Test
+  fun `goal boundary writer prompt carries ordered child proposals and settled repairs`() {
+    val input =
+      GoalHistoryWriterInput(
+        parentWorkflowId = "goal-parent",
+        entries =
+          listOf(
+            GoalHistoryWriterEntry(
+              subtaskId = 2,
+              childWorkflowId = "child-2",
+              definitionId = "goal-child@5",
+              draft =
+                GoalChildHistoryDraft(
+                  parentWorkflowId = "goal-parent",
+                  subtaskId = 2,
+                  childWorkflowId = "child-2",
+                  disposition = GoalChildHistoryDraftDisposition.DRAFT,
+                  boundary = "runtime",
+                  history = "The gate records repaired output before returning.",
+                  decisions = "Keep repair context on the parent.",
+                ),
+            ),
+            GoalHistoryWriterEntry(3, "child-3", "goal-child@4", legacyDisposition = "already_written"),
+          ),
+        repairContext =
+          GoalFinalRepairContext(
+            outputs = listOf(GoalFinalRepairOutput("qa_fix", "inv-qa", 1, "Fixed the final issue.")),
+            warning = "Validation reported a warning.",
+          ),
+      )
+    val prompt =
+      BoundaryHistoryStrategy().promptSections(
+        PHASE_WRITE_HISTORY,
+        FeatureTaskRuntimePhasePromptComposeInputs(
+          PROMPT_COMPOSER_ISSUE_KEY,
+          promptComposerBriefingFor(PHASE_WRITE_HISTORY),
+          goalHistoryWriterInput = input,
+        ),
+      ).stepContext
+
+    assertTrue(prompt.contains("child-2"))
+    assertTrue(prompt.contains("already_written"))
+    assertTrue(prompt.contains("Fixed the final issue."))
+    assertTrue(prompt.contains("Validation reported a warning."))
+    assertTrue(prompt.contains("avoid duplicate entries"))
   }
 
   @Test

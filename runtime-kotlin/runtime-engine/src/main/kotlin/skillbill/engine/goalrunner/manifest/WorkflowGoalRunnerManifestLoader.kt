@@ -22,6 +22,7 @@ import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
+import skillbill.workflow.decomposition.runtime.withHistoricalGoalQualityReadiness
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.WorkflowUpdateInput
@@ -131,7 +132,10 @@ class WorkflowGoalRunnerManifestLoader(
             workflowStatus = WorkflowStatus.PAUSED,
             currentStepId = "plan",
             stepUpdates = if (existing != null) null else importedPlanStepUpdates(planWorkflowId),
-            artifactsPatch = parentProjection.artifacts(manifest, base.artifacts).withImportedPlan(planWorkflowId),
+            artifactsPatch =
+              parentProjection.artifacts(manifest, base.artifacts).withImportedPlan(planWorkflowId).let { patch ->
+                if (existing == null) patch.withHistoricalGoalQualityReadiness() else patch
+              },
             sessionId = base.sessionId.orEmpty(),
             replaceArtifacts = true,
           ),

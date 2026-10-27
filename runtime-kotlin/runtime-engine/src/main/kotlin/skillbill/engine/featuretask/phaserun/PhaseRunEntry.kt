@@ -3,8 +3,6 @@ package skillbill.engine.featuretask.phaserun
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
-import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
@@ -12,20 +10,20 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
-import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
-import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.qa.QaOpenFinding
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseRunHarness
@@ -37,16 +35,15 @@ import java.util.UUID
 @Inject
 class PhaseRunEntry(
   private val strategies: PhaseStrategyLookup,
-  private val gitOperations: WorkflowGitOperations,
   private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
   private val lifecycleTelemetry: LifecycleTelemetryService,
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
   private val intakeResolver: PhaseRunIntakeResolver,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
-  private val agentRunLauncher: AgentRunLauncher,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val standaloneRunners: StandalonePhaseRunners,
+  private val plans: PhaseRunPlanResolver,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
     if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
@@ -66,7 +63,7 @@ class PhaseRunEntry(
       requireNotNull(SkeletonDefinition.preparedExecutionFor(request.definitionId)) {
         "Phase ${request.definitionId} has no prepared standalone execution."
       }
-    val branch = currentBranch(request)?.branch
+    val branch = plans.currentBranch(request)?.branch
     val selector = request.intake?.trim()?.takeIf(String::isNotEmpty) ?: branch?.let { "branch $it" } ?: "no target"
     if (request.recoverStaleOwner != null && request.intake.isNullOrBlank()) {
       return monitorBlocked(
@@ -129,6 +126,117 @@ class PhaseRunEntry(
     parentWorkflowId: String,
     expectedBranch: String,
   ): PhaseRunResult = runInternal(request, parentWorkflowId, parentWorkflowId, expectedBranch)
+
+  fun runForGoalQuality(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    invocationId: String,
+    expectedBranch: String,
+    acceptedExecutionPlan: String,
+  ): PhaseRunResult {
+    val progressAvailable = request.goalQualityPhaseProgress != null && request.persistGoalQualityPhaseProgress != null
+    val latestAvailable = request.latestGoalQualityPhaseProgress != null && acceptedExecutionPlan.isNotBlank()
+    if (!progressAvailable || !latestAvailable) {
+      plans.invalidQualityPlan()
+    }
+    val retained = request.goalQualityPhaseProgress
+    val plan =
+      plans.validateGoalQualityExecutionPlan(
+        acceptedExecutionPlan,
+        request.definitionId,
+        request.invokedAgentId,
+      )
+    retained.let {
+      plans.validateNestedProgressKeys(it)
+      plans.validateRetainedRunningPhases(it, plan, "$parentWorkflowId:$invocationId")
+    }
+    reconcileGoalRepairOutputs(request, invocationId, retained)
+    if (retained.terminalCompleted == true) return completedQualityResult(invocationId, retained)
+    if (retained.terminalBlockedStep != null) return blockedQualityResult(invocationId, retained)
+    val result =
+      runInternal(
+        request.copy(acceptedGoalQualityPlanText = acceptedExecutionPlan),
+        invocationId,
+        parentWorkflowId,
+        expectedBranch,
+      )
+    reconcileGoalRepairOutputs(request, invocationId, request.goalQualityPhaseProgress)
+    val sink = request.persistGoalQualityPhaseProgress
+    val latest = request.latestGoalQualityPhaseProgress.invoke()
+    val terminal =
+      when (result) {
+        is PhaseRunResult.Completed -> latest.copy(terminalCompleted = true)
+        is PhaseRunResult.Blocked ->
+          latest.copy(
+            terminalBlockedStep = result.stepId,
+            terminalBlockedReason = result.reason,
+          )
+      }
+    if (!sink(terminal)) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION,
+        "Could not persist terminal '${request.definitionId}' progress for '$invocationId'.",
+      )
+    }
+    return result
+  }
+
+  private fun reconcileGoalRepairOutputs(
+    request: PhaseRunRequest,
+    invocationId: String,
+    progress: GoalQualityPhaseProgress?,
+  ) {
+    val sink = request.acceptedGoalRepairOutput ?: return
+    progress?.acceptedOutputs?.forEach { output ->
+      sink(output.phaseId, invocationId, output.occurrence, output.output)
+    }
+  }
+
+  private fun completedQualityResult(
+    invocationId: String,
+    progress: GoalQualityPhaseProgress,
+  ): PhaseRunResult.Completed {
+    val completedSteps =
+      progress.phaseLedger
+        .filter { it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE }
+        .map { it.phaseId }
+    val outputs = progress.acceptedOutputs.map { it.output }
+    return PhaseRunResult.Completed(
+      invocationId = invocationId,
+      completedStepIds = completedSteps,
+      reviewResult = null,
+      value = outputs.lastOrNull(),
+      completedOutputs = outputs,
+      acceptedOutput = outputs.lastOrNull(),
+      identifiedCompletedOutputs =
+        progress.acceptedOutputs.map {
+          PhaseRunCompletedOutput(it.phaseId, it.occurrence, it.output)
+        },
+    )
+  }
+
+  private fun blockedQualityResult(
+    invocationId: String,
+    progress: GoalQualityPhaseProgress,
+  ): PhaseRunResult.Blocked {
+    val completedSteps =
+      progress.phaseLedger
+        .filter { it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE }
+        .map { it.phaseId }
+    val outputs = progress.acceptedOutputs.map { it.output }
+    return PhaseRunResult.Blocked(
+      invocationId = invocationId,
+      completedStepIds = completedSteps,
+      reviewResult = null,
+      stepId = requireNotNull(progress.terminalBlockedStep),
+      reason = requireNotNull(progress.terminalBlockedReason),
+      completedOutputs = outputs,
+      identifiedCompletedOutputs =
+        progress.acceptedOutputs.map {
+          PhaseRunCompletedOutput(it.phaseId, it.occurrence, it.output)
+        },
+    )
+  }
 
   private fun runPrepared(
     request: PhaseRunRequest,
@@ -238,6 +346,7 @@ class PhaseRunEntry(
     expectedBranch: String? = null,
     standalone: MonitorPreparation.Prepared? = null,
   ): PhaseRunResult {
+    val acceptedExecutionPlan = request.acceptedGoalQualityPlanText
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
       throw InMemorySkeletonDefinitionRequiredError(definition.id)
@@ -246,26 +355,20 @@ class PhaseRunEntry(
       standalone
         ?.context
         ?.let { FeatureTaskRuntimeResolvedBranch(branch = it.worktree.branch, baseBranch = it.target.base.ref) }
-        ?: currentBranch(request)
+        ?: plans.currentBranch(request)
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
-    val facts = InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context)
-    val selection = strategySelectionFacts(facts)
+    val resolutionFacts = InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context)
     val executionPlan =
-      strategies.executionPlan(
-        selection.copy(
-          stepAssignments =
-            FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
-              launcher = agentRunLauncher,
-              lookup = strategies,
-              facts = selection,
-              inputs =
-                StepLaunchAssignmentInputs(
-                  invokedAgentId = request.invokedAgentId,
-                  agentAssignment = facts.agentAssignment,
-                  modelAssignment = facts.modelAssignment,
-                ),
-            ),
-        ),
+      acceptedExecutionPlan?.let { encoded ->
+        plans.validateGoalQualityExecutionPlan(encoded, request.definitionId, request.invokedAgentId)
+      } ?: plans.resolveExecutionPlan(request, workflowId, branch, resolutionFacts)
+    val facts =
+      InMemoryPhaseRunFacts(
+        request.copy(acceptedGoalQualityExecutionPlan = executionPlan.takeIf { acceptedExecutionPlan != null }),
+        definition,
+        intake,
+        workflowId,
+        standalone?.context,
       )
     if (expectedBranch != null && branch?.branch != expectedBranch) {
       return PhaseRunResult.Blocked(
@@ -278,12 +381,14 @@ class PhaseRunEntry(
     }
     val progress =
       FeatureTaskRuntimeRunState(
-        initialRecords = emptyMap(),
+        initialRecords = request.goalQualityPhaseProgress?.phaseRecords.orEmpty(),
         transitions = executionPlan.phaseTraversal(),
+        durableInitialLedger = request.goalQualityPhaseProgress?.phaseLedger.orEmpty(),
+        initialQaRepairState = request.goalQualityPhaseProgress?.qaRepairState,
         stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
         resumeRulesFn = strategies.resumeRules(executionPlan),
       )
-    val records = inMemoryRecords(request, workflowId, branch, standalone)
+    val records = inMemoryRecords(request, workflowId, branch, standalone, invocationId)
     val state =
       InMemoryPhaseRunState(
         facts = facts,
@@ -307,6 +412,7 @@ class PhaseRunEntry(
     workflowId: String,
     branch: FeatureTaskRuntimeResolvedBranch?,
     standalone: MonitorPreparation.Prepared?,
+    invocationId: String,
   ): InMemoryPhaseRunRecords =
     InMemoryPhaseRunRecords(
       clock,
@@ -326,6 +432,11 @@ class PhaseRunEntry(
           },
         )
       },
+      request.acceptedGoalRepairOutput,
+      invocationId,
+      request.goalQualityPhaseProgress,
+      request.persistGoalQualityPhaseProgress,
+      workflowId,
     )
 
   private fun resultOf(
@@ -339,9 +450,10 @@ class PhaseRunEntry(
           invocationId = state.invocationId,
           completedStepIds = report.completedPhaseIds,
           reviewResult = state.reviewResult,
-          value = report.completedPhaseIds.lastOrNull()?.let { id -> records.loadPhaseRecords("")[id]?.outputArtifact },
+          value = report.completedPhaseIds.lastOrNull()?.let { id -> records.acceptedOutputs[id] },
           completedOutputs = completedOutputs(report.completedPhaseIds, records),
           acceptedOutput = report.completedPhaseIds.lastOrNull()?.let { records.acceptedOutputs[it] },
+          identifiedCompletedOutputs = records.identifiedCompletedOutputs(report.completedPhaseIds),
         )
       is FeatureTaskRuntimeRunReport.Blocked ->
         blocked(state, report.completedPhaseIds, report.lastIncompletePhase, report.blockedReason, records)
@@ -362,13 +474,6 @@ class PhaseRunEntry(
         )
     }
 
-  private fun currentBranch(request: PhaseRunRequest): FeatureTaskRuntimeResolvedBranch? =
-    (gitOperations.currentBranch(request.repoRoot) as? WorkflowGitOperationResult.Ok)
-      ?.value
-      ?.trim()
-      ?.takeIf { branch -> branch.isNotBlank() && branch != DETACHED_HEAD }
-      ?.let(::FeatureTaskRuntimeResolvedBranch)
-
   private fun blocked(
     state: InMemoryPhaseRunState,
     completedStepIds: List<String>,
@@ -383,18 +488,17 @@ class PhaseRunEntry(
       stepId,
       reason,
       completedOutputs(completedStepIds, records),
+      identifiedCompletedOutputs = records.identifiedCompletedOutputs(completedStepIds),
     )
 
   private fun completedOutputs(
     stepIds: List<String>,
     records: InMemoryPhaseRunRecords,
   ): List<String> {
-    val outputs = records.loadPhaseRecords("")
-    return stepIds.mapNotNull { id -> outputs[id]?.outputArtifact?.takeIf(String::isNotBlank) }
+    return stepIds.mapNotNull { id -> records.loadPhaseRecords("")[id]?.outputArtifact?.takeIf(String::isNotBlank) }
   }
 }
 
 private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
 
 private const val INVOCATION_ID_PREFIX = "phr-"
-private const val DETACHED_HEAD = "HEAD"

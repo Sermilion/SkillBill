@@ -17,11 +17,14 @@ import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
+import skillbill.contracts.workflow.goal.GOAL_QUALITY_EXECUTION_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityWorktreeActivity
+import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
@@ -102,12 +105,16 @@ internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpe
           ),
         )
       }.orEmpty()
+    val goalQualityReadiness = initialGoalQualityReadiness(args)
     val withExecutionPlan =
-      if (planArtifacts.isEmpty() && args.initialArtifacts.isEmpty()) {
+      if (planArtifacts.isEmpty() && args.initialArtifacts.isEmpty() && goalQualityReadiness.isEmpty()) {
         record
       } else {
         record.copy(
-          artifacts = DurableWorkflowArtifacts.fromMap(record.artifacts + planArtifacts + args.initialArtifacts),
+          artifacts =
+            DurableWorkflowArtifacts.fromMap(
+              record.artifacts + planArtifacts + args.initialArtifacts + goalQualityReadiness,
+            ),
         )
       }
     args.workflowSnapshotValidator.validate(withExecutionPlan, family.definition.workflowName)
@@ -329,3 +336,19 @@ fun generateWorkflowId(
 }
 
 private fun Int.twoDigits(): String = toString().padStart(2, '0')
+
+private fun initialGoalQualityReadiness(args: PersistOpenedWorkflowArgs): Map<String, Any?> {
+  return if (args.family == WorkflowFamily.TASK_RUNTIME && args.stepId == "plan") {
+    mapOf(
+      DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.entry(
+        mapOf(
+          GoalQualityExecutionPayloadKeys.CONTRACT_VERSION to GOAL_QUALITY_EXECUTION_CONTRACT_VERSION,
+          GoalQualityExecutionPayloadKeys.READINESS to GoalQualityReadiness.CLEAN_UNSTARTED.wireValue,
+          GoalQualityExecutionPayloadKeys.EXECUTION to null,
+        ),
+      ),
+    )
+  } else {
+    emptyMap()
+  }
+}

@@ -123,6 +123,8 @@ data class SkeletonDefinition(
           ),
         loopOnlyStepIds = setOf(FeatureTaskRuntimePhaseIds.BUILD),
       )
+    val GOAL_HISTORY: SkeletonDefinition =
+      SkeletonDefinition("goal-history", listOf(PhaseSlot.WRITE_HISTORY), runStateKind = SkeletonRunStateKind.IN_MEMORY)
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
@@ -167,6 +169,7 @@ data class SkeletonDefinition(
           VALIDATION,
           QA,
           GOAL_QA,
+          GOAL_HISTORY,
           PLAN,
           PR,
           MONITOR,

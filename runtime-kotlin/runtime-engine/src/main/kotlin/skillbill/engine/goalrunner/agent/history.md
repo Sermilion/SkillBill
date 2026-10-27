@@ -1,5 +1,17 @@
 # goalrunner boundary history
 
+## [2026-10-27] SKILL-446 subtask 2: publish goal history after final checks
+Areas: runtime-engine goalrunner and featuretask, runtime-domain, runtime-application workflow, runtime-contracts, runtime-core goal wiring, runtime-infra contracts, orchestration/contracts
+- MEDIUM feature. Goal finalization runs the existing boundary writer after goal QA, repairs and already-required validation, before the remaining-worktree commit and PR. No-change and already-published exits remain.
+- Writer inputs follow manifest order with stable parent, subtask and child identities. New children require retained drafts or explicit skips; recorded legacy dispositions prevent republishing older writes.
+- Accepted QA and validation repair prose persists under the parent before acknowledgement, survives interruption and warnings, and reaches the writer alongside drafts. Skipped QA retains explicit empty repair context when no repair occurred.
+- Reusable: versioned parent history and quality-execution artifacts retain repair occurrences, accepted plans and writer completion outside the bounded attempt ledger, with schema validation and typed failures.
+- Accepted writer reuse requires matching ordered inputs and the saved post-writer content identity. Missing records, writer failure or required persistence failure stop at write_history before publication; interrupted writers inspect current files to avoid duplicates.
+- Validation repairs preserve raw completion envelopes beside normalized prose, recover interrupted phases, retain legacy validation evidence and distinguish QA findings from environment warnings.
+- Limits: unchanged retries reuse completion without another writer; changed inputs or contents require a fresh write. No additional quality cycle, per-entry edit protocol or multi-file transaction was added.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-27] SKILL-446 subtask 1: durable goal-child history drafts
 Areas: runtime-engine goalrunner and featuretask, runtime-domain skeleton, runtime-contracts, runtime-infra contracts and sqlite, orchestration/contracts
 - New goal children use skeleton revision 5 to return a history and decision draft or an explicit skip without editing boundary memory. Recorded revisions 2 through 4 and standalone writing keep their strategies.

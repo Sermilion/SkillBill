@@ -1,0 +1,264 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/goal-quality-execution-schema.yaml"
+title: Goal quality execution
+type: object
+additionalProperties: false
+required: [contract_version, readiness, execution]
+properties:
+  contract_version:
+    enum: ["0.1", "0.2", "0.3", "0.4", "0.5"]
+  readiness:
+    enum: [clean_unstarted, admitted, historical_ambiguity]
+  execution:
+    oneOf:
+      - type: "null"
+      - type: object
+        additionalProperties: false
+        required: [parent_workflow_id, invocation_id, baseline_content_fingerprint, status, validation, warning]
+        properties:
+          parent_workflow_id: {type: string, minLength: 1}
+          invocation_id: {type: string, minLength: 1}
+          baseline_content_fingerprint: {type: string, minLength: 1}
+          selection_fingerprint:
+            oneOf:
+              - type: "null"
+              - type: string
+                minLength: 1
+          governing_input_fingerprint:
+            oneOf:
+              - type: "null"
+              - type: string
+                minLength: 1
+          governing_inputs:
+            oneOf:
+              - type: "null"
+              - type: object
+                additionalProperties: false
+                required: [issue_key, repo_root, invoked_agent_id, timeout_millis, qa_selection, parent_spec_path, acceptance_criteria, acceptance_criteria_read_failure, branch, model_directives, model_matrix, addons]
+                properties:
+                  issue_key: {type: string, minLength: 1}
+                  intake: {type: [string, "null"]}
+                  repo_root: {type: string, minLength: 1}
+                  invoked_agent_id: {type: string, minLength: 1}
+                  configured_agent_override_id: {type: [string, "null"]}
+                  timeout_millis: {type: [integer, "null"], minimum: 1}
+                  qa_selection: {enum: [auto, off]}
+                  parent_spec_path: {type: string, minLength: 1}
+                  acceptance_criteria:
+                    oneOf:
+                      - type: "null"
+                      - type: array
+                        items: {type: string}
+                  acceptance_criteria_read_failure: {type: [string, "null"]}
+                  branch: {type: string, minLength: 1}
+                  model_directives:
+                    type: object
+                    additionalProperties:
+                      $ref: "#/$defs/model_directive"
+                  model_matrix:
+                    oneOf:
+                      - type: "null"
+                      - $ref: "#/$defs/model_matrix"
+                  addons:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [slug, source_identity, content_sha256, description, content]
+                      properties:
+                        slug: {type: string, minLength: 1}
+                        source_identity: {type: string, minLength: 1}
+                        content_sha256: {type: string, pattern: "^[0-9a-f]{64}$"}
+                        description: {type: string}
+                        content: {type: string}
+          execution_plans:
+            oneOf:
+              - type: "null"
+              - type: object
+                additionalProperties: false
+                required: [qa_plan, validation_plan]
+                properties:
+                  qa_plan: {type: string, minLength: 1}
+                  validation_plan: {type: string, minLength: 1}
+                  plan_fingerprint: {type: string, pattern: "^[0-9a-f]{64}$"}
+          progress:
+            oneOf:
+              - type: "null"
+              - type: object
+                additionalProperties: false
+                required: [qa_progress, validation_progress]
+                properties:
+                  qa_progress: {$ref: "#/$defs/phase_progress"}
+                  validation_progress: {$ref: "#/$defs/phase_progress"}
+          status:
+            enum: [qa_pending, validation_decision_pending, required_validation_pending, validation_running, validation_completed_pending_settlement, settled_passed, settled_skipped, settled_warned, retired]
+          validation:
+            enum: [decision_pending, not_required, required_pending, running, completed, deliberately_warned]
+          warning:
+            oneOf:
+              - type: "null"
+              - type: string
+          settled_content_fingerprint:
+            oneOf:
+              - type: "null"
+              - type: string
+                minLength: 1
+          post_qa_content_fingerprint:
+            oneOf:
+              - type: "null"
+              - type: string
+                minLength: 1
+          qa_tested_tree_identity:
+            oneOf:
+              - type: "null"
+              - type: string
+                minLength: 1
+          skip_reason:
+            oneOf:
+              - type: "null"
+              - enum: [unsupported_target, subtasks_already_ran_qa, already_settled_on_tree]
+allOf:
+  - if:
+      properties:
+        contract_version: {const: "0.2"}
+    then:
+      properties:
+        execution:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [governing_input_fingerprint, governing_inputs]
+  - if:
+      properties:
+        contract_version: {const: "0.3"}
+    then:
+      properties:
+        execution:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [governing_input_fingerprint, governing_inputs, execution_plans]
+  - if:
+      properties:
+        contract_version: {const: "0.4"}
+    then:
+      properties:
+        execution:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [governing_input_fingerprint, governing_inputs, execution_plans, progress]
+  - if:
+      properties:
+        contract_version: {const: "0.5"}
+    then:
+      properties:
+        execution:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [governing_input_fingerprint, governing_inputs, execution_plans, progress]
+              properties:
+                execution_plans:
+                  type: object
+                  required: [qa_plan, validation_plan, plan_fingerprint]
+$defs:
+  validation_gate_progress:
+    type: object
+    additionalProperties: false
+    required: [contract_version, gate_run_count, gate_runs, remaining_findings, complete_findings, repair_window_phase, repairs_used, captured_triage_plan, last_agent_unfixed_criteria, pending_external_operation, pending_external_checkpoint, accepted_repair_outputs, terminal_outcome, terminal_reason, terminal_failure_disposition, terminal_failure_code]
+    properties:
+      contract_version: {enum: ["0.2", "0.3"]}
+      gate_run_count: {type: integer, minimum: 0}
+      gate_runs: {type: array, items: {type: object}}
+      remaining_findings: {type: array, items: {type: object}}
+      complete_findings: {type: array, items: {type: object}}
+      repair_window_phase: {enum: [none, findings_open]}
+      repairs_used: {type: integer, minimum: 0}
+      captured_triage_plan: {type: [string, "null"]}
+      triage_disposition: {enum: [unknown, not_required, not_started, accepted_empty, captured]}
+      last_agent_unfixed_criteria: {type: array, items: {type: string}}
+      pending_external_operation: {type: [string, "null"]}
+      pending_external_checkpoint: {type: [string, "null"]}
+      accepted_repair_outputs: {type: array, items: {type: object}}
+      terminal_outcome: {type: [string, "null"]}
+      terminal_reason: {type: [string, "null"]}
+      terminal_failure_disposition: {type: [string, "null"]}
+      terminal_failure_code: {type: [string, "null"]}
+    allOf:
+      - if:
+          properties:
+            contract_version: {const: "0.3"}
+        then:
+          required: [triage_disposition]
+  phase_progress:
+    type: object
+    additionalProperties: false
+    required: [phase_records, phase_ledger, accepted_outputs, accepted_envelopes, terminal_completed, build_gate_progress_key, validation_gate_progress_key, revision]
+    properties:
+      phase_records: {type: object, additionalProperties: {type: object}}
+      phase_ledger: {type: array, items: {type: object}}
+      accepted_outputs:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [phase_id, occurrence, output]
+          properties:
+            phase_id: {type: string, minLength: 1}
+            occurrence: {type: integer, minimum: 1}
+            output: {type: string}
+      accepted_envelopes:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [phase_id, attempt, envelope]
+          properties:
+            phase_id: {type: string, minLength: 1}
+            attempt: {type: integer, minimum: 1}
+            envelope: {type: object}
+      qa_repair_state: {type: [object, "null"]}
+      build_gate_progress:
+        oneOf:
+          - type: "null"
+          - $ref: "#/$defs/validation_gate_progress"
+      build_gate_progress_key: {type: [string, "null"]}
+      validation_gate_progress:
+        oneOf:
+          - type: "null"
+          - $ref: "#/$defs/validation_gate_progress"
+      validation_gate_progress_key: {type: [string, "null"]}
+      verification_checkpoint: {type: [array, "null"], items: {type: object}}
+      verification_boundary: {type: [object, "null"]}
+      terminal_blocked_step: {type: [string, "null"]}
+      terminal_blocked_reason: {type: [string, "null"]}
+      terminal_completed: {type: boolean}
+      revision: {type: integer, minimum: 0}
+  model_directive:
+    type: object
+    additionalProperties: false
+    required: [model, effort]
+    properties:
+      model: {type: string, minLength: 1}
+      effort: {type: [string, "null"]}
+  model_matrix:
+    type: object
+    additionalProperties: false
+    required: [phase_tiers, agents, agent_phase_overrides]
+    properties:
+      phase_tiers:
+        type: object
+        additionalProperties: {type: string}
+      agents:
+        type: object
+        additionalProperties:
+          type: object
+          additionalProperties:
+            $ref: "#/$defs/model_directive"
+      agent_phase_overrides:
+        type: object
+        additionalProperties:
+          type: object
+          additionalProperties:
+            $ref: "#/$defs/model_directive"

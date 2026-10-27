@@ -1,9 +1,10 @@
 {
     "artifacts_json": {
         "feature_task_runtime_build_gate_progress": {
+            "accepted_repair_outputs": [],
             "captured_triage_plan": null,
             "complete_findings": [],
-            "contract_version": "0.2",
+            "contract_version": "0.3",
             "gate_run_count": 1,
             "gate_runs": [
                 {
@@ -18,9 +19,16 @@
                 }
             ],
             "last_agent_unfixed_criteria": [],
+            "pending_external_checkpoint": null,
+            "pending_external_operation": null,
             "remaining_findings": [],
             "repair_window_phase": "none",
-            "repairs_used": 0
+            "repairs_used": 0,
+            "terminal_failure_code": null,
+            "terminal_failure_disposition": null,
+            "terminal_outcome": null,
+            "terminal_reason": null,
+            "triage_disposition": "not_required"
         },
         "feature_task_runtime_checkpoint_identities": {
             "checkpoints": [

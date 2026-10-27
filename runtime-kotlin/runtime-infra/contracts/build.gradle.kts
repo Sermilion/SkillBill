@@ -86,6 +86,16 @@ governedResources {
     "SKILL-446: canonical goal-child history draft schema",
   )
   copy(
+    "copyGoalFinalizationHistorySchema",
+    "goal-finalization-history-schema.yaml",
+    "SKILL-446: canonical goal finalization history schema",
+  )
+  copy(
+    "copyGoalQualityExecutionSchema",
+    "goal-quality-execution-schema.yaml",
+    "SKILL-446: canonical goal quality execution schema",
+  )
+  copy(
     "copyGoalProgressEventSchema",
     "goal-progress-event-schema.yaml",
     "SKILL-64: canonical goal progress event schema",

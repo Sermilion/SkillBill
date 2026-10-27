@@ -16,9 +16,11 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.contracts.workflow.featuretask.QaRepairStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalChildHistoryDraftSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalChildHistoryEvidenceSchemaValidator
+import skillbill.infrastructure.contracts.workflow.goal.GoalFinalizationHistorySchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalObservabilityEventSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalPlanningPreparationSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalProgressEventSchemaValidator
+import skillbill.infrastructure.contracts.workflow.goal.GoalQualityExecutionSchemaValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -86,6 +88,10 @@ class FeatureTaskRuntimeWireArtifactValidator(
         GoalChildHistoryEvidenceSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_DRAFT ->
         GoalChildHistoryDraftSchemaValidator.validate(wireMap, sourceLabel)
+      FeatureTaskRuntimeWireArtifactKind.GOAL_FINALIZATION_HISTORY ->
+        GoalFinalizationHistorySchemaValidator.validate(wireMap, sourceLabel)
+      FeatureTaskRuntimeWireArtifactKind.GOAL_QUALITY_EXECUTION ->
+        GoalQualityExecutionSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
         AcceptanceCriterionRepairStateSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT ->

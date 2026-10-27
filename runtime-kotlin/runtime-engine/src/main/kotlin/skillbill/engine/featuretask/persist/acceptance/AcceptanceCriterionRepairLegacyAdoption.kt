@@ -121,7 +121,12 @@ class AcceptanceCriterionRepairLegacyAdoption(
 
   private fun composition(recorded: ResolvedPhaseExecutionPlan): AcceptanceCriterionRepairAdoptionComposition? =
     when {
-      recorded.definitionId == "standalone" && recorded.qualityGateSelection == null ->
+      recorded.definitionId == "standalone" && recorded.qualityGateSelection in
+        setOf(
+          null,
+          FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+        )
+      ->
         AcceptanceCriterionRepairAdoptionComposition.STANDALONE
       recorded.definitionId == "goal-child" &&
         recorded.qualityGateSelection == FeatureTaskRuntimeQualityGateSelection.BUILD ->

@@ -55,7 +55,7 @@ class FeatureTaskRuntimeBuildGateFullDiscoverTest {
     assertIs<ValidationGateCycleTerminalOutcome.Completed>(
       assertIs<ValidationGateCycleResult.Terminal>(cycle).outcome,
     )
-    val discoveryFinding = progress.first().completeFindings.single()
+    val discoveryFinding = progress.first { it.completeFindings.isNotEmpty() }.completeFindings.single()
     assertEquals("Unresolved reference: missing", discoveryFinding["message"])
     assertEquals("module-a/Foo.kt:3:1", discoveryFinding["location"])
     assertEquals(2, progress.last().gateRunCount)

@@ -18,8 +18,13 @@ sealed interface GoalQaGateResult {
   data class Warned(val reason: String) : GoalQaGateResult
 }
 
-enum class GoalQaSkipReason {
-  UNSUPPORTED_TARGET,
-  SUBTASKS_ALREADY_RAN_QA,
-  ALREADY_SETTLED_ON_TREE,
+enum class GoalQaSkipReason(val wireValue: String) {
+  UNSUPPORTED_TARGET("unsupported_target"),
+  SUBTASKS_ALREADY_RAN_QA("subtasks_already_ran_qa"),
+  ALREADY_SETTLED_ON_TREE("already_settled_on_tree"),
+  ;
+
+  companion object {
+    fun fromWire(value: String?): GoalQaSkipReason? = entries.firstOrNull { it.wireValue == value }
+  }
 }

@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestLoader
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestProjectionPersistence
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
@@ -32,6 +33,7 @@ import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -112,6 +114,7 @@ fun engineWorkflowGoalRunnerManifestStore(
       featureTaskRuntimeWireArtifactValidatorForTest(),
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
     )
+  val qualityExecution = testWorkflowGoalRunnerQualityExecutionStore(database, workflowSnapshotValidator)
   return WorkflowGoalRunnerManifestStore(
     database = database,
     projectionPersistence =
@@ -137,6 +140,7 @@ fun engineWorkflowGoalRunnerManifestStore(
     repositoryEnclosingRootPort = repositoryEnclosingRootPort,
     executionAdmission = executionAdmission,
     historyEvidence = historyEvidence,
+    qualityExecution = qualityExecution,
     childWorkflowPersistence =
       WorkflowGoalRunnerChildWorkflowPersistence(
         planningHydrator,
@@ -146,6 +150,7 @@ fun engineWorkflowGoalRunnerManifestStore(
         repositoryEnclosingRootPort,
         projectStore,
         historyEvidence,
+        qualityExecution,
       ),
   )
 }
@@ -199,6 +204,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     database = database,
     workflowSnapshotValidator = workflowSnapshotValidator,
     wireArtifactValidator = artifactPorts.wireArtifactValidator(),
+    goalQualityExecution = testWorkflowGoalRunnerQualityExecutionStore(database, workflowSnapshotValidator),
     historyEvidence =
       GoalChildHistoryEvidenceStore(
         workflowSnapshotValidator,
@@ -211,6 +217,24 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     blockIncidentCapture = testBlockIncidentCapture(database, clock),
     clock = clock,
   )
+
+fun testWorkflowGoalRunnerQualityExecutionStore(
+  database: DatabaseSessionFactory,
+  workflowSnapshotValidator: WorkflowSnapshotValidator,
+): WorkflowGoalRunnerQualityExecutionStore {
+  var invocation = 0
+  return WorkflowGoalRunnerQualityExecutionStore(
+    database,
+    workflowSnapshotValidator,
+    featureTaskRuntimeWireArtifactValidatorForTest(),
+    IdentifierGeneratorPort { "test-quality-${++invocation}" },
+    GoalChildHistoryEvidenceStore(
+      workflowSnapshotValidator,
+      featureTaskRuntimeWireArtifactValidatorForTest(),
+      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+    ),
+  )
+}
 
 fun engineWorkflowGoalRunnerChildRepairStore(
   database: DatabaseSessionFactory,

@@ -13,9 +13,9 @@ import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftDisposition
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftDisposition
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.db.DatabaseSessionFactory

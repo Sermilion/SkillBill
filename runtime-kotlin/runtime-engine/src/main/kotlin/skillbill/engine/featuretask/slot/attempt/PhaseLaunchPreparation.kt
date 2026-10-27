@@ -194,7 +194,6 @@ object PhaseLaunchPreparation {
     with(context) {
       val run = args.run
       val state = args.state
-      val priorCorrection = args.priorCorrection
       val measurementContext = args.context
       return try {
         PhaseLaunchPreparation.prepareLaunch(context, args)
@@ -253,7 +252,6 @@ object PhaseLaunchPreparation {
   ): LaunchPreparation {
     val run = args.run
     val state = args.state
-    val priorCorrection = args.priorCorrection
     val measurementContext = args.context
     val repositoryCheckpoint = args.context.repositoryCheckpoint
     val prompt = args.prompt
@@ -310,6 +308,7 @@ object PhaseLaunchPreparation {
           .copy(
             phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
             projectInstructions = projectInstructions,
+            goalHistoryWriterInput = run.request.goalHistoryWriterInput,
           )
       return PreparedLaunchReady(
         PreparedLaunch(
@@ -436,7 +435,6 @@ object PhaseLaunchPreparation {
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   ): FeatureTaskRuntimePhasePromptComposeInputs {
     val run = args.run
-    val priorCorrection = args.priorCorrection
     val resolvedBranchRecord = recorder.loadResolvedBranch(run.request.workflowId)
     val launchReviewTier = launchReviewTierFor(run, args.boundStep)
     val checkpointArgs =
@@ -474,8 +472,8 @@ object PhaseLaunchPreparation {
       reviewDecidingRule = launchReviewTier.resolution?.decidingRule,
       repairLedger = handoff.repairLedger,
       priorReviewContext = null,
-      priorTerminalFailure = priorCorrection?.retryableTerminalReason,
-      priorFindingCoverage = priorCorrection?.findingCoverageReason,
+      priorTerminalFailure = args.priorCorrection?.retryableTerminalReason,
+      priorFindingCoverage = args.priorCorrection?.findingCoverageReason,
       priorAcceptanceAudit =
         auditProseValue(
           progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)

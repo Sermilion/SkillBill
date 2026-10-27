@@ -1,5 +1,21 @@
 # goalrunner boundary decisions
 
+## [2026-10-27] Write goal boundary memory after final repairs
+Context: SKILL-446 child drafts precede goal QA and validation repairs, so child-time file writes cannot describe the final published change.
+Decision: Run the existing boundary writer once in goal finalization after existing final checks and before commit and PR. Supply manifest-ordered drafts, explicit skips, stable identities and final repair context; honor recorded legacy dispositions.
+Reason: The ordinary writer already owns boundary selection, overlap removal and supersession policy. Reusing it includes final repairs without adding another quality cycle or republishing legacy child history.
+Alternatives considered: Reconstructing narrative from transcripts or Git ancestry and introducing a per-entry edit protocol are outside the spec's producer-owned draft design.
+
+## [2026-10-27] Persist final repair prose before acknowledging completion
+Context: A goal QA or validation run can accept a repair and then warn, block or stop before its in-memory result returns.
+Decision: Persist identified accepted repair prose under the parent at settlement, reconcile returned outputs without duplicate occurrences, and retain warnings separately. Required save failures stop publication even when ordinary QA failures warn and continue.
+Reason: Capturing only returned phase results loses repairs across interruption. The bounded attempt ledger and execution archives cannot replace producer-owned durable prose for the final writer.
+
+## [2026-10-27] Reuse writer completion against its post-write contents
+Context: The history writer changes repository files, and finalization can stop after those edits or after accepted writer completion.
+Decision: Save accepted output with ordered-input and pre-writer content fingerprints plus post-writer content identity. Reuse only when inputs and current post-writer contents match; otherwise invoke the writer against current files and stable references.
+Reason: Comparing only pre-writer contents invalidates the writer's own edits on every retry. Treating an interrupted edit or synthetic head receipt as completion could publish without accepted settlement. Current-file inspection follows existing duplicate-avoidance policy without promising semantic deduplication.
+
 ## [2026-10-27] Save child history drafts before completion
 Context: Goal children must leave history for final publication, but scratch cleanup and the bounded attempt ledger can remove child state before finalization.
 Decision: Store a validated draft or skip in a separate parent-owned durable artifact before authoritative phase settlement, and require it before child completion or scratch deletion. Keep recorded older revisions on their original history strategies.

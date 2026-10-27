@@ -13,6 +13,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.history.GoalFinalizationHistoryPayloadKeys
+import skillbill.engine.goalrunner.persist.quality.GoalFinalizationHistoryMigration
+import skillbill.engine.goalrunner.persist.quality.fromPersistenceWire
 import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -27,14 +30,21 @@ import skillbill.goalrunner.ledger.summarizeAttemptLedgerStatusEntries
 import skillbill.goalrunner.ledger.toProgressEvent
 import skillbill.goalrunner.model.GOAL_ATTEMPT_LEDGER_LIMIT
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftPayloadKeys
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftPayloadKeys
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalFinalRepairContext
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalFinalizationHistoryRecord
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
+import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
+import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
+import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.toPersistenceWire
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
@@ -61,6 +71,7 @@ import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.io.IOException
+import java.sql.SQLException
 import kotlin.coroutines.cancellation.CancellationException
 
 private fun nextSequence(highest: Int?): Int = highest?.let { it + 1 } ?: 0
@@ -316,6 +327,212 @@ internal class WorkflowGoalRunnerProgressRecording(
       }
     }
 
+  fun recordGoalFinalRepairOutput(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    output: GoalFinalRepairOutput,
+  ): Boolean =
+    withFinalHistoryPersistence {
+      if (output.invocationId != expectedInvocationId) return@withFinalHistoryPersistence false
+      updateGoalFinalizationHistory(parentWorkflowId, expectedInvocationId) { prior ->
+        val context = prior.repairContext ?: GoalFinalRepairContext(emptyList())
+        val sameIdentity =
+          context.outputs.firstOrNull {
+            it.phaseId == output.phaseId && it.invocationId == output.invocationId &&
+              it.occurrence == output.occurrence
+          }
+        if (sameIdentity != null && sameIdentity != output) {
+          invalidFinalHistory("Conflicting accepted repair output identity.")
+        }
+        if (sameIdentity != null) {
+          prior
+        } else {
+          prior.copy(
+            repairContext = context.copy(outputs = context.outputs + output),
+            completion = null,
+          )
+        }
+      }
+    }
+
+  fun recordGoalFinalRepairWarning(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    warning: String?,
+  ): Boolean =
+    withFinalHistoryPersistence {
+      updateGoalFinalizationHistory(parentWorkflowId, expectedInvocationId) { prior ->
+        val context = prior.repairContext ?: GoalFinalRepairContext(emptyList())
+        if (prior.repairContext != null && context.warning == warning) {
+          prior
+        } else {
+          prior.copy(repairContext = context.copy(warning = warning), completion = null)
+        }
+      }
+    }
+
+  fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? =
+    withFinalHistoryPersistence {
+      readGoalFinalizationHistory(parentWorkflowId).repairContext
+    }
+
+  fun saveGoalHistoryCompletion(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    completion: GoalHistoryCompletion,
+  ): Boolean =
+    withFinalHistoryPersistence {
+      updateGoalFinalizationHistory(
+        parentWorkflowId,
+        expectedInvocationId,
+      ) { prior -> prior.copy(completion = completion) }
+    }
+
+  fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion? =
+    withFinalHistoryPersistence {
+      readGoalFinalizationHistory(parentWorkflowId).completion
+    }
+
+  fun goalHistoryWriterEntries(
+    parentWorkflowId: String,
+    expectedSelection: List<Pair<Int, String?>>,
+  ): List<GoalHistoryWriterEntry> =
+    withFinalHistoryPersistence {
+      database.transaction { unitOfWork ->
+        expectedSelection.forEach { (subtaskId, childId) ->
+          if (childId != null) historyEvidence.capture(unitOfWork, parentWorkflowId, subtaskId, childId)
+        }
+        historyEvidence.goalHistoryWriterEntries(unitOfWork, parentWorkflowId, expectedSelection)
+      }
+    }
+
+  private fun updateGoalFinalizationHistory(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    transform: (GoalFinalizationHistoryRecord) -> GoalFinalizationHistoryRecord,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      val parent = draftParent(unitOfWork, parentWorkflowId)
+      val qualityPayload =
+        DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
+          ?: return@transaction false
+      val qualityMap =
+        JsonCodec.anyToStringAnyMap(qualityPayload)
+          ?: invalidFinalHistory("Quality execution is not an object.")
+      wireArtifactValidator.validate(
+        FeatureTaskRuntimeWireArtifactKind.GOAL_QUALITY_EXECUTION,
+        FeatureTaskRuntimeWorkflowArtifactMap.from(qualityMap),
+        DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.label(),
+      )
+      val quality = GoalQualityExecutionRecord.fromPersistenceWire(qualityMap).execution
+      if (quality == null || quality.invocationId != expectedInvocationId ||
+        quality.status == GoalQualityExecutionStatus.RETIRED
+      ) {
+        return@transaction false
+      }
+      val raw = DurableWorkflowArtifactFamily.GOAL_FINALIZATION_HISTORY.value(parent.artifacts)
+      val prior = decodeGoalFinalizationHistory(raw)
+      val updated = transform(prior)
+      val payload = updated.toPersistenceWire()
+      validateGoalFinalizationHistory(payload)
+      engine.saveRunnerArtifactPatch(
+        unitOfWork.workflowStates,
+        WorkflowFamily.TASK_RUNTIME,
+        parent,
+        mapOf(DurableWorkflowArtifactFamily.GOAL_FINALIZATION_HISTORY.entry(payload)),
+      )
+      true
+    }
+
+  private fun readGoalFinalizationHistory(parentWorkflowId: String): GoalFinalizationHistoryRecord =
+    database.transaction { unitOfWork ->
+      val parent = draftParent(unitOfWork, parentWorkflowId)
+      val payload = DurableWorkflowArtifactFamily.GOAL_FINALIZATION_HISTORY.value(parent.artifacts)
+      if (payload == null) {
+        GoalFinalizationHistoryRecord()
+      } else {
+        val source = JsonCodec.anyToStringAnyMap(payload) ?: invalidFinalHistory("Stored record is not an object.")
+        val map = GoalFinalizationHistoryMigration.upgrade(source)
+        validateGoalFinalizationHistory(map)
+        if (map != source) {
+          engine.saveRunnerArtifactPatch(
+            unitOfWork.workflowStates,
+            WorkflowFamily.TASK_RUNTIME,
+            parent,
+            mapOf(DurableWorkflowArtifactFamily.GOAL_FINALIZATION_HISTORY.entry(map)),
+          )
+        }
+        decodeGoalFinalizationHistory(map)
+      }
+    }
+
+  private fun decodeGoalFinalizationHistory(payload: Any?): GoalFinalizationHistoryRecord {
+    if (payload == null) return GoalFinalizationHistoryRecord()
+    val map = JsonCodec.anyToStringAnyMap(payload) ?: invalidFinalHistory("Stored record is not an object.")
+    val current = GoalFinalizationHistoryMigration.upgrade(map)
+    validateGoalFinalizationHistory(current)
+    val contextMap = JsonCodec.anyToStringAnyMap(current[GoalFinalizationHistoryPayloadKeys.REPAIR_CONTEXT])
+    val outputs =
+      (contextMap?.get(GoalFinalizationHistoryPayloadKeys.OUTPUTS) as? List<*>)?.map { value ->
+        val item = JsonCodec.anyToStringAnyMap(value) ?: invalidFinalHistory("Repair output is not an object.")
+        GoalFinalRepairOutput(
+          phaseId = item.getValue(GoalFinalizationHistoryPayloadKeys.PHASE_ID) as String,
+          invocationId = item.getValue(GoalFinalizationHistoryPayloadKeys.INVOCATION_ID) as String,
+          occurrence = (item.getValue(GoalFinalizationHistoryPayloadKeys.OCCURRENCE) as Number).toInt(),
+          output = item.getValue(GoalFinalizationHistoryPayloadKeys.OUTPUT) as String,
+        )
+      }.orEmpty()
+    val repairContext =
+      contextMap?.let {
+        GoalFinalRepairContext(outputs, it[GoalFinalizationHistoryPayloadKeys.WARNING] as String?)
+      }
+    val completionMap = JsonCodec.anyToStringAnyMap(current[GoalFinalizationHistoryPayloadKeys.COMPLETION])
+    val completion =
+      completionMap?.let {
+        GoalHistoryCompletion(
+          inputFingerprint = it.getValue(GoalFinalizationHistoryPayloadKeys.INPUT_FINGERPRINT) as String,
+          preWriterContentFingerprint =
+            it.getValue(GoalFinalizationHistoryPayloadKeys.PRE_WRITER_CONTENT_FINGERPRINT) as String,
+          postWriterContentFingerprint =
+            it.getValue(GoalFinalizationHistoryPayloadKeys.POST_WRITER_CONTENT_FINGERPRINT) as String,
+          acceptedOutput = it.getValue(GoalFinalizationHistoryPayloadKeys.ACCEPTED_OUTPUT) as String,
+        )
+      }
+    return GoalFinalizationHistoryRecord(repairContext = repairContext, completion = completion)
+  }
+
+  private fun validateGoalFinalizationHistory(payload: Map<String, Any?>) {
+    wireArtifactValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_FINALIZATION_HISTORY,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(payload),
+      DurableWorkflowArtifactFamily.GOAL_FINALIZATION_HISTORY.label(),
+    )
+  }
+
+  private fun invalidFinalHistory(message: String): Nothing =
+    throw SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY, message)
+
+  private fun <T> withFinalHistoryPersistence(block: () -> T): T =
+    try {
+      block()
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (failure: SkillBillRuntimeException) {
+      throw failure
+    } catch (failure: IOException) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+        "Required goal finalization history persistence operation failed.",
+        failure,
+      )
+    } catch (failure: SQLException) {
+      throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+        "Required goal finalization history persistence operation failed.",
+        failure,
+      )
+    }
+
   override fun hasRequiredGoalChildHistoryDraft(
     parentWorkflowId: String,
     subtaskId: Int,
@@ -556,4 +773,39 @@ private fun GoalChildHistoryDraft.toPersistenceWire(): Map<String, Any?> =
     history?.let { put(GoalChildHistoryDraftPayloadKeys.HISTORY, it) }
     decisions?.let { put(GoalChildHistoryDraftPayloadKeys.DECISIONS, it) }
     skipReason?.let { put(GoalChildHistoryDraftPayloadKeys.SKIP_REASON, it) }
+  }
+
+private fun GoalFinalizationHistoryRecord.toPersistenceWire(): Map<String, Any?> =
+  buildMap {
+    put(GoalFinalizationHistoryPayloadKeys.CONTRACT_VERSION, contractVersion)
+    put(
+      GoalFinalizationHistoryPayloadKeys.REPAIR_CONTEXT,
+      repairContext?.let { context ->
+        buildMap {
+          put(
+            GoalFinalizationHistoryPayloadKeys.OUTPUTS,
+            context.outputs.map { output ->
+              mapOf(
+                GoalFinalizationHistoryPayloadKeys.PHASE_ID to output.phaseId,
+                GoalFinalizationHistoryPayloadKeys.INVOCATION_ID to output.invocationId,
+                GoalFinalizationHistoryPayloadKeys.OCCURRENCE to output.occurrence,
+                GoalFinalizationHistoryPayloadKeys.OUTPUT to output.output,
+              )
+            },
+          )
+          put(GoalFinalizationHistoryPayloadKeys.WARNING, context.warning)
+        }
+      },
+    )
+    put(
+      GoalFinalizationHistoryPayloadKeys.COMPLETION,
+      completion?.let {
+        mapOf(
+          GoalFinalizationHistoryPayloadKeys.INPUT_FINGERPRINT to it.inputFingerprint,
+          GoalFinalizationHistoryPayloadKeys.PRE_WRITER_CONTENT_FINGERPRINT to it.preWriterContentFingerprint,
+          GoalFinalizationHistoryPayloadKeys.POST_WRITER_CONTENT_FINGERPRINT to it.postWriterContentFingerprint,
+          GoalFinalizationHistoryPayloadKeys.ACCEPTED_OUTPUT to it.acceptedOutput,
+        )
+      },
+    )
   }

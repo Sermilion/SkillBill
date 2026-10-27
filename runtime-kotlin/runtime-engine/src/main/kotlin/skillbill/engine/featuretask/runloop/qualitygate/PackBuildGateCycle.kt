@@ -51,7 +51,7 @@ internal class PackBuildGateCycle(
     val checkpoint =
       context.gateCheckpoint(run)
         ?: return PhaseOutcome.blocked("Build gate cycle could not resolve a repository checkpoint fingerprint.")
-    val iteration = call.acceptedExecution.nextStepIteration()
+    val iteration = call.acceptedExecution.nextGateIteration()
     persistRunning(run, iteration)?.let { return it }
     var gateRuns = 0
     val changedPaths = context.gateChangedPaths(run)
@@ -98,10 +98,26 @@ internal class PackBuildGateCycle(
       request = run.request,
       phaseId = run.phaseId,
       validationDepth =
-        run.request.admittedExecution
-          ?.effectiveInputs
-          ?.validationDepth ?: ValidationDepth.DEFAULT,
+        run.request.acceptedGoalQualityExecutionPlan?.effectivePolicySettings?.validationDepth
+          ?: run.request.admittedExecution
+            ?.effectiveInputs
+            ?.validationDepth ?: ValidationDepth.DEFAULT,
       commandFamily = commandFamily,
+      preserveConsumedRepairTurns = run.request.goalQualityAutomaticRecovery,
+      progressKey =
+        if (!run.request.goalQualityAutomaticRecovery) {
+          run.request.workflowId
+        } else {
+          packBuildGateProgressKey(
+            run.request.qaOutcomeWorkflowId,
+            run.request.acceptedGoalQualityExecutionPlan?.definitionId ?: requireNotNull(
+              run.request.skeletonDefinition,
+            ).id,
+            run.phaseId,
+            iteration,
+            commandFamily,
+          )
+        },
       changedPaths = changedPaths,
       repositoryCheckpoint = checkpoint,
       repositoryCheckpointProvider = { context.gateCheckpoint(run) },
@@ -255,6 +271,14 @@ internal class PackBuildGateCycle(
     )
   }
 }
+
+internal fun packBuildGateProgressKey(
+  parentWorkflowId: String,
+  definitionId: String,
+  phaseId: String,
+  iteration: Int,
+  commandFamily: ValidationGateCommandFamily,
+): String = "$parentWorkflowId:$definitionId:$phaseId:$iteration:${commandFamily.name.lowercase()}"
 
 private data class PackBuildRepairTurn(
   val findings: ValidationFindingSetProjection,

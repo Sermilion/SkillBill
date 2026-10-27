@@ -3,11 +3,13 @@ package skillbill.workflow.taskruntime.model.validation
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationGateFindingPayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 import skillbill.workflow.model.persistence.artifact.asExactLongOrNull
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 enum class FeatureTaskRuntimeValidationGateRepairWindowPhase(val wireValue: String) {
   NONE("none"),
@@ -23,6 +25,21 @@ enum class FeatureTaskRuntimeValidationGateRepairWindowPhase(val wireValue: Stri
           "FeatureTaskRuntimeValidationGateProgress.repair_window_phase must be 'none' or 'findings_open'.",
         )
       }
+  }
+}
+
+enum class FeatureTaskRuntimeValidationGateTriageDisposition(val wireValue: String) {
+  UNKNOWN("unknown"),
+  NOT_REQUIRED("not_required"),
+  NOT_STARTED("not_started"),
+  ACCEPTED_EMPTY("accepted_empty"),
+  CAPTURED("captured"),
+  ;
+
+  companion object {
+    fun fromWire(value: String?): FeatureTaskRuntimeValidationGateTriageDisposition =
+      entries.firstOrNull { it.wireValue == value }
+        ?: throw invalidWorkflowStateSchemaError("Validation gate triage disposition is unsupported.")
   }
 }
 
@@ -164,24 +181,86 @@ data class FeatureTaskRuntimeValidationGateProgress(
     FeatureTaskRuntimeValidationGateRepairWindowPhase.NONE,
   val repairsUsed: Int = 0,
   val capturedTriagePlan: String? = null,
+  val triageDisposition: FeatureTaskRuntimeValidationGateTriageDisposition =
+    FeatureTaskRuntimeValidationGateTriageDisposition.UNKNOWN,
   val lastAgentUnfixedCriteria: List<String> = emptyList(),
+  val pendingExternalOperation: String? = null,
+  val pendingExternalCheckpoint: String? = null,
+  val acceptedRepairOutputs: List<FeatureTaskRuntimeValidationGateRepairOutput> = emptyList(),
+  val terminalOutcome: String? = null,
+  val terminalReason: String? = null,
+  val terminalFailureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+  val terminalFailureCode: String? = null,
 ) {
   init {
-    val reason = violation(gateRunCount, gateRuns, repairsUsed)
+    val reason =
+      violation(gateRunCount, gateRuns, repairsUsed)
+        ?: if ((pendingExternalOperation == null) != (pendingExternalCheckpoint == null) ||
+          pendingExternalOperation?.isBlank() == true || pendingExternalCheckpoint?.isBlank() == true
+        ) {
+          "Pending validation gate operation identity and checkpoint must be present together."
+        } else {
+          if (acceptedRepairOutputs.map { it.repairTurn }.distinct().size != acceptedRepairOutputs.size ||
+            acceptedRepairOutputs.any { it.repairTurn > repairsUsed }
+          ) {
+            "Accepted validation gate repairs must have unique turns within the consumed budget."
+          } else {
+            terminalViolation()
+              ?: triageViolation()
+          }
+        }
     require(reason == null) { reason.orEmpty() }
+  }
+
+  private fun terminalViolation(): String? {
+    val invalidIdentity =
+      (terminalOutcome == null) != (terminalReason == null) ||
+        terminalOutcome !in setOf(null, "paused", "blocked") || terminalReason?.isBlank() == true
+    val invalidFailure =
+      terminalOutcome != "blocked" &&
+        (terminalFailureDisposition != null || terminalFailureCode != null)
+    val operationPending = terminalOutcome != null && pendingExternalOperation != null
+    return if (invalidIdentity || invalidFailure || operationPending) {
+      "Terminal validation gate outcome is incomplete or inconsistent."
+    } else {
+      null
+    }
+  }
+
+  private fun triageViolation(): String? {
+    val invalidPlan =
+      when (triageDisposition) {
+        FeatureTaskRuntimeValidationGateTriageDisposition.CAPTURED -> capturedTriagePlan.isNullOrBlank()
+        else -> capturedTriagePlan != null
+      }
+    return if (invalidPlan) "Validation gate triage disposition conflicts with its captured plan." else null
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf(
-      SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION,
+      SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION,
       ValidationEvidencePayloadKeys.GATE_RUN_COUNT to gateRunCount,
       ValidationEvidencePayloadKeys.GATE_RUNS to gateRuns.map { it.toArtifactMap() },
-      "remaining_findings" to remainingFindings,
-      "complete_findings" to completeFindings,
-      "repair_window_phase" to repairWindowPhase.wireValue,
-      "repairs_used" to repairsUsed,
-      "captured_triage_plan" to capturedTriagePlan,
+      ValidationEvidencePayloadKeys.REMAINING_FINDINGS to remainingFindings,
+      ValidationEvidencePayloadKeys.COMPLETE_FINDINGS to completeFindings,
+      ValidationEvidencePayloadKeys.REPAIR_WINDOW_PHASE to repairWindowPhase.wireValue,
+      ValidationEvidencePayloadKeys.REPAIRS_USED to repairsUsed,
+      ValidationEvidencePayloadKeys.CAPTURED_TRIAGE_PLAN to capturedTriagePlan,
+      ValidationEvidencePayloadKeys.TRIAGE_DISPOSITION to triageDisposition.wireValue,
       ValidationEvidencePayloadKeys.LAST_AGENT_UNFIXED_CRITERIA to lastAgentUnfixedCriteria,
+      ValidationEvidencePayloadKeys.PENDING_EXTERNAL_OPERATION to pendingExternalOperation,
+      ValidationEvidencePayloadKeys.PENDING_EXTERNAL_CHECKPOINT to pendingExternalCheckpoint,
+      ValidationEvidencePayloadKeys.ACCEPTED_REPAIR_OUTPUTS to
+        acceptedRepairOutputs.map {
+          mapOf(
+            ValidationEvidencePayloadKeys.REPAIR_TURN to it.repairTurn,
+            ValidationEvidencePayloadKeys.REPAIR_OUTPUT to it.output,
+          )
+        },
+      ValidationEvidencePayloadKeys.TERMINAL_OUTCOME to terminalOutcome,
+      ValidationEvidencePayloadKeys.TERMINAL_REASON to terminalReason,
+      ValidationEvidencePayloadKeys.TERMINAL_FAILURE_DISPOSITION to terminalFailureDisposition?.wireValue,
+      ValidationEvidencePayloadKeys.TERMINAL_FAILURE_CODE to terminalFailureCode,
     )
 
   companion object {
@@ -202,22 +281,45 @@ data class FeatureTaskRuntimeValidationGateProgress(
       }
 
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeValidationGateProgress {
-      if (raw[SharedPayloadKeys.CONTRACT_VERSION] != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION) {
+      val contractVersion = raw[SharedPayloadKeys.CONTRACT_VERSION]
+      if (
+        contractVersion != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION &&
+        contractVersion != FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION
+      ) {
         throw invalidWorkflowStateSchemaError("Unsupported validation gate progress contract_version.")
       }
       val gateRunCount = raw.asStarMap().gateProgressInt(ValidationEvidencePayloadKeys.GATE_RUN_COUNT)
       val gateRuns = decodeGateRuns(raw[ValidationEvidencePayloadKeys.GATE_RUNS])
-      val remainingFindings = decodeFindings(raw["remaining_findings"], "remaining_findings")
-      val completeFindings = decodeFindings(raw["complete_findings"], "complete_findings")
+      val remainingFindings =
+        decodeFindings(
+          raw[ValidationEvidencePayloadKeys.REMAINING_FINDINGS],
+          ValidationEvidencePayloadKeys.REMAINING_FINDINGS,
+        )
+      val completeFindings =
+        decodeFindings(
+          raw[ValidationEvidencePayloadKeys.COMPLETE_FINDINGS],
+          ValidationEvidencePayloadKeys.COMPLETE_FINDINGS,
+        )
       val repairWindowPhase =
-        FeatureTaskRuntimeValidationGateRepairWindowPhase.fromWire(raw["repair_window_phase"] as? String)
-      val repairsUsed = raw.asStarMap().gateProgressOptionalInt("repairs_used") ?: 0
-      val capturedTriagePlan = raw["captured_triage_plan"] as? String
+        FeatureTaskRuntimeValidationGateRepairWindowPhase.fromWire(
+          raw[ValidationEvidencePayloadKeys.REPAIR_WINDOW_PHASE] as? String,
+        )
+      val repairsUsed = raw.asStarMap().gateProgressOptionalInt(ValidationEvidencePayloadKeys.REPAIRS_USED) ?: 0
+      val capturedTriagePlan = raw[ValidationEvidencePayloadKeys.CAPTURED_TRIAGE_PLAN] as? String
+      val triageDisposition = decodeTriageDisposition(raw, contractVersion, capturedTriagePlan)
       val lastAgentUnfixedCriteria =
         decodeStringList(
           raw[ValidationEvidencePayloadKeys.LAST_AGENT_UNFIXED_CRITERIA],
           ValidationEvidencePayloadKeys.LAST_AGENT_UNFIXED_CRITERIA,
         )
+      val pendingExternalOperation = raw[ValidationEvidencePayloadKeys.PENDING_EXTERNAL_OPERATION] as? String
+      val pendingExternalCheckpoint = raw[ValidationEvidencePayloadKeys.PENDING_EXTERNAL_CHECKPOINT] as? String
+      val acceptedRepairOutputs =
+        decodeAcceptedRepairOutputs(raw[ValidationEvidencePayloadKeys.ACCEPTED_REPAIR_OUTPUTS])
+      val terminalOutcome = raw.optionalGateProgressString(ValidationEvidencePayloadKeys.TERMINAL_OUTCOME)
+      val terminalReason = raw.optionalGateProgressString(ValidationEvidencePayloadKeys.TERMINAL_REASON)
+      val terminalFailureDisposition = decodeTerminalFailureDisposition(raw)
+      val terminalFailureCode = raw.optionalGateProgressString(ValidationEvidencePayloadKeys.TERMINAL_FAILURE_CODE)
       violation(gateRunCount, gateRuns, repairsUsed)?.let { reason ->
         throw invalidWorkflowStateSchemaError("FeatureTaskRuntimeValidationGateProgress is incoherent: $reason")
       }
@@ -229,9 +331,58 @@ data class FeatureTaskRuntimeValidationGateProgress(
         repairWindowPhase,
         repairsUsed,
         capturedTriagePlan,
+        triageDisposition,
         lastAgentUnfixedCriteria,
+        pendingExternalOperation,
+        pendingExternalCheckpoint,
+        acceptedRepairOutputs,
+        terminalOutcome,
+        terminalReason,
+        terminalFailureDisposition,
+        terminalFailureCode,
       )
     }
+
+    private fun decodeTriageDisposition(
+      raw: Map<String, Any?>,
+      contractVersion: Any?,
+      capturedTriagePlan: String?,
+    ): FeatureTaskRuntimeValidationGateTriageDisposition {
+      return if (raw.containsKey(ValidationEvidencePayloadKeys.TRIAGE_DISPOSITION)) {
+        FeatureTaskRuntimeValidationGateTriageDisposition.fromWire(
+          raw[ValidationEvidencePayloadKeys.TRIAGE_DISPOSITION] as? String,
+        )
+      } else if (contractVersion == FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS_CONTRACT_VERSION) {
+        throw invalidWorkflowStateSchemaError("Validation gate progress is missing triage_disposition.")
+      } else if (capturedTriagePlan != null) {
+        FeatureTaskRuntimeValidationGateTriageDisposition.CAPTURED
+      } else {
+        FeatureTaskRuntimeValidationGateTriageDisposition.UNKNOWN
+      }
+    }
+
+    private fun decodeTerminalFailureDisposition(raw: Map<String, Any?>): FeatureTaskRuntimeFailureDisposition? {
+      val wire = raw[ValidationEvidencePayloadKeys.TERMINAL_FAILURE_DISPOSITION]
+      val disposition = (wire as? String)?.let(FeatureTaskRuntimeFailureDisposition::fromWireValue)
+      if (wire != null && disposition == null) {
+        throw invalidWorkflowStateSchemaError("Validation gate terminal failure disposition is unsupported.")
+      }
+      return disposition
+    }
+
+    private fun decodeAcceptedRepairOutputs(raw: Any?): List<FeatureTaskRuntimeValidationGateRepairOutput> =
+      (raw as? List<*>)?.mapIndexed { index, value ->
+        val entry =
+          value as? Map<*, *>
+            ?: throw invalidWorkflowStateSchemaError("Validation gate accepted repair output $index must be a mapping.")
+        val turn =
+          (entry[ValidationEvidencePayloadKeys.REPAIR_TURN] as? Number)?.toInt()
+            ?: throw invalidWorkflowStateSchemaError("Validation gate accepted repair output $index has no turn.")
+        val output =
+          entry[ValidationEvidencePayloadKeys.REPAIR_OUTPUT] as? String
+            ?: throw invalidWorkflowStateSchemaError("Validation gate accepted repair output $index has no output.")
+        FeatureTaskRuntimeValidationGateRepairOutput(turn, output)
+      }.orEmpty()
 
     private fun decodeGateRuns(raw: Any?): List<FeatureTaskRuntimeValidationGateRunRecord> {
       val runsRaw =
@@ -376,6 +527,15 @@ data class FeatureTaskRuntimeValidationGateProgress(
   }
 }
 
+data class FeatureTaskRuntimeValidationGateRepairOutput(
+  val repairTurn: Int,
+  val output: String,
+) {
+  init {
+    require(repairTurn > 0)
+  }
+}
+
 internal fun Map<String, Any?>.asStarMap(): Map<*, *> = this
 
 internal fun Map<*, *>.gateProgressString(key: String): String =
@@ -399,6 +559,12 @@ internal fun Map<*, *>.gateProgressOptionalInt(key: String): Int? {
 internal fun Map<*, *>.gateProgressOptionalString(key: String): String? {
   if (!containsKey(key) || this[key] == null) return null
   return gateProgressString(key)
+}
+
+private fun Map<String, Any?>.optionalGateProgressString(key: String): String? {
+  if (!containsKey(key) || this[key] == null) return null
+  return this[key] as? String
+    ?: throw invalidWorkflowStateSchemaError("Validation gate progress field '$key' must be a string or null.")
 }
 
 private fun invalidGateRuns(reason: String): Nothing = throw invalidWorkflowStateSchemaError(reason)

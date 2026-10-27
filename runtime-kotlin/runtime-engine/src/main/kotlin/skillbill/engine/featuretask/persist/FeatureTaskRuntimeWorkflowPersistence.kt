@@ -246,6 +246,8 @@ class FeatureTaskRuntimeWorkflowPersistence
           FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION,
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_QA_REPAIR_STATE to
           FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE,
+        DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION to
+          FeatureTaskRuntimeWireArtifactKind.GOAL_QUALITY_EXECUTION,
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_PROGRESS to
           FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_PROGRESS,
       ).forEach { (family, kind) ->

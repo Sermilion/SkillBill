@@ -6,6 +6,7 @@ import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestProjection
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.persistence.UnitOfWork
@@ -27,6 +28,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 internal class WorkflowGoalRunnerScopedReplanPersistence(
   private val projectionPersistence: WorkflowGoalRunnerManifestProjectionPersistence,
   private val historyEvidence: GoalChildHistoryEvidenceStore,
+  private val qualityExecution: WorkflowGoalRunnerQualityExecutionStore,
 ) {
   private val engine = WorkflowEngine()
 
@@ -36,6 +38,7 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
     subtaskId: Int,
     options: GoalRunnerScopedReplanOptions,
   ): Pair<GoalRunnerScopedReplanWriteResult, DurableWorkflowArtifacts> {
+    qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
     val discard = discardPlannedDetails(unitOfWork, state, subtaskId, options)
     val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, listOf(subtaskId), historyEvidence)
     val projection =
@@ -61,6 +64,7 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
   ): Pair<GoalRunnerManifestState, DurableWorkflowArtifacts?> {
     val clearedChildIds = deleteStaleReplanChildren(unitOfWork, state, subtaskIds, historyEvidence)
     if (clearedChildIds.isEmpty()) return state to null
+    qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
     val projection =
       projectionPersistence.saveInTransaction(
         unitOfWork,

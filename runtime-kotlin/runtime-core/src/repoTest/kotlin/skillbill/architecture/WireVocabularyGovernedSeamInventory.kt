@@ -10,11 +10,13 @@ import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
+import skillbill.contracts.workflow.goal.GoalQualityExecutionPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJournalSchemaPaths
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
+import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
@@ -81,6 +83,17 @@ internal object WireVocabularyGovernedSeamInventory {
           listOf(
             "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifact",
             "engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
+          ),
+      ),
+      GovernedPayloadSeam(
+        seamId = "goal-quality-execution",
+        schemaRepoRelativePath = GoalQualityExecutionSchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers =
+          listOf(
+            "contracts/workflow/goal/GoalQualityExecutionPayloadKeys",
+            "goalrunner/model/quality/GoalQualityExecution",
+            "engine/goalrunner/persist/quality/GoalQualityExecutionCodec",
+            "engine/goalrunner/persist/quality/WorkflowGoalRunnerQualityExecutionStore",
           ),
       ),
       GovernedPayloadSeam(
@@ -153,6 +166,8 @@ internal object WireVocabularyGovernedSeamInventory {
         )
       FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH ->
         executionPlanGovernedKeys(loadRepoSchema(schemaRepoRelativePath))
+      GoalQualityExecutionSchemaPaths.REPO_RELATIVE_PATH ->
+        payloadKeyValues(GoalQualityExecutionPayloadKeys::class.java)
       GOAL_CONTINUATION_ARTIFACT_SCHEMA_AUTHORITY -> goalContinuationArtifactGovernedKeys()
       GOAL_RUNNER_CONTROLS_AUTHORITY -> goalRunnerControlsGovernedKeys()
       SQLITE_TELEMETRY_MATERIALIZATION_AUTHORITY -> sqliteTelemetryMaterializationGovernedKeys()

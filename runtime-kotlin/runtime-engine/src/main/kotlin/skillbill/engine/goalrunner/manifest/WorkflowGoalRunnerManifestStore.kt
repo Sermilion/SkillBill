@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.reset.GoalChildWorkflowSaveResult
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
@@ -56,6 +57,7 @@ class WorkflowGoalRunnerManifestStore
     private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
     private val childWorkflowPersistence: WorkflowGoalRunnerChildWorkflowPersistence,
     private val historyEvidence: GoalChildHistoryEvidenceStore,
+    private val qualityExecution: WorkflowGoalRunnerQualityExecutionStore,
     private val projectionPersistence: WorkflowGoalRunnerManifestProjectionPersistence,
   ) : GoalRunnerManifestStore,
     GoalRunnerManifestPurgeCommands by WorkflowGoalRunnerPurgePersistence(database, repositoryEnclosingRootPort),
@@ -79,6 +81,7 @@ class WorkflowGoalRunnerManifestStore
       WorkflowGoalRunnerScopedReplanPersistence(
         projectionPersistence,
         historyEvidence,
+        qualityExecution,
       )
     private val controls =
       GoalRunnerControlCoordinator(
@@ -270,6 +273,7 @@ class WorkflowGoalRunnerManifestStore
                 "Goal manifest is missing during hard reset.",
               )
           captureSelectedChildren(unitOfWork, state.parentWorkflowId, manifest)
+          qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
           if (!preservePlanning) unitOfWork.goalPlanningPreparations.deleteByGoal(state.parentWorkflowId)
           deleteCapturedChildren(unitOfWork, state.parentWorkflowId, manifest)
           val repositoryIdentity = unitOfWork.goalRunnerControls.controlState(state.parentWorkflowId).repositoryIdentity
@@ -455,6 +459,7 @@ class WorkflowGoalRunnerManifestStore
             )
           }
           historyEvidence.capture(unitOfWork, state.parentWorkflowId, subtaskId, workflowId)
+          qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
           val deleted =
             unitOfWork.workflowStates.deleteGoalChildWorkflow(
               state.parentWorkflowId,
@@ -580,9 +585,25 @@ class WorkflowGoalRunnerManifestStore
     ): GoalChildHistoryAcceptanceRestoreResult {
       val result =
         database.transaction { unit ->
+          val priorManifest =
+            unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, state.parentWorkflowId)
+              ?.decompositionRuntime()
+          val priorSubtask = priorManifest?.subtasks?.singleOrNull { it.id == acceptance.subtaskId }
+          val priorRestoredChild = historyEvidence.restoredChildId(unit, state.parentWorkflowId, acceptance.subtaskId)
           when (val restored = restoreGoalChildHistoryAcceptance(unit, state, acceptance, historyEvidence)) {
             is GoalChildHistoryAcceptanceRestoreResult.Refused -> restored to null
             is GoalChildHistoryAcceptanceRestoreResult.Restored -> {
+              val restoredSubtask = restored.state.manifest.subtasks.single { it.id == acceptance.subtaskId }
+              val restoredChild =
+                restoredSubtask.workflowId ?: historyEvidence.restoredChildId(
+                  unit,
+                  state.parentWorkflowId,
+                  acceptance.subtaskId,
+                )
+              val priorChild = priorSubtask?.workflowId ?: priorRestoredChild
+              if (priorChild != restoredChild) {
+                qualityExecution.retireForSelectionChange(unit, state.parentWorkflowId)
+              }
               val projection =
                 projectionPersistence.saveInTransaction(
                   unit,

@@ -11,16 +11,24 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.persist.quality.toPersistenceWire
 import skillbill.engine.goalrunner.status.liveLease
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftDisposition
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftDisposition
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
+import skillbill.goalrunner.model.quality.GoalQualityExecutionAdmission
+import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
+import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
+import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
+import skillbill.goalrunner.model.quality.GoalQualityReadiness
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
@@ -31,6 +39,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Instant
@@ -75,6 +84,64 @@ internal fun seedCurrentParent(
 }
 
 class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
+  @Test
+  fun `accepted final repairs and writer completion survive outcome store reopen`() {
+    val workflows = InMemoryWorkflowStates()
+    val parent = taskRuntimeWorkflowRecord("wftr-task-runtime")
+    val invocationId = "invocation-1"
+    val quality =
+      GoalQualityExecutionRecord(readiness = GoalQualityReadiness.CLEAN_UNSTARTED).admit(
+        GoalQualityExecutionAdmission(
+          parentWorkflowId = parent.workflowId,
+          invocationId = invocationId,
+          baselineContentFingerprint = "baseline",
+          selectionFingerprint = "selection",
+          governingInputFingerprint = "inputs",
+          governingInputs =
+            GoalQualityExecutionInputs(
+              issueKey = "SKILL-446",
+              intake = null,
+              repoRoot = "/repository",
+              invokedAgentId = "codex",
+              configuredAgentOverrideId = null,
+              timeoutMillis = null,
+              qaSelection = FeatureTaskRuntimeQaSelection.AUTO,
+              parentSpecPath = "spec.md",
+              acceptanceCriteria = emptyList(),
+              acceptanceCriteriaReadFailure = null,
+              branch = "feat/SKILL-446",
+              modelDirectives = emptyMap(),
+              modelMatrix = null,
+              addons = emptyList(),
+            ),
+          executionPlans = GoalQualityExecutionPlans("qa-plan", "validation-plan"),
+        ),
+      )
+    workflows.saveFeatureTaskWorkflow(
+      parent.copy(
+        artifactsJson =
+          JsonCodec.mapToJsonString(
+            parent.toSnapshot().artifacts.toMap() +
+              DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.entry(quality.toPersistenceWire()),
+          ),
+      ),
+      RUNTIME,
+    )
+    val database = FakeDatabaseSessionFactory(workflows)
+    val store = testWorkflowGoalRunnerOutcomeStore(database, testWorkflowSnapshotValidator)
+    val repair = GoalFinalRepairOutput("qa_fix", invocationId, 1, "Repair output")
+    val completion = GoalHistoryCompletion("fingerprint", "tree-before", "tree-after", "written")
+
+    assertTrue(store.recordGoalFinalRepairOutput("wftr-task-runtime", invocationId, repair))
+    assertTrue(store.recordGoalFinalRepairWarning("wftr-task-runtime", invocationId, "QA warning"))
+    assertTrue(store.saveGoalHistoryCompletion("wftr-task-runtime", invocationId, completion))
+    val reopened = testWorkflowGoalRunnerOutcomeStore(database, testWorkflowSnapshotValidator)
+
+    assertEquals(listOf(repair), reopened.goalFinalRepairContext("wftr-task-runtime")?.outputs)
+    assertEquals("QA warning", reopened.goalFinalRepairContext("wftr-task-runtime")?.warning)
+    assertEquals(completion, reopened.goalHistoryCompletion("wftr-task-runtime"))
+  }
+
   @Test
   fun `reads progress from task runtime workflows without probing prose mode`() {
     val workflows = InMemoryWorkflowStates()

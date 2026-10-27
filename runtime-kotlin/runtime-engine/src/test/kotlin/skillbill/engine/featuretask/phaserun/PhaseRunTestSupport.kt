@@ -5,8 +5,12 @@ import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
+import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
@@ -18,7 +22,9 @@ import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
+import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.goalrunner.intake.LegacySpecIntake
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -27,6 +33,9 @@ import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
+import skillbill.ports.config.RepoLocalConfigPort
+import skillbill.ports.config.model.ReadRepoLocalConfigRequest
+import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -104,7 +113,6 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
     statusPublisherFactory =
       testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics),
     strategies = strategies,
-    gitOperations = gitOperations,
     reviewResultAssembly =
       ParallelCodeReviewRunnerResultAssembly(
         GoalRunnerSubtaskLauncher { error("A phase run must not launch an integration pass.") },
@@ -124,13 +132,7 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
     clock = clock,
     intakeResolver = testPhaseRunIntakeResolver(database),
     runLoopEntry = runLoopEntry,
-    agentRunLauncher =
-      object : AgentRunLauncher {
-        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
-
-        override fun launch(request: AgentRunLaunchRequest) =
-          error("A phase run fixture must not resolve launches through the test support launcher.")
-      },
+    plans = plans(),
     standaloneRunners =
       StandalonePhaseRunners(
         standaloneMonitorPreparer,
@@ -238,3 +240,33 @@ internal fun DatabaseSessionFactory.assertOnlyOutboxEvents(allowedEventNames: Se
 
 internal fun slotBaselineFixture(relativePath: String): Any? =
   JsonCodec.parseValue(Files.readString(SlotBaselineTestResources.resolve(relativePath)))
+
+internal fun PhaseRunEntryFixture.plans(): PhaseRunPlanResolver {
+  val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
+  val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
+  val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies)
+  val config =
+    object : RepoLocalConfigPort {
+      override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest) =
+        ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
+    }
+  return PhaseRunPlanResolver(
+    strategies = strategies,
+    gitOperations = gitOperations,
+    intakeResolver = testPhaseRunIntakeResolver(database),
+    agentRunLauncher =
+      object : AgentRunLauncher {
+        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = launchModelResolver(request)
+
+        override fun launch(request: AgentRunLaunchRequest) =
+          error("A phase run fixture must not resolve launches through the test support launcher.")
+      },
+    executionPlanCodec = codec,
+    executionPlanCompatibility = compatibility,
+    executionPlanResolver =
+      FeatureTaskRuntimeExecutionPlanResolver(
+        strategies, codec, validator, ValidationGateResolver { qaManifests }, gitOperations, config,
+        database, compatibility, diagnostics,
+      ),
+  )
+}

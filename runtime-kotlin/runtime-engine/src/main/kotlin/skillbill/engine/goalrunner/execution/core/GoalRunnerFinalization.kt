@@ -8,8 +8,11 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.pruneCompletedSubtaskCh
 import skillbill.engine.featuretask.lifecycle.subtask.parseGitPorcelainPaths
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.phaserun.PhaseRunEntry
+import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
+import skillbill.engine.goalrunner.execution.support.goalRunnerRepositoryContentIdentity
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -37,6 +40,9 @@ import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.goalrunner.model.UnaddressedFindingsLedger
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
+import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
@@ -46,28 +52,30 @@ import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.decomposition.branchForFinalPullRequest
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
+import java.security.MessageDigest
 
 @Inject
 class GoalRunnerFinalization(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
-  private val pullRequestPort: GoalPullRequestPort,
   private val specScratchCleanup: GoalSpecScratchCleanup,
   private val gitOperations: WorkflowGitOperations,
   private val diagnostics: RuntimeDiagnostics,
-  private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
   private val reconciliation: GoalRunnerFinalReconciliation,
   private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
   private val ciMonitor: GoalRunnerCiMonitor,
   private val qaGate: GoalRunnerQaGate,
-  private val pullRequestIdentityLookup: PullRequestIdentityLookup,
+  private val finalHistoryWriter: GoalRunnerFinalHistoryWriter,
+  private val publication: GoalRunnerPullRequests,
 ) {
   fun finalizeGoal(
     state: GoalRunnerManifestState,
@@ -114,10 +122,49 @@ class GoalRunnerFinalization(
   ): GoalRunnerRunReport {
     val settled =
       noChangeFinalization(finalState.manifest, request, attempted)
-        ?: publishedGoalResult(finalState, request, attempted)
+        ?: publication.publishedGoalResult(finalState, request, attempted)
     settled?.let { return it }
-    val qaResult = qaGate.run(finalState, request)
-    if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
+    return finalizeValidatedPublication(finalState, request, attempted)
+  }
+
+  private fun finalizeValidatedPublication(
+    finalState: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+  ): GoalRunnerRunReport {
+    val prepared =
+      try {
+        val qaResult = qaGate.run(finalState, request)
+        if (qaResult is GoalQaGateResult.Warned) warnQa(request, qaResult.reason)
+        val invocationId =
+          outcomeStore.goalQualityExecution(finalState.parentWorkflowId)?.execution?.invocationId
+            ?: return writeHistoryStopped(
+              finalState,
+              attempted,
+              "Final quality invocation is missing before boundary history writing.",
+            )
+        writeGoalHistory(finalState, request, attempted, invocationId)?.let { return it }
+        invocationId to qaResult
+      } catch (failure: SkillBillRuntimeException) {
+        return writeHistoryStopped(finalState, attempted, failure.message ?: "Final goal state could not be saved.")
+      }
+    return commitAndPublish(finalState, request, attempted, prepared.first, prepared.second)
+  }
+
+  private fun commitAndPublish(
+    finalState: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+    qualityInvocationId: String,
+    qaResult: GoalQaGateResult,
+  ): GoalRunnerRunReport {
+    if (!qualityInvocationIsCurrent(finalState.parentWorkflowId, qualityInvocationId)) {
+      return writeHistoryStopped(
+        finalState,
+        attempted,
+        "Final quality invocation changed before commit and PR publication.",
+      )
+    }
     commitAllRemainingWorktree(finalState.manifest, request)?.let { reason ->
       return stopped(
         StoppedReportArgs(
@@ -131,7 +178,10 @@ class GoalRunnerFinalization(
         ),
       )
     }
-    val result = openPullRequest(finalState, request, qaResult)
+    if (!qualityInvocationIsCurrent(finalState.parentWorkflowId, qualityInvocationId)) {
+      return writeHistoryStopped(finalState, attempted, "Final quality invocation changed before PR creation.")
+    }
+    val result = publication.openPullRequest(finalState, request, qaResult)
     return when (result) {
       is GoalPullRequestResult.Opened ->
         completeMonitoredGoal(finalState, request, attempted, result.url, GoalPullRequestStatus.OPENED)
@@ -160,36 +210,208 @@ class GoalRunnerFinalization(
     }
   }
 
-  private fun openPullRequest(
+  private fun writeGoalHistory(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
-    qaResult: GoalQaGateResult,
-  ): GoalPullRequestResult =
-    pullRequestPort.open(
-      state.manifest.toPullRequestRequest(
-        request.repoRoot,
-        goalQaSummary = goalQaSummary(state, qaResult),
-        qaSummary = { subtask ->
-          state.manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome)
-            ?: GoalSubtaskQaSummary.NotRecorded
-        },
+    attempted: List<Int>,
+    expectedInvocationId: String,
+  ): GoalRunnerRunReport? {
+    val quality =
+      outcomeStore.goalQualityExecution(state.parentWorkflowId)?.execution
+        ?.takeIf { it.invocationId == expectedInvocationId }
+        ?: return writeHistoryStopped(
+          state,
+          attempted,
+          "Final quality invocation changed before boundary history writing.",
+        )
+    if (quality.status !in
+      setOf(
+        GoalQualityExecutionStatus.SETTLED_PASSED,
+        GoalQualityExecutionStatus.SETTLED_SKIPPED,
+        GoalQualityExecutionStatus.SETTLED_WARNED,
+      )
+    ) {
+      return writeHistoryStopped(
+        state,
+        attempted,
+        "Final quality invocation is no longer settled for boundary history " +
+          "writing.",
+      )
+    }
+    return writeEligibleGoalHistory(state, request, attempted, quality.invocationId)
+  }
+
+  private fun writeEligibleGoalHistory(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+    invocationId: String,
+  ): GoalRunnerRunReport? {
+    val writerInput = requiredGoalHistoryInput(state)
+    val currentTree = goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot)
+    if (currentTree !is WorkflowGitOperationResult.Ok || currentTree.value.isBlank()) {
+      return writeHistoryStopped(
+        state,
+        attempted,
+        "Could not read repository contents before boundary history writing.",
+      )
+    }
+    val preWriterContentFingerprint = currentTree.value.trim()
+    val accepted = outcomeStore.goalHistoryCompletion(state.parentWorkflowId)
+    if (accepted != null &&
+      accepted.inputFingerprint == goalHistoryFingerprint(writerInput, accepted.preWriterContentFingerprint) &&
+      preWriterContentFingerprint == accepted.postWriterContentFingerprint
+    ) {
+      return null
+    }
+
+    return runHistoryWriter(
+      state,
+      request,
+      attempted,
+      GoalHistoryWriteInput(writerInput, invocationId, preWriterContentFingerprint),
+    )
+  }
+
+  private fun requiredGoalHistoryInput(state: GoalRunnerManifestState): GoalHistoryWriterInput {
+    val input =
+      goalHistoryWriterInput(state) ?: throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+        "Required child history records are missing or conflict with the parent manifest.",
+      )
+    val repairs =
+      outcomeStore.goalFinalRepairContext(state.parentWorkflowId) ?: throw SkillBillRuntimeException(
+        WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+        "Final QA repair context was not durably recorded.",
+      )
+    return input.copy(repairContext = repairs)
+  }
+
+  private fun runHistoryWriter(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+    write: GoalHistoryWriteInput,
+  ): GoalRunnerRunReport? {
+    val (writerInput, invocationId, preWriterContentFingerprint) = write
+    val branch = state.manifest.featureBranch.orEmpty().ifBlank { state.manifest.branchForFinalPullRequest() }
+    val result =
+      finalHistoryWriter.run(
+        PhaseRunRequest(
+          definitionId = SkeletonDefinition.GOAL_HISTORY.id,
+          repoRoot = request.repoRoot,
+          invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+          intake = request.issueKey,
+          timeout = request.timeout,
+          agentAddonSelection = request.agentAddonSelection,
+          modelAssignment = request.modelAssignment,
+          goalHistoryWriterInput = writerInput,
+        ),
+        state.parentWorkflowId,
+        branch,
+      )
+    val output =
+      (result as? PhaseRunResult.Completed)?.acceptedOutput?.takeIf(String::isNotBlank)
+        ?: return writeHistoryStopped(
+          state,
+          attempted,
+          "The boundary history writer did not complete with accepted output.",
+        )
+    val afterTree = goalRunnerRepositoryContentIdentity(gitOperations, request.repoRoot)
+    if (afterTree !is WorkflowGitOperationResult.Ok || afterTree.value.isBlank()) {
+      return writeHistoryStopped(state, attempted, "Could not read repository contents after boundary history writing.")
+    }
+    val postWriterContentFingerprint = afterTree.value.trim()
+    val completion =
+      GoalHistoryCompletion(
+        inputFingerprint = goalHistoryFingerprint(writerInput, preWriterContentFingerprint),
+        preWriterContentFingerprint = preWriterContentFingerprint,
+        postWriterContentFingerprint = postWriterContentFingerprint,
+        acceptedOutput = output,
+      )
+    if (!outcomeStore.saveGoalHistoryCompletion(state.parentWorkflowId, invocationId, completion)) {
+      return writeHistoryStopped(state, attempted, "Could not durably record boundary history writer completion.")
+    }
+    return null
+  }
+
+  private fun qualityInvocationIsCurrent(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+  ): Boolean =
+    outcomeStore.goalQualityExecution(parentWorkflowId)?.execution?.let { execution ->
+      execution.invocationId == expectedInvocationId && execution.status in
+        setOf(
+          GoalQualityExecutionStatus.SETTLED_PASSED,
+          GoalQualityExecutionStatus.SETTLED_SKIPPED,
+          GoalQualityExecutionStatus.SETTLED_WARNED,
+        )
+    } == true
+
+  private fun goalHistoryWriterInput(state: GoalRunnerManifestState): GoalHistoryWriterInput? {
+    val parentId = state.parentWorkflowId
+    val expectedSelection = state.manifest.subtasks.map { it.id to it.workflowId }
+    val ordered = outcomeStore.goalHistoryWriterEntries(parentId, expectedSelection)
+    if (ordered.size != state.manifest.subtasks.size) return null
+    val repairContext = outcomeStore.goalFinalRepairContext(parentId) ?: return null
+    return GoalHistoryWriterInput(parentId, ordered, repairContext)
+  }
+
+  private fun goalHistoryFingerprint(
+    input: GoalHistoryWriterInput,
+    preWriterTree: String,
+  ): String {
+    val values =
+      buildList {
+        add(input.parentWorkflowId)
+        input.entries.forEach { entry ->
+          add(entry.subtaskId.toString())
+          add(entry.childWorkflowId)
+          add(entry.definitionId)
+          add(entry.legacyDisposition.orEmpty())
+          entry.draft?.let { draft ->
+            add(draft.disposition.wireValue)
+            add(draft.boundary.orEmpty())
+            add(draft.history.orEmpty())
+            add(draft.decisions.orEmpty())
+            add(draft.skipReason.orEmpty())
+          }
+        }
+        input.repairContext.outputs.forEach { output ->
+          add(output.phaseId)
+          add(output.invocationId)
+          add(output.occurrence.toString())
+          add(output.output)
+        }
+        add(input.repairContext.warning.orEmpty())
+        add(preWriterTree)
+      }
+    val digest = MessageDigest.getInstance("SHA-256")
+    values.forEach { value ->
+      val bytes = value.toByteArray(Charsets.UTF_8)
+      digest.update(bytes.size.toString().toByteArray(Charsets.UTF_8))
+      digest.update(byteArrayOf(0))
+      digest.update(bytes)
+    }
+    return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+  }
+
+  private fun writeHistoryStopped(
+    state: GoalRunnerManifestState,
+    attempted: List<Int>,
+    reason: String,
+  ): GoalRunnerRunReport =
+    stopped(
+      StoppedReportArgs(
+        issueKey = state.manifest.issueKey,
+        attempted = attempted,
+        subtaskId = state.manifest.subtasks.lastOrNull()?.id ?: 0,
+        reason = GoalRunnerStopReason.BLOCKED,
+        blockedReason = reason,
+        workflowId = state.parentWorkflowId,
+        lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
       ),
     )
-
-  private fun goalQaSummary(
-    state: GoalRunnerManifestState,
-    result: GoalQaGateResult,
-  ): GoalQaSummary {
-    if (result is GoalQaGateResult.Skipped && result.reason == GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA) {
-      return GoalQaSummary.RanPerSubtask
-    }
-    val recorded = outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)
-    return when {
-      result is GoalQaGateResult.Warned -> GoalQaSummary.Warned(result.reason, recorded)
-      recorded != null -> GoalQaSummary.Recorded(recorded)
-      else -> GoalQaSummary.NotRecorded
-    }
-  }
 
   private fun warnQa(
     request: GoalRunnerRunRequest,
@@ -198,39 +420,6 @@ class GoalRunnerFinalization(
     val warning = "Warning: goal QA finished with a warning; continuing to commit_push. $reason"
     RuntimeDiagnosticsBestEffortWarning.record(diagnostics, warning)
     request.outputSink.write(AgentRunOutputStream.STDERR, "$warning\n")
-  }
-
-  private fun publishedGoalResult(
-    finalState: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-    attempted: List<Int>,
-  ): GoalRunnerRunReport? {
-    val published =
-      pullRequestIdentityLookup.lookup(request.repoRoot, finalState.manifest.featureBranch.orEmpty())
-    if (published is PullRequestIdentity.Merged) {
-      deleteGoalSpecScratchOnSuccess(finalState.manifest, request)
-      return completed(
-        finalState.manifest,
-        attempted,
-        published.url,
-        GoalPullRequestStatus.EXISTING,
-        resolveFindingsLedger(finalState.manifest.issueKey),
-      )
-    }
-    if (published is PullRequestIdentity.Unavailable) {
-      return stopped(
-        StoppedReportArgs(
-          issueKey = finalState.manifest.issueKey,
-          attempted = attempted,
-          subtaskId = 0,
-          reason = GoalRunnerStopReason.PULL_REQUEST_FAILED,
-          blockedReason = published.reason,
-          workflowId = finalState.parentWorkflowId,
-          lastResumableStep = "pr_description",
-        ),
-      )
-    }
-    return null
   }
 
   private fun completeMonitoredGoal(
@@ -248,7 +437,7 @@ class GoalRunnerFinalization(
           attempted,
           pullRequestUrl,
           pullRequestStatus,
-          resolveFindingsLedger(state.manifest.issueKey),
+          publication.resolveFindingsLedger(state.manifest.issueKey),
         ).copy(monitoringSummary = acceptedMonitoringSummary(result.completedOutputs))
       }
       is PhaseRunResult.Blocked ->
@@ -474,7 +663,110 @@ class GoalRunnerFinalization(
     manifest: DecompositionManifest,
     request: GoalRunnerRunRequest,
   ) = specScratchCleanup.deleteGoalSpecBundle(manifest, request.repoRoot)
+}
 
-  private fun resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
+private data class GoalHistoryWriteInput(
+  val input: GoalHistoryWriterInput,
+  val invocationId: String,
+  val preWriterContentFingerprint: String,
+)
+
+@Inject
+class GoalRunnerPullRequests(
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  private val pullRequestPort: GoalPullRequestPort,
+  private val pullRequestIdentityLookup: PullRequestIdentityLookup,
+  private val specScratchCleanup: GoalSpecScratchCleanup,
+  private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
+) {
+  fun openPullRequest(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    qaResult: GoalQaGateResult,
+  ): GoalPullRequestResult =
+    pullRequestPort.open(
+      state.manifest.toPullRequestRequest(
+        request.repoRoot,
+        goalQaSummary = goalQaSummary(state, qaResult),
+        qaSummary = { subtask ->
+          state.manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome)
+            ?: GoalSubtaskQaSummary.NotRecorded
+        },
+      ),
+    )
+
+  private fun goalQaSummary(
+    state: GoalRunnerManifestState,
+    result: GoalQaGateResult,
+  ): GoalQaSummary {
+    if (result is GoalQaGateResult.Skipped && result.reason == GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA) {
+      return GoalQaSummary.RanPerSubtask
+    }
+    val recorded = outcomeStore.recordedGoalQaOutcome(state.parentWorkflowId)
+    return when {
+      result is GoalQaGateResult.Warned -> GoalQaSummary.Warned(result.reason, recorded)
+      recorded != null -> GoalQaSummary.Recorded(recorded)
+      else -> GoalQaSummary.NotRecorded
+    }
+  }
+
+  fun publishedGoalResult(
+    finalState: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+  ): GoalRunnerRunReport? {
+    val published =
+      pullRequestIdentityLookup.lookup(request.repoRoot, finalState.manifest.featureBranch.orEmpty())
+    if (published is PullRequestIdentity.Merged) {
+      deleteGoalSpecScratchOnSuccess(finalState.manifest, request)
+      return completed(
+        finalState.manifest,
+        attempted,
+        published.url,
+        GoalPullRequestStatus.EXISTING,
+        resolveFindingsLedger(finalState.manifest.issueKey),
+      )
+    }
+    if (published is PullRequestIdentity.Unavailable) {
+      return stopped(
+        StoppedReportArgs(
+          issueKey = finalState.manifest.issueKey,
+          attempted = attempted,
+          subtaskId = 0,
+          reason = GoalRunnerStopReason.PULL_REQUEST_FAILED,
+          blockedReason = published.reason,
+          workflowId = finalState.parentWorkflowId,
+          lastResumableStep = "pr_description",
+        ),
+      )
+    }
+    return null
+  }
+
+  private fun deleteGoalSpecScratchOnSuccess(
+    manifest: DecompositionManifest,
+    request: GoalRunnerRunRequest,
+  ) = specScratchCleanup.deleteGoalSpecBundle(manifest, request.repoRoot)
+
+  fun resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
     resolveUnaddressedFindingsLedger(unaddressedFindingsLedgerService, issueKey)
+}
+
+fun interface GoalRunnerFinalHistoryWriter {
+  fun run(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    branch: String,
+  ): PhaseRunResult
+}
+
+@Inject
+class PhaseRunGoalFinalHistoryWriter(
+  private val phaseRunEntry: PhaseRunEntry,
+) : GoalRunnerFinalHistoryWriter {
+  override fun run(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    branch: String,
+  ): PhaseRunResult = phaseRunEntry.runForGoal(request, parentWorkflowId, branch)
 }

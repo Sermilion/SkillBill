@@ -4,7 +4,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.workflow.goal.GOAL_CHILD_HISTORY_DRAFT_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
-import skillbill.goalrunner.model.GoalChildHistoryDraftPayloadKeys
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftPayloadKeys
 import skillbill.infrastructure.contracts.locator.GoalChildHistoryDraftSchemaPaths
 import java.nio.file.Files
 import java.nio.file.Path

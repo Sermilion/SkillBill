@@ -72,7 +72,6 @@ import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
-import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.engine.goalrunner.persist.taskRuntimeWorkflowRecord
 import skillbill.engine.goalrunner.persist.withSettledLegacyHistorySkip
@@ -91,8 +90,6 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalObservabilityProgressEvent
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
 import skillbill.goalrunner.model.GoalPlanningStatusReasons
@@ -115,6 +112,8 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
@@ -4364,6 +4363,7 @@ class GoalRunnerManifestReconciliationTest {
     val store = InMemoryGoalManifestStore(staleManifest)
     val outcomes =
       RecordingOutcomeStore().apply {
+        this["wfl-1"] = completeOutcome(1)
         authoritativeOutcomesBySubtask[1] = completeOutcome(1)
       }
     val launcher =
@@ -5313,7 +5313,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
     )
 }
 
-internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+internal class RecordingOutcomeStore : TestGoalQualityOutcomeStore(settled = true) {
   override fun saveGoalChildHistoryDraft(
     draft: GoalChildHistoryDraft,
     admitted: AdmittedFeatureTaskRuntimeExecution?,
@@ -5412,6 +5412,17 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     return authoritativeOutcomesBySubtask.toMap()
   }
 
+  override fun authoritativeOutcomesForSubtasks(
+    unitOfWork: UnitOfWork,
+    issueKey: String,
+    parentWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerStoredOutcome> =
+    authoritativeOutcomes(
+      issueKey,
+      parentWorkflowId,
+    ).filterKeys(subtaskIds::contains)
+
   override fun authoritativeOutcomes(
     issueKey: String,
     parentWorkflowId: String,
@@ -5419,6 +5430,20 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     lastAuthoritativeOutcomeRequest = issueKey
     return authoritativeOutcomesBySubtask.toMap()
   }
+
+  override fun terminalOutcome(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    issueKey: String,
+    subtaskId: Int,
+  ): GoalRunnerStoredOutcome? = terminalOutcome(workflowId, issueKey, subtaskId)
+
+  override fun hasRequiredGoalChildHistoryDraft(
+    unitOfWork: UnitOfWork,
+    parentWorkflowId: String,
+    subtaskId: Int,
+    childWorkflowId: String,
+  ): Boolean = hasRequiredGoalChildHistoryDraft(parentWorkflowId, subtaskId, childWorkflowId)
 
   override fun terminalOutcome(
     workflowId: String,

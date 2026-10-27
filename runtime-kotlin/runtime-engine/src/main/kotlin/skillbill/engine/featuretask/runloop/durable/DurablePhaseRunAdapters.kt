@@ -41,9 +41,9 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations

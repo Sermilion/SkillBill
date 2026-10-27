@@ -17,6 +17,8 @@ import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.phaserun.qa.QaStandalonePhaseRun
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
@@ -25,6 +27,7 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -50,6 +53,14 @@ data class PhaseRunRequest(
   val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val acceptanceCriteria: List<String>? = null,
   val recordedGoalQaOutcome: FeatureTaskQaOutcome? = null,
+  val goalHistoryWriterInput: GoalHistoryWriterInput? = null,
+  val acceptedGoalRepairOutput: ((String, String, Int, String) -> Unit)? = null,
+  val goalQualityPhaseProgress: GoalQualityPhaseProgress? = null,
+  val persistGoalQualityPhaseProgress: ((GoalQualityPhaseProgress) -> Boolean)? = null,
+  val latestGoalQualityPhaseProgress: (() -> GoalQualityPhaseProgress)? = null,
+  val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null,
+  val goalQualityInvocationId: String? = null,
+  val acceptedGoalQualityPlanText: String? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -65,6 +76,7 @@ sealed interface PhaseRunResult {
   val completedStepIds: List<String>
   val reviewResult: ParallelCodeReviewResult?
   val targetReport: List<String>
+  val identifiedCompletedOutputs: List<PhaseRunCompletedOutput>
 
   data class Completed(
     override val invocationId: String,
@@ -77,6 +89,7 @@ sealed interface PhaseRunResult {
     override val targetReport: List<String> = emptyList(),
     val qaOutcome: StandaloneQaOutcome? = null,
     val qaReportText: String? = null,
+    override val identifiedCompletedOutputs: List<PhaseRunCompletedOutput> = emptyList(),
   ) : PhaseRunResult
 
   data class Blocked(
@@ -87,8 +100,15 @@ sealed interface PhaseRunResult {
     val reason: String,
     val completedOutputs: List<String> = emptyList(),
     override val targetReport: List<String> = emptyList(),
+    override val identifiedCompletedOutputs: List<PhaseRunCompletedOutput> = emptyList(),
   ) : PhaseRunResult
 }
+
+data class PhaseRunCompletedOutput(
+  val phaseId: String,
+  val occurrence: Int,
+  val output: String,
+)
 
 @Inject
 class StandalonePhaseRunners(
@@ -137,4 +157,8 @@ internal data class InMemoryPhaseRunFacts(
   override val reviewInvocation: ReviewInvocation = request.reviewInvocation
   override val phaseInstructions: PhaseInstructions? = request.instructions
   override val qaExecution: QaExecutionContext? = request.qaExecution
+  override val goalHistoryWriterInput = request.goalHistoryWriterInput
+  override val goalQualityAutomaticRecovery: Boolean = request.goalQualityPhaseProgress != null
+  override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = request.acceptedGoalQualityExecutionPlan
+  override val qaOutcomeWorkflowId: String = request.goalQualityInvocationId?.let { "$workflowId:$it" } ?: workflowId
 }

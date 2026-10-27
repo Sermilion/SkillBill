@@ -28,6 +28,8 @@ internal interface PhaseAcceptedStepCallTarget {
 
   fun nextStepIteration(): Int
 
+  fun nextGateIteration(): Int
+
   fun requireAcceptedAttempt(
     run: PhaseRun,
     call: PhaseStepCall,

@@ -19,16 +19,22 @@ import skillbill.engine.goalrunner.model.GoalRunnerRestoredChildReference
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
+import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalFinalRepairContext
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
+import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
+import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.validatedGoalReviewPasses
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
@@ -75,8 +81,9 @@ class WorkflowGoalRunnerOutcomeStore
   @Inject
   constructor(
     private val database: DatabaseSessionFactory,
-    workflowSnapshotValidator: WorkflowSnapshotValidator,
+    private val workflowSnapshotValidator: WorkflowSnapshotValidator,
     wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
+    private val goalQualityExecution: WorkflowGoalRunnerQualityExecutionStore,
     private val historyEvidence: GoalChildHistoryEvidenceStore,
     gitOperations: WorkflowGitOperations,
     workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -84,7 +91,9 @@ class WorkflowGoalRunnerOutcomeStore
     clock: Clock,
     private val blockIncidentCapture: BlockIncidentCapture,
   ) : GoalRunnerWorkflowOutcomeStore,
-    GoalRunnerAttemptLedgerStore {
+    GoalRunnerAttemptLedgerStore,
+    GoalRunnerQualityExecutionStore by goalQualityExecution,
+    GoalRunnerReviewOutcomeStore by WorkflowGoalRunnerReviewBridge(database, WorkflowEngine()) {
     private val engine = WorkflowEngine()
     private val blockWrites = WorkflowGoalRunnerBlockWrites(clock)
     private val progressRecording =
@@ -114,7 +123,6 @@ class WorkflowGoalRunnerOutcomeStore
       )
     private val terminal =
       WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations, crashReconciler)
-    private val review = WorkflowGoalRunnerReviewBridge(database, engine)
     private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile, blockIncidentCapture)
     private val blocks = WorkflowGoalRunnerBlockBridge(database, blockWrites, blockIncidentCapture, clock)
 
@@ -161,34 +169,67 @@ class WorkflowGoalRunnerOutcomeStore
         output,
       )
 
-    override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? =
-      review.goalSubtaskReviewState(workflowId)
-
-    override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
-      review.recordedQualityGateSelection(workflowId)
-
-    override fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = review.recordedQaOutcome(workflowId)
-
     override fun hasQaComposedPlan(workflowId: String): Boolean =
       database.read { unitOfWork ->
         storedExecutionPlanComposesQa(taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts)
       }
 
-    override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? =
-      database.read { unitOfWork -> unitOfWork.featureTaskQaOutcomes.find(parentWorkflowId) }
+    override fun recordGoalFinalRepairOutput(
+      parentWorkflowId: String,
+      expectedInvocationId: String,
+      output: GoalFinalRepairOutput,
+    ): Boolean = progressRecording.recordGoalFinalRepairOutput(parentWorkflowId, expectedInvocationId, output)
 
-    override fun childQaSelection(
-      workflowId: String,
-      requested: FeatureTaskRuntimeQaSelection?,
-    ): FeatureTaskRuntimeQaSelection? = review.childQaSelection(workflowId, requested)
+    override fun recordGoalFinalRepairWarning(
+      parentWorkflowId: String,
+      expectedInvocationId: String,
+      warning: String?,
+    ): Boolean = progressRecording.recordGoalFinalRepairWarning(parentWorkflowId, expectedInvocationId, warning)
 
-    override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
-      review.unemittedGoalReviewPasses(workflowId)
+    override fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? =
+      progressRecording.goalFinalRepairContext(parentWorkflowId)
 
-    override fun acknowledgeGoalReviewPass(
-      workflowId: String,
-      passNumber: Int,
-    ): Boolean = review.acknowledgeGoalReviewPass(workflowId, passNumber)
+    override fun saveGoalHistoryCompletion(
+      parentWorkflowId: String,
+      expectedInvocationId: String,
+      completion: GoalHistoryCompletion,
+    ): Boolean = progressRecording.saveGoalHistoryCompletion(parentWorkflowId, expectedInvocationId, completion)
+
+    override fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion? =
+      progressRecording.goalHistoryCompletion(parentWorkflowId)
+
+    override fun goalHistoryWriterEntries(
+      parentWorkflowId: String,
+      expectedSelection: List<Pair<Int, String?>>,
+    ): List<GoalHistoryWriterEntry> = progressRecording.goalHistoryWriterEntries(parentWorkflowId, expectedSelection)
+
+    override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? {
+      val scopeSeparator = parentWorkflowId.lastIndexOf(":phr-")
+      val scopedInvocation =
+        scopeSeparator.takeIf { it >= 0 }?.let { separator ->
+          parentWorkflowId.substring(separator + 1)
+        }
+      val parentId = scopeSeparator.takeIf { it >= 0 }?.let { separator -> parentWorkflowId.substring(0, separator) }
+      val active =
+        parentId?.let(goalQualityExecution::goalQualityExecution)?.execution
+          ?: goalQualityExecution.goalQualityExecution(parentWorkflowId)?.execution
+      val outcomeId =
+        when {
+          scopedInvocation != null -> {
+            if (active?.invocationId != scopedInvocation || active.status == GoalQualityExecutionStatus.RETIRED) {
+              return null
+            }
+            parentWorkflowId
+          }
+          active != null && active.status != GoalQualityExecutionStatus.RETIRED -> {
+            "$parentWorkflowId:${active.invocationId}"
+          }
+          else -> parentWorkflowId
+        }
+      return database.read { unitOfWork ->
+        unitOfWork.featureTaskQaOutcomes.find(outcomeId)
+      }
+    }
 
     override fun progress(workflowId: String): GoalRunnerWorkflowProgress? = progressRecording.progress(workflowId)
 

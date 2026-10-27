@@ -5,8 +5,8 @@ import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewPassComplet
 import skillbill.engine.featuretask.lifecycle.remediation.RemediationDegradationSignal
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import java.nio.file.Path

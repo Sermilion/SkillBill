@@ -26,7 +26,14 @@ internal fun productionStrategyFor(stepId: String): PhaseStrategy =
     stepId,
     PhaseStrategySelectionFacts(
       definitionOwning(stepId),
-      setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
+      setOf(
+        CodeReviewExecutionMode.INLINE,
+        if (stepId == "validate") {
+          FeatureTaskRuntimeQualityGateSelection.VALIDATE
+        } else {
+          FeatureTaskRuntimeQualityGateSelection.BUILD
+        },
+      ),
     ),
   )
 

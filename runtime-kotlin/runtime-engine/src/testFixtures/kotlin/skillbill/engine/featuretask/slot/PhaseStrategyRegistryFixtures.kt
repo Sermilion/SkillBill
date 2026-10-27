@@ -33,7 +33,12 @@ fun PhaseStrategyLookup.reachableStrategyPairs(): Set<Pair<PhaseSlot, String>> =
         } else {
           listOf(null)
         }
-      val gates = if (PhaseSlot.QUALITY_GATE in slots) FeatureTaskRuntimeQualityGateSelection.entries else listOf(null)
+      val gates =
+        when {
+          definition == SkeletonDefinition.VALIDATION -> listOf(FeatureTaskRuntimeQualityGateSelection.VALIDATE)
+          PhaseSlot.QUALITY_GATE in slots -> FeatureTaskRuntimeQualityGateSelection.entries
+          else -> listOf(null)
+        }
       val qas = if (PhaseSlot.QA in slots) FeatureTaskRuntimeQaSelection.entries else listOf(null)
       modes.forEach { mode ->
         gates.forEach { gate ->

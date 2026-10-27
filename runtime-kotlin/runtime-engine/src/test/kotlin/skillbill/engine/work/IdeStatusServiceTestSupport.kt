@@ -39,8 +39,6 @@ import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.toStatusWireMap
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -49,6 +47,10 @@ import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -833,6 +835,24 @@ internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
 }
 
 internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
+  override fun recordGoalFinalRepairOutput(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    output: GoalFinalRepairOutput,
+  ): Boolean = false
+
+  override fun recordGoalFinalRepairWarning(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    warning: String?,
+  ): Boolean = false
+
+  override fun saveGoalHistoryCompletion(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    completion: GoalHistoryCompletion,
+  ): Boolean = false
+
   override fun saveGoalChildHistoryDraft(
     draft: GoalChildHistoryDraft,
     admitted: AdmittedFeatureTaskRuntimeExecution?,

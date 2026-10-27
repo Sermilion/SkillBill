@@ -8,7 +8,8 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPla
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
-import skillbill.goalrunner.model.GoalChildHistoryDraftPayloadKeys
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftPayloadKeys
+import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
@@ -358,6 +359,65 @@ class GoalChildHistoryEvidenceStore(
         }
       }
       evidence.historyStepStatus == WorkflowStepStatus.SKIPPED || legacyHistoryReady(evidence.historyRecord)
+    }
+
+  internal fun goalHistoryWriterEntries(
+    unit: UnitOfWork,
+    parentId: String,
+    expectedSelection: List<Pair<Int, String?>>,
+  ): List<GoalHistoryWriterEntry> =
+    guarded {
+      val parent =
+        unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentId)
+          ?: throw invalid("History evidence parent is missing.")
+      snapshots.validate(parent, parent.workflowName)
+      val manifest =
+        parent.decompositionRuntime()
+          ?: throw invalid("History evidence parent has no durable manifest.")
+      val durableSelection = manifest.subtasks.map { it.id to it.workflowId }
+      if (durableSelection != expectedSelection) {
+        throw invalid("The goal child selection changed before history writer eligibility was read.")
+      }
+      val selected =
+        manifest.subtasks.mapNotNull { subtask ->
+          val childId = subtask.workflowId ?: restoredChildId(unit, parentId, subtask.id)
+          childId?.let { subtask.id to it }
+        }
+      val drafts = decodeHistoryDrafts(parent.artifacts, parentId, wireArtifacts)
+      val allEvidence = read(unit, parentId)
+      selected.map { (subtaskId, childId) ->
+        val evidence =
+          allEvidence.singleOrNull {
+            it.subtaskId == subtaskId && it.childWorkflowId == childId
+          } ?: throw invalid("Selected child '$childId' has no preserved history evidence.")
+        val definition = definition(evidence.executionPlan)
+        if (definition == SkeletonDefinition.GOAL_CHILD_REVISION_5) {
+          val draft =
+            drafts.singleOrNull {
+              it.subtaskId == evidence.subtaskId && it.childWorkflowId == evidence.childWorkflowId
+            } ?: throw invalid("Revision 5 child '${evidence.childWorkflowId}' has no required history draft or skip.")
+          GoalHistoryWriterEntry(
+            evidence.subtaskId,
+            evidence.childWorkflowId,
+            "${definition.id}@${definition.semanticRevision}",
+            draft,
+          )
+        } else {
+          val disposition = legacyDisposition(evidence)
+          val label =
+            when {
+              disposition?.first == WorkflowStepStatus.SKIPPED -> "skipped"
+              legacyHistoryReady(evidence.historyRecord) -> "already_written"
+              else -> throw invalid("Legacy child '${evidence.childWorkflowId}' has no recorded history disposition.")
+            }
+          GoalHistoryWriterEntry(
+            evidence.subtaskId,
+            evidence.childWorkflowId,
+            "${definition.id}@${definition.semanticRevision}",
+            legacyDisposition = label,
+          )
+        }
+      }
     }
 
   internal fun legacyHistoryReady(record: Map<String, Any?>?): Boolean {

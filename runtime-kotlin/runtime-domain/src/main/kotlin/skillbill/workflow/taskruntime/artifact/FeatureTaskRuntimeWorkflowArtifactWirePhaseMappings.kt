@@ -50,6 +50,17 @@ fun FeatureTaskRuntimeVerificationBoundaryHeadingProvenance.asWorkflowArtifactEn
   FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
+fun decodeVerificationBoundaryHeadingProvenanceFromArtifact(
+  raw: Any?,
+  path: String,
+): FeatureTaskRuntimeVerificationBoundaryHeadingProvenance? =
+  JsonCodec.anyToStringAnyMap(raw)?.let {
+    FeatureTaskRuntimeVerificationBoundaryHeadingProvenance.fromArtifactMap(
+      it,
+      path,
+    )
+  }
+
 internal fun decodeVerificationBoundaryHeadingProvenanceFromArtifact(
   raw: Map<String, Any?>,
   path: String,

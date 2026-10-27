@@ -5,10 +5,10 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftDisposition
-import skillbill.goalrunner.model.GoalChildHistoryDraftPayloadKeys
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftDisposition
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftPayloadKeys
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 internal object GoalChildHistoryDraftOutputPersistence {

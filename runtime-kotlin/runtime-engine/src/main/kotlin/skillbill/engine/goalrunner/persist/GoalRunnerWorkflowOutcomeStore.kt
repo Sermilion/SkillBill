@@ -11,13 +11,21 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerRestoredChildReference
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
-import skillbill.goalrunner.model.GoalChildHistoryDraft
-import skillbill.goalrunner.model.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
+import skillbill.goalrunner.model.history.GoalChildHistoryDraft
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalFinalRepairContext
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.history.GoalHistoryCompletion
+import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
+import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
+import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
+import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -83,6 +91,7 @@ interface GoalRunnerReviewOutcomeStore {
 }
 
 interface GoalRunnerWorkflowOutcomeStore :
+  GoalRunnerQualityExecutionStore,
   GoalRunnerTerminalOutcomeStore,
   GoalRunnerReviewOutcomeStore,
   GoalRunnerWorkflowProgressStore,
@@ -90,6 +99,33 @@ interface GoalRunnerWorkflowOutcomeStore :
   GoalRunnerGoalChildHistoryDraftStore,
   GoalRunnerWorkflowOutcomeMutationStore {
   fun hasQaComposedPlan(workflowId: String): Boolean
+
+  fun recordGoalFinalRepairOutput(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    output: GoalFinalRepairOutput,
+  ): Boolean
+
+  fun recordGoalFinalRepairWarning(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    warning: String?,
+  ): Boolean
+
+  fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? = null
+
+  fun saveGoalHistoryCompletion(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    completion: GoalHistoryCompletion,
+  ): Boolean
+
+  fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion? = null
+
+  fun goalHistoryWriterEntries(
+    parentWorkflowId: String,
+    expectedSelection: List<Pair<Int, String?>>,
+  ): List<GoalHistoryWriterEntry> = emptyList()
 
   fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
 
@@ -224,4 +260,44 @@ interface GoalRunnerWorkflowLedgerWriteStore {
   fun ledgerSequenceWatermarks(issueKey: String): GoalRunnerLedgerSequenceWatermarks
 
   fun childWorkflowLoopIterations(workflowId: String): Map<String, Int>
+}
+
+interface GoalRunnerQualityExecutionStore {
+  fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord? = null
+
+  fun resolvedGoalQualityChildIds(
+    parentWorkflowId: String,
+    expectedSelection: List<Pair<Int, String?>>,
+  ): List<String> = emptyList()
+
+  fun admitGoalQualityExecution(
+    parentWorkflowId: String,
+    baselineContentFingerprint: String,
+    governingInputs: GoalQualityExecutionInputs,
+    executionPlans: GoalQualityExecutionPlans,
+  ): GoalQualityExecutionRecord =
+    throw UnsupportedOperationException("Goal quality execution persistence is unavailable.")
+
+  fun transitionGoalQualityExecution(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    expected: GoalQualityExecutionRecord,
+    next: GoalQualityExecutionRecord,
+  ): Boolean = false
+
+  fun goalQualityPhaseProgress(
+    parentWorkflowId: String,
+    invocationId: String,
+    definitionId: String,
+    acceptedPlan: String,
+  ): GoalQualityPhaseProgress =
+    throw UnsupportedOperationException("Goal quality phase progress persistence is unavailable.")
+
+  fun persistGoalQualityPhaseProgress(
+    parentWorkflowId: String,
+    invocationId: String,
+    definitionId: String,
+    acceptedPlan: String,
+    progress: GoalQualityPhaseProgress,
+  ): Boolean = false
 }

@@ -3,19 +3,23 @@ package skillbill.engine.goalrunner.qa
 import org.junit.jupiter.api.io.TempDir
 import skillbill.application.testProjectStore
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.phaserun.PhaseRunEntryFixture
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
+import skillbill.engine.featuretask.phaserun.plans
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
+import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.work.EmptyOutcomeStore
+import skillbill.goalrunner.model.history.GoalFinalRepairContext
+import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -54,6 +58,7 @@ class DefaultGoalRunnerQaGateTest {
     val result = gate.run(state(subtaskWorkflowId = "child"), request())
 
     assertEquals(GoalQaGateResult.Skipped(GoalQaSkipReason.SUBTASKS_ALREADY_RAN_QA), result)
+    assertEquals(emptyList(), outcomes.goalFinalRepairContext("goal-parent")?.outputs)
   }
 
   @Test
@@ -74,7 +79,7 @@ class DefaultGoalRunnerQaGateTest {
       gate(git, QaGateOutcomeStore(), listOf(kotlinPackWithoutGate())).run(state(), request())
 
     assertEquals(GoalQaGateResult.Skipped(GoalQaSkipReason.UNSUPPORTED_TARGET), result)
-    assertNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent") })
+    assertNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent:test-quality") })
   }
 
   @Test
@@ -91,7 +96,8 @@ class DefaultGoalRunnerQaGateTest {
     assertEquals("goal_qa_gate: $reason", warning.first)
     assertEquals("boom", warning.second?.message)
     assertEquals(GoalQaGateResult.Warned(reason), result)
-    val recorded = assertNotNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent") })
+    val recorded =
+      assertNotNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent") })
     assertEquals(StandaloneQaOutcome.INCOMPLETE, recorded.outcome)
     assertEquals(reason, recorded.reason)
     assertEquals(FeatureTaskQaFailureKind.DEFECT, recorded.failureKind)
@@ -110,7 +116,8 @@ class DefaultGoalRunnerQaGateTest {
     val result = gate(git, QaGateOutcomeStore(), listOf(qaPack), invariants = rejected).run(state(), request())
 
     assertEquals(GoalQaGateResult.Warned(message), result)
-    val recorded = assertNotNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent") })
+    val recorded =
+      assertNotNull(phaseRunDatabase(home, clock).read { it.featureTaskQaOutcomes.find("goal-parent:test-quality") })
     assertEquals(StandaloneQaOutcome.INCOMPLETE, recorded.outcome)
     assertEquals(FeatureTaskQaFailureKind.ENVIRONMENT, recorded.failureKind)
     assertEquals(message, recorded.reason)
@@ -133,18 +140,21 @@ class DefaultGoalRunnerQaGateTest {
     invariants: FeatureTaskRuntimeRunInvariantsRead? = null,
   ): DefaultGoalRunnerQaGate {
     val database = phaseRunDatabase(home, clock)
+    val strategies =
+      testPhaseStrategies(
+        launcher = GoalRunnerSubtaskLauncher { error("The QA skip rules must not launch an agent.") },
+        gitOperations = git,
+      )
     val phaseEntry =
       phaseRunEntry(
-        testPhaseStrategies(
-          launcher = GoalRunnerSubtaskLauncher { error("The QA skip rules must not launch an agent.") },
-          gitOperations = git,
-        ),
+        strategies,
         git,
         database,
         clock,
       )
     return DefaultGoalRunnerQaGate(
       phaseEntry,
+      PhaseRunEntryFixture(strategies, git, database, clock, qaManifests = manifests).plans(),
       outcomes,
       git,
       object : FeatureTaskRuntimeRunInvariantsSource {
@@ -214,7 +224,31 @@ class DefaultGoalRunnerQaGateTest {
     private val childOutcome: GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded,
     private val parentOutcome: FeatureTaskQaOutcome? = null,
     private val parentReadFailure: Exception? = null,
-  ) : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+  ) : TestGoalQualityOutcomeStore() {
+    private var repairContext: GoalFinalRepairContext? = null
+
+    override fun recordGoalFinalRepairOutput(
+      parentWorkflowId: String,
+      expectedInvocationId: String,
+      output: GoalFinalRepairOutput,
+    ): Boolean {
+      val context = repairContext ?: GoalFinalRepairContext(emptyList())
+      repairContext = context.copy(outputs = context.outputs + output)
+      return true
+    }
+
+    override fun recordGoalFinalRepairWarning(
+      parentWorkflowId: String,
+      expectedInvocationId: String,
+      warning: String?,
+    ): Boolean {
+      val context = repairContext ?: GoalFinalRepairContext(emptyList())
+      repairContext = context.copy(warning = warning)
+      return true
+    }
+
+    override fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? = repairContext
+
     override fun hasQaComposedPlan(workflowId: String): Boolean = childPlan
 
     override fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = childOutcome

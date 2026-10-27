@@ -1363,7 +1363,7 @@ class WorkflowServiceGoalManifestStoreTest {
       JsonCodec.parseObjectOrNull(parentRow.artifactsJson)
         ?.let(JsonCodec::jsonElementToValue)
         ?.let(JsonCodec::anyToStringAnyMap)
-    assertEquals(setOf(DECOMPOSITION_RUNTIME_ARTIFACT_KEY), importedArtifacts?.keys)
+    assertEquals(setOf(DECOMPOSITION_RUNTIME_ARTIFACT_KEY, "goal_quality_execution"), importedArtifacts?.keys)
   }
 
   @Test

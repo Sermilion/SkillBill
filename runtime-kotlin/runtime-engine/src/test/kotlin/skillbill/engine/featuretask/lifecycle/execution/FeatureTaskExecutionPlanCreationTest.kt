@@ -33,6 +33,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.persist.OperatorBlockedPhaseReopenRequest
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.testWorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPortAdapter
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
@@ -619,6 +620,7 @@ class FeatureTaskExecutionPlanCreationTest {
           featureTaskRuntimeWireArtifactValidatorForTest(),
           FeatureTaskRuntimeExecutionPlanSchemaValidator(),
         ),
+        testWorkflowGoalRunnerQualityExecutionStore(database, testWorkflowSnapshotValidator),
       )
 
     fun store() =

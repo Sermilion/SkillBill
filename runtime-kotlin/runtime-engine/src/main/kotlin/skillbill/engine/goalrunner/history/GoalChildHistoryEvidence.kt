@@ -3,7 +3,7 @@ package skillbill.engine.goalrunner.history
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.goal.GOAL_CHILD_HISTORY_EVIDENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.goalrunner.model.GoalChildHistoryDraftPayloadKeys
+import skillbill.goalrunner.model.history.GoalChildHistoryDraftPayloadKeys
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.workflow.model.WorkflowStepStatus
 

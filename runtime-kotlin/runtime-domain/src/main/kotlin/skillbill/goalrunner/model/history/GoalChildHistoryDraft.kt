@@ -1,4 +1,4 @@
-package skillbill.goalrunner.model
+package skillbill.goalrunner.model.history
 
 import skillbill.contracts.workflow.goal.GOAL_CHILD_HISTORY_DRAFT_CONTRACT_VERSION
 

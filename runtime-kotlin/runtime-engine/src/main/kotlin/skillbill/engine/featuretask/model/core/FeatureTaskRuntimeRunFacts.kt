@@ -6,10 +6,12 @@ import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeEx
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.review.ReviewInvocation
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -94,6 +96,14 @@ interface FeatureTaskRuntimeRunFacts {
 
   /** The workspace, expected identity, and pack guidance of a standalone QA run; null for every other run. */
   val qaExecution: QaExecutionContext? get() = null
+
+  val goalHistoryWriterInput: GoalHistoryWriterInput? get() = null
+
+  val goalQualityAutomaticRecovery: Boolean get() = false
+
+  val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? get() = null
+
+  val qaOutcomeWorkflowId: String get() = workflowId
 }
 
 data class PhaseInstructions(

@@ -11,6 +11,8 @@ internal const val WORKER_SUBTASK_REQUEST_OUTCOMES_ARTIFACT_KEY = "goal_worker_s
 internal const val GOAL_ATTEMPT_LEDGER_ARTIFACT_KEY: String = "goal_attempt_ledger"
 internal const val GOAL_CHILD_HISTORY_EVIDENCE_ARTIFACT_KEY: String = "goal_child_history_evidence"
 internal const val GOAL_CHILD_HISTORY_DRAFTS_ARTIFACT_KEY: String = "goal_child_history_drafts"
+internal const val GOAL_FINALIZATION_HISTORY_ARTIFACT_KEY: String = "goal_finalization_history"
+internal const val GOAL_QUALITY_EXECUTION_ARTIFACT_KEY: String = "goal_quality_execution"
 
 internal const val GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY: String = "goal_subtask_review_state"
 internal const val GOAL_SUBTASK_REVIEW_INPUT_ARTIFACT_KEY: String = "goal_subtask_review_input"

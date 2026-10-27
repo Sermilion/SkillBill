@@ -78,6 +78,8 @@ object SkeletonStrategyBindings {
           PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
           PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID),
         ),
+      SkeletonDefinition.GOAL_HISTORY to
+        mapOf(PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID)),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),

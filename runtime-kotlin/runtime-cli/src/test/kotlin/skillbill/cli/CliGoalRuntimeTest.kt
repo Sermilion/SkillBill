@@ -558,7 +558,7 @@ class CliGoalExecutionOptionsTest {
   }
 
   @Test
-  fun `goal imports checked-in decomposition manifest when workflow store is missing`() {
+  fun `goal imports checked-in decomposition manifest but refuses ambiguous historical quality`() {
     val fixture = goalFixture(subtaskCount = 1)
     val recoveredDb = fixture.tempDir.resolve("recovered.db")
     val launcher = GoalFixtureAgentRunLauncher(fixture, dbPath = recoveredDb)
@@ -569,8 +569,8 @@ class CliGoalExecutionOptionsTest {
         fixture.context(launcher = launcher),
       )
 
-    assertEquals(0, result.exitCode, result.stdout)
-    assertContains(result.stdout, "goal SKILL-901: finished")
+    assertEquals(3, result.exitCode, result.stdout)
+    assertContains(result.stdout, "ambiguous historical quality state")
     DriverManager.getConnection("jdbc:sqlite:$recoveredDb").use { connection ->
       connection.prepareStatement("SELECT COUNT(*) FROM feature_task_workflows").use { statement ->
         statement.executeQuery().use { rows ->

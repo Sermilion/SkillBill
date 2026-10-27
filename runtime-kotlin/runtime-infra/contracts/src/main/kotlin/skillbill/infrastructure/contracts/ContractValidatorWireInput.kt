@@ -112,6 +112,10 @@ private fun serialWireArtifactNonObjectError(
       SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_EVIDENCE, "$sourceLabel: $reason")
     FeatureTaskRuntimeWireArtifactKind.GOAL_CHILD_HISTORY_DRAFT ->
       SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_CHILD_HISTORY_DRAFT, "$sourceLabel: $reason")
+    FeatureTaskRuntimeWireArtifactKind.GOAL_FINALIZATION_HISTORY ->
+      SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY, "$sourceLabel: $reason")
+    FeatureTaskRuntimeWireArtifactKind.GOAL_QUALITY_EXECUTION ->
+      SkillBillRuntimeException(WorkflowFailureCode.INVALID_GOAL_QUALITY_EXECUTION, "$sourceLabel: $reason")
     FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
       invalidAcceptanceCriterionRepairStateSchema(sourceLabel, reason)
     FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT ->

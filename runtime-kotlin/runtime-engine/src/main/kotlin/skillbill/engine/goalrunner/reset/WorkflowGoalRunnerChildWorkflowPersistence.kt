@@ -18,6 +18,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.persist.OperatorBlockedPhaseReopenRequest
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
+import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Conflicted
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Hydrated
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
@@ -66,6 +67,7 @@ class WorkflowGoalRunnerChildWorkflowPersistence(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val projectStore: ProjectStorePort,
   private val historyEvidence: GoalChildHistoryEvidenceStore,
+  private val qualityExecution: WorkflowGoalRunnerQualityExecutionStore,
 ) {
   private val engine = WorkflowEngine()
   private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
@@ -109,6 +111,7 @@ class WorkflowGoalRunnerChildWorkflowPersistence(
         existingChild
       }
     if (existingChild == null) {
+      qualityExecution.retireForSelectionChange(unitOfWork, state.parentWorkflowId)
       historyEvidence.retire(unitOfWork, state.parentWorkflowId, setup.subtaskId)
       unitOfWork.workflowStates.saveRecord(
         WorkflowFamily.TASK_RUNTIME,

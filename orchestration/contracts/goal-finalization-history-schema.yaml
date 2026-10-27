@@ -1,0 +1,51 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/goal-finalization-history-schema.yaml"
+title: Goal finalization history
+type: object
+additionalProperties: false
+required: [contract_version, repair_context, completion]
+properties:
+  contract_version:
+    const: "0.2"
+  repair_context:
+    oneOf:
+      - type: "null"
+      - type: object
+        additionalProperties: false
+        required: [outputs, warning]
+        properties:
+          outputs:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required: [phase_id, invocation_id, occurrence, output]
+              properties:
+                phase_id: {type: string, minLength: 1}
+                invocation_id: {type: string, minLength: 1}
+                occurrence: {type: integer, minimum: 0}
+                output: {type: string, minLength: 1}
+          warning:
+            oneOf:
+              - type: "null"
+              - type: string
+  completion:
+    oneOf:
+      - type: "null"
+      - type: object
+        additionalProperties: false
+        required: [input_fingerprint, pre_writer_content_fingerprint, post_writer_content_fingerprint, accepted_output]
+        properties:
+          input_fingerprint:
+            type: string
+            minLength: 1
+            description: SHA-256 over ordered writer inputs and the immutable pre-writer content fingerprint.
+          pre_writer_content_fingerprint:
+            type: string
+            minLength: 1
+            description: Representation-independent scoped content digest before the writer runs.
+          post_writer_content_fingerprint:
+            type: string
+            minLength: 1
+            description: Representation-independent scoped content digest after the writer completes.
+          accepted_output: {type: string, minLength: 1}

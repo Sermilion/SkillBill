@@ -29,7 +29,6 @@ import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaboration
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
-import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
@@ -57,7 +56,7 @@ internal class InMemoryPhaseRunState(
   private val facts: InMemoryPhaseRunFacts,
   private val executionPlan: ResolvedPhaseExecutionPlan,
   override val progress: FeatureTaskRuntimeRunState,
-  override val records: PhaseRunRecords,
+  override val records: InMemoryPhaseRunRecords,
   override val telemetry: FeatureTaskRuntimeRunObservability,
   val invocationId: String,
   private val strategies: PhaseStrategyLookup,
@@ -66,6 +65,8 @@ internal class InMemoryPhaseRunState(
   override val clock: Clock,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
+  override val settlements: PhaseRunSettlements =
+    GoalQualityPhaseRunSettlements(records)
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
   override var commitPushManifestCompletion: CommitPushManifestCompletion? = null
   override val diagnostics get() = telemetry.diagnostics
@@ -75,7 +76,6 @@ internal class InMemoryPhaseRunState(
   override val session: FeatureTaskRuntimeRunLoopSession =
     FeatureTaskRuntimeRunLoopSession(operatorBlockRetry = null, initialPendingReentry = null)
   override val goal: PhaseRunGoal = InMemoryPhaseRunGoal
-  override val settlements: PhaseRunSettlements = InMemoryPhaseRunSettlements
   override val checkpoints: PhaseRunCheckpoints = InMemoryPhaseRunCheckpoints
   override val specSource: SpecSource = facts.request.specSource
   override val transitions: FeatureTaskRuntimeTransitionDeclaration
@@ -170,7 +170,11 @@ internal class InMemoryPhaseRunState(
       }
     val progressEmitter: (AgentRunProgressEmission) -> Unit = { emission ->
       if (emission.processAlive && emission.outcome == GoalProgressOutcome.NONE &&
-        emission.eventKind in setOf(GoalProgressEventKind.OPERATION_STARTED, GoalProgressEventKind.OPERATION_HEARTBEAT)
+        emission.eventKind in
+        setOf(
+          GoalProgressEventKind.OPERATION_STARTED,
+          GoalProgressEventKind.OPERATION_HEARTBEAT,
+        )
       ) {
         publish("child_liveness", "The '$stepName' child is active; source progress is not confirmed.")
       }
@@ -206,7 +210,10 @@ internal class InMemoryPhaseRunState(
   override fun settledEnvelope(
     stepName: String,
     target: FeatureTaskRuntimePhaseSettlementTarget,
-  ): PhaseSettledEnvelopeRead = PhaseSettledEnvelopeRead.None
+  ): PhaseSettledEnvelopeRead =
+    settlements.findEnvelope(target.workflowId, stepName, target.attempt)
+      ?.let { PhaseSettledEnvelopeRead.Found(it.envelope) }
+      ?: PhaseSettledEnvelopeRead.None
 
   override fun recordReviewRun(
     reviewRunId: String,
