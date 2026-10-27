@@ -197,6 +197,7 @@ class PlanSubtasksReopeningTest {
         val reopened = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
         assertNull(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.value(reopened.artifacts))
       }
+      assertNull(recorder.loadDecomposeTerminal(selectedId))
       assertTrue(recorder.recordDecomposeTerminal(selectedId, terminal, "plan_subtasks"))
       val identity = execution.identity(selectedId)
       database.read { unit ->

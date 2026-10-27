@@ -8,8 +8,8 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerm
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 
 internal fun decomposeTerminalFrom(artifacts: Map<String, Any?>): FeatureTaskRuntimeDecomposeTerminal? {
-  if (FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL_ARTIFACT_KEY !in artifacts) return null
-  val raw = artifacts[FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL_ARTIFACT_KEY]
+  // Reopening plan_subtasks clears the terminal by writing null, so null reads as absent.
+  val raw = artifacts[FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL_ARTIFACT_KEY] ?: return null
   val entryMap =
     JsonCodec.anyToStringAnyMap(raw)
       ?: schemaError(
