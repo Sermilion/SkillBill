@@ -28,6 +28,7 @@ import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -44,6 +45,8 @@ import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
  */
 internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
   val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
+
+  val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode? get() = null
 
   /** Whether the accepted step owns one serial acceptance-repair mutation attempt. */
   val serialAcceptanceRepairStep: Boolean get() = false

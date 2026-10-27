@@ -18,7 +18,7 @@ internal fun featureTaskPhaseComplete(
   arguments: McpToolArguments,
   component: McpComponent,
 ): Map<String, Any?> =
-  component.featureTaskPhaseSettlementService.complete(
+  component.featureTaskPhaseSettlementService.completeFromAgent(
     FeatureTaskPhaseSettlementCompleteRequest(
       workflowId = arguments.string(SharedPayloadKeys.WORKFLOW_ID),
       phaseId = arguments.string(SharedPayloadKeys.PHASE_ID),

@@ -82,6 +82,41 @@ class FeatureTaskPhaseSettlementServiceTest {
   }
 
   @Test
+  fun `unfinished audit repair cannot settle and can finish in the same attempt`() {
+    listOf("progress", "no_progress").forEach { verdict ->
+      val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
+      val request =
+        FeatureTaskPhaseSettlementCompleteRequest(
+          workflowId = "wftr-test",
+          phaseId = "audit_implement_fix",
+          attempt = 1,
+          value = "One guard repaired. The remaining production paths still need edits.",
+          verdict = verdict,
+        )
+
+      val refused = service.completeFromAgent(request)
+
+      assertEquals(FeatureTaskPhaseSettlementAckStatus.ERROR, refused.status)
+      assertEquals(
+        FeatureTaskRuntimeFailureCode.AUDIT_REPAIR_UNFINISHED_CONTINUE_IMPLEMENTING.name,
+        refused.diagnosticCode,
+      )
+      assertNull(refused.envelope)
+      assertNull(service.findEnvelope(request.workflowId, request.phaseId, request.attempt))
+      assertEquals(
+        FeatureTaskPhaseSettlementAckStatus.OK,
+        service.completeFromAgent(request.copy(phaseId = "validate")).status,
+      )
+      val finished =
+        service.completeFromAgent(
+          request.copy(value = "Every planned production path repaired.", verdict = "satisfied"),
+        )
+      assertEquals(FeatureTaskPhaseSettlementAckStatus.OK, finished.status)
+      assertNotNull(service.findEnvelope(request.workflowId, request.phaseId, request.attempt))
+    }
+  }
+
+  @Test
   fun `contradictory complete for the same attempt keeps the first accepted value`() {
     val service = testPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
     service.complete(

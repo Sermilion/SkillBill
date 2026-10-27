@@ -62,9 +62,11 @@ internal object AuditImplementFixPromptSections {
       "Task size, implementation complexity, and an unproven file-scoped formatter invocation are not reasons " +
       "to stop source repair. If a formatter cannot be scoped safely, record its deferral and continue editing. " +
       "Use compaction to retain the plan and unfinished items when context runs low. " +
-      "Only if an actual execution limit ends the session with unfinished source work, " +
-      "call feature_task_phase_complete with verdict progress " +
-      "and explain the remaining work in prose. Every unfinished repair implementation consumes one of the " +
+      "Do not call feature_task_phase_complete with progress or no_progress for unfinished source work. " +
+      "The completion tool rejects those handoffs without saving a settlement; continue implementing " +
+      "in this session and attempt. Do not omit or change the verdict to conceal unfinished work. " +
+      "A real process interruption is handled by the runtime, not by declaring partial work complete. " +
+      "Every unfinished repair implementation accepted for settlement consumes one of the " +
       "selected criterion's three unsuccessful repair attempts, whether or not it changed source files. " +
       "The runtime preserves edits and reports, then blocks after the third unsuccessful attempt. " +
       "Never use feature_task_phase_block or a " +
@@ -117,9 +119,11 @@ internal object AuditImplementFixPromptSections {
       with the latest audit and current source. Preserve completed edits and continue the saved plan for
       the runtime-selected criterion. Prior completion claims and test-only classifications remain claims
       to verify. Continue every remaining production item in the saved plan under the current reservation.
-      Do not stop after another partial edit while authorized source work can proceed. Only an actual
-      execution limit justifies ending unfinished source work with verdict progress. Every unfinished
-      repair consumes one unsuccessful attempt, even when it changed source files. The runtime preserves
+      Do not stop after another partial edit while authorized source work can proceed. The completion
+      tool rejects progress and no_progress handoffs without saving a settlement. Continue implementing
+      in the same attempt; do not conceal unfinished work by omitting or changing the verdict.
+      Every unfinished repair accepted for settlement consumes one unsuccessful attempt, even when it
+      changed source files. The runtime preserves
       edits and reports; the next attempt receives a new reservation and repair plan. Do not replace the
       plan with another partial guard.
 

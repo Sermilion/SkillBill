@@ -670,3 +670,11 @@ Context: SKILL-446 exhausted three repair attempts after reports that reconciled
 Decision: Keep the three-attempt limit. Resumed repair prompts describe the charged attempt and new reservation. Require continued source work while authorized items remain, and reserve a partial progress settlement for an actual execution limit. A formatter that cannot be scoped safely is deferred without stopping production edits.
 
 Evidence: The rendered resume-prompt test checks the stopping rule, formatter deferral, charged attempt and absence of the obsolete budget exemption. Existing serial repair tests retain the accounting proof.
+
+## [2026-10-27] Refuse voluntary unfinished audit repair settlement
+
+Context: SKILL-446 spent all three renewed attempts on MCP completion calls with `progress`. Each report listed remaining authorized production work despite the stopping instructions. Those calls durably settled the attempt before the worker had to continue.
+
+Decision: The MCP completion path calls the service's agent admission method, which returns `AUDIT_REPAIR_UNFINISHED_CONTINUE_IMPLEMENTING` for new `audit_implement_fix` completion requests with `progress` or `no_progress`, without writing a settlement. The worker continues the same attempt and can complete it after finishing the plan. This supersedes the earlier instruction to voluntarily settle partial work at an execution limit. Process interruption remains runtime-owned. Trusted runtime settlement and historical reads, independent audit verification and the existing failure accounting remain unchanged. Other phases retain their completion verdicts.
+
+Evidence: The settlement service test refuses both partial verdicts, verifies no envelope was saved, then completes the same attempt. The existing serial repair tests retain the three-failure accounting proof.

@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -13,6 +14,9 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 internal object AuditImplementFixStep : PhaseStepHooks<PhaseAcceptedStepExecution> {
   override val serialAcceptanceRepairStep: Boolean = true
+
+  override val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode =
+    FeatureTaskRuntimeFailureCode.AUDIT_REPAIR_UNFINISHED_CONTINUE_IMPLEMENTING
 
   override fun settleCompletedRound(
     context: PhaseStepOutputContext,
