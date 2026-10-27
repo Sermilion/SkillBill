@@ -19,6 +19,7 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.goalrunner.model.quality.GoalQualityReadiness
+import skillbill.goalrunner.model.quality.GoalQualityReadiness.CLEAN_UNSTARTED
 import skillbill.goalrunner.model.quality.GoalQualityValidationDisposition
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
@@ -73,9 +74,8 @@ class WorkflowGoalRunnerQualityExecutionStore
           if (manifest.subtasks.map { it.id to it.workflowId } != expectedSelection) {
             invalid("The goal child selection changed while final quality was being admitted.")
           }
-          manifest.subtasks.map { subtask ->
+          manifest.subtasks.mapNotNull { subtask ->
             subtask.workflowId ?: historyEvidence.restoredChildId(unitOfWork, parentWorkflowId, subtask.id)
-              ?: invalid("Selected subtask '${subtask.id}' has no recorded child identity.")
           }
         }
       }
@@ -90,10 +90,9 @@ class WorkflowGoalRunnerQualityExecutionStore
         database.transaction { unitOfWork ->
           val parent = parent(unitOfWork, parentWorkflowId)
           val family = DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION
-          val payload =
-            family.value(parent.artifacts)
-              ?: invalid("Quality readiness is absent. Historical validation and retry state is ambiguous.")
-          val record = decode(payload)
+          val record =
+            family.value(parent.artifacts)?.let(::decode)
+              ?: GoalQualityExecutionRecord(readiness = CLEAN_UNSTARTED)
           validateParentIdentity(record, parentWorkflowId)
           if (record.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY) {
             invalid(

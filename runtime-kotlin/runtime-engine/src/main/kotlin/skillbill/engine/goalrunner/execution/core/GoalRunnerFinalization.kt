@@ -352,7 +352,6 @@ class GoalRunnerFinalization(
     val parentId = state.parentWorkflowId
     val expectedSelection = state.manifest.subtasks.map { it.id to it.workflowId }
     val ordered = outcomeStore.goalHistoryWriterEntries(parentId, expectedSelection)
-    if (ordered.size != state.manifest.subtasks.size) return null
     val repairContext = outcomeStore.goalFinalRepairContext(parentId) ?: return null
     return GoalHistoryWriterInput(parentId, ordered, repairContext)
   }

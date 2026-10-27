@@ -48,10 +48,44 @@ internal class GoalQualityRepairOutputs(private val outcomeStore: GoalRunnerWork
     definition: SkeletonDefinition,
     result: PhaseRunResult,
   ) {
+    val validationRepairs =
+      if (definition == SkeletonDefinition.VALIDATION) {
+        outcomeStore.goalQualityExecution(state.parentWorkflowId)
+          ?.execution
+          ?.progress
+          ?.validation
+          ?.buildGateProgress
+          ?.acceptedRepairOutputs
+          .orEmpty()
+      } else {
+        emptyList()
+      }
+    validationRepairs.forEach { repair ->
+      if (!outcomeStore.recordGoalFinalRepairOutput(
+          state.parentWorkflowId,
+          result.invocationId,
+          GoalFinalRepairOutput(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+            result.invocationId,
+            repair.repairTurn,
+            repair.output,
+          ),
+        )
+      ) {
+        throw SkillBillRuntimeException(
+          WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
+          "Could not reconcile accepted validation repair '${repair.repairTurn}' for '${state.parentWorkflowId}'.",
+        )
+      }
+    }
     result.identifiedCompletedOutputs
       .filter {
         definition == SkeletonDefinition.VALIDATION ||
           it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA_FIX
+      }
+      .filterNot {
+        validationRepairs.isNotEmpty() &&
+          it.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
       }
       .forEach { output ->
         if (!outcomeStore.recordGoalFinalRepairOutput(

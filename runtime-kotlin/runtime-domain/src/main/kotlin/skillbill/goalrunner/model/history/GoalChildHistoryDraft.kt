@@ -28,7 +28,6 @@ data class GoalChildHistoryDraft(
         require(
           !boundary.isNullOrBlank() &&
             !history.isNullOrBlank() &&
-            !decisions.isNullOrBlank() &&
             skipReason == null,
         )
       GoalChildHistoryDraftDisposition.SKIP ->
