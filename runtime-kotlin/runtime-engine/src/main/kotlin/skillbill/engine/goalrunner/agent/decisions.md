@@ -209,3 +209,11 @@ Context: SKILL-437 was first used for an inline-review plan whose bundle was lat
 Decision: Continuation lookup classifies only the latest workflow for a key and repository: terminal gives `TerminalOnly`, running gives `AlreadyRunning`, anything else gives `Resumable`. The `Ambiguous` result, the `ambiguous` preflight verdict and the `ambiguous` CLI lookup result are removed. A plan run resumes a found plan, or settles from a completed one, only when that plan governs the spec this launch resolves. Otherwise it opens a new plan workflow for the launched spec, which then becomes the latest run. Goal planning links a completed or reopened plan workflow only when its governed spec is the manifest's parent spec; plans imported by the goal's own children stay linked. Goal planning progress reads the plan workflow that started last, not the one updated last, so touching an old run cannot shadow the new one.
 
 Reason: Keys are reused for unrelated specs. A run belongs to the spec it governs, and the newest run for a key is the one the operator means.
+
+## [2026-10-28] A goal imported right after its own plan starts with clean quality readiness
+
+Context: The goal runner creates the parent workflow by importing the manifest projection when no parent record exists. That import always wrote `historical_ambiguity`. Planning writes only the manifest, so every newly planned goal took this path. GV-3 finished all four subtasks and then blocked before final quality with "ambiguous historical quality state", though no quality had ever run.
+
+Decision: The import writes `clean_unstarted` only when this database holds the completed plan workflow it links and no manifest subtask has started. Every other import keeps `historical_ambiguity`, including a checked-in manifest imported into an empty or recovered database.
+
+Reason: A linked completed plan with untouched subtasks proves that no final quality execution ran. A checked-in manifest alone proves nothing, because it can lag behind real progress. A runtime-engine test covers both outcomes, and the CLI recovered-database test keeps the refusal.

@@ -38,7 +38,7 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
-import skillbill.workflow.decomposition.runtime.withHistoricalGoalQualityReadiness
+import skillbill.workflow.decomposition.runtime.withImportedGoalQualityReadiness
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.decomposition.withStartedSubtask
 import skillbill.workflow.engine.WorkflowEngine
@@ -155,7 +155,7 @@ class DecompositionWorkflowContinuation(
           artifactsPatch =
             parentProjectionArtifacts(manifest, validator, base.artifacts).withImportedPlan(planWorkflowId).let {
                 patch ->
-              if (existing == null) patch.withHistoricalGoalQualityReadiness() else patch
+              if (existing == null) patch.withImportedGoalQualityReadiness(manifest, planWorkflowId) else patch
             },
           sessionId = base.sessionId.orEmpty(),
           replaceArtifacts = true,
