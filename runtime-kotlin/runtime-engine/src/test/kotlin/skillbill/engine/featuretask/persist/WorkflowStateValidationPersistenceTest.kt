@@ -5,6 +5,7 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
+import skillbill.infrastructure.sqlite.TestWorkBoardReadModelProjector
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -42,6 +43,7 @@ class WorkflowStateValidationPersistenceTest {
         WorkflowStateSchemaValidator(),
         "test-runtime-version",
         BlockIncidentSchemaValidator(),
+        lazy { TestWorkBoardReadModelProjector },
       )
     database.transaction { unit ->
       unit.workflowStates.saveRecord(

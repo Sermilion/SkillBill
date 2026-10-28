@@ -7,6 +7,7 @@ import skillbill.infrastructure.sqlite.blockincident.SqliteBlockIncidentReposito
 import skillbill.infrastructure.sqlite.blockincident.SqliteProductReportRepository
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.goal.UnaddressedFindingsRuntime
+import skillbill.infrastructure.sqlite.idestatus.SqliteWorkBoardReadModelStore
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalStore
 import skillbill.infrastructure.sqlite.review.accounting.loadReviewAccounting
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
@@ -47,6 +48,7 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
+import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
@@ -113,6 +115,7 @@ internal class SQLiteUnitOfWork(
   override val workflowStates: WorkflowStateRepository =
     WorkflowStateStore(connection, clock, workflowSnapshotValidator, diagnostics, transactionActive)
   override val workList: WorkListRepository = SQLiteWorkListRepository(connection, diagnostics)
+  override val workBoardReadModel: WorkBoardReadModelRepository = SqliteWorkBoardReadModelStore(connection, diagnostics)
   override val goalPlanningPreparations: GoalPlanningPreparationRepository =
     GoalPlanningPreparationStore(connection)
   override val goalRunnerControls: GoalRunnerControlRepository =

@@ -72,6 +72,7 @@ import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.specbrowser.SpecBrowserService
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.WorkBoardReadModelProjection
 import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
@@ -104,6 +105,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.editor.FileEditorLauncherPort
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
@@ -250,7 +252,13 @@ abstract class RuntimeComponent(
       workflowSnapshotValidator,
       runtimeVersion().value,
       blockIncidentContractValidator,
+      lazy { boardReadModelProjector() },
     )
+
+  @Provides @RuntimeSingleton
+  fun workBoardReadModelProjector(impl: WorkBoardReadModelProjection): WorkBoardReadModelProjector = impl
+
+  internal abstract fun boardReadModelProjector(): WorkBoardReadModelProjector
 
   @Provides
   fun databaseSessionFactory(factory: SQLiteDatabaseSessionFactory): DatabaseSessionFactory = factory

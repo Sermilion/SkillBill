@@ -26,7 +26,9 @@ import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import java.nio.file.Files
 import java.nio.file.Path
@@ -43,6 +45,7 @@ class SQLiteDatabaseSessionFactory(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
   private val blockIncidentContractValidator: BlockIncidentContractValidator,
+  private val boardReadModelProjector: Lazy<WorkBoardReadModelProjector>,
 ) : DatabaseSessionFactory, DatabaseReadConnections {
   private val readConnections = ReadConnectionPool(diagnostics)
   private val activeRead = ThreadLocal<UnitOfWork>()
@@ -174,14 +177,11 @@ class SQLiteDatabaseSessionFactory(
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
     activeWrite.get()?.let { return block(it) }
     repeat(DatabaseRuntime.SELF_MANAGED_WRITE_BUSY_ATTEMPTS - 1) {
+      var blockCompleted = false
       val outcome =
         runCatching {
           withWriteDatabase { openDb ->
-            val (result, changedTopics) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
-            if (changedTopics.isNotEmpty()) {
-              publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
-            }
-            result
+            runSelfManagedWrite(openDb, block) { blockCompleted = true }
           }
         }
       val error = outcome.exceptionOrNull()
@@ -189,15 +189,12 @@ class SQLiteDatabaseSessionFactory(
         return outcome.getOrThrow()
       }
       error.rethrowIfCooperativeCancellationOrInterruption()
+      if (blockCompleted) throw error
       if (!error.isSqliteBusy()) throw error
     }
     return translatingBusyFailures {
       withWriteDatabase { openDb ->
-        val (result, changedTopics) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
-        if (changedTopics.isNotEmpty()) {
-          publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
-        }
-        result
+        runSelfManagedWrite(openDb, block) {}
       }
     }
   }
@@ -215,10 +212,13 @@ class SQLiteDatabaseSessionFactory(
               diagnostics = diagnostics,
             ),
           ) {
-            withDesktopTopicSignal(this) {
+            withDesktopTopicSignal(this) { before ->
               activeWrite.set(unitOfWork(openDb, transactionActive = true))
               try {
-                block(requireNotNull(activeWrite.get()))
+                val unit = requireNotNull(activeWrite.get())
+                val result = block(unit)
+                refreshBoardReadModel(openDb, before, unit)
+                result
               } finally {
                 activeWrite.remove()
               }
@@ -256,11 +256,13 @@ class SQLiteDatabaseSessionFactory(
             ),
             commitWhen = { it.first is FencedTransactionResult.Committed<*> },
           ) {
-            withDesktopTopicSignal(this) {
+            withDesktopTopicSignal(this) { before ->
               val unit = unitOfWork(openDb, transactionActive = true)
               activeWrite.set(unit)
               try {
-                fencedResult(unit, expected, block)
+                val result = fencedResult(unit, expected, block)
+                if (result is FencedTransactionResult.Committed<*>) refreshBoardReadModel(openDb, before, unit)
+                result
               } finally {
                 activeWrite.remove()
               }
@@ -276,12 +278,116 @@ class SQLiteDatabaseSessionFactory(
 
   private fun <T> withDesktopTopicSignal(
     connection: Connection,
-    block: Connection.() -> T,
+    block: Connection.(Map<String, Long>) -> T,
   ): Pair<T, Set<String>> {
     val before = connection.desktopTopicRevisions()
-    val result = connection.block()
+    val result = connection.block(before)
     val after = connection.desktopTopicRevisions()
     return result to after.filter { (topic, revision) -> before[topic] != revision }.keys
+  }
+
+  private fun refreshBoardReadModel(
+    openDb: OpenDatabase,
+    before: Map<String, Long>,
+    unit: UnitOfWork = unitOfWork(openDb, transactionActive = true),
+  ) {
+    val store = unit.workBoardReadModel
+    if (!store.isComplete()) {
+      boardReadModelProjector.value.rebuild(unit, clock.instant())
+      return
+    }
+    val changed = openDb.connection.changedBoardWorkIds(before)
+    if (changed.requiresRebuild) {
+      boardReadModelProjector.value.rebuild(unit, clock.instant())
+    } else if (changed.workIds.isNotEmpty()) {
+      boardReadModelProjector.value.refresh(unit, changed.workIds, clock.instant())
+    }
+  }
+
+  private fun refreshBoardReadModelAfterSelfManagedWrite(
+    openDb: OpenDatabase,
+    before: Map<String, Long>,
+  ) {
+    openDb.connection.inDatabaseTransaction(
+      DatabaseTransactionSpec(
+        dbPath = openDb.dbPath,
+        beginMode = DatabaseTransactionBeginMode.IMMEDIATE,
+        operation = DatabaseAccessOperation.WRITE,
+        diagnostics = diagnostics,
+      ),
+    ) {
+      val unit = unitOfWork(openDb, transactionActive = true)
+      activeWrite.set(unit)
+      try {
+        refreshBoardReadModel(openDb, before, unit)
+      } finally {
+        activeWrite.remove()
+      }
+    }
+  }
+
+  private fun <T> runSelfManagedWrite(
+    openDb: OpenDatabase,
+    block: (UnitOfWork) -> T,
+    onBlockCompleted: () -> Unit,
+  ): T {
+    var refreshFailure: Throwable? = null
+    val (result, changedTopics) =
+      withDesktopTopicSignal(openDb.connection) { before ->
+        val result = block(unitOfWork(openDb))
+        onBlockCompleted()
+        refreshFailure =
+          runCatching {
+            refreshBoardReadModelAfterSelfManagedWrite(openDb, before)
+          }.exceptionOrNull()
+        result
+      }
+    val error = refreshFailure
+    if (error != null) {
+      recoverFromSelfManagedProjectionFailure(openDb, changedTopics, error)
+      throw error
+    }
+    if (changedTopics.isNotEmpty()) {
+      publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
+    }
+    return result
+  }
+
+  private fun recoverFromSelfManagedProjectionFailure(
+    openDb: OpenDatabase,
+    changedTopics: Set<String>,
+    refreshFailure: Throwable,
+  ) {
+    val recovery =
+      runCatching {
+        openDb.connection.inDatabaseTransaction(
+          DatabaseTransactionSpec(
+            dbPath = openDb.dbPath,
+            beginMode = DatabaseTransactionBeginMode.IMMEDIATE,
+            operation = DatabaseAccessOperation.WRITE,
+            diagnostics = diagnostics,
+          ),
+        ) {
+          unitOfWork(openDb, transactionActive = true).workBoardReadModel.setComplete(false)
+        }
+      }
+    val recoveryFailure = recovery.exceptionOrNull()
+    if (recoveryFailure != null) {
+      diagnostics.error("Could not invalidate the work board read model after refresh failed.", recoveryFailure)
+      refreshFailure.addSuppressed(recoveryFailure)
+      recoveryFailure.rethrowIfCooperativeCancellationOrInterruption()
+      return
+    }
+    diagnostics.warning("Invalidated the work board read model after refresh failed.", refreshFailure)
+    if (changedTopics.isNotEmpty()) {
+      runCatching {
+        publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
+      }.exceptionOrNull()?.let { publishFailure ->
+        diagnostics.error("Could not publish the desktop commit signal after read model invalidation.", publishFailure)
+        refreshFailure.addSuppressed(publishFailure)
+        publishFailure.rethrowIfCooperativeCancellationOrInterruption()
+      }
+    }
   }
 
   private fun Connection.desktopTopicRevisions(): Map<String, Long> =
@@ -368,4 +474,33 @@ private fun throwReadFailure(
     throw databaseAccessError(dbPath, DatabaseAccessOperation.READ, error)
   }
   throw error
+}
+
+internal data class ChangedBoardWorkIds(val workIds: Set<String>, val requiresRebuild: Boolean)
+
+internal fun Connection.changedBoardWorkIds(before: Map<String, Long>): ChangedBoardWorkIds {
+  val topics = listOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.ACTIVITY_TOPIC)
+  val current =
+    prepareStatement("SELECT topic, revision FROM ${DesktopReadSchema.REVISIONS_TABLE}").use { statement ->
+      statement.executeQuery().use { rows -> buildMap { while (rows.next()) put(rows.getString(1), rows.getLong(2)) } }
+    }
+  val requiresRebuild =
+    topics.any { topic ->
+      val delta = (current[topic] ?: 0L) - (before[topic] ?: 0L)
+      delta > DesktopReadSchema.CHANGE_ITEM_RETENTION
+    }
+  if (requiresRebuild) return ChangedBoardWorkIds(emptySet(), true)
+  val ids =
+    buildSet {
+      prepareStatement(
+        "SELECT DISTINCT work_id FROM ${DesktopReadSchema.CHANGE_ITEMS_TABLE} WHERE topic = ? AND revision > ?",
+      ).use { statement ->
+        topics.forEach { topic ->
+          statement.setString(1, topic)
+          statement.setLong(2, before[topic] ?: 0L)
+          statement.executeQuery().use { rows -> while (rows.next()) add(rows.getString(1)) }
+        }
+      }
+    }
+  return ChangedBoardWorkIds(ids, ids.size > WORK_BOARD_CANDIDATE_BATCH_SIZE)
 }

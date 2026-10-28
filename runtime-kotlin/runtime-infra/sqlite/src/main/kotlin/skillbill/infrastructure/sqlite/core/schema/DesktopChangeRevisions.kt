@@ -216,7 +216,7 @@ private fun Statement.createChangeTrigger(
   execute("CREATE TRIGGER ${triggerName(table, suffix)} AFTER $operation ON ${table.name}$whenClause BEGIN $body END")
 }
 
-private fun changeStatements(
+internal fun changeStatements(
   topic: String,
   keys: String,
 ): String {
@@ -312,3 +312,179 @@ private val DESKTOP_CHANGE_TABLES =
     DesktopChangeTable("block_incident_reports", DesktopReadSchema.TOPICS, keys = reportKey),
     DesktopChangeTable(LEASES_TABLE, DesktopReadSchema.TOPICS, keys = column(WORKFLOW_ID)),
   )
+
+internal fun installWorkBoardChangeTriggers(connection: Connection) {
+  val tables =
+    listOf(
+      "goal_issue_progress", "goal_runner_controls", "goal_planning_preparations", "goal_subtask_plans",
+      "feature_task_workflows", "feature_task_execution_identities", "feature_verify_workflows",
+      "standalone_phase_status", "ide_status_workflow_execution",
+    )
+  connection.createStatement().use { statement ->
+    tables.forEach { table ->
+      listOf("insert", "update", "delete").forEach { suffix ->
+        statement.execute("DROP TRIGGER IF EXISTS desktop_change_${table}_$suffix")
+      }
+      installTableTriggers(statement, table)
+    }
+  }
+}
+
+private fun installTableTriggers(
+  statement: Statement,
+  table: String,
+) {
+  val topics =
+    when (table) {
+      "goal_issue_progress", "goal_runner_controls", "goal_planning_preparations", "goal_subtask_plans" ->
+        listOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.SPECS_TOPIC)
+      "feature_task_execution_identities", "feature_verify_workflows" -> listOf(DesktopReadSchema.PHASES_TOPIC)
+      "standalone_phase_status" -> listOf(DesktopReadSchema.PHASES_TOPIC)
+      else -> DesktopReadSchema.TOPICS
+    }
+  listOf("INSERT", "UPDATE", "DELETE").forEach { operation ->
+    val suffix = operation.lowercase()
+    val rowNames =
+      when (operation) {
+        "INSERT" -> listOf("NEW")
+        "DELETE" -> listOf("OLD")
+        else -> listOf("OLD", "NEW")
+      }
+    val keys = rowNames.map { row -> affectedKeys(table, row) }.joinToString(" UNION ")
+    val whenClause = if (operation == "UPDATE") " WHEN ${changedColumns(statement, table)}" else ""
+    val body = topics.joinToString(" ") { topic -> changeStatements(topic, keys) }
+    statement.execute(
+      "CREATE TRIGGER desktop_change_${table}_$suffix AFTER $operation ON $table$whenClause BEGIN $body END",
+    )
+  }
+}
+
+private fun changedColumns(
+  statement: Statement,
+  table: String,
+): String {
+  val columns =
+    statement.connection.prepareStatement("SELECT name FROM pragma_table_info(?) ORDER BY cid").use { query ->
+      query.setString(1, table)
+      query.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }
+    }
+  return columns.joinToString(" OR ") { "OLD.$it IS NOT NEW.$it" }.ifEmpty { "0" }
+}
+
+private fun affectedKeys(
+  table: String,
+  row: String,
+): String {
+  return (listOf(originalKey(table, row)) + relatedKeys(table, row)).joinToString(" UNION ")
+}
+
+private fun originalKey(
+  table: String,
+  row: String,
+): String =
+  when (table) {
+    "goal_issue_progress" -> "SELECT $row.parent_workflow_id AS k"
+    "goal_runner_controls" -> "SELECT $row.parent_workflow_id AS k"
+    "goal_planning_preparations", "goal_subtask_plans" -> "SELECT $row.parent_goal_workflow_id AS k"
+    "feature_task_workflows", "feature_task_execution_identities", "feature_verify_workflows" ->
+      "SELECT $row.workflow_id AS k"
+    "standalone_phase_status", "ide_status_workflow_execution" ->
+      "SELECT COALESCE($row.invocation_id, $row.workflow_id) AS k UNION SELECT $row.invocation_id AS k " +
+        "UNION SELECT $row.workflow_id AS k"
+    else -> "SELECT NULL AS k"
+  }
+
+private fun relatedKeys(
+  table: String,
+  row: String,
+): List<String> =
+  when (table) {
+    "goal_issue_progress" ->
+      listOf(
+        "SELECT parent_workflow_id AS k FROM goal_issue_progress " +
+          "WHERE upper(trim(issue_key)) = upper(trim($row.issue_key))",
+        "SELECT workflow_id AS k FROM feature_verify_workflows " +
+          "WHERE upper(trim(issue_key)) = upper(trim($row.issue_key))",
+        standaloneForWorkflow("$row.parent_workflow_id"),
+      )
+    "goal_runner_controls", "goal_planning_preparations", "goal_subtask_plans" ->
+      listOf(
+        "SELECT parent_workflow_id AS k FROM goal_issue_progress WHERE parent_workflow_id = " + parentId(table, row),
+        "SELECT verify.workflow_id AS k FROM feature_verify_workflows verify JOIN goal_issue_progress goal " +
+          "ON upper(trim(goal.issue_key)) = upper(trim(verify.issue_key)) " +
+          "WHERE goal.parent_workflow_id = ${parentId(table, row)}",
+        "SELECT verify.workflow_id AS k FROM feature_verify_workflows verify JOIN feature_task_workflows goal " +
+          "ON upper(trim(goal.issue_key)) = upper(trim(verify.issue_key)) " +
+          "WHERE goal.workflow_id = ${parentId(table, row)}",
+        standaloneForWorkflow(parentId(table, row)),
+      )
+    "feature_task_workflows" ->
+      listOf(
+        parentsForWorkflow("$row.workflow_id"),
+        "SELECT workflow_id AS k FROM feature_verify_workflows " +
+          "WHERE upper(trim(issue_key)) = upper(trim($row.issue_key))",
+        standaloneForWorkflow("$row.workflow_id"),
+      )
+    "feature_task_execution_identities" ->
+      listOf(
+        "SELECT progress.parent_workflow_id AS k FROM goal_issue_progress progress " +
+          "WHERE upper(trim(progress.issue_key)) = upper(trim($row.normalized_issue_key))",
+        "SELECT workflow_id AS k FROM feature_verify_workflows " +
+          "WHERE upper(trim(issue_key)) = upper(trim($row.normalized_issue_key))",
+        parentsForWorkflow("$row.workflow_id"),
+        standaloneForWorkflow("$row.workflow_id"),
+      )
+    "feature_verify_workflows" ->
+      listOf(
+        "SELECT workflow_id AS k FROM feature_verify_workflows " +
+          "WHERE upper(trim(issue_key)) = upper(trim($row.issue_key))",
+      )
+    "standalone_phase_status" ->
+      listOf(
+        "SELECT $row.workflow_id AS k",
+        standaloneGroupPeers(row),
+        standaloneForWorkflow("$row.workflow_id"),
+        parentsForWorkflow("$row.workflow_id"),
+        "SELECT workflow_id AS k FROM feature_verify_workflows " +
+          "WHERE upper(trim(issue_key)) = upper(trim($row.issue_key))",
+      )
+    "ide_status_workflow_execution" ->
+      listOf(
+        "SELECT $row.invocation_id AS k",
+        "SELECT $row.workflow_id AS k",
+        standaloneForWorkflow("$row.invocation_id"),
+        standaloneForWorkflow("$row.workflow_id"),
+        parentsForWorkflow("$row.workflow_id"),
+        "SELECT workflow_id AS k FROM feature_verify_workflows " +
+          "WHERE upper(trim(issue_key)) = upper(trim($row.issue_key))",
+        "SELECT workflow_id AS k FROM feature_verify_workflows WHERE upper(trim(issue_key)) = " +
+          "(SELECT upper(trim(issue_key)) FROM feature_task_workflows WHERE workflow_id = $row.workflow_id)",
+      )
+    else -> emptyList()
+  }
+
+private fun parentId(
+  table: String,
+  row: String,
+): String = if (table == "goal_runner_controls") "$row.parent_workflow_id" else "$row.parent_goal_workflow_id"
+
+private fun parentsForWorkflow(workflow: String): String =
+  "SELECT progress.parent_workflow_id AS k FROM goal_issue_progress progress " +
+    "JOIN feature_task_execution_identities identity " +
+    "ON identity.normalized_issue_key = upper(trim(progress.issue_key)) " +
+    "WHERE identity.route_scope = 'goal_child' AND identity.workflow_id = $workflow"
+
+private fun standaloneForWorkflow(workflow: String): String =
+  "SELECT invocation_id AS k FROM standalone_phase_status WHERE workflow_id = $workflow"
+
+private fun standaloneGroupPeers(row: String): String =
+  "SELECT peer.invocation_id AS k FROM standalone_phase_status peer WHERE " +
+    standalonePhaseGroupMatch("peer", row)
+
+internal fun standalonePhaseGroupMatch(
+  left: String,
+  right: String,
+): String =
+  "$left.repository_identity = $right.repository_identity AND $left.phase_id = $right.phase_id AND " +
+    "COALESCE($left.monitor_pr_key, upper($left.issue_key), $left.workflow_id, $left.branch_correlation) = " +
+    "COALESCE($right.monitor_pr_key, upper($right.issue_key), $right.workflow_id, $right.branch_correlation)"

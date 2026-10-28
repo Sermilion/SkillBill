@@ -344,6 +344,8 @@ internal fun ideStatusService(
           NoopRuntimeDiagnostics,
         ),
     )
+  val boardProjection = testBoardProjection(projector)
+  (database as? BoardProjectionCapture)?.accept(boardProjection)
   return IdeStatusService(
     database = database,
     projector = projector,
@@ -353,11 +355,18 @@ internal fun ideStatusService(
     repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
-    workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+    workBoardItemProjection = boardProjection,
     diagnostics = NoopRuntimeDiagnostics,
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
+
+internal interface BoardProjectionCapture {
+  fun accept(projection: WorkBoardItemProjection)
+}
+
+private fun testBoardProjection(projector: IdeStatusProjector): WorkBoardItemProjection =
+  WorkBoardItemProjection(projector, EmitShapeValidator, NoopFeatureTaskRuntimeWorkerSupervisor, NoopRuntimeDiagnostics)
 
 internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =
   runCatching { Files.readString(repoRoot.resolve(".git").resolve("HEAD")) }.getOrNull()

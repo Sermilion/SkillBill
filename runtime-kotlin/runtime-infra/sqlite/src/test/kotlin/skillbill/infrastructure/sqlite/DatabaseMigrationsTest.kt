@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
+import skillbill.contracts.persistence.WorkBoardReadModelKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
@@ -48,6 +49,68 @@ private val DIAGNOSIS_TABLES =
 
 class DatabaseMigrationsTest {
   @Test
+  fun `work board read model migration creates indexed tables in the incomplete state`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-work-board-read-model").resolve("runtime.db")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(
+        0,
+        scalarInt(connection, "SELECT ${WorkBoardReadModelKeys.COMPLETE} FROM ${WorkBoardReadModelKeys.STATE_TABLE}"),
+      )
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertTrue(tableExists(connection, WorkBoardReadModelKeys.ITEMS_TABLE))
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master WHERE type = 'index' " +
+            "AND name = '${WorkBoardReadModelKeys.DISPLAY_INDEX}'",
+        ),
+      )
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master WHERE type = 'index' " +
+            "AND name = '${WorkBoardReadModelKeys.FINISHED_INDEX}'",
+        ),
+      )
+    }
+  }
+
+  @Test
+  fun `work board read model migration upgrades the previous schema and preserves work`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-work-board-read-model-upgrade").resolve("runtime.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feature_task_workflows (workflow_id, mode, contract_version) " +
+            "VALUES ('wftr-existing', 'prose', '1.0')",
+        )
+        statement.execute("DROP TABLE ${WorkBoardReadModelKeys.ITEMS_TABLE}")
+        statement.execute("DROP TABLE ${WorkBoardReadModelKeys.STATE_TABLE}")
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 88")
+        statement.execute("PRAGMA user_version = 87")
+      }
+    }
+
+    DatabaseRuntime.migrateExistingDatabase(dbPath, SqliteTestDiagnostics)
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-existing'"),
+      )
+      assertEquals(
+        0,
+        scalarInt(connection, "SELECT ${WorkBoardReadModelKeys.COMPLETE} FROM ${WorkBoardReadModelKeys.STATE_TABLE}"),
+      )
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertTrue(tableExists(connection, WorkBoardReadModelKeys.ITEMS_TABLE))
+    }
+  }
+
+  @Test
   fun `product report migration preserves incidents and starts with empty report tables`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-product-reports-upgrade").resolve("upgrade.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
@@ -65,6 +128,7 @@ class DatabaseMigrationsTest {
         listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
           statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
         }
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 80")
         statement.execute("PRAGMA user_version = 79")
         statement.executeUpdate(
@@ -113,6 +177,7 @@ class DatabaseMigrationsTest {
           ).use { rows -> generateSequence { if (rows.next()) rows.getString(1) else null }.toList() }
         blockIncidentTables.forEach { table -> statement.execute("DROP TABLE $table") }
         statement.execute("DROP TABLE feature_task_runtime_worker_generations")
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 66")
         statement.execute("PRAGMA user_version = 65")
       }
@@ -175,6 +240,7 @@ class DatabaseMigrationsTest {
         statement.execute("DROP TABLE IF EXISTS feature_task_runtime_worker_generations")
         statement.execute("DROP TABLE block_incident_report_links")
         statement.execute("DROP TABLE block_incident_reports")
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 77")
         statement.execute("PRAGMA user_version = 76")
       }
@@ -225,6 +291,7 @@ class DatabaseMigrationsTest {
         listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
           statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
         }
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 78")
         statement.execute("PRAGMA user_version = 77")
       }
@@ -1039,7 +1106,7 @@ class DatabaseMigrationsTest {
       }
       assertFalse("interruption_reason" in tableColumns(connection, "feature_task_workflows"))
       assertFalse(versionIsPrimaryKey(connection), "The ledger must already be name-keyed for this to gate.")
-      assertEquals(DatabaseMigrations.migrations.size - 2, migrationRows(connection).size)
+      assertEquals(DatabaseMigrations.migrations.size - 3, migrationRows(connection).size)
       connection.createStatement().use {
         it.executeUpdate(
           """
@@ -2366,4 +2433,6 @@ private val expectedMigrationDefinitions =
     85 to "record-goal-subtask-trace-probe-counts",
     86 to "record-goal-assessment-counts",
     87 to "separate-desktop-change-signals",
+    88 to "add-work-board-read-model",
+    89 to "refresh-work-board-dependencies",
   )

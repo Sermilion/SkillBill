@@ -407,10 +407,11 @@ class WorkStackTest {
             process.processBirthToken, now, now.plusSeconds(3600))))
         unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "live", now.minusSeconds(3600), "live-branch"))
         repeat(5000) { index ->
-          val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "done-$index", now.minusSeconds(30), "branch-$index"))
+          val finishedAt = if (index < 4992) now.minusSeconds(21601) else now.minusSeconds(1)
+          val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "done-$index", finishedAt.minusSeconds(30), "branch-$index"))
           unit.standalonePhaseStatuses.update(StandalonePhaseStatusUpdate(record.executionId, record.statusRevision,
             record.leaseOwner, record.leaseGeneration, "terminal", "review", null, now.minusSeconds(1),
-            finishedAt = now.minusSeconds(1), terminalResult = "completed"))
+            finishedAt = finishedAt, terminalResult = "completed"))
         }
       }
       val runtime = RuntimeComponent::class.create(RuntimeContext(

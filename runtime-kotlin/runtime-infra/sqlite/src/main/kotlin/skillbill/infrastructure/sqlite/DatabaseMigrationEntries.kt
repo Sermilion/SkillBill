@@ -18,6 +18,8 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
@@ -891,4 +893,14 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 87,
       name = "separate-desktop-change-signals",
       operation = ::separateDesktopChangeSignals,
+    ) +
+    DatabaseMigration(
+      version = 88,
+      name = "add-work-board-read-model",
+      operation = WorkBoardReadModelMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 89,
+      name = "refresh-work-board-dependencies",
+      operation = WorkBoardReadModelDependencyMigration::apply,
     )

@@ -20,6 +20,7 @@ import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyAgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
+import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
@@ -30,6 +31,9 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.idestatus.model.WorkBoardReadModelPage
+import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
+import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.persistence.model.GoalPurgeTableCounts
@@ -37,6 +41,7 @@ import skillbill.ports.persistence.model.GoalPurgeTarget
 import java.time.Instant
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
+  open override val workBoardReadModel: WorkBoardReadModelRepository = EmptyBoardReadModel()
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository
   open override val agentActivityStamps: AgentActivityStampRepository = EmptyAgentActivityStampRepository
   open override val worktreeEditJournal: WorktreeEditJournalRepository = EmptyWorktreeEditJournalRepository
@@ -105,4 +110,20 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
   override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
 
   override fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
+}
+
+private class EmptyBoardReadModel : WorkBoardReadModelRepository {
+  override fun upsert(row: WorkBoardReadModelRow) = Unit
+
+  override fun delete(workId: String) = Unit
+
+  override fun deleteAll() = Unit
+
+  override fun isComplete(): Boolean = false
+
+  override fun setComplete(complete: Boolean) = Unit
+
+  override fun page(query: WorkBoardReadModelPageQuery): WorkBoardReadModelPage = WorkBoardReadModelPage(emptyList())
+
+  override fun readByWorkIds(workIds: Set<String>): List<WorkBoardReadModelPage.Entry> = emptyList()
 }

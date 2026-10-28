@@ -266,6 +266,11 @@ initialization path still performs a second identity observation after acquiring
 `DatabaseWriteReadinessTest` exercises the gate through `sqliteSessionFactoryForTests`
 and recording diagnostics instead of production-only counters.
 
+`work_board_read_model_state.complete = 0` marks an unbuilt board read model. Migration 89 resets
+that flag once because older change journals did not retain removed grouping and association
+facts. The first write transaction after upgrade rebuilds all board rows and sets `complete = 1`.
+That rebuild is the read model's initialization boundary. Later writes refresh only changed work ids.
+
 `:runtime-infra:sqlite` `testFixtures` own cross-module database evidence:
 `establishTemporarySchemaReadiness` returns a temp directory, database path, and
 connection; `ensureTestDatabase` applies schema readiness only; `sqliteSessionFactoryForTests`

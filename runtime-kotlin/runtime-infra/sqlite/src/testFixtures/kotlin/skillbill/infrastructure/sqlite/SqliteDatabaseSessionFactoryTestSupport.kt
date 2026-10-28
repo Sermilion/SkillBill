@@ -3,6 +3,8 @@ package skillbill.infrastructure.sqlite
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.WorkBoardReadModelProjector
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import java.nio.file.Path
@@ -17,6 +19,7 @@ fun sqliteDatabaseSessionFactory(
   clock: Clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
   diagnostics: RuntimeDiagnostics = SqliteTestDiagnostics,
   runtimeVersion: String = "test-runtime-version",
+  boardReadModelProjector: WorkBoardReadModelProjector = TestWorkBoardReadModelProjector,
 ): SQLiteDatabaseSessionFactory =
   SQLiteDatabaseSessionFactory(
     EnvironmentContext(
@@ -29,7 +32,21 @@ fun sqliteDatabaseSessionFactory(
     SqliteTestWorkflowSnapshotValidator,
     runtimeVersion,
     BlockIncidentSchemaValidator(),
+    lazy { boardReadModelProjector },
   )
+
+object TestWorkBoardReadModelProjector : WorkBoardReadModelProjector {
+  override fun refresh(
+    unitOfWork: UnitOfWork,
+    workIds: Set<String>,
+    now: Instant,
+  ) = Unit
+
+  override fun rebuild(
+    unitOfWork: UnitOfWork,
+    now: Instant,
+  ) = Unit
+}
 
 object SqliteTestWorkflowSnapshotValidator : WorkflowSnapshotValidator {
   override fun validate(

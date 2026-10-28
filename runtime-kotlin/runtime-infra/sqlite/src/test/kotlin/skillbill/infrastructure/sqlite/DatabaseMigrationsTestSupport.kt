@@ -1459,5 +1459,15 @@ internal fun revertDesktopChangeSignals(connection: Connection) {
   connection.createStatement().use { statement ->
     triggers.forEach { trigger -> statement.execute("DROP TRIGGER $trigger") }
     statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-desktop-change-signals'")
+    statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'refresh-work-board-dependencies'")
+    statement.execute("DROP INDEX IF EXISTS desktop_phase_board_group")
+  }
+}
+
+internal fun revertWorkBoardReadModel(connection: Connection) {
+  revertDesktopChangeSignals(connection)
+  connection.createStatement().use { statement ->
+    statement.execute("DROP TABLE work_board_items")
+    statement.execute("DROP TABLE work_board_read_model_state")
   }
 }
