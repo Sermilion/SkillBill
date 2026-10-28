@@ -234,7 +234,7 @@ enum class IncidentRecoveryUnavailableReason {
   NoSupportedAction, InvestigationNotSettled, NotBlocked, GenerationChanged, AttemptLimitReached, OperatorDecision, QualityGate,
 }
 
-data class IncidentPrerequisite(val kind: String, val instruction: String)
+data class IncidentPrerequisiteDetail(val kind: String, val instruction: String)
 
 data class IncidentEvidence(val kind: String, val referenceId: String, val summary: String, val trusted: Boolean)
 
@@ -252,7 +252,7 @@ data class IncidentRecoveryPreview(
 sealed interface IncidentRecoveryEligibility {
   data class Available(val preview: IncidentRecoveryPreview) : IncidentRecoveryEligibility
 
-  data class NeedsPrerequisites(val instructions: List<IncidentPrerequisite>) : IncidentRecoveryEligibility
+  data class NeedsPrerequisites(val instructions: List<IncidentPrerequisiteDetail>) : IncidentRecoveryEligibility
 
   data class Unavailable(val reason: IncidentRecoveryUnavailableReason) : IncidentRecoveryEligibility
 }
@@ -282,7 +282,7 @@ data class Incident(
   val responsibleCategory: String,
   val nextAction: String,
   val noWorkaroundKnown: Boolean,
-  val prerequisites: List<IncidentPrerequisite>,
+  val prerequisites: List<IncidentPrerequisiteDetail>,
   val evidence: List<IncidentEvidence>,
   val degradations: Set<String>,
   val recovery: IncidentRecovery,

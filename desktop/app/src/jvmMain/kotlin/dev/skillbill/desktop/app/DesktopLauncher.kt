@@ -1,5 +1,8 @@
 package dev.skillbill.desktop.app
 
+import androidx.compose.material3.Text
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.application
 import dev.skillbill.desktop.core.data.identity.BuildIdentityRecord
 import dev.skillbill.desktop.core.data.runtime.InstalledRuntimeBuildGate
 import dev.skillbill.desktop.core.data.runtime.runtimeInstallRoot
@@ -27,7 +30,7 @@ fun main(args: Array<String>) {
   val installation = InstalledRuntimeBuildGate(runtimeRoot, appIdentityPath()).check()
   when (val availability = installation.availability) {
     RuntimeAvailability.Available -> launchApplication(applicationClasspath(distributionAppDirectory(), installation.runtimeJars), args)
-    is RuntimeAvailability.Unavailable -> showSkillBillWindow(refusalText(availability.problem))
+    is RuntimeAvailability.Unavailable -> showRefusalWindow(refusalText(availability.problem))
   }
 }
 
@@ -79,4 +82,10 @@ private fun launchApplication(classpath: List<URL>, args: Array<String>) {
     lookup.findStatic(entryPoint, "main", MethodType.methodType(Void.TYPE))
   }
   if (main.type().parameterCount() == 0) main.invokeWithArguments(emptyList<Any>()) else main.invokeWithArguments(listOf(args))
+}
+
+private fun showRefusalWindow(text: String) = application {
+  Window(onCloseRequest = ::exitApplication, title = "Skill Bill") {
+    Text(text)
+  }
 }

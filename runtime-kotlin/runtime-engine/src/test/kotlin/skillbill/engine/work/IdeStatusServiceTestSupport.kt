@@ -55,6 +55,7 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
@@ -556,6 +557,9 @@ internal class TrackingDatabase(
   internal val goalPage: WorkGoalSubtaskPage? = null,
   internal val qaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository(),
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   var readCalls: Int = 0
     internal set
   var writeCalls: Int = 0

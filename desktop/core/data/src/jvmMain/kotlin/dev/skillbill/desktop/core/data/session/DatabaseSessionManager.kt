@@ -4,6 +4,8 @@ import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.di.AppScope
+import dev.skillbill.desktop.core.data.runtime.BoardPage
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.domain.settings.AppSettingsRepository
@@ -25,9 +27,18 @@ class DatabaseSessionManager(
   settings: AppSettingsRepository,
   dispatcher: DatabaseDispatcher,
   diagnostics: Diagnostics,
+  private val reservations: LaunchReservations,
   appScope: ApplicationCoroutineScope,
 ) : DatabaseSessionController {
-  private val lifecycle = SessionLifecycle(factory, settings, StorageFailureClassifier::classify, dispatcher, diagnostics, appScope.scope)
+  private val lifecycle = SessionLifecycle(
+    factory,
+    settings,
+    StorageFailureClassifier::classify,
+    dispatcher,
+    diagnostics,
+    appScope.scope,
+    reservations,
+  )
 
   override val state: StateFlow<DatabaseSessionState> get() = lifecycle.state
 
@@ -38,4 +49,33 @@ class DatabaseSessionManager(
   fun start(): Job = lifecycle.start()
 
   override fun reopen() = lifecycle.reopen()
+
+  internal fun isCurrent(session: DatabaseSessionComponent): Boolean = lifecycle.coordinate { open ->
+    (open?.graph as? RuntimeSessionGraph)?.component === session &&
+      (state.value as? DatabaseSessionState.Open)?.sessionId == session.selection.selection.id
+  }
+
+  internal fun admitReservation(
+    session: DatabaseSessionComponent,
+    key: String,
+    target: LaunchBoardTarget,
+    baseline: Lifecycle?,
+    page: BoardPage,
+  ): ReservationAdmission = lifecycle.coordinate { open ->
+    if ((open?.graph as? RuntimeSessionGraph)?.component !== session ||
+      (state.value as? DatabaseSessionState.Open)?.sessionId != session.selection.selection.id
+    ) {
+      ReservationAdmission.ChangedSession
+    } else {
+      reservations.reserve(key, session.selection.selection.id, target, baseline, page)
+    }
+  }
+
+  internal fun acceptReservationBoard(sessionId: Long, page: BoardPage): Boolean = lifecycle.coordinate { open ->
+    if (open?.id != sessionId || (state.value as? DatabaseSessionState.Open)?.sessionId != sessionId) false
+    else {
+      reservations.onBoard(sessionId, page)
+      true
+    }
+  }
 }

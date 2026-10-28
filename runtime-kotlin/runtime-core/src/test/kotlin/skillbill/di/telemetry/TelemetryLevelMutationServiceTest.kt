@@ -9,6 +9,7 @@ import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -302,6 +303,9 @@ private fun outboxRecord(id: Long): TelemetryOutboxRecord =
 private class FakeTelemetryDatabaseSessionFactory(
   private val telemetryOutbox: TelemetryOutboxRepository,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   val calls = mutableListOf<String>()
   private val dbPath = Path.of("/fake/metrics.db")
 

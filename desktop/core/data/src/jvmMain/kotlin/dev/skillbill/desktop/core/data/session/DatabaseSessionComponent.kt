@@ -24,11 +24,15 @@ import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.create
 import skillbill.model.EnvironmentContext
+import skillbill.ports.db.model.DatabasePathProtectionResult
+import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesSubcomponent
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import kotlin.concurrent.Volatile
 import kotlin.time.Clock
 
 /** Everything bound to one database session. [DatabaseSessionManager] creates one per selection and releases it on switch. */
@@ -36,6 +40,7 @@ import kotlin.time.Clock
 @SingleIn(DatabaseSessionScope::class)
 interface DatabaseSessionComponent {
   val selection: SessionSelectionHolder
+  val purgeIdentity: SessionPurgeIdentity
   val runtime: RuntimeComponent
   val reads: RuntimeReads
   val signals: CommitSignalWatcher
@@ -98,7 +103,7 @@ interface RuntimeSessionProviders {
     diagnostics: Diagnostics,
     clock: Clock,
   ): BoardObservations =
-    BoardObservations(holder.selection.scope, signals.snapshots, RuntimeBoardReads(reads, runtime, diagnostics), clock)
+    BoardObservations(holder.selection.scope, signals.snapshots, RuntimeBoardReads(reads, runtime, diagnostics, holder.selection.id), clock)
 
   @Provides
   @SingleIn(DatabaseSessionScope::class)
@@ -108,7 +113,7 @@ interface RuntimeSessionProviders {
     runtime: RuntimeComponent,
     signals: CommitSignalWatcher,
     diagnostics: Diagnostics,
-  ): DetailObservations = DetailObservations(holder.selection.scope, signals.snapshots, RuntimeDetailReads(reads, runtime, diagnostics))
+  ): DetailObservations = DetailObservations(holder.selection.scope, signals.snapshots, RuntimeDetailReads(reads, runtime, diagnostics, holder.selection.id))
 
   @Provides
   @SingleIn(DatabaseSessionScope::class)
@@ -136,11 +141,60 @@ class RuntimeSessionGraph internal constructor(val component: DatabaseSessionCom
   override fun open(): Job {
     val runtime = component.runtime
     runtime.databaseSchema.migrateExistingDatabase()
+    val protection = when (val result = runtime.databaseSession.acquireDatabasePathProtection()) {
+      is DatabasePathProtectionResult.Acquired -> result.protection
+      is DatabasePathProtectionResult.Unavailable -> {
+        component.purgeIdentity.initialize(null)
+        return startSignalsAfterExistingStore(runtime)
+      }
+    }
+    try {
+      val observation = runtime.databaseSession.readIfPresent {
+        it.workList.observation()
+        it.databaseFileObservation
+      }
+      if (observation == null) {
+        component.purgeIdentity.initialize(null)
+        throw DatabaseFileMissingException(displayPath())
+      }
+      when (runtime.databaseSession.transactionFenced(observation) { Unit }) {
+        FencedTransactionResult.ChangedTarget -> component.purgeIdentity.initialize(null)
+        is FencedTransactionResult.Committed -> component.purgeIdentity.initialize(observation)
+      }
+    } finally {
+      protection.close()
+    }
+    return component.signals.start()
+  }
+
+  private fun startSignalsAfterExistingStore(runtime: RuntimeComponent): Job {
     runtime.databaseSession.readIfPresent { it.workList.observation() } ?: throw DatabaseFileMissingException(displayPath())
     return component.signals.start()
   }
 
-  override fun release() = component.runtime.databaseReadConnections.release()
+  override fun release() {
+    component.purgeIdentity.clear()
+    component.runtime.databaseReadConnections.release()
+  }
+}
+
+@Inject
+@SingleIn(DatabaseSessionScope::class)
+class SessionPurgeIdentity {
+  @Volatile
+  var observation: DatabaseFileObservation? = null
+    private set
+  private var initialized = false
+
+  fun initialize(value: DatabaseFileObservation?) {
+    check(!initialized)
+    initialized = true
+    observation = value
+  }
+
+  fun clear() {
+    observation = null
+  }
 }
 
 @Inject

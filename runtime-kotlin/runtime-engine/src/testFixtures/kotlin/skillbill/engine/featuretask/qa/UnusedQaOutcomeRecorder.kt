@@ -2,12 +2,18 @@ package skillbill.engine.featuretask.qa
 
 import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.persistence.UnitOfWork
 import java.nio.file.Path
 import java.time.Clock
 
 private object UnusedQaOutcomeDatabase : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
+
   override fun resolveDbPath(): Path = unused()
 
   override fun databaseExists(): Boolean = unused()

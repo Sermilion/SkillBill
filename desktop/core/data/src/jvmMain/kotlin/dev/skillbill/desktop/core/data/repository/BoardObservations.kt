@@ -73,6 +73,29 @@ class BoardObservations internal constructor(
     }
   }
 
+  internal fun observeComplete(query: BoardQuery): Flow<Outcome<BoardPage, ReadProblem>> = flow {
+    val deadline = MutableStateFlow<Instant?>(null)
+    val deadlineTicks = deadline.flatMapLatest { at ->
+      if (at == null) emptyFlow() else flow {
+        delay(at - clock.now() + 1.milliseconds)
+        emit(Unit)
+      }
+    }
+    emitAll(
+      merge(
+        signals.map {
+          RevisionKey(it.generation, it.revisions[DesktopReadSchema.GOALS_TOPIC], it.revisions[DesktopReadSchema.PHASES_TOPIC], it.resyncEpoch)
+        }.distinctUntilChanged().map { },
+        deadlineTicks,
+        refreshes,
+      ).conflate().mapLatest { reads.complete(query) }
+        .onEach { result -> if (result is Outcome.Success) deadline.value = nextDeadline(result.value) }
+        .distinctUntilChanged(),
+    )
+  }
+
+  internal suspend fun completeSnapshot(query: BoardQuery): Outcome<BoardPage, ReadProblem> = reads.complete(query)
+
   suspend fun loadMore(query: BoardQuery, cursor: String): LoadMoreOutcome {
     val observation = synchronized(observations) { observations[query] } ?: return LoadMoreOutcome.End
     return when (val read = reads.page(query, cursor)) {

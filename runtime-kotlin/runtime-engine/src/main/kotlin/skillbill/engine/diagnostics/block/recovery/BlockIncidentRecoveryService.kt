@@ -357,8 +357,11 @@ class BlockIncidentRecoveryService(
     }
   }
 
-  internal fun requestBasis(incidentToken: String): BlockIncidentRecoveryBasis? =
-    database.read { unit ->
+  internal fun requestBasis(
+    incidentToken: String,
+    expectedObservation: DatabaseFileObservation,
+  ): FencedTransactionResult<BlockIncidentRecoveryBasis?> =
+    database.transactionFenced(expectedObservation) { unit ->
       unit.blockIncidents.find(incidentToken)?.let { incident ->
         BlockIncidentRecoveryBasis(
           unit.blockIncidents.diagnoses(incidentToken).lastOrNull()?.proposedRecoveryAction
@@ -367,6 +370,11 @@ class BlockIncidentRecoveryService(
         )
       }
     }
+
+  internal fun <T> fencedRead(
+    expectedObservation: DatabaseFileObservation,
+    block: () -> T,
+  ): FencedTransactionResult<T> = database.transactionFenced(expectedObservation) { block() }
 
   private fun targetMismatch(
     unit: UnitOfWork,

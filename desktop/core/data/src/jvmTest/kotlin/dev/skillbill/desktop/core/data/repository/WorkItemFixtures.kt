@@ -19,7 +19,7 @@ internal fun workItem(id: String, membershipDeadline: Instant? = null) = WorkIte
   doneWithinDay = false, freshnessDeadline = null, membershipDeadline = membershipDeadline, exactPauseReason = null,
   awaitsOperatorDecision = false, currentSubtaskId = null, reason = null,
   control = WorkControlIdentity(
-    workflowId = id, invocationId = null, repositoryIdentity = "repo", executionId = null, statusStoreId = null,
+    sessionId = 1L, workflowId = id, invocationId = null, repositoryIdentity = "repo", executionId = null, statusStoreId = null,
     runSequence = null, statusRevision = null, phaseId = null, updatedAt = Instant.fromEpochMilliseconds(0),
     controlLeaseOwner = null, controlLeaseGeneration = null, storeId = null, storeRevision = null, databaseFile = null,
   ),

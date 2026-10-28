@@ -26,12 +26,19 @@ import kotlin.time.toJavaInstant
 import kotlin.time.toKotlinInstant
 
 /** Mapped board rows from one or more pages, with the runtime's observation time and the cursor after the last page. */
-internal data class BoardPage(val items: List<WorkItem>, val nextCursor: String?, val observedAt: Instant)
+internal data class BoardPage(
+  val items: List<WorkItem>,
+  val nextCursor: String?,
+  val observedAt: Instant,
+  val observation: skillbill.ports.work.model.WorkStoreObservation? = null,
+)
 
 /** The board reads an observation needs, behind an interface so its triggering can be tested without a runtime. */
 internal interface BoardReads {
   /** Pages 1 to [pageCount] in one read; a failure after page 1 keeps the pages already read and ends the cursor. */
   suspend fun pages(query: BoardQuery, pageCount: Int): Outcome<BoardPage, ReadProblem>
+
+  suspend fun complete(query: BoardQuery): Outcome<BoardPage, ReadProblem> = pages(query, Int.MAX_VALUE)
 
   suspend fun page(query: BoardQuery, cursor: String): Outcome<BoardPage, ReadProblem>
 
@@ -43,6 +50,7 @@ internal class RuntimeBoardReads(
   private val reads: RuntimeReads,
   private val runtime: RuntimeComponent,
   private val diagnostics: Diagnostics,
+  private val sessionId: Long,
 ) : BoardReads {
   override suspend fun pages(query: BoardQuery, pageCount: Int): Outcome<BoardPage, ReadProblem> {
     return when (val read = readOrProblem(runtime, diagnostics) { readPages(query, pageCount) }) {
@@ -51,18 +59,48 @@ internal class RuntimeBoardReads(
     }
   }
 
+  override suspend fun complete(query: BoardQuery): Outcome<BoardPage, ReadProblem> =
+    when (val read = readOrProblem(runtime, diagnostics) { readComplete(query) }) {
+      is Outcome.Failure -> read
+      is Outcome.Success -> read.value?.let { Outcome.Success(it) } ?: Outcome.Failure(ReadProblem.Storage(StorageFailure.Missing))
+    }
+
+  private suspend fun readComplete(query: BoardQuery): BoardPage? = reads.read("board_reservations") { component ->
+    val first = component.ideStatusService.board(query.request(cursor = null))
+    if (first.absentDatabase) return@read null
+    checkNotNull(first.observation) { "The complete board read has no store observation." }
+    val items = first.items.mapTo(mutableListOf()) { it.toWorkItem(sessionId) }
+    var cursor = first.nextCursor
+    while (cursor != null) {
+      try {
+        val next = component.ideStatusService.board(query.request(cursor))
+        if (next.observation == null || next.observation != first.observation) {
+          throw IllegalStateException("The board changed while its complete snapshot was being read.")
+        }
+        next.items.mapTo(items) { it.toWorkItem(sessionId) }
+        cursor = next.nextCursor
+      } catch (failure: CancellationException) {
+        throw failure
+      } catch (failure: Exception) {
+        diagnostics.record("desktop_board_page_failed")
+        throw failure
+      }
+    }
+    BoardPage(items, null, first.observedAt.toKotlinInstant(), first.observation)
+  }
+
   /** Null when the runtime reports the database absent. */
   private suspend fun readPages(query: BoardQuery, pageCount: Int): BoardPage? =
     reads.read("board") { component ->
       val first = component.ideStatusService.board(query.request(cursor = null))
       if (first.absentDatabase) return@read null
-      val items = first.items.mapTo(mutableListOf()) { it.toWorkItem() }
+      val items = first.items.mapTo(mutableListOf()) { it.toWorkItem(sessionId) }
       var cursor = first.nextCursor
       var pagesRead = 1
       while (pagesRead < pageCount && cursor != null) {
         cursor = try {
           val next = component.ideStatusService.board(query.request(cursor))
-          next.items.mapTo(items) { it.toWorkItem() }
+          next.items.mapTo(items) { it.toWorkItem(sessionId) }
           next.nextCursor
         } catch (failure: CancellationException) {
           throw failure
@@ -73,13 +111,13 @@ internal class RuntimeBoardReads(
         }
         pagesRead++
       }
-      BoardPage(items, cursor, first.observedAt.toKotlinInstant())
+      BoardPage(items, cursor, first.observedAt.toKotlinInstant(), first.observation)
     }
 
   override suspend fun page(query: BoardQuery, cursor: String) = readOrProblem(runtime, diagnostics) {
     reads.read("board_page") { component ->
       val result = component.ideStatusService.board(query.request(cursor))
-      BoardPage(result.items.map { it.toWorkItem() }, result.nextCursor, result.observedAt.toKotlinInstant())
+      BoardPage(result.items.map { it.toWorkItem(sessionId) }, result.nextCursor, result.observedAt.toKotlinInstant(), result.observation)
     }
   }
 

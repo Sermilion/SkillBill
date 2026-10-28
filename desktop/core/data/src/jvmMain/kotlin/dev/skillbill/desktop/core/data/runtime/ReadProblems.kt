@@ -20,7 +20,14 @@ internal suspend fun <T> readOrProblem(
 } catch (failure: CancellationException) {
   throw failure
 } catch (failure: Exception) {
-  val path = runCatching { runtime.databaseSession.resolveDbPath().toString() }.getOrDefault("")
+  val path = try {
+    runtime.databaseSession.resolveDbPath().toString()
+  } catch (pathFailure: CancellationException) {
+    throw pathFailure
+  } catch (_: Exception) {
+    diagnostics.record("desktop_read_database_path_resolution_failed")
+    ""
+  }
   val storage = StorageFailureClassifier.classify(failure, path)
   if (storage == null) diagnostics.record("desktop_read_failed")
   Outcome.Failure(storage?.let(ReadProblem::Storage) ?: ReadProblem.Runtime(failure.message ?: failure::class.java.simpleName))

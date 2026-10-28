@@ -19,8 +19,8 @@ class RuntimeWorkMapperTest {
     )
     val workflow = IdeStatusExecutionIdentity(IdeStatusExecutionScope.WORKFLOW, "exec-2", "store-1", "1", "1")
 
-    assertEquals("inv-1", board(workflowId = "wf-1", standalone).toWorkItem().id)
-    assertEquals("wf-2", board(workflowId = "wf-2", workflow).toWorkItem().id)
+    assertEquals("inv-1", board(workflowId = "wf-1", standalone).toWorkItem(1L).id)
+    assertEquals("wf-2", board(workflowId = "wf-2", workflow).toWorkItem(1L).id)
   }
 
   private fun board(workflowId: String, execution: IdeStatusExecutionIdentity) = WorkBoardItem(

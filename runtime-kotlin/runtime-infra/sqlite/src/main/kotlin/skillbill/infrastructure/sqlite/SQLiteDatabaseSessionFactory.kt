@@ -18,12 +18,14 @@ import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.core.schema.fileObservation
 import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentContext
+import skillbill.infrastructure.sqlite.pathlock.DatabasePathFileLock
 import skillbill.model.EnvironmentContext
 import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabaseCheckpointResult
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -62,6 +64,9 @@ class SQLiteDatabaseSessionFactory(
   }
 
   override fun resolveDbPath(): Path = resolvedPath
+
+  override fun acquireDatabasePathProtection(): DatabasePathProtectionResult =
+    DatabasePathFileLock.acquire(resolveDbPath(), diagnostics)
 
   override fun databaseExists(): Boolean = Files.exists(resolveDbPath())
 

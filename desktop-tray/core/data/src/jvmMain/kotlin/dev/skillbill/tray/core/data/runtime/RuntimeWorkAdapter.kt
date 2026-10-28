@@ -5,6 +5,7 @@ import dev.skillbill.tray.core.data.port.BoardProjection
 import dev.skillbill.tray.core.data.port.ControlAction
 import dev.skillbill.tray.core.data.port.ControlRefusal
 import dev.skillbill.tray.core.data.port.ControlResult
+import dev.skillbill.tray.core.data.session.DatabaseIdentityCapture
 import dev.skillbill.tray.core.data.port.DetailProjection
 import dev.skillbill.tray.core.data.port.InvalidDatabasePathException
 import dev.skillbill.tray.core.data.port.OwnerRegistration
@@ -12,6 +13,7 @@ import dev.skillbill.tray.core.data.port.ProjectedWork
 import dev.skillbill.tray.core.data.port.RuntimeWorkGateway
 import dev.skillbill.tray.core.data.port.SnapshotReads
 import dev.skillbill.tray.core.data.port.StoreObservation
+import dev.skillbill.tray.core.data.session.DatabaseFileIdentity
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.ExecutionScope
@@ -32,6 +34,9 @@ import skillbill.engine.work.control.model.WorkControlTarget
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.databaseMissing
+import skillbill.ports.db.DatabaseReadConnections
+import skillbill.ports.db.model.DatabasePathProtectionResult
+import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkBoardWindow
 import skillbill.ports.idestatus.model.WorkDetailList
@@ -70,6 +75,32 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
 
   override fun observation(): StoreObservation = existing { runtime.databaseSession.read { it.workList.observation() } }
     .let { StoreObservation(it.storeId, it.revision) }
+
+  override fun captureDatabaseIdentity(): DatabaseIdentityCapture {
+    val protection = when (val result = runtime.databaseSession.acquireDatabasePathProtection()) {
+      is DatabasePathProtectionResult.Acquired -> result.protection
+      is DatabasePathProtectionResult.Unavailable -> return DatabaseIdentityCapture.Unavailable(result.reason)
+    }
+    try {
+      val observation = runtime.databaseSession.readIfPresent {
+        it.workList.observation()
+        it.databaseFileObservation
+      }
+        ?: return DatabaseIdentityCapture.Unavailable("The selected database identity could not be captured.")
+      return when (runtime.databaseSession.transactionFenced(observation) { Unit }) {
+        FencedTransactionResult.ChangedTarget -> DatabaseIdentityCapture.Unavailable("The selected database changed while opening the session.")
+        is FencedTransactionResult.Committed -> DatabaseIdentityCapture.Captured(
+          DatabaseFileIdentity(observation.path.toString(), observation.fileKey),
+        )
+      }
+    } finally {
+      try {
+        (runtime.databaseSession as? DatabaseReadConnections)?.release()
+      } finally {
+        protection.close()
+      }
+    }
+  }
 
   override fun <T : Any> existingSnapshot(read: SnapshotReads.() -> T): T = existing { RuntimeSnapshotReads().read() }
 

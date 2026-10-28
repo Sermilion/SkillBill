@@ -104,6 +104,7 @@ class DatabaseSession(
   private val generations: DatabaseGenerations,
   private val dispatchers: DispatcherProvider,
   private val diagnostics: Diagnostics,
+  internal val selectedDatabaseIdentity: SessionDatabaseIdentity,
 ) {
   internal val mutex = Mutex()
   private val lifecycle = Mutex()
@@ -151,6 +152,16 @@ class DatabaseSession(
       diagnostics.record("database_path_invalid")
     }
     if (path != null) configurationProblem = prepareSchema()
+    val capture = if (configurationProblem == null && path != null) {
+      when (val result = safeRead { Outcome.Value(gateway.captureDatabaseIdentity()) }) {
+        is Outcome.Value -> result.value
+        is Outcome.Failure -> {
+          diagnostics.record("database_identity_unavailable")
+          DatabaseIdentityCapture.Unavailable(result.problem.summary)
+        }
+      }
+    } else DatabaseIdentityCapture.Unavailable("The selected database could not be prepared for purge.")
+    selectedDatabaseIdentity.initialize(capture)
     generation = generations.next()
     observationProblem = null
   }
@@ -455,6 +466,7 @@ class DatabaseSession(
       try {
         lifecycle.withLock { retire(announce = true) }
       } finally {
+        selectedDatabaseIdentity.clear()
         sessionScope.coroutineContext.job.cancelAndJoin()
         closeCompletion.complete(Unit)
         closerScope.cancel()

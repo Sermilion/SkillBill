@@ -52,6 +52,7 @@ import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabaseCheckpointResult
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -446,6 +447,11 @@ internal fun testGoalRunner(
   )
 
 private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 

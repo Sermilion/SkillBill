@@ -3,6 +3,7 @@ package skillbill.application.idestatus
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.AgentActivityStamp
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
@@ -70,6 +71,11 @@ class AgentActivityStampWriterOwnershipTest {
     val attempts = AtomicInteger(0)
     val database =
       object : DatabaseSessionFactory {
+        override fun acquireDatabasePathProtection() =
+          DatabasePathProtectionResult.Unavailable(
+            "Database path protection is not available.",
+          )
+
         override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
           OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
@@ -165,6 +171,9 @@ class AgentActivityStampWriterOwnershipTest {
 private class MemoryDatabaseSessionFactory(
   private val dbPath: Path,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   private val stamps = mutableMapOf<String, AgentActivityStamp>()
   private val repository =
     object : AgentActivityStampRepository {

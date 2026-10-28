@@ -44,22 +44,23 @@ internal class ItemVerdicts(
   val controlLease: GoalRunnerExecutionLease?,
   val observation: WorkStoreObservation?,
   val databaseFile: DatabaseFileObservation?,
+  val sessionId: Long,
 )
 
-internal fun WorkBoardItem.toWorkItem(): WorkItem = snapshot.toWorkItem(
+internal fun WorkBoardItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWorkItem(
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase, doneWithinDay, freshnessDeadline, membershipDeadline, exactPauseReason, controlLease,
-    observation, databaseFileObservation,
+    observation, databaseFileObservation, sessionId,
   ),
 )
 
 /** The detail read carries no running or membership verdicts; those stay on the board row. */
-internal fun WorkDetailItem.toWorkItem(): WorkItem = snapshot.toWorkItem(
+internal fun WorkDetailItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWorkItem(
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running = false, recentlyFinishedPhase = false, doneWithinDay = false, freshnessDeadline, membershipDeadline = null,
-    exactPauseReason, controlLease, observation, databaseFileObservation,
+    exactPauseReason, controlLease, observation, databaseFileObservation, sessionId,
   ),
 )
 
@@ -112,6 +113,7 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     currentSubtaskId = currentSubtask?.id,
     reason = verdicts.exactPauseReason ?: pauseReason?.label ?: planning?.reason,
     control = WorkControlIdentity(
+      sessionId = verdicts.sessionId,
       workflowId = workflowId,
       invocationId = execution?.invocationId,
       repositoryIdentity = repositoryIdentity,

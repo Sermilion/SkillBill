@@ -14,7 +14,7 @@ import dev.skillbill.desktop.core.domain.model.GoalQaFinding
 import dev.skillbill.desktop.core.domain.model.GoalQaResult
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentEvidence
-import dev.skillbill.desktop.core.domain.model.IncidentPrerequisite
+import dev.skillbill.desktop.core.domain.model.IncidentPrerequisiteDetail
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.IncidentRecovery
 import dev.skillbill.desktop.core.domain.model.IncidentRecoveryEligibility
@@ -69,8 +69,8 @@ import java.time.Instant as JavaInstant
  * The detail header: the row's fields plus the feature title, the executing agent (the goal's active agent, or the run
  * options' agent for a standalone phase) and, for anything but a standalone phase, the checked-out branch.
  */
-internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: CheckedOutBranchSource): WorkItem {
-  val item = toWorkItem()
+internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: CheckedOutBranchSource, sessionId: Long): WorkItem {
+  val item = toWorkItem(sessionId)
   val standalone = snapshot.execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE
   val branch = if (standalone) item.branch else branches.checkedOutBranch(Path.of(repositoryRoot)) ?: item.branch
   return item.copy(
@@ -248,14 +248,14 @@ private fun RuntimeAssessmentFindingState.toDomain(): GoalAssessmentFindingState
 private fun WorkIncidentProjection.toDomain(): Incident = Incident(
   incidentToken, revision, progress.toDomain(),
   summary, cause, certainty.wireValue, responsibleCategory.wireValue, nextAction, noWorkaroundKnown,
-  prerequisites.map { IncidentPrerequisite(it.kind, it.instruction) },
+  prerequisites.map { IncidentPrerequisiteDetail(it.kind, it.instruction) },
   evidence.map { IncidentEvidence(it.kind.wireValue, it.referenceId, it.summary, it.trusted) },
   degradations.map { it.wireValue }.toSet(),
   IncidentRecovery(
     when (val value = recovery.eligibility) {
       is BlockIncidentRecoveryEligibilityResult.Available -> IncidentRecoveryEligibility.Available(value.preview.toDomain())
       is BlockIncidentRecoveryEligibilityResult.NeedsPrerequisites -> IncidentRecoveryEligibility.NeedsPrerequisites(
-        value.instructions.map { IncidentPrerequisite(it.kind.wireValue, it.instruction) },
+        value.instructions.map { IncidentPrerequisiteDetail(it.kind.wireValue, it.instruction) },
       )
       is BlockIncidentRecoveryEligibilityResult.Unavailable ->
         IncidentRecoveryEligibility.Unavailable(value.reason.toDomain())

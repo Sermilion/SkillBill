@@ -1,5 +1,6 @@
 package dev.skillbill.tray.core.data.port
 
+import dev.skillbill.tray.core.data.session.DatabaseIdentityCapture
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.Retention
@@ -118,6 +119,8 @@ interface RuntimeWorkGateway {
   fun upgradeExistingStore()
 
   fun observation(): StoreObservation
+
+  fun captureDatabaseIdentity(): DatabaseIdentityCapture
 
   /** Runs [read] in one snapshot of the existing store; a missing store is a typed failure. */
   fun <T : Any> existingSnapshot(read: SnapshotReads.() -> T): T

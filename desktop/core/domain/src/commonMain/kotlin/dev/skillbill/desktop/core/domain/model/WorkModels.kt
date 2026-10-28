@@ -24,6 +24,7 @@ data class DatabaseFileIdentity(val path: String, val fileKey: String)
 
 /** The facts a control request rebuilds its runtime target from, held as plain values. */
 data class WorkControlIdentity(
+  val sessionId: Long,
   val workflowId: String?,
   val invocationId: String?,
   val repositoryIdentity: String,

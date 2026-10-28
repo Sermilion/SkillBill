@@ -6,6 +6,10 @@ import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
+import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
+import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
+import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +27,10 @@ abstract class AppComponent(
   @get:Provides val diagnosticsSwitch: DiagnosticsSwitch,
 ) {
   abstract val databaseSessionManager: DatabaseSessionManager
+  abstract val workBoardRepository: WorkBoardRepository
+  abstract val workControlRepository: WorkControlRepository
+  abstract val workDetailRepository: WorkDetailRepository
+  abstract val specRepository: SpecRepository
 }
 
 @ContributesTo(AppScope::class)

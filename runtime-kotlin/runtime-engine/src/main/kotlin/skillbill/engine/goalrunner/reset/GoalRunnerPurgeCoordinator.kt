@@ -15,6 +15,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecAction
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
+import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -41,60 +44,187 @@ class GoalRunnerPurgeCoordinator(
   private val goalStateFiles: GoalRuntimeStateFileStore,
   private val projectStore: ProjectStorePort,
 ) {
+  private val changedSummary = "Database file changed during purge; remaining steps were stopped."
   private val specBundleReset =
     GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator, projectStore)
 
-  fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult {
+  fun purge(
+    request: GoalRunnerPurgeRequest,
+    expectedObservation: DatabaseFileObservation? = null,
+  ): GoalRunnerPurgeResult {
     val repoRoot = request.repoRoot ?: error("repoRoot is required to purge goal '${request.issueKey}'.")
     val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey)
-    val plan = discover(repoRoot, issueKey)
+    val protection =
+      when (val result = database.acquireDatabasePathProtection()) {
+        is DatabasePathProtectionResult.Acquired -> result.protection
+        is DatabasePathProtectionResult.Unavailable ->
+          return GoalRunnerPurgeResult(
+            issueKey,
+            refusalReason = "Database path protection is unavailable; purge made no changes. ${result.reason}",
+          )
+      }
+    return protection.use {
+      purgeProtected(repoRoot, issueKey, expectedObservation)
+    }
+  }
+
+  private fun purgeProtected(
+    repoRoot: Path,
+    issueKey: String,
+    expectedObservation: DatabaseFileObservation?,
+  ): GoalRunnerPurgeResult {
+    val observation =
+      expectedObservation ?: if (database.databaseExists()) {
+        database.read {
+          it.databaseFileObservation
+        }
+      } else {
+        null
+      }
+    val refusal = observationRefusal(issueKey, observation)
+    if (refusal != null) return refusal
+    requireNotNull(observation)
+    val plan =
+      when (val admission = database.transactionFenced(observation) { discover(repoRoot, issueKey) }) {
+        FencedTransactionResult.ChangedTarget -> return GoalRunnerPurgeResult(issueKey, refusalReason = changedSummary)
+        is FencedTransactionResult.Committed -> admission.value
+      }
     if (plan.refusalReason != null) return plan.toResult()
-    val directories = ownedDirectories(repoRoot, plan.target)
-    val removedPaths = mutableListOf<String>()
-    val failedDirectories = mutableListOf<String>()
-    directories.forEach { directory ->
+    val progress = PurgeProgress(repoRoot, issueKey, observation, plan, ownedDirectories(repoRoot, plan.target))
+    return deleteDirectories(progress) ?: deleteRows(progress) ?: finishPurge(progress)
+  }
+
+  private fun observationRefusal(
+    issueKey: String,
+    observation: DatabaseFileObservation?,
+  ): GoalRunnerPurgeResult? {
+    val selectedPath = database.resolveDbPath().toAbsolutePath().normalize()
+    val reason =
+      when {
+        !database.databaseExists() -> "Selected database does not exist; purge made no changes."
+        observation == null -> "Database file identity is unavailable; purge made no changes."
+        observation.path.toAbsolutePath().normalize() != selectedPath ->
+          "Database observation does not match the selected database path; purge made no changes."
+        else -> null
+      }
+    return reason?.let { GoalRunnerPurgeResult(issueKey, refusalReason = it) }
+  }
+
+  private fun deleteDirectories(progress: PurgeProgress): GoalRunnerPurgeResult? {
+    val failed = mutableListOf<String>()
+    for (directory in progress.directories) {
+      if (!isCurrent(progress.observation)) return progress.changed()
       when (val deletion = goalStateFiles.deleteDirectoryTree(directory)) {
-        GoalRuntimeDirectoryDeletion.Deleted -> removedPaths += repoRelativePath(repoRoot, directory)
+        GoalRuntimeDirectoryDeletion.Deleted -> progress.removedPaths += repoRelativePath(progress.repoRoot, directory)
         GoalRuntimeDirectoryDeletion.Absent -> Unit
         is GoalRuntimeDirectoryDeletion.Failed ->
-          failedDirectories += "${repoRelativePath(repoRoot, directory)}: ${deletion.reason}"
+          failed += "${repoRelativePath(progress.repoRoot, directory)}: ${deletion.reason}"
       }
     }
-    if (failedDirectories.isNotEmpty()) {
-      return plan.toResult(
-        removedPaths = removedPaths,
-        leftovers = failedDirectories + "database and spec-bundle steps deferred until the directories can be removed",
+    return if (failed.isEmpty()) {
+      null
+    } else {
+      progress.result(
+        leftovers = failed + "database and spec-bundle steps deferred until the directories can be removed",
       )
     }
-    val leftovers = mutableListOf<String>()
-    val removedRowCounts =
-      if (plan.target.isEmpty) {
-        emptyMap()
-      } else {
-        manifestStore.purgeDecomposedGoal(
-          plan.target,
-        ).byTable
+  }
+
+  private fun deleteRows(progress: PurgeProgress): GoalRunnerPurgeResult? {
+    if (progress.plan.target.isEmpty) return null
+    return when (
+      val result =
+        database.transactionFenced(progress.observation) {
+          manifestStore.purgeDecomposedGoal(progress.plan.target)
+        }
+    ) {
+      FencedTransactionResult.ChangedTarget -> progress.changed()
+      is FencedTransactionResult.Committed -> {
+        progress.removedRowCounts = result.value.byTable
+        null
       }
-    val checkpointRefsPruned =
+    }
+  }
+
+  private fun finishPurge(progress: PurgeProgress): GoalRunnerPurgeResult {
+    val hasSibling =
+      when (
+        val result =
+          database.transactionFenced(progress.observation) {
+            hasStandaloneSibling(progress.issueKey, progress.repoRoot)
+          }
+      ) {
+        FencedTransactionResult.ChangedTarget -> return progress.changed()
+        is FencedTransactionResult.Committed -> result.value
+      }
+    progress.checkpointRefsPruned =
       pruneGoalPurgeCheckpointRefs(
         gitOperations = gitOperations,
-        repoRoot = repoRoot,
-        issueKey = issueKey,
-        skipStandaloneNamespace = hasStandaloneSibling(issueKey, repoRoot),
-        record = { diagnostic -> leftovers += diagnostic },
+        repoRoot = progress.repoRoot,
+        issueKey = progress.issueKey,
+        skipStandaloneNamespace = hasSibling,
+        record = { diagnostic -> progress.leftovers += diagnostic },
       )
-    val specActions =
-      plan.sourceManifest?.let { source -> specBundleReset.reset(repoRoot, source, requireNotNull(plan.manifestPath)) }
-        .orEmpty()
-    leftovers += survivors(repoRoot, issueKey, plan, directories)
-    return plan.toResult(
-      removedRowCounts = removedRowCounts,
-      removedPaths = removedPaths,
-      specBundleActions = specActions,
-      checkpointRefsPruned = checkpointRefsPruned,
-      leftovers = leftovers,
-    )
+    if (!isCurrent(progress.observation)) return progress.changed()
+    progress.plan.sourceManifest?.let { source ->
+      progress.specActions =
+        specBundleReset.reset(
+          progress.repoRoot,
+          source,
+          requireNotNull(progress.plan.manifestPath),
+        )
+    }
+    return when (
+      val result =
+        database.transactionFenced(progress.observation) {
+          survivors(progress.repoRoot, progress.issueKey, progress.plan, progress.directories)
+        }
+    ) {
+      FencedTransactionResult.ChangedTarget -> progress.changed()
+      is FencedTransactionResult.Committed -> {
+        progress.leftovers += result.value
+        progress.result()
+      }
+    }
   }
+
+  private inner class PurgeProgress(
+    val repoRoot: Path,
+    val issueKey: String,
+    val observation: DatabaseFileObservation,
+    val plan: PurgePlan,
+    val directories: List<Path>,
+  ) {
+    var removedRowCounts: Map<String, Int> = emptyMap()
+    val removedPaths = mutableListOf<String>()
+    var specActions: List<GoalRunnerPurgeSpecAction> = emptyList()
+    var checkpointRefsPruned = 0
+    val leftovers = mutableListOf<String>()
+
+    fun changed(): GoalRunnerPurgeResult = result(leftovers + changedSummary, changedSummary)
+
+    fun result(
+      leftovers: List<String> = this.leftovers,
+      refusalReason: String? = plan.refusalReason,
+    ): GoalRunnerPurgeResult =
+      GoalRunnerPurgeResult(
+        issueKey = issueKey,
+        parentWorkflowIds = plan.target.parentWorkflowIds.sorted(),
+        deletedChildWorkflowIds = (plan.target.workflowIds - plan.target.parentWorkflowIds).sorted(),
+        removedRowCounts = removedRowCounts,
+        removedPaths = removedPaths,
+        specBundleActions = specActions,
+        checkpointRefsPruned = checkpointRefsPruned,
+        leftovers = plan.unclassifiedLeftovers + leftovers,
+        refusalReason = refusalReason,
+      )
+  }
+
+  private fun isCurrent(expected: DatabaseFileObservation): Boolean =
+    when (database.transactionFenced(expected) { true }) {
+      FencedTransactionResult.ChangedTarget -> false
+      is FencedTransactionResult.Committed -> true
+    }
 
   private fun discover(
     repoRoot: Path,
@@ -243,22 +373,12 @@ private data class PurgePlan(
   val refusalReason: String?,
   val unclassifiedLeftovers: List<String>,
 ) {
-  fun toResult(
-    removedRowCounts: Map<String, Int> = emptyMap(),
-    removedPaths: List<String> = emptyList(),
-    specBundleActions: List<GoalRunnerPurgeSpecAction> = emptyList(),
-    checkpointRefsPruned: Int = 0,
-    leftovers: List<String> = emptyList(),
-  ): GoalRunnerPurgeResult =
+  fun toResult(): GoalRunnerPurgeResult =
     GoalRunnerPurgeResult(
       issueKey = issueKey,
       parentWorkflowIds = target.parentWorkflowIds.sorted(),
       deletedChildWorkflowIds = (target.workflowIds - target.parentWorkflowIds).sorted(),
-      removedRowCounts = removedRowCounts,
-      removedPaths = removedPaths,
-      specBundleActions = specBundleActions,
-      checkpointRefsPruned = checkpointRefsPruned,
-      leftovers = unclassifiedLeftovers + leftovers,
+      leftovers = unclassifiedLeftovers,
       refusalReason = refusalReason,
     )
 }

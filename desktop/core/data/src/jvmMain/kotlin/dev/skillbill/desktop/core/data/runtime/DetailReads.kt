@@ -39,13 +39,14 @@ internal class RuntimeDetailReads(
   private val reads: RuntimeReads,
   private val runtime: RuntimeComponent,
   private val diagnostics: Diagnostics,
+  private val sessionId: Long,
 ) : DetailReads {
   override suspend fun first(id: String) = refresh(id, emptyMap())
 
   override suspend fun refresh(id: String, extended: Map<DetailList, Int>): DetailRead = read("detail") { component ->
     val result = component.ideStatusService.detail(WorkDetailRequest(id, observedAt = null))
     val options = result.item?.let(component.workControlService::options)
-    val head = result.toRead(component, options)
+    val head = result.toRead(component, options, sessionId)
     if (head !is DetailRead.Loaded) return@read head
     extended.entries.fold(head) { loaded, (list, count) ->
       val pageSize = count.coerceIn(1, WorkPaginationLimits.MAX_PAGE_SIZE)
@@ -56,7 +57,8 @@ internal class RuntimeDetailReads(
   }
 
   override suspend fun list(id: String, list: DetailList, cursor: String?): DetailRead = read("detail_list") { component ->
-    component.ideStatusService.detail(WorkDetailRequest(id, list = list.toRuntime(), cursor = cursor)).toRead(component, options = null)
+    component.ideStatusService.detail(WorkDetailRequest(id, list = list.toRuntime(), cursor = cursor))
+      .toRead(component, options = null, sessionId = sessionId)
   }
 
   private suspend fun read(name: String, block: (RuntimeComponent) -> DetailRead): DetailRead =
@@ -66,13 +68,13 @@ internal class RuntimeDetailReads(
     }
 }
 
-private fun WorkDetailResult.toRead(component: RuntimeComponent, options: WorkRunOptions?): DetailRead {
+private fun WorkDetailResult.toRead(component: RuntimeComponent, options: WorkRunOptions?, sessionId: Long): DetailRead {
   problem?.let { problem ->
     return if (problem.code == WorkDetailProblemCode.UNKNOWN_WORK_ITEM) DetailRead.Gone else DetailRead.Failed(ReadProblem.Runtime(problem.message))
   }
   val detailItem = item ?: return DetailRead.Gone
   return DetailRead.Loaded(
-    header = detailItem.toHeader(options, component.checkedOutBranchSource),
+    header = detailItem.toHeader(options, component.checkedOutBranchSource, sessionId),
     sections = DetailSections.Loaded(
       detail = detailItem.toDetail(observedAt),
       runOptions = options?.toDomain(),

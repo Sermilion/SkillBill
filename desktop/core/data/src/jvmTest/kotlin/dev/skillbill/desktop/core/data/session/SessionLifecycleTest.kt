@@ -28,7 +28,7 @@ class SessionLifecycleTest {
       val factory = FakeSessionGraphFactory(mapOf(missing to SkillBillRuntimeException(DatabaseFailureCode.MISSING, "missing")))
       val settings = FakeAppSettingsRepository()
       val dispatcher = DatabaseDispatcher(StandardTestDispatcher(testScheduler))
-      val lifecycle = SessionLifecycle(factory, settings, StorageFailureClassifier::classify, dispatcher, RecordingDiagnostics(), backgroundScope)
+      val lifecycle = SessionLifecycle(factory, settings, StorageFailureClassifier::classify, dispatcher, RecordingDiagnostics(), backgroundScope, LaunchReservations())
       val states = mutableListOf<DatabaseSessionState>()
       backgroundScope.launch(dispatcher.dispatcher) { lifecycle.state.toList(states) }
       lifecycle.start()

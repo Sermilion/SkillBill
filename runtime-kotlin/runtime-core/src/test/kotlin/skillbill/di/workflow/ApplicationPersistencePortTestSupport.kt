@@ -47,6 +47,7 @@ import skillbill.learnings.model.UpdateLearningRequest
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -243,6 +244,9 @@ internal class FakeDatabaseSessionFactory(
   private val workflows: WorkflowStateRepository = NoopWorkflowStateRepository,
   private val lifecycleTelemetry: LifecycleTelemetryRepository = noopPort(LifecycleTelemetryRepository::class.java),
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   val calls = mutableListOf<String>()
   private val dbPath = Path.of("/fake/metrics.db")
 

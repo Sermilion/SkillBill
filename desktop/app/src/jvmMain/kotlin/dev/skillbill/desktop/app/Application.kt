@@ -9,6 +9,12 @@ fun main() {
     System.getenv("SKILL_BILL_DESKTOP_DIAGNOSTICS") == "1" || System.getProperty("skillbill.desktop.diagnostics") == "true",
   )
   val host = HostEnvironment(System.getenv(), System.getProperty("user.home"), System.getProperty("user.dir"))
-  AppComponent::class.create(host, diagnostics).databaseSessionManager.start()
-  showSkillBillWindow("Skill Bill runtime is available.")
+  val component = AppComponent::class.create(host, diagnostics)
+  component.databaseSessionManager.start()
+  showSkillBillWindow(
+    component.workBoardRepository,
+    component.workDetailRepository,
+    component.workControlRepository,
+    component.specRepository,
+  )
 }

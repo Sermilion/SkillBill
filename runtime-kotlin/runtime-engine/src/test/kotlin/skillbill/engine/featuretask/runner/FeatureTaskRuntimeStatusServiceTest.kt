@@ -25,6 +25,7 @@ import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -1460,6 +1461,9 @@ internal class StatusHarness(
 private class StatusFakeDatabaseSessionFactory(
   val repository: StatusInMemoryWorkflowRepository,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   private val dbPath = Path.of("/fake/status-metrics.db")
 
   override fun resolveDbPath(): Path = dbPath

@@ -37,6 +37,7 @@ internal class SessionLifecycle<G : SessionGraph>(
   private val dispatcher: DatabaseDispatcher,
   private val diagnostics: Diagnostics,
   private val appScope: CoroutineScope,
+  private val reservations: LaunchReservations,
 ) {
   private data class Selection(val databasePath: String?, val claudeConfigDir: String?)
 
@@ -53,6 +54,7 @@ internal class SessionLifecycle<G : SessionGraph>(
   private val mutableCurrent = MutableStateFlow<OpenSession<G>?>(null)
   private var selection: Selection? = null
   private var counter = 0L
+  private val coordinationBoundary = Any()
 
   val state: StateFlow<DatabaseSessionState> = mutableState.asStateFlow()
   val current: StateFlow<OpenSession<G>?> = mutableCurrent.asStateFlow()
@@ -85,9 +87,19 @@ internal class SessionLifecycle<G : SessionGraph>(
     requests.trySend(Request.Reopen)
   }
 
+  fun <T> coordinate(action: (OpenSession<G>?) -> T): T = synchronized(coordinationBoundary) {
+    action(mutableCurrent.value)
+  }
+
   private suspend fun open(selection: Selection) {
-    mutableState.value = DatabaseSessionState.Opening(selection.databasePath)
-    closeCurrent()
+    val previous = synchronized(coordinationBoundary) {
+      val current = mutableCurrent.value
+      mutableCurrent.value = null
+      mutableState.value = DatabaseSessionState.Opening(selection.databasePath)
+      current?.let { reservations.releaseSession(it.id) }
+      current
+    }
+    if (previous != null) close(previous)
     val id = ++counter
     // The watcher's ending IOException is reported through invokeOnCompletion below; anything else still surfaces.
     val failures = CoroutineExceptionHandler { _, failure -> if (failure !is IOException) appScope.launch { throw failure } }
@@ -99,8 +111,10 @@ internal class SessionLifecycle<G : SessionGraph>(
         graph = created
         created.open() to created.displayPath()
       }
-      mutableCurrent.value = OpenSession(id, checkNotNull(graph), scope)
-      mutableState.value = DatabaseSessionState.Open(path, id)
+      synchronized(coordinationBoundary) {
+        mutableCurrent.value = OpenSession(id, checkNotNull(graph), scope)
+        mutableState.value = DatabaseSessionState.Open(path, id)
+      }
       watcher.invokeOnCompletion { cause ->
         if (cause != null && cause !is CancellationException) requests.trySend(Request.WatchEnded(id, cause))
       }
@@ -112,24 +126,33 @@ internal class SessionLifecycle<G : SessionGraph>(
       graph?.let { release(it) }
       val storageFailure = classify(failure, path)
       if (storageFailure == null) {
+        synchronized(coordinationBoundary) { reservations.releaseSession(id) }
         diagnostics.record("desktop_session_open_failed")
         throw failure
       }
-      mutableState.value = DatabaseSessionState.Failed(path, storageFailure)
+      synchronized(coordinationBoundary) {
+        reservations.releaseSession(id)
+        mutableState.value = DatabaseSessionState.Failed(path, storageFailure)
+      }
     }
   }
 
   private suspend fun watchEnded(failure: Throwable) {
-    val open = mutableCurrent.value ?: return
+    val open = synchronized(coordinationBoundary) {
+      val current = mutableCurrent.value ?: return@synchronized null
+      mutableCurrent.value = null
+      reservations.releaseSession(current.id)
+      current
+    } ?: return
     val path = runCatching { open.graph.displayPath() }.getOrDefault(selection?.databasePath.orEmpty())
-    closeCurrent()
-    mutableState.value = DatabaseSessionState.Failed(path, classify(failure, path) ?: StorageFailure.Access)
+    close(open)
+    synchronized(coordinationBoundary) {
+      mutableState.value = DatabaseSessionState.Failed(path, classify(failure, path) ?: StorageFailure.Access)
+    }
   }
 
   /** Cancels and joins every session-scoped observation and in-flight read, then releases the graph's connections. */
-  private suspend fun closeCurrent() {
-    val open = mutableCurrent.value ?: return
-    mutableCurrent.value = null
+  private suspend fun close(open: OpenSession<G>) {
     open.scope.cancel()
     open.scope.coroutineContext.job.join()
     release(open.graph)

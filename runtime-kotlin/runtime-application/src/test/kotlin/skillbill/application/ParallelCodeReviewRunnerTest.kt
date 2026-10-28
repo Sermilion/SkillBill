@@ -45,6 +45,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.DiffResolverPortDefaults
@@ -1549,6 +1550,11 @@ internal class RecordingReviewDatabase : DatabaseSessionFactory {
         else -> error("Unexpected unit-of-work call: ${method.name}")
       }
     } as UnitOfWork
+
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
 
   override fun resolveDbPath() = unitOfWork.dbPath
 

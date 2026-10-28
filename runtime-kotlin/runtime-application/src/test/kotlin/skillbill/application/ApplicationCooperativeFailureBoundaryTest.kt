@@ -13,6 +13,7 @@ import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.model.RuntimeVersion
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
@@ -294,6 +295,11 @@ private fun noopReviewContextEnvelopeValidator(): ReviewContextEnvelopeValidator
   }
 
 private class FailingDatabase(private val failure: Throwable) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
@@ -352,6 +358,11 @@ private fun versionedSystemService(version: String): SystemService =
   )
 
 private class UpdateCheckTestDatabaseSessionFactory : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
+
   private val dbPath = Files.createTempDirectory("cooperative-failure-db").resolve("metrics.db")
 
   override fun resolveDbPath(): Path = dbPath
