@@ -64,7 +64,6 @@ fun WorkflowEngine.updateGoalParentForBlockedPhaseRetry(
           ),
         ),
       sessionId = parent.sessionId.orEmpty(),
-      replaceArtifacts = true,
     )
   migrateLegacyGoalRunnerControls(unitOfWork, parent)
   val updatedParent = updateRecord(WorkflowFamily.TASK_RUNTIME.definition, parent, parentInput)

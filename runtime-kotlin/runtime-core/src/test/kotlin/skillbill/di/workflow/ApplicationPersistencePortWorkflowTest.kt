@@ -330,6 +330,15 @@ class ApplicationPersistencePortWorkflowTest {
   @Test
   fun `operator blocked-phase retry reopens the authoritative goal manifest`() {
     val fixture = blockedGoalChildRetryFixture()
+    val preserved = listOf(mapOf("subtask_id" to 8, "child_workflow_id" to "completed-child"))
+    fixture.service.update(
+      WorkflowFamilyKind.TASK_RUNTIME,
+      WorkflowUpdateRequest(
+        workflowId = fixture.parentWorkflowId,
+        workflowStatus = WorkflowStatus.RUNNING.wireValue,
+        artifactsPatch = WorkflowArtifactPatch.from(mapOf("goal_child_history_drafts" to preserved)),
+      ),
+    )
 
     val retried =
       fixture.service.retryBlockedFeatureTaskRuntimePhase(
@@ -354,6 +363,7 @@ class ApplicationPersistencePortWorkflowTest {
       ) as WorkflowGetResult.Ok
     val parentRuntime = parent.snapshot.artifacts["decomposition_runtime"] as Map<*, *>
     assertEquals("in_progress", parentRuntime["status"])
+    assertEquals(preserved, parent.snapshot.artifacts["goal_child_history_drafts"])
   }
 
   @Test
