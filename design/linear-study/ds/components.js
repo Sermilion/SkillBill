@@ -137,7 +137,7 @@
       case 'failed': inner = `<circle cx="7" cy="7" r="6.25" fill="${c}"/><path d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2" stroke="${ink}" stroke-width="1.5" stroke-linecap="round"/>`; break;
       case 'done': inner = `<circle cx="7" cy="7" r="6.25" fill="${c}"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`; break;
       case 'no_change': inner = `<circle cx="7" cy="7" r="5.5" fill="none" stroke="${c}" stroke-width="1.5"/><path d="M4.6 7.2l1.6 1.6 3.2-3.4" fill="none" stroke="${c}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`; break;
-      case 'canceled': inner = `<circle cx="7" cy="7" r="6.25" fill="${c}"/><path d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2" stroke="${ink}" stroke-width="1.5" stroke-linecap="round"/>`; break;
+      case 'canceled': inner = `<circle cx="7" cy="7" r="5.5" fill="none" stroke="${c}" stroke-width="1.5"/><path d="M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2" stroke="${c}" stroke-width="1.5" stroke-linecap="round"/>`; break;
       case 'skipped': inner = `<circle cx="7" cy="7" r="5.5" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="2.4 1.9"/><path d="M4.6 9.4l4.8-4.8" stroke="${c}" stroke-width="1.4" stroke-linecap="round"/>`; break;
       default: inner = `<circle cx="7" cy="7" r="5.5" fill="none" stroke="${c}" stroke-width="1.5"/>`;
     }

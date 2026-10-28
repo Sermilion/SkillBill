@@ -15,6 +15,7 @@ internal data class ModuleManifest(
   val project: String,
   val projectDependencies: List<String>,
   val resolved: Map<String, List<String>>,
+  val sourceDirectories: Map<String, List<String>> = emptyMap(),
 ) {
   val productionEdges: Set<String>
     get() = projectDependencies
@@ -29,6 +30,7 @@ internal fun parseManifest(text: String): ModuleManifest {
     project = document.getValue("project").jsonPrimitive.content,
     projectDependencies = document.getValue("projectDependencies").jsonArray.map { it.jsonPrimitive.content },
     resolved = document.getValue("resolved").jsonObject.mapValues { (_, value) -> (value as JsonArray).map { it.jsonPrimitive.content } },
+    sourceDirectories = document.getValue("sourceDirectories").jsonObject.mapValues { (_, value) -> (value as JsonArray).map { it.jsonPrimitive.content } },
   )
 }
 

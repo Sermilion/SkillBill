@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.app
 
+import dev.skillbill.desktop.app.motion.OsReducedMotionReader
+import dev.skillbill.desktop.app.motion.ReducedMotionRead
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 
@@ -11,10 +13,20 @@ fun main() {
   val host = HostEnvironment(System.getenv(), System.getProperty("user.home"), System.getProperty("user.dir"))
   val component = AppComponent::class.create(host, diagnostics)
   component.databaseSessionManager.start()
+  val reducedMotion = when (val read = OsReducedMotionReader().read()) {
+    is ReducedMotionRead.Known -> read.reduced
+    is ReducedMotionRead.Unavailable -> {
+      val source = read.source.replace(Regex("\\s+"), " ").take(120)
+      val reason = read.reason.replace(Regex("\\s+"), " ").take(120)
+      System.getLogger("dev.skillbill.desktop").log(System.Logger.Level.WARNING, "desktop:reduced-motion-unavailable source=$source reason=$reason")
+      false
+    }
+  }
   showSkillBillWindow(
     component.workBoardRepository,
     component.workDetailRepository,
     component.workControlRepository,
     component.specRepository,
+    reducedMotion,
   )
 }

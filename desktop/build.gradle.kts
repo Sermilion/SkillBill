@@ -9,6 +9,10 @@ version = "0.1.0"
 // The implicit ":core" parent has no build script, so it owns no check or jvmTest task.
 val moduleProjects = subprojects.filter { it.buildFile.exists() }
 
+tasks.register("compileKotlin") {
+  dependsOn(moduleProjects.map { "${it.path}:compileKotlinJvm" })
+}
+
 tasks.named("check") {
   dependsOn(moduleProjects.map { "${it.path}:check" })
   dependsOn(gradle.includedBuild("build-logic").task(":convention:check"))

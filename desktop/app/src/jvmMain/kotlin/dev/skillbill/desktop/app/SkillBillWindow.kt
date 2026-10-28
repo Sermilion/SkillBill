@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import dev.skillbill.desktop.core.common.Outcome
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.domain.model.BoardQuery
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -55,9 +56,12 @@ fun showSkillBillWindow(
   details: WorkDetailRepository,
   controls: WorkControlRepository,
   specs: SpecRepository,
+  reducedMotion: Boolean,
 ) = application {
   Window(onCloseRequest = ::exitApplication, title = "Skill Bill") {
-    MainWindow(board, details, controls, specs)
+    SkillBillTheme(reducedMotion) {
+      MainWindow(board, details, controls, specs)
+    }
   }
 }
 

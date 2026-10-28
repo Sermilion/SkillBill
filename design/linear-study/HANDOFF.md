@@ -321,9 +321,11 @@ Shape carries the state and color reinforces it, so a list reads in grayscale. A
 | Completed, no change | Ring with a check | `st-done` |
 | Pending | Ring | `st-pending` |
 | Skipped | Dashed ring with a slash | `st-pending` |
-| Canceled | Filled with an × | `st-pending` |
+| Canceled | Ring r=5.5 stroke 1.5 with an × in `st-pending`, lines (4.9,4.9)–(9.1,9.1) and (9.1,4.9)–(4.9,9.1), stroke 1.5 with round caps | `st-pending` |
 
 Mapping from runtime lifecycle: `ACTIVE` → Active (Planning while `planningState` is not prepared, Stalled when `stalledSince` is set), `PAUSED` → Paused, `BLOCKED` → Blocked, `FAILED` → Failed, `TERMINAL` → Completed, `CANCELED` → Canceled. Subtask statuses: `complete`, `completed_no_change`, `in_progress`, `pending`, `blocked`, `skipped`.
+
+AC-004 amendment: Canceled uses the outlined shape above, replacing the earlier filled circle. Match the updated prototype for Canceled and preserve shape-only distinction in grayscale for IS-002. Failed remains filled.
 
 ### 6.5 Icons
 

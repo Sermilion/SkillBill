@@ -15,19 +15,24 @@ tasks.named<dev.skillbill.buildidentity.WriteBuildIdentityTask>("writeBuildIdent
 
 kotlin {
   sourceSets.commonMain.dependencies {
+    implementation(compose.material3)
     implementation(projects.core.common)
     implementation(projects.core.domain)
     implementation(projects.core.data)
     implementation(projects.core.datastore)
+    implementation(projects.core.designsystem)
   }
   sourceSets.jvmMain.dependencies {
     implementation(libs.kotlinx.coroutines.swing)
+    implementation(libs.jna)
+    implementation(libs.jna.platform)
     // The merged component names the session's runtime graph; its classes come from the installed runtime at run time.
     compileOnly("dev.skillbill:runtime-core")
   }
   sourceSets.jvmTest.dependencies {
     // The architecture test parses the per-module manifests.
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlin.compiler.embeddable)
   }
 }
 

@@ -46,4 +46,4 @@ dependencyResolutionManagement {
   }
 }
 
-include(":app", ":core:common", ":core:domain", ":core:data", ":core:datastore", ":core:testing")
+include(":app", ":core:common", ":core:domain", ":core:data", ":core:datastore", ":core:testing", ":core:designsystem", ":core:ui")
