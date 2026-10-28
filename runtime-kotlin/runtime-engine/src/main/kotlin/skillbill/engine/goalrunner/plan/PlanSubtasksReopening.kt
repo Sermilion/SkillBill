@@ -70,7 +70,6 @@ class PlanSubtasksReopening(
               clock = clock,
             ),
           )
-        // Drop the earlier decompose terminal so the re-planned bundle is verified and the plan completes again.
         val updated =
           engine.updateRecord(
             WorkflowFamily.TASK_RUNTIME.definition,
