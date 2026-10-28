@@ -20,6 +20,7 @@ fun SkillBillTheme(reducedMotion: Boolean, content: @Composable () -> Unit) {
     LocalSkillBillShadows provides DarkSkillBillShadows,
     LocalReducedMotion provides reducedMotion,
     LocalContentColor provides DarkSkillBillColors.fg,
+    dev.skillbill.desktop.core.designsystem.component.LocalUiTicker provides dev.skillbill.desktop.core.designsystem.component.rememberUiTicker(),
     content = content,
   )
 }

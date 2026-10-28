@@ -1,0 +1,127 @@
+package dev.skillbill.desktop.core.designsystem.component
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.areAnyPressed
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.layeredShadow
+import kotlinx.coroutines.delay
+
+private const val TOOLTIP_DELAY_MS = 450L
+
+@Composable
+fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () -> Unit) {
+  val source = remember { MutableInteractionSource() }
+  val hovered by source.collectIsHoveredAsState()
+  var focused by remember { mutableStateOf(false) }
+  var pointerPressed by remember { mutableStateOf(false) }
+  val pressedKeys = remember { mutableStateMapOf<Key, Boolean>() }
+  val pressed = pointerPressed || pressedKeys.isNotEmpty()
+  var visible by remember { mutableStateOf(false) }
+  val density = androidx.compose.ui.platform.LocalDensity.current
+  LaunchedEffect(hovered, focused, pressed) {
+    visible = false
+    if ((hovered || focused) && !pressed) {
+      delay(TOOLTIP_DELAY_MS)
+      visible = true
+    }
+  }
+  Box(
+    Modifier.hoverable(source)
+      .onFocusChanged {
+        focused = it.hasFocus
+        if (!focused) pressedKeys.clear()
+      }
+      .onPreviewKeyEvent { event ->
+        if (event.key == Key.Spacebar || event.key == Key.Enter) {
+          when (event.type) {
+            KeyEventType.KeyDown -> pressedKeys[event.key] = true
+            KeyEventType.KeyUp -> pressedKeys.remove(event.key)
+          }
+        }
+        false
+      }
+      .pointerInput(Unit) {
+        try {
+          awaitPointerEventScope {
+            while (true) {
+              pointerPressed = awaitPointerEvent(PointerEventPass.Initial).buttons.areAnyPressed
+            }
+          }
+        } finally {
+          pointerPressed = false
+        }
+      },
+  ) {
+    content()
+    if (visible) {
+      Popup(
+        popupPositionProvider = TooltipPositionProvider(
+          with(density) { 6.dp.roundToPx() },
+          with(density) { 8.dp.roundToPx() },
+        ),
+        properties = PopupProperties(focusable = false, dismissOnBackPress = false, dismissOnClickOutside = false),
+      ) {
+        val shape = RoundedCornerShape(SkillBillRadius.sm)
+        Row(
+          Modifier.clearAndSetSemantics {}
+            .layeredShadow(SkillBillTheme.shadows.popover, shape)
+            .background(SkillBillTheme.colors.bgOverlay, shape)
+            .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          BasicText(text, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fg), maxLines = 1)
+          shortcut?.let { Kbd(it) }
+        }
+      }
+    }
+  }
+}
+
+private class TooltipPositionProvider(private val gap: Int, private val margin: Int) : PopupPositionProvider {
+  override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+    val centered = anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2
+    val x = centered.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin))
+    val below = anchorBounds.bottom + gap
+    val y = if (below + popupContentSize.height <= windowSize.height - margin) below else (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(margin)
+    return IntOffset(x, y)
+  }
+}

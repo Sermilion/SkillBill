@@ -4,6 +4,10 @@ plugins {
 }
 
 kotlin {
+  sourceSets.jvmTest.dependencies {
+    implementation(libs.kotlinx.coroutines.test)
+  }
+
   sourceSets.commonMain.dependencies {
     api(compose.runtime)
     api(compose.foundation)
