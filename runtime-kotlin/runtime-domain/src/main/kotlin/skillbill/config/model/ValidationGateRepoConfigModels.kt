@@ -1,7 +1,7 @@
 package skillbill.config.model
 
-private const val VALIDATION_GATE_KEY: String = "validation_gate"
-private const val GRADLE_WRAPPER_KEY: String = "gradle_wrapper"
+private const val VALIDATION_GATE_KEY: String = RepoLocalConfigFileKeys.VALIDATION_GATE
+private const val GRADLE_WRAPPER_KEY: String = RepoLocalConfigFileKeys.GRADLE_WRAPPER
 
 data class ValidationGateRepoConfig(
   val gradleWrapper: String? = null,

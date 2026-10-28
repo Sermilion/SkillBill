@@ -5,6 +5,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.telemetry.INSTALL_ID_ENVIRONMENT_KEY
+import skillbill.telemetry.TelemetryConfigFileKeys
 import skillbill.telemetry.defaultLocalTelemetryConfig
 import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.telemetry.model.TelemetryOpenDocument
@@ -62,8 +63,8 @@ internal fun ensureTelemetryConfigFile(
       ?: UUID.randomUUID().toString()
   val defaults = defaultLocalTelemetryConfig(fallbackInstallId).payload
   val telemetry = normalizedTelemetryMap(payload, defaults)
-  payload["install_id"] = normalizedInstallId(payload, defaults)
-  payload["telemetry"] = telemetry
+  payload[TelemetryConfigFileKeys.INSTALL_ID] = normalizedInstallId(payload, defaults)
+  payload[TelemetryConfigFileKeys.TELEMETRY] = telemetry
   preserveUnownedTopLevelKeys(payload, existing?.payload)
   val document = TelemetryConfigDocument(TelemetryOpenDocument.from(payload))
   if (!Files.exists(path) || existing != document) {
@@ -84,34 +85,38 @@ private fun normalizedInstallId(
   payload: MutableMap<String, Any?>,
   defaults: Map<String, Any?>,
 ): String =
-  (payload["install_id"] as? String)?.takeIf(String::isNotBlank)
-    ?: defaults.getValue("install_id").toString()
+  (payload[TelemetryConfigFileKeys.INSTALL_ID] as? String)?.takeIf(String::isNotBlank)
+    ?: defaults.getValue(TelemetryConfigFileKeys.INSTALL_ID).toString()
 
 private fun normalizedTelemetryMap(
   payload: MutableMap<String, Any?>,
   defaults: Map<String, Any?>,
 ): Map<String, Any?> {
-  val telemetryRaw = payload["telemetry"]
+  val telemetryRaw = payload[TelemetryConfigFileKeys.TELEMETRY]
   val telemetry =
     (telemetryRaw as? Map<*, *>)
       ?.entries
       ?.filter { it.key is String }
       ?.associate { it.key as String to it.value }
       ?.toMutableMap() ?: mutableMapOf()
-  val defaultTelemetry = defaults.getValue("telemetry") as Map<*, *>
+  val defaultTelemetry = defaults.getValue(TelemetryConfigFileKeys.TELEMETRY) as Map<*, *>
   normalizeLegacyEnabledFlag(telemetry)
-  listOf("level", "proxy_url", "batch_size").forEach { key ->
+  listOf(
+    TelemetryConfigFileKeys.LEVEL,
+    TelemetryConfigFileKeys.PROXY_URL,
+    TelemetryConfigFileKeys.BATCH_SIZE,
+  ).forEach { key ->
     telemetry.putIfAbsent(key, defaultTelemetry[key])
   }
   return telemetry
 }
 
 private fun normalizeLegacyEnabledFlag(telemetry: MutableMap<String, Any?>) {
-  if (!telemetry.containsKey("level") && telemetry.containsKey("enabled")) {
-    val enabledRaw = telemetry.remove("enabled")
-    telemetry["level"] = legacyEnabledLevel(enabledRaw)
+  if (!telemetry.containsKey(TelemetryConfigFileKeys.LEVEL) && telemetry.containsKey(TelemetryConfigFileKeys.ENABLED)) {
+    val enabledRaw = telemetry.remove(TelemetryConfigFileKeys.ENABLED)
+    telemetry[TelemetryConfigFileKeys.LEVEL] = legacyEnabledLevel(enabledRaw)
   } else {
-    telemetry.remove("enabled")
+    telemetry.remove(TelemetryConfigFileKeys.ENABLED)
   }
 }
 
@@ -119,7 +124,7 @@ private fun preserveUnownedTopLevelKeys(
   payload: MutableMap<String, Any?>,
   existing: Map<String, Any?>?,
 ) {
-  val ownedKeys = setOf("install_id", "telemetry")
+  val ownedKeys = setOf(TelemetryConfigFileKeys.INSTALL_ID, TelemetryConfigFileKeys.TELEMETRY)
   existing?.forEach { (key, value) ->
     if (key !in ownedKeys && !payload.containsKey(key)) {
       payload[key] = value

@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Component
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.agentrun.AgentRunService
 import skillbill.application.config.ConfigResolutionService
+import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.application.install.InstallService
@@ -80,6 +81,7 @@ import skillbill.infrastructure.host.blockincident.FileProductReportDeliveryOwne
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.host.process.EnvironmentGhProductIssueCredential
 import skillbill.infrastructure.host.projectstore.ProjectStoreResolver
+import skillbill.infrastructure.host.system.FileConfigDocumentFiles
 import skillbill.infrastructure.host.system.FileSystemProjectConfigFile
 import skillbill.infrastructure.host.system.PackagedRuntimeBuildIdentity
 import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
@@ -98,6 +100,7 @@ import skillbill.ports.blockincident.ProductIssueCredentialPort
 import skillbill.ports.blockincident.ProductIssueTrackerPort
 import skillbill.ports.blockincident.ProductReportDeliveryOwnershipPort
 import skillbill.ports.concurrency.InterruptSignalPort
+import skillbill.ports.config.ConfigDocumentFiles
 import skillbill.ports.config.ProjectConfigFilePort
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
@@ -236,6 +239,9 @@ abstract class RuntimeComponent(
   fun projectConfigFilePort(adapter: FileSystemProjectConfigFile): ProjectConfigFilePort = adapter
 
   @Provides
+  fun configDocumentFiles(adapter: FileConfigDocumentFiles): ConfigDocumentFiles = adapter
+
+  @Provides
   fun fileEditorLauncherPort(adapter: ProcessFileEditorLauncher): FileEditorLauncherPort = adapter
 
   @Provides @RuntimeSingleton
@@ -305,6 +311,7 @@ abstract class RuntimeComponent(
   abstract val operationExecutor: OperationExecutor
   abstract val operationRegistry: OperationRegistry
   abstract val configResolutionService: ConfigResolutionService
+  abstract val runtimeConfigEditService: RuntimeConfigEditService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService
   abstract val externalAddonOverlayService: ExternalAddonOverlayService

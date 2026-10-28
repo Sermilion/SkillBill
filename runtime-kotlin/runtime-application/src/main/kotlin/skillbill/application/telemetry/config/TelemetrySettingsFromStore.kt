@@ -10,6 +10,7 @@ import skillbill.telemetry.TELEMETRY_BATCH_SIZE_ENVIRONMENT_KEY
 import skillbill.telemetry.TELEMETRY_ENABLED_ENVIRONMENT_KEY
 import skillbill.telemetry.TELEMETRY_LEVEL_ENVIRONMENT_KEY
 import skillbill.telemetry.TELEMETRY_PROXY_URL_ENVIRONMENT_KEY
+import skillbill.telemetry.TelemetryConfigFileKeys
 import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.telemetry.model.TelemetrySettings
 import skillbill.telemetry.parsePositiveTelemetryIntOrNull
@@ -75,11 +76,11 @@ private fun readTelemetrySettingsConfig(
       if (!materialize) {
         TelemetrySettingsValue.Loaded(configRead.document)
       } else {
-        val telemetry = configRead.document.payload["telemetry"] as? Map<*, *>
-        val enabled = telemetry?.get("enabled")
+        val telemetry = configRead.document.payload[TelemetryConfigFileKeys.TELEMETRY] as? Map<*, *>
+        val enabled = telemetry?.get(TelemetryConfigFileKeys.ENABLED)
         if (
           telemetry != null &&
-          !telemetry.containsKey("level") &&
+          !telemetry.containsKey(TelemetryConfigFileKeys.LEVEL) &&
           invalidTelemetryEnabledValue(enabled)
         ) {
           TelemetrySettingsValue.Unavailable(telemetryBoolValueError("telemetry.enabled"))
@@ -129,7 +130,7 @@ private fun settingsFromConfigDocument(
   config: TelemetryConfigDocument,
 ): TelemetrySettingsValue<MutableTelemetrySettings> {
   val payload = config.payload
-  val telemetryRaw = payload["telemetry"]
+  val telemetryRaw = payload[TelemetryConfigFileKeys.TELEMETRY]
   val telemetry =
     when (telemetryRaw) {
       null -> emptyMap()
@@ -153,9 +154,9 @@ private fun settingsFromConfigDocument(
   return TelemetrySettingsValue.Loaded(
     MutableTelemetrySettings(
       level = parsedLevel,
-      customProxyUrl = telemetry["proxy_url"]?.toString()?.trim().orEmpty(),
+      customProxyUrl = telemetry[TelemetryConfigFileKeys.PROXY_URL]?.toString()?.trim().orEmpty(),
       batchSize = parsedBatchSize,
-      installId = payload["install_id"]?.toString()?.trim().orEmpty(),
+      installId = payload[TelemetryConfigFileKeys.INSTALL_ID]?.toString()?.trim().orEmpty(),
     ),
   )
 }
@@ -167,8 +168,8 @@ private sealed interface TelemetrySettingsValue<out T> {
 }
 
 private fun telemetryLevelFromConfig(telemetry: Map<String, Any?>): TelemetrySettingsValue<String> {
-  val levelRaw = telemetry["level"]
-  val enabledRaw = telemetry["enabled"]
+  val levelRaw = telemetry[TelemetryConfigFileKeys.LEVEL]
+  val enabledRaw = telemetry[TelemetryConfigFileKeys.ENABLED]
   return when {
     levelRaw != null ->
       parseTelemetryLevelValueOrNull(levelRaw.toString())?.let { TelemetrySettingsValue.Loaded(it) }
@@ -183,7 +184,7 @@ private fun telemetryLevelFromConfig(telemetry: Map<String, Any?>): TelemetrySet
 }
 
 private fun telemetryBatchSize(telemetry: Map<String, Any?>): TelemetrySettingsValue<Int> =
-  when (val batchSizeRaw = telemetry["batch_size"]) {
+  when (val batchSizeRaw = telemetry[TelemetryConfigFileKeys.BATCH_SIZE]) {
     is Int -> TelemetrySettingsValue.Loaded(batchSizeRaw)
     is Number -> TelemetrySettingsValue.Loaded(batchSizeRaw.toInt())
     null -> TelemetrySettingsValue.Loaded(DEFAULT_TELEMETRY_BATCH_SIZE)

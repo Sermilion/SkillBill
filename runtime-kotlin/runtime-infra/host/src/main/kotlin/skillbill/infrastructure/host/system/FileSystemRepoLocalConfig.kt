@@ -5,9 +5,12 @@ import com.fasterxml.jackson.core.JacksonException
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import me.tatarka.inject.annotations.Inject
 import skillbill.config.model.RepoLocalConfig
+import skillbill.config.model.RepoLocalConfigFileKeys
 import skillbill.config.model.RepoLocalConfigKey
+import skillbill.config.model.ReviewContextBudgetParse
 import skillbill.config.model.ValidationGateRepoConfig
 import skillbill.config.model.ValidationGateRepoConfigParse
+import skillbill.config.model.parseReviewContextBudget
 import skillbill.config.model.parseSpecType
 import skillbill.config.model.parseValidationGateRepoConfig
 import skillbill.contracts.JsonCodec
@@ -20,7 +23,6 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import java.io.IOException
-import java.math.BigInteger
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -50,14 +52,14 @@ class FileSystemRepoLocalConfig(
         parseKnownKey(path, raw, RepoLocalConfigKey.SPEC_TYPE) { value -> parseSpecType(value) }
           ?: RepoLocalConfig.defaults().specType,
       reviewContextBudget =
-        if (raw.containsKey("review_context_budget")) {
-          parseReviewContextBudget(path, raw["review_context_budget"])
+        if (raw.containsKey(RepoLocalConfigFileKeys.REVIEW_CONTEXT_BUDGET)) {
+          parseReviewContextBudget(path, raw[RepoLocalConfigFileKeys.REVIEW_CONTEXT_BUDGET])
         } else {
           ReviewContextBudgetPolicy.DEFAULT
         },
       validationGate =
-        if (raw.containsKey("validation_gate")) {
-          parseValidationGate(path, raw["validation_gate"])
+        if (raw.containsKey(RepoLocalConfigFileKeys.VALIDATION_GATE)) {
+          parseValidationGate(path, raw[RepoLocalConfigFileKeys.VALIDATION_GATE])
         } else {
           ValidationGateRepoConfig.defaults()
         },
@@ -67,13 +69,13 @@ class FileSystemRepoLocalConfig(
     path: Path,
     raw: Map<String, Any?>,
   ) {
-    if (!raw.containsKey(REMOVED_PARALLEL_AGENT_KEY)) return
-    val normalized = raw[REMOVED_PARALLEL_AGENT_KEY]?.toString()?.trim()?.lowercase()
+    if (!raw.containsKey(RepoLocalConfigFileKeys.REMOVED_PARALLEL_AGENT)) return
+    val normalized = raw[RepoLocalConfigFileKeys.REMOVED_PARALLEL_AGENT]?.toString()?.trim()?.lowercase()
     if (normalized.isNullOrBlank() || normalized == "none") return
     throw malformedRepoLocalConfigError(
       path = path.toString(),
-      key = REMOVED_PARALLEL_AGENT_KEY,
-      value = raw[REMOVED_PARALLEL_AGENT_KEY].toString(),
+      key = RepoLocalConfigFileKeys.REMOVED_PARALLEL_AGENT,
+      value = raw[RepoLocalConfigFileKeys.REMOVED_PARALLEL_AGENT].toString(),
       reason = "names a removed capability; delete this key or set it to none.",
     )
   }
@@ -96,76 +98,22 @@ class FileSystemRepoLocalConfig(
     path: Path,
     value: Any?,
   ): ReviewContextBudgetPolicy {
-    val raw = budgetMapping(path, "review_context_budget", value)
-    if (raw.containsKey("provider_token_thresholds")) {
+    val raw = value as? Map<*, *>
+    if (raw != null && raw.containsKey("provider_token_thresholds")) {
       diagnostics.warning(
         "Repo-local config degradation: seam=provider_token_thresholds used=ignored " +
           "expected=absent cause=retired configuration block",
       )
     }
-    val active = raw - "provider_token_thresholds"
-    validateBudgetKeys(path, active, "review_context_budget", REVIEW_CONTEXT_BUDGET_KEYS)
-    val defaults = ReviewContextBudgetPolicy.DEFAULT
-    return buildReviewContextBudget(path, active, defaults, value.toString())
-  }
-
-  private fun buildReviewContextBudget(
-    path: Path,
-    raw: Map<*, *>,
-    defaults: ReviewContextBudgetPolicy,
-    originalValue: String,
-  ): ReviewContextBudgetPolicy {
-    val maxParentPacketBytes = budgetLong(path, raw, "max_parent_packet_bytes", defaults.maxParentPacketBytes)
-    val maxLaneLaunchBytes = budgetLong(path, raw, "max_lane_launch_bytes", defaults.maxLaneLaunchBytes)
-    val maxLaneEvidenceBytes = budgetLong(path, raw, "max_lane_evidence_bytes", defaults.maxLaneEvidenceBytes)
-    val maxEvidenceResultBytes = budgetLong(path, raw, "max_evidence_result_bytes", defaults.maxEvidenceResultBytes)
-    val maxLaneResultBytes = budgetLong(path, raw, "max_lane_result_bytes", defaults.maxLaneResultBytes)
-    val maxAssignmentExpansions = assignmentExpansions(path, raw, defaults.maxAssignmentExpansions)
-    val maxSpecialistToolCalls = budgetInt(path, raw, "max_specialist_tool_calls", defaults.maxSpecialistToolCalls)
-    val maxSpecialistModelTurns =
-      budgetInt(path, raw, "max_specialist_model_turns", defaults.maxSpecialistModelTurns)
-    val maxRoutingAnalysisPairs =
-      budgetInt(path, raw, "max_routing_analysis_pairs", defaults.maxRoutingAnalysisPairs)
-    val maxRoutingAnalysisBytes = budgetLong(path, raw, "max_routing_analysis_bytes", defaults.maxRoutingAnalysisBytes)
-    val maxSpecIntentProjectionBytes = defaults.maxSpecIntentProjectionBytes
-    val violation =
-      ReviewContextBudgetPolicy.byteLimitViolation(
-        listOf(
-          maxParentPacketBytes,
-          maxLaneLaunchBytes,
-          maxLaneEvidenceBytes,
-          maxEvidenceResultBytes,
-          maxLaneResultBytes,
-          maxSpecIntentProjectionBytes,
-        ),
-      ) ?: ReviewContextBudgetPolicy.executionLimitViolation(
-        maxAssignmentExpansions,
-        maxSpecialistToolCalls,
-        maxSpecialistModelTurns,
-        maxRoutingAnalysisPairs,
-        maxRoutingAnalysisBytes,
-      ) ?: ReviewContextBudgetPolicy.relationshipViolation(
-        maxEvidenceResultBytes,
-        maxLaneEvidenceBytes,
-        maxLaneLaunchBytes,
-        maxParentPacketBytes,
+    return when (val parsed = parseReviewContextBudget(value)) {
+      is ReviewContextBudgetParse.Valid -> parsed.policy
+      is ReviewContextBudgetParse.Invalid -> throw malformedRepoLocalConfigError(
+        path.toString(),
+        parsed.keyPath,
+        parsed.value,
+        parsed.reason,
       )
-    if (violation != null) {
-      throw malformedRepoLocalConfigError(path.toString(), "review_context_budget", originalValue, violation)
     }
-    return ReviewContextBudgetPolicy(
-      maxParentPacketBytes,
-      maxLaneLaunchBytes,
-      maxLaneEvidenceBytes,
-      maxEvidenceResultBytes,
-      maxLaneResultBytes,
-      maxAssignmentExpansions,
-      maxSpecialistToolCalls,
-      maxSpecialistModelTurns,
-      maxRoutingAnalysisPairs,
-      maxRoutingAnalysisBytes,
-      maxSpecIntentProjectionBytes,
-    )
   }
 
   private fun <T> parseKnownKey(
@@ -213,90 +161,4 @@ class FileSystemRepoLocalConfig(
     }
 }
 
-private const val REMOVED_PARALLEL_AGENT_KEY = "code_review_parallel_agent"
-
-private fun budgetMapping(
-  path: Path,
-  key: String,
-  value: Any?,
-): Map<*, *> {
-  if (value == null) malformedBudget(path, key, value, "must be a mapping, not null.")
-  return value as? Map<*, *> ?: malformedBudget(path, key, value, "must be a mapping.")
-}
-
-private fun validateBudgetKeys(
-  path: Path,
-  raw: Map<*, *>,
-  prefix: String,
-  allowed: Set<String>,
-) {
-  val unknown = raw.entries.firstOrNull { entry -> entry.key.toString() !in allowed } ?: return
-  malformedBudget(path, "$prefix.${unknown.key}", unknown.value, "is not a recognized key.")
-}
-
-private fun assignmentExpansions(
-  path: Path,
-  raw: Map<*, *>,
-  fallback: Int,
-): Int = budgetInt(path, raw, "max_assignment_expansions", fallback)
-
-private fun budgetInt(
-  path: Path,
-  raw: Map<*, *>,
-  key: String,
-  fallback: Int,
-): Int {
-  val parsed = budgetLong(path, raw, key, fallback.toLong())
-  if (parsed !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) {
-    malformedBudget(path, "review_context_budget.$key", parsed, "is outside the signed 32-bit integer range.")
-  }
-  return parsed.toInt()
-}
-
-private fun budgetLong(
-  path: Path,
-  source: Map<*, *>,
-  key: String,
-  fallback: Long,
-  prefix: String = "review_context_budget",
-): Long {
-  if (!source.containsKey(key)) return fallback
-  val rawValue = source[key] ?: malformedBudget(path, "$prefix.$key", null, "must be an integer, not null.")
-  return when (rawValue) {
-    is Byte, is Short, is Int, is Long -> (rawValue as Number).toLong()
-    is BigInteger ->
-      rawValue.longValueExactOrNull()
-        ?: malformedBudget(path, "$prefix.$key", rawValue, "is outside the signed 64-bit integer range.")
-    else -> malformedBudget(path, "$prefix.$key", rawValue, "must be an exact integer.")
-  }
-}
-
-private fun malformedBudget(
-  path: Path,
-  key: String,
-  value: Any?,
-  reason: String,
-): Nothing = throw malformedRepoLocalConfigError(path.toString(), key, value?.toString() ?: "null", reason)
-
 internal const val REPO_LOCAL_CONFIG_FILE_NAME: String = "config.yaml"
-
-private val REVIEW_CONTEXT_BUDGET_KEYS =
-  setOf(
-    "max_parent_packet_bytes",
-    "max_lane_launch_bytes",
-    "max_lane_evidence_bytes",
-    "max_evidence_result_bytes",
-    "max_lane_result_bytes",
-    "max_assignment_expansions",
-    "max_specialist_tool_calls",
-    "max_specialist_model_turns",
-    "max_routing_analysis_pairs",
-    "max_routing_analysis_bytes",
-  )
-
-private fun BigInteger.longValueExactOrNull(): Long? {
-  if (this > BigInteger.valueOf(Long.MAX_VALUE) || this < BigInteger.valueOf(Long.MIN_VALUE)) {
-    return null
-  }
-  return toLong()
-}

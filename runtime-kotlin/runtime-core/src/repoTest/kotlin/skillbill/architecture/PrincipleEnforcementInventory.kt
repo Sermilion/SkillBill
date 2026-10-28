@@ -669,6 +669,7 @@ object PrincipleEnforcementInventory {
       "agentRunService",
       "checkedOutBranchSource",
       "configResolutionService",
+      "runtimeConfigEditService",
       "databaseReadConnections",
       "databaseSchema",
       "databaseSession",
