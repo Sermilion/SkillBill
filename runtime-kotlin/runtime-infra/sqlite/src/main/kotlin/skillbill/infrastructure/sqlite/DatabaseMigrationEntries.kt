@@ -22,6 +22,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDep
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaOutcomes
@@ -903,4 +904,14 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 89,
       name = "refresh-work-board-dependencies",
       operation = WorkBoardReadModelDependencyMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 90,
+      name = "prune-worktree-edit-journal-to-latest-tick",
+      operation = ::pruneWorktreeEditJournalToLatestTick,
+    ) +
+    DatabaseMigration(
+      version = 91,
+      name = "correct-worktree-edit-journal-prune-chronological-order",
+      operation = ::pruneWorktreeEditJournalToLatestTick,
     )

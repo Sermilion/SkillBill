@@ -2395,6 +2395,8 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
   private val workerGenerations = mutableMapOf<String, FeatureTaskRuntimeWorkerGenerationObservation>()
   private val goalChildWorkflowIds = mutableMapOf<String, List<String>>()
 
+  override fun hasActiveFeatureTaskRuntimeWorkerLeases(): Boolean = synchronized(this) { workerOwnership.isNotEmpty() }
+
   fun seedGoalChildWorkflowIds(
     parentWorkflowId: String,
     childWorkflowIds: List<String>,

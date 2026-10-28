@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFi
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
+import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -33,6 +34,32 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
   private val execution = ExecutionPlanAdmissionFixture()
 
   @Test
+  fun `checkpoint failure after idle release preserves the worker result`() {
+    val repository = InMemoryRuntimeWorkflowRepository()
+    repository.saveFeatureTaskWorkflow(unownedRuntimeRow(updatedAt = "2026-08-15T20:57:11Z"), RUNTIME)
+    execution.seed(repository, WORKFLOW_ID)
+    var checkpointAttempts = 0
+    val coordinator =
+      FeatureTaskRuntimeWorkerCoordinator(
+        RuntimeFakeDatabaseSessionFactory(repository),
+        FakeWorkerSupervisor(FeatureTaskRuntimeProcessInspection.NotRunning),
+        testHarnessClock,
+        execution.admission,
+        NoopRuntimeDiagnostics,
+        DatabaseCheckpoint {
+          checkpointAttempts++
+          error("checkpoint failed")
+        },
+      )
+
+    val result = coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ -> "done" }
+
+    assertEquals("done", result)
+    assertEquals(1, checkpointAttempts)
+    assertNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
+  }
+
+  @Test
   fun `unowned acquire still claims after a concurrent updated_at bump`() {
     val repository = InMemoryRuntimeWorkflowRepository()
     repository.saveFeatureTaskWorkflow(unownedRuntimeRow(updatedAt = "2026-08-15T20:57:11Z"), RUNTIME)
@@ -44,6 +71,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -67,6 +95,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -91,6 +120,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ -> Unit }
@@ -115,6 +145,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     val failure =
@@ -142,6 +173,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -170,6 +202,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -204,6 +237,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     val failure =
@@ -227,6 +261,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
@@ -254,6 +289,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         testHarnessClock,
         execution.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
 
     val failure =

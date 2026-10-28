@@ -27,6 +27,7 @@ import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.TestGoalQualityOutcomeStore
 import skillbill.engine.goalrunner.assessment.GoalRunnerAssessmentGate
+import skillbill.engine.goalrunner.completion.GoalCompletionRecorder
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
@@ -48,7 +49,9 @@ import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
+import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabaseCheckpointResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -271,7 +274,15 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
     outcomeStore = wiring.outcomeStore,
     goalPlanningSource = wiring.goalPlanningSource,
     telemetry = wiring.telemetry,
-    clock = wiring.clock,
+    completionRecorder =
+      GoalCompletionRecorder(
+        wiring.manifestStore,
+        wiring.clock,
+        DatabaseCheckpoint {
+          DatabaseCheckpointResult.Absent
+        },
+        wiring.diagnostics,
+      ),
     diagnostics = wiring.diagnostics,
     executionCoordinator = wiring.executionCoordinator,
     runPreparation =

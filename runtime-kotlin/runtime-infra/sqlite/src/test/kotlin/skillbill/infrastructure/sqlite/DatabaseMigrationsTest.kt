@@ -111,6 +111,55 @@ class DatabaseMigrationsTest {
   }
 
   @Test
+  fun `latest worktree journal migration prunes old ticks per workflow and preserves other records`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-worktree-journal-upgrade").resolve("upgrade.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feature_task_workflows (workflow_id, mode, contract_version) " +
+            "VALUES ('wftr-preserved', 'prose', '1.0')",
+        )
+        statement.executeUpdate(
+          "INSERT INTO worktree_edit_journal " +
+            "(workflow_id, phase_id, recorded_at, path, lines_added, lines_removed, source) VALUES " +
+            "('wfl-a', 'implement', '2026-10-28T10:00:00Z', 'old-a.kt', 1, 0, 'worktree_probe'), " +
+            "('wfl-a', 'implement', '2026-10-28T10:00:01Z', 'new-a.kt', 2, 0, 'worktree_probe'), " +
+            "('wfl-b', 'review', '2026-10-28T10:00:00Z', 'old-b.kt', 3, 0, 'worktree_probe'), " +
+            "('wfl-b', 'review', '2026-10-28T10:00:02Z', 'new-b.kt', 4, 0, 'worktree_probe')",
+        )
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 90")
+        statement.execute("PRAGMA user_version = 89")
+      }
+    }
+
+    DatabaseRuntime.migrateExistingDatabase(dbPath, SqliteTestDiagnostics)
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM schema_migrations WHERE version = 90"))
+      assertEquals(2, scalarInt(connection, "SELECT count(*) FROM worktree_edit_journal"))
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-a' AND path = 'new-a.kt'",
+        ),
+      )
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-b' AND path = 'new-b.kt'",
+        ),
+      )
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-preserved'"),
+      )
+    }
+  }
+
+  @Test
   fun `product report migration preserves incidents and starts with empty report tables`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-product-reports-upgrade").resolve("upgrade.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
@@ -2435,4 +2484,6 @@ private val expectedMigrationDefinitions =
     87 to "separate-desktop-change-signals",
     88 to "add-work-board-read-model",
     89 to "refresh-work-board-dependencies",
+    90 to "prune-worktree-edit-journal-to-latest-tick",
+    91 to "correct-worktree-edit-journal-prune-chronological-order",
   )

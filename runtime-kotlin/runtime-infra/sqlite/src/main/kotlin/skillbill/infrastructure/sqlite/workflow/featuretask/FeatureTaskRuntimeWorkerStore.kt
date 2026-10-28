@@ -18,6 +18,17 @@ internal class FeatureTaskRuntimeWorkerStore(
   private val diagnostics: RuntimeDiagnostics,
   private val transactionActive: Boolean = false,
 ) : FeatureTaskRuntimeWorkerRepository {
+  override fun hasActiveFeatureTaskRuntimeWorkerLeases(): Boolean =
+    connection.prepareStatement(
+      "SELECT EXISTS(SELECT 1 FROM feature_task_runtime_worker_leases WHERE lease_state IN (?, ?))",
+    ).use { statement ->
+      statement.bindAll(
+        FeatureTaskRuntimeWorkerLeaseState.ACTIVE.wireValue,
+        FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED.wireValue,
+      )
+      statement.executeQuery().use { rows -> rows.next() && rows.getInt(1) != 0 }
+    }
+
   override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
     connection.featureTaskRuntimeWorkerOwnership(workflowId, diagnostics)
 

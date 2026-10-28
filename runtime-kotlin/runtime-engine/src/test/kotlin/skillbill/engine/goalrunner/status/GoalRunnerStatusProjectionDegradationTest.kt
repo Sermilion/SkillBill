@@ -97,9 +97,9 @@ class GoalRunnerStatusProjectionDegradationTest {
 
           override fun latestTick(workflowId: String): WorktreeEditTick? = error("journal unavailable")
 
-          override fun trimToCap(
+          override fun deleteTicksBefore(
             workflowId: String,
-            maxRows: Int,
+            recordedAt: Instant,
           ): Int = error("unused")
         },
       )
@@ -292,9 +292,9 @@ private class InMemoryStatusWorktreeEditJournalRepository : WorktreeEditJournalR
 
   override fun latestTick(workflowId: String): WorktreeEditTick? = latest[workflowId]
 
-  override fun trimToCap(
+  override fun deleteTicksBefore(
     workflowId: String,
-    maxRows: Int,
+    recordedAt: Instant,
   ): Int = 0
 }
 

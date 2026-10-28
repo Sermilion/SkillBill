@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
+import skillbill.engine.goalrunner.completion.GoalCompletionRecorder
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
 import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
 import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
@@ -41,7 +42,6 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
-import java.time.Clock
 
 @Inject
 class GoalRunner(
@@ -49,7 +49,7 @@ class GoalRunner(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val goalPlanningSource: GoalPlanningSource,
   private val telemetry: GoalLifecycleTelemetryEmitter,
-  private val clock: Clock,
+  private val completionRecorder: GoalCompletionRecorder,
   private val diagnostics: RuntimeDiagnostics,
   private val executionCoordinator: GoalRunnerExecutionCoordinator,
   private val runPreparation: GoalRunnerRunPreparation,
@@ -224,18 +224,7 @@ class GoalRunner(
     parentWorkflowId: String,
     finalReport: GoalRunnerRunReport,
   ) {
-    val pullRequestUrl =
-      when (finalReport) {
-        is GoalRunnerRunReport.Completed -> finalReport.pullRequestUrl?.takeIf(String::isNotBlank)
-        is GoalRunnerRunReport.CompletedNoChange -> null
-        else -> return
-      }
-    manifestStore.updateControlState(parentWorkflowId) { current ->
-      current.copy(
-        goalCompletedAt = clock.instant().toString(),
-        goalPullRequestUrl = pullRequestUrl,
-      )
-    }
+    completionRecorder.record(parentWorkflowId, finalReport)
   }
 
   private fun alreadyRunningReport(
@@ -281,10 +270,11 @@ class GoalRunner(
   private fun runPrepared(preparation: GoalRunPreparation.Prepared): GoalRunnerRunReport {
     var state = preparation.state
     val effectiveRequest = preparation.request
-    val observability = GoalRunnerObservabilityEmitter(outcomeStore, clock, diagnostics)
-    val ledger = GoalRunnerLedgerRecorder(outcomeStore, effectiveRequest, clock, diagnostics)
+    val observability = GoalRunnerObservabilityEmitter(outcomeStore, completionRecorder.clock(), diagnostics)
+    val ledger = GoalRunnerLedgerRecorder(outcomeStore, effectiveRequest, completionRecorder.clock(), diagnostics)
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
-    val telemetryEmitter = GoalRunnerTelemetryEmitter(telemetry, clock, state, outcomeStore, diagnostics)
+    val telemetryEmitter =
+      GoalRunnerTelemetryEmitter(telemetry, completionRecorder.clock(), state, outcomeStore, diagnostics)
     return runCatching {
       manifestStore.updateControlState(state.parentWorkflowId) { current ->
         current.copy(goalBlockedReason = null)

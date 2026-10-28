@@ -20,8 +20,10 @@ import skillbill.infrastructure.sqlite.core.schema.fileObservation
 import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentContext
 import skillbill.model.EnvironmentContext
 import skillbill.ports.blockincident.BlockIncidentContractValidator
+import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabaseCheckpointResult
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -46,7 +48,7 @@ class SQLiteDatabaseSessionFactory(
   private val runtimeVersion: String,
   private val blockIncidentContractValidator: BlockIncidentContractValidator,
   private val boardReadModelProjector: Lazy<WorkBoardReadModelProjector>,
-) : DatabaseSessionFactory, DatabaseReadConnections {
+) : DatabaseSessionFactory, DatabaseReadConnections, DatabaseCheckpoint {
   private val readConnections = ReadConnectionPool(diagnostics)
   private val activeRead = ThreadLocal<UnitOfWork>()
   private val activeWrite = ThreadLocal<UnitOfWork>()
@@ -62,6 +64,67 @@ class SQLiteDatabaseSessionFactory(
   override fun resolveDbPath(): Path = resolvedPath
 
   override fun databaseExists(): Boolean = Files.exists(resolveDbPath())
+
+  override fun truncateWal(): DatabaseCheckpointResult {
+    if (activeWrite.get() != null || activeRead.get() != null) {
+      recordCheckpointBusy("active_transaction")
+      return DatabaseCheckpointResult.Busy
+    }
+    if (!databaseExists()) return DatabaseCheckpointResult.Absent
+    val dbPath = resolveDbPath()
+    val outcome =
+      runCatching {
+        DatabaseRuntime.openWriteDbAt(dbPath, diagnostics).use { openDb ->
+          openDb.connection.createStatement().use { it.execute("PRAGMA busy_timeout = 0") }
+          val pageSize =
+            openDb.connection.createStatement().use { statement ->
+              statement.executeQuery("PRAGMA page_size").use { rows ->
+                check(rows.next()) { "SQLite did not return a page size." }
+                rows.getInt(1)
+              }
+            }
+          val walPagesBefore = walFrameCount(Path.of("$dbPath-wal"), pageSize)
+          val busy =
+            openDb.connection.createStatement().use { statement ->
+              statement.executeQuery("PRAGMA wal_checkpoint(TRUNCATE)").use { rows ->
+                check(rows.next()) { "SQLite did not return a WAL checkpoint result." }
+                rows.getInt(1) == 1
+              }
+            }
+          if (busy) {
+            recordCheckpointBusy("checkpoint_blocked")
+            DatabaseCheckpointResult.Busy
+          } else {
+            DatabaseCheckpointResult.Truncated(walPagesBefore)
+          }
+        }
+      }
+    return outcome.getOrElse { error ->
+      error.rethrowIfCooperativeCancellationOrInterruption()
+      if (error.isSqliteBusy()) {
+        recordCheckpointBusy("checkpoint_blocked")
+        DatabaseCheckpointResult.Busy
+      } else {
+        throw error
+      }
+    }
+  }
+
+  private fun recordCheckpointBusy(cause: String) {
+    diagnostics.warning(
+      "seam=wal_checkpoint value_expected=truncated value_used=busy cause=$cause db_path=${resolveDbPath()}",
+    )
+  }
+
+  private fun walFrameCount(
+    walPath: Path,
+    pageSize: Int,
+  ): Int {
+    if (!Files.exists(walPath)) return 0
+    val size = Files.size(walPath)
+    if (size < WAL_HEADER_BYTES) return 0
+    return ((size - WAL_HEADER_BYTES) / (WAL_FRAME_HEADER_BYTES + pageSize)).toInt()
+  }
 
   override fun <T> read(block: (UnitOfWork) -> T): T {
     activeWrite.get()?.let { return block(it) }
@@ -435,6 +498,11 @@ class SQLiteDatabaseSessionFactory(
     val dbPath = resolveDbPath()
     DatabaseRuntime.ensureWriteReady(dbPath, diagnostics)
     return DatabaseRuntime.openWriteDbAt(dbPath, diagnostics).use(block)
+  }
+
+  private companion object {
+    const val WAL_HEADER_BYTES = 32L
+    const val WAL_FRAME_HEADER_BYTES = 24
   }
 }
 

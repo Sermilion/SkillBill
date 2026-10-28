@@ -126,6 +126,7 @@ class WorkerTakeoverFencingTest {
             testHarnessClock,
             execution.admission,
             NoopRuntimeDiagnostics,
+            absentDatabaseCheckpoint,
           )
         var launches = 0
 
@@ -176,6 +177,7 @@ class WorkerTakeoverFencingTest {
           testHarnessClock,
           execution.admission,
           NoopRuntimeDiagnostics,
+          absentDatabaseCheckpoint,
         )
       coordinator.runOwned(
         original.workflowId,
@@ -230,6 +232,7 @@ class WorkerTakeoverFencingTest {
               testHarnessClock,
               execution.admission,
               NoopRuntimeDiagnostics,
+              absentDatabaseCheckpoint,
             )
           var launches = 0
 
@@ -266,6 +269,7 @@ class WorkerTakeoverFencingTest {
           testHarnessClock,
           execution.admission,
           NoopRuntimeDiagnostics,
+          absentDatabaseCheckpoint,
         )
       var launches = 0
       listOf(
@@ -311,6 +315,7 @@ class WorkerTakeoverFencingTest {
             testHarnessClock,
             execution.admission,
             NoopRuntimeDiagnostics,
+            absentDatabaseCheckpoint,
           )
         var launches = 0
 
@@ -411,6 +416,7 @@ class WorkerTakeoverFencingTest {
             testHarnessClock,
             execution.admission,
             NoopRuntimeDiagnostics,
+            absentDatabaseCheckpoint,
           )
 
         val tick =
