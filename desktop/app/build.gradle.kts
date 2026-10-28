@@ -1,6 +1,7 @@
 plugins {
   id("skillbill.desktop.application")
   id("skillbill.build-identity")
+  id("skillbill.desktop.kotlin.inject")
 }
 
 group = "dev.skillbill.desktop"
@@ -17,9 +18,12 @@ kotlin {
     implementation(projects.core.common)
     implementation(projects.core.domain)
     implementation(projects.core.data)
+    implementation(projects.core.datastore)
   }
   sourceSets.jvmMain.dependencies {
     implementation(libs.kotlinx.coroutines.swing)
+    // The merged component names the session's runtime graph; its classes come from the installed runtime at run time.
+    compileOnly("dev.skillbill:runtime-core")
   }
   sourceSets.jvmTest.dependencies {
     // The architecture test parses the per-module manifests.

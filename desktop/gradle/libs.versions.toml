@@ -55,6 +55,7 @@ nucleus-autolaunch = { module = "dev.nucleusframework:nucleus.autolaunch", versi
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "datastore" }
+androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 jediterm-core = { module = "org.jetbrains.jediterm:jediterm-core", version.ref = "jediterm" }
 jediterm-ui = { module = "org.jetbrains.jediterm:jediterm-ui", version.ref = "jediterm" }
 pty4j = { module = "org.jetbrains.pty4j:pty4j", version.ref = "pty4j" }
