@@ -168,7 +168,7 @@ internal object DatabaseRuntime {
     }
   }
 
-  private fun openCompatibleReadOnlyDb(
+  internal fun openCompatibleReadOnlyDb(
     dbPath: Path,
     diagnostics: RuntimeDiagnostics,
   ): OpenDatabase {

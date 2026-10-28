@@ -6,6 +6,7 @@ import skillbill.contracts.persistence.DesktopCommitSignal
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.core.ops.storedDesktopGeneration
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -85,11 +86,6 @@ private fun Connection.desktopTopicRevisions(): Map<String, Long> =
     }
   }
 
-private fun Connection.desktopSignalGeneration(): String? =
-  prepareStatement("SELECT generation FROM ${DesktopReadSchema.GENERATION_TABLE} WHERE id = 1").use { statement ->
-    statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
-  }
-
 private fun Connection.desktopCommitSignalPayload(
   changedTopics: Set<String>,
   diagnostics: RuntimeDiagnostics,
@@ -99,7 +95,7 @@ private fun Connection.desktopCommitSignalPayload(
     diagnostics.warning("skillbill sqlite: desktop commit signal lacked a topic revision")
     return null
   }
-  val generation = desktopSignalGeneration()
+  val generation = storedDesktopGeneration()
   if (generation == null) {
     diagnostics.warning("skillbill sqlite: desktop commit signal lacked a store generation")
     return null

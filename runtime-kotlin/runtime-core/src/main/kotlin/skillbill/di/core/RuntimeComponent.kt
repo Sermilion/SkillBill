@@ -98,6 +98,7 @@ import skillbill.ports.blockincident.ProductIssueTrackerPort
 import skillbill.ports.blockincident.ProductReportDeliveryOwnershipPort
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.config.ProjectConfigFilePort
+import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -235,13 +236,13 @@ abstract class RuntimeComponent(
   fun fileEditorLauncherPort(adapter: ProcessFileEditorLauncher): FileEditorLauncherPort = adapter
 
   @Provides @RuntimeSingleton
-  fun databaseSessionFactory(
+  internal fun sqliteDatabaseSessionFactory(
     context: EnvironmentContext,
     clock: Clock,
     diagnostics: RuntimeDiagnostics,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
     blockIncidentContractValidator: BlockIncidentContractValidator,
-  ): DatabaseSessionFactory =
+  ): SQLiteDatabaseSessionFactory =
     SQLiteDatabaseSessionFactory(
       context,
       clock,
@@ -250,6 +251,12 @@ abstract class RuntimeComponent(
       runtimeVersion().value,
       blockIncidentContractValidator,
     )
+
+  @Provides
+  fun databaseSessionFactory(factory: SQLiteDatabaseSessionFactory): DatabaseSessionFactory = factory
+
+  @Provides
+  fun databaseReadConnections(factory: SQLiteDatabaseSessionFactory): DatabaseReadConnections = factory
 
   @Provides
   fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter
@@ -334,5 +341,6 @@ abstract class RuntimeComponent(
 
   abstract val ideStatusService: IdeStatusService
   abstract val databaseSession: DatabaseSessionFactory
+  abstract val databaseReadConnections: DatabaseReadConnections
   abstract val databaseSchema: DatabaseSchemaPort
 }

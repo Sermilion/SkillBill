@@ -4,10 +4,7 @@ import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.model.EnvironmentContext
 import skillbill.ports.telemetry.model.RemoteTransportResponse
 import skillbill.ports.telemetry.transport.RemoteTransportPort
-import skillbill.ports.workflow.WorkflowSnapshotValidator
-import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import java.nio.file.Files
-import java.time.Clock
 import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,14 +30,7 @@ class RuntimeComponentInvocationSnapshotTest {
         )
       val environment = component.resolvedEnvironmentContext
       val firstDbPath =
-        component.databaseSessionFactory(
-          environment,
-          Clock.systemUTC(),
-          component.runtimeDiagnostics,
-          NoOpWorkflowSnapshotValidator,
-          {},
-        )
-          .resolveDbPath().toAbsolutePath().normalize()
+        component.databaseSession.resolveDbPath().toAbsolutePath().normalize()
       val firstConfigPath =
         component.telemetryConfigStore(FileTelemetryConfigStore(environment))
           .configPath().toAbsolutePath().normalize()
@@ -50,13 +40,7 @@ class RuntimeComponentInvocationSnapshotTest {
       component.runtimeContext()
       val afterMutationEnvironment = component.resolvedEnvironmentContext
       val secondDbPath =
-        component.databaseSessionFactory(
-          afterMutationEnvironment,
-          Clock.systemUTC(),
-          component.runtimeDiagnostics,
-          NoOpWorkflowSnapshotValidator,
-          {},
-        ).resolveDbPath().toAbsolutePath().normalize()
+        component.databaseSession.resolveDbPath().toAbsolutePath().normalize()
       val secondConfigPath =
         component.telemetryConfigStore(FileTelemetryConfigStore(afterMutationEnvironment))
           .configPath().toAbsolutePath().normalize()
@@ -152,28 +136,6 @@ class RuntimeComponentInvocationSnapshotTest {
       componentA.featureTaskRuntimeWorkerCoordinator,
       componentB.featureTaskRuntimeWorkerCoordinator,
     )
-    assertNotSame(
-      componentA.databaseSessionFactory(
-        componentA.resolvedEnvironmentContext,
-        Clock.systemUTC(),
-        componentA.runtimeDiagnostics,
-        NoOpWorkflowSnapshotValidator,
-        {},
-      ),
-      componentB.databaseSessionFactory(
-        componentB.resolvedEnvironmentContext,
-        Clock.systemUTC(),
-        componentB.runtimeDiagnostics,
-        NoOpWorkflowSnapshotValidator,
-        {},
-      ),
-    )
-  }
-
-  private object NoOpWorkflowSnapshotValidator : WorkflowSnapshotValidator {
-    override fun validate(
-      snapshot: WorkflowStateSnapshot,
-      slug: String,
-    ) = Unit
+    assertNotSame(componentA.databaseSession, componentB.databaseSession)
   }
 }

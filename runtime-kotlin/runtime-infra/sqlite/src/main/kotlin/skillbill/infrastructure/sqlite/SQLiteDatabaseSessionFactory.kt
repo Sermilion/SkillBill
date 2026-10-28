@@ -5,10 +5,13 @@ import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.databaseBusy
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
+import skillbill.infrastructure.sqlite.core.ops.ReadConnectionLease
+import skillbill.infrastructure.sqlite.core.ops.ReadConnectionPool
 import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
@@ -17,6 +20,7 @@ import skillbill.infrastructure.sqlite.core.schema.fileObservation
 import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentContext
 import skillbill.model.EnvironmentContext
 import skillbill.ports.blockincident.BlockIncidentContractValidator
+import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.db.model.OwningTransactionResult
@@ -39,7 +43,8 @@ class SQLiteDatabaseSessionFactory(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
   private val blockIncidentContractValidator: BlockIncidentContractValidator,
-) : DatabaseSessionFactory {
+) : DatabaseSessionFactory, DatabaseReadConnections {
+  private val readConnections = ReadConnectionPool(diagnostics)
   private val activeRead = ThreadLocal<UnitOfWork>()
   private val activeWrite = ThreadLocal<UnitOfWork>()
   private val resolvedContext = requireResolvedEnvironmentContext(context)
@@ -58,23 +63,89 @@ class SQLiteDatabaseSessionFactory(
   override fun <T> read(block: (UnitOfWork) -> T): T {
     activeWrite.get()?.let { return block(it) }
     activeRead.get()?.let { return block(it) }
-    return DatabaseRuntime.openReadDbAt(resolveDbPath(), diagnostics).use { openDb -> readInDatabase(openDb, block) }
+    val dbPath = resolveDbPath()
+    if (!databaseExists()) {
+      readConnections.invalidate()
+      return perConnectionRead(dbPath, block)
+    }
+    val pooled = pooledRead({ openPooledReadDb(dbPath) }, block)
+    return if (pooled != null) pooled.value else perConnectionRead(dbPath, block)
   }
 
   override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? {
     activeWrite.get()?.let { return block(it) }
     activeRead.get()?.let { return block(it) }
-    if (!databaseExists()) return null
-    return DatabaseRuntime.openExistingReadDbAt(resolveDbPath(), diagnostics).use {
-        openDb ->
-      readInDatabase(openDb, block)
+    if (!databaseExists()) {
+      readConnections.invalidate()
+      return null
+    }
+    val dbPath = resolveDbPath()
+    return pooledRead({ DatabaseRuntime.openExistingReadDbAt(dbPath, diagnostics) }, block)?.value
+  }
+
+  override fun release() {
+    readConnections.invalidate()
+  }
+
+  private fun openPooledReadDb(dbPath: Path): OpenDatabase? =
+    try {
+      DatabaseRuntime.openCompatibleReadOnlyDb(dbPath, diagnostics)
+    } catch (error: SkillBillRuntimeException) {
+      if (error.code != DatabaseFailureCode.INCOMPATIBLE_SCHEMA && error.code != DatabaseFailureCode.MISSING) {
+        throw error
+      }
+      diagnostics.info("Pooled read connection unavailable (${error.code}); reading through a per-read connection.")
+      null
+    }
+
+  private fun <T> perConnectionRead(
+    dbPath: Path,
+    block: (UnitOfWork) -> T,
+  ): T =
+    DatabaseRuntime.openReadDbAt(dbPath, diagnostics).use { openDb ->
+      readTransaction(openDb, { true }) { runReadBlock(openDb, block) }
+    }
+
+  private fun <T> pooledRead(
+    open: () -> OpenDatabase?,
+    block: (UnitOfWork) -> T,
+  ): LeasedRead.Done<T>? {
+    while (true) {
+      val lease = readConnections.lease(open) ?: return null
+      if (lease.reused && !readConnections.isCurrentFile(lease)) {
+        readConnections.discard(lease)
+      } else {
+        val outcome = readOnLease(lease, block)
+        if (outcome is LeasedRead.Done) return outcome
+      }
+      readConnections.invalidate()
     }
   }
 
-  private fun <T> readInDatabase(
-    openDb: OpenDatabase,
+  private fun <T> readOnLease(
+    lease: ReadConnectionLease,
     block: (UnitOfWork) -> T,
-  ): T =
+  ): LeasedRead<T> {
+    val openDb = lease.database
+    val outcome =
+      runCatching {
+        readTransaction<LeasedRead<T>>(openDb, { it is LeasedRead.Done }) {
+          if (lease.reused && !readConnections.isCurrentGeneration(this, lease)) {
+            LeasedRead.Stale
+          } else {
+            LeasedRead.Done(runReadBlock(openDb, block))
+          }
+        }
+      }.onFailure { readConnections.discard(lease) }.getOrThrow()
+    if (outcome is LeasedRead.Done) readConnections.giveBack(lease) else readConnections.discard(lease)
+    return outcome
+  }
+
+  private fun <R> readTransaction(
+    openDb: OpenDatabase,
+    commitWhen: (R) -> Boolean,
+    body: Connection.() -> R,
+  ): R =
     runCatching {
       openDb.connection.inDatabaseTransaction(
         DatabaseTransactionSpec(
@@ -83,15 +154,22 @@ class SQLiteDatabaseSessionFactory(
           operation = DatabaseAccessOperation.READ,
           diagnostics = diagnostics,
         ),
-      ) {
-        activeRead.set(unitOfWork(openDb, transactionActive = true))
-        try {
-          block(requireNotNull(activeRead.get()))
-        } finally {
-          activeRead.remove()
-        }
-      }
+        commitWhen,
+        body,
+      )
     }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
+
+  private fun <T> runReadBlock(
+    openDb: OpenDatabase,
+    block: (UnitOfWork) -> T,
+  ): T {
+    activeRead.set(unitOfWork(openDb, transactionActive = true))
+    try {
+      return block(requireNotNull(activeRead.get()))
+    } finally {
+      activeRead.remove()
+    }
+  }
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
     activeWrite.get()?.let { return block(it) }
@@ -275,6 +353,12 @@ private fun Throwable.isSqliteBusy(): Boolean =
   }
 
 private const val SQLITE_PRIMARY_CODE_MASK = 0xFF
+
+private sealed interface LeasedRead<out T> {
+  data class Done<T>(val value: T) : LeasedRead<T>
+
+  data object Stale : LeasedRead<Nothing>
+}
 
 private fun throwReadFailure(
   dbPath: Path,
