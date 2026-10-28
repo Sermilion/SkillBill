@@ -50,6 +50,7 @@ import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
+import skillbill.infrastructure.sqlite.core.schema.separateDesktopChangeSignals
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
@@ -885,4 +886,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 86,
       name = "record-goal-assessment-counts",
       operation = ::recordGoalAssessmentCounts,
+    ) +
+    DatabaseMigration(
+      version = 87,
+      name = "separate-desktop-change-signals",
+      operation = ::separateDesktopChangeSignals,
     )

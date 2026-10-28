@@ -130,6 +130,7 @@ class GoalPlanningPhaseOutputMigrationTest {
   }
 
   private fun revertRepairEvidenceMigrations(connection: Connection) {
+    revertDesktopChangeSignals(connection)
     connection.createStatement().use { statement ->
       statement.execute("ALTER TABLE goal_shared_preplans DROP COLUMN repair_evidence_json")
       statement.execute("ALTER TABLE goal_subtask_plans DROP COLUMN repair_evidence_json")

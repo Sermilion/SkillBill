@@ -61,6 +61,7 @@ class DatabaseMigrationsTest {
         )
         statement.execute("DROP TABLE block_incident_report_links")
         statement.execute("DROP TABLE block_incident_reports")
+        revertDesktopChangeSignals(connection)
         listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
           statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
         }
@@ -220,6 +221,7 @@ class DatabaseMigrationsTest {
         statement.execute("DROP TABLE feature_task_runtime_worker_generations")
         statement.execute("DROP TABLE block_incident_report_links")
         statement.execute("DROP TABLE block_incident_reports")
+        revertDesktopChangeSignals(connection)
         listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
           statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
         }
@@ -329,6 +331,45 @@ class DatabaseMigrationsTest {
           }
         }
       }
+    }
+  }
+
+  @Test
+  fun `desktop change signal migration upgrades version 86 and keeps existing revisions`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-desktop-v86").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-desktop-change-signals'")
+        statement.execute("DROP TABLE desktop_change_items")
+        statement.execute("DROP TABLE desktop_signal_generation")
+        statement.executeUpdate("DELETE FROM desktop_change_revisions WHERE topic = 'specs'")
+        statement.execute("DROP TRIGGER desktop_change_worktree_edit_journal_insert")
+        statement.execute(
+          "CREATE TRIGGER desktop_change_worktree_edit_journal_insert AFTER INSERT ON worktree_edit_journal BEGIN " +
+            "UPDATE desktop_change_revisions SET revision = revision + 1 WHERE topic IN ('goals', 'phases'); END",
+        )
+        statement.executeUpdate("UPDATE desktop_change_revisions SET revision = 7 WHERE topic IN ('goals', 'phases')")
+        statement.execute("PRAGMA user_version = 86")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(7, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
+      assertEquals(7, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'phases'"))
+      assertEquals(0, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'specs'"))
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM desktop_signal_generation"))
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO worktree_edit_journal (workflow_id, recorded_at, path, lines_added, lines_removed, source) " +
+            "VALUES ('wftr-journal', '2026-10-28T00:00:00Z', 'a.kt', 1, 0, 'worktree_probe')",
+        )
+      }
+      assertEquals(7, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM desktop_change_items WHERE work_id = 'wftr-journal'"),
+      )
     }
   }
 
@@ -482,6 +523,7 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
+        revertDesktopChangeSignals(connection)
         goalTables.forEach { table -> statement.executeUpdate("ALTER TABLE $table DROP COLUMN no_change_reason") }
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'add-goal-no-change-reason'")
         statement.executeUpdate(goalRunSessionInsert("wfl-kept"))
@@ -517,6 +559,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-monitor-target'")
+        revertDesktopChangeSignals(connection)
         targetColumns.forEach { column ->
           statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN $column")
         }
@@ -562,6 +605,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-phase-launch-scope'")
+        revertDesktopChangeSignals(connection)
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN launch_scope")
         statement.executeUpdate(
           "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
@@ -599,6 +643,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-launch-agent-environment'")
+        revertDesktopChangeSignals(connection)
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN agent_environment_json")
         statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN agent_environment_json")
         statement.executeUpdate(
@@ -989,11 +1034,12 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use {
         it.executeUpdate("DELETE FROM schema_migrations WHERE name = 'ensure-schema-columns-and-heals'")
+        revertDesktopChangeSignals(connection)
         it.executeUpdate("ALTER TABLE feature_task_workflows DROP COLUMN interruption_reason")
       }
       assertFalse("interruption_reason" in tableColumns(connection, "feature_task_workflows"))
       assertFalse(versionIsPrimaryKey(connection), "The ledger must already be name-keyed for this to gate.")
-      assertEquals(DatabaseMigrations.migrations.size - 1, migrationRows(connection).size)
+      assertEquals(DatabaseMigrations.migrations.size - 2, migrationRows(connection).size)
       connection.createStatement().use {
         it.executeUpdate(
           """
@@ -2319,4 +2365,5 @@ private val expectedMigrationDefinitions =
     84 to "record-qa-failure-kind",
     85 to "record-goal-subtask-trace-probe-counts",
     86 to "record-goal-assessment-counts",
+    87 to "separate-desktop-change-signals",
   )

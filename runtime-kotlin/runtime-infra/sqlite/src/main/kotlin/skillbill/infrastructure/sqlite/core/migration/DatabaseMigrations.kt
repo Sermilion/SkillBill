@@ -9,6 +9,7 @@ import skillbill.infrastructure.sqlite.core.schema.databasePath
 import skillbill.infrastructure.sqlite.databaseMigrations
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.sql.Connection
+import java.util.UUID
 
 internal object DatabaseMigrations {
   val migrations: List<DatabaseMigration> =
@@ -33,12 +34,12 @@ internal object DatabaseMigrations {
     ) {
       MigrationLedger.ensureNameKeyed(this)
       val appliedNames = MigrationLedger.appliedNames(this)
-      migrationSet
-        .filterNot { migration -> migration.name in appliedNames }
-        .forEach { migration ->
-          migration.apply(this, diagnostics)
-          MigrationLedger.record(this, migration)
-        }
+      val pending = migrationSet.filterNot { migration -> migration.name in appliedNames }
+      pending.forEach { migration ->
+        migration.apply(this, diagnostics)
+        MigrationLedger.record(this, migration)
+      }
+      if (pending.isNotEmpty()) refreshDesktopSignalGeneration(this)
       MigrationLedger.alignVersions(this, migrationSet)
       val appliedAfter = MigrationLedger.appliedNames(this)
       val highestVersion =
@@ -48,6 +49,21 @@ internal object DatabaseMigrations {
       if (highestVersion != null) {
         createStatement().use { statement -> statement.execute("PRAGMA user_version = $highestVersion") }
       }
+    }
+  }
+
+  private fun refreshDesktopSignalGeneration(connection: Connection) {
+    val exists =
+      connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").use { statement ->
+        statement.setString(1, DesktopReadSchema.GENERATION_TABLE)
+        statement.executeQuery().use { rows -> rows.next() }
+      }
+    if (!exists) return
+    connection.prepareStatement(
+      "INSERT OR REPLACE INTO ${DesktopReadSchema.GENERATION_TABLE} (id, generation) VALUES (1, ?)",
+    ).use { statement ->
+      statement.setString(1, UUID.randomUUID().toString())
+      statement.executeUpdate()
     }
   }
 

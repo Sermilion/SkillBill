@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.core.schema
 import skillbill.contracts.persistence.DesktopReadSchema
 import java.sql.Connection
 import java.sql.Statement
+import java.util.UUID
 
 internal fun installDesktopReadCompatibility(connection: Connection) {
   connection.createStatement().use { statement ->
@@ -143,3 +144,171 @@ private fun installDesktopReadIndexes(connection: Connection) {
     )
   }
 }
+
+internal fun separateDesktopChangeSignals(connection: Connection) {
+  connection.createStatement().use { statement ->
+    statement.execute(
+      "CREATE TABLE IF NOT EXISTS ${DesktopReadSchema.CHANGE_ITEMS_TABLE} " +
+        "(topic TEXT NOT NULL, revision INTEGER NOT NULL, work_id TEXT NOT NULL, " +
+        "PRIMARY KEY (topic, revision, work_id))",
+    )
+    statement.execute(
+      "CREATE TABLE IF NOT EXISTS ${DesktopReadSchema.GENERATION_TABLE} " +
+        "(id INTEGER PRIMARY KEY CHECK (id = 1), generation TEXT NOT NULL)",
+    )
+    statement.execute(
+      "INSERT OR IGNORE INTO ${DesktopReadSchema.REVISIONS_TABLE} VALUES ('${DesktopReadSchema.SPECS_TOPIC}', 0)",
+    )
+  }
+  connection.prepareStatement(
+    "INSERT OR IGNORE INTO ${DesktopReadSchema.GENERATION_TABLE} (id, generation) VALUES (1, ?)",
+  ).use { statement ->
+    statement.setString(1, UUID.randomUUID().toString())
+    statement.executeUpdate()
+  }
+  installDesktopChangeTriggers(connection)
+}
+
+internal fun installDesktopChangeTriggers(connection: Connection) {
+  val columns = DESKTOP_CHANGE_TABLES.associate { table -> table.name to connection.tableColumns(table.name) }
+  connection.createStatement().use { statement ->
+    DESKTOP_CHANGE_TABLES.forEach { table ->
+      TRIGGER_SUFFIXES.forEach { suffix -> statement.execute("DROP TRIGGER IF EXISTS ${triggerName(table, suffix)}") }
+    }
+    DESKTOP_CHANGE_TABLES.forEach { table -> createChangeTriggers(statement, table, columns.getValue(table.name)) }
+  }
+}
+
+private fun createChangeTriggers(
+  statement: Statement,
+  table: DesktopChangeTable,
+  columns: List<String>,
+) {
+  statement.createChangeTrigger(table, INSERT, table.topics, null)
+  if (table.insertOnly) return
+  statement.createChangeTrigger(table, DELETE, table.topics, null)
+  if (table.name != LEASES_TABLE) {
+    statement.createChangeTrigger(table, UPDATE, table.topics, anyDiffers(columns))
+    return
+  }
+  val heartbeatColumns = columns.filter { column -> column in LEASE_HEARTBEAT_COLUMNS }
+  statement.createChangeTrigger(table, UPDATE, table.topics, anyDiffers(LEASE_IDENTITY_COLUMNS))
+  statement.createChangeTrigger(
+    table,
+    UPDATE,
+    listOf(DesktopReadSchema.ACTIVITY_TOPIC),
+    "NOT (${anyDiffers(LEASE_IDENTITY_COLUMNS)}) AND (${anyDiffers(heartbeatColumns)})",
+    suffix = ACTIVITY_UPDATE_SUFFIX,
+  )
+}
+
+private fun Statement.createChangeTrigger(
+  table: DesktopChangeTable,
+  operation: String,
+  topics: List<String>,
+  condition: String?,
+  suffix: String = operation.lowercase(),
+) {
+  val row = if (operation == DELETE) "OLD" else "NEW"
+  val keys = table.keys(row)
+  val body = topics.joinToString(" ") { topic -> changeStatements(topic, keys) }
+  val whenClause = condition?.let { " WHEN $it" }.orEmpty()
+  execute("CREATE TRIGGER ${triggerName(table, suffix)} AFTER $operation ON ${table.name}$whenClause BEGIN $body END")
+}
+
+private fun changeStatements(
+  topic: String,
+  keys: String,
+): String {
+  val revision = "(SELECT revision FROM ${DesktopReadSchema.REVISIONS_TABLE} WHERE topic = '$topic')"
+  return "UPDATE ${DesktopReadSchema.REVISIONS_TABLE} SET revision = revision + 1 WHERE topic = '$topic'; " +
+    "INSERT OR IGNORE INTO ${DesktopReadSchema.CHANGE_ITEMS_TABLE} (topic, revision, work_id) " +
+    "SELECT DISTINCT '$topic', $revision, k FROM ($keys) WHERE k IS NOT NULL; " +
+    "DELETE FROM ${DesktopReadSchema.CHANGE_ITEMS_TABLE} WHERE topic = '$topic' " +
+    "AND revision <= $revision - ${DesktopReadSchema.CHANGE_ITEM_RETENTION};"
+}
+
+private fun anyDiffers(columns: List<String>): String =
+  columns.joinToString(" OR ") { column -> "OLD.$column IS NOT NEW.$column" }.ifEmpty { "0" }
+
+private fun Connection.tableColumns(table: String): List<String> =
+  prepareStatement("SELECT name FROM pragma_table_info(?) ORDER BY cid").use { statement ->
+    statement.setString(1, table)
+    statement.executeQuery().use { rows ->
+      buildList {
+        while (rows.next()) add(rows.getString(1))
+      }
+    }
+  }
+
+private fun triggerName(
+  table: DesktopChangeTable,
+  suffix: String,
+): String = "desktop_change_${table.name}_$suffix"
+
+private class DesktopChangeTable(
+  val name: String,
+  val topics: List<String>,
+  val insertOnly: Boolean = false,
+  val keys: (String) -> String,
+)
+
+private fun column(name: String): (String) -> String = { row -> "SELECT $row.$name AS k" }
+
+private val invocationKey: (String) -> String = { row -> "SELECT COALESCE($row.invocation_id, $row.workflow_id) AS k" }
+
+private val incidentKey: (String) -> String = { row ->
+  "SELECT workflow_id AS k FROM block_incidents WHERE occurrence_token = $row.occurrence_token"
+}
+
+private val reportKey: (String) -> String = { row ->
+  "SELECT incidents.workflow_id AS k FROM block_incident_report_links AS links " +
+    "JOIN block_incidents AS incidents ON incidents.occurrence_token = links.occurrence_token " +
+    "WHERE links.report_id = $row.report_id"
+}
+
+private const val INSERT = "INSERT"
+private const val UPDATE = "UPDATE"
+private const val DELETE = "DELETE"
+private const val ACTIVITY_UPDATE_SUFFIX = "update_activity"
+private const val LEASES_TABLE = "feature_task_runtime_worker_leases"
+private const val WORKFLOW_ID = "workflow_id"
+private val TRIGGER_SUFFIXES = listOf("insert", "update", "delete", ACTIVITY_UPDATE_SUFFIX)
+private val LEASE_IDENTITY_COLUMNS = listOf("lease_state", "owner_token", "pid", "phase_id", "phase_attempt")
+private val LEASE_HEARTBEAT_COLUMNS = listOf("heartbeat_at", "expires_at")
+private val GOAL_SPEC_TOPICS = listOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.SPECS_TOPIC)
+private val PHASE_TOPICS = listOf(DesktopReadSchema.PHASES_TOPIC)
+
+private val DESKTOP_CHANGE_TABLES =
+  listOf(
+    DesktopChangeTable("goal_issue_progress", GOAL_SPEC_TOPICS, keys = column("parent_workflow_id")),
+    DesktopChangeTable("goal_runner_controls", GOAL_SPEC_TOPICS, keys = column("parent_workflow_id")),
+    DesktopChangeTable("goal_planning_preparations", GOAL_SPEC_TOPICS, keys = column("parent_goal_workflow_id")),
+    DesktopChangeTable("goal_shared_preplans", GOAL_SPEC_TOPICS, keys = column("parent_goal_workflow_id")),
+    DesktopChangeTable("goal_subtask_plans", GOAL_SPEC_TOPICS, keys = column("parent_goal_workflow_id")),
+    DesktopChangeTable("goal_subtask_events", GOAL_SPEC_TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable("feature_task_phase_settlements", DesktopReadSchema.TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable("feature_task_workflows", DesktopReadSchema.TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable("feature_task_qa_outcomes", DesktopReadSchema.TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable("block_incidents", DesktopReadSchema.TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable("feature_task_execution_identities", PHASE_TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable("feature_verify_workflows", PHASE_TOPICS, keys = column(WORKFLOW_ID)),
+    DesktopChangeTable("standalone_phase_status", PHASE_TOPICS, keys = invocationKey),
+    DesktopChangeTable("ide_status_workflow_execution", DesktopReadSchema.TOPICS, keys = invocationKey),
+    DesktopChangeTable(
+      "agent_activity_stamps",
+      listOf(DesktopReadSchema.ACTIVITY_TOPIC),
+      keys = column(WORKFLOW_ID),
+    ),
+    DesktopChangeTable(
+      "worktree_edit_journal",
+      listOf(DesktopReadSchema.ACTIVITY_TOPIC),
+      insertOnly = true,
+      keys = column(WORKFLOW_ID),
+    ),
+    DesktopChangeTable("block_incident_diagnoses", DesktopReadSchema.TOPICS, keys = incidentKey),
+    DesktopChangeTable("block_incident_recovery_attempts", DesktopReadSchema.TOPICS, keys = incidentKey),
+    DesktopChangeTable("block_incident_report_links", DesktopReadSchema.TOPICS, keys = incidentKey),
+    DesktopChangeTable("block_incident_reports", DesktopReadSchema.TOPICS, keys = reportKey),
+    DesktopChangeTable(LEASES_TABLE, DesktopReadSchema.TOPICS, keys = column(WORKFLOW_ID)),
+  )

@@ -100,8 +100,8 @@ internal class DesktopCommitSignalObserver(
               if (!publishChange(StoreChange(resynchronize = true, revisions = snapshot.revisions))) return@launch
               continue
             }
-            if (next.generation != snapshot.generation) {
-              val resynchronize = next.revisions == snapshot.revisions
+            if (next.revisions != snapshot.revisions || next.generation != snapshot.generation) {
+              val resynchronize = next.generation != snapshot.generation
               snapshot = next
               if (!publishChange(StoreChange(resynchronize = resynchronize, revisions = next.revisions))) return@launch
             }
@@ -144,13 +144,14 @@ internal class DesktopCommitSignalObserver(
     if (!Files.exists(signalPath)) return SignalSnapshot("", emptyMap())
     val content = Files.readString(signalPath)
     if (content.isEmpty()) return SignalSnapshot("", emptyMap())
-    if (content.length > MAX_SIGNAL_LENGTH) return null
+    if (content.length > DesktopCommitSignal.MAX_SIGNAL_CHARS) return null
     var generation: String? = null
     val parsed = buildMap<String, Long> {
       content.lineSequence().filter(String::isNotBlank).forEach { line ->
         val separator = line.indexOf(DesktopCommitSignal.REVISION_SEPARATOR)
         if (separator <= 0) return null
         val topic = line.substring(0, separator)
+        if (topic.endsWith(DesktopCommitSignal.CHANGED_SUFFIX)) return@forEach
         val value = line.substring(separator + DesktopCommitSignal.REVISION_SEPARATOR.length)
         if (topic == DesktopCommitSignal.GENERATION_LABEL) {
           if (generation != null || value.isBlank()) return null
@@ -171,10 +172,6 @@ internal class DesktopCommitSignalObserver(
     if (result.isSuccess) return true
     close(IOException("Commit signal delivery was interrupted.", result.exceptionOrNull()))
     return false
-  }
-
-  private companion object {
-    const val MAX_SIGNAL_LENGTH = 512
   }
 }
 

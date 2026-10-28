@@ -1448,3 +1448,16 @@ internal fun tableExists(
     statement.setString(1, table)
     statement.executeQuery().use { resultSet -> resultSet.next() }
   }
+
+internal fun revertDesktopChangeSignals(connection: Connection) {
+  val triggers =
+    connection.createStatement().use { statement ->
+      statement.executeQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'desktop_change_%'",
+      ).use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }
+    }
+  connection.createStatement().use { statement ->
+    triggers.forEach { trigger -> statement.execute("DROP TRIGGER $trigger") }
+    statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-desktop-change-signals'")
+  }
+}

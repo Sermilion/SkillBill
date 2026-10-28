@@ -99,8 +99,10 @@ class SQLiteDatabaseSessionFactory(
       val outcome =
         runCatching {
           withWriteDatabase { openDb ->
-            val (result, workChanged) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
-            if (workChanged) publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
+            val (result, changedTopics) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
+            if (changedTopics.isNotEmpty()) {
+              publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
+            }
             result
           }
         }
@@ -113,8 +115,10 @@ class SQLiteDatabaseSessionFactory(
     }
     return translatingBusyFailures {
       withWriteDatabase { openDb ->
-        val (result, workChanged) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
-        if (workChanged) publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
+        val (result, changedTopics) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
+        if (changedTopics.isNotEmpty()) {
+          publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
+        }
         result
       }
     }
@@ -124,7 +128,7 @@ class SQLiteDatabaseSessionFactory(
     activeWrite.get()?.let { return block(it) }
     return translatingBusyFailures {
       withWriteDatabase { openDb ->
-        val (transactionResult, changedRevisions) =
+        val (transactionResult, changedTopics) =
           openDb.connection.inDatabaseTransaction(
             DatabaseTransactionSpec(
               dbPath = openDb.dbPath,
@@ -142,7 +146,9 @@ class SQLiteDatabaseSessionFactory(
               }
             }
           }
-        if (changedRevisions) publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
+        if (changedTopics.isNotEmpty()) {
+          publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
+        }
         transactionResult
       }
     }
@@ -162,7 +168,7 @@ class SQLiteDatabaseSessionFactory(
     if (activeWrite.get() != null) return FencedTransactionResult.ChangedTarget
     return translatingBusyFailures {
       withWriteDatabase { openDb ->
-        val (transactionResult, changedRevisions) =
+        val (transactionResult, changedTopics) =
           openDb.connection.inDatabaseTransaction(
             DatabaseTransactionSpec(
               openDb.dbPath,
@@ -182,8 +188,8 @@ class SQLiteDatabaseSessionFactory(
               }
             }
           }
-        if (transactionResult is FencedTransactionResult.Committed<*> && changedRevisions) {
-          publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
+        if (transactionResult is FencedTransactionResult.Committed<*> && changedTopics.isNotEmpty()) {
+          publishDesktopCommitSignal(openDb.dbPath, openDb.connection, changedTopics, diagnostics)
         }
         transactionResult
       }
@@ -193,11 +199,11 @@ class SQLiteDatabaseSessionFactory(
   private fun <T> withDesktopTopicSignal(
     connection: Connection,
     block: Connection.() -> T,
-  ): Pair<T, Boolean> {
+  ): Pair<T, Set<String>> {
     val before = connection.desktopTopicRevisions()
     val result = connection.block()
     val after = connection.desktopTopicRevisions()
-    return result to (after != before)
+    return result to after.filter { (topic, revision) -> before[topic] != revision }.keys
   }
 
   private fun Connection.desktopTopicRevisions(): Map<String, Long> =

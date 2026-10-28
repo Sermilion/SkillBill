@@ -409,11 +409,11 @@ Top to bottom:
 1. Chips: lifecycle (tinted), "Stalled", id, issue key for phases and operations, kind ("goal", "phase", "operation"), "fresh" or "stale".
 2. Title (`featureTitle` or summary).
 3. Repository location: folder (opens the checkout) and branch (opens the branch on its web host; desktop `RepositoryWebLinks.kt`), or "no branch".
-4. Run actions: "Pause after subtask" (or "Pause requested", disabled), "Pause" (danger; stops the runner now), and when the item is resumable the launch button with the runtime's label ("Resume", "Run again", "Start") plus "Agent: <id>" / "Choose agent", then "Cancel", then "Recover" when recovery is offered. Under them, "Starts the installed agent harness" when a launch is possible.
+4. Run actions: "Pause after subtask" (or "Pause requested", disabled), "Pause" (danger; stops the runner now), and when the item is resumable the launch button with the runtime's label ("Resume", "Run again", "Start") plus "Agent: `<id>`" / "Choose agent", then "Cancel", then "Recover" when recovery is offered. Under them, "Starts the installed agent harness" when a launch is possible.
 5. "Pause recorded. The goal pauses at its next checkpoint." while a pause is pending.
 6. Run reason (ReasonBlock, "Copy reason").
 7. Incident (when present): status ("Needs your action", "Diagnosis ready", "Investigating block", "Investigation queued", "Partial diagnosis", "Diagnosis unavailable", "Recovery available", "Recovering", "Recovery failed", "Resumed"), cause, next action, certainty; prerequisite checkboxes (Recover is enabled once all are confirmed); operator decision when the runtime says recovery needs an operator decision (section 9.2.1); evidence rows; report status with "Open issue" when submitted.
-8. Metrics: Subtask n/m ("x complete · y pending") or Goal stage ("Planning", "Goal finish"); Phase with execution label ("pass 2", "gate run 2") or "n/m plans saved"; Goal active (or "Total run time … finished <time>" when finished; "Phase elapsed" or "Operation elapsed" for those kinds); Subtask active ("ticking" or "last known duration").
+8. Metrics: Subtask n/m ("x complete · y pending") or Goal stage ("Planning", "Goal finish"); Phase with execution label ("pass 2", "gate run 2") or "n/m plans saved"; Goal active (or "Total run time … finished `<time>`" when finished; "Phase elapsed" or "Operation elapsed" for those kinds); Subtask active ("ticking" or "last known duration").
 9. Subtasks with status, commit sha, current-subtask timer, block reason; a final Goal finish row with pr, monitor, monitor_fix.
 10. Phase pipeline (goals; standalone phases with more than one step). Operations show no pipeline, metrics or subtask timers.
 11. Dependencies ("Subtask 3 waits on subtask 2", required or optional).
@@ -434,23 +434,23 @@ Shown inside the incident section when recovery is unavailable because it needs 
 
 ### 9.3 History
 
-Header: tabs All, Goals, Phases, Operations and a filter. One group "Finished within <retention>". Rows: id, status, title, kind caption, repository, total run time, finished time. Empty: "No finished work" or "No matching work". Rows open the detail.
+Header: tabs All, Goals, Phases, Operations and a filter. One group "Finished within `<retention>`". Rows: id, status, title, kind caption, repository, total run time, finished time. Empty: "No finished work" or "No matching work". Rows open the detail.
 
 ### 9.4 Specs pane
 
 - Header: "Specs", project picker ("Choose project"), Collapse all, close ("Close specs pane").
 - Toolbar, driven only by the runtime's `SpecBundleControl` verdicts:
   - Nothing or a plain folder selected: "Select a spec folder to start, pause or cancel it."
-  - A file inside a bundle: "Actions run a whole spec folder, not one subtask. Select <KEY> to control it."
-  - A bundle: key, title and run state, then Start / Resume / Run again with "Agent: <id>", Pause ("Pause requested" while pending), Cancel, and a Purge icon ("Purge <KEY> run history", or "Pause or cancel the goal before purging" when disabled).
-  - Cancel confirms inline: "Cancel <KEY>? The run stops and the goal is marked canceled. Its branch and commits stay." with "Keep running" and "Cancel goal".
+  - A file inside a bundle: "Actions run a whole spec folder, not one subtask. Select `<KEY>` to control it."
+  - A bundle: key, title and run state, then Start / Resume / Run again with "Agent: `<id>`", Pause ("Pause requested" while pending), Cancel, and a Purge icon ("Purge `<KEY>` run history", or "Pause or cancel the goal before purging" when disabled).
+  - Cancel confirms inline: "Cancel `<KEY>`? The run stops and the goal is marked canceled. Its branch and commits stay." with "Keep running" and "Cancel goal".
   - After Pause: "Pause recorded. The goal stops after its current subtask."
   - Refusals: "Couldn't start: <summary>", "Couldn't purge: <summary>".
 - Filters: "Filter by key, title or file" and All / Active / Pending / Done.
 - Tree: bundles with status and progress; expanded bundles list spec.md, subtask specs with status, traceability.md and decomposition-manifest.yaml; a `done` folder with its count. Clicking a folder or bundle selects and toggles it; clicking a file selects and opens it.
 - Footer: the store path and Reveal.
 - States: "No specs yet" ("Plan a feature with /skill-bill phase:plan and its bundle shows up here."), "No specs match" with Clear filters, "Specs unavailable" with Retry, "This project has no checkout on this machine."
-- Purge dialog: "Purge <KEY>?", Deleted (goal and subtask run history, run evidence and task tracking, checkpoint refs, subtask progress back to not started) and Kept (every spec file in the folder, your branch and its commits, open pull requests), "This can't be undone …", "Keep run history" and "Purge <KEY>".
+- Purge dialog: "Purge `<KEY>`?", Deleted (goal and subtask run history, run evidence and task tracking, checkpoint refs, subtask progress back to not started) and Kept (every spec file in the folder, your branch and its commits, open pull requests), "This can't be undone …", "Keep run history" and "Purge `<KEY>`".
 - Speed: build the tree from `specBrowserService.snapshot` once per project, refresh it on spec-directory changes (desktop `NioSpecDirectoryChanges`) and on the specs-related signal, and fetch `control` for the selected bundle in the background; selection itself must not wait on it.
 
 ### 9.5 Terminal pane
@@ -465,7 +465,7 @@ Header: tabs All, Goals, Phases, Operations and a filter. One group "Finished wi
 
 ### 9.6 Settings, App group
 
-- General: "Database path, blank uses runtime default" with "Save settings" and "Current database: <path>"; "The path is only spaces. Clear it to use the default."; Claude account: the Claude config directories found ("Runs started here use it as CLAUDE_CONFIG_DIR.", "No Claude directory found"); history retention 6h, 24h, 7d; Start at login.
+- General: "Database path, blank uses runtime default" with "Save settings" and "Current database: `<path>`"; "The path is only spaces. Clear it to use the default."; Claude account: the Claude config directories found ("Runs started here use it as CLAUDE_CONFIG_DIR.", "No Claude directory found"); history retention 6h, 24h, 7d; Start at login.
 - Notifications: A goal is blocked; A goal or phase fails; A goal completes; A pause takes effect; A standalone phase finishes (off by default); QA could not complete. Keys: `blocked`, `failed`, `goal_completed`, `pause_took_effect`, `standalone_phase_finished`, `qa_incomplete`.
 
 ### 9.7 Settings, Runtime config
@@ -486,7 +486,7 @@ Each row shows its config key and default. Saving shows "Saved to config.json" (
 
 ### 9.9 Problem states
 
-"Loading your work", "Couldn't load your work" ("Check the database path in Settings, then try refreshing."), "Skill Bill runtime unavailable" / "Skill Bill runtime not installed." / "The installed Skill Bill runtime is not the build this app was packaged with." with "Install a matched runtime and desktop pair with <reinstall command>, then retry.", "Opening your database", "Skill Bill is switching to the selected database.", and the storage failures missing, access, busy, corrupt, incompatible schema, incompatible record (desktop `ProblemCode`, `StorageFailure`). Failed refreshes keep the last data with a stale indication.
+"Loading your work", "Couldn't load your work" ("Check the database path in Settings, then try refreshing."), "Skill Bill runtime unavailable" / "Skill Bill runtime not installed." / "The installed Skill Bill runtime is not the build this app was packaged with." with "Install a matched runtime and desktop pair with `<reinstall command>`, then retry.", "Opening your database", "Skill Bill is switching to the selected database.", and the storage failures missing, access, busy, corrupt, incompatible schema, incompatible record (desktop `ProblemCode`, `StorageFailure`). Failed refreshes keep the last data with a stale indication.
 
 ---
 
@@ -513,7 +513,7 @@ Interaction patterns come from Linear; they only trigger the actions above.
 | ⌘Enter | Save an open config edit |
 
 - Single-key shortcuts are off while a text field or the terminal has focus.
-- Command menu groups: the current item's actions (Open, Pause after subtask, Pause now, Resume, Cancel, Copy reason, Open terminal in <repo>), Navigation (Work, each Board section, History, Settings), Panes (Specs, Terminal, New terminal tab, Refresh), every work item by key and title, Config (Models, Compaction, Keyboard shortcuts). Arrow keys move, Enter runs, Esc closes.
+- Command menu groups: the current item's actions (Open, Pause after subtask, Pause now, Resume, Cancel, Copy reason, Open terminal in `<repo>`), Navigation (Work, each Board section, History, Settings), Panes (Specs, Terminal, New terminal tab, Refresh), every work item by key and title, Config (Models, Compaction, Keyboard shortcuts). Arrow keys move, Enter runs, Esc closes.
 - Destructive actions confirm only where the app already does: Purge (dialog), Specs Cancel (inline), Recover (preview dialog). Pause and Cancel in the detail act immediately, as today.
 - Feedback appears as a toast for five seconds (desktop: the window feedback popup) and never claims more than the runtime reported.
 
