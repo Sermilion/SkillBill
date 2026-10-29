@@ -32,6 +32,7 @@ fun AppNavHost(navigator: WindowNavigator, entries: Set<FeatureEntry>, problem: 
   // NavDisplay keeps each entry's content for as long as the back stack is unchanged, so the content reads these through state.
   val currentProblem by rememberUpdatedState(problem)
   val currentProblemPanel by rememberUpdatedState(problemPanel)
+  val currentSettingsRoute by rememberUpdatedState(navigator.top.route as? SettingsRoute)
   NavDisplay(
     backStack = navigator.backStack,
     modifier = Modifier.fillMaxSize(),
@@ -46,7 +47,8 @@ fun AppNavHost(navigator: WindowNavigator, entries: Set<FeatureEntry>, problem: 
       NavEntry(entry, contentKey = entry.contentKey) { current ->
         CompositionLocalProvider(LocalEntryKey provides current.contentKey) {
           val shown = currentProblem
-          if (shown != null && current.route !is SettingsRoute) currentProblemPanel(shown) else RouteContent(current.route, entries)
+          val route = if (current.route is SettingsRoute) currentSettingsRoute ?: current.route else current.route
+          if (shown != null && route !is SettingsRoute) currentProblemPanel(shown) else RouteContent(route, entries)
         }
       }
     },

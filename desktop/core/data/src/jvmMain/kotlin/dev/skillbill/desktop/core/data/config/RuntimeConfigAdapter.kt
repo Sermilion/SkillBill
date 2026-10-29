@@ -12,13 +12,16 @@ import dev.skillbill.desktop.core.domain.model.ConfigWriteOutcome
 import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.MachineConfig
 import dev.skillbill.desktop.core.domain.model.MachineConfigChange
+import dev.skillbill.desktop.core.domain.model.ModelMatrixView
 import dev.skillbill.desktop.core.domain.model.PhaseInstructionFile
 import dev.skillbill.desktop.core.domain.model.ProjectConfig
 import dev.skillbill.desktop.core.domain.model.ProjectConfigChange
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.TelemetryLevel
 import dev.skillbill.desktop.core.domain.model.TelemetryLevelRead
+import dev.skillbill.desktop.core.domain.repository.ClaudeConfigDirectoriesRead
 import dev.skillbill.desktop.core.domain.repository.ConfigRead
+import dev.skillbill.desktop.core.domain.repository.ModelMatrixRead
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -47,6 +50,22 @@ class RuntimeConfigAdapter(
   private val host: HostEnvironment,
   private val diagnostics: Diagnostics,
 ) : RuntimeConfigRepository {
+  private val defaults by lazy { runtimeConfigDefaults(Path.of(host.userHome), diagnostics) }
+
+  override fun configDefaults() = defaults
+
+  override suspend fun modelMatrix(): ModelMatrixRead =
+    call("config_matrix_read", read = true, { ModelMatrixRead.Failed(it) }) { runtime ->
+      val document = runtime.runtimeConfigEditService.readMachineConfig()
+      val mapped = document.toDomain { it.toDomain() }
+      val agents = when (document) {
+        is ConfigDocumentRead.Present -> resolveModelMatrix(document.values.executionMatrix, defaults)
+        is ConfigDocumentRead.Absent -> resolveModelMatrix(null, defaults)
+        is ConfigDocumentRead.Unreadable -> emptyMap()
+      }
+      ModelMatrixRead.Success(ModelMatrixView(mapped, agents))
+    }
+
   override suspend fun machineConfig(): ConfigRead<MachineConfig> =
     call("config_machine_read", read = true, { ConfigRead.Failed(it) }) { runtime ->
       ConfigRead.Document(runtime.runtimeConfigEditService.readMachineConfig().toDomain { it.toDomain() })
@@ -111,13 +130,27 @@ class RuntimeConfigAdapter(
       runtime.installAgentService.detectAgentTargets(Path.of(host.userHome), host.variables).map { DetectedAgent(it.name, it.path.value) }
     }
 
-  override suspend fun claudeConfigDirectories(): List<String> =
-    call("agents_claude_roots", read = true, {
-      diagnostics.record("desktop_agents_claude_roots_unavailable")
-      emptyList()
-    }) { runtime ->
-      runtime.installAgentService.claudeRoots(Path.of(host.userHome), host.variables).map { it.toString() }
+  override suspend fun claudeConfigDirectories(sessionId: Long): ClaudeConfigDirectoriesRead {
+    val session = sessions.currentComponent(sessionId) ?: return unavailableClaudeRoots()
+    val read = readOrProblem(session.runtime, diagnostics) {
+      session.reads.read("agents_claude_roots") { runtime ->
+        runtime.installAgentService.claudeRoots(Path.of(host.userHome), host.variables).map { it.toString() }
+      }
     }
+    if (!sessions.isCurrent(session)) return unavailableClaudeRoots()
+    return when (read) {
+      is Outcome.Success -> ClaudeConfigDirectoriesRead.Success(read.value)
+      is Outcome.Failure -> {
+        diagnostics.record("desktop_agents_claude_roots_unavailable")
+        ClaudeConfigDirectoriesRead.Failed(read.error)
+      }
+    }
+  }
+
+  private fun unavailableClaudeRoots(): ClaudeConfigDirectoriesRead.Unavailable {
+    diagnostics.record("desktop_agents_claude_roots_unavailable")
+    return ClaudeConfigDirectoriesRead.Unavailable
+  }
 
   // Lists every file; skipping unknown phase ids is the Settings page's rule.
   override suspend fun phaseInstructionFiles(repoRoot: String): List<PhaseInstructionFile> = withContext(Dispatchers.IO) {
@@ -137,7 +170,7 @@ class RuntimeConfigAdapter(
       entries.use { stream ->
         stream.toList().sortedBy { it.fileName.toString() }.mapNotNull { path ->
           val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
-          if (!attributes.isRegularFile) return@mapNotNull null
+          if (!attributes.isRegularFile || defaults.phases.none { it.id == path.nameWithoutExtension }) return@mapNotNull null
           val size = attributes.size()
           PhaseInstructionFile(
             path.nameWithoutExtension,

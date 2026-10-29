@@ -18,6 +18,7 @@ data class DetailUiState(
   val sections: SectionsUi,
   val stale: Boolean,
   val renderedAt: Instant,
+  val itemResolved: Boolean = true,
   val listLoads: Map<DetailList, ListLoad> = emptyMap(),
   val boardPosition: BoardPosition? = null,
   val controls: ControlsUiState = ControlsUiState(),

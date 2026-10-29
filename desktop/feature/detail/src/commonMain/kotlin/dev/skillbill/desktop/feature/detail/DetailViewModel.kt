@@ -13,6 +13,8 @@ import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
@@ -45,6 +47,7 @@ private const val FILE_NOT_OPENED = "Could not open the file. Check that it stil
 @Inject
 class DetailViewModel(
   @Assisted private val item: WorkItem,
+  private val session: DatabaseSessionController,
   private val detail: WorkDetailRepository,
   private val board: WorkBoardRepository,
   private val specs: SpecRepository,
@@ -54,7 +57,16 @@ class DetailViewModel(
   workControls: WorkControlRepository,
   toasts: ToastQueue,
 ) : ViewModel() {
-  private val mutableState = MutableStateFlow(DetailUiState(header = item, sections = SectionsUi.Pending, stale = false, renderedAt = clock.now()))
+  private val initiallyOpen = session.state.value as? DatabaseSessionState.Open
+  private val mutableState = MutableStateFlow(
+    DetailUiState(
+      header = item,
+      sections = SectionsUi.Pending,
+      itemResolved = initiallyOpen?.sessionId == item.control.sessionId,
+      stale = false,
+      renderedAt = clock.now(),
+    ),
+  )
   val state: StateFlow<DetailUiState> = mutableState.asStateFlow()
 
   private val effectChannel = Channel<DetailEffect>(Channel.BUFFERED)
@@ -66,7 +78,6 @@ class DetailViewModel(
 
   init {
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
-    selection.select(item)
     observe()
     board.observe(ShellBoard.query).onEach { board -> mutableState.update { it.copy(boardPosition = boardPosition(board, it.header.id)) } }
       .launchIn(viewModelScope)
@@ -74,6 +85,7 @@ class DetailViewModel(
 
   /** Opens the next or previous board item; returns false when there is none, so the key goes unhandled. */
   fun step(next: Boolean): Boolean {
+    if (!state.value.itemResolved) return false
     val position = state.value.boardPosition
     val target = (if (next) position?.next else position?.previous) ?: return false
     effectChannel.trySend(DetailEffect.OpenItem(target))
@@ -81,7 +93,7 @@ class DetailViewModel(
   }
 
   /** P, Shift+P and R run the matching run-actions button; false when it is absent or disabled. */
-  fun onKey(key: ScreenKey): Boolean = when (key) {
+  fun onKey(key: ScreenKey): Boolean = if (!state.value.itemResolved) false else when (key) {
     ScreenKey.PauseAfterSubtask -> controls.onAction(ControlsAction.PauseAfterSubtask)
     ScreenKey.PauseNow -> controls.onAction(ControlsAction.PauseNow)
     ScreenKey.Resume -> controls.onAction(ControlsAction.Launch)
@@ -89,6 +101,7 @@ class DetailViewModel(
   }
 
   fun onAction(action: DetailAction) {
+    if (!state.value.itemResolved && action != DetailAction.Retry && action !is DetailAction.Navigate) return
     when (action) {
       is ControlsAction -> controls.onAction(action)
       is DetailAction.LoadMore -> loadMore(action.list)
@@ -111,7 +124,9 @@ class DetailViewModel(
   }
 
   private fun show(read: DetailState) {
-    selection.select(read.header)
+    val resolved = read.sections is DetailSections.Loaded &&
+      (session.state.value as? DatabaseSessionState.Open)?.sessionId == read.header.control.sessionId
+    if (resolved) selection.select(read.header)
     mutableState.update { current ->
       val sections = when (val sections = read.sections) {
         // A detail that has shown its sections never returns to placeholders.
@@ -121,7 +136,7 @@ class DetailViewModel(
         is DetailSections.Failed -> SectionsUi.Failed(sections.problem)
       }
       val stale = (read.sections as? DetailSections.Loaded)?.stale ?: (current.stale && sections is SectionsUi.Loaded)
-      current.copy(header = read.header, sections = sections, stale = stale, renderedAt = clock.now())
+      current.copy(header = read.header, sections = sections, itemResolved = current.itemResolved || resolved, stale = stale, renderedAt = clock.now())
     }
   }
 

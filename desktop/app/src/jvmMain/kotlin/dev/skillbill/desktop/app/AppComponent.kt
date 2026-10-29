@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.app
 
 import dev.skillbill.desktop.app.di.WindowComponent
+import dev.skillbill.desktop.app.settings.StartAtLoginSync
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
@@ -28,6 +29,7 @@ abstract class AppComponent(
   @get:Provides val diagnosticsSwitch: DiagnosticsSwitch,
 ) {
   abstract val databaseSessionManager: DatabaseSessionManager
+  abstract val startAtLoginSync: StartAtLoginSync
   abstract val workBoardRepository: WorkBoardRepository
   abstract val workControlRepository: WorkControlRepository
   abstract val workDetailRepository: WorkDetailRepository

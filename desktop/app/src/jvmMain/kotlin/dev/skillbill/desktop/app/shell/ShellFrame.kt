@@ -36,13 +36,17 @@ fun ShellFrame(
   val shape = RoundedCornerShape(SkillBillRadius.lg)
   val inlineSidebar = sidebar != null && !drawerMode
   Box(Modifier.fillMaxSize().background(colors.bgFrame)) {
-    Row(Modifier.fillMaxSize()) {
-      if (inlineSidebar) sidebar?.invoke()
-      Box(
-        Modifier.weight(1f).fillMaxHeight()
-          .padding(start = if (inlineSidebar) 0.dp else PANEL_INSET, top = PANEL_INSET, end = PANEL_INSET, bottom = PANEL_INSET)
-          .clip(shape).background(colors.bgPanel).border(1.dp, colors.borderSubtle, shape),
-      ) { content() }
+    if (sidebar == null) {
+      content()
+    } else {
+      Row(Modifier.fillMaxSize()) {
+        if (inlineSidebar) sidebar.invoke()
+        Box(
+          Modifier.weight(1f).fillMaxHeight()
+            .padding(start = if (inlineSidebar) 0.dp else PANEL_INSET, top = PANEL_INSET, end = PANEL_INSET, bottom = PANEL_INSET)
+            .clip(shape).background(colors.bgPanel).border(1.dp, colors.borderSubtle, shape),
+        ) { content() }
+      }
     }
     if (sidebar != null && drawerMode && drawerOpen) {
       Box(

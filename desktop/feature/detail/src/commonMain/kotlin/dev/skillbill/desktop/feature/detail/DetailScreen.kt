@@ -50,6 +50,17 @@ private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
 
 @Composable
 internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction: (DetailAction) -> Unit) {
+  if (!state.itemResolved) {
+    when (val sections = state.sections) {
+      SectionsUi.Pending -> EmptyState("Checking this work item in the current database")
+      SectionsUi.Gone -> EmptyState("This work item is no longer in the database") {
+        SbButton("Back to Work", { onAction(DetailAction.Navigate(WorkRoute(null))) })
+      }
+      is SectionsUi.Failed -> EmptyState("Couldn't load this work item", body = readProblemText(sections.problem))
+      is SectionsUi.Loaded -> EmptyState("Checking this work item in the current database")
+    }
+    return
+  }
   val item = state.header
   val view = runActionsView(state)
   val recoverFocus = remember { FocusRequester() }

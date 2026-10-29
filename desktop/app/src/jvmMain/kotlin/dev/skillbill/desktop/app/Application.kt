@@ -15,6 +15,7 @@ fun main() {
   val host = HostEnvironment(System.getenv(), System.getProperty("user.home"), System.getProperty("user.dir"))
   val component = AppComponent::class.create(host, diagnostics)
   component.databaseSessionManager.start()
+  component.startAtLoginSync.start()
   val reducedMotion = when (val read = OsReducedMotionReader().read()) {
     is ReducedMotionRead.Known -> read.reduced
     is ReducedMotionRead.Unavailable -> {

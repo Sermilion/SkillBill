@@ -89,21 +89,21 @@ private fun ExecutionMatrix.toDomain() = ExecutionMatrixConfig(
   agentPhaseOverrides = agentPhaseOverrides.entries.associate { (agent, phases) -> agent.id to phases.mapValues { it.value.toDomain() } },
 )
 
-private fun ExecutionTier.toDomain(): Tier = when (this) {
+internal fun ExecutionTier.toDomain(): Tier = when (this) {
   ExecutionTier.REASONING -> Tier.REASONING
   ExecutionTier.IMPLEMENTATION -> Tier.IMPLEMENTATION
 }
 
-private fun PhaseModelDirective.toDomain() = ModelDirective(model, effort)
+internal fun PhaseModelDirective.toDomain() = ModelDirective(model, effort)
 
-private fun CompactionSettings.toDomain() = CompactionConfig(
+internal fun CompactionSettings.toDomain() = CompactionConfig(
   enabled = enabled,
   windowTokens = windowTokens,
   triggerPct = triggerPct,
   phases = phases.mapValues { PhaseCompaction(it.value.windowTokens, it.value.triggerPct) },
 )
 
-private fun ReviewContextBudgetPolicy.toDomain() = ReviewBudget(
+internal fun ReviewContextBudgetPolicy.toDomain() = ReviewBudget(
   maxParentPacketBytes = maxParentPacketBytes,
   maxLaneLaunchBytes = maxLaneLaunchBytes,
   maxLaneEvidenceBytes = maxLaneEvidenceBytes,

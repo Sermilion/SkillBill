@@ -15,6 +15,8 @@ import dev.skillbill.desktop.core.domain.model.SpecTreeState
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
+import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.workItem
@@ -24,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -45,7 +48,12 @@ class DetailViewModelTest {
   @AfterTest
   fun tearDown() = Dispatchers.resetMain()
 
-  private fun viewModel() = DetailViewModel(item, details, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), clock, FakeWorkControlRepository(), ToastQueue())
+  private val session = object : DatabaseSessionController {
+    override val state = MutableStateFlow<DatabaseSessionState>(DatabaseSessionState.Open("test.db", 1))
+    override fun reopen() = Unit
+  }
+
+  private fun viewModel() = DetailViewModel(item, session, details, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), clock, FakeWorkControlRepository(), ToastQueue())
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {

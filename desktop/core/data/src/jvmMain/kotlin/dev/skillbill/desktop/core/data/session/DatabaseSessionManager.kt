@@ -55,6 +55,11 @@ class DatabaseSessionManager(
       (state.value as? DatabaseSessionState.Open)?.sessionId == session.selection.selection.id
   }
 
+  internal fun currentComponent(sessionId: Long): DatabaseSessionComponent? = lifecycle.coordinate { open ->
+    if (open?.id != sessionId || (state.value as? DatabaseSessionState.Open)?.sessionId != sessionId) null
+    else (open.graph as? RuntimeSessionGraph)?.component
+  }
+
   internal fun admitReservation(
     session: DatabaseSessionComponent,
     key: String,

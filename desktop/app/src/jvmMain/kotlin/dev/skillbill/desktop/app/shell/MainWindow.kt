@@ -83,8 +83,8 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
   val board by window.board.view.collectAsState()
   val topRoute = navigator.top.route
   val contributions = window.entries.flatMap { it.panes }
-  val right = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen }?.content
-  val bottom = contributions.firstOrNull { it.slot == PaneSlot.Bottom }?.takeIf { panes.terminalOpen }?.content
+  val right = contributions.firstOrNull { it.slot == PaneSlot.Right }?.takeIf { panes.specsOpen && topRoute !is SettingsRoute }?.content
+  val bottom = contributions.firstOrNull { it.slot == PaneSlot.Bottom }?.takeIf { panes.terminalOpen && topRoute !is SettingsRoute }?.content
   val navigate: (AppRoute) -> Unit = { route ->
     panes.drawerOpen = false
     navigator.navigate(route)

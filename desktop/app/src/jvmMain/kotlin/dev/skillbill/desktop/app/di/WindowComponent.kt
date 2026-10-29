@@ -54,6 +54,11 @@ interface WindowComponent {
   val session: DatabaseSessionController
   val entries: Set<FeatureEntry>
 
+  @Provides
+  @SingleIn(WindowScope::class)
+  fun settingsPages(): dev.skillbill.desktop.feature.settings.SettingsPages =
+    dev.skillbill.desktop.feature.settings.SettingsPages(lazy { entries })
+
   @ContributesSubcomponent.Factory(AppScope::class)
   interface Factory {
     fun createWindowComponent(): WindowComponent

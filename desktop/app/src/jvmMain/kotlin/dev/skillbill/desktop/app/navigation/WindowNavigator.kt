@@ -58,16 +58,16 @@ class WindowNavigator(private val session: DatabaseSessionController, private va
     return true
   }
 
-  /** Follows the session: a new open session or a session that closed resets the stack to Work, keeping Settings when it is on top. */
+  /** Rebinds each session-owned entry to the new generation while keeping the window's route history. */
   suspend fun followSession() {
     session.state.collect { state ->
       val next = (state as? DatabaseSessionState.Open)?.sessionId
       if (next == sessionId) return@collect
       sessionId = next
-      val settings = top.takeIf { it.route is SettingsRoute }
-      backStack.clear()
-      backStack += RouteEntry(WorkRoute(null), next)
-      if (settings != null) backStack += settings
+      backStack.indices.forEach { index ->
+        val entry = backStack[index]
+        backStack[index] = if (entry.route is SettingsRoute) entry else RouteEntry(entry.route, next)
+      }
       selection.select(null)
     }
   }

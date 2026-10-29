@@ -27,6 +27,8 @@ kotlin {
     implementation(projects.feature.history)
     implementation(projects.feature.detail)
     implementation(projects.feature.specs)
+    implementation(projects.feature.settings)
+    implementation(projects.feature.config)
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)
   }
@@ -34,6 +36,7 @@ kotlin {
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.jna)
     implementation(libs.jna.platform)
+    implementation(libs.nucleus.autolaunch)
     // The merged component names the session's runtime graph; its classes come from the installed runtime at run time.
     compileOnly("dev.skillbill:runtime-core")
   }
