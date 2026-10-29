@@ -31,7 +31,7 @@ internal fun SpecBrowserSnapshot.toState(): SpecTreeState {
     failure != null -> SpecTreeState.Unavailable(ReadProblem.Runtime(failure.orEmpty()))
     root == null -> SpecTreeState.Unavailable(ReadProblem.Runtime("The project ${project.projectId} has no spec folder."))
     project.repoRoot == null -> SpecTreeState.NoCheckout
-    counts.all == 0 -> SpecTreeState.NoSpecs
+    counts.all == 0 -> SpecTreeState.NoSpecs(root.toString().takeIf(String::isNotBlank))
     else -> SpecTreeState.Loaded(
       SpecTree(project.toDomain(), roots.map { it.toDomain() }, SpecCounts(counts.all, counts.active, counts.pending, counts.done), anyInProgress),
       storePath = root.toString(),

@@ -83,7 +83,7 @@ sealed interface SpecTreeState {
 
   data class Loaded(val tree: SpecTree, val storePath: String) : SpecTreeState
 
-  data object NoSpecs : SpecTreeState
+  data class NoSpecs(val storePath: String?) : SpecTreeState
 
   data object NoCheckout : SpecTreeState
 
@@ -93,11 +93,8 @@ sealed interface SpecTreeState {
 sealed interface SpecControlState {
   data object Loading : SpecControlState
 
-  /**
-   * The live goal, if any, is [SpecBundleControlView.workflowId]; its row and verdicts come from the board observation, since
-   * the detail read carries no running or membership verdicts.
-   */
-  data class Loaded(val control: SpecBundleControlView) : SpecControlState
+  /** The live goal's header, if any. Run verdicts remain on [control] because a detail read carries no board verdicts. */
+  data class Loaded(val control: SpecBundleControlView, val liveGoal: WorkItem?) : SpecControlState
 
   data class Unavailable(val problem: ReadProblem) : SpecControlState
 }

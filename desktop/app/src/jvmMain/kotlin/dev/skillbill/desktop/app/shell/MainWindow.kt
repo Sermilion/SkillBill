@@ -40,6 +40,7 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean)
   DisposableEffect(window) {
     onDispose {
       window.terminal.close()
+      window.specsPane.close()
       window.scope.scope.cancel()
     }
   }

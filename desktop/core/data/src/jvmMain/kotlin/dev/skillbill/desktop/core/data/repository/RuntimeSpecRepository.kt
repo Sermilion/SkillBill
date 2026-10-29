@@ -37,6 +37,10 @@ class RuntimeSpecRepository(private val sessions: DatabaseSessionManager) : Spec
     failed = { SpecTreeState.Unavailable(ReadProblem.Storage(it)) },
   ) { it.specs.observeTree(projectId, rootOf(projectId)) }
 
+  override fun refreshTree(projectId: String) {
+    sessions.sessions.value?.specs?.refreshTree(projectId)
+  }
+
   override fun control(bundle: SpecBundleRef): Flow<SpecControlState> = sessions.sessionFlow(
     opening = SpecControlState.Loading,
     failed = { SpecControlState.Unavailable(ReadProblem.Storage(it)) },

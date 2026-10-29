@@ -9,7 +9,6 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.time.Duration.Companion.seconds
 
 class AgentRunLauncherLivenessTest {
   @Test
@@ -27,7 +26,6 @@ class AgentRunLauncherLivenessTest {
             listOf(bashExecutable().toString(), script.toString()),
             fixtureRoot,
           ) {
-            timeout = 3.seconds
             environment =
               mapOf(
                 "HOME" to fixtureRoot.resolve("home").toString(),

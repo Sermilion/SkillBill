@@ -6,6 +6,9 @@ import dev.skillbill.desktop.app.keyboard.ShellKeyboard
 import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
 import dev.skillbill.desktop.app.shell.ShellBoardState
+import dev.skillbill.desktop.core.common.AppDispatchers
+import dev.skillbill.desktop.core.common.DatabaseDispatcher
+import dev.skillbill.desktop.feature.specs.SpecsPaneModel
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
@@ -43,6 +46,7 @@ interface WindowComponent {
   val catalog: CommandCatalog
   val keyboard: ShellKeyboard
   val terminal: TerminalTriggers
+  val specsPane: SpecsPaneModel
   val board: ShellBoardState
   val boardRepository: WorkBoardRepository
   val details: WorkDetailRepository
@@ -67,4 +71,8 @@ interface WindowProviders {
 
   @Provides
   fun appNavigator(navigator: WindowNavigator): AppNavigator = navigator
+
+  @Provides
+  fun appDispatchers(database: DatabaseDispatcher): AppDispatchers =
+    AppDispatchers(Dispatchers.Main, Dispatchers.IO, database.dispatcher)
 }

@@ -125,7 +125,7 @@ interface RuntimeSessionProviders {
     diagnostics: Diagnostics,
     host: HostEnvironment,
   ): SpecObservations = SpecObservations(
-    holder.selection.scope, signals.snapshots, reads, runtime, diagnostics, SpecDirectoryChanges(diagnostics), host,
+    holder.selection.scope, holder.selection.id, signals.snapshots, reads, runtime, diagnostics, SpecDirectoryChanges(diagnostics), host,
   )
 }
 

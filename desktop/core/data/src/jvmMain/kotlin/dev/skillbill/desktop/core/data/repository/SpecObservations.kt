@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.data.runtime.RuntimeReads
 import dev.skillbill.desktop.core.data.runtime.readOrProblem
 import dev.skillbill.desktop.core.data.runtime.toDomain
 import dev.skillbill.desktop.core.data.runtime.toState
+import dev.skillbill.desktop.core.data.runtime.toWorkItem
 import dev.skillbill.desktop.core.data.signal.SignalSnapshot
 import dev.skillbill.desktop.core.data.signal.SpecDirectoryChanges
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
@@ -21,6 +22,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -37,6 +40,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.di.core.RuntimeComponent
+import skillbill.ports.idestatus.model.WorkDetailRequest
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -51,6 +55,7 @@ private val EDITOR_VARIABLES = setOf("VISUAL", "EDITOR")
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpecObservations internal constructor(
   private val scope: CoroutineScope,
+  private val sessionId: Long,
   private val signals: StateFlow<SignalSnapshot>,
   private val reads: RuntimeReads,
   private val runtime: RuntimeComponent,
@@ -59,6 +64,12 @@ class SpecObservations internal constructor(
   private val host: HostEnvironment,
 ) {
   private val trees = ConcurrentHashMap<String, StateFlow<SpecTreeState>>()
+  private val refreshes = ConcurrentHashMap<String, MutableSharedFlow<Unit>>()
+
+  fun refreshTree(projectId: String) {
+    refreshes.computeIfAbsent(projectId) { MutableSharedFlow(replay = 1, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
+      .tryEmit(Unit)
+  }
 
   suspend fun projects(): Outcome<List<SpecProject>, ReadProblem> = readOrProblem(runtime, diagnostics) {
     reads.read("spec_projects") { component -> component.specBrowserService.projects().map { it.toDomain() } }
@@ -76,7 +87,11 @@ class SpecObservations internal constructor(
     trees.computeIfAbsent(projectId) { id ->
       val storePath = MutableStateFlow<String?>(null)
       val directoryChanges = storePath.flatMapLatest { path -> path?.let(::folderChanges) ?: emptyFlow() }
-      merge(preferredRepoRoot.map { }, directoryChanges, revisionChanges(DesktopReadSchema.SPECS_TOPIC).drop(1))
+      merge(
+        refreshes.computeIfAbsent(id) { MutableSharedFlow(replay = 1, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
+          .onStart { emit(Unit) },
+        preferredRepoRoot.map { }, directoryChanges, revisionChanges(DesktopReadSchema.SPECS_TOPIC).drop(1),
+      )
         .conflate()
         .mapLatest {
           when (val read = readTree(id, preferredRepoRoot.value)) {
@@ -135,7 +150,10 @@ class SpecObservations internal constructor(
     val read = readOrProblem(runtime, diagnostics) {
       reads.read("spec_control") { component ->
         val control = component.specBrowserService.control(bundle.projectId, bundle.path, bundle.repoRoot?.let(Path::of))
-        SpecControlState.Loaded(control.toDomain())
+        val liveGoal = control.workflowId?.let { workflowId ->
+          component.ideStatusService.detail(WorkDetailRequest(workflowId)).item?.toWorkItem(sessionId)
+        }
+        SpecControlState.Loaded(control.toDomain(), liveGoal)
       }
     }
     return when (read) {

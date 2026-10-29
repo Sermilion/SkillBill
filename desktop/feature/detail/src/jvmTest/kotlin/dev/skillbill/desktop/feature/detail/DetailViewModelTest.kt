@@ -103,6 +103,7 @@ class DetailViewModelTest {
     override suspend fun projects(): Outcome<List<SpecProject>, ReadProblem> = error("unused")
     override suspend fun projectFor(repoRoot: String): Outcome<SpecProject, ReadProblem> = error("unused")
     override fun observeTree(projectId: String): Flow<SpecTreeState> = emptyFlow()
+    override fun refreshTree(projectId: String) = Unit
     override fun control(bundle: SpecBundleRef): Flow<SpecControlState> = emptyFlow()
     override suspend fun openFile(path: String) = OpenOutcome.Opened
     override suspend fun revealFolder(path: String) = OpenOutcome.Opened

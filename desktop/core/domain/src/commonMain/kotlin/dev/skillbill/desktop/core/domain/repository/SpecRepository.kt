@@ -17,6 +17,9 @@ interface SpecRepository {
 
   fun observeTree(projectId: String): Flow<SpecTreeState>
 
+  /** Re-reads the project's spec snapshot, also after a failed read. */
+  fun refreshTree(projectId: String)
+
   /** The bundle's run control, read in the background so selecting the bundle never waits on it. */
   fun control(bundle: SpecBundleRef): Flow<SpecControlState>
 
