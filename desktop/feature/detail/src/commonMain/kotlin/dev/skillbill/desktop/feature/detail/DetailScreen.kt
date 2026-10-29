@@ -15,8 +15,10 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -24,6 +26,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
+import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.Pager
@@ -48,6 +51,8 @@ private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
 @Composable
 internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction: (DetailAction) -> Unit) {
   val item = state.header
+  val view = runActionsView(state)
+  val recoverFocus = remember { FocusRequester() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = listOf(
@@ -69,15 +74,45 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         contentPadding = PaddingValues(horizontal = 32.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
       ) {
-        // Subtask 17 inserts its run actions and pause hint after `header`, and the incident after `reason`.
         item(key = "header") {
           DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) })
         }
+        if (state.sections != SectionsUi.Gone) item(key = "run-actions") {
+          val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
+          RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+        }
         item(key = "reason") { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
+        incident(state, view, onAction)
         document(state, onAction)
       }
       DetailsPaneSlot { DetailsPane(state) }
     }
+  }
+  state.controls.recoveryDialog?.let { preview ->
+    RecoveryDialog(
+      preview,
+      applying = state.controls.inFlight == InFlightControl.Recover,
+      returnFocusTo = recoverFocus,
+      onApply = { onAction(ControlsAction.ApplyRecovery) },
+      onDismiss = { onAction(ControlsAction.DismissRecovery) },
+    )
+  }
+}
+
+/** HANDOFF 9.2 item 7, with the operator decision inside it; a decision with no incident gets its own section. */
+private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+  val detail = (state.sections as? SectionsUi.Loaded)?.detail
+  val incident = detail?.incident
+  val decision: @Composable () -> Unit = {
+    view.decision?.let {
+      OperatorDecisionBlock(it, view.recordEnabled, view.usable && state.controls.inFlight == null, state.controls.inFlight == InFlightControl.Decision, onAction)
+    }
+  }
+  if (detail != null && (incident != null || detail.incidentHistory.isNotEmpty())) item(key = "incident") {
+    IncidentSection(incident, detail.incidentHistory, view, decision, onAction) { onAction(DetailAction.Copy(it)) }
+  }
+  if (incident == null && view.decision != null && state.sections != SectionsUi.Gone) item(key = "decision") {
+    Section(title = "Operator decision") { decision() }
   }
 }
 

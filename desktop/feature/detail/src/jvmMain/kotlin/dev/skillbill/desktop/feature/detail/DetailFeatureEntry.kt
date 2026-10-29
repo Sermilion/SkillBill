@@ -63,7 +63,7 @@ class DetailFeatureEntry(
       when (key) {
         ScreenKey.Next -> viewModel.step(next = true)
         ScreenKey.Previous -> viewModel.step(next = false)
-        else -> false
+        else -> viewModel.onKey(key)
       }
     }
     val host = DetailScreenHost(

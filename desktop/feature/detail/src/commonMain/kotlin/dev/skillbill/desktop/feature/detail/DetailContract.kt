@@ -20,6 +20,7 @@ data class DetailUiState(
   val renderedAt: Instant,
   val listLoads: Map<DetailList, ListLoad> = emptyMap(),
   val boardPosition: BoardPosition? = null,
+  val controls: ControlsUiState = ControlsUiState(),
 )
 
 sealed interface SectionsUi {

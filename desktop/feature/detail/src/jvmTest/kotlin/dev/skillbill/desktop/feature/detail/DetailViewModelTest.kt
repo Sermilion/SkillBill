@@ -1,13 +1,10 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.common.Outcome
-import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.DetailAttempts
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
-import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
@@ -19,7 +16,9 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
+import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.workItem
+import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -46,7 +45,7 @@ class DetailViewModelTest {
   @AfterTest
   fun tearDown() = Dispatchers.resetMain()
 
-  private fun viewModel() = DetailViewModel(item, details, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), clock)
+  private fun viewModel() = DetailViewModel(item, details, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), clock, FakeWorkControlRepository(), ToastQueue())
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {
@@ -111,17 +110,5 @@ class DetailViewModelTest {
 
   private object NoWebPages : RepositoryWebPages {
     override suspend fun openBranch(repositoryRoot: String, branch: String) = OpenOutcome.Opened
-  }
-
-  private companion object {
-    val emptyDetail = Detail(
-      featureTitle = null, workflowId = null, invocationId = null, activeAgent = null, executionLiveness = null,
-      updatedAt = Instant.fromEpochMilliseconds(0), lastAgentActivityLabel = null, lastAgentActivityAt = null, currentSubtaskStartedAt = null,
-      subtaskActiveDurationMs = null, subtaskActiveDurationAsOf = null, qaVerdict = null, qaOutcome = null, stepPipeline = emptyList(),
-      goalFinishPipeline = emptyList(), currentPhase = null, completeCount = 0, pendingCount = 0, blockedCount = 0, subtasks = emptyList(),
-      phases = emptyList(), dependencies = emptyList(), attempts = DetailAttempts(emptyMap(), emptyMap(), emptyMap(), null, 0),
-      validation = emptyList(), phaseResults = emptyList(), goalQa = null, goalAssessment = null, latestActivity = LatestActivity(null, null),
-      executionHistory = emptyList(), incident = null, incidentHistory = emptyList(), goalSpecBundle = null, observedAt = Instant.fromEpochMilliseconds(0),
-    )
   }
 }

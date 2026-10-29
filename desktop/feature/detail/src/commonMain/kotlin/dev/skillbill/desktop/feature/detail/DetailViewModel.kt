@@ -11,10 +11,13 @@ import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository
+import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import dev.skillbill.desktop.core.ui.board.ShellBoard
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
+import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
+import dev.skillbill.desktop.core.ui.input.ScreenKey
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -48,6 +51,8 @@ class DetailViewModel(
   private val webPages: RepositoryWebPages,
   private val selection: SelectionHolder,
   private val clock: Clock,
+  workControls: WorkControlRepository,
+  toasts: ToastQueue,
 ) : ViewModel() {
   private val mutableState = MutableStateFlow(DetailUiState(header = item, sections = SectionsUi.Pending, stale = false, renderedAt = clock.now()))
   val state: StateFlow<DetailUiState> = mutableState.asStateFlow()
@@ -57,7 +62,10 @@ class DetailViewModel(
 
   private var observation: Job? = null
 
+  private val controls = DetailControls(viewModelScope, workControls, toasts) { mutableState.value }
+
   init {
+    controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
     selection.select(item)
     observe()
     board.observe(ShellBoard.query).onEach { board -> mutableState.update { it.copy(boardPosition = boardPosition(board, it.header.id)) } }
@@ -72,8 +80,17 @@ class DetailViewModel(
     return true
   }
 
+  /** P, Shift+P and R run the matching run-actions button; false when it is absent or disabled. */
+  fun onKey(key: ScreenKey): Boolean = when (key) {
+    ScreenKey.PauseAfterSubtask -> controls.onAction(ControlsAction.PauseAfterSubtask)
+    ScreenKey.PauseNow -> controls.onAction(ControlsAction.PauseNow)
+    ScreenKey.Resume -> controls.onAction(ControlsAction.Launch)
+    else -> false
+  }
+
   fun onAction(action: DetailAction) {
     when (action) {
+      is ControlsAction -> controls.onAction(action)
       is DetailAction.LoadMore -> loadMore(action.list)
       DetailAction.Next -> step(next = true)
       DetailAction.Previous -> step(next = false)
