@@ -304,6 +304,12 @@ class ApplicationPersistencePortWorkflowTest {
     val retried = service.retryBlockedFeatureTaskRuntimePhase(workflowId, "implement", reason)
 
     assertTrue(retried is WorkflowUpdateResult.Ok)
+    assertRuntimeWorkflowRow(
+      workflowRepository,
+      workflowId,
+      currentStepId = "implement",
+      workflowStatus = WorkflowStatus.PENDING.wireValue,
+    )
     assertEquals(reason, recorder.loadOperatorBlockRetry(workflowId)?.reason)
     recorder.appendLedgerEntry(
       FeatureTaskRuntimePhaseLedgerRequest(

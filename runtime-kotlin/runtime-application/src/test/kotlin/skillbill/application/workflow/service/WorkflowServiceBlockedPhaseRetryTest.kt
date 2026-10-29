@@ -95,7 +95,7 @@ class WorkflowServiceBlockedPhaseRetryTest {
         assertEquals(listOf("AC-001"), resumed.pendingAuditRefs)
         assertEquals(resumed, AcceptanceCriterionRepairState.restore(resumed))
         assertEquals(repair.outcomes, resumed.outcomes)
-        assertEquals(WorkflowStatus.RUNNING, saved.workflowStatus)
+        assertEquals(WorkflowStatus.PENDING, saved.workflowStatus)
         assertEquals("audit", saved.currentStepId)
         assertEquals(WorkflowStepStatus.PENDING, saved.steps.single { it.stepId == "audit" }.status)
         val beforeRepeat = fixture.states.runtimeRecord(WORKFLOW_ID)
@@ -140,7 +140,7 @@ class WorkflowServiceBlockedPhaseRetryTest {
         fixture.invariants.copy(mandatesAndOverrides = listOfNotNull("Existing mandate", mandate)),
         invariants,
       )
-      assertEquals(WorkflowStatus.RUNNING, saved.workflowStatus)
+      assertEquals(WorkflowStatus.PENDING, saved.workflowStatus)
       assertEquals(WorkflowStepStatus.PENDING, saved.steps.single { it.stepId == "audit_plan_fix" }.status)
     }
   }

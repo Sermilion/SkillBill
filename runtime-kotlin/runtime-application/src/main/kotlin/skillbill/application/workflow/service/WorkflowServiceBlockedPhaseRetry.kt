@@ -202,6 +202,11 @@ internal class WorkflowServiceBlockedPhaseRetry(
     ) {
       return null
     }
+    if (existing.workflowStatus == WorkflowStatus.PENDING &&
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY.contains(existing.artifacts)
+    ) {
+      return null
+    }
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
     if (!family.contains(existing.artifacts)) return null
     return FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(existing.artifacts))
@@ -311,7 +316,7 @@ private fun blockedPhaseRetryInput(
       resolvedAgentId = state.blockedRecord.resolvedAgentId,
     )
   return WorkflowUpdateInput(
-    workflowStatus = WorkflowStatus.RUNNING,
+    workflowStatus = WorkflowStatus.PENDING,
     currentStepId = request.phaseId,
     stepUpdates =
       WorkflowStepUpdates.from(
