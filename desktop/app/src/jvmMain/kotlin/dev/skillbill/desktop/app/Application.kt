@@ -1,7 +1,9 @@
 package dev.skillbill.desktop.app
 
+import androidx.compose.ui.window.application
 import dev.skillbill.desktop.app.motion.OsReducedMotionReader
 import dev.skillbill.desktop.app.motion.ReducedMotionRead
+import dev.skillbill.desktop.app.shell.MainWindow
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.common.HostEnvironment
 
@@ -22,11 +24,6 @@ fun main() {
       false
     }
   }
-  showSkillBillWindow(
-    component.workBoardRepository,
-    component.workDetailRepository,
-    component.workControlRepository,
-    component.specRepository,
-    reducedMotion,
-  )
+  val window = component.windowComponentFactory.createWindowComponent()
+  application { MainWindow(window, reducedMotion) }
 }

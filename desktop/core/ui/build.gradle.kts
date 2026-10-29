@@ -1,11 +1,15 @@
 plugins {
   id("skillbill.desktop.kmp.library")
   id("skillbill.desktop.compose")
+  id("skillbill.desktop.kotlin.inject")
 }
 
 kotlin {
   sourceSets.commonMain.dependencies {
     api(projects.core.designsystem)
-    implementation(projects.core.domain)
+    api(projects.core.domain)
+    api(libs.navigation3.runtime)
+    api(libs.lifecycle.viewmodel)
+    api(libs.lifecycle.viewmodel.compose)
   }
 }

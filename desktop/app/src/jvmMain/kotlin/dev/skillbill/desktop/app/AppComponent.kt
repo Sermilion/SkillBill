@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.app
 
+import dev.skillbill.desktop.app.di.WindowComponent
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
@@ -31,6 +32,7 @@ abstract class AppComponent(
   abstract val workControlRepository: WorkControlRepository
   abstract val workDetailRepository: WorkDetailRepository
   abstract val specRepository: SpecRepository
+  abstract val windowComponentFactory: WindowComponent.Factory
 }
 
 @ContributesTo(AppScope::class)

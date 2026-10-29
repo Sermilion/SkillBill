@@ -1,47 +1,50 @@
 package dev.skillbill.desktop.app
 
-import androidx.compose.material3.Text
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.application
 import dev.skillbill.desktop.core.data.identity.BuildIdentityRecord
 import dev.skillbill.desktop.core.data.runtime.InstalledRuntimeBuildGate
 import dev.skillbill.desktop.core.data.runtime.runtimeInstallRoot
 import dev.skillbill.desktop.core.domain.model.RuntimeAvailability
-import dev.skillbill.desktop.core.domain.model.RuntimeBuildProblem
 import java.io.File
 import java.lang.invoke.MethodHandles
 import java.lang.invoke.MethodType
 import java.net.URL
-import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 
 private const val DELEGATE_MAIN_CLASS_PROPERTY = "skillbill.desktop.mainClass"
 private const val DEFAULT_MAIN_CLASS = "dev.skillbill.desktop.app.ApplicationKt"
+private const val REFUSAL_CLASS = "dev.skillbill.desktop.app.RuntimeUnavailableAppKt"
 private const val RESOURCES_DIRECTORY_PROPERTY = "compose.application.resources.dir"
 
 /**
- * Checks the installed runtime against this build, then starts the app in a class loader over the app's jars plus the runtime's
- * `runtime-cli/lib` jars. A refused runtime is shown in this loader's window, and the user relaunches after reinstalling: loading
- * Compose's native libraries a second time in another loader would fail.
+ * Checks the installed runtime against this build, then starts the app in one class loader over the app's jars plus the runtime's
+ * `runtime-cli/lib` jars. A refused runtime is shown by the refusal window inside that same loader, without the runtime's jars;
+ * when Retry finds a matched runtime, its jars join the loader and the app starts there, so Compose's native libraries load once.
  */
 fun main(args: Array<String>) {
   val runtimeRoot = runtimeInstallRoot(System.getenv(), System.getProperty("user.home"))
-  val installation = InstalledRuntimeBuildGate(runtimeRoot, appIdentityPath()).check()
-  when (val availability = installation.availability) {
-    RuntimeAvailability.Available -> launchApplication(applicationClasspath(distributionAppDirectory(), installation.runtimeJars), args)
-    is RuntimeAvailability.Unavailable -> showRefusalWindow(refusalText(availability.problem))
+  val appRecord = appIdentityPath()
+  val installation = InstalledRuntimeBuildGate(runtimeRoot, appRecord).check()
+  val appDirectory = distributionAppDirectory()
+  when (installation.availability) {
+    RuntimeAvailability.Available -> launchApplication(AppClassLoader(applicationClasspath(appDirectory, installation.runtimeJars)), args)
+    is RuntimeAvailability.Unavailable -> {
+      val loader = AppClassLoader(applicationClasspath(appDirectory, emptyList()))
+      val runtimeJars = showRefusal(loader, runtimeRoot, appRecord) ?: return
+      loader.addJars(runtimeJars.map(Path::of))
+      launchApplication(loader, args)
+    }
   }
 }
 
-private fun refusalText(problem: RuntimeBuildProblem): String {
-  val reason = when (problem) {
-    is RuntimeBuildProblem.NotInstalled -> "The Skill Bill runtime is not installed."
-    is RuntimeBuildProblem.Unreadable -> "The Skill Bill runtime's build identity cannot be read."
-    is RuntimeBuildProblem.Mismatched ->
-      "The installed Skill Bill runtime (${problem.installedIdentity}) does not match this app (${problem.appIdentity})."
-  }
-  return "$reason\nRun ${problem.reinstallCommand} from the Skill Bill checkout, then relaunch."
+private fun showRefusal(loader: AppClassLoader, runtimeRoot: Path, appRecord: Path): Array<String>? {
+  Thread.currentThread().contextClassLoader = loader
+  val refusal = MethodHandles.publicLookup().findStatic(
+    loader.loadClass(REFUSAL_CLASS),
+    "runRuntimeUnavailable",
+    MethodType.methodType(Array<String>::class.java, String::class.java, String::class.java),
+  )
+  return refusal.invokeWithArguments(runtimeRoot.toString(), appRecord.toString()) as Array<String>?
 }
 
 private fun appIdentityPath(): Path {
@@ -69,10 +72,7 @@ private fun distributionAppDirectory(): Path? {
   return location.parent?.takeIf { it.fileName?.toString() == "app" }
 }
 
-private fun libraryName(fileName: String): String = fileName.removeSuffix(".jar").replace(Regex("-[0-9].*$"), "")
-
-private fun launchApplication(classpath: List<URL>, args: Array<String>) {
-  val loader = URLClassLoader(classpath.toTypedArray(), ClassLoader.getPlatformClassLoader())
+private fun launchApplication(loader: AppClassLoader, args: Array<String>) {
   Thread.currentThread().contextClassLoader = loader
   val entryPoint = loader.loadClass(System.getProperty(DELEGATE_MAIN_CLASS_PROPERTY, DEFAULT_MAIN_CLASS))
   val lookup = MethodHandles.publicLookup()
@@ -82,10 +82,4 @@ private fun launchApplication(classpath: List<URL>, args: Array<String>) {
     lookup.findStatic(entryPoint, "main", MethodType.methodType(Void.TYPE))
   }
   if (main.type().parameterCount() == 0) main.invokeWithArguments(emptyList<Any>()) else main.invokeWithArguments(listOf(args))
-}
-
-private fun showRefusalWindow(text: String) = application {
-  Window(onCloseRequest = ::exitApplication, title = "Skill Bill") {
-    Text(text)
-  }
 }
