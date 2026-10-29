@@ -2,6 +2,7 @@ package skillbill.infrastructure.host
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.model.EnvironmentContext
+import java.nio.file.Path
 
 internal fun EnvironmentContext.withProcessDefaults(): EnvironmentContext {
   val withUserHome =
@@ -16,3 +17,6 @@ internal fun EnvironmentContext.withProcessDefaults(): EnvironmentContext {
     withUserHome
   }
 }
+
+fun EnvironmentContext.skillBillStateDir(): Path =
+  withProcessDefaults().let { resolveTelemetryStateDir(it.environment, it.userHome) }

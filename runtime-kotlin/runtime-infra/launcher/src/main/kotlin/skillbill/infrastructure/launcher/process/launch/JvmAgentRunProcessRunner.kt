@@ -15,6 +15,7 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import java.io.IOException
 import java.io.InputStream
+import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -24,15 +25,28 @@ import java.util.logging.Logger
 class JvmAgentRunProcessRunner(
   private val clock: Clock,
   private val gateJvmResolver: GateJvmResolver,
+  scratchRoot: AgentRunScratchRoot,
 ) : AgentRunProcessRunner {
+  private val scratchSpace = AgentRunScratchSpace(scratchRoot.path)
+
   override fun run(request: AgentRunProcessRequest): AgentRunProcessResult {
     request.review.reviewEvidenceEndpoint?.let(liveEndpoints::add)
     return try {
-      runAgentRunContinuations(request, clock, ::runGoverned)
+      scratchSpace.withScratch { directory ->
+        runAgentRunContinuations(request.withScratchDirectory(directory), clock, ::runGoverned)
+      }
     } finally {
       closeEndpoint(request)
     }
   }
+
+  private fun AgentRunProcessRequest.withScratchDirectory(directory: Path?): AgentRunProcessRequest =
+    copy(
+      environmentFields =
+        environmentFields.copy(
+          environment = environmentFields.environment + scratchSpace.environment(directory),
+        ),
+    )
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
     var startedProcess: ProcessStart? = null

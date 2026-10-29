@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
@@ -11,6 +12,7 @@ import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.review.context.model.launch.ReviewConversationIsolation
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -90,3 +92,10 @@ internal class TestAgentRunProcessRequestBuilder {
         ),
     )
 }
+
+internal fun testAgentRunScratchRoot(
+  stateDir: Path = Files.createTempDirectory("agent-run-state"),
+): AgentRunScratchRoot =
+  AgentRunScratchRoot(
+    EnvironmentContext(environment = mapOf("SKILL_BILL_STATE_DIR" to stateDir.toString()), userHome = stateDir),
+  )

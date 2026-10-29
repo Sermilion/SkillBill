@@ -678,3 +678,12 @@ Context: SKILL-446 spent all three renewed attempts on MCP completion calls with
 Decision: The MCP completion path calls the service's agent admission method, which returns `AUDIT_REPAIR_UNFINISHED_CONTINUE_IMPLEMENTING` for new `audit_implement_fix` completion requests with `progress` or `no_progress`, without writing a settlement. The worker continues the same attempt and can complete it after finishing the plan. This supersedes the earlier instruction to voluntarily settle partial work at an execution limit. Process interruption remains runtime-owned. Trusted runtime settlement and historical reads, independent audit verification and the existing failure accounting remain unchanged. Other phases retain their completion verdicts.
 
 Evidence: The settlement service test refuses both partial verdicts, verifies no envelope was saved, then completes the same attempt. The existing serial repair tests retain the three-failure accounting proof.
+
+## [2026-10-29] The runtime owns and deletes each agent run's temporary files
+
+Context: Validation told agents to copy the checkout to "a temporary directory outside the workflow checkout" for test probes and then delete the copy. Agents chose their own locations, such as `~/.cache/<key>-validate-*` and `<state>/projects/*/validation`, and any timed-out, killed or forgetful session left a full repository copy behind. One machine accumulated 22 copies and filled its disk, which then stopped QA from booting an emulator.
+
+Decision: The JVM agent process runner creates a fresh directory under `<state dir>/scratch/` for every agent run, points `TMPDIR`, `TMP` and `TEMP` at it, and deletes it when the run ends, whatever the outcome. Each directory records its owner pid. A later run sweeps directories whose owner process is gone, which covers a killed runtime. The validation prompt directs every temporary copy, file or directory to `$TMPDIR` and forbids `~/.cache`, the state directory and the checkout's parent. The root sits under the state directory rather than the system temp directory because `/tmp` is often a size-limited tmpfs and a checkout copy can reach many gigabytes.
+
+Reason: Cleanup that depends on the agent remembering fails exactly when runs go wrong. Owning the directory makes deletion a runtime guarantee. Launcher tests prove a failing run leaves nothing behind and that the sweep keeps a live owner's directory.
+

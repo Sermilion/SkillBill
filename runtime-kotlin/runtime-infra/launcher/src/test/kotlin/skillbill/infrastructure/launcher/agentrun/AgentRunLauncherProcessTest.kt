@@ -5,6 +5,7 @@ import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessResult
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.testAgentRunProcessRequest
+import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunOutputStream
@@ -62,7 +63,7 @@ class AgentRunLauncherProcessTest {
   fun `unknown agent id fails before launch`() {
     val launcher =
       FileSystemAgentRunLauncher(
-        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()),
+        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()),
         ALL_EXECUTABLES_AVAILABLE,
         diagnostics = NoopRuntimeDiagnostics,
       )
@@ -217,7 +218,7 @@ class AgentRunLauncherProcessTest {
   fun `jvm process runner tees live output while preserving captured output`() {
     val events = mutableListOf<Pair<AgentRunOutputStream, String>>()
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "printf stdout-line; printf stderr-line >&2"),
           Path.of(".").toAbsolutePath().normalize(),
@@ -241,7 +242,7 @@ class AgentRunLauncherProcessTest {
   @Test
   fun `jvm process runner closes child stdin for non-interactive runs`() {
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "if read line; then printf got; else printf eof; fi"),
           Path.of(".").toAbsolutePath().normalize(),
@@ -257,7 +258,7 @@ class AgentRunLauncherProcessTest {
   @Test
   fun `jvm process runner writes configured stdin text before closing child stdin`() {
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "cat"),
           Path.of(".").toAbsolutePath().normalize(),

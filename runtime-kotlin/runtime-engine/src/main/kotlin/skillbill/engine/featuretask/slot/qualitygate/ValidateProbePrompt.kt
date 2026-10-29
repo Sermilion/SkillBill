@@ -12,7 +12,7 @@ internal object ValidateProbePrompt {
       "tests this subtask added or changed: first tests covering a listed broken-then-repaired scenario, then " +
       "one test per listed required criterion, then the remaining changed tests in diff order. For each test, " +
       "name the production line or branch it guards. Copy the current checkout, uncommitted changes included, " +
-      "to a temporary directory outside the workflow checkout, apply there the smallest change that removes " +
+      "to a new directory under ${'$'}TMPDIR, apply there the smallest change that removes " +
       "that behavior, run only that test, then delete the copy; never mutate the workflow checkout. Record " +
       "each probe as killed when the test fails, survived when it still passes, or not_run, with a reason. " +
       "Strengthen a survived test inside this existing repair session, for example by asserting the specific " +

@@ -4,6 +4,7 @@ import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.testAgentRunProcessRequest
+import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -20,7 +21,7 @@ class AgentRunLauncherActivityTest {
   @Test
   fun `a faulty emitter never fails the run`() {
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "printf done"),
           Path.of(".").toAbsolutePath().normalize(),

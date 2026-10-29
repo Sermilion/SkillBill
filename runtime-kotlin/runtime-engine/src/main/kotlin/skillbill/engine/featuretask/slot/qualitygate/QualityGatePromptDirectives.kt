@@ -59,6 +59,9 @@ private fun runtimeOwnedValidateChecksDirective(): String {
     "the operator to rebuild artifacts you can create here. The separate compile-only build gate does not restrict " +
     "builds required by validation. Preserve artifact identity and integrity checks; do not bypass them " +
     "or count a rebuild alone as validation success. " +
+    "Put every temporary copy, file, or directory this session creates under ${'$'}TMPDIR; the runtime owns " +
+    "that directory and deletes it when the session ends. Never create them under ~/.cache, the " +
+    "skill-bill state directory, or beside the checkout. " +
     "Do not recursively invoke `skill-bill phase validation`. " +
     "Keep repairing in this same session until every runnable required project check passes. Do not spawn delegated " +
     "subagents. Settle completed when every runnable required check passes, with warnings for unavailable " +

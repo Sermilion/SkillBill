@@ -4,6 +4,7 @@ import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.testAgentRunProcessRequest
+import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -22,7 +23,7 @@ class AgentRunLauncherLivenessTest {
       Files.copy(repoRoot.resolve(scriptName), script)
 
       val result =
-        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           testAgentRunProcessRequest(
             listOf(bashExecutable().toString(), script.toString()),
             fixtureRoot,

@@ -57,7 +57,7 @@ class JvmAgentRunProcessRunnerTest {
     assertSame(
       primary,
       assertThrows<CancellationException> {
-        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           testAgentRunProcessRequest(
             listOf("sh", "-c", "exec sleep 120"),
             Path.of("."),
@@ -131,7 +131,7 @@ class JvmAgentRunProcessRunnerTest {
   @Test
   fun `cancellation from a probe is not converted into missing progress`() {
     assertThrows<CancellationException> {
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "exec sleep 120"),
           Path.of("."),
@@ -173,7 +173,7 @@ class JvmAgentRunProcessRunnerTest {
       val stdout = StringBuilder()
       val stderr = StringBuilder()
       val result =
-        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
           testAgentRunProcessRequest(
             listOf("sh", "-c", "cat output.txt; cat output.txt >&2"),
             directory,
@@ -205,7 +205,7 @@ class JvmAgentRunProcessRunnerTest {
   @Test
   fun `foreground process result is returned once as the bounded terminal result`() {
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "printf terminal-result"),
           Path.of("."),
@@ -223,7 +223,7 @@ class JvmAgentRunProcessRunnerTest {
   @Test
   fun `nonzero child exit remains an ordinary completed process result`() {
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "printf failure >&2; exit 17"),
           Path.of("."),
@@ -239,7 +239,7 @@ class JvmAgentRunProcessRunnerTest {
   @Test
   fun `spawn refusal remains distinct from a started process`() {
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("/skillbill/does-not-exist"),
           Path.of("."),
@@ -254,7 +254,7 @@ class JvmAgentRunProcessRunnerTest {
   @Test
   fun `MCP startup is counted only when an explicit launcher probe observes it`() {
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "printf terminal-result"),
           Path.of("."),
@@ -271,7 +271,7 @@ class JvmAgentRunProcessRunnerTest {
     var authorizationEntered = false
     var authorizationExited = false
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "printf terminal-result"),
           Path.of("."),
@@ -299,7 +299,7 @@ class JvmAgentRunProcessRunnerTest {
     Files.delete(marker)
     val denied = AgentRunSpawnAuthorizationResult.Denied("operator_request")
     val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver(), testAgentRunScratchRoot()).run(
         testAgentRunProcessRequest(
           listOf("sh", "-c", "touch '$marker'"),
           Path.of("."),

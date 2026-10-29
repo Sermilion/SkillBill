@@ -14,6 +14,10 @@ or stale artifacts and rebuild after source repairs, then rerun every runnable r
 against the current candidate. Keep artifact identity and integrity checks intact.
 Do not return to an earlier phase or ask the operator to perform a rebuild you can run.
 
+Put every temporary copy, file, or directory this session creates under `$TMPDIR`. The runtime owns
+that directory and deletes it when the session ends. Never create them under `~/.cache`, the
+skill-bill state directory, or beside the checkout.
+
 Do not recurse into `skill-bill phase validation`. Keep repairing in this session.
 Name the checks you ran and how each ended. If discovery finds no applicable commands, print a warning and complete the step.
 Do not treat unreadable configuration or failed discovery as an empty check list.
@@ -23,8 +27,8 @@ Do not treat unreadable configuration or failed discovery as an empty check list
 After every required check passes, probe at most six tests this subtask added or changed: first tests
 covering a listed broken-then-repaired scenario, then one test per listed required criterion, then the
 remaining changed tests in diff order. For each test, name the production line or branch it guards.
-Copy the current checkout, uncommitted changes included, to a temporary directory outside the workflow
-checkout, apply there the smallest change that removes that behavior, run only that test, then delete
+Copy the current checkout, uncommitted changes included, to a new directory under `$TMPDIR`, apply
+there the smallest change that removes that behavior, run only that test, then delete
 the copy. Never mutate the workflow checkout. Record killed, survived, or not_run with a reason.
 Strengthen a survived test inside this existing repair session, for example by asserting the specific
 outcome instead of only success, driving the named entry point instead of an internal helper, or

@@ -5,6 +5,7 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFie
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRequest
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessReviewFields
 import skillbill.infrastructure.launcher.process.launch.JvmAgentRunProcessRunner
+import skillbill.infrastructure.launcher.process.launch.testAgentRunScratchRoot
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
@@ -63,6 +64,7 @@ class CodexOutputTokenProcessTest {
         JvmAgentRunProcessRunner(
           Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
           testGateJvmResolver(),
+          testAgentRunScratchRoot(),
         ).run(request)
 
       assertEquals(0, result.exitStatus, result.stderr)
