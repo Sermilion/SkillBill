@@ -40,12 +40,18 @@ data class ConfigDocumentTree(
 data class ProjectConfigLocation(
   val target: Path,
   val readable: Path?,
+  val candidatePaths: List<Path> = listOfNotNull(target, readable).distinct(),
 )
 
 sealed interface ConfigDocumentFileRead {
   data class Absent(val path: Path) : ConfigDocumentFileRead
 
-  data class Malformed(val path: Path, val reason: String) : ConfigDocumentFileRead
+  data class Malformed(
+    val path: Path,
+    val fingerprint: ConfigFingerprint,
+    val reason: String,
+    val keyPath: String? = null,
+  ) : ConfigDocumentFileRead
 
   data class Present(
     val path: Path,

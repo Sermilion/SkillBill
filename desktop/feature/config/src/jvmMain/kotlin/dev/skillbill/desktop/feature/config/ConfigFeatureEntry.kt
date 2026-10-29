@@ -9,6 +9,7 @@ import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.SettingsPageContribution
 import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
+import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import me.tatarka.inject.annotations.Inject
@@ -25,6 +26,8 @@ class ConfigFeatureEntry(
   private val selection: SelectionHolder,
   private val ledger: CommentWarningLedger,
   private val toasts: ToastQueue,
+  private val sessions: ConfigEditorSessions,
+  private val windowScope: WindowCoroutineScope,
 ) : FeatureEntry {
   override fun renders(route: AppRoute) = false
 
@@ -38,9 +41,9 @@ class ConfigFeatureEntry(
   @Composable
   override fun Content(route: AppRoute) {
     val page = (route as SettingsRoute).page.id
-    androidx.compose.runtime.key(page) {
-      ConfigPage(page, repository, specs, selection.item.value?.repositoryRoot, ledger, toasts)
-    }
+    val preferredRepo = selection.item.value?.repositoryRoot
+    val session = sessions.session(page, preferredRepo)
+    ConfigPage(page, repository, specs, preferredRepo, ledger, toasts, session, sessions, windowScope.scope)
   }
 }
 

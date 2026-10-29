@@ -16,15 +16,15 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.model.toPath
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
-import skillbill.ports.telemetry.transport.writeTelemetryLevel
 import skillbill.telemetry.DEFAULT_TELEMETRY_BATCH_SIZE
+import skillbill.telemetry.TelemetryConfigFileKeys
 import skillbill.telemetry.parsePositiveTelemetryInt
-import skillbill.telemetry.parseTelemetryLevelValue
 import skillbill.telemetry.telemetryLevels
 import java.nio.file.Files
 import java.nio.file.Path
@@ -41,28 +41,36 @@ internal fun applyTelemetryIntent(
       environment = resolveEnvironmentMap(plan.request.environment),
       userHome = plan.request.home.toPath(),
     )
-  val configPath = resolveTelemetryConfigPath(environmentContext.environment, environmentContext.userHome)
-  val existedBefore = Files.exists(configPath)
+  var configPath = environmentContext.userHome.resolve(".config").resolve("skill-bill").resolve("config.json")
   return runCatching {
-    val clearedEvents =
-      applyInstallTelemetryLevel(
-        plan.telemetryLevel.id,
-        telemetryLevelMutator,
-        telemetryConfigStore,
+    val apply = {
+      val existedBefore = Files.exists(configPath)
+      val clearedEvents =
+        applyInstallTelemetryLevel(plan.telemetryLevel.id, telemetryLevelMutator, telemetryConfigStore)
+      val status =
+        if (plan.telemetryLevel.id == "off" && !existedBefore && clearedEvents == 0) {
+          InstallTelemetryApplyStatus.SKIPPED
+        } else {
+          InstallTelemetryApplyStatus.SUCCESS
+        }
+      InstallTelemetryApplyOutcome(
+        level = plan.telemetryLevel,
+        status = status,
+        configPath = configPath.toFileLocation(),
+        clearedEvents = clearedEvents,
+        message = telemetryOutcomeMessage(plan.telemetryLevel.id, status),
       )
-    val status =
-      if (plan.telemetryLevel.id == "off" && !existedBefore && clearedEvents == 0) {
-        InstallTelemetryApplyStatus.SKIPPED
-      } else {
-        InstallTelemetryApplyStatus.SUCCESS
+    }
+    val configStore = telemetryConfigStore
+    if (configStore != null) {
+      configStore.withConfigTransaction {
+        configPath = configStore.configPath()
+        apply()
       }
-    InstallTelemetryApplyOutcome(
-      level = plan.telemetryLevel,
-      status = status,
-      configPath = configPath.toFileLocation(),
-      clearedEvents = clearedEvents,
-      message = telemetryOutcomeMessage(plan.telemetryLevel.id, status),
-    )
+    } else {
+      configPath = resolveTelemetryConfigPath(environmentContext.environment, environmentContext.userHome)
+      apply()
+    }
   }.getOrElse { error ->
     val issue =
       InstallApplyIssue(
@@ -96,33 +104,24 @@ private fun applyInstallTelemetryLevel(
     requireNotNull(telemetryConfigStore) {
       "TelemetryConfigStore must be supplied through RuntimeComponent."
     }
-  if (configStore.writeTelemetryLevel(level)) {
-    validateInstallTelemetryConfig(configStore)
-  }
+  validateInstallTelemetryBatchSize(configStore)
+  configStore.mutateTelemetryLevelAtomically(level).wrote
   return 0
 }
 
-private fun validateInstallTelemetryConfig(configStore: TelemetryConfigStore) {
-  val payload = readInstallTelemetryPayload(configStore)
-  val telemetry =
-    (payload["telemetry"] as? Map<*, *>)
-      ?.entries
-      ?.filter { it.key is String }
-      ?.associate { it.key as String to it.value }
-      ?: throw IllegalArgumentException(
-        "Telemetry config at '${configStore.configPath()}' must contain a 'telemetry' object.",
-      )
-  val level = parseTelemetryLevelValue(telemetry["level"]?.toString() ?: "anonymous", "telemetry.level")
-  val installId = payload["install_id"]?.toString()?.trim().orEmpty()
-  require(level == "off" || installId.isNotBlank()) {
-    "Telemetry is enabled but no install_id is configured at '${configStore.configPath()}'. " +
-      "Run 'skill-bill telemetry enable' to create one."
-  }
-  val batchSizeRaw = telemetry["batch_size"] ?: DEFAULT_TELEMETRY_BATCH_SIZE
-  when (batchSizeRaw) {
-    is Int -> require(batchSizeRaw > 0) { "telemetry.batch_size must be greater than zero." }
-    is Number -> require(batchSizeRaw.toInt() > 0) { "telemetry.batch_size must be greater than zero." }
-    else -> parsePositiveTelemetryInt(batchSizeRaw.toString(), "telemetry.batch_size")
+private fun validateInstallTelemetryBatchSize(configStore: TelemetryConfigStore) {
+  val document =
+    when (val read = configStore.read()) {
+      TelemetryConfigRead.Absent -> return
+      is TelemetryConfigRead.Malformed -> throw IllegalArgumentException(read.reason)
+      is TelemetryConfigRead.Present -> read.document
+    }
+  val telemetry = document.payload[TelemetryConfigFileKeys.TELEMETRY] as? Map<*, *>
+  val batchSize = telemetry?.get(TelemetryConfigFileKeys.BATCH_SIZE) ?: DEFAULT_TELEMETRY_BATCH_SIZE
+  val keyPath = "${TelemetryConfigFileKeys.TELEMETRY}.${TelemetryConfigFileKeys.BATCH_SIZE}"
+  when (batchSize) {
+    is Number -> require(batchSize.toInt() > 0) { "$keyPath must be greater than zero." }
+    else -> parsePositiveTelemetryInt(batchSize.toString(), keyPath)
   }
 }
 
@@ -197,6 +196,8 @@ private fun registerMcpAgent(
           agent = agent.id,
           runtimeMcpBin = runtimeMcpBin,
           home = plan.request.home.toPath(),
+          profileEnvironment =
+            InstallMcpProfileEnvironment.from(plan.request.environment) ?: InstallMcpProfileEnvironment(),
         ),
       ).outcome
     }.getOrElse { error ->
@@ -274,15 +275,4 @@ private fun failedMcpRegistrationOutcome(
     issue = issue,
     profiles = profiles,
   )
-}
-
-private fun readInstallTelemetryPayload(configStore: TelemetryConfigStore): Map<String, Any?> {
-  val payload =
-    when (val read = configStore.read()) {
-      TelemetryConfigRead.Absent ->
-        throw IllegalArgumentException("Telemetry config at '${configStore.configPath()}' is missing.")
-      is TelemetryConfigRead.Malformed -> throw IllegalArgumentException(read.reason)
-      is TelemetryConfigRead.Present -> read.document.payload
-    }
-  return payload
 }

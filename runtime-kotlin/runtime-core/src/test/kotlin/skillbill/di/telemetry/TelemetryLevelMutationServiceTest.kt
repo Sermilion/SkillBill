@@ -8,6 +8,8 @@ import skillbill.application.telemetry.settings.DefaultTelemetrySettingsProvider
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.model.EnvironmentContext
+import skillbill.ports.config.model.ConfigDocumentReplaceResult
+import skillbill.ports.config.model.ConfigFingerprint
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
@@ -21,7 +23,10 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
+import skillbill.ports.telemetry.model.TelemetryConfigLevelWriteResult
 import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryConfigSnapshotRead
+import skillbill.ports.telemetry.model.TelemetryConfigWriteRequest
 import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
@@ -34,6 +39,7 @@ import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
+import skillbill.telemetry.TelemetryConfigFileKeys
 import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.telemetry.model.TelemetryOpenDocument
 import skillbill.telemetry.model.TelemetrySettings
@@ -185,7 +191,7 @@ class TelemetryLevelMutationServiceTest {
         seed =
           """
       |{"install_id":"seeded-id","external_addon_sources":["/tmp/addons","/tmp/more"],
-      |"execution_matrix":{"default":"claude","review":"codex"},
+      |"execution_matrix":{"phase_tiers":{"review":"reasoning"},"agents":{}},
       |"telemetry":{"level":"anonymous","proxy_url":"","batch_size":50}}
           """.trimMargin(),
       )
@@ -203,7 +209,10 @@ class TelemetryLevelMutationServiceTest {
         is TelemetryConfigRead.Present -> read.document.payload
       }
     assertEquals(listOf("/tmp/addons", "/tmp/more"), payload["external_addon_sources"])
-    assertEquals(mapOf("default" to "claude", "review" to "codex"), payload["execution_matrix"])
+    assertEquals(
+      mapOf("phase_tiers" to mapOf("review" to "reasoning"), "agents" to emptyMap<String, Any?>()),
+      payload["execution_matrix"],
+    )
   }
 
   @Test
@@ -455,11 +464,40 @@ private class FakeMutationTelemetryConfigStore : TelemetryConfigStore {
 
   override fun configPath(): Path = Path.of("/fake/config.json")
 
+  override fun configCandidatePaths(): List<Path> = listOf(configPath())
+
+  override fun <T> withConfigTransaction(action: () -> T): T = action()
+
+  override fun newInstallIdCandidate(): String = "new-install"
+
   override fun read(): TelemetryConfigRead = TelemetryConfigRead.Present(document)
+
+  override fun readSnapshot(): TelemetryConfigSnapshotRead =
+    TelemetryConfigSnapshotRead.Present(configPath(), ConfigFingerprint("fake"), document)
 
   override fun ensure(): TelemetryConfigDocument = document
 
-  override fun write(document: TelemetryConfigDocument) {
-    this.document = document
+  override fun write(request: TelemetryConfigWriteRequest): ConfigDocumentReplaceResult {
+    if (request.path != configPath() || request.fingerprint != ConfigFingerprint("fake")) {
+      return ConfigDocumentReplaceResult.ChangedOnDisk(configPath())
+    }
+    document = request.document
+    return ConfigDocumentReplaceResult.Written(configPath(), ConfigFingerprint("fake"))
+  }
+
+  override fun mutateTelemetryLevelAtomically(level: String): TelemetryConfigLevelWriteResult {
+    val payload = LinkedHashMap<String, Any?>(document.payload)
+    val telemetry =
+      LinkedHashMap(
+        (payload[TelemetryConfigFileKeys.TELEMETRY] as Map<*, *>).entries
+          .filter { it.key is String }
+          .associate { it.key as String to it.value },
+      )
+    val previousLevel = telemetry[TelemetryConfigFileKeys.LEVEL]?.toString() ?: "anonymous"
+    telemetry[TelemetryConfigFileKeys.LEVEL] = level
+    telemetry.remove(TelemetryConfigFileKeys.ENABLED)
+    payload[TelemetryConfigFileKeys.TELEMETRY] = telemetry
+    this.document = TelemetryConfigDocument(TelemetryOpenDocument.from(payload))
+    return TelemetryConfigLevelWriteResult(true, previousLevel)
   }
 }

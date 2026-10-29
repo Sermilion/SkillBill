@@ -4,6 +4,13 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 
 const val COMPACTION_KEY: String = "compaction"
 
+object CompactionFieldKeys {
+  const val ENABLED: String = "enabled"
+  const val WINDOW_TOKENS: String = "window_tokens"
+  const val TRIGGER_PCT: String = "trigger_pct"
+  const val PHASES: String = "phases"
+}
+
 private const val DEFAULT_COMPACTION_ENABLED: Boolean = true
 internal const val DEFAULT_COMPACTION_WINDOW_TOKENS: Int = 400_000
 internal const val DEFAULT_COMPACTION_TRIGGER_PCT: Int = 70
@@ -43,8 +50,35 @@ data class CompactionSettings(
   }
 }
 
+sealed interface CompactionField<out T> {
+  data object Missing : CompactionField<Nothing>
+
+  data object Null : CompactionField<Nothing>
+
+  data class Value<T>(val value: T) : CompactionField<T>
+}
+
+data class PhaseCompactionFields(
+  val windowTokens: CompactionField<Int> = CompactionField.Missing,
+  val triggerPct: CompactionField<Int> = CompactionField.Missing,
+)
+
+data class CompactionSettingsFields(
+  val enabled: CompactionField<Boolean> = CompactionField.Missing,
+  val windowTokens: CompactionField<Int> = CompactionField.Missing,
+  val triggerPct: CompactionField<Int> = CompactionField.Missing,
+  val phases: CompactionField<Map<String, PhaseCompactionFields>> = CompactionField.Missing,
+) {
+  companion object {
+    val EMPTY: CompactionSettingsFields = CompactionSettingsFields()
+  }
+}
+
 sealed interface CompactionSettingsParse {
-  data class Valid(val settings: CompactionSettings) : CompactionSettingsParse
+  data class Valid(
+    val settings: CompactionSettings,
+    val fields: CompactionSettingsFields = CompactionSettingsFields.EMPTY,
+  ) : CompactionSettingsParse
 
   data class Invalid(
     val keyPath: String,
@@ -53,8 +87,11 @@ sealed interface CompactionSettingsParse {
   ) : CompactionSettingsParse
 }
 
-fun parseCompactionSettings(raw: Any?): CompactionSettingsParse =
-  compactionInvalid(raw) ?: CompactionSettingsParse.Valid(buildCompactionSettings(raw))
+fun parseCompactionSettings(raw: Any?): CompactionSettingsParse {
+  val invalid = compactionInvalid(raw)
+  if (invalid != null) return invalid
+  return CompactionSettingsParse.Valid(buildCompactionSettings(raw), buildCompactionSettingsFields(raw))
+}
 
 private fun compactionInvalid(raw: Any?): CompactionSettingsParse.Invalid? {
   val root = raw as? Map<*, *> ?: return invalidCompaction(COMPACTION_KEY, raw, "must be a mapping.")
@@ -188,6 +225,40 @@ private fun buildCompactionSettings(raw: Any?): CompactionSettings {
   )
 }
 
+private fun buildCompactionSettingsFields(raw: Any?): CompactionSettingsFields {
+  val fields = fieldsOf(checkNotNull(raw as? Map<*, *>) { "validated compaction settings must be a mapping." })
+  val phases =
+    authoredField(fields, PHASES_KEY) { phaseMap ->
+      val rawPhases = checkNotNull(phaseMap as? Map<*, *>) { "validated phase settings must be a mapping." }
+      rawPhases.entries.associate { (rawPhaseId, rawFields) ->
+        val phaseId = checkNotNull(rawPhaseId as? String) { "validated phase id must be a string." }
+        val phaseFields =
+          fieldsOf(checkNotNull(rawFields as? Map<*, *>) { "validated phase directive must be a mapping." })
+        phaseId to
+          PhaseCompactionFields(
+            windowTokens = authoredField(phaseFields, WINDOW_KEY) { (it as Number).toInt() },
+            triggerPct = authoredField(phaseFields, TRIGGER_PCT_KEY) { (it as Number).toInt() },
+          )
+      }
+    }
+  return CompactionSettingsFields(
+    enabled = authoredField(fields, ENABLED_KEY) { it as Boolean },
+    windowTokens = authoredField(fields, WINDOW_KEY) { (it as Number).toInt() },
+    triggerPct = authoredField(fields, TRIGGER_PCT_KEY) { (it as Number).toInt() },
+    phases = phases,
+  )
+}
+
+private fun <T> authoredField(
+  fields: Map<String, Any?>,
+  key: String,
+  value: (Any) -> T,
+): CompactionField<T> {
+  if (!fields.containsKey(key)) return CompactionField.Missing
+  val raw = fields[key] ?: return CompactionField.Null
+  return CompactionField.Value(value(raw))
+}
+
 private fun buildPhases(
   raw: Any?,
   defaultWindow: Int,
@@ -211,9 +282,9 @@ private fun invalidCompaction(
 ): CompactionSettingsParse.Invalid =
   CompactionSettingsParse.Invalid(keyPath = keyPath, value = value?.toString() ?: "null", reason = reason)
 
-private const val ENABLED_KEY: String = "enabled"
-private const val WINDOW_KEY: String = "window_tokens"
-private const val TRIGGER_PCT_KEY: String = "trigger_pct"
-private const val PHASES_KEY: String = "phases"
+private const val ENABLED_KEY: String = CompactionFieldKeys.ENABLED
+private const val WINDOW_KEY: String = CompactionFieldKeys.WINDOW_TOKENS
+private const val TRIGGER_PCT_KEY: String = CompactionFieldKeys.TRIGGER_PCT
+private const val PHASES_KEY: String = CompactionFieldKeys.PHASES
 private val COMPACTION_FIELDS: Set<String> = setOf(ENABLED_KEY, WINDOW_KEY, TRIGGER_PCT_KEY, PHASES_KEY)
 private val PHASE_DIRECTIVE_FIELDS: Set<String> = setOf(WINDOW_KEY, TRIGGER_PCT_KEY)

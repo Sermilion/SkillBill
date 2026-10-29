@@ -19,6 +19,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
+import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.CoroutineScope
@@ -64,9 +65,6 @@ interface WindowComponent {
     fun createWindowComponent(): WindowComponent
   }
 }
-
-/** The window's coroutines: control calls and the shared board observation. Cancelled when the window is disposed. */
-class WindowCoroutineScope(val scope: CoroutineScope)
 
 @ContributesTo(WindowScope::class)
 interface WindowProviders {

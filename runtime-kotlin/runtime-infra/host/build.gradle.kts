@@ -11,6 +11,7 @@ dependencies {
   implementation(libs.kotlin.inject.runtime)
   implementation(libs.jackson.databind)
   implementation(libs.jackson.dataformat.yaml)
+  implementation(libs.snakeyaml)
   testImplementation(testFixtures(project(":runtime-ports")))
   testImplementation(libs.junit.jupiter)
   testImplementation(libs.kotlin.test)

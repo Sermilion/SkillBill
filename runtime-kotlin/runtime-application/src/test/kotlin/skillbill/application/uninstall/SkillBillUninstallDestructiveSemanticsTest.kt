@@ -124,6 +124,17 @@ class SkillBillUninstallDestructiveSemanticsTest {
 }
 
 private class LocalUninstallPathsPort : UninstallPathsPort {
+  override fun <T> withConfigTransaction(
+    userHome: Path,
+    environment: Map<String, String>,
+    action: () -> T,
+  ): T = action()
+
+  override fun configLockFilePaths(
+    userHome: Path,
+    environment: Map<String, String>,
+  ): List<Path> = emptyList()
+
   override fun listImmediateDirectoryNames(root: Path): List<String> =
     if (Files.isDirectory(root)) root.toFile().list().orEmpty().toList() else emptyList()
 
@@ -148,11 +159,27 @@ private class LocalUninstallPathsPort : UninstallPathsPort {
     }
     return removed
   }
+
+  override fun removeTreeExcept(
+    path: Path,
+    retainedPaths: Collection<Path>,
+  ): List<Path> = removeTree(path)
 }
 
 private class FailingStateRootUninstallPathsPort(
   private val home: Path,
 ) : UninstallPathsPort {
+  override fun <T> withConfigTransaction(
+    userHome: Path,
+    environment: Map<String, String>,
+    action: () -> T,
+  ): T = action()
+
+  override fun configLockFilePaths(
+    userHome: Path,
+    environment: Map<String, String>,
+  ): List<Path> = emptyList()
+
   override fun listImmediateDirectoryNames(root: Path): List<String> =
     if (root == home.resolve(".skill-bill")) listOf("runtime", "review-metrics.db") else emptyList()
 
@@ -170,6 +197,11 @@ private class FailingStateRootUninstallPathsPort(
     }
     return emptyList()
   }
+
+  override fun removeTreeExcept(
+    path: Path,
+    retainedPaths: Collection<Path>,
+  ): List<Path> = removeTree(path)
 }
 
 private object NoopDestructiveSemanticsDiagnostics : RuntimeDiagnostics {

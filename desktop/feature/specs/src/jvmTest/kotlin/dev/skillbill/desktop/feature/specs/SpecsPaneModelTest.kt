@@ -158,6 +158,7 @@ class SpecsPaneModelTest {
       return controlState
     }
     override suspend fun openFile(path: String) = OpenOutcome.Opened
+    override suspend fun openFileInDefaultApp(path: String) = OpenOutcome.NotOpened
     override suspend fun revealFolder(path: String) = OpenOutcome.Opened
   }
 }

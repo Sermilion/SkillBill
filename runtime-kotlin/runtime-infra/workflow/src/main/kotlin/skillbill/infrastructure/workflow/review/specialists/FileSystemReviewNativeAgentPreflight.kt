@@ -23,8 +23,9 @@ class FileSystemReviewNativeAgentPreflight(
 ) : ReviewNativeAgentPreflightPort {
   override fun verify(request: ReviewNativeAgentPreflightRequest) {
     val home = environment.userHome
+    val environmentValues = resolveEnvironmentMap(environment.environment)
 
-    val inventory = NativeAgentLinkInventory.read(home, emptyList())
+    val inventory = NativeAgentLinkInventory.read(home, emptyList(), environment = environmentValues)
     request.assignments.distinct().forEach { assignment ->
       val agentId = assignment.agentId
       val logicalName = assignment.logicalName
@@ -43,18 +44,18 @@ class FileSystemReviewNativeAgentPreflight(
         fail(
           logicalName,
           provider,
-          provider.homeAgentDirs(home).first().resolve(provider.fileName(logicalName)),
+          provider.homeAgentDirs(home, environmentValues).first().resolve(provider.fileName(logicalName)),
           "managed inventory entry is missing",
         )
       }
       val activePaths =
-        activeProviderDirs(provider, home)
+        activeProviderDirs(provider, home, environmentValues)
           .map { it.resolve(provider.fileName(logicalName)).toAbsolutePath().normalize() }.toSet()
       if (activePaths.isEmpty()) {
         fail(
           logicalName,
           provider,
-          provider.homeAgentDirs(home).first().resolve(provider.fileName(logicalName)),
+          provider.homeAgentDirs(home, environmentValues).first().resolve(provider.fileName(logicalName)),
           "active provider directory is missing",
         )
       }
@@ -63,7 +64,7 @@ class FileSystemReviewNativeAgentPreflight(
         fail(
           logicalName,
           provider,
-          provider.homeAgentDirs(home).first().resolve(provider.fileName(logicalName)),
+          provider.homeAgentDirs(home, environmentValues).first().resolve(provider.fileName(logicalName)),
           "managed inventory must contain one entry per applicable provider path",
         )
       }
@@ -112,10 +113,8 @@ class FileSystemReviewNativeAgentPreflight(
   private fun activeProviderDirs(
     provider: NativeAgentProvider,
     home: Path,
-  ): List<Path> {
-    val env = resolveEnvironmentMap(environment.environment)
-    return provider.activeHomeAgentDirs(home, env)
-  }
+    environment: Map<String, String>,
+  ): List<Path> = provider.activeHomeAgentDirs(home, environment)
 
   private fun fail(
     logicalName: String,

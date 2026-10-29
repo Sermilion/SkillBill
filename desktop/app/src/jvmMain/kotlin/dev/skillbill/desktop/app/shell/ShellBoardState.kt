@@ -1,6 +1,6 @@
 package dev.skillbill.desktop.app.shell
 
-import dev.skillbill.desktop.app.di.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.repository.WorkBoardRepository

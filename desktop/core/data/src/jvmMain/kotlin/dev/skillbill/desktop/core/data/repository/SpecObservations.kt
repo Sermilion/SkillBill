@@ -122,17 +122,27 @@ class SpecObservations internal constructor(
 
   suspend fun openFile(path: String): OpenOutcome = open(path, host.variables)
 
+  suspend fun openFileInDefaultApp(path: String): OpenOutcome = withContext(Dispatchers.IO) {
+    val outcome = if (path.isBlank()) OpenOutcome.NotOpened else openOnIo(path, host.variables - EDITOR_VARIABLES)
+    if (outcome == OpenOutcome.NotOpened) diagnostics.record("desktop_phase_instruction_default_open_failed")
+    outcome
+  }
+
   /** Without `VISUAL` and `EDITOR` the port falls through to the system opener, which shows a folder in the file manager. */
   suspend fun revealFolder(path: String): OpenOutcome = open(path, host.variables - EDITOR_VARIABLES)
 
   // File opens wait on the launched process, so they run on IO and never hold a database dispatcher slot.
   private suspend fun open(path: String, environment: Map<String, String>): OpenOutcome = withContext(Dispatchers.IO) {
+    openOnIo(path, environment)
+  }
+
+  private fun openOnIo(path: String, environment: Map<String, String>): OpenOutcome {
     val target = try {
       Path.of(path)
     } catch (_: InvalidPathException) {
-      return@withContext OpenOutcome.NotOpened
+      return OpenOutcome.NotOpened
     }
-    if (runtime.fileEditorLauncherPort.open(target, environment)) OpenOutcome.Opened else OpenOutcome.NotOpened
+    return if (runtime.fileEditorLauncherPort.open(target, environment)) OpenOutcome.Opened else OpenOutcome.NotOpened
   }
 
   private fun revisionChanges(topic: String): Flow<Unit> =

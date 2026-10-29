@@ -26,11 +26,18 @@ fun TelemetryConfigDocument.withTelemetryLevel(
   configPath: String,
 ): TelemetryConfigDocument {
   val updatedPayload = payload.toMutableMap()
+  val telemetryRaw = updatedPayload[TelemetryConfigFileKeys.TELEMETRY]
   val telemetry =
-    when (val telemetryRaw = updatedPayload[TelemetryConfigFileKeys.TELEMETRY]) {
-      null -> mutableMapOf<String, Any?>()
-      is Map<*, *> ->
-        telemetryRaw.entries
+    when {
+      !updatedPayload.containsKey(TelemetryConfigFileKeys.TELEMETRY) -> mutableMapOf<String, Any?>()
+      telemetryRaw == null ->
+        throw IllegalArgumentException(
+          "Telemetry config at '$configPath' has 'telemetry: null'. Replace it with an object before setting " +
+            "'${TelemetryConfigFileKeys.TELEMETRY}.${TelemetryConfigFileKeys.LEVEL}'.",
+        )
+      telemetryRaw is Map<*, *> ->
+        telemetryRaw
+          .entries
           .filter { it.key is String }
           .associate { it.key as String to it.value }
           .toMutableMap()
@@ -38,8 +45,8 @@ fun TelemetryConfigDocument.withTelemetryLevel(
         "Telemetry config at '$configPath' must contain a 'telemetry' object.",
       )
     }
-  telemetry[TelemetryConfigFileKeys.LEVEL] = level
   telemetry.remove(TelemetryConfigFileKeys.ENABLED)
+  telemetry[TelemetryConfigFileKeys.LEVEL] = level
   updatedPayload[TelemetryConfigFileKeys.TELEMETRY] = telemetry
   return TelemetryConfigDocument(TelemetryOpenDocument.from(updatedPayload))
 }

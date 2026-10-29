@@ -1,17 +1,18 @@
 package skillbill.infrastructure.host.system
 
 import com.fasterxml.jackson.core.JacksonException
+import com.fasterxml.jackson.core.StreamReadFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import me.tatarka.inject.annotations.Inject
+import org.yaml.snakeyaml.LoaderOptions
+import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.comments.CommentType
+import org.yaml.snakeyaml.error.YAMLException
+import org.yaml.snakeyaml.events.CommentEvent
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.config.ConfigDocumentFiles
@@ -25,9 +26,8 @@ import skillbill.ports.config.model.ProjectConfigLocation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import java.io.IOException
-import java.math.BigDecimal
+import java.io.StringReader
 import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
@@ -35,66 +35,111 @@ import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.StandardOpenOption.CREATE
-import java.nio.file.StandardOpenOption.WRITE
 import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.ReentrantLock
 
 @Inject
 class FileConfigDocumentFiles(
   private val diagnostics: RuntimeDiagnostics,
   private val projectStore: ProjectStorePort,
 ) : ConfigDocumentFiles {
-  override fun projectConfigLocation(repoRoot: Path): ProjectConfigLocation {
+  override fun <T> withLocks(
+    paths: Collection<Path>,
+    action: () -> T,
+  ): T {
+    return FileConfigDocumentLocks.withLocks(paths, action)
+  }
+
+  override fun projectConfigLockPaths(repoRoot: Path): List<Path> {
     val target = projectStore.resolve(repoRoot).configPath
-    val readable =
-      try {
-        readableRepoLocalConfigPath(diagnostics, repoRoot, target)
-      } catch (error: IOException) {
-        throw configDocumentIoException(target, "resolve", error)
-      } catch (error: SecurityException) {
-        throw configDocumentIoException(target, "resolve", error)
-      }
-    return ProjectConfigLocation(target, readable)
+    val legacy = repoRoot.resolve(LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY).resolve(REPO_LOCAL_CONFIG_FILE_NAME)
+    return listOf(target, legacy)
+  }
+
+  override fun projectConfigLocation(repoRoot: Path): ProjectConfigLocation {
+    val requestedTarget = projectStore.resolve(repoRoot).configPath
+    return withLocks(projectConfigLockPaths(repoRoot)) {
+      val target = FileConfigDocumentLocks.lockedPath(requestedTarget)
+      val readable =
+        try {
+          readableRepoLocalConfigPath(diagnostics, repoRoot, target)
+        } catch (error: IOException) {
+          throw configDocumentIoException(target, "resolve", error)
+        } catch (error: SecurityException) {
+          throw configDocumentIoException(target, "resolve", error)
+        }
+      ProjectConfigLocation(
+        target,
+        readable,
+        projectConfigLockPaths(repoRoot).map { FileConfigDocumentLocks.lockedPath(it) },
+      )
+    }
   }
 
   override fun read(
     path: Path,
     format: ConfigDocumentFormat,
-  ): ConfigDocumentFileRead {
-    val bytes = readBytesOrAbsent(path, "read") ?: return ConfigDocumentFileRead.Absent(path)
-    val text =
-      try {
-        Charsets.UTF_8.newDecoder()
-          .onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT)
-          .decode(ByteBuffer.wrap(bytes))
-          .toString()
-      } catch (_: CharacterCodingException) {
-        return ConfigDocumentFileRead.Malformed(path, "Configuration is not valid UTF-8.")
+  ): ConfigDocumentFileRead =
+    withLocks(listOf(path)) {
+      val actualPath = FileConfigDocumentLocks.lockedPath(path)
+      val bytes = readBytesOrAbsent(actualPath, "read") ?: return@withLocks ConfigDocumentFileRead.Absent(actualPath)
+      val fingerprint = fingerprint(bytes)
+      val text =
+        try {
+          Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes))
+            .toString()
+        } catch (_: CharacterCodingException) {
+          return@withLocks ConfigDocumentFileRead.Malformed(
+            actualPath,
+            fingerprint,
+            "Configuration is not valid UTF-8.",
+          )
+        }
+      val parsed =
+        when (format) {
+          ConfigDocumentFormat.JSON -> readJson(text)
+          ConfigDocumentFormat.YAML -> readYaml(actualPath, text)
+        }
+      if (parsed is ParsedTree.Invalid) {
+        return@withLocks ConfigDocumentFileRead.Malformed(actualPath, fingerprint, parsed.reason, parsed.keyPath)
       }
-    val parsed =
-      when (format) {
-        ConfigDocumentFormat.JSON -> readJson(text)
-        ConfigDocumentFormat.YAML -> readYaml(path, text)
-      }
-    if (parsed is ParsedTree.Invalid) return ConfigDocumentFileRead.Malformed(path, parsed.reason)
-    val tree = (parsed as ParsedTree.Valid).entries
-    return ConfigDocumentFileRead.Present(
-      path,
-      fingerprint(bytes),
-      ConfigDocumentTree(tree),
-      format == ConfigDocumentFormat.YAML && text.lineSequence().any { it.trimStart().startsWith('#') },
-    )
-  }
+      val hasComments =
+        if (format == ConfigDocumentFormat.YAML) {
+          try {
+            yamlHasComments(text)
+          } catch (error: YAMLException) {
+            return@withLocks ConfigDocumentFileRead.Malformed(
+              actualPath,
+              fingerprint,
+              "Configuration comments could not be inspected: ${error.message.orEmpty()}",
+            )
+          }
+        } else {
+          false
+        }
+      val tree = (parsed as ParsedTree.Valid).entries
+      ConfigDocumentFileRead.Present(
+        actualPath,
+        fingerprint,
+        ConfigDocumentTree(tree),
+        hasComments,
+      )
+    }
 
   private fun readJson(text: String): ParsedTree {
     val parsed =
       JsonCodec.parseObjectOrNull(text)
         ?: return ParsedTree.Invalid("Configuration is not a valid JSON object.")
+    JsonCodec.duplicateObjectKeyPath(text)?.let { keyPath ->
+      return ParsedTree.Invalid(duplicateKeyReason(keyPath), keyPath)
+    }
     return try {
-      ParsedTree.Valid(jsonObjectToOrderedMap(parsed))
+      ParsedTree.Valid(
+        JsonCodec.anyToStringAnyMap(JsonCodec.machineConfigJsonElementToValue(parsed))
+          ?: return ParsedTree.Invalid("Configuration is not a valid JSON object."),
+      )
     } catch (_: NumberFormatException) {
       ParsedTree.Invalid("Configuration contains a number that cannot be represented.")
     }
@@ -104,6 +149,9 @@ class FileConfigDocumentFiles(
     path: Path,
     text: String,
   ): ParsedTree {
+    yamlAdmissionFailure(text)?.let { failure ->
+      return ParsedTree.Invalid(failure.reason, failure.keyPath)
+    }
     val root =
       try {
         yamlMapper.factory.createParser(text).use { parser ->
@@ -138,42 +186,53 @@ class FileConfigDocumentFiles(
     return ParsedTree.Valid(entries)
   }
 
+  private fun yamlHasComments(text: String): Boolean {
+    val options = LoaderOptions().apply { setProcessComments(true) }
+    val events = Yaml(options).parse(StringReader(text)).iterator()
+    var found = false
+    while (events.hasNext()) {
+      val event = events.next()
+      if (
+        event is CommentEvent &&
+        (event.commentType == CommentType.BLOCK || event.commentType == CommentType.IN_LINE)
+      ) {
+        found = true
+      }
+    }
+    return found
+  }
+
   override fun replace(request: ConfigDocumentReplaceRequest): ConfigDocumentReplaceResult {
-    val bytes = serialize(request.target, request.tree, request.format)
-    val target = request.target.toAbsolutePath().normalize()
-    val baseline = request.baseline.toAbsolutePath().normalize()
-    val parent =
-      target.parent ?: throw configDocumentIoException(target, "write", IOException("Target has no parent directory."))
-    val lock = pathLocks.computeIfAbsent(target) { ReentrantLock() }
     try {
-      Files.createDirectories(parent)
-      lock.lock()
-      try {
-        val lockPath = target.resolveSibling("${target.fileName}.lock")
-        FileChannel.open(lockPath, CREATE, WRITE).use { channel ->
-          channel.lock().use {
-            if (target != baseline && readBytesOrAbsent(target, "replace") != null) {
-              return ConfigDocumentReplaceResult.ChangedOnDisk(request.target)
-            }
-            val currentFingerprint = currentFingerprint(baseline)
-            if (currentFingerprint != request.expected) return ConfigDocumentReplaceResult.ChangedOnDisk(request.target)
-            val temp = Files.createTempFile(parent, ".${target.fileName}-", ".tmp")
-            try {
-              Files.write(temp, bytes)
-              Files.move(temp, target, ATOMIC_MOVE, REPLACE_EXISTING)
-            } finally {
-              Files.deleteIfExists(temp)
-            }
-            return ConfigDocumentReplaceResult.Written(request.target, fingerprint(bytes))
-          }
+      return withLocks(listOf(request.target, request.baseline)) {
+        val target = FileConfigDocumentLocks.lockedPath(request.target)
+        val baseline = FileConfigDocumentLocks.lockedPath(request.baseline)
+        val bytes = serialize(target, request.tree, request.format)
+        val parent =
+          target.parent ?: throw configDocumentIoException(
+            target,
+            "write",
+            IOException("Target has no parent directory."),
+          )
+        Files.createDirectories(parent)
+        if (target != baseline && readBytesOrAbsent(target, "replace") != null) {
+          return@withLocks ConfigDocumentReplaceResult.ChangedOnDisk(target)
         }
-      } finally {
-        lock.unlock()
+        val currentFingerprint = currentFingerprint(baseline)
+        if (currentFingerprint != request.expected) return@withLocks ConfigDocumentReplaceResult.ChangedOnDisk(target)
+        val temp = Files.createTempFile(parent, ".${target.fileName}-", ".tmp")
+        try {
+          Files.write(temp, bytes)
+          Files.move(temp, target, ATOMIC_MOVE, REPLACE_EXISTING)
+        } finally {
+          Files.deleteIfExists(temp)
+        }
+        ConfigDocumentReplaceResult.Written(target, fingerprint(bytes))
       }
     } catch (error: IOException) {
-      throw configDocumentIoException(target, "replace", error)
+      throw configDocumentIoException(request.target, "replace", error)
     } catch (error: SecurityException) {
-      throw configDocumentIoException(target, "replace", error)
+      throw configDocumentIoException(request.target, "replace", error)
     }
   }
 
@@ -220,37 +279,19 @@ class FileConfigDocumentFiles(
       throw configDocumentIoException(path, operation, error)
     }
 
-  private fun jsonObjectToOrderedMap(value: JsonObject): Map<String, Any?> =
-    value.entries.associateTo(LinkedHashMap()) { (key, entry) -> key to jsonValuePreservingExponentNumbers(entry) }
-
-  private fun jsonValuePreservingExponentNumbers(value: JsonElement): Any? =
-    when (value) {
-      JsonNull -> null
-      is JsonObject -> jsonObjectToOrderedMap(value)
-      is JsonArray -> value.map(::jsonValuePreservingExponentNumbers)
-      is JsonPrimitive -> {
-        val content = value.content
-        if (!value.isString && value.booleanOrNull == null && content.contains('e', ignoreCase = true)) {
-          BigDecimal(content)
-        } else {
-          JsonCodec.jsonElementToValue(value)
-        }
-      }
-    }
-
   private val yamlMapper: YAMLMapper by lazy {
     YAMLMapper.builder()
       .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
       .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+      .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
       .build()
-  }
-
-  private companion object {
-    val pathLocks = ConcurrentHashMap<Path, ReentrantLock>()
   }
 }
 
-internal fun configDocumentIoException(
+internal fun duplicateKeyReason(keyPath: String): String =
+  "Configuration repeats the key '$keyPath'. Remove the duplicate; saving would keep only one of the values."
+
+fun configDocumentIoException(
   path: Path,
   operation: String,
   cause: Throwable,
@@ -263,5 +304,5 @@ internal fun configDocumentIoException(
 private sealed interface ParsedTree {
   data class Valid(val entries: Map<String, Any?>) : ParsedTree
 
-  data class Invalid(val reason: String) : ParsedTree
+  data class Invalid(val reason: String, val keyPath: String? = null) : ParsedTree
 }

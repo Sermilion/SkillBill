@@ -1,9 +1,11 @@
 package skillbill.ports.telemetry.transport
 
+import skillbill.ports.config.model.ConfigDocumentReplaceResult
+import skillbill.ports.telemetry.model.TelemetryConfigLevelWriteResult
 import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryConfigSnapshotRead
+import skillbill.ports.telemetry.model.TelemetryConfigWriteRequest
 import skillbill.telemetry.model.TelemetryConfigDocument
-import skillbill.telemetry.telemetryLevels
-import skillbill.telemetry.withTelemetryLevel
 import java.nio.file.Path
 
 interface TelemetryConfigStore {
@@ -11,24 +13,24 @@ interface TelemetryConfigStore {
 
   fun configPath(): Path
 
+  /** Paths the runtime may select for the active machine config in this environment. */
+  fun configCandidatePaths(): List<Path>
+
+  /** Runs an operation while this store owns its config identities. */
+  fun <T> withConfigTransaction(action: () -> T): T
+
+  fun newInstallIdCandidate(): String
+
   fun read(): TelemetryConfigRead
+
+  /** Reads the selected path, byte fingerprint and parsed document from one locked observation. */
+  fun readSnapshot(): TelemetryConfigSnapshotRead
 
   fun ensure(): TelemetryConfigDocument
 
-  fun write(document: TelemetryConfigDocument)
-}
+  /** Writes only when the selected path and bytes still match the captured request. */
+  fun write(request: TelemetryConfigWriteRequest): ConfigDocumentReplaceResult
 
-fun TelemetryConfigStore.writeTelemetryLevel(level: String): Boolean {
-  val document =
-    if (level == telemetryLevels.first()) {
-      when (val read = read()) {
-        TelemetryConfigRead.Absent -> return false
-        is TelemetryConfigRead.Malformed -> throw IllegalArgumentException(read.reason)
-        is TelemetryConfigRead.Present -> read.document
-      }
-    } else {
-      ensure()
-    }
-  write(document.withTelemetryLevel(level, configPath().toString()))
-  return true
+  /** Applies a level change and returns its previous value from the same locked snapshot. */
+  fun mutateTelemetryLevelAtomically(level: String): TelemetryConfigLevelWriteResult
 }

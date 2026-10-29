@@ -25,7 +25,7 @@ class SkillBillUninstallService(
 ) {
   fun plan(request: UninstallRequest): UninstallPlan {
     val home = request.home
-    val stateRoot = home.resolve(".skill-bill")
+    val stateRoot = request.stateRoot
     val skillNames = installedSkillNames(uninstallFileSystem, stateRoot.resolve("installed-skills"))
     val legacyNames = legacySkillNames(skillNames)
     val claudeTargets =
@@ -65,6 +65,7 @@ class SkillBillUninstallService(
           environment = request.environment,
           os = currentOs(hostPlatform.osName),
         ),
+      environment = request.environment,
     )
   }
 
@@ -81,7 +82,15 @@ class SkillBillUninstallService(
       removeLauncher(uninstallFileSystem, launcher, removed, skipped, recorder)
     }
     removeDesktop(uninstallFileSystem, plan.desktop, removed, skipped, recorder)
-    removeInstallState(uninstallFileSystem, plan.stateRoot, removed, recorder)
+    uninstallFileSystem.withConfigTransaction(plan.home, plan.environment) {
+      removeInstallState(
+        uninstallFileSystem,
+        plan.stateRoot,
+        removed,
+        recorder,
+        InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(plan.home, plan.environment)),
+      )
+    }
 
     return UninstallResult(
       failed = recorder.failed(),
@@ -89,6 +98,28 @@ class SkillBillUninstallService(
       skipped = skipped,
       warnings = recorder.failureMessages(),
     )
+  }
+
+  fun clearInstallState(
+    stateRoot: Path,
+    home: Path,
+    environment: Map<String, String>,
+    preserveGeneratedOnly: Boolean,
+  ): UninstallResult {
+    val removed = mutableListOf<String>()
+    val recorder = UninstallMutationRecorder(diagnostics)
+    if (uninstallFileSystem.exists(stateRoot)) {
+      uninstallFileSystem.withConfigTransaction(home, environment) {
+        removeInstallState(
+          uninstallFileSystem,
+          stateRoot,
+          removed,
+          recorder,
+          InstallStateRemovalOptions(uninstallFileSystem.configLockFilePaths(home, environment), preserveGeneratedOnly),
+        )
+      }
+    }
+    return UninstallResult(recorder.failed(), removed, emptyList(), recorder.failureMessages())
   }
 }
 

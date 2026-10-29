@@ -27,8 +27,11 @@ class InstallPlanCliSubcommands(
   applyExternalAddons: InstallApplyExternalAddonsCommand,
   reconcile: InstallReconcileCommand,
   replayLastSelection: InstallReplayLastSelectionCommand,
+  migrateLegacyMachineConfig: InstallMigrateLegacyMachineConfigCommand,
+  clearState: InstallClearStateCommand,
 ) {
-  val commands: List<CliktCommand> = listOf(plan, apply, applyExternalAddons, reconcile, replayLastSelection)
+  val commands: List<CliktCommand> =
+    listOf(plan, apply, applyExternalAddons, reconcile, replayLastSelection, migrateLegacyMachineConfig, clearState)
 }
 
 @Inject

@@ -25,6 +25,9 @@ interface SpecRepository {
 
   suspend fun openFile(path: String): OpenOutcome
 
+  /** Opens a project phase instruction with the operating system's default application. */
+  suspend fun openFileInDefaultApp(path: String): OpenOutcome
+
   /** Shows a folder in the system file manager. */
   suspend fun revealFolder(path: String): OpenOutcome
 }

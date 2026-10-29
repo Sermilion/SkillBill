@@ -114,6 +114,7 @@ class DetailViewModelTest {
     override fun refreshTree(projectId: String) = Unit
     override fun control(bundle: SpecBundleRef): Flow<SpecControlState> = emptyFlow()
     override suspend fun openFile(path: String) = OpenOutcome.Opened
+    override suspend fun openFileInDefaultApp(path: String) = OpenOutcome.NotOpened
     override suspend fun revealFolder(path: String) = OpenOutcome.Opened
   }
 

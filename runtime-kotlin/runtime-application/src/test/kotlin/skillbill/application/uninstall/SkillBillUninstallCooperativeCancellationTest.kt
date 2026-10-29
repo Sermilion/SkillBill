@@ -161,6 +161,17 @@ private object StubHostPlatformPort : HostPlatformPort {
 }
 
 private object AbsentUninstallPathsPort : UninstallPathsPort {
+  override fun <T> withConfigTransaction(
+    userHome: Path,
+    environment: Map<String, String>,
+    action: () -> T,
+  ): T = action()
+
+  override fun configLockFilePaths(
+    userHome: Path,
+    environment: Map<String, String>,
+  ): List<Path> = emptyList()
+
   override fun listImmediateDirectoryNames(root: Path): List<String> = emptyList()
 
   override fun exists(path: Path): Boolean = false
@@ -172,6 +183,11 @@ private object AbsentUninstallPathsPort : UninstallPathsPort {
   override fun deleteIfExists(path: Path): Boolean = false
 
   override fun removeTree(path: Path): List<Path> = emptyList()
+
+  override fun removeTreeExcept(
+    path: Path,
+    retainedPaths: Collection<Path>,
+  ): List<Path> = emptyList()
 }
 
 private object StubInstallAgentTargetPort : InstallAgentTargetPort {

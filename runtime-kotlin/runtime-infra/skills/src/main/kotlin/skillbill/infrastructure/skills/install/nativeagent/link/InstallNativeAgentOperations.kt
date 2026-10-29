@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
+import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.uninstallCodexAgentTomls
 import skillbill.infrastructure.skills.install.nativeagent.uninstallCursorAgentMarkdown
@@ -8,10 +9,10 @@ import skillbill.infrastructure.skills.install.plan.CLAUDE_AGENTS_KIND
 import skillbill.infrastructure.skills.install.plan.CURSOR_AGENTS_KIND
 import skillbill.infrastructure.skills.install.plan.JUNIE_AGENTS_KIND
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.AgentTarget
 import skillbill.ports.repository.toFileLocation
-import java.nio.file.Files
 import java.nio.file.Path
 
 data class NativeAgentLinkOutcome(
@@ -39,13 +40,14 @@ data class NativeAgentLinkRequest(
 
 object InstallNativeAgentOperations {
   fun linkClaudeAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
-    val resolvedHome = request.home ?: resolveUserHome(null)
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
     return linkProviderAgents(
       provider = NativeAgentProvider.Claude,
-      request = request,
-      detectTargets = {
+      request = resolvedRequest,
+      detectTargets = { home ->
         NativeAgentProvider.Claude.homeAgentDirs(
-          resolvedHome,
+          home,
+          resolvedRequest.environment,
         ).map { AgentTarget(CLAUDE_AGENTS_KIND, it.toFileLocation()) }
       },
     )
@@ -54,90 +56,108 @@ object InstallNativeAgentOperations {
   fun unlinkClaudeAgents(request: NativeAgentLinkRequest): List<Path> =
     unlinkProviderAgents(
       provider = NativeAgentProvider.Claude,
-      request = request,
+      request = resolveNativeAgentLinkRequest(request),
     )
 
-  fun linkCodexAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome =
-    linkProviderAgents(
+  fun linkCodexAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    return linkProviderAgents(
       provider = NativeAgentProvider.Codex,
-      request = request,
+      request = resolvedRequest,
       detectTargets = { home ->
-        NativeAgentProvider.Codex.activeHomeAgentDirs(home).map {
+        NativeAgentProvider.Codex.activeHomeAgentDirs(home, resolvedRequest.environment).map {
           AgentTarget(NativeAgentProvider.Codex.directoryName, it.toFileLocation())
         }
       },
     )
+  }
 
   fun unlinkCodexAgents(request: NativeAgentLinkRequest): List<Path> {
-    val resolvedHome = request.home ?: resolveUserHome(null)
-    val unlinkedFromCache = unlinkProviderAgents(provider = NativeAgentProvider.Codex, request = request)
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    val agentDirs = NativeAgentProvider.Codex.homeAgentDirs(resolvedRequest.home!!, resolvedRequest.environment)
+    val unlinkedFromCache =
+      unlinkProviderAgents(
+        provider = NativeAgentProvider.Codex,
+        request = resolvedRequest,
+        agentDirs = agentDirs,
+      )
     return uninstallCodexAgentTomls(
-      request.platformPacksRoot,
-      resolvedHome,
-      request.skillsRoot,
-      request.selectedPlatforms,
+      resolvedRequest.platformPacksRoot,
+      resolvedRequest.skillsRoot,
+      resolvedRequest.selectedPlatforms,
+      agentDirs,
     ) + unlinkedFromCache
   }
 
-  fun linkJunieAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome =
-    linkProviderAgents(
+  fun linkJunieAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    return linkProviderAgents(
       provider = NativeAgentProvider.Junie,
-      request = request,
-      detectTargets = { resolvedHome ->
-        val targetPath = NativeAgentProvider.Junie.homeAgentDirs(resolvedHome).first()
-        if (
-          Files.exists(targetPath) ||
-          Files.exists(
-            resolvedHome.resolve(requireNotNull(NativeAgentProvider.Junie.supportedAgent.simpleHomeDirectory)),
-          )
-        ) {
+      request = resolvedRequest,
+      detectTargets = { home ->
+        val targetPath = NativeAgentProvider.Junie.homeAgentDirs(home, resolvedRequest.environment).first()
+        val root = home.resolve(requireNotNull(NativeAgentProvider.Junie.supportedAgent.simpleHomeDirectory))
+        val present =
+          listOf(targetPath, root).map { path ->
+            agentPathExists(path, "inspect Junie native-agent directory")
+          }.any { exists -> exists }
+        if (present) {
           listOf(AgentTarget(JUNIE_AGENTS_KIND, targetPath.toFileLocation()))
         } else {
           emptyList()
         }
       },
     )
+  }
 
   fun unlinkJunieAgents(request: NativeAgentLinkRequest): List<Path> {
-    val resolvedHome = request.home ?: resolveUserHome(null)
-    val unlinkedFromCache = unlinkProviderAgents(provider = NativeAgentProvider.Junie, request = request)
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    val unlinkedFromCache = unlinkProviderAgents(provider = NativeAgentProvider.Junie, request = resolvedRequest)
     return uninstallJunieAgentMarkdown(
-      request.platformPacksRoot,
-      resolvedHome,
-      request.skillsRoot,
-      request.selectedPlatforms,
+      resolvedRequest.platformPacksRoot,
+      resolvedRequest.home,
+      resolvedRequest.skillsRoot,
+      resolvedRequest.selectedPlatforms,
     ) +
       unlinkedFromCache
   }
 
-  fun linkCursorAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome =
-    linkProviderAgents(
+  fun linkCursorAgents(request: NativeAgentLinkRequest): NativeAgentLinkOutcome {
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    return linkProviderAgents(
       provider = NativeAgentProvider.Cursor,
-      request = request,
-      detectTargets = { resolvedHome ->
-        val targetPath = NativeAgentProvider.Cursor.homeAgentDirs(resolvedHome).first()
-        if (
-          Files.exists(targetPath) ||
-          Files.exists(
-            resolvedHome.resolve(requireNotNull(NativeAgentProvider.Cursor.supportedAgent.simpleHomeDirectory)),
-          )
-        ) {
+      request = resolvedRequest,
+      detectTargets = { home ->
+        val targetPath = NativeAgentProvider.Cursor.homeAgentDirs(home, resolvedRequest.environment).first()
+        val root = home.resolve(requireNotNull(NativeAgentProvider.Cursor.supportedAgent.simpleHomeDirectory))
+        val present =
+          listOf(targetPath, root).map { path ->
+            agentPathExists(path, "inspect Cursor native-agent directory")
+          }.any { exists -> exists }
+        if (present) {
           listOf(AgentTarget(CURSOR_AGENTS_KIND, targetPath.toFileLocation()))
         } else {
           emptyList()
         }
       },
     )
+  }
 
   fun unlinkCursorAgents(request: NativeAgentLinkRequest): List<Path> {
-    val resolvedHome = request.home ?: resolveUserHome(null)
-    val unlinkedFromCache = unlinkProviderAgents(provider = NativeAgentProvider.Cursor, request = request)
+    val resolvedRequest = resolveNativeAgentLinkRequest(request)
+    val unlinkedFromCache = unlinkProviderAgents(provider = NativeAgentProvider.Cursor, request = resolvedRequest)
     return uninstallCursorAgentMarkdown(
-      request.platformPacksRoot,
-      resolvedHome,
-      request.skillsRoot,
-      request.selectedPlatforms,
+      resolvedRequest.platformPacksRoot,
+      resolvedRequest.home,
+      resolvedRequest.skillsRoot,
+      resolvedRequest.selectedPlatforms,
     ) +
       unlinkedFromCache
   }
 }
+
+private fun resolveNativeAgentLinkRequest(request: NativeAgentLinkRequest): NativeAgentLinkRequest =
+  request.copy(
+    home = resolveUserHome(request.home),
+    environment = resolveEnvironmentMap(request.environment),
+  )

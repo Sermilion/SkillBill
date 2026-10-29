@@ -24,7 +24,7 @@ The current app takes about 5 seconds to open a goal or spec. Section 5.2 explai
 | Feature scope | Only functionality Skill Bill has (section 4). Nothing invented. Everything the desktop app does today is included, plus the config screen and operator decisions. |
 | Stack | Kotlin/JVM with Kotlin Flow for all observation. Compose Multiplatform Desktop is the natural toolkit (the current app uses it and its terminal, tray and notification integrations are proven), but the toolkit is not otherwise fixed by this document. |
 | No CLI | The app never runs `skill-bill`, never parses CLI output and has no CLI fallback. |
-| Embedded runtime | The app loads the runtime that `install.sh` installed (`~/.skill-bill/runtime/runtime-cli/lib`) into its own JVM and calls runtime services directly. There is one installed copy; the app ships no runtime jars. |
+| Embedded runtime | The app loads the runtime that `install.sh` installed in `.skill-bill/runtime/runtime-cli/lib` under the user's home directory into its own JVM and calls runtime services directly. There is one installed copy; the app ships no runtime jars. |
 | No coordinator daemon | Considered and rejected (section 5.7). |
 | Dark only | One theme, the tokens in section 6. |
 | Config included | The config screen edits real runtime config keys. The runtime needs a write path for most of them (section 5.4, R5). |
@@ -108,7 +108,7 @@ The first design pass invented these; they were removed and must not come back w
 
 One JVM. At startup:
 
-1. Resolve the runtime install root: `SKILL_BILL_RUNTIME_DIR` if set, else `~/.skill-bill/runtime` (desktop: `RuntimeInstallRoot.kt`).
+1. Resolve the runtime install root: `SKILL_BILL_RUNTIME_DIR` if set, else `.skill-bill/runtime` under the user's home directory (desktop: `RuntimeInstallRoot.kt`).
 2. Read `runtime-cli/build-identity.properties` (keys: `commit`, `dirty`, `release_tag`, `install_run_id`, `read_schema`, `incident_detail_version`, `min_incident_detail_read_schema`). Refuse to start when the runtime is missing, unreadable, or not the build the app was built for, and show the "runtime unavailable" state with the reinstall command (desktop: `InstalledRuntimeBuildGate.kt`, `RuntimeBuildProblem`).
 3. Load `runtime-cli/lib/*.jar` through an application class loader (desktop: `DesktopBootstrap.kt`). The packaged app contains no runtime jar; keep a build check equivalent to desktop's `verifyPackagedRuntimeFree`.
 4. Per selected database, build one `RuntimeComponent` and keep it for the session. Building it costs about 2 seconds of cold JVM time (section 5.2), so never build it per read.
@@ -129,7 +129,7 @@ val runtime: RuntimeComponent = RuntimeComponent::class.create(
 )
 ```
 
-This is how `desktop-tray/core/data/src/jvmMain/.../runtime/RuntimeSessionProviders.kt` does it. The default database is `~/.skill-bill/review-metrics.db` (`DatabasePaths.defaultDbPath`), overridden by the database path setting or `SKILL_BILL_DB`.
+This is how `desktop-tray/core/data/src/jvmMain/.../runtime/RuntimeSessionProviders.kt` does it. The default database is `.skill-bill/review-metrics.db` under the user's home directory (`DatabasePaths.defaultDbPath`), overridden by the database path setting or `SKILL_BILL_DB`.
 
 The app and the runtime are a matched pair. `install.sh` installs both; an upgrade of one without the other makes the app show the runtime-unavailable state.
 
@@ -201,7 +201,7 @@ The new app needs these changes in `runtime-kotlin`. Each follows `docs/architec
 | R2 | Finer change signals: separate topics for board structure (lifecycle, step, progress, membership), activity (agent activity stamps, worktree edits, heartbeats) and specs; the signal also carries a bounded list of changed work ids per topic, with an overflow marker that means "re-read all". Worktree probes and lease heartbeats bump only the activity topic, and only when a displayed value changes. | Stops activity writes from invalidating the whole board and every detail. |
 | R3 | A board read model: one table with a row per work item holding every fact the board and the detail header show (the `WorkBoardItem` fields plus display group, priority and deadlines), written in the same transaction as the source change. The board becomes one indexed `SELECT` ordered by priority. | Replaces multi-table projection on every read with a single cheap query. Time-dependent facts stay correct through stored deadlines. |
 | R4 | WAL and journal hygiene: checkpoint (`wal_checkpoint(TRUNCATE)`) after goal completion and when idle; bound `worktree_edit_journal` to what the UI and goal status read (the latest probe per workflow, or a fixed history). | The 106 MB WAL and the 229k-row journal slow every read. |
-| R5 | A config write service: read and write `execution_matrix` (agent tiers, `phase_tiers`, agent phase overrides), `compaction` (enabled, window, trigger percent, per-phase), `telemetry.proxy_url` and `telemetry.batch_size` in `~/.config/skill-bill/config.json` (path precedence: `SKILL_BILL_CONFIG_PATH`, `~/.config/skill-bill/config.json`, `~/.skill-bill/config.json`), and `spec_type`, `validation_gate.gradle_wrapper` and `review_context_budget` in the project store `config.yaml`. Validate with the existing parsers (`parseExecutionMatrix`, `parseCompactionSettings`, `parseValidationGateRepoConfig`, `ReviewContextBudgetPolicy`), keep unknown keys, write atomically, and refuse to overwrite a file that changed since it was read. Expose it through `RuntimeComponent`. | Today only telemetry level has a write path (`TelemetryConfigStore`). |
+| R5 | A config write service: read and write `execution_matrix` (agent tiers, `phase_tiers`, agent phase overrides), `compaction` (enabled, window, trigger percent, per-phase), `telemetry.proxy_url` and `telemetry.batch_size` in the user config. Path precedence is `SKILL_BILL_CONFIG_PATH`, then `.config/skill-bill/config.json`, then `.skill-bill/config.json`, with both paths relative to the user's home directory. Also write `spec_type`, `validation_gate.gradle_wrapper` and `review_context_budget` in the project store `config.yaml`. Validate with the existing parsers (`parseExecutionMatrix`, `parseCompactionSettings`, `parseValidationGateRepoConfig`, `ReviewContextBudgetPolicy`), keep unknown keys, write atomically, and refuse to overwrite a file that changed since it was read. Expose it through `RuntimeComponent`. | Today only telemetry level has a write path (`TelemetryConfigStore`). |
 
 R1 to R4 are what make the app fast; R5 is what makes config editable. R2 and R3 are the largest. If they are deferred, R1 plus the app-side rules in 5.3 still remove most of the per-selection cost, but activity churn remains.
 
@@ -477,7 +477,7 @@ Each row shows its config key and default. Saving shows "Saved to config.json" (
 - **Models:** agent tabs claude, codex, cursor; junie disabled ("junie cannot honor a model or effort directive"). Tiers Reasoning and Implementation. Phase groups with each phase's tier badge (R or I), resolved model and effort, and an "override" tag. Default phase tiers are `DEFAULT_PHASE_TIERS` in `ExecutionMatrixModels.kt`. Editing a row expands it in place: Tier (phases only; applies to every agent), Model (required, passed as typed), Effort (optional), Save, Cancel, Reset to tier. There is no model catalog check.
 - **Compaction:** enabled (default on), window tokens (default 400,000), trigger percent (default 70; the trigger must be at least 200,000 tokens), per-phase overrides.
 - **Project:** project name and store path, "Open config.yaml"; spec source local or linear (default local); Gradle wrapper (repo-relative, no `.` or `..` segments, blank means the repository's `./gradlew`); phase instruction files in `<repo>/.skill-bill/phases/<phase-id>.md` (committed with the repository, 16 KiB cap, unknown phase ids are skipped); review context budget with defaults from `ReviewContextBudgetPolicy` (byte limits must be positive).
-- **Telemetry and agents:** level off, anonymous, full (default anonymous); proxy URL (blank uses the default endpoint); batch size (default 50); detected agents (read-only); files `~/.config/skill-bill/config.json` and `~/.skill-bill/install-selection.json`.
+- **Telemetry and agents:** level off, anonymous, full (default anonymous); proxy URL (blank uses the default endpoint); batch size (default 50); detected agents (read-only); files `.config/skill-bill/config.json` and `.skill-bill/install-selection.json` under the user's home directory.
 - **Edge states:** an unreadable config file shows the runtime's error with its key path and never overwrites the file; a file changed on disk while a row is open asks to reload or keep editing; YAML comments do not survive a rewrite, so ask once per file before the first save.
 
 ### 9.8 Tray popover and notifications

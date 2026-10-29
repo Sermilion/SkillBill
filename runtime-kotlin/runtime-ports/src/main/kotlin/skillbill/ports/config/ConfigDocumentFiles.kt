@@ -9,6 +9,15 @@ import java.nio.file.Path
 
 /** Reads and atomically replaces machine and project configuration documents. */
 interface ConfigDocumentFiles {
+  /** Holds cooperating config writers for the supplied file identities until [action] returns. */
+  fun <T> withLocks(
+    paths: Collection<Path>,
+    action: () -> T,
+  ): T
+
+  /** Returns both project config locations that may participate in migration or an edit. */
+  fun projectConfigLockPaths(repoRoot: Path): List<Path>
+
   /** Resolves the project store target and the path whose contents should be read. */
   fun projectConfigLocation(repoRoot: Path): ProjectConfigLocation
 

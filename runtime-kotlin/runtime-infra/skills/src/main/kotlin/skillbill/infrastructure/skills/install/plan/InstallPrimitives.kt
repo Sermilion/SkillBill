@@ -4,6 +4,9 @@ import skillbill.error.shellcontent.invalidInternalSkillClassification
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.resolveStagedSymlinkTarget
+import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
+import skillbill.infrastructure.skills.nativeagent.support.agentPathsHavePresence
+import skillbill.infrastructure.skills.nativeagent.support.codexAgentIsPresent
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.AgentTarget
@@ -16,7 +19,11 @@ import skillbill.scaffold.model.PlatformManifest
 import java.io.FileNotFoundException
 import java.nio.file.Files
 import java.nio.file.Path
+import skillbill.infrastructure.skills.nativeagent.support.claudeSkillTargets as nativeClaudeSkillTargets
+import skillbill.infrastructure.skills.nativeagent.support.codexSkillTargets as nativeCodexSkillTargets
 import skillbill.infrastructure.skills.nativeagent.support.detectCodexAgentsTargets as nativeDetectCodexAgentsTargets
+import skillbill.infrastructure.skills.nativeagent.support.discoverClaudeConfigRoots as nativeDiscoverClaudeConfigRoots
+import skillbill.infrastructure.skills.nativeagent.support.discoverCodexConfigRoots as nativeDiscoverCodexConfigRoots
 
 internal val SUPPORTED_AGENTS: List<SupportedAgent> = SupportedAgent.entries
 
@@ -59,34 +66,50 @@ internal fun detectAgents(
   home: Path,
   environment: Map<String, String>,
 ): List<AgentTarget> {
-  val configRoots = installConfigRoots(home, environment)
-  val paths = agentPaths(home, configRoots)
   return SUPPORTED_AGENTS.flatMap { agent ->
-    val installPath = paths.getValue(agent)
-    if (!agentIsPresent(home, agent, installPath, configRoots)) {
-      return@flatMap emptyList()
-    }
     when (agent) {
-      SupportedAgent.CLAUDE ->
-        claudeSkillTargets(home, environment).map { path -> AgentTarget(agent.wireValue, path.toFileLocation()) }
-      SupportedAgent.CODEX ->
-        codexSkillTargets(home, environment).map { path -> AgentTarget(agent.wireValue, path.toFileLocation()) }
+      SupportedAgent.CLAUDE -> {
+        val roots = nativeDiscoverClaudeConfigRoots(home, environment)
+        val targets = nativeClaudeSkillTargets(roots.paths)
+        if (!agentPathsHavePresence(roots.paths + targets, "inspect Claude installation", roots)) {
+          emptyList()
+        } else {
+          targets.map { path -> AgentTarget(agent.wireValue, path.toFileLocation()) }
+        }
+      }
+      SupportedAgent.CODEX -> {
+        val roots = nativeDiscoverCodexConfigRoots(home, environment)
+        val targets = nativeCodexSkillTargets(home, roots.paths)
+        if (!codexAgentIsPresent(home, environment, roots)) {
+          emptyList()
+        } else {
+          targets.map { path -> AgentTarget(agent.wireValue, path.toFileLocation()) }
+        }
+      }
       SupportedAgent.JUNIE,
       SupportedAgent.CURSOR,
-      -> listOf(AgentTarget(agent.wireValue, installPath.toFileLocation()))
+      -> {
+        val root = home.resolve(requireNotNull(agent.simpleHomeDirectory))
+        val installPath = root.resolve("skills")
+        if (!anyAgentPathExists(listOf(installPath, root), "inspect ${agent.wireValue} installation")) {
+          emptyList()
+        } else {
+          listOf(AgentTarget(agent.wireValue, installPath.toFileLocation()))
+        }
+      }
     }
   }
 }
+
+private fun anyAgentPathExists(
+  paths: List<Path>,
+  operation: String,
+): Boolean = paths.map { path -> agentPathExists(path, operation) }.any { present -> present }
 
 internal fun detectCodexAgentsTargets(
   home: Path,
   environment: Map<String, String>,
 ): List<AgentTarget> {
-  val configRoots = installConfigRoots(home, environment)
-  val paths = agentPaths(home, configRoots)
-  if (!agentIsPresent(home, SupportedAgent.CODEX, paths.getValue(SupportedAgent.CODEX), configRoots)) {
-    return emptyList()
-  }
   return nativeDetectCodexAgentsTargets(home, environment)
     .map { target -> AgentTarget(target.name, target.path.toFileLocation()) }
 }
@@ -182,26 +205,4 @@ internal fun uninstallTargets(createdSymlinks: Iterable<Path>): List<Path> {
     }
   }
   return removed
-}
-
-private fun agentIsPresent(
-  home: Path,
-  agent: SupportedAgent,
-  installPath: Path,
-  configRoots: InstallConfigRoots,
-): Boolean {
-  if (Files.exists(installPath)) {
-    return true
-  }
-  val roots =
-    when (agent) {
-      SupportedAgent.CLAUDE -> listOf(configRoots.claude)
-      SupportedAgent.JUNIE,
-      SupportedAgent.CURSOR,
-      -> listOf(home.resolve(requireNotNull(agent.simpleHomeDirectory)))
-      SupportedAgent.CODEX -> {
-        listOf(configRoots.codex)
-      }
-    }
-  return roots.any(Files::exists)
 }

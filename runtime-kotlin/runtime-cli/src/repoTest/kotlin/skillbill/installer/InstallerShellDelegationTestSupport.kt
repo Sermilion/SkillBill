@@ -470,6 +470,19 @@ internal object InstallerShellFixtures {
   private val fakeRuntimeCliCleanupCaseBlock: String =
     """
     |case "${'$'}{1:-} ${'$'}{2:-}" in
+    |  "install migrate-legacy-config") exit 0 ;;
+    |  "install clear-state")
+    |    state_root="${'$'}{SKILL_BILL_STATE_DIR:-${'$'}home/.skill-bill}"
+    |    rm -rf "${'$'}state_root/runtime" "${'$'}state_root/installed-skills" \
+    |      "${'$'}state_root/.candidate-source" "${'$'}state_root/native-agent-link-inventory.json" \
+    |      "${'$'}state_root/native-agent-link-inventory.json.lock"
+    |    if [[ "${'$'}{SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" != 1 ]]; then
+    |      rm -rf "${'$'}state_root/skills" "${'$'}state_root/platform-packs" \
+    |        "${'$'}state_root/orchestration" "${'$'}state_root/agent-addons" \
+    |        "${'$'}state_root/baseline-manifest.json"
+    |    fi
+    |    exit 0
+    |    ;;
     |  "install cleanup-agent-target"|"install unlink-codex-agents"|"install unlink-claude-agents"|\
     "install unlink-junie-agents"|"install unlink-cursor-agents"|"install unregister-mcp")
     |    exit 0

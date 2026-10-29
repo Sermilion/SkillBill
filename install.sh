@@ -708,26 +708,21 @@ print_install_plan() {
   echo ""
 }
 
-# One-time migration: older installs kept config.json inside the wiped
-# ~/.skill-bill/. Move it to the durable XDG location (~/.config/skill-bill/,
-# outside the wipe zone) BEFORE the pre-install uninstall so user settings —
-# external_addon_sources, telemetry choices, install_id — survive every install.
-# Skipped when the user pins a config path via SKILL_BILL_CONFIG_PATH, or when
-# the durable copy already exists (never clobber it).
+# One-time migration runs through the staged runtime so both candidate files
+# share the runtime's config lock before cleanup can remove the legacy state.
 migrate_legacy_config_to_durable_path() {
-  if [[ -n "${SKILL_BILL_CONFIG_PATH:-}" ]]; then
-    return 0
+  local staged_cli="${STAGED_RUNTIME_ROOT:-}/runtime-cli.tmp/bin/runtime-cli"
+  if [[ -z "${STAGED_RUNTIME_ROOT:-}" || ! -x "$staged_cli" ]]; then
+    err "Installation stopped: the staged runtime cannot run the locked config migration. No config was moved."
+    return 1
   fi
-  local legacy="$SKILL_BILL_STATE_DIR/config.json"
-  local durable="$HOME/.config/skill-bill/config.json"
-  if [[ -f "$legacy" && ! -f "$durable" ]]; then
-    mkdir -p "$(dirname "$durable")"
-    if mv "$legacy" "$durable"; then
-      info "Migrated Skill Bill config to durable location: $durable"
-    else
-      warn "Could not migrate config to $durable; leaving it at $legacy."
-    fi
+  local output
+  if ! output="$("$staged_cli" --home "$HOME" install migrate-legacy-config 2>&1)"; then
+    err "Installation stopped: the staged runtime could not migrate machine config. No cleanup ran."
+    [[ -z "$output" ]] || err "$output"
+    return 1
   fi
+  [[ -z "$output" ]] || info "$output"
 }
 
 # >>> retired IDE plugin cleanup (keep identical in install.sh and uninstall.sh)
@@ -914,7 +909,10 @@ run_pre_install_uninstall() {
   # This flag limits the wipe to regenerated install output (runtime/,
   # installed-skills/, the native link inventory). Explicit uninstall still
   # clears everything except databases and backups.
-  SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 SKILL_BILL_PRESERVE_DESKTOP_APP=1 bash "$uninstall_script"
+  SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 \
+    SKILL_BILL_PRESERVE_DESKTOP_APP=1 \
+    SKILL_BILL_STAGED_RUNTIME_CLI="$1/runtime-cli.tmp/bin/runtime-cli" \
+    bash "$uninstall_script"
 }
 
 locate_packaged_runtime_bin() {
@@ -1083,7 +1081,7 @@ report_unstaged_desktop_app() {
 activate_staged_runtime_pair() {
   local candidate_root="$1"
   local cli_target="$candidate_root/runtime-cli" mcp_target="$candidate_root/runtime-mcp"
-  if ! clean_install_state_if_requested || ! run_pre_install_uninstall; then
+  if ! clean_install_state_if_requested || ! run_pre_install_uninstall "$candidate_root"; then
     rm -rf "$candidate_root"
     return 1
   fi
@@ -2635,7 +2633,6 @@ run_full_install() {
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     replay_last_install_selection
   fi
-  migrate_legacy_config_to_durable_path
   cleanup_retired_ide_plugins
   # A dirty tree has no exact source identity, so both builds of this run share
   # one run id and only match each other.
@@ -2652,6 +2649,10 @@ run_full_install() {
     discard_staged_runtime
     return 1
   fi
+  migrate_legacy_config_to_durable_path || {
+    discard_staged_runtime
+    return 1
+  }
   if [[ -n "$STAGED_RUNTIME_ROOT" ]]; then
     activate_staged_runtime_pair "$STAGED_RUNTIME_ROOT" || return 1
     STAGED_RUNTIME_ROOT=""

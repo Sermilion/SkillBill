@@ -21,7 +21,7 @@ class ConfigSectionsTest {
   }
 
   @Test
-  fun editingMatrixPreservesExplicitPhaseOverrideMatchingItsTier() {
+  fun matchingPhaseDirectiveDoesNotBecomeAnOverride() {
     val directive = ModelDirective("model", "high")
     val matrix = ExecutionMatrixConfig(
       emptyMap(),
@@ -30,7 +30,34 @@ class ConfigSectionsTest {
     )
     val agents = executionMatrixSection(matrix, defaults())[ConfigFileKeys.AGENTS] as Map<*, *>
     val codex = agents["codex"] as Map<*, *>
-    assertEquals(mapOf("model" to "model", "effort" to "high"), codex["review"])
+    assertEquals(setOf("reasoning"), codex.keys)
+  }
+
+  @Test
+  fun unrelatedEditKeepsExplicitDefaultTierAndMatchingPhaseOverride() {
+    val directive = ModelDirective("model", "high")
+    val baseline = ExecutionMatrixConfig(
+      mapOf("review" to Tier.REASONING),
+      mapOf("claude" to mapOf(Tier.REASONING to directive, Tier.IMPLEMENTATION to ModelDirective("impl", null))),
+      mapOf("claude" to mapOf("review" to directive)),
+    )
+    val unrelatedEdit = baseline.copy(
+      agents = baseline.agents + ("codex" to mapOf(Tier.REASONING to ModelDirective("codex", null))),
+    )
+    val section = executionMatrixSection(unrelatedEdit, defaults(), baseline)
+    val tiers = section[ConfigFileKeys.PHASE_TIERS] as Map<*, *>
+    val agents = section[ConfigFileKeys.AGENTS] as Map<*, *>
+    val claude = agents["claude"] as Map<*, *>
+
+    assertEquals("reasoning", tiers["review"])
+    assertEquals(mapOf("model" to "model", "effort" to "high"), claude["review"])
+
+    val changedTier = unrelatedEdit.copy(phaseTiers = unrelatedEdit.phaseTiers + ("review" to Tier.IMPLEMENTATION))
+    val changedSection = executionMatrixSection(changedTier, defaults(), baseline)
+    val changedAgents = changedSection[ConfigFileKeys.AGENTS] as Map<*, *>
+    val changedClaude = changedAgents["claude"] as Map<*, *>
+    assertEquals("implementation", (changedSection[ConfigFileKeys.PHASE_TIERS] as Map<*, *>)["review"])
+    assertEquals(mapOf("model" to "model", "effort" to "high"), changedClaude["review"])
   }
 
   @Test

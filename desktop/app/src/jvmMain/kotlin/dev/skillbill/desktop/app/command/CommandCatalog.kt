@@ -1,7 +1,7 @@
 package dev.skillbill.desktop.app.command
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import dev.skillbill.desktop.app.di.WindowCoroutineScope
+import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.app.keyboard.TerminalTriggers
 import dev.skillbill.desktop.app.navigation.WindowNavigator
 import dev.skillbill.desktop.core.designsystem.component.ToastData

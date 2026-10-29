@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.data.repository
 
+import dev.skillbill.desktop.core.common.Diagnostics
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.session.DatabaseSessionManager
@@ -21,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Inject
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
-class RuntimeSpecRepository(private val sessions: DatabaseSessionManager) : SpecRepository {
+class RuntimeSpecRepository(private val sessions: DatabaseSessionManager, private val diagnostics: Diagnostics) : SpecRepository {
   override suspend fun projects(): Outcome<List<SpecProject>, ReadProblem> =
     sessions.sessions.value?.specs?.projects() ?: noSession
 
@@ -47,6 +48,15 @@ class RuntimeSpecRepository(private val sessions: DatabaseSessionManager) : Spec
   ) { it.specs.control(bundle) }
 
   override suspend fun openFile(path: String): OpenOutcome = sessions.sessions.value?.specs?.openFile(path) ?: OpenOutcome.NotOpened
+
+  override suspend fun openFileInDefaultApp(path: String): OpenOutcome {
+    val observations = sessions.sessions.value?.specs
+    if (observations == null) {
+      diagnostics.record("desktop_phase_instruction_default_open_unavailable")
+      return OpenOutcome.NotOpened
+    }
+    return observations.openFileInDefaultApp(path)
+  }
 
   override suspend fun revealFolder(path: String): OpenOutcome =
     sessions.sessions.value?.specs?.revealFolder(path) ?: OpenOutcome.NotOpened

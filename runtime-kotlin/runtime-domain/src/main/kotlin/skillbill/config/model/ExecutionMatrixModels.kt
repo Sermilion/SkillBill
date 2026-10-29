@@ -5,6 +5,13 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 
 const val EXECUTION_MATRIX_KEY: String = "execution_matrix"
 
+object ExecutionMatrixFieldKeys {
+  const val PHASE_TIERS: String = "phase_tiers"
+  const val AGENTS: String = "agents"
+  const val MODEL: String = "model"
+  const val EFFORT: String = "effort"
+}
+
 enum class ExecutionTier(
   val id: String,
 ) {
@@ -260,9 +267,9 @@ private fun invalidExecutionMatrix(
 ): ExecutionMatrixParse.Invalid =
   ExecutionMatrixParse.Invalid(keyPath = keyPath, value = value?.toString() ?: "null", reason = reason)
 
-private const val PHASE_TIERS_KEY: String = "phase_tiers"
-private const val AGENTS_KEY: String = "agents"
-private const val MODEL_KEY: String = "model"
-private const val EFFORT_KEY: String = "effort"
+private const val PHASE_TIERS_KEY: String = ExecutionMatrixFieldKeys.PHASE_TIERS
+private const val AGENTS_KEY: String = ExecutionMatrixFieldKeys.AGENTS
+private const val MODEL_KEY: String = ExecutionMatrixFieldKeys.MODEL
+private const val EFFORT_KEY: String = ExecutionMatrixFieldKeys.EFFORT
 private val EXECUTION_MATRIX_FIELDS: Set<String> = setOf(PHASE_TIERS_KEY, AGENTS_KEY)
 private val DIRECTIVE_FIELDS: Set<String> = setOf(MODEL_KEY, EFFORT_KEY)

@@ -6,6 +6,7 @@ data class UninstallRequest(
   val home: Path,
   val environment: Map<String, String>,
   val desktopAppDir: String?,
+  val stateRoot: Path = home.resolve(".skill-bill"),
 )
 
 data class LauncherRemoval(
@@ -29,6 +30,7 @@ data class UninstallPlan(
   val mcpAgents: List<String>,
   val launchers: List<LauncherRemoval>,
   val desktop: DesktopRemoval,
+  val environment: Map<String, String> = emptyMap(),
 )
 
 data class UninstallResult(

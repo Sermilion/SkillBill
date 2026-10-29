@@ -27,7 +27,7 @@ internal fun readExternalAddonSourceEntries(
       is TelemetryConfigRead.Malformed -> throw ExternalAddonConfigError(read.reason)
       is TelemetryConfigRead.Present -> read.document.payload
     }
-  val raw = payload["external_addon_sources"] ?: return null
+  val raw = payload[ExternalAddonConfigKeys.SOURCES] ?: return null
   if (raw !is List<*>) {
     throw ExternalAddonConfigError(
       "External addon config at '$configPath': 'external_addon_sources' $listShapeMessage",
@@ -81,7 +81,7 @@ internal fun requireExternalAddonEntryPath(
   index: Int,
   map: Map<*, *>,
 ): String =
-  (map["path"] as? String)?.takeIf(String::isNotBlank)
+  (map[ExternalAddonConfigKeys.PATH] as? String)?.takeIf(String::isNotBlank)
     ?: throw ExternalAddonConfigError(
       "External addon config at '$configPath': 'external_addon_sources[$index].path' must be a non-empty string.",
     )
@@ -91,7 +91,7 @@ internal fun requireExternalAddonEntryPlatform(
   index: Int,
   map: Map<*, *>,
 ): String =
-  (map["platform"] as? String)?.takeIf(String::isNotBlank)
+  (map[ExternalAddonConfigKeys.PLATFORM] as? String)?.takeIf(String::isNotBlank)
     ?: throw ExternalAddonConfigError(
       "External addon config at '$configPath': 'external_addon_sources[$index].platform' must be a non-empty string.",
     )
@@ -108,4 +108,11 @@ internal fun validateExternalAddonEntryDirectory(
         "does not exist or is not a directory.",
     )
   }
+}
+
+internal object ExternalAddonConfigKeys {
+  const val SOURCES: String = "external_addon_sources"
+  const val KIND: String = "kind"
+  const val PATH: String = "path"
+  const val PLATFORM: String = "platform"
 }

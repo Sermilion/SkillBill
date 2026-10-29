@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import dev.skillbill.desktop.core.designsystem.overlay.CommandItem
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.di.WindowScope
+import kotlinx.coroutines.CoroutineScope
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
@@ -50,6 +51,8 @@ enum class PaneSlot {
 class PaneContribution(val slot: PaneSlot, val content: @Composable () -> Unit)
 
 class SettingsPageContribution(val id: SettingsPageId, val label: String, val group: String)
+
+class WindowCoroutineScope(val scope: CoroutineScope)
 
 /** Every feature's settings pages, so the config feature adds pages without depending on the settings feature. */
 @Inject

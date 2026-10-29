@@ -4,10 +4,9 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.cancel
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.ConfigWriteOutcome
-import dev.skillbill.desktop.core.domain.model.DetectedAgent
 import dev.skillbill.desktop.core.domain.model.MachineConfig
 import dev.skillbill.desktop.core.domain.model.MachineConfigChange
-import dev.skillbill.desktop.core.domain.model.PhaseInstructionFile
+import dev.skillbill.desktop.core.domain.model.PhaseInstructionFilesRead
 import dev.skillbill.desktop.core.domain.model.ProjectConfig
 import dev.skillbill.desktop.core.domain.model.ProjectConfigChange
 import dev.skillbill.desktop.core.domain.model.TelemetryLevel
@@ -195,9 +194,9 @@ class SettingsViewModelTest {
     override suspend fun writeMachineConfig(changes: List<MachineConfigChange>, expected: dev.skillbill.desktop.core.domain.model.ConfigFingerprint?): ConfigWriteOutcome = error("unused")
     override suspend fun writeProjectConfig(repoRoot: String, changes: List<ProjectConfigChange>, expected: dev.skillbill.desktop.core.domain.model.ConfigFingerprint?): ConfigWriteOutcome = error("unused")
     override suspend fun telemetryLevel(): TelemetryLevelRead = error("unused")
-    override suspend fun setTelemetryLevel(level: TelemetryLevel): ConfigWriteOutcome = error("unused")
-    override suspend fun detectedAgents(): List<DetectedAgent> = error("unused")
+    override suspend fun setTelemetryLevel(level: TelemetryLevel, expected: dev.skillbill.desktop.core.domain.model.ConfigFingerprint?): ConfigWriteOutcome = error("unused")
+    override suspend fun detectedAgentsRead(): dev.skillbill.desktop.core.domain.model.DetectedAgentsRead = error("unused")
     override suspend fun claudeConfigDirectories(sessionId: Long): ClaudeConfigDirectoriesRead = ClaudeConfigDirectoriesRead.Success(emptyList())
-    override suspend fun phaseInstructionFiles(repoRoot: String): List<PhaseInstructionFile> = error("unused")
+    override suspend fun phaseInstructionFiles(repoRoot: String): PhaseInstructionFilesRead = error("unused")
   }
 }

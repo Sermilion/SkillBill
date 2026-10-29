@@ -174,12 +174,29 @@ internal fun removeRecursively(
     }
 }
 
+internal data class InstallStateRemovalOptions(
+  val retainedPaths: Collection<Path>,
+  val preserveGeneratedOnly: Boolean = false,
+)
+
 internal fun removeInstallState(
   fileSystem: UninstallPathsPort,
   stateRoot: Path,
   removed: MutableList<String>,
   recorder: UninstallMutationRecorder,
+  options: InstallStateRemovalOptions,
 ) {
+  val retainedPaths = options.retainedPaths
+  if (options.preserveGeneratedOnly) {
+    listOf(
+      "runtime",
+      "installed-skills",
+      ".candidate-source",
+      "native-agent-link-inventory.json",
+      "native-agent-link-inventory.json.lock",
+    ).forEach { name -> removeRecursivelyExcept(fileSystem, stateRoot.resolve(name), retainedPaths, removed, recorder) }
+    return
+  }
   val entries =
     runCatching { fileSystem.listImmediateDirectoryNames(stateRoot) }.getOrElse { error ->
       error.rethrowIfCooperativeCancellationOrInterruption()
@@ -189,8 +206,24 @@ internal fun removeInstallState(
   entries.filterNot { name ->
     name == "backups" || name == "projects" || DATABASE_STATE_NAME.matches(name)
   }.forEach { name ->
-    removeRecursively(fileSystem, stateRoot.resolve(name), removed, recorder)
+    removeRecursivelyExcept(fileSystem, stateRoot.resolve(name), retainedPaths, removed, recorder)
   }
+}
+
+private fun removeRecursivelyExcept(
+  fileSystem: UninstallPathsPort,
+  path: Path,
+  retainedPaths: Collection<Path>,
+  removed: MutableList<String>,
+  recorder: UninstallMutationRecorder,
+) {
+  if (!fileSystem.exists(path) && !fileSystem.isSymbolicLink(path)) return
+  runCatching { fileSystem.removeTreeExcept(path, retainedPaths) }
+    .onSuccess { entries -> entries.forEach { entry -> removed += entry.toString() } }
+    .onFailure { error ->
+      error.rethrowIfCooperativeCancellationOrInterruption()
+      recorder.recordFailure("could not remove $path", error)
+    }
 }
 
 private val DATABASE_STATE_NAME = Regex(""".*\.db(?:-wal|-shm|-journal)?$""")

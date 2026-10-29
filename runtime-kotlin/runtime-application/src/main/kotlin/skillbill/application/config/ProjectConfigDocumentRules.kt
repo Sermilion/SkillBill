@@ -1,5 +1,6 @@
 package skillbill.application.config
 
+import skillbill.application.config.model.AuthoredReviewContextBudget
 import skillbill.application.config.model.ConfigDocumentRead
 import skillbill.application.config.model.ProjectConfigEdit
 import skillbill.application.config.model.ProjectConfigValues
@@ -15,6 +16,9 @@ import skillbill.ports.config.model.ConfigDocumentTree
 import skillbill.ports.config.model.ConfigFingerprint
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import java.nio.file.Path
+import java.util.Collections
+import java.util.LinkedHashMap
+import java.util.LinkedHashSet
 
 internal fun parseProjectConfigValues(
   path: Path,
@@ -51,6 +55,13 @@ private fun parseProjectValues(
         is ReviewContextBudgetParse.Invalid -> return ConfigDocumentRead.Unreadable(path, parsed.keyPath, parsed.reason)
       }
     }
+  val authoredReviewBudget =
+    if (tree.contains(RepoLocalConfigFileKeys.REVIEW_CONTEXT_BUDGET)) {
+      val section = tree.value(RepoLocalConfigFileKeys.REVIEW_CONTEXT_BUDGET) as Map<*, *>
+      AuthoredReviewContextBudget(true, ConfigDocumentTree(immutableSection(section)))
+    } else {
+      AuthoredReviewContextBudget.EMPTY
+    }
   val validationGate =
     if (!tree.contains(RepoLocalConfigFileKeys.VALIDATION_GATE)) {
       null
@@ -68,6 +79,7 @@ private fun parseProjectValues(
       specType,
       validationGate,
       reviewBudget,
+      authoredReviewBudget,
     ),
     hasComments,
   )
@@ -131,19 +143,49 @@ private fun applyGradleWrapper(
   if (value == null) {
     gate.remove(RepoLocalConfigFileKeys.GRADLE_WRAPPER)
   } else {
+    if (hasDotPathSegment(value)) {
+      return ProjectConfigTreeResult.Invalid(
+        "${RepoLocalConfigFileKeys.VALIDATION_GATE}.${RepoLocalConfigFileKeys.GRADLE_WRAPPER}",
+        "must not contain '.' or '..' path segments.",
+      )
+    }
     gate[RepoLocalConfigFileKeys.GRADLE_WRAPPER] = value
   }
-  if (gate.isEmpty()) {
-    return ProjectConfigTreeResult.Valid(tree.without(RepoLocalConfigFileKeys.VALIDATION_GATE))
-  } else {
-    when (val parsed = parseValidationGateRepoConfig(gate)) {
-      is ValidationGateRepoConfigParse.Valid ->
-        return ProjectConfigTreeResult.Valid(tree.with(RepoLocalConfigFileKeys.VALIDATION_GATE, gate))
-      is ValidationGateRepoConfigParse.Invalid ->
-        return ProjectConfigTreeResult.Invalid(parsed.keyPath, parsed.reason)
-    }
+  if (gate.isEmpty() && !tree.contains(RepoLocalConfigFileKeys.VALIDATION_GATE)) {
+    return ProjectConfigTreeResult.Valid(tree)
+  }
+  when (val parsed = parseValidationGateRepoConfig(gate)) {
+    is ValidationGateRepoConfigParse.Valid ->
+      return ProjectConfigTreeResult.Valid(tree.with(RepoLocalConfigFileKeys.VALIDATION_GATE, gate))
+    is ValidationGateRepoConfigParse.Invalid ->
+      return ProjectConfigTreeResult.Invalid(parsed.keyPath, parsed.reason)
   }
 }
+
+private fun immutableSection(section: Map<*, *>): Map<String, Any?> =
+  Collections.unmodifiableMap(
+    LinkedHashMap<String, Any?>().apply {
+      section.forEach { (key, value) ->
+        if (key is String) put(key, immutableConfigValue(value))
+      }
+    },
+  )
+
+private fun immutableConfigValue(value: Any?): Any? =
+  when (value) {
+    is Map<*, *> ->
+      Collections.unmodifiableMap(
+        LinkedHashMap<Any?, Any?>().apply {
+          value.forEach { (key, nested) -> put(key, immutableConfigValue(nested)) }
+        },
+      )
+    is List<*> -> Collections.unmodifiableList(value.map(::immutableConfigValue))
+    is Set<*> -> Collections.unmodifiableSet(LinkedHashSet(value.map(::immutableConfigValue)))
+    else -> value
+  }
+
+private fun hasDotPathSegment(value: String): Boolean =
+  value.trim().replace('\\', '/').split('/').any { segment -> segment == "." || segment == ".." }
 
 internal sealed interface ProjectConfigTreeResult {
   data class Valid(val tree: ConfigDocumentTree) : ProjectConfigTreeResult

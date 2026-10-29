@@ -1,14 +1,19 @@
 package skillbill.cli
 
 import com.github.ajalt.clikt.parsers.CommandLineParser
+import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.scaffold.InstallAgentService
 import skillbill.application.uninstall.SkillBillUninstallService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.system.UninstallCommand
+import skillbill.infrastructure.host.FileTelemetryConfigStore
+import skillbill.infrastructure.host.system.FileConfigDocumentFiles
 import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpRegistrationOutcome
+import skillbill.model.EnvironmentContext
+import skillbill.ports.config.MachineConfigMigrationPort
 import skillbill.ports.install.agent.InstallAgentTargetPort
 import skillbill.ports.install.agent.model.ClaudeConfigRootsRequest
 import skillbill.ports.install.agent.model.ClaudeConfigRootsResult
@@ -31,6 +36,7 @@ import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationRequest
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentLinkOperationResult
 import skillbill.ports.install.nativeagent.model.InstallNativeAgentUnlinkOperationResult
+import skillbill.ports.projectstore.FixedProjectStorePort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.system.UninstallPathsPort
@@ -84,6 +90,12 @@ class UninstallMutationFailurePolicyTest {
             liveStderr = {},
           ),
         uninstallService = uninstallService,
+        runtimeConfigEditService =
+          RuntimeConfigEditService(
+            FileConfigDocumentFiles(diagnostics, FixedProjectStorePort(HOME.resolve("projects"))),
+            FileTelemetryConfigStore(EnvironmentContext(environment = emptyMap(), userHome = HOME)),
+            MachineConfigMigrationPort { false },
+          ),
       )
     CommandLineParser.parseAndRun(command, listOf("--yes")) { parsed -> parsed.run() }
     return assertNotNull(state.result)
@@ -106,6 +118,17 @@ private object ThrowingMcpRegistrationPort : InstallMcpRegistrationPort {
 private val ABSENT_PATH: Path = Path.of("/tmp/skillbill-uninstall-policy/absent")
 
 private object AbsentUninstallPathsPort : UninstallPathsPort {
+  override fun <T> withConfigTransaction(
+    userHome: Path,
+    environment: Map<String, String>,
+    action: () -> T,
+  ): T = action()
+
+  override fun configLockFilePaths(
+    userHome: Path,
+    environment: Map<String, String>,
+  ): List<Path> = emptyList()
+
   override fun listImmediateDirectoryNames(root: Path): List<String> = emptyList()
 
   override fun exists(path: Path): Boolean = false
@@ -117,6 +140,11 @@ private object AbsentUninstallPathsPort : UninstallPathsPort {
   override fun deleteIfExists(path: Path): Boolean = false
 
   override fun removeTree(path: Path): List<Path> = emptyList()
+
+  override fun removeTreeExcept(
+    path: Path,
+    retainedPaths: Collection<Path>,
+  ): List<Path> = emptyList()
 }
 
 private object StubInstallAgentTargetPort : InstallAgentTargetPort {

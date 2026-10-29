@@ -11,5 +11,6 @@ kotlin {
     api(libs.navigation3.runtime)
     api(libs.lifecycle.viewmodel)
     api(libs.lifecycle.viewmodel.compose)
+    api(libs.kotlinx.coroutines.core)
   }
 }

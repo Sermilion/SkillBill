@@ -52,7 +52,7 @@ class GovernedReviewEvidenceBridgeTest {
 
   @Test
   fun `bridge forwards tools list to the governed evidence socket`() {
-    val socketPath = Files.createTempFile("skillbill-evidence-tools", ".sock")
+    val socketPath = Files.createTempFile("sb", ".sock")
     Files.delete(socketPath)
     val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     server.bind(UnixDomainSocketAddress.of(socketPath))
@@ -142,7 +142,7 @@ class GovernedReviewEvidenceBridgeTest {
 
   @Test
   fun `a forwarded response over the frame limit is rejected by a real unix socket`() {
-    val socketPath = Files.createTempFile("skillbill-evidence", ".sock")
+    val socketPath = Files.createTempFile("sb", ".sock")
     Files.delete(socketPath)
     val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     server.bind(UnixDomainSocketAddress.of(socketPath))
@@ -172,7 +172,7 @@ class GovernedReviewEvidenceBridgeTest {
 
   @Test
   fun `a handshake refusal is reported as a transport error`() {
-    val socketPath = Files.createTempFile("skillbill-evidence-refusal", ".sock")
+    val socketPath = Files.createTempFile("sb", ".sock")
     Files.delete(socketPath)
     val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
     server.bind(UnixDomainSocketAddress.of(socketPath))

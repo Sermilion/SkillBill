@@ -62,8 +62,8 @@ internal fun applyInstallPlan(
   }
   val nativeAgents =
     if (failures.isEmpty()) {
-      applyRepoLocalConfigScaffold(plan, ports.projectStore, warnings)
-      applyNativeAgents(plan, failures, catalogLoader)
+      applyRepoLocalConfigScaffold(plan, ports.projectStore, warnings, failures)
+      if (failures.isEmpty()) applyNativeAgents(plan, failures, catalogLoader) else emptyList()
     } else {
       emptyList()
     }

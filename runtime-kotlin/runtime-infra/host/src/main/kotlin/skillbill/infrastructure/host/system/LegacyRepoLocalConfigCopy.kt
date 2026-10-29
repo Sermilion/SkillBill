@@ -14,24 +14,30 @@ internal fun readableRepoLocalConfigPath(
   diagnostics: RuntimeDiagnostics,
   repoRoot: Path,
   storeConfig: Path,
+  copy: (Path, Path) -> Unit = { legacy, store -> copyLegacyConfig(diagnostics, legacy, store) },
 ): Path? {
-  if (pathAttributesOrNull(storeConfig, "resolve") != null) return storeConfig
+  val canonicalStoreConfig = FileConfigDocumentLocks.lockedPath(storeConfig)
+  if (pathAttributesOrNull(canonicalStoreConfig, "resolve") != null) return canonicalStoreConfig
   val legacy =
     repoRoot
       .resolve(LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY)
       .resolve(REPO_LOCAL_CONFIG_FILE_NAME)
       .toAbsolutePath()
       .normalize()
-  if (pathAttributesOrNull(legacy, "resolve")?.isRegularFile != true) return null
+  val canonicalLegacy = FileConfigDocumentLocks.lockedPath(legacy)
+  if (pathAttributesOrNull(canonicalLegacy, "resolve")?.isRegularFile != true) return null
   return try {
-    copyLegacyConfig(diagnostics, legacy, storeConfig)
-    storeConfig
+    copy(canonicalLegacy, canonicalStoreConfig)
+    canonicalStoreConfig
   } catch (failure: IOException) {
     diagnostics.warning(
-      "seam=repo_local_config value_expected=$storeConfig value_used=$legacy cause=legacy_config_copy_failed",
+      "seam=repo_local_config value_expected=$canonicalStoreConfig " +
+        "value_used=$canonicalLegacy cause=legacy_config_copy_failed",
       failure,
     )
-    legacy
+    canonicalLegacy
+  } catch (failure: SecurityException) {
+    throw configDocumentIoException(canonicalStoreConfig, "copy", failure)
   }
 }
 

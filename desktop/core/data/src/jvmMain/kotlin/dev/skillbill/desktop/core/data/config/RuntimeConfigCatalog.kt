@@ -28,7 +28,10 @@ private val phaseGroups = linkedMapOf(
   PhaseGroupKind.GOAL_FINISH to listOf("goal_assessment", "goal_assessment_fix"),
 )
 
-internal fun runtimeConfigDefaults(userHome: Path, diagnostics: Diagnostics): ConfigDefaults {
+internal fun runtimeConfigDefaults(
+  userHome: Path,
+  diagnostics: Diagnostics,
+): ConfigDefaults {
   val available = PhaseSlot.entries.flatMap { it.steps }.distinct()
   val known = phaseGroups.values.flatten().toSet()
   val ordered = phaseGroups.flatMap { (group, ids) -> ids.filter { it in available }.map { it to group } } +

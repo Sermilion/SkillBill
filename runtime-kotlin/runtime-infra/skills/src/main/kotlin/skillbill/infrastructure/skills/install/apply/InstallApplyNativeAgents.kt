@@ -9,6 +9,7 @@ import skillbill.infrastructure.skills.install.nativeagent.link.effectivePackRoo
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
@@ -66,6 +67,7 @@ private fun applyNativeAgentProvider(
   }.fold(
     onSuccess = { outcome -> nativeAgentProviderOutcomes(installer, outcome) },
     onFailure = { error ->
+      error.rethrowIfCooperativeCancellationOrInterruption()
       listOf(
         failedNativeAgentOutcome(installer, error).also { nativeOutcome ->
           nativeOutcome.issue?.let(context.failures::add)

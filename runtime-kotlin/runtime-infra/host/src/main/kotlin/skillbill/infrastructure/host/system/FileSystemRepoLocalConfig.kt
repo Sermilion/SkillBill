@@ -14,6 +14,7 @@ import skillbill.config.model.parseReviewContextBudget
 import skillbill.config.model.parseSpecType
 import skillbill.config.model.parseValidationGateRepoConfig
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.error.shellcontent.malformedRepoLocalConfigError
 import skillbill.error.shellcontent.unreadableRepoLocalConfigError
 import skillbill.ports.config.RepoLocalConfigPort
@@ -34,13 +35,20 @@ class FileSystemRepoLocalConfig(
   private val yamlMapper: YAMLMapper by lazy { YAMLMapper() }
 
   override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest): ReadRepoLocalConfigResult {
-    val configPath =
-      readableRepoLocalConfigPath(diagnostics, request.repoRoot, projectStore.resolve(request.repoRoot).configPath)
-        ?: return ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
-    val payload = readConfigPayload(configPath)
-    val raw = parseConfigMap(configPath, payload)
-    rejectRemovedParallelAgentConfig(configPath, raw)
-    return ReadRepoLocalConfigResult(buildConfig(configPath, raw))
+    val target = projectStore.resolve(request.repoRoot).configPath
+    val legacy =
+      request.repoRoot.resolve(
+        LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY,
+      ).resolve(REPO_LOCAL_CONFIG_FILE_NAME)
+    return FileConfigDocumentLocks.withLocks(listOf(target, legacy)) {
+      val configPath =
+        readableRepoLocalConfigPath(diagnostics, request.repoRoot, target)
+          ?: return@withLocks ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
+      val payload = readConfigPayload(configPath)
+      val raw = parseConfigMap(configPath, payload)
+      rejectRemovedParallelAgentConfig(configPath, raw)
+      ReadRepoLocalConfigResult(buildConfig(configPath, raw))
+    }
   }
 
   private fun buildConfig(
@@ -138,6 +146,14 @@ class FileSystemRepoLocalConfig(
     payload: String,
   ): Map<String, Any?> {
     if (payload.isBlank()) return emptyMap()
+    yamlAdmissionFailure(payload)?.let { failure ->
+      throw malformedRepoLocalConfigError(
+        path = path.toString(),
+        key = failure.keyPath.orEmpty(),
+        value = "<document>",
+        reason = failure.reason,
+      )
+    }
     return try {
       JsonCodec.anyToStringAnyMap(yamlMapper.readValue(payload, Any::class.java)) ?: emptyMap()
     } catch (error: JacksonException) {

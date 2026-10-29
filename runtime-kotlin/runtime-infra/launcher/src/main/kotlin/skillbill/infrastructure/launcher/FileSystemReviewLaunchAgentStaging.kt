@@ -3,6 +3,7 @@ package skillbill.infrastructure.launcher
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
 import skillbill.error.shellcontent.missingInstalledNativeAgent
+import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
@@ -21,6 +22,7 @@ class FileSystemReviewLaunchAgentStaging(
 ) : ReviewLaunchAgentStagingPort {
   override fun stage(request: ReviewLaunchAgentStagingRequest) {
     if (request.logicalWorkerNames.isEmpty()) return
+    val environmentValues = resolveEnvironmentMap(environment.environment)
     val provider =
       provider(request.agentId)
         ?: throw missingInstalledNativeAgent(
@@ -32,9 +34,14 @@ class FileSystemReviewLaunchAgentStaging(
             REPAIR_COMMAND,
           ),
         )
-    val inventory = NativeAgentLinkInventory.read(environment.userHome, emptyList())
+    val inventory =
+      NativeAgentLinkInventory.read(
+        environment.userHome,
+        emptyList(),
+        environment = environmentValues,
+      )
     request.logicalWorkerNames.distinct().forEach { logicalName ->
-      val entry = inventoryEntry(inventory, provider, logicalName)
+      val entry = inventoryEntry(inventory, provider, logicalName, environmentValues)
       copyArtifact(entry, provider, request.reviewLaunchDirectory)
     }
   }
@@ -43,6 +50,7 @@ class FileSystemReviewLaunchAgentStaging(
     inventory: List<NativeAgentLinkInventoryEntry>,
     provider: NativeAgentProvider,
     logicalName: String,
+    environmentValues: Map<String, String>,
   ): NativeAgentLinkInventoryEntry {
     val entries =
       inventory.filter {
@@ -52,7 +60,7 @@ class FileSystemReviewLaunchAgentStaging(
       fail(
         logicalName,
         provider,
-        provider.homeAgentDirs(environment.userHome).first().resolve(provider.fileName(logicalName)),
+        provider.homeAgentDirs(environment.userHome, environmentValues).first().resolve(provider.fileName(logicalName)),
         "managed inventory entry is missing",
       )
     }

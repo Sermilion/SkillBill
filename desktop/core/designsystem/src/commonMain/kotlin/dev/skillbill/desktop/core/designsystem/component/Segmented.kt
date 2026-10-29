@@ -61,7 +61,12 @@ fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, onSelect: (T) 
           .hoverable(source)
           .clickable(source, null, enabled = option.enabled, onClick = { onSelect(option.value) })
           .sbFocusRing(source, RoundedCornerShape(SkillBillRadius.xs))
-          .semantics { role = Role.Tab; this.selected = isSelected; contentDescription = option.label }.padding(horizontal = 9.dp),
+          .semantics {
+            role = Role.Tab
+            this.selected = isSelected
+            contentDescription = option.label
+            option.tooltip?.let { stateDescription = it }
+          }.padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
         CompositionLocalProvider(LocalContentColor provides foreground) {

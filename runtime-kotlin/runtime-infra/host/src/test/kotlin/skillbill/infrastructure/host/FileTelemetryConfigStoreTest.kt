@@ -18,6 +18,24 @@ import kotlin.test.assertTrue
 
 class FileTelemetryConfigStoreTest {
   @Test
+  fun `config with a repeated key is unreadable and ensure leaves it untouched`(
+    @TempDir tempDir: Path,
+  ) {
+    val path = tempDir.resolve("config.json")
+    val text = "{\"custom\":{\"owner\":\"first\",\"owner\":\"second\"},\"telemetry\":{\"level\":\"off\"}}\n"
+    Files.writeString(path, text)
+
+    val read = assertIs<TelemetryConfigRead.Malformed>(readTelemetryConfigFileRead(path))
+    assertEquals(
+      "Telemetry config at '$path' repeats the key 'custom.owner'. " +
+        "Remove the duplicate; saving would keep only one of the values.",
+      read.reason,
+    )
+    assertFailsWith<IllegalArgumentException> { ensureTelemetryConfigFile(path) }
+    assertEquals(text, Files.readString(path))
+  }
+
+  @Test
   fun `config reads distinguish absence malformed text and non-object roots while edge reads keep throwing`(
     @TempDir tempDir: Path,
   ) {

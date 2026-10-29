@@ -19,10 +19,15 @@ data class ExternalPlatformPackSourceUnregisterRequest(
   val userHome: Path,
   val environment: Map<String, String> = emptyMap(),
   val source: ExternalPlatformPackSource,
+  val restoreEmptyFieldState: ExternalPlatformPackSourcesFieldState? = null,
 )
+
+enum class ExternalPlatformPackSourcesFieldState { ABSENT, NULL, LIST }
 
 data class ExternalPlatformPackSourceConfigResult(
   val sources: List<ExternalPlatformPackSource> = emptyList(),
+  val inserted: Boolean = false,
+  val previousFieldState: ExternalPlatformPackSourcesFieldState = ExternalPlatformPackSourcesFieldState.LIST,
 )
 
 data class ExternalPlatformPackPathResolveRequest(

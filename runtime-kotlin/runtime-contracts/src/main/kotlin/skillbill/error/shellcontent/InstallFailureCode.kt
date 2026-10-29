@@ -22,7 +22,19 @@ enum class InstallFailureCode : RuntimeFailureCode {
   INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
   GOAL_PLANNING_PREPARATION_CONFLICT,
   GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+  AGENT_DISCOVERY_FAILED,
 }
+
+fun agentDiscoveryFailed(
+  operation: String,
+  path: String,
+  cause: Throwable,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    InstallFailureCode.AGENT_DISCOVERY_FAILED,
+    "Agent discovery could not $operation at '$path': ${cause.message.orEmpty()}",
+    cause,
+  )
 
 fun invalidInstallPlanSchemaError(
   fieldPath: String,

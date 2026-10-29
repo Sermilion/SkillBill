@@ -6,8 +6,16 @@ import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceConf
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceConfigResult
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceRegistrationRequest
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceUnregisterRequest
+import java.nio.file.Path
 
 interface ExternalPlatformPackSourceConfigPort {
+  /** Holds the shared machine config lock across registration and the scaffold commit or rollback. */
+  fun <T> withConfigTransaction(
+    userHome: Path,
+    environment: Map<String, String>,
+    action: () -> T,
+  ): T
+
   fun readExternalPlatformPackSources(
     request: ExternalPlatformPackSourceConfigRequest,
   ): ExternalPlatformPackSourceConfigResult

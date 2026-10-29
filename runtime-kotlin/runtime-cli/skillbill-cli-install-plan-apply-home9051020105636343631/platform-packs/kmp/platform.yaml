@@ -1,0 +1,21 @@
+platform: "kmp"
+contract_version: "1.8"
+routing_signals:
+  strong: [".kmp", "*.kmp"]
+  tie_breakers:
+    - "Prefer kmp when kmp source signals dominate the changed product surface."
+    - "Do not prefer kmp when an adjacent pack's declared signals dominate."
+    - "Exclude generated and vendored files from dominance scoring."
+declared_code_review_areas: [architecture]
+declared_files:
+  baseline: "code-review/bill-kmp-code-review/content.md"
+  areas:
+    architecture: "code-review/bill-kmp-code-review-architecture/content.md"
+area_metadata:
+  architecture:
+    focus: "kmp architecture boundary APIs and failure modes"
+display_name: "kmp"
+declared_quality_check_file: "quality-check/bill-kmp-code-check/content.md"
+pointers:
+  code-review/bill-kmp-code-review: []
+  code-review/bill-kmp-code-review-architecture: []

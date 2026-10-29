@@ -3,8 +3,7 @@ package skillbill.infrastructure.skills.install.plan
 import skillbill.infrastructure.skills.nativeagent.support.CLAUDE_CONFIG_DIR_ENV
 import java.nio.file.Path
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots as nativeAgentClaudeConfigRoots
-
-internal const val CLAUDE_CONFIG_DIR_ENV: String = "CLAUDE_CONFIG_DIR"
+import skillbill.infrastructure.skills.nativeagent.support.claudeSkillTargets as nativeClaudeSkillTargets
 
 internal fun claudeConfigRoot(
   home: Path,
@@ -22,6 +21,4 @@ internal fun claudeConfigRoots(
 internal fun claudeSkillTargets(
   home: Path,
   environment: Map<String, String>,
-): List<Path> {
-  return claudeConfigRoots(home, environment).map { root -> root.resolve("skills") }
-}
+): List<Path> = nativeClaudeSkillTargets(home, environment)
