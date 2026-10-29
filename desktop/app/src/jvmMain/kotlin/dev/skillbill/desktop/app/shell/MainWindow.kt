@@ -37,7 +37,12 @@ private val MIN_WINDOW_SIZE = Dimension(560, 420)
 /** The main window: the shell frame, the routes, the command menu, the shortcut sheet and the toasts, all on [window]'s graph. */
 @Composable
 fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean) {
-  DisposableEffect(window) { onDispose { window.scope.scope.cancel() } }
+  DisposableEffect(window) {
+    onDispose {
+      window.terminal.close()
+      window.scope.scope.cancel()
+    }
+  }
   LaunchedEffect(window) { window.navigator.followSession() }
   val keyboard = window.keyboard
   Window(

@@ -16,6 +16,6 @@ class ShellPanes {
   var drawerOpen by mutableStateOf(false)
   var shortcutsOpen by mutableStateOf(false)
 
-  /** Held here until the terminal feature owns its pane state; only `:app`'s `TerminalTriggers` writes it. */
+  /** Mirrors the terminal feature's pane state for the shell's layout; only the terminal workspace writes it. */
   var terminalOpen by mutableStateOf(false)
 }

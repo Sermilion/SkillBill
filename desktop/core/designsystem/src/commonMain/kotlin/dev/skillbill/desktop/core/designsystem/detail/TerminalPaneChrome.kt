@@ -84,7 +84,9 @@ class TerminalTabChrome(val id: String, val title: String)
 
 /**
  * The caller owns [height], clamping and persistence. [onResizeBy] reports a height delta: positive grows the pane
- * (dragging the grip up or the taller button), negative shrinks it.
+ * (dragging the grip up or the taller button), negative shrinks it. [renameFieldGate] is called inside the open rename
+ * field, for exactly as long as the field is composed, with the field's own cancel and commit. It returns the modifier
+ * that gates the window's shortcuts while the field has focus.
  */
 @Composable
 fun TerminalPaneChrome(
@@ -96,6 +98,7 @@ fun TerminalPaneChrome(
   onStartRename: (String) -> Unit,
   onRename: (id: String, name: String) -> Unit,
   onCancelRename: () -> Unit,
+  renameFieldGate: @Composable (cancel: () -> Unit, commit: () -> Unit) -> Modifier,
   onCloseTab: (String) -> Unit,
   onNewTab: () -> Unit,
   onResizeBy: (Dp) -> Unit,
@@ -120,7 +123,7 @@ fun TerminalPaneChrome(
               TerminalTab(
                 tab, active = tab.id == activeId, renaming = tab.id == renamingId,
                 onSelect = { onSelectTab(tab.id) }, onStartRename = { onStartRename(tab.id) },
-                onRename = { onRename(tab.id, it) }, onCancelRename = onCancelRename, onClose = { onCloseTab(tab.id) },
+                onRename = { onRename(tab.id, it) }, onCancelRename = onCancelRename, renameFieldGate = renameFieldGate, onClose = { onCloseTab(tab.id) },
               )
             }
           }
@@ -152,6 +155,7 @@ private fun TerminalTab(
   onStartRename: () -> Unit,
   onRename: (String) -> Unit,
   onCancelRename: () -> Unit,
+  renameFieldGate: @Composable (cancel: () -> Unit, commit: () -> Unit) -> Modifier,
   onClose: () -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -169,7 +173,7 @@ private fun TerminalTab(
     verticalAlignment = Alignment.CenterVertically,
   ) {
     if (renaming) {
-      RenameField(tab.title, onRename, onCancelRename)
+      RenameField(tab.title, onRename, onCancelRename, renameFieldGate)
     } else {
       BasicText(tab.title, style = SkillBillTheme.type.tSmMedium.copy(color = textColor), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -182,7 +186,12 @@ private fun TerminalTab(
 }
 
 @Composable
-private fun RenameField(initial: String, onRename: (String) -> Unit, onCancel: () -> Unit) {
+private fun RenameField(
+  initial: String,
+  onRename: (String) -> Unit,
+  onCancel: () -> Unit,
+  gate: @Composable (cancel: () -> Unit, commit: () -> Unit) -> Modifier,
+) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.xs)
   val focus = remember { FocusRequester() }
@@ -190,17 +199,19 @@ private fun RenameField(initial: String, onRename: (String) -> Unit, onCancel: (
   var hadFocus by remember { mutableStateOf(false) }
   var settled by remember { mutableStateOf(false) }
   fun commit() { if (!settled) { settled = true; onRename(value.text) } }
+  fun cancel() { if (!settled) { settled = true; onCancel() } }
+  val gateModifier = gate(::cancel, ::commit)
   LaunchedEffect(Unit) { focus.requestFocus() }
   BasicTextField(
     value, { value = it },
-    Modifier.width(120.dp).height(20.dp).background(colors.bgPanel, shape).border(1.dp, colors.accentRing, shape)
+    gateModifier.width(120.dp).height(20.dp).background(colors.bgPanel, shape).border(1.dp, colors.accentRing, shape)
       .focusRequester(focus)
       .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) commit() }
       .onPreviewKeyEvent {
         if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
         when (it.key) {
           Key.Enter, Key.NumPadEnter -> { commit(); true }
-          Key.Escape -> { if (!settled) { settled = true; onCancel() }; true }
+          Key.Escape -> { cancel(); true }
           else -> false
         }
       }

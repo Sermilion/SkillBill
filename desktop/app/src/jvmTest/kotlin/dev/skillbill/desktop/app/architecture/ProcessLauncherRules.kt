@@ -88,7 +88,7 @@ internal object ProcessLauncherRules {
         violations += "${source.path} references process launcher APIs ${hits.sorted()}; add an exact approved path only when the launcher is required."
       }
     }
-    allowedLaunchers.filter { it !in sources.map(ProductionSource::path) && it.endsWith("OsReducedMotionReader.kt") }
+    allowedLaunchers.filter { it !in sources.map(ProductionSource::path) }
       .forEach { violations += "Required process launcher allowlist entry is not in the production scan: $it" }
     return violations
   }

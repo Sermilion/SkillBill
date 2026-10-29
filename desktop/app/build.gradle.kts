@@ -22,6 +22,7 @@ kotlin {
     implementation(projects.core.datastore)
     implementation(projects.core.designsystem)
     implementation(projects.core.ui)
+    implementation(projects.feature.terminal)
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)
   }

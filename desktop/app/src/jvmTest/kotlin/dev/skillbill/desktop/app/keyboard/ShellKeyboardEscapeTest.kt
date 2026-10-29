@@ -10,10 +10,12 @@ import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
+import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -26,7 +28,7 @@ class ShellKeyboardEscapeTest {
     navigator.navigate(DetailRoute(workItem("goal-1")))
     val input = ShellInput()
     val panes = ShellPanes()
-    val keyboard = ShellKeyboard(navigator, panes, input, CommandMenuState(), TerminalTriggers(panes))
+    val keyboard = ShellKeyboard(navigator, panes, input, CommandMenuState(), TerminalTriggers(NoTerminal))
     var dismissed = false
     val menu = ShellInput.Layer { dismissed = true }
     input.addLayer(menu)
@@ -38,6 +40,21 @@ class ShellKeyboardEscapeTest {
     input.removeLayer(menu)
     assertTrue(keyboard.onKey(KeyPress(ShellKey.Escape)))
     assertEquals(WorkRoute(null), navigator.top.route)
+  }
+
+  private object NoTerminal : PaneCommands {
+    override val terminalOpen: StateFlow<Boolean> = MutableStateFlow(false)
+    override val terminalFocused: StateFlow<Boolean> = MutableStateFlow(false)
+
+    override fun toggleTerminal() = Unit
+
+    override fun newTerminalTab() = Unit
+
+    override fun openTerminal(directory: Path?) = Unit
+
+    override fun specProjectSelected(checkout: Path?) = Unit
+
+    override fun closeTerminals() = Unit
   }
 
   private object OpenSession : DatabaseSessionController {

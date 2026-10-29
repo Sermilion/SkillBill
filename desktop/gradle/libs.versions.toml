@@ -20,6 +20,9 @@ jediterm = "3.57"
 # Maven Central: org.jetbrains.pty4j
 pty4j = "0.13.10"
 jna = "5.14.0"
+# Aligned with runtime-kotlin; verifySharedRuntimeVersions fails on drift.
+jetbrains-annotations = "23.0.0"
+slf4j = "2.0.17"
 asm = "9.9.1"
 
 [libraries]
@@ -62,3 +65,5 @@ jediterm-ui = { module = "org.jetbrains.jediterm:jediterm-ui", version.ref = "je
 pty4j = { module = "org.jetbrains.pty4j:pty4j", version.ref = "pty4j" }
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
