@@ -19,6 +19,7 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
+import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRepairRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReplanRequest
@@ -337,5 +338,36 @@ class GoalOperatorDecisionCommand(
       )
     val payload = result.toGoalOperatorDecisionCliMap()
     state.completeText(goalOperatorDecisionText(result), payload, exitCode = goalOperatorDecisionExitCode(result))
+  }
+}
+
+@Inject
+class GoalFreshQualityCommand(
+  private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+) : DocumentedCliCommand(
+    "fresh-quality",
+    "Resolve an 'ambiguous historical quality state' block by discarding that history. " +
+      "The next goal run admits a fresh quality execution with new cycles. Refused while a runner holds the goal.",
+  ) {
+  private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
+  private val reason by option("--reason", help = "Why the historical quality state can be discarded.").required()
+  private val repoRoot by option("--repo-root", help = "Repository root for the goal.")
+
+  override fun run() {
+    if (reason.isBlank()) {
+      throw UsageError("--reason must not be blank.")
+    }
+    val result =
+      goalRunnerStatusService.freshQuality(
+        GoalRunnerFreshQualityRequest(
+          issueKey = issueKey,
+          reason = reason,
+          repoRoot = resolveCliRepositoryRoot(repoRoot, inputs),
+        ),
+      )
+    val payload = result.toGoalFreshQualityCliMap()
+    state.completeText(goalFreshQualityText(result), payload, exitCode = goalFreshQualityExitCode(result))
   }
 }

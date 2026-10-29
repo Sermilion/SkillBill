@@ -65,6 +65,21 @@ class WorkflowGoalRunnerQualityExecutionStore
         }
       }
 
+    override fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean =
+      withQualityPersistence {
+        database.transaction { unitOfWork ->
+          val parent = parent(unitOfWork, parentWorkflowId)
+          val payload =
+            DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.value(parent.artifacts)
+              ?: return@transaction false
+          val current = decode(payload)
+          validateParentIdentity(current, parentWorkflowId)
+          if (current.readiness != GoalQualityReadiness.HISTORICAL_AMBIGUITY) return@transaction false
+          persist(unitOfWork, parent, current.copy(readiness = CLEAN_UNSTARTED, execution = null))
+          true
+        }
+      }
+
     override fun resolvedGoalQualityChildIds(
       parentWorkflowId: String,
       expectedSelection: List<Pair<Int, String?>>,
@@ -99,7 +114,8 @@ class WorkflowGoalRunnerQualityExecutionStore
           if (record.readiness == GoalQualityReadiness.HISTORICAL_AMBIGUITY) {
             invalid(
               "This parent has ambiguous historical quality state. An operator must " +
-                "decide whether to start a fresh quality execution or provide " +
+                "decide whether to start a fresh quality execution " +
+                "(skill-bill goal fresh-quality <issue-key> --reason \"<why>\") or provide " +
                 "authoritative original evidence.",
             )
           }
@@ -295,25 +311,6 @@ class WorkflowGoalRunnerQualityExecutionStore
       ) {
         invalid("Goal-quality phase progress has conflicting identities or terminal state.")
       }
-    }
-
-    private fun invalidGateKeys(progress: GoalQualityPhaseProgress): Boolean {
-      val build =
-        (progress.buildGateProgress == null) != (progress.buildGateProgressKey == null) ||
-          progress.buildGateProgressKey?.isBlank() == true
-      val validation =
-        (progress.validationGateProgress == null) != (progress.validationGateProgressKey == null) ||
-          progress.validationGateProgressKey?.isBlank() == true
-      return build || validation
-    }
-
-    private fun invalidTerminalProgress(progress: GoalQualityPhaseProgress): Boolean {
-      val invalidIdentity =
-        progress.revision < 0 || progress.terminalBlockedStep?.isBlank() == true ||
-          progress.terminalBlockedReason?.isBlank() == true
-      val hasBlock = progress.terminalBlockedStep != null || progress.terminalBlockedReason != null
-      val incompleteBlock = (progress.terminalBlockedStep == null) != (progress.terminalBlockedReason == null)
-      return invalidIdentity || if (progress.terminalCompleted) hasBlock else incompleteBlock
     }
 
     internal fun retireForSelectionChange(
@@ -853,6 +850,25 @@ class WorkflowGoalRunnerQualityExecutionStore
         )
       }
   }
+
+private fun invalidGateKeys(progress: GoalQualityPhaseProgress): Boolean {
+  val build =
+    (progress.buildGateProgress == null) != (progress.buildGateProgressKey == null) ||
+      progress.buildGateProgressKey?.isBlank() == true
+  val validation =
+    (progress.validationGateProgress == null) != (progress.validationGateProgressKey == null) ||
+      progress.validationGateProgressKey?.isBlank() == true
+  return build || validation
+}
+
+private fun invalidTerminalProgress(progress: GoalQualityPhaseProgress): Boolean {
+  val invalidIdentity =
+    progress.revision < 0 || progress.terminalBlockedStep?.isBlank() == true ||
+      progress.terminalBlockedReason?.isBlank() == true
+  val hasBlock = progress.terminalBlockedStep != null || progress.terminalBlockedReason != null
+  val incompleteBlock = (progress.terminalBlockedStep == null) != (progress.terminalBlockedReason == null)
+  return invalidIdentity || if (progress.terminalCompleted) hasBlock else incompleteBlock
+}
 
 private fun allowedNextStatuses(status: GoalQualityExecutionStatus): Set<GoalQualityExecutionStatus> =
   when (status) {

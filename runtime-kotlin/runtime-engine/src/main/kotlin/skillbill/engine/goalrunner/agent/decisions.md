@@ -217,3 +217,11 @@ Context: The goal runner creates the parent workflow by importing the manifest p
 Decision: The import writes `clean_unstarted` only when this database holds the completed plan workflow it links and no manifest subtask has started. Every other import keeps `historical_ambiguity`, including a checked-in manifest imported into an empty or recovered database.
 
 Reason: A linked completed plan with untouched subtasks proves that no final quality execution ran. A checked-in manifest alone proves nothing, because it can lag behind real progress. A runtime-engine test covers both outcomes, and the CLI recovered-database test keeps the refusal.
+
+## [2026-10-29] Operators can discard ambiguous historical quality state
+
+Context: The quality gate blocks a parent marked `historical_ambiguity` and asks the operator to provide original evidence or choose a fresh quality execution. Nothing recorded that choice. Intake text never reaches the gate, `goal repair` and `goal resume` do not touch it, and `work recover` excludes operator decisions. 0AC-85 stayed blocked with no supported way forward.
+
+Decision: `skill-bill goal fresh-quality <issue-key> --reason <why>` moves the parent's quality record from `historical_ambiguity` to `clean_unstarted` in one transaction. It refuses while the parent execution lease is live and when the record holds no ambiguity. It is a separate command, not a `goal repair` wedge, because `goal resume` applies repair clears automatically and this choice discards history only an operator can judge.
+
+Reason: The ambiguity guard exists so the runtime never guesses. The guess belongs to the operator, and the runtime needs a durable way to record it. A CLI test drives the recovered-database block, the choice, a refused repeat and a run that no longer blocks.

@@ -5,6 +5,8 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerAcceptanceCoordinato
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
+import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest
+import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
@@ -17,6 +19,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerResetResult
 import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
+import skillbill.engine.goalrunner.repair.GoalRunnerFreshQualityCoordinator
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
@@ -37,6 +40,7 @@ class GoalRunnerStatusService(
   private val projectionAssembler: GoalRunnerStatusProjectionAssembler,
   private val resetReplanCoordinator: GoalRunnerResetReplanCoordinator,
   private val purgeCoordinator: GoalRunnerPurgeCoordinator,
+  private val freshQualityCoordinator: GoalRunnerFreshQualityCoordinator,
 ) {
   fun status(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? {
     return manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
@@ -102,6 +106,11 @@ class GoalRunnerStatusService(
   fun repair(request: GoalRunnerRepairRequest): GoalRunnerRepairResult = repairCoordinator.repair(request)
 
   fun accept(request: GoalRunnerAcceptRequest): GoalRunnerAcceptResult = acceptanceCoordinator.accept(request)
+
+  fun freshQuality(request: GoalRunnerFreshQualityRequest): GoalRunnerFreshQualityResult =
+    freshQualityCoordinator.choose(
+      request.copy(repoRoot = effectiveGoalRepoRoot(request.repoRoot, repositoryRoot)),
+    )
 }
 
 fun effectiveGoalRepoRoot(

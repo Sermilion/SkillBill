@@ -27,3 +27,24 @@ sealed interface GoalRunnerOperatorDecisionResult {
 
   data class Rejected(val issueKey: String, val reason: String) : GoalRunnerOperatorDecisionResult
 }
+
+data class GoalRunnerFreshQualityRequest(
+  val issueKey: String,
+  val reason: String,
+  val repoRoot: Path? = null,
+) {
+  init {
+    require(issueKey.isNotBlank()) { "issueKey is required." }
+    require(reason.isNotBlank()) { "reason is required." }
+  }
+}
+
+sealed interface GoalRunnerFreshQualityResult {
+  data class Chosen(
+    val issueKey: String,
+    val parentWorkflowId: String,
+    val reason: String,
+  ) : GoalRunnerFreshQualityResult
+
+  data class Rejected(val issueKey: String, val reason: String) : GoalRunnerFreshQualityResult
+}

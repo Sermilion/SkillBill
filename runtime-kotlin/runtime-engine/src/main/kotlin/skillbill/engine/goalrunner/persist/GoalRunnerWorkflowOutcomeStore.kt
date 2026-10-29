@@ -282,6 +282,13 @@ interface GoalRunnerWorkflowLedgerWriteStore {
 interface GoalRunnerQualityExecutionStore {
   fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord? = null
 
+  /**
+   * Records the operator's choice to discard ambiguous historical quality state. The parent's
+   * quality record becomes clean and unstarted, so the next goal run admits a fresh quality
+   * execution with new cycles. Returns false when the parent holds no historical ambiguity.
+   */
+  fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean = false
+
   fun resolvedGoalQualityChildIds(
     parentWorkflowId: String,
     expectedSelection: List<Pair<Int, String?>>,

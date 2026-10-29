@@ -5,6 +5,7 @@ import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
+import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerRepairResult
 import skillbill.engine.goalrunner.model.GoalRunnerResetSubtaskSnapshot
@@ -173,5 +174,40 @@ internal fun goalOperatorDecisionText(result: GoalRunnerOperatorDecisionResult):
       appendLine(
         "next: skill-bill goal resume ${result.issueKey} (consumes the recorded decision)",
       )
+    }
+  }
+
+internal fun GoalRunnerFreshQualityResult.toGoalFreshQualityCliMap(): Map<String, Any?> =
+  when (this) {
+    is GoalRunnerFreshQualityResult.Chosen ->
+      linkedMapOf(
+        SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
+        SharedPayloadKeys.ISSUE_KEY to issueKey,
+        "parent_workflow_id" to parentWorkflowId,
+        "reason" to reason,
+      )
+    is GoalRunnerFreshQualityResult.Rejected ->
+      linkedMapOf(
+        SharedPayloadKeys.STATUS to "rejected",
+        SharedPayloadKeys.ISSUE_KEY to issueKey,
+        "reason" to reason,
+      )
+  }
+
+internal fun goalFreshQualityText(result: GoalRunnerFreshQualityResult): String =
+  buildString {
+    when (result) {
+      is GoalRunnerFreshQualityResult.Chosen -> {
+        appendLine("goal: ${result.issueKey}")
+        appendLine("status: ok")
+        appendLine("parent_workflow_id: ${result.parentWorkflowId}")
+        appendLine("reason: ${result.reason}")
+        appendLine("next: skill-bill ${result.issueKey} (admits a fresh quality execution)")
+      }
+      is GoalRunnerFreshQualityResult.Rejected -> {
+        appendLine("goal: ${result.issueKey}")
+        appendLine("status: rejected")
+        appendLine("reason: ${result.reason}")
+      }
     }
   }

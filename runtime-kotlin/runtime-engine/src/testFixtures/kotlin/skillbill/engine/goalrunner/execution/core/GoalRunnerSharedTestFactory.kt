@@ -33,6 +33,7 @@ import skillbill.engine.goalrunner.qa.GoalQaSkipReason
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
+import skillbill.engine.goalrunner.repair.GoalRunnerFreshQualityCoordinator
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.repair.NoopGoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
@@ -170,6 +171,14 @@ fun testGoalRunnerStatusService(
         repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
         goalStateFiles = ports.goalStateFiles,
         projectStore = ports.projectStore,
+      ),
+    freshQualityCoordinator =
+      GoalRunnerFreshQualityCoordinator(
+        manifestStore = manifestStore,
+        outcomeStore = outcomeStore,
+        workerSupervisor = ports.workerSupervisor,
+        clock = clock,
+        diagnostics = ports.diagnostics,
       ),
   )
 }

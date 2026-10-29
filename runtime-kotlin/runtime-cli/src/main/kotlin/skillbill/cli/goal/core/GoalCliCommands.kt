@@ -14,6 +14,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.config.ConfigResolutionService
 import skillbill.application.system.RuntimeProvenanceService
 import skillbill.cli.goal.control.GoalAcceptCommand
+import skillbill.cli.goal.control.GoalFreshQualityCommand
 import skillbill.cli.goal.control.GoalOperatorDecisionCommand
 import skillbill.cli.goal.control.GoalPauseCommand
 import skillbill.cli.goal.control.GoalRepairCommand
@@ -86,8 +87,9 @@ class GoalControlOperatorCommands(
   accept: GoalAcceptCommand,
   repair: GoalRepairCommand,
   operatorDecision: GoalOperatorDecisionCommand,
+  freshQuality: GoalFreshQualityCommand,
 ) {
-  val commands: List<CliktCommand> = listOf(replan, accept, repair, operatorDecision)
+  val commands: List<CliktCommand> = listOf(replan, accept, repair, operatorDecision, freshQuality)
 }
 
 @Inject

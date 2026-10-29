@@ -73,6 +73,17 @@ The retry schedules a read-only source audit before further repairs. A stopped
 repair planner can also return to audit after scoped crash reconciliation confirms
 its worker is dead and releases ownership. A live or unverifiable worker blocks retry.
 
+## Ambiguous historical quality state
+
+A goal whose parent workflow was imported without proof that final quality never
+ran blocks before QA with "ambiguous historical quality state". When the original
+quality evidence is gone, record the operator's choice with
+`skill-bill goal fresh-quality <issue-key> --reason <why>`. The parent's quality
+record becomes clean and unstarted, and the next goal run admits a fresh quality
+execution with new cycles. The command refuses while a runner holds the goal and
+when the parent has no ambiguous state. It does not change subtasks, child
+workflows, specs or commits.
+
 ## Block incident recovery
 
 Work detail includes the runtime-built `incident` projection and `incident_history`. Status and run output use that same projection for the diagnosis, next action, report, and telemetry lines. The detail JSON adds `recover_command` only when recovery is available or prerequisites need confirmation; it includes the incident revision and one `--confirm-prerequisite` flag for each unmet prerequisite.
