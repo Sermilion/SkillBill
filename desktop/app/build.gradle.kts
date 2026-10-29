@@ -25,6 +25,7 @@ kotlin {
     implementation(projects.feature.terminal)
     implementation(projects.feature.work)
     implementation(projects.feature.history)
+    implementation(projects.feature.detail)
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)
   }
