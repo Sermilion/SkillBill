@@ -18,6 +18,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelAgentMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
@@ -914,4 +915,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 91,
       name = "correct-worktree-edit-journal-prune-chronological-order",
       operation = ::pruneWorktreeEditJournalToLatestTick,
+    ) +
+    DatabaseMigration(
+      version = 92,
+      name = "rebuild-work-board-executing-agent",
+      operation = WorkBoardReadModelAgentMigration::apply,
     )

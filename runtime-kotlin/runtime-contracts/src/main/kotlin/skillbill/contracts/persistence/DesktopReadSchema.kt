@@ -1,7 +1,7 @@
 package skillbill.contracts.persistence
 
 object DesktopReadSchema {
-  const val VERSION = 91
+  const val VERSION = 92
   const val INCIDENT_DETAIL_CAPABILITY_VERSION = 1
   const val MIN_INCIDENT_DETAIL_READ_SCHEMA = VERSION
   const val IDENTITY_TABLE = "work_store_identity"

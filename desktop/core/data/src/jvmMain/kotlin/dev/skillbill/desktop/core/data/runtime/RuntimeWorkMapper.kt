@@ -45,13 +45,14 @@ internal class ItemVerdicts(
   val observation: WorkStoreObservation?,
   val databaseFile: DatabaseFileObservation?,
   val sessionId: Long,
+  val agentId: String? = null,
 )
 
 internal fun WorkBoardItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWorkItem(
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase, doneWithinDay, freshnessDeadline, membershipDeadline, exactPauseReason, controlLease,
-    observation, databaseFileObservation, sessionId,
+    observation, databaseFileObservation, sessionId, executingAgentId,
   ),
 )
 
@@ -93,7 +94,7 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     finishedAt = verdicts.finishedAt?.toKotlinInstant(),
     model = currentModel?.model,
     effort = currentModel?.effort,
-    agentId = null,
+    agentId = verdicts.agentId,
     branch = branchCorrelation,
     repositoryName = RepositoryNames.nameOf(verdicts.repositoryRoot),
     repositoryRoot = verdicts.repositoryRoot,

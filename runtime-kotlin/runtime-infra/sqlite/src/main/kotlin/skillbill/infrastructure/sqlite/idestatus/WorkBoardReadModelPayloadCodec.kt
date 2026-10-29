@@ -71,6 +71,7 @@ internal object WorkBoardReadModelPayloadCodec {
         WorkBoardReadModelPayloadKeys.DISPLAY_GROUP to row.item.displayGroup?.name,
         WorkBoardReadModelPayloadKeys.DISPLAY_PRIORITY to row.item.displayPriority,
         WorkBoardReadModelPayloadKeys.EXACT_PAUSE_REASON to row.item.exactPauseReason,
+        WorkBoardReadModelPayloadKeys.EXECUTING_AGENT_ID to row.item.executingAgentId,
         WorkBoardReadModelPayloadKeys.PAUSE_ELIGIBLE to row.item.pauseEligible,
         WorkBoardReadModelPayloadKeys.RUNNING to row.item.running,
         WorkBoardReadModelPayloadKeys.RECENTLY_FINISHED_PHASE to row.item.recentlyFinishedPhase,
@@ -129,6 +130,7 @@ internal object WorkBoardReadModelPayloadCodec {
         recentlyFinishedPhase = fields.boolean(WorkBoardReadModelPayloadKeys.RECENTLY_FINISHED_PHASE),
         doneWithinDay = fields.boolean(WorkBoardReadModelPayloadKeys.DONE_WITHIN_DAY),
         membershipDeadline = fields.instant(WorkBoardReadModelPayloadKeys.MEMBERSHIP_DEADLINE),
+        executingAgentId = fields.nullableText(WorkBoardReadModelPayloadKeys.EXECUTING_AGENT_ID),
         databaseFileObservation =
           fields.map(WorkBoardReadModelPayloadKeys.DATABASE_FILE_OBSERVATION)?.let {
             DatabaseFileObservation(

@@ -35,6 +35,7 @@ object WorkBoardReadModelPayloadKeys {
   const val DISPLAY_GROUP = "display_group"
   const val DISPLAY_PRIORITY = "display_priority"
   const val EXACT_PAUSE_REASON = "exact_pause_reason"
+  const val EXECUTING_AGENT_ID = "executing_agent_id"
   const val DATABASE_FILE_OBSERVATION = "database_file_observation"
   const val PAUSE_ELIGIBLE = "pause_eligible"
   const val RUNNING = "running"

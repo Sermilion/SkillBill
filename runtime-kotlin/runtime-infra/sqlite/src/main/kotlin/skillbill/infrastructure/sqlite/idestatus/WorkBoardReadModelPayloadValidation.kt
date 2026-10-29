@@ -309,7 +309,8 @@ internal object WorkBoardReadModelPayloadValidation {
         IdeStatusDisplayGroup.entries.map { it.name },
       ) ||
         !requiredInt(fields, WorkBoardReadModelPayloadKeys.DISPLAY_PRIORITY) ||
-        !optionalText(fields, WorkBoardReadModelPayloadKeys.EXACT_PAUSE_REASON)
+        !optionalText(fields, WorkBoardReadModelPayloadKeys.EXACT_PAUSE_REASON) ||
+        !optionalText(fields, WorkBoardReadModelPayloadKeys.EXECUTING_AGENT_ID)
 
     fun invalidFieldGroup4(fields: Map<String, Any?>): Boolean =
       !requiredBoolean(fields, WorkBoardReadModelPayloadKeys.PAUSE_ELIGIBLE) ||

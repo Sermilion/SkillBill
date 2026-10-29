@@ -23,7 +23,7 @@ import java.time.Instant
 const val BRANCH_SETUP_AGENT_SENTINEL = "branch-setup"
 const val GOAL_PLANNING_IMPORT_AGENT_SENTINEL = "goal-planning-import"
 
-private fun String.isRuntimeAgentId(): Boolean =
+internal fun String.isRuntimeAgentId(): Boolean =
   isNotBlank() && this != BRANCH_SETUP_AGENT_SENTINEL && this != GOAL_PLANNING_IMPORT_AGENT_SENTINEL
 
 fun completedGoalContinuationOutcome(

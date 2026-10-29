@@ -23,6 +23,8 @@ kotlin {
     implementation(projects.core.designsystem)
     implementation(projects.core.ui)
     implementation(projects.feature.terminal)
+    implementation(projects.feature.work)
+    implementation(projects.feature.history)
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.navigation3)
   }

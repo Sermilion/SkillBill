@@ -81,3 +81,11 @@ internal object WorkBoardReadModelDependencyMigration {
     installWorkBoardChangeTriggers(connection)
   }
 }
+
+internal object WorkBoardReadModelAgentMigration {
+  fun apply(connection: Connection) {
+    connection.createStatement().use { statement ->
+      statement.executeUpdate("UPDATE ${WorkBoardReadModelKeys.STATE_TABLE} SET ${WorkBoardReadModelKeys.COMPLETE} = 0")
+    }
+  }
+}

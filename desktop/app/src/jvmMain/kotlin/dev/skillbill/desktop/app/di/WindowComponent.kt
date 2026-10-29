@@ -14,6 +14,7 @@ import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.input.ShellInput
+import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
@@ -63,4 +64,7 @@ interface WindowProviders {
   @Provides
   @SingleIn(WindowScope::class)
   fun windowScope(): WindowCoroutineScope = WindowCoroutineScope(CoroutineScope(SupervisorJob() + Dispatchers.Main))
+
+  @Provides
+  fun appNavigator(navigator: WindowNavigator): AppNavigator = navigator
 }

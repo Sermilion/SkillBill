@@ -2,6 +2,7 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.continuation.isRuntimeAgentId
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeOperatorDecisionPause
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
@@ -14,6 +15,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
+import skillbill.engine.work.control.standaloneLaunchAgent
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -64,6 +66,7 @@ internal data class IdeStatusProjectionContext(
 internal data class IdeStatusProjection(
   val snapshot: IdeStatusSnapshot,
   val exactPauseReason: String?,
+  val executingAgentId: String? = null,
 )
 
 private data class GoalPauseReasonProjection(
@@ -151,6 +154,7 @@ class IdeStatusProjector(
       return IdeStatusProjection(
         projectStandalonePhase(context, record),
         resolveExecutionReason(record, context.unitOfWork).text,
+        standaloneLaunchAgent(record, context.unitOfWork),
       )
     }
     val projection =
@@ -362,7 +366,7 @@ class IdeStatusProjector(
             ?.let { goalPlanningSummary(issueKey, it) }
             ?: goalSnapshotSummary(issueKey, lifecycle, step.label, projection, childContext),
       )
-    return IdeStatusProjection(snapshot, pauseReason.exactText)
+    return IdeStatusProjection(snapshot, pauseReason.exactText, projection?.activeAgent?.takeIf(String::isNotBlank))
   }
 
   private fun goalSnapshotSummary(
@@ -574,7 +578,11 @@ class IdeStatusProjector(
             stepLabel,
           ),
       )
-    return IdeStatusProjection(snapshot, status.operatorDecisionPause?.reason)
+    val executingAgentId =
+      status.phases.firstOrNull { it.status.workflowStepStatus() == WorkflowStepStatus.RUNNING }
+        ?.resolvedAgentId?.takeIf(String::isRuntimeAgentId)
+        ?: status.finalizingAgentId?.takeIf(String::isRuntimeAgentId)
+    return IdeStatusProjection(snapshot, status.operatorDecisionPause?.reason, executingAgentId)
   }
 
   private fun projectWorkflowFamily(

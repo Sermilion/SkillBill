@@ -193,6 +193,7 @@ class WorkBoardItemProjection(
       recentlyFinishedPhase = windowed.recentlyFinishedPhase,
       doneWithinDay = windowed.doneWithinDay,
       membershipDeadline = windowed.membershipDeadline,
+      executingAgentId = projection.executingAgentId,
     )
   }
 

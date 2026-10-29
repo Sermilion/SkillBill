@@ -2486,4 +2486,5 @@ private val expectedMigrationDefinitions =
     89 to "refresh-work-board-dependencies",
     90 to "prune-worktree-edit-journal-to-latest-tick",
     91 to "correct-worktree-edit-journal-prune-chronological-order",
+    92 to "rebuild-work-board-executing-agent",
   )

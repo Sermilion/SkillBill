@@ -43,7 +43,9 @@ data class WorkControlIdentity(
 
 /**
  * One board row or detail header. Every field is a runtime verdict or a fact copied from the runtime's read; the app sorts,
- * groups and judges nothing on it. [agentId] is null on board rows, because the board read carries no executing agent.
+ * groups and judges nothing on it. [agentId] is the runtime's executing agent on board rows (a goal's active agent, a
+ * standalone run's launch agent, or a runtime's running or finalizing agent), null when none was recorded. It is display
+ * only; launches use [RunOptions.agentId].
  */
 data class WorkItem(
   val id: String,

@@ -5,6 +5,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.ui.di.WindowScope
+import dev.skillbill.desktop.core.ui.navigation.AppNavigator
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
@@ -25,14 +26,14 @@ data class RouteEntry(val route: AppRoute, val sessionId: Long?) {
 /** The window's back stack. Work and History are roots; a detail sits on one of them, and Settings sits on top of either. */
 @Inject
 @SingleIn(WindowScope::class)
-class WindowNavigator(private val session: DatabaseSessionController, private val selection: SelectionHolder) {
+class WindowNavigator(private val session: DatabaseSessionController, private val selection: SelectionHolder) : AppNavigator {
   private var sessionId: Long? = (session.state.value as? DatabaseSessionState.Open)?.sessionId
 
   val backStack: SnapshotStateList<RouteEntry> = mutableStateListOf(RouteEntry(WorkRoute(null), sessionId))
 
   val top: RouteEntry get() = backStack.last()
 
-  fun navigate(route: AppRoute) {
+  override fun navigate(route: AppRoute) {
     val entry = RouteEntry(route, if (route is SettingsRoute) null else sessionId)
     when (route) {
       is WorkRoute, HistoryRoute -> {
