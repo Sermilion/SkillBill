@@ -560,6 +560,8 @@ class IdeStatusService(
     return featureTaskRuntimeStatusService.phasePage(workflowId, after, limit, position.offset)?.let { page ->
       if (after != null && after !in page.phaseIds) invalidWorkPaginationRequest("Unknown phase anchor.")
       val status = page.status
+      val briefings =
+        if (status.phases.isEmpty()) emptyMap() else featureTaskRuntimeStatusService.phaseBriefingTexts(workflowId)
       RuntimePhasePageRead(
         WorkDetailRuntimeStatus(
           phases =
@@ -567,6 +569,7 @@ class IdeStatusService(
               WorkDetailPhase(
                 phase.phaseId, phase.status, phase.attemptCount, phase.resolvedAgentId, phase.finished,
                 phase.executionOrigin, phase.continuationKind, phase.launchedModel, phase.launchedEffort,
+                briefings[phase.phaseId],
               )
             },
           currentPhase = status.currentPhaseId,

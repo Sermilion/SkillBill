@@ -7,11 +7,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
-/**
- * Pre-planning always runs with requirements: goal intake refuses new work without them. A block that rests on
- * missing tracker data therefore never holds, so the step retries with a correction, inside the retryable-failure
- * budget, instead of blocking the goal.
- */
 internal object PreplanTrackerBlockHooks : PhaseStepHooks<PhaseAcceptedStepExecution> {
   override val blockedOutputRetryCorrection: (FeatureTaskRuntimeWorkflowArtifactMap) -> String? =
     { outputMap -> TRACKER_BLOCK_CORRECTION.takeIf { blocksOnTrackerData(outputMap) } }

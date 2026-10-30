@@ -318,8 +318,12 @@ internal object IdeStatusTitles {
     issueKey: String,
   ): String = featureName.nonBlank() ?: issueKey
 
-  fun standalonePhase(record: StandalonePhaseStatusRecord): String =
+  fun standalonePhase(
+    record: StandalonePhaseStatusRecord,
+    seededFeatureName: String? = null,
+  ): String =
     record.planReport?.featureName.nonBlank()
+      ?: seededFeatureName.nonBlank()
       ?: idWithTarget(
         record.phaseId,
         record.issueKey.nonBlank()

@@ -3418,3 +3418,11 @@ A resumed goal clears its retained blocked reason only after it owns execution a
 ## [2026-10-23] Interactive editor launches are a third process lifetime owned by `ProcessFileEditorLauncher`
 
 `skill-bill config edit` hands the terminal to the user's `$VISUAL`, `$EDITOR`, or the OS default application. `ProcessFileEditorLauncher` in `runtime-infra/host` starts that process with inherited IO and waits for it without a deadline. It is not a one-shot command, so `BoundedExternalProcessRunner` does not fit: its capture and deadline would cut a live editing session. It is not a supervised agent run, so `runtime-infra/launcher` does not fit either. Interactive, inherited-IO launches of user-chosen programs stay in this one adapter. The configured editor runs through `sh -c` so quoted paths and arguments survive, and `sh` exit codes 126 and 127 fall through to the OS default opener.
+
+## [2026-10-30] Preplan retries blocks that rest on missing tracker data
+
+Goal intake refuses new work without requirements, so pre-planning always has them. A preplan block that cites unreachable or missing tracker data therefore never holds. `PreplanTrackerBlockHooks` turns that block into a retry with a correction, inside the retryable-failure budget, instead of blocking the goal.
+
+## [2026-10-30] Status reads treat an unreadable briefing map as no briefings
+
+`FeatureTaskRuntimeStatusService.phaseBriefingTexts` returns each phase's saved launch briefing text for the detail view. When the briefing map fails to parse, it returns an empty map so the rest of the status read stays usable.

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ReasonBlock
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
@@ -28,6 +29,20 @@ internal fun DetailSections.qaReportSection(item: WorkItem, detail: Detail, onAc
   item(key = "qa-report") {
     Column(Modifier.padding(top = DocBlockGap)) {
       ReasonBlock(label = "QA report", text = text, onCopy = { onAction(DetailAction.Copy(it)) }, color = SkillBillTheme.colors.stDone)
+    }
+  }
+}
+
+/** A standalone run's saved phase briefings, one folded block per phase, in pipeline order. */
+internal fun DetailSections.briefingSection(item: WorkItem, detail: Detail, onAction: (DetailAction) -> Unit) {
+  if (item.kind == WorkKind.Goal) return
+  val briefings = detail.phases.mapNotNull { phase -> phase.briefingText?.takeIf { it.isNotBlank() }?.let { phase.id to it } }
+  if (briefings.isEmpty()) return
+  section("briefings", if (briefings.size == 1) "Briefing" else "Briefings") {
+    itemsIndexed(briefings, key = { _, (phaseId, _) -> "briefing-$phaseId" }) { index, (phaseId, text) ->
+      Column(Modifier.padding(top = if (index > 0) 8.dp else 0.dp)) {
+        ReasonBlock(label = "$phaseId briefing", text = text, onCopy = { onAction(DetailAction.Copy(it)) })
+      }
     }
   }
 }

@@ -28,7 +28,7 @@ internal data class GoalIntake(
       val first = intake.split(Regex("\\s+")).first()
       val (key, fromReference) = reference(first) ?: return null
       val contentLine = firstContentLine(intake, first)
-      return GoalIntake(key, intake, fromReference ?: slug(contentLine), contentLine != null)
+      return GoalIntake(key, intake, fromReference ?: shortName(contentLine), contentLine != null)
     }
 
     private fun reference(first: String): Pair<String, String?>? {
@@ -70,6 +70,15 @@ internal data class GoalIntake(
         .firstOrNull { it.isNotEmpty() }
     }
 
+    private fun shortName(line: String?): String? =
+      line
+        ?.split(CLAUSE_END, limit = 2)
+        ?.first()
+        ?.split(Regex("\\s+"))
+        ?.take(NAME_WORDS)
+        ?.joinToString(" ")
+        .let(::slug)
+
     private fun slug(raw: String?): String? =
       raw
         ?.trim()
@@ -83,6 +92,8 @@ internal data class GoalIntake(
       reason: String,
     ): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = field, reason = reason)
 
+    private val CLAUSE_END = Regex("(?<=\\S)[.:;!?](?=\\s|$)")
+    private const val NAME_WORDS = 6
     private val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
   }
 }

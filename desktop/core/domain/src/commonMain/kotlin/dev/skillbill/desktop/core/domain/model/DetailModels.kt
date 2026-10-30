@@ -108,7 +108,8 @@ data class WorkDependency(val subtaskId: Int, val optional: Boolean, val skipped
 
 data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)
 
-data class WorkPhase(val id: String, val status: String, val attemptCount: Int, val finished: Boolean)
+/** One phase of the run; [briefingText] is the launch briefing the runtime saved for it, when it has one. */
+data class WorkPhase(val id: String, val status: String, val attemptCount: Int, val finished: Boolean, val briefingText: String? = null)
 
 /** Runs and fixes: per-phase runs, fix iterations, relaunch causes, findings in scope and supervisor kills. */
 data class DetailAttempts(

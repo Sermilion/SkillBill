@@ -82,7 +82,7 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
     id = requireNotNull(id) { "A work item has neither a workflow nor an invocation id." },
     kind = displayGroup?.toKind(),
     issueKey = issueKey,
-    title = displayTitle(title),
+    title = displayTitle(title, issueKey),
     summary = summary,
     lifecycle = lifecycleState.toDomain(),
     planningPrepared = planning?.sharedPreplanPrepared == true,

@@ -213,6 +213,7 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       }
       subtaskSection(item, detail, state, onAction)
       pipelineSection(item, detail)
+      briefingSection(item, detail, onAction)
       activitySection(item, detail, state, onAction)
       if (item.kind != WorkKind.Goal) {
         goalQaSection(detail)

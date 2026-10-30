@@ -242,8 +242,17 @@ class IdeStatusProjector(
             standalonePhaseStateSummary(record.phaseId, lifecycle, record.lifecycleState, record.qaOutcome),
             record.monitorTargetDetail(),
           ).joinToString(" "),
-      title = IdeStatusTitles.standalonePhase(record),
+      title = IdeStatusTitles.standalonePhase(record, seededPlanFeatureName(record, context)),
     )
+  }
+
+  private fun seededPlanFeatureName(
+    record: StandalonePhaseStatusRecord,
+    context: IdeStatusProjectionContext,
+  ): String? {
+    val issueKey = record.issueKey?.takeIf(String::isNotBlank) ?: return null
+    if (record.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN || record.planReport != null) return null
+    return planReports.seededFeatureName(issueKey, context.repoRoot)
   }
 
   private fun goalBackedRuntimeSnapshot(

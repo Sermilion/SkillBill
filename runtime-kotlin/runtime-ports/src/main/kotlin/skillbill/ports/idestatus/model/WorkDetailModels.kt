@@ -103,6 +103,7 @@ data class WorkDetailPhase(
   val continuationKind: String?,
   val launchedModel: String?,
   val effort: String?,
+  val briefingText: String? = null,
 )
 
 data class WorkExecutionInstance(

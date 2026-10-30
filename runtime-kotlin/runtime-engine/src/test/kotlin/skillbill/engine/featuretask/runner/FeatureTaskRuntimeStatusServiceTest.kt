@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromP
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -59,6 +60,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerm
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDiagnosticFailureClass
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
@@ -191,6 +193,20 @@ class FeatureTaskRuntimeStatusServiceTest {
       "claude-opus-4-8[effort=high]",
       projection.phases.single { it.phaseId == "implement" }.launchedModel,
     )
+  }
+
+  @Test
+  fun `phase briefing texts return each saved launch briefing by phase`() {
+    val harness = statusHarness()
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.recordPhaseBriefing(WORKFLOW_ID, launchBriefing("preplan", "preplan briefing body"))
+    harness.recorder.recordPhaseBriefing(WORKFLOW_ID, launchBriefing("plan", "plan briefing body"))
+
+    assertEquals(
+      mapOf("preplan" to "preplan briefing body", "plan" to "plan briefing body"),
+      harness.service.phaseBriefingTexts(WORKFLOW_ID),
+    )
+    assertEquals(emptyMap(), harness.service.phaseBriefingTexts("wftr-20260603-status-none"))
   }
 
   @Test
@@ -1555,3 +1571,17 @@ private object StatusNoopSnapshotValidator : WorkflowSnapshotValidator {
     slug: String,
   ) = Unit
 }
+
+private fun launchBriefing(
+  phaseId: String,
+  text: String,
+) = FeatureTaskRuntimePhaseLaunchBriefing(
+  phaseId = phaseId,
+  specReference = "spec.md",
+  featureSize = "MEDIUM",
+  acceptanceCriteria = listOf("AC-001"),
+  mandatesAndOverrides = emptyList(),
+  handoffEnvelope = FeatureTaskRuntimeHandoffEnvelope(consumerPhaseId = phaseId, projections = emptyList()),
+  derivedContextKeys = emptyList(),
+  briefingText = text,
+)

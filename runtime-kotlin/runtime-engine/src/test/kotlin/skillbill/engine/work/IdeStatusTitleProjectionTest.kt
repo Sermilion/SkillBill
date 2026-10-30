@@ -5,6 +5,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.WorkBoardRequest
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -58,6 +59,34 @@ class IdeStatusTitleProjectionTest {
         titles,
       )
       assertTrue(items.none { it.snapshot.title == it.snapshot.summary })
+    }
+  }
+
+  @Test
+  fun `a running plan is titled by the feature name of the bundle its intake seeded`() {
+    val bundle = ideStatusProjectStoreRoot.resolve("specs/SKILL-9452-linear-progress-sync")
+    Files.createDirectories(bundle)
+    try {
+      establishTemporarySchemaReadiness("ide-status-seeded-plan-title").use { fixture ->
+        val database =
+          sqliteDatabaseSessionFactory(fixture.tempDir, fixture.dbPath.toString(), emptyMap(), ideStatusClock)
+        val identity = testGoalRepositoryIdentity(fixture.tempDir)
+        database.transaction { unit ->
+          unit.standalonePhaseStatuses.register(
+            StandalonePhaseStatusRegistration(
+              identity, "feat/SKILL-9452-board", "SKILL-9452", null, "plan-1", "plan", "execution-plan-1", "running",
+              "plan", ideStatusObservedAt.minusSeconds(30), "owner", 1, ideStatusObservedAt.plusSeconds(30),
+            ),
+          )
+        }
+
+        val items =
+          ideStatusService(database).board(WorkBoardRequest(observedAt = ideStatusObservedAt, pageSize = 10)).items
+
+        assertEquals(listOf("linear-progress-sync"), items.map { it.snapshot.title })
+      }
+    } finally {
+      Files.delete(bundle)
     }
   }
 }

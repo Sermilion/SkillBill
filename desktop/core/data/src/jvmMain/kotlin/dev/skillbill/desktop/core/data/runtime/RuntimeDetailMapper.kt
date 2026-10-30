@@ -76,8 +76,8 @@ internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: Checked
   val branch = if (standalone) item.branch else branches.checkedOutBranch(Path.of(repositoryRoot)) ?: item.branch
   val planFeature = executionHistory.firstOrNull { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
   return item.copy(
-    title = goalManifest?.featureName?.takeIf { item.kind == WorkKind.Goal && it.isNotBlank() }?.let(::displayTitle)
-      ?: planFeature?.takeIf { standalone && it.isNotBlank() }?.let(::displayTitle) ?: item.title,
+    title = goalManifest?.featureName?.takeIf { item.kind == WorkKind.Goal && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) }
+      ?: planFeature?.takeIf { standalone && it.isNotBlank() }?.let { displayTitle(it, item.issueKey) } ?: item.title,
     agentId = goalStatus?.activeAgent ?: options?.agentId?.takeIf { standalone },
     branch = branch,
   )
@@ -130,7 +130,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
         subtask.dependencies.map { WorkDependency(it.subtaskId, it.optional, it.skipped) },
       )
     },
-    phases = runtimeStatus?.phases.orEmpty().map { WorkPhase(it.phaseId, it.status, it.attemptCount, it.finished) },
+    phases = runtimeStatus?.phases.orEmpty().map { WorkPhase(it.phaseId, it.status, it.attemptCount, it.finished, it.briefingText) },
     dependencies = dependencies.map { entry ->
       SubtaskDependency(entry.subtaskId, WorkDependency(entry.dependency.subtaskId, entry.dependency.optional, entry.dependency.skipped))
     },

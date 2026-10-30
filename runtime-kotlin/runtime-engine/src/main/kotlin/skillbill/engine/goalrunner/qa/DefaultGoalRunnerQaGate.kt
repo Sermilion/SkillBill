@@ -225,7 +225,7 @@ class DefaultGoalRunnerQaGate(
         } else {
           readParentInvariants(state, request)
         }
-    val inputs = governingInputs(state, request, parentInvariants)
+    val inputs = retainedExecution?.governingInputs ?: governingInputs(state, request, parentInvariants)
     val retainedPlans =
       retainedExecution
         ?.takeUnless { it.status == GoalQualityExecutionStatus.RETIRED }

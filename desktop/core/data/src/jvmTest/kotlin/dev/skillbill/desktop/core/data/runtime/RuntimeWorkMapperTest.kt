@@ -31,7 +31,22 @@ class RuntimeWorkMapperTest {
     assertEquals("plan SKILL-452" to "Canceled by you.", item.title to item.summary)
   }
 
-  private fun board(workflowId: String, execution: IdeStatusExecutionIdentity) = WorkBoardItem(
+  @Test
+  fun `a feature-named row is led by its issue key and a keyless one by its name alone`() {
+    val execution = IdeStatusExecutionIdentity(IdeStatusExecutionScope.WORKFLOW, "e", "s", "1", "1")
+
+    val keyed = board("wf-1", execution, title = "linear-progress-sync", issueKey = "SKILL-452").toWorkItem(1L)
+    val keyless = board("wf-2", execution, title = "linear-progress-sync").toWorkItem(1L)
+
+    assertEquals("[SKILL-452] Linear progress sync" to "Linear progress sync", keyed.title to keyless.title)
+  }
+
+  private fun board(
+    workflowId: String,
+    execution: IdeStatusExecutionIdentity,
+    title: String = "plan SKILL-452",
+    issueKey: String? = null,
+  ) = WorkBoardItem(
     snapshot = IdeStatusSnapshot(
       repositoryIdentity = "repo",
       lifecycleState = IdeStatusLifecycleState.ACTIVE,
@@ -39,7 +54,8 @@ class RuntimeWorkMapperTest {
       updatedAt = Instant.EPOCH,
       freshness = IdeStatusFreshness.FRESH,
       summary = "Canceled by you.",
-      title = "plan SKILL-452",
+      title = title,
+      issueKey = issueKey,
       workflowId = workflowId,
       execution = execution,
     ),
