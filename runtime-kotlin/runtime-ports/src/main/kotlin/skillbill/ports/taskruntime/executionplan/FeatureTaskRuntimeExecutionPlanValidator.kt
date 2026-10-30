@@ -1,4 +1,4 @@
-package skillbill.ports.taskruntime
+package skillbill.ports.taskruntime.executionplan
 
 interface FeatureTaskRuntimeExecutionPlanValidator {
   fun canonicalize(

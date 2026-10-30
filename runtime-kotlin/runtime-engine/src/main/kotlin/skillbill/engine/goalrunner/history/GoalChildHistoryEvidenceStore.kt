@@ -12,8 +12,8 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraftPayloadKeys
 import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot

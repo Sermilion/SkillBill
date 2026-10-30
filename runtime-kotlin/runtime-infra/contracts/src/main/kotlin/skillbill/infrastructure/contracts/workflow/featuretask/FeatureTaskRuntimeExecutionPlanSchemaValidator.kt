@@ -22,7 +22,7 @@ import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPla
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator as FeatureTaskRuntimeExecutionPlanValidatorPort
+import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator as FeatureTaskRuntimeExecutionPlanValidatorPort
 
 @Inject
 class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecutionPlanValidatorPort {

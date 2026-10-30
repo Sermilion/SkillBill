@@ -21,8 +21,8 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.process.IdentifierGeneratorPort
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily

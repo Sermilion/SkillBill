@@ -283,7 +283,20 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
-  fun `runtime-ports package cycles equal the recorded census`() {
+  fun `runtime-ports has no exact-package cycles`() {
+    val scanCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == "runtime-ports" }
+    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
+    assertEquals(null, scanCase.packageCycleBaseline)
+    assertTrue(
+      ArchitectureScanSupport.packageImportEdges(
+        scanRoot = scanCase.mainScanRoot,
+        packagePrefix = scanCase.packagePrefix,
+        granularity = scanCase.packageCycleGranularity,
+      ).isNotEmpty(),
+      "The runtime-ports scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
+    )
     assertPackageCyclesMatchBaseline("runtime-ports")
   }
 

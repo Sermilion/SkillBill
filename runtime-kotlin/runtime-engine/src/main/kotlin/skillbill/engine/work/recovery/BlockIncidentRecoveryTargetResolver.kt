@@ -12,7 +12,7 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
+import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime

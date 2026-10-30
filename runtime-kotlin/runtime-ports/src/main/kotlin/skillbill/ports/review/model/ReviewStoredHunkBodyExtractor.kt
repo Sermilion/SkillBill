@@ -1,4 +1,4 @@
-package skillbill.ports.review.evidence
+package skillbill.ports.review.model
 
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 
