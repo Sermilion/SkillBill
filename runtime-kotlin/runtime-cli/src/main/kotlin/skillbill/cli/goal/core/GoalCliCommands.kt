@@ -58,7 +58,6 @@ import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.goalrunner.GoalRunner
-import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
@@ -67,7 +66,6 @@ import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 @Inject
@@ -175,13 +173,6 @@ class GoalRunCommand(
         "$DEFAULT_GOAL_PROGRESS_IDLE_TIMEOUT_MINUTES). A subtask with no durable progress and no " +
         "file activity for this long is killed; active work is spared. Pass 0 to disable.",
   ).int().default(DEFAULT_GOAL_PROGRESS_IDLE_TIMEOUT_MINUTES)
-  private val planningBudgetMinutes by option(
-    "--planning-budget-minutes",
-    help =
-      "Per-plan wall-clock budget for goal planning in minutes (default " +
-        "${DEFAULT_GOAL_PLANNING_BUDGET.inWholeMinutes}). Planning writes no durable progress, so it is " +
-        "bounded by this budget rather than the progress-idle timeout. Pass 0 to disable.",
-  ).int().default(DEFAULT_GOAL_PLANNING_BUDGET.inWholeMinutes.toInt())
   private val stopAfterSubtask by option(
     "--stop-after-subtask",
     help = "Pause the parent after this positive subtask ID reaches durable terminal success.",
@@ -297,7 +288,7 @@ class GoalRunCommand(
         effectiveRepoRoot,
         invokedAgentId,
         StandalonePlanOptions(
-          timeout = planTimeout(),
+          timeout = maxWallClockMinutes.takeIf { it > 0 }?.minutes,
           agentAddonSelection = hydratedSelection,
           eventSink =
             runtimeRunEventSink(inputs, monitor = !noLiveOutput) { workflowId ->
@@ -330,12 +321,6 @@ class GoalRunCommand(
     return false
   }
 
-  private fun planTimeout(): Duration? =
-    listOfNotNull(
-      maxWallClockMinutes.takeIf { it > 0 }?.minutes,
-      planningBudgetMinutes.takeIf { it > 0 }?.minutes,
-    ).minOrNull()
-
   private fun runRequest(
     runIssueKey: String,
     invokedAgentId: String,
@@ -350,7 +335,6 @@ class GoalRunCommand(
       configuredAgentOverrideId = agentOverride,
       timeout = maxWallClockMinutes.takeIf { it > 0 }?.minutes,
       progressIdleTimeout = progressIdleTimeoutMinutes.takeIf { it > 0 }?.minutes,
-      planningBudget = planningBudgetMinutes.takeIf { it > 0 }?.minutes,
       outputSink = presenter.outputSink(includeRawChildOutput = debugChildOutput),
       eventSink =
         presenter.eventSink { event ->

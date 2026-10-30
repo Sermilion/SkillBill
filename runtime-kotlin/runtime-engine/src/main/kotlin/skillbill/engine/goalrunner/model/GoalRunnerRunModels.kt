@@ -10,7 +10,6 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import java.nio.file.Path
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
 
 data class GoalRunnerRunRequest(
   val issueKey: String,
@@ -19,7 +18,6 @@ data class GoalRunnerRunRequest(
   val configuredAgentOverrideId: String? = null,
   val timeout: Duration? = null,
   val progressIdleTimeout: Duration? = null,
-  val planningBudget: Duration? = DEFAULT_GOAL_PLANNING_BUDGET,
   val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
   val eventSink: GoalRunnerEventSink = GoalRunnerEventSink.NONE,
   val codeReviewMode: CodeReviewExecutionMode? = null,
@@ -40,9 +38,6 @@ data class GoalRunnerRunRequest(
     }
     progressIdleTimeout?.let { idleTimeout ->
       require(idleTimeout.isPositive()) { "progressIdleTimeout must be positive when provided." }
-    }
-    planningBudget?.let { budget ->
-      require(budget.isPositive()) { "planningBudget must be positive when provided." }
     }
   }
 }
@@ -99,8 +94,6 @@ sealed interface GoalRunnerRunEvent {
     val pullRequestUrl: String?,
   ) : GoalRunnerRunEvent
 }
-
-val DEFAULT_GOAL_PLANNING_BUDGET: Duration = 30.minutes
 
 fun interface GoalRunnerEventSink {
   fun emit(event: GoalRunnerRunEvent)

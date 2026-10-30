@@ -193,7 +193,7 @@ class CliPhasePlanRuntimeTest {
 
     assertEquals(3, result.exitCode, result.stdout + result.stderr)
     assertEquals(PLAN_LAUNCHES, planner.phaseIds)
-    assertTrue(planner.timeouts.all { it == 30.minutes }, planner.timeouts.toString())
+    assertTrue(planner.timeouts.all { it == 180.minutes }, planner.timeouts.toString())
     assertEquals(1, goal.childLaunches.size)
     assertEquals(1, rowCount("goal_runner_controls"))
     assertTrue(workflowIdsMentioning(planWorkflowId()).isNotEmpty())
@@ -327,7 +327,7 @@ class CliPhasePlanRuntimeTest {
     assertEquals(workflowId, planWorkflowId())
     assertEquals(descriptor, DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(planArtifacts()))
     assertEquals(RESUMED_PLAN_LAUNCHES, planner.phaseIds)
-    assertTrue(planner.timeouts.all { it == 30.minutes }, planner.timeouts.toString())
+    assertTrue(planner.timeouts.all { it == 180.minutes }, planner.timeouts.toString())
     assertEquals(PLANNED_UNITS, completedPlanUnitIds())
   }
 

@@ -224,7 +224,7 @@ class PlanWorkflowGoalPlanningSource(
     modelAssignment = request.modelAssignment,
     compactionSettings = CompactionSettings.DEFAULT,
     environment = emptyMap(),
-    timeout = request.planningBudget ?: request.timeout,
+    timeout = request.timeout,
     requestedCodeReviewMode = null,
     goalContinuation = null,
     operatorDecision = null,
