@@ -479,6 +479,14 @@ class PhaseStrategyLookup(
   private fun invalidComposition(reason: String): Nothing = throw InvalidPhaseStrategyCompositionError(reason)
 }
 
+internal object GoalPlanningImportSteps {
+  val MIGRATION_REFUSED: Set<String> =
+    setOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+    )
+}
+
 class ModelDirectiveSupplements(val enabled: Boolean) {
   private val loaded = ConcurrentHashMap<String, String>()
 

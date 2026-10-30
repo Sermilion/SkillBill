@@ -1,4 +1,4 @@
-package skillbill.engine.goalrunner.intake
+package skillbill.engine.featuretask.slot.intake
 
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import java.nio.file.Path

@@ -1,8 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.goalrunner.intake.LegacySpecIntake
-import skillbill.engine.goalrunner.intake.LegacySpecRoute
 import skillbill.error.featuretask.PhaseIntakeRequiredError
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
@@ -16,12 +14,28 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
+/** Finds the replan intake for a launch on a legacy `.feature-specs/` spec; the intake slot implements it. */
+interface LegacySpecReplanSource {
+  /** The replan intake for [specPath], or null when the ordinary intake rules apply. */
+  fun replanIntake(
+    specPath: Path,
+    issueKey: String,
+    repoRoot: Path,
+  ): String?
+
+  /** The replan intake for the spec the issue-key lookup finds, or null when the ordinary intake rules apply. */
+  fun replanIntakeForIssueKey(
+    issueKey: String,
+    repoRoot: Path,
+  ): String?
+}
+
 @Inject
 class PhaseRunIntakeResolver(
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val projectStore: ProjectStorePort,
-  private val legacySpecIntake: LegacySpecIntake,
+  private val legacySpecReplan: LegacySpecReplanSource,
 ) {
   internal fun resolve(
     definition: SkeletonDefinition,
@@ -82,16 +96,16 @@ class PhaseRunIntakeResolver(
             ?.let(Path::of)
         }
         ?: return null
-    val route =
+    val replanIntake =
       when {
-        issueKey == null -> LegacySpecRoute.NotLegacy
-        explicitSpecPath != null -> legacySpecIntake.route(specPath, issueKey, repoRoot)
-        else -> legacySpecIntake.routeIssueKey(issueKey, repoRoot)
+        issueKey == null -> null
+        explicitSpecPath != null -> legacySpecReplan.replanIntake(specPath, issueKey, repoRoot)
+        else -> legacySpecReplan.replanIntakeForIssueKey(issueKey, repoRoot)
       }
-    if (route is LegacySpecRoute.Replan) {
+    if (replanIntake != null) {
       return FeatureTaskRuntimeRunInvariants(
-        specReference = route.intake,
-        acceptanceCriteria = listOf(route.intake),
+        specReference = replanIntake,
+        acceptanceCriteria = listOf(replanIntake),
         mandatesAndOverrides = emptyList(),
       )
     }

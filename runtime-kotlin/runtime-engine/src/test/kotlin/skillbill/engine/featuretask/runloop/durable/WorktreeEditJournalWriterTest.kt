@@ -1,4 +1,4 @@
-package skillbill.engine.worktreeedit
+package skillbill.engine.featuretask.runloop.durable
 
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.idestatus.model.WorktreeEditSource

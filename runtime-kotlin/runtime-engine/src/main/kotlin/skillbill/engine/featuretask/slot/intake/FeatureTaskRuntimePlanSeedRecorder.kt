@@ -1,4 +1,4 @@
-package skillbill.engine.goalrunner.plan
+package skillbill.engine.featuretask.slot.intake
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.db.DatabaseSessionFactory

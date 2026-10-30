@@ -1,4 +1,4 @@
-package skillbill.engine.goalrunner.intake
+package skillbill.engine.featuretask.slot.intake
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.issueAndFeature

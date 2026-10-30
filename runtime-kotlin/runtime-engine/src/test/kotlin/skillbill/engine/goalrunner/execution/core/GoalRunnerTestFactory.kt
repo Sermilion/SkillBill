@@ -21,7 +21,9 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
+import skillbill.engine.featuretask.runloop.durable.WorktreeEditJournalWriter
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.slot.intake.LegacySpecIntake
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
@@ -31,7 +33,6 @@ import skillbill.engine.goalrunner.completion.GoalCompletionRecorder
 import skillbill.engine.goalrunner.execution.support.GoalSpecScratchCleanup
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
-import skillbill.engine.goalrunner.intake.LegacySpecIntake
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -41,7 +42,6 @@ import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.goalrunner.qa.GoalRunnerQaGate
-import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.model.RepositoryRoot

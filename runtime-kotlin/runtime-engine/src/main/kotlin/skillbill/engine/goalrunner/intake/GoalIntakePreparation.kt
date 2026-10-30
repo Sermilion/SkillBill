@@ -5,6 +5,10 @@ import skillbill.contracts.issuekey.goalIntakeSpecBundleDirectory
 import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
+import skillbill.engine.featuretask.slot.intake.LegacySpecIntake
+import skillbill.engine.featuretask.slot.intake.LegacySpecRoute
+import skillbill.engine.featuretask.slot.intake.PlanSpecIntakePreparation
+import skillbill.engine.featuretask.slot.intake.PlanSpecSeed
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -32,7 +36,7 @@ class GoalIntakePreparation(
   private val fileStore: DecompositionManifestStore,
   private val projectStore: ProjectStorePort,
   private val legacySpecIntake: LegacySpecIntake,
-) {
+) : PlanSpecIntakePreparation {
   fun issueKeyForExistingSpec(
     intake: String,
     repoRoot: Path,
@@ -53,7 +57,7 @@ class GoalIntakePreparation(
   fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? =
     manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
 
-  fun resolvePlanSpec(
+  override fun resolvePlanSpec(
     issueKey: String,
     intake: String?,
     repoRoot: Path,
@@ -91,10 +95,10 @@ class GoalIntakePreparation(
     return firstToken.endsWith(".md") || goalIntakeSpecBundleDirectory(firstToken) != null
   }
 
-  fun keepsOperatorSpec(specPath: Path): Boolean =
+  override fun keepsOperatorSpec(specPath: Path): Boolean =
     fileStore.isRegularFile(specPath) && hasAcceptanceList(fileStore.readText(specPath))
 
-  fun intakePlanSpec(
+  override fun intakePlanSpec(
     issueKey: String,
     intake: String?,
     repoRoot: Path,

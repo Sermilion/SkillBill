@@ -688,7 +688,7 @@ class FeatureTaskLaunchPortArchitectureTest {
   @Test
   fun `goal planning reaches GoalRunnerSubtaskLauncher only through the PhaseRunner`() {
     val sources = goalPlanningEngineSources()
-    assertTrue(sources.keys.any { it.startsWith("goalrunner/planning/sweep/") }, "Read no goal-planning sweep file.")
+    assertTrue(sources.keys.any { it.startsWith("goalrunner/planning/") }, "Read no goal-planning file.")
 
     val violations = FeatureTaskLaunchPortScan.violations(sources)
 

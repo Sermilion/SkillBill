@@ -6,8 +6,8 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
 import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
+import skillbill.engine.featuretask.persist.UnitTestPathClassifier
 import skillbill.engine.featuretask.persist.sha256Hex
-import skillbill.engine.operation.unittestvalue.UnitTestPathClassifier
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage

@@ -22,8 +22,9 @@ import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
+import skillbill.engine.featuretask.slot.intake.LegacySpecIntake
+import skillbill.engine.featuretask.slot.intake.LegacySpecReplanIntake
 import skillbill.engine.featuretask.validation.ValidationGateResolver
-import skillbill.engine.goalrunner.intake.LegacySpecIntake
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
@@ -149,13 +150,15 @@ internal fun testPhaseRunIntakeResolver(
     specPathResolver,
     invariantsSource,
     RUNNER_TEST_PROJECT_STORE,
-    LegacySpecIntake(
-      database,
-      TestRepositoryEnclosingRoot,
-      RUNNER_TEST_PROJECT_STORE,
-      TestDecompositionManifestStore,
-      NoopRuntimeDiagnostics,
-      specPathResolver,
+    LegacySpecReplanIntake(
+      LegacySpecIntake(
+        database,
+        TestRepositoryEnclosingRoot,
+        RUNNER_TEST_PROJECT_STORE,
+        TestDecompositionManifestStore,
+        NoopRuntimeDiagnostics,
+        specPathResolver,
+      ),
     ),
   )
 }

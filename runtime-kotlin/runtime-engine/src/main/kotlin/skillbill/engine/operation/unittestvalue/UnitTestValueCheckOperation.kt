@@ -1,5 +1,6 @@
 package skillbill.engine.operation.unittestvalue
 
+import skillbill.engine.featuretask.persist.UnitTestPathClassifier
 import skillbill.engine.operation.core.Operation
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome

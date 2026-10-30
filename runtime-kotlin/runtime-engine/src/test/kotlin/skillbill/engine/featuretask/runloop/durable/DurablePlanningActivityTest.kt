@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.engine.featuretask.runner.runnerHarness
 import skillbill.engine.featuretask.runner.testDecompositionPlanner
-import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.time.Clock

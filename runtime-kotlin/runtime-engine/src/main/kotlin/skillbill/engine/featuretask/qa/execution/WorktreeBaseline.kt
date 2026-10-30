@@ -1,4 +1,4 @@
-package skillbill.engine.operation.core
+package skillbill.engine.featuretask.qa.execution
 
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult

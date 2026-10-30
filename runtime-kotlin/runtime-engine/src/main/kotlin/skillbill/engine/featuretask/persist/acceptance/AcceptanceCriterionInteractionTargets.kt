@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.persist.acceptance
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutation
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
-import skillbill.engine.operation.unittestvalue.UnitTestPathClassifier
+import skillbill.engine.featuretask.persist.UnitTestPathClassifier
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionInteractionTrace
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage

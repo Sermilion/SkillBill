@@ -8,9 +8,10 @@ import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testProjectStore
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
+import skillbill.engine.featuretask.slot.intake.FeatureTaskRuntimePlanIntake
+import skillbill.engine.featuretask.slot.intake.FeatureTaskRuntimePlanSeedRecorder
+import skillbill.engine.featuretask.slot.intake.LegacySpecIntake
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
-import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
-import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanSeedRecorder
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort

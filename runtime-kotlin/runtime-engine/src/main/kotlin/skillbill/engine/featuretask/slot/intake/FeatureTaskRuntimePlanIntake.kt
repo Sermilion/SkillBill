@@ -1,8 +1,7 @@
-package skillbill.engine.goalrunner.plan
+package skillbill.engine.featuretask.slot.intake
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
-import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.projectstore.ProjectStorePort
@@ -30,7 +29,7 @@ sealed interface PlanIntakeSettlement {
 
 @Inject
 class FeatureTaskRuntimePlanIntake(
-  private val intakePreparation: GoalIntakePreparation,
+  private val intakePreparation: PlanSpecIntakePreparation,
   private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
   private val fileStore: DecompositionManifestStore,
   private val repositories: RepositoryEnclosingRootPort,

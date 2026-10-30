@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolver
 import skillbill.engine.featuretask.qa.report.QaRetainedResource
-import skillbill.engine.operation.core.worktreeBaseline
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.qa.isQaDeviceLeaseFailure

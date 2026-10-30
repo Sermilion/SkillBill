@@ -1,4 +1,4 @@
-package skillbill.engine.operation.unittestvalue
+package skillbill.engine.featuretask.persist
 
 internal object UnitTestPathClassifier {
   private val TEST_DIRECTORIES = setOf("test", "tests", "__tests__")

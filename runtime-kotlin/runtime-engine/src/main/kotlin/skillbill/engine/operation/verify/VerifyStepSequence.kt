@@ -2,12 +2,12 @@ package skillbill.engine.operation.verify
 
 import skillbill.application.telemetry.model.FeatureVerifyFinishedRequest
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.persist.UnitTestPathClassifier
 import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationStepResult
-import skillbill.engine.operation.unittestvalue.UnitTestPathClassifier
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult

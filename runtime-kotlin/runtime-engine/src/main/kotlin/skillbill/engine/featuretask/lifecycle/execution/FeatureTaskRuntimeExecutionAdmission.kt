@@ -8,7 +8,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.engine.featuretask.slot.GoalPlanningImportSteps
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
@@ -271,9 +271,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         is FeatureTaskRuntimePhaseOutputMigrationResult.Current -> hasCurrentOutput = true
         is FeatureTaskRuntimePhaseOutputMigrationResult.Migrated -> {
           val hydrated = record.executionOrigin == FeatureTaskRuntimePhaseExecutionOrigin.GOAL_PLANNING_HYDRATED
-          if (ownsGoalPlanningImport && hydrated &&
-            phaseId in setOf(GoalPlanningSweepConstants.PHASE_PREPLAN, GoalPlanningSweepConstants.PHASE_PLAN)
-          ) {
+          if (ownsGoalPlanningImport && hydrated && phaseId in GoalPlanningImportSteps.MIGRATION_REFUSED) {
             throw SkillBillRuntimeException(
               FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT,
               "Imported planning output is not coherent with its parent checkpoint. Resume the parent goal.",

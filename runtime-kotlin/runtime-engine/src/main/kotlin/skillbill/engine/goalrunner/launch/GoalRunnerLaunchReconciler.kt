@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.launch
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.agentoutput.stderrExcerpt
+import skillbill.engine.featuretask.runloop.durable.WorktreeEditJournalWriter
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.core.SubtaskLaunchRequestArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
@@ -22,7 +23,6 @@ import skillbill.engine.goalrunner.model.missingResultPrefixDiagnostics
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
-import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerOutcomeReconciler
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts

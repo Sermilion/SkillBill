@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.execution.GoalChildHistoryDraftWriter
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunCheckpoints
 import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunGoal
@@ -13,7 +14,6 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDur
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.goalrunner.persist.GoalRunnerGoalChildHistoryDraftStore
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -30,7 +30,7 @@ class FeatureTaskRuntimeDurableRunFactory(
   private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
   private val database: DatabaseSessionFactory,
   private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
-  private val historyDraftStore: GoalRunnerGoalChildHistoryDraftStore,
+  private val historyDraftStore: GoalChildHistoryDraftWriter,
 ) {
   internal fun create(
     runRequest: FeatureTaskRuntimeRunRequest,

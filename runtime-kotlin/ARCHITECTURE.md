@@ -465,7 +465,7 @@ runtime-core
   adapter, which supplies only the session factory and the repositories it opens.
   It also owns the agent-output helpers
   (`skillbill.engine.agentoutput`) and the worktree edit journal writer
-  (`skillbill.engine.worktreeedit`). It depends on `runtime-application` through
+  (`skillbill.engine.featuretask.runloop.durable`). It depends on `runtime-application` through
   `implementation` for the shared services those loops call today and exposes a
   pinned inbound API through `RuntimeComponent`.
 - `runtime-infra/sqlite` (`:runtime-infra:sqlite`): SQLite schema, migrations, connection/session

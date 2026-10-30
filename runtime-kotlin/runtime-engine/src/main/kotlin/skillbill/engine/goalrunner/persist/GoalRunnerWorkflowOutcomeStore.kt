@@ -1,6 +1,6 @@
 package skillbill.engine.goalrunner.persist
 
-import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.execution.GoalChildHistoryDraftWriter
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptedBlock
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
@@ -20,7 +20,6 @@ import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.history.GoalChildHistoryDraft
-import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
@@ -216,7 +215,7 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
   ): Boolean
 }
 
-interface GoalRunnerGoalChildHistoryDraftStore {
+interface GoalRunnerGoalChildHistoryDraftStore : GoalChildHistoryDraftWriter {
   fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference> = emptyMap()
 
   fun restoredGoalChildWorkflowId(
@@ -229,11 +228,6 @@ interface GoalRunnerGoalChildHistoryDraftStore {
     parentWorkflowId: String,
     subtaskId: Int,
   ): String? = restoredGoalChildWorkflowId(parentWorkflowId, subtaskId)
-
-  fun saveGoalChildHistoryDraft(
-    draft: GoalChildHistoryDraft,
-    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-  ): GoalChildHistoryDraftSaveResult
 
   fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft>
 
