@@ -1,3 +1,18 @@
+## [2026-10-30] Keep desktop preferences in DataStore without a Room database
+Context: The new app needs preferences, but its runtime data remains owned by runtime services and its terminal tabs live in memory.
+Decision: Store preferences in core:datastore and defer a Room database until the app has structured data of its own.
+Reason: Adding another persistence model now would introduce behavior outside the handoff's scope.
+
+## [2026-10-30] Keep the new desktop app beside the shipped tray
+Context: The handoff leaves the choice of replacing desktop-tray in the installer open.
+Decision: Build the new app as a standalone desktop build while the installer and release assets continue to ship desktop-tray.
+Reason: Switching the shipped app requires an operator decision.
+
+## [2026-10-30] Let settings own contributed page routing
+Context: Multiple features contribute settings pages, while the navigation host selects one entry for a route.
+Decision: Settings owns SettingsRoute and dispatches page bodies to their contributing FeatureEntry. Page selection remains local to Settings.
+Reason: Route ownership must not depend on set iteration order, and Back and Esc should leave Settings in one step.
+
 ## [2026-10-30] Use one class loader for runtime refusal and retry
 Context: The unavailable panel must retry the runtime gate without restarting the process.
 Decision: Load the refusal panel and the app in one app class loader, adding runtime jars after a successful retry. The refusal entry avoids types absent before that retry.
