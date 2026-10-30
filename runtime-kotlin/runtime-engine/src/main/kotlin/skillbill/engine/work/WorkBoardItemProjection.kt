@@ -2,13 +2,13 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.work.control.workControlEligible
-import skillbill.engine.work.control.workDisplayGroup
-import skillbill.engine.work.control.workDisplayPriority
-import skillbill.engine.work.control.workLiveSection
-import skillbill.engine.work.control.workPauseEligible
-import skillbill.engine.work.control.workPolicy
-import skillbill.engine.work.control.workRequiresAttention
+import skillbill.engine.work.eligibility.workControlEligible
+import skillbill.engine.work.eligibility.workDisplayGroup
+import skillbill.engine.work.eligibility.workDisplayPriority
+import skillbill.engine.work.eligibility.workLiveSection
+import skillbill.engine.work.eligibility.workPauseEligible
+import skillbill.engine.work.eligibility.workPolicy
+import skillbill.engine.work.eligibility.workRequiresAttention
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
 import skillbill.engine.work.model.IdeStatusRepositoryResolution

@@ -11,6 +11,8 @@ import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
+import skillbill.engine.work.eligibility.workControlEligible
+import skillbill.engine.work.eligibility.workPauseEligible
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest

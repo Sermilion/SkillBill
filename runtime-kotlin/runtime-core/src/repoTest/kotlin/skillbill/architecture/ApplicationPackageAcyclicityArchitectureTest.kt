@@ -184,6 +184,22 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
+  fun `runtime-engine package cycles equal the recorded census`() {
+    val scanCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == "runtime-engine" }
+    assertTrue(
+      ArchitectureScanSupport.packageImportEdges(
+        scanRoot = scanCase.mainScanRoot,
+        packagePrefix = scanCase.packagePrefix,
+        granularity = scanCase.packageCycleGranularity,
+      ).isNotEmpty(),
+      "The runtime-engine scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
+    )
+    assertPackageCyclesMatchBaseline("runtime-engine")
+  }
+
+  @Test
   fun `runtime-infra host package cycles equal the recorded census`() {
     assertPackageCyclesMatchBaseline("runtime-infra:host")
   }
@@ -431,26 +447,6 @@ class ApplicationPackageAcyclicityArchitectureTest {
             }
           }
         }
-      }
-    assertEquals(emptyList(), violations)
-  }
-
-  @Test
-  fun `engine subareas have an empty package cycle baseline`() {
-    val engineRoot = "runtime-kotlin/runtime-engine/src/main/kotlin"
-    val subareas =
-      listOf(
-        "skillbill.engine.featuretask",
-        "skillbill.engine.goalrunner",
-        "skillbill.engine.goalrunner.planning",
-      )
-    val violations =
-      subareas.flatMap { packagePrefix ->
-        ArchitectureScanSupport.packageCycleViolations(
-          baselineCycles = emptySet(),
-          scanRoot = engineRoot,
-          packagePrefix = packagePrefix,
-        ).map { violation -> "$packagePrefix: $violation" }
       }
     assertEquals(emptyList(), violations)
   }

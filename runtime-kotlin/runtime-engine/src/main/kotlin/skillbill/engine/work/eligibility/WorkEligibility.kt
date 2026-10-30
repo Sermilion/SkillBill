@@ -1,4 +1,4 @@
-package skillbill.engine.work.control
+package skillbill.engine.work.eligibility
 
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.idestatus.model.IdeStatusDisplayGroup

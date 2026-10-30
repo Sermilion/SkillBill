@@ -25,6 +25,8 @@ object PrincipleEnforcementInventory {
     val injectDefaultsBaseline: String,
   )
 
+  private val EXACT_PACKAGE_SCC_MODULES = setOf("runtime-domain", "runtime-contracts", "runtime-cli", "runtime-engine")
+
   val moduleArchitectureScanCases: List<ModuleArchitectureScanCase> =
     RuntimeModuleCatalog.declaredGradleModules
       .filter { moduleName -> moduleName != "runtime-infra" }
@@ -40,7 +42,7 @@ object PrincipleEnforcementInventory {
       packagePrefix = packagePrefixForModule(moduleName),
       packageCycleBaseline = packageCycleBaselineForModule(moduleName, baselineStem),
       packageCycleGranularity =
-        if (moduleName == "runtime-domain" || moduleName == "runtime-contracts" || moduleName == "runtime-cli") {
+        if (moduleName in EXACT_PACKAGE_SCC_MODULES) {
           ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC
         } else {
           ArchitectureScanSupport.PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR
