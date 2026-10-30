@@ -607,11 +607,6 @@ object ArchitectureScanSupport {
   private val EXTENSION_FUN_PATTERN =
     Regex("""^\s*(?:(?:public|internal|private|protected)\s+)*fun\s+([A-Za-z0-9_.]+)\.""")
 
-  enum class PackageCycleGranularity {
-    FIRST_SEGMENT_MUTUAL_PAIR,
-    EXACT_PACKAGE_SCC,
-  }
-
   data class PackageCycle(val areas: List<String>)
 
   data class AmbientCallSite(val relativePath: String, val lineNumber: Int, val call: String)
@@ -779,39 +774,21 @@ object ArchitectureScanSupport {
   fun packageImportEdges(
     scanRoot: String,
     packagePrefix: String,
-    granularity: PackageCycleGranularity = PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR,
   ): Map<String, Set<String>> {
     val sourceFiles = kotlinFilesUnder(runtimeRoot.resolve(scanRoot))
-    val declaredPackages =
-      if (granularity == PackageCycleGranularity.EXACT_PACKAGE_SCC) {
-        sourceFiles.mapNotNull { sourceFile -> declaredPackage(sourceFile.readText()) }.toSet()
-      } else {
-        emptySet()
-      }
+    val declaredPackages = sourceFiles.mapNotNull { sourceFile -> declaredPackage(sourceFile.readText()) }.toSet()
     val edges = linkedMapOf<String, MutableSet<String>>()
     sourceFiles.forEach { sourceFile ->
       val source = sourceFile.readText()
-      val packageName = declaredPackage(source) ?: return@forEach
-      if (!isScannedPackage(packageName, packagePrefix, granularity)) return@forEach
-      val sourceNode =
-        when (granularity) {
-          PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR ->
-            packageName.removePrefix(packagePrefix).substringBefore('.')
-          PackageCycleGranularity.EXACT_PACKAGE_SCC -> packageName
-        }
-      if (sourceNode.isBlank()) return@forEach
+      val sourceNode = declaredPackage(source) ?: return@forEach
+      if (!isScannedPackage(sourceNode, packagePrefix)) return@forEach
       declaredImports(source)
         .filter { imported -> imported.startsWith(packagePrefix) }
         .map { imported ->
-          when (granularity) {
-            PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR ->
-              imported.removePrefix(packagePrefix).substringBefore('.')
-            PackageCycleGranularity.EXACT_PACKAGE_SCC ->
-              declaredPackages
-                .filter { declared -> imported == declared || imported.startsWith("$declared.") }
-                .maxByOrNull(String::length)
-                .orEmpty()
-          }
+          declaredPackages
+            .filter { declared -> imported == declared || imported.startsWith("$declared.") }
+            .maxByOrNull(String::length)
+            .orEmpty()
         }
         .filter { importedNode -> importedNode.isNotBlank() && importedNode != sourceNode }
         .forEach { importedNode -> edges.getOrPut(sourceNode) { mutableSetOf() }.add(importedNode) }
@@ -822,20 +799,16 @@ object ArchitectureScanSupport {
   fun scannedPackages(
     scanRoot: String,
     packagePrefix: String,
-    granularity: PackageCycleGranularity = PackageCycleGranularity.EXACT_PACKAGE_SCC,
   ): Set<String> =
     kotlinFilesUnder(runtimeRoot.resolve(scanRoot))
       .mapNotNull { sourceFile -> declaredPackage(sourceFile.readText()) }
-      .filter { packageName -> isScannedPackage(packageName, packagePrefix, granularity) }
+      .filter { packageName -> isScannedPackage(packageName, packagePrefix) }
       .toSet()
 
   private fun isScannedPackage(
     packageName: String,
     packagePrefix: String,
-    granularity: PackageCycleGranularity,
-  ): Boolean =
-    packageName.startsWith(packagePrefix) ||
-      (granularity == PackageCycleGranularity.EXACT_PACKAGE_SCC && packageName == packagePrefix.removeSuffix("."))
+  ): Boolean = packageName.startsWith(packagePrefix) || packageName == packagePrefix.removeSuffix(".")
 
   fun modelPackageImportViolations(
     scanRoot: String,
@@ -954,59 +927,10 @@ object ArchitectureScanSupport {
   fun packageCycles(
     scanRoot: String,
     packagePrefix: String,
-    granularity: PackageCycleGranularity = PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR,
   ): Set<PackageCycle> =
-    packageCyclesForEdges(packageImportEdges(scanRoot, packagePrefix, granularity), granularity)
+    stronglyConnectedComponents(packageImportEdges(scanRoot, packagePrefix))
       .map { cycle -> PackageCycle(cycle) }
       .toSet()
-
-  fun packageCycleViolations(
-    baselineCycles: Set<PackageCycle>,
-    scanRoot: String,
-    packagePrefix: String,
-    granularity: PackageCycleGranularity = PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR,
-  ): List<String> =
-    packageCycleViolationsForEdges(
-      packageImportEdges(scanRoot, packagePrefix, granularity),
-      baselineCycles,
-      granularity,
-    )
-
-  fun packageCycleViolationsForEdges(
-    edges: Map<String, Set<String>>,
-    baselineCycles: Set<PackageCycle>,
-    granularity: PackageCycleGranularity = PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR,
-  ): List<String> {
-    val baselineKeys = baselineCycles.map { cycle -> cycle.areas.sorted().joinToString("|") }.toSet()
-    val currentKeys =
-      packageCyclesForEdges(edges, granularity)
-        .map { cycle -> cycle.sorted().joinToString("|") }
-        .toSet()
-    return (currentKeys - baselineKeys).sorted().map { cycle ->
-      "New package cycle not in baseline: ${cycle.replace("|", " <-> ")}"
-    }
-  }
-
-  private fun packageCyclesForEdges(
-    edges: Map<String, Set<String>>,
-    granularity: PackageCycleGranularity,
-  ): List<List<String>> =
-    when (granularity) {
-      PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR -> mutualImportCyclesForEdges(edges)
-      PackageCycleGranularity.EXACT_PACKAGE_SCC -> stronglyConnectedComponents(edges)
-    }
-
-  private fun mutualImportCyclesForEdges(edges: Map<String, Set<String>>): List<List<String>> {
-    val cycles = linkedSetOf<List<String>>()
-    edges.forEach { (from, targets) ->
-      targets.forEach { to ->
-        if (from != to && edges[to]?.contains(from) == true) {
-          cycles += listOf(from, to).sorted()
-        }
-      }
-    }
-    return cycles.toList()
-  }
 
   fun cyclicComponents(edges: Map<String, Set<String>>): List<List<String>> = stronglyConnectedComponents(edges)
 
@@ -1099,15 +1023,6 @@ object ArchitectureScanSupport {
       .lineSequence()
       .joinToString("\n") { line -> line.substringBefore("//") }
 
-  fun parsePackageCycleBaseline(text: String): Set<PackageCycle> =
-    text.lineSequence()
-      .map { it.trim() }
-      .filter { it.isNotBlank() && !it.startsWith("#") }
-      .map { line ->
-        PackageCycle(line.split('|').map(String::trim).filter(String::isNotBlank).sorted())
-      }
-      .toSet()
-
   fun transitiveAreaClosure(
     edges: Map<String, Set<String>>,
     area: String,
@@ -1155,10 +1070,32 @@ object ArchitectureScanSupport {
     compositionRootArea: String,
   ): List<String> =
     allAreaIsolationViolationsForEdges(
-      packageImportEdges(scanRoot, packagePrefix),
+      areaEdges(packageImportEdges(scanRoot, packagePrefix), packagePrefix),
       sharedAreas,
       compositionRootArea,
     )
+
+  private fun areaEdges(
+    packageEdges: Map<String, Set<String>>,
+    packagePrefix: String,
+  ): Map<String, Set<String>> {
+    fun areaOf(packageName: String): String =
+      if (packageName.startsWith(packagePrefix)) {
+        packageName.removePrefix(packagePrefix).substringBefore('.')
+      } else {
+        ""
+      }
+    val edges = linkedMapOf<String, MutableSet<String>>()
+    packageEdges.forEach { (from, targets) ->
+      val fromArea = areaOf(from)
+      if (fromArea.isBlank()) return@forEach
+      targets
+        .map(::areaOf)
+        .filter { toArea -> toArea.isNotBlank() && toArea != fromArea }
+        .forEach { toArea -> edges.getOrPut(fromArea) { mutableSetOf() }.add(toArea) }
+    }
+    return edges.mapValues { (_, value) -> value.toSet() }
+  }
 
   fun projectEdgesForConfiguration(
     source: String,

@@ -18,40 +18,10 @@ object PrincipleEnforcementInventory {
     val mainScanRoot: String,
     val moduleSourceRoot: String,
     val packagePrefix: String,
-    val packageCycleBaseline: String?,
-    val packageCycleGranularity: ArchitectureScanSupport.PackageCycleGranularity,
     val ambientClockBaseline: String,
     val ambientEnvironmentBaseline: String,
     val injectDefaultsBaseline: String,
   )
-
-  private val EXACT_PACKAGE_SCC_MODULES =
-    setOf(
-      "runtime-domain",
-      "runtime-contracts",
-      "runtime-cli",
-      "runtime-application",
-      "runtime-engine",
-      "runtime-infra:skills",
-      "runtime-infra:sqlite",
-      "runtime-infra:contracts",
-      "runtime-infra:host",
-      "runtime-infra:workflow",
-      "runtime-infra:launcher",
-      "runtime-ports",
-    )
-
-  private val BASELINE_FREE_PACKAGE_CYCLE_MODULES =
-    setOf(
-      "runtime-application",
-      "runtime-infra:skills",
-      "runtime-infra:sqlite",
-      "runtime-infra:contracts",
-      "runtime-infra:host",
-      "runtime-infra:workflow",
-      "runtime-infra:launcher",
-      "runtime-ports",
-    )
 
   val moduleArchitectureScanCases: List<ModuleArchitectureScanCase> =
     RuntimeModuleCatalog.declaredGradleModules
@@ -66,13 +36,6 @@ object PrincipleEnforcementInventory {
       mainScanRoot = "runtime-kotlin/$directoryPath/src/main/kotlin",
       moduleSourceRoot = "runtime-kotlin/$directoryPath/src",
       packagePrefix = packagePrefixForModule(moduleName),
-      packageCycleBaseline = packageCycleBaselineForModule(moduleName, baselineStem),
-      packageCycleGranularity =
-        if (moduleName in EXACT_PACKAGE_SCC_MODULES) {
-          ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC
-        } else {
-          ArchitectureScanSupport.PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR
-        },
       ambientClockBaseline = ambientClockBaselineForModule(moduleName, baselineStem),
       ambientEnvironmentBaseline = ambientEnvironmentBaselineForModule(moduleName, baselineStem),
       injectDefaultsBaseline = injectDefaultsBaselineForModule(moduleName, baselineStem),
@@ -88,16 +51,6 @@ object PrincipleEnforcementInventory {
       "runtime-mcp" -> "skillbill.mcp."
       "runtime-core" -> "skillbill.di."
       else -> RuntimeModuleCatalog.moduleMainPackageRoots[moduleName]?.let { "$it." } ?: "skillbill."
-    }
-
-  private fun packageCycleBaselineForModule(
-    moduleName: String,
-    baselineStem: String,
-  ): String? =
-    when (moduleName) {
-      in BASELINE_FREE_PACKAGE_CYCLE_MODULES -> null
-      "runtime-cli" -> "runtime-cli-package-cycle-baseline.txt"
-      else -> "$baselineStem-package-cycle-baseline.txt"
     }
 
   private fun ambientClockBaselineForModule(
@@ -237,8 +190,9 @@ object PrincipleEnforcementInventory {
         ProductionLogicalTypeLineCeilingArchitectureTest::class,
       ),
       EnforcedRule(
-        "Package acyclicity: mutual imports among areas under each module package prefix stay within that " +
-          "module baseline across all declared runtime Gradle modules.",
+        "Package acyclicity: every declared runtime Gradle module's main sources have an empty exact-package " +
+          "strongly connected component set, except runtime-engine and runtime-goalrunner, which equal their " +
+          "recorded census.",
         ApplicationPackageAcyclicityArchitectureTest::class,
       ),
       EnforcedRule(

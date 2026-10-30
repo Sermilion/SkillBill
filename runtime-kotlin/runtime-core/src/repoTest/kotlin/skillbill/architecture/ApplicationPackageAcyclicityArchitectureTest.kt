@@ -1,5 +1,7 @@
 package skillbill.architecture
 
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
@@ -9,43 +11,38 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ApplicationPackageAcyclicityArchitectureTest {
-  @Test
-  fun `runtime-application has no exact package cycles`() {
+  @ParameterizedTest(name = "{0} main sources have no exact-package cycle")
+  @MethodSource("moduleNames")
+  fun `module main sources have no exact-package cycle`(moduleName: String) {
     val scanCase =
       PrincipleEnforcementInventory.moduleArchitectureScanCases
-        .single { scanCase -> scanCase.moduleName == "runtime-application" }
-    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
-    assertEquals(null, scanCase.packageCycleBaseline)
+        .single { scanCase -> scanCase.moduleName == moduleName }
     assertTrue(
-      ArchitectureScanSupport.packageImportEdges(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      ).isNotEmpty(),
-      "The runtime-application scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
+      ArchitectureScanSupport.scannedPackages(scanCase.mainScanRoot, scanCase.packagePrefix).isNotEmpty(),
+      "The $moduleName scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
     )
-    val cycles =
-      ArchitectureScanSupport.packageCycles(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      )
+    val cycles = ArchitectureScanSupport.packageCycles(scanCase.mainScanRoot, scanCase.packagePrefix)
+    val expected = ArchitectureBaselineSupport.readPackageCycleCensus(moduleName)
     assertEquals(
-      emptySet(),
+      expected,
       cycles,
-      cycles.joinToString("\n") { cycle -> "Package cycle: ${cycle.areas.joinToString(" <-> ")}" },
+      cycleDifference(expected, cycles) +
+        if (moduleName in ArchitectureBaselineSupport.packageCycleCensusModules) {
+          "\nRe-record the census with RECORD_ARCHITECTURE_BASELINES=1 only if the change is intended."
+        } else {
+          ""
+        },
     )
   }
 
-  @Test
-  fun `runtime-cli package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-cli")
-  }
-
-  @Test
-  fun `runtime-contracts package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-contracts")
-  }
+  private fun cycleDifference(
+    expected: Set<ArchitectureScanSupport.PackageCycle>,
+    actual: Set<ArchitectureScanSupport.PackageCycle>,
+  ): String =
+    buildList {
+      (actual - expected).forEach { cycle -> add("New package cycle: ${cycle.areas.joinToString(" <-> ")}") }
+      (expected - actual).forEach { cycle -> add("Census cycle gone: ${cycle.areas.joinToString(" <-> ")}") }
+    }.joinToString("\n")
 
   @Test
   fun `runtime-contracts cycle scan sees error and contracts subpackage back edges`() {
@@ -56,27 +53,18 @@ class ApplicationPackageAcyclicityArchitectureTest {
     try {
       writeContractsSubpackageFixture(root, errorCoreImportsShellContent = false)
       assertEquals(
-        emptyList(),
-        ArchitectureScanSupport.packageCycleViolations(
-          baselineCycles = emptySet(),
-          scanRoot = root.toString(),
-          packagePrefix = scanCase.packagePrefix,
-          granularity = scanCase.packageCycleGranularity,
-        ),
+        emptySet(),
+        ArchitectureScanSupport.packageCycles(root.toString(), scanCase.packagePrefix),
       )
       writeContractsSubpackageFixture(root, errorCoreImportsShellContent = true)
       assertEquals(
-        listOf(
-          "New package cycle not in baseline: " +
-            "skillbill.contracts.review <-> skillbill.contracts.workflow.featuretask",
-          "New package cycle not in baseline: skillbill.error.core <-> skillbill.error.shellcontent",
+        setOf(
+          ArchitectureScanSupport.PackageCycle(
+            listOf("skillbill.contracts.review", "skillbill.contracts.workflow.featuretask"),
+          ),
+          ArchitectureScanSupport.PackageCycle(listOf("skillbill.error.core", "skillbill.error.shellcontent")),
         ),
-        ArchitectureScanSupport.packageCycleViolations(
-          baselineCycles = emptySet(),
-          scanRoot = root.toString(),
-          packagePrefix = scanCase.packagePrefix,
-          granularity = scanCase.packageCycleGranularity,
-        ),
+        ArchitectureScanSupport.packageCycles(root.toString(), scanCase.packagePrefix),
       )
     } finally {
       root.toFile().deleteRecursively()
@@ -129,16 +117,6 @@ class ApplicationPackageAcyclicityArchitectureTest {
     val file = root.resolve(relativePath)
     Files.createDirectories(file.parent)
     file.writeText(lines.joinToString("\n"))
-  }
-
-  @Test
-  fun `runtime-core package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-core")
-  }
-
-  @Test
-  fun `runtime-domain package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-domain")
   }
 
   @Test
@@ -201,147 +179,7 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
-  fun `runtime-engine package cycles equal the recorded census`() {
-    val scanCase =
-      PrincipleEnforcementInventory.moduleArchitectureScanCases
-        .single { scanCase -> scanCase.moduleName == "runtime-engine" }
-    assertTrue(
-      ArchitectureScanSupport.packageImportEdges(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      ).isNotEmpty(),
-      "The runtime-engine scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
-    )
-    assertPackageCyclesMatchBaseline("runtime-engine")
-  }
-
-  @Test
-  fun `runtime-infra host has no exact package cycles`() {
-    assertNoPackageCycles("runtime-infra:host")
-  }
-
-  @Test
-  fun `runtime-infra contracts has no exact package cycles`() {
-    assertNoPackageCycles("runtime-infra:contracts")
-  }
-
-  @Test
-  fun `runtime-infra skills has no exact-package cycles`() {
-    val scanCase =
-      PrincipleEnforcementInventory.moduleArchitectureScanCases
-        .single { scanCase -> scanCase.moduleName == "runtime-infra:skills" }
-    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
-    assertEquals(null, scanCase.packageCycleBaseline)
-    assertTrue(
-      ArchitectureScanSupport.packageImportEdges(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      ).isNotEmpty(),
-      "The runtime-infra:skills scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
-    )
-    assertPackageCyclesMatchBaseline("runtime-infra:skills")
-  }
-
-  @Test
-  fun `runtime-infra launcher has no exact package cycles`() {
-    assertNoPackageCycles("runtime-infra:launcher")
-  }
-
-  @Test
-  fun `runtime-infra workflow has no exact package cycles`() {
-    assertNoPackageCycles("runtime-infra:workflow")
-  }
-
-  @Test
-  fun `runtime-infra http package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-infra:http")
-  }
-
-  @Test
-  fun `runtime-infra sqlite has no exact-package cycles`() {
-    val scanCase =
-      PrincipleEnforcementInventory.moduleArchitectureScanCases
-        .single { scanCase -> scanCase.moduleName == "runtime-infra:sqlite" }
-    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
-    assertEquals(null, scanCase.packageCycleBaseline)
-    assertTrue(
-      ArchitectureScanSupport.packageImportEdges(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      ).isNotEmpty(),
-      "The runtime-infra:sqlite scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
-    )
-    assertPackageCyclesMatchBaseline("runtime-infra:sqlite")
-  }
-
-  @Test
-  fun `runtime-mcp package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-mcp")
-  }
-
-  @Test
-  fun `runtime-ports has no exact-package cycles`() {
-    val scanCase =
-      PrincipleEnforcementInventory.moduleArchitectureScanCases
-        .single { scanCase -> scanCase.moduleName == "runtime-ports" }
-    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
-    assertEquals(null, scanCase.packageCycleBaseline)
-    assertTrue(
-      ArchitectureScanSupport.packageImportEdges(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      ).isNotEmpty(),
-      "The runtime-ports scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
-    )
-    assertPackageCyclesMatchBaseline("runtime-ports")
-  }
-
-  @Test
-  fun `package cycle scanner fires on synthetic cycle absent from baseline`() {
-    val violations =
-      ArchitectureScanSupport.packageCycleViolationsForEdges(
-        edges =
-          mapOf(
-            "alpha" to setOf("beta"),
-            "beta" to setOf("alpha"),
-          ),
-        baselineCycles = emptySet(),
-      )
-    assertEquals(
-      listOf("New package cycle not in baseline: alpha <-> beta"),
-      violations,
-    )
-    assertTrue(violations.single().contains("alpha <-> beta"))
-  }
-
-  @Test
-  fun `exact package scanner reports arbitrary length cycles and resolves imported members`() {
-    val violations =
-      ArchitectureScanSupport.packageCycleViolationsForEdges(
-        edges =
-          mapOf(
-            "skillbill.synthetic.alpha" to setOf("skillbill.synthetic.beta"),
-            "skillbill.synthetic.beta" to setOf("skillbill.synthetic.gamma"),
-            "skillbill.synthetic.gamma" to setOf("skillbill.synthetic.alpha"),
-          ),
-        baselineCycles = emptySet(),
-        granularity = ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC,
-      )
-    assertEquals(
-      listOf(
-        "New package cycle not in baseline: " +
-          "skillbill.synthetic.alpha <-> skillbill.synthetic.beta <-> skillbill.synthetic.gamma",
-      ),
-      violations,
-    )
-  }
-
-  @Test
-  fun `exact package source scan resolves nested and member imports without changing default scan`() {
+  fun `exact package scan resolves member imports and reports arbitrary length cycles`() {
     assertExactPackageCycleScan()
     assertRootPackageCycleScan()
     assertAcyclicExactPackageScan()
@@ -362,11 +200,7 @@ class ApplicationPackageAcyclicityArchitectureTest {
       )
       assertEquals(
         setOf(ArchitectureScanSupport.PackageCycle(listOf("skillbill.synthetic", "skillbill.synthetic.zeta"))),
-        ArchitectureScanSupport.packageCycles(
-          scanRoot = root.toString(),
-          packagePrefix = "skillbill.synthetic.",
-          granularity = ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC,
-        ),
+        ArchitectureScanSupport.packageCycles(scanRoot = root.toString(), packagePrefix = "skillbill.synthetic."),
       )
     } finally {
       root.toFile().deleteRecursively()
@@ -385,7 +219,6 @@ class ApplicationPackageAcyclicityArchitectureTest {
         ArchitectureScanSupport.packageImportEdges(
           scanRoot = root.toString(),
           packagePrefix = "skillbill.synthetic.",
-          granularity = ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC,
         )
       assertEquals(
         mapOf(
@@ -413,18 +246,7 @@ class ApplicationPackageAcyclicityArchitectureTest {
             ),
           ),
         ),
-        ArchitectureScanSupport.packageCycles(
-          scanRoot = root.toString(),
-          packagePrefix = "skillbill.synthetic.",
-          granularity = ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC,
-        ),
-      )
-      assertEquals(
-        setOf(ArchitectureScanSupport.PackageCycle(listOf("delta", "epsilon"))),
-        ArchitectureScanSupport.packageCycles(
-          scanRoot = root.toString(),
-          packagePrefix = "skillbill.synthetic.",
-        ),
+        ArchitectureScanSupport.packageCycles(scanRoot = root.toString(), packagePrefix = "skillbill.synthetic."),
       )
     } finally {
       root.toFile().deleteRecursively()
@@ -434,26 +256,28 @@ class ApplicationPackageAcyclicityArchitectureTest {
   private fun assertAcyclicExactPackageScan() {
     val root = Files.createTempDirectory("architecture-acyclic-package")
     try {
-      val packages =
-        listOf("alpha", "beta", "gamma").associateWith { area ->
-          root.resolve("skillbill/synthetic/$area").also { path -> Files.createDirectories(path) }
-        }
-      packages.forEach { (name, path) ->
-        path.resolve("${name.replaceFirstChar(Char::uppercase)}.kt").writeText(
-          """
-
-
-          class ${name.replaceFirstChar(Char::uppercase)}
-          """.trimIndent(),
-        )
-      }
+      writeFixtureFile(
+        root,
+        "skillbill/synthetic/alpha/Alpha.kt",
+        listOf("package skillbill.synthetic.alpha", "import skillbill.synthetic.beta.Beta", "class Alpha"),
+      )
+      writeFixtureFile(
+        root,
+        "skillbill/synthetic/beta/Beta.kt",
+        listOf("package skillbill.synthetic.beta", "import skillbill.synthetic.gamma.Gamma", "class Beta"),
+      )
+      writeFixtureFile(
+        root,
+        "skillbill/synthetic/gamma/Gamma.kt",
+        listOf("package skillbill.synthetic.gamma", "class Gamma"),
+      )
+      assertTrue(
+        ArchitectureScanSupport.packageImportEdges(root.toString(), "skillbill.synthetic.").isNotEmpty(),
+        "The acyclic fixture must contain import edges.",
+      )
       assertEquals(
         emptySet(),
-        ArchitectureScanSupport.packageCycles(
-          scanRoot = root.toString(),
-          packagePrefix = "skillbill.synthetic.",
-          granularity = ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC,
-        ),
+        ArchitectureScanSupport.packageCycles(scanRoot = root.toString(), packagePrefix = "skillbill.synthetic."),
       )
     } finally {
       root.toFile().deleteRecursively()
@@ -555,48 +379,8 @@ class ApplicationPackageAcyclicityArchitectureTest {
     assertEquals(emptyList(), violations)
   }
 
-  private fun assertNoPackageCycles(moduleName: String) {
-    val scanCase =
-      PrincipleEnforcementInventory.moduleArchitectureScanCases
-        .single { scanCase -> scanCase.moduleName == moduleName }
-    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
-    assertEquals(null, scanCase.packageCycleBaseline)
-    assertTrue(
-      ArchitectureScanSupport.scannedPackages(scanCase.mainScanRoot, scanCase.packagePrefix).isNotEmpty(),
-      "The $moduleName scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
-    )
-    val cycles =
-      ArchitectureScanSupport.packageCycles(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      )
-    assertEquals(
-      emptySet(),
-      cycles,
-      cycles.joinToString("\n") { cycle -> "Package cycle: ${cycle.areas.joinToString(" <-> ")}" },
-    )
+  companion object {
+    @JvmStatic
+    fun moduleNames(): List<String> = PrincipleEnforcementInventory.moduleArchitectureScanCases.map { it.moduleName }
   }
-
-  private fun assertPackageCyclesMatchBaseline(moduleName: String) {
-    val scanCase =
-      PrincipleEnforcementInventory.moduleArchitectureScanCases
-        .single { scanCase -> scanCase.moduleName == moduleName }
-    val current =
-      ArchitectureScanSupport.packageCycles(
-        scanRoot = scanCase.mainScanRoot,
-        packagePrefix = scanCase.packagePrefix,
-        granularity = scanCase.packageCycleGranularity,
-      )
-    val baselineName = scanCase.packageCycleBaseline
-    assertEquals(
-      baselineName?.let(::baselineCycles).orEmpty(),
-      current,
-      baselineName?.let { "Re-record $it with RECORD_ARCHITECTURE_BASELINES=1." }
-        ?: "$moduleName must stay free of exact-package cycles.",
-    )
-  }
-
-  private fun baselineCycles(name: String): Set<ArchitectureScanSupport.PackageCycle> =
-    ArchitectureScanSupport.parsePackageCycleBaseline(ArchitectureBaselineSupport.readBaseline(name))
 }

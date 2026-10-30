@@ -42,15 +42,15 @@ class ArchitectureBaselineRecorder {
   }
 
   private fun recordPackageCycleBaselines(baselineDir: Path) {
-    PrincipleEnforcementInventory.moduleArchitectureScanCases.forEach { scanCase ->
-      val baselineName = scanCase.packageCycleBaseline ?: return@forEach
-      writePackageCycleBaseline(
-        baselineDir.resolve(baselineName),
-        scanCase.mainScanRoot,
-        scanCase.packagePrefix,
-        scanCase.packageCycleGranularity,
-      )
-    }
+    PrincipleEnforcementInventory.moduleArchitectureScanCases
+      .filter { scanCase -> scanCase.moduleName in ArchitectureBaselineSupport.packageCycleCensusModules }
+      .forEach { scanCase ->
+        writePackageCycleBaseline(
+          baselineDir.resolve(ArchitectureBaselineSupport.packageCycleCensusName(scanCase.moduleName)),
+          scanCase.mainScanRoot,
+          scanCase.packagePrefix,
+        )
+      }
   }
 
   private fun recordAmbientClockBaselines(baselineDir: Path) {
@@ -102,10 +102,9 @@ class ArchitectureBaselineRecorder {
     target: Path,
     scanRoot: String,
     packagePrefix: String,
-    granularity: ArchitectureScanSupport.PackageCycleGranularity,
   ) {
     val cycles =
-      ArchitectureScanSupport.packageCycles(scanRoot, packagePrefix, granularity)
+      ArchitectureScanSupport.packageCycles(scanRoot, packagePrefix)
         .map { cycle -> cycle.areas.sorted().joinToString("|") }
         .sorted()
     Files.writeString(target, cycles.joinToString("\n") + "\n")

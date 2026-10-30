@@ -32,17 +32,14 @@ class RuntimeCliAreaIsolationArchitectureTest {
   }
 
   @Test
-  fun `all-area scan fires on a one-directional sibling edge an empty cycle baseline accepts`() {
+  fun `all-area scan fires on a one-directional sibling edge the cycle check accepts`() {
     val edges =
       mapOf(
         "core" to setOf("goal", "featuretask"),
         "goal" to setOf("featuretask", "kernel"),
         "featuretask" to setOf("kernel", "model"),
       )
-    assertEquals(
-      emptyList(),
-      ArchitectureScanSupport.packageCycleViolationsForEdges(edges, baselineCycles = emptySet()),
-    )
+    assertEquals(emptyList(), ArchitectureScanSupport.cyclicComponents(edges))
     assertEquals(
       listOf(
         "Area 'goal' transitively imports 'featuretask'; only the shared leaves (kernel, model) may appear " +
