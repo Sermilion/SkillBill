@@ -1,3 +1,10 @@
+## [2026-10-30] SKILL-447 board executing agent
+Areas: runtime-engine work, runtime-ports, runtime-contracts, runtime-infra/sqlite, desktop work and history
+- Board projection carries the executing agent for goals, standalone runs and feature-task phases. Desktop uses it for display; launches retain the agent from run options.
+- Migration 92 marks the persisted board model incomplete so the existing projector rebuilds rows with the additive executing-agent field. Older payloads decode the field as null.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-23] SKILL-435 subtask 5: shared incident presentation
 Areas: runtime-engine work, diagnostics and goalrunner; runtime-ports idestatus and blockincident; runtime-domain blockincident; runtime-contracts work and persistence; runtime-infra sqlite; runtime-cli kernel/work, goal, featuretask and phase; desktop-tray data, domain, detail and bootstrap; build-identity; docs
 - Added one runtime-built incident projection for terminal and desktop, with cause, progress, next action, evidence, recovery, report and telemetry status.

@@ -18,15 +18,13 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
-import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
@@ -50,7 +48,6 @@ import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
-import dev.skillbill.desktop.core.ui.shell.DetailsPaneSlot
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 
 /** `.sb-doc` max-width, padding included. */
@@ -104,10 +101,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val view = runActionsView(state)
   val recoverFocus = remember { FocusRequester() }
   val listState = rememberLazyListState()
-  val documentIndex = remember { DocumentIndex() }
-  val scope = rememberCoroutineScope()
-  // The Goal finish pointers scroll the document to their section's header.
-  val jump: (String) -> Unit = { key -> documentIndex.indexOf(key)?.let { index -> scope.launch { listState.animateScrollToItem(index) } } }
+  val peekState = rememberSaveableStateHolder()
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = listOf(
@@ -127,10 +121,10 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         SbIconButton(LucideIcons.panelRight, "Toggle details", host.onToggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)
       },
     )
-    Row(Modifier.weight(1f).fillMaxWidth()) {
+    Box(Modifier.weight(1f).fillMaxWidth()) {
       // `.sb-doc`: a 780 column (padding included) centred in the scroll area, 32/40/64 padding, 20/16/48 in a narrow window.
       // The list adds no spacing of its own: each block brings its 28 gap, so a section's rows can sit flush in one box.
-      BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+      BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = LocalShellLayout.current.drawerMode
         val inset = if (narrow) 16.dp else 40.dp
         val side = maxOf(inset, (maxWidth - (DOC_MAX_WIDTH - inset * 2)) / 2)
@@ -155,12 +149,20 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          sections.document(state, view, onAction, jump)
-          documentIndex.replace(sections.keyPositions.toMap())
+          sections.document(state, view, onAction)
         }
       }
-      val wide = (state.sections as? SectionsUi.Loaded)?.detail?.let { hasSubtaskIndex(item, it) } == true
-      DetailsPaneSlot(if (wide) SkillBillSize.detailsPaneWide else SkillBillSize.detailsPane) { DetailsPane(state, onAction, jump) }
+      DetailPeek(
+        open = host.detailsPaneOpen && !host.specsOpen,
+        wide = (state.sections as? SectionsUi.Loaded)?.detail?.let {
+          selectedSubtask(item, it, state.subtaskChoice.key) == SubtaskKey.GoalFinish
+        } == true,
+        onDismiss = { if (host.detailsPaneOpen) host.onToggleDetails() },
+      ) {
+        peekState.SaveableStateProvider("${item.id}:${state.subtaskChoice.key}") {
+          DetailsPane(state, assessmentOrder, onAction)
+        }
+      }
     }
   }
   state.controls.recoveryDialog?.let { preview ->
@@ -194,7 +196,7 @@ private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, 
 }
 
 /** The sections in HANDOFF 9.2 order; placeholders hold their place until the first read lands. */
-private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
+private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -209,11 +211,13 @@ private fun DetailSections.document(state: DetailUiState, view: RunActionsView, 
       item(key = "metrics") {
         Column(Modifier.padding(top = DocBlockGap)) { DetailMetrics(item, detail) }
       }
-      subtaskSection(item, detail, state, onAction, onJump)
+      subtaskSection(item, detail, state, onAction)
       pipelineSection(item, detail)
       activitySection(item, detail, state, onAction)
-      goalQaSection(detail)
-      goalAssessmentSection(detail)
+      if (item.kind != WorkKind.Goal) {
+        goalQaSection(detail)
+        goalAssessmentSection(detail)
+      }
       qaReportSection(item, detail, onAction)
       // Standalone phases and operations keep their dependencies, validation, phase results and spec bundle in the document.
       dependencySection(item, detail, state, onAction)

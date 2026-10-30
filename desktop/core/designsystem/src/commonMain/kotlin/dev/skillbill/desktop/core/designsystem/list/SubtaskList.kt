@@ -29,7 +29,7 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -43,7 +43,7 @@ import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 
 /**
  * `.sb-sublist`: the Subtasks index, a box that takes keyboard focus. While it has focus ↑ and ↓ call [onMove] with -1 or 1 and
- * Enter calls [onOpen]. A press inside focuses it without the ring; the 2 px `accent-ring` outline shows only for keyboard focus,
+ * Enter calls [onOpen]. A press inside focuses the clicked row without the ring; the 2 px `accent-ring` outline shows only for keyboard focus,
  * as `:focus-visible` does. [onFocusChange] reports focus so the shell can hand it the arrow keys. [requestFocus] takes keyboard
  * focus once the list shows, as main.js does when J or K pages away from a focused list.
  */
@@ -91,19 +91,18 @@ fun SubtaskList(
             val event = awaitPointerEvent(PointerEventPass.Initial)
             if (event.type == PointerEventType.Press) {
               pointerFocus = true
-              requester.requestFocus()
             }
           }
         }
       }
       .onFocusChanged {
-        focused = it.isFocused
+        focused = it.hasFocus
         if (!it.hasFocus) pointerFocus = false
         onFocusChange(it.hasFocus)
       }
-      .onKeyEvent { event ->
+      .onPreviewKeyEvent { event ->
         if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed || event.isShiftPressed) {
-          return@onKeyEvent false
+          return@onPreviewKeyEvent false
         }
         when (event.key) {
           Key.DirectionDown -> { move(1); true }

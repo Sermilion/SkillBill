@@ -80,7 +80,13 @@ class DetailFeatureEntry(
       onToggleSpecs = { shellPanes.specsOpen = !shellPanes.specsOpen },
       onToggleTerminal = paneCommands::toggleTerminal,
     )
-    DetailScreen(state, host, viewModel::onAction)
+    DetailScreen(state, host) { action ->
+      if (action is DetailAction.SelectSubtask || action is DetailAction.MoveSubtaskSelection) {
+        shellPanes.specsOpen = false
+        shellPanes.detailsPaneOpen = true
+      }
+      viewModel.onAction(action)
+    }
   }
 
   private fun copy(text: String) {

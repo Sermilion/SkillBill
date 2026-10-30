@@ -49,7 +49,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
 import dev.skillbill.desktop.core.ui.status.subtaskStatusKind
 
-/** Document keys the Goal finish pointers scroll to. */
+/** Result section keys shared by the document and the side peek. */
 internal const val GOAL_QA_KEY = "goal-qa"
 internal const val GOAL_ASSESSMENT_KEY = "goal-assessment"
 
@@ -224,33 +224,4 @@ private fun PipelineStepState.status(): Pair<StatusKind, String> = when (this) {
   PipelineStepState.Waiting -> StatusKind.Blocked to "Waiting"
   PipelineStepState.Failed -> StatusKind.Failed to "Failed"
   PipelineStepState.Pending -> StatusKind.Pending to "Pending"
-}
-
-/**
- * Goal finish selected: the pr, monitor and monitor_fix steps (mono labels) with their states, then one line each for Goal QA
- * and the assessment that scrolls the document to the full section ([onJump] with its key) instead of repeating the findings.
- */
-@Composable
-internal fun GoalFinishInspector(item: WorkItem, detail: Detail, onJump: (String) -> Unit) {
-  PropertyList {
-    goalFinishSteps(item, detail).forEach { step ->
-      val (kind, word) = step.state.status()
-      PropertyRow(step.label, monoLabel = true) {
-        StatusIcon(kind, 0.5f)
-        PropertyText(word)
-      }
-    }
-    detail.goalQa?.let { qa ->
-      val fixed = qa.findings.count { it.fixed }
-      val jumps = qa.findings.isNotEmpty()
-      val text = if (jumps) "${qa.outcome} · $fixed of ${qa.findings.size} fixed" else qa.outcome
-      PropertyRow("Goal QA", onClick = if (jumps) ({ onJump(GOAL_QA_KEY) }) else null, tooltip = if (jumps) "Show Goal QA" else null) { PropertyText(text) }
-    }
-    detail.goalAssessment?.let { assessment ->
-      val state = assessment.state.word()
-      val findings = assessment.findings.size
-      val text = listOfNotNull(state, "round ${assessment.round}", if (findings == 1) "1 finding" else "$findings findings").joinToString(" · ")
-      PropertyRow("Assessment", onClick = { onJump(GOAL_ASSESSMENT_KEY) }, tooltip = "Show Goal assessment") { PropertyText(text) }
-    }
-  }
 }

@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -79,10 +78,7 @@ fun SubtaskRow(
         .background(if (hovered) colors.bgHover else Color.Transparent)
         .then(
           if (onClick != null) {
-            // `.sb-sub-row` is a plain div: only the list takes focus (Tab), so ↑/↓ and Enter reach [SubtaskList] and Enter
-            // opens the spec instead of clicking the row.
-            Modifier.focusProperties { canFocus = false }
-              .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+            Modifier.hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
               .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
               .expandSemantics(body != null)
           } else {

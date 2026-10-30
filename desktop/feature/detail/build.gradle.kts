@@ -8,5 +8,6 @@ kotlin {
   }
   sourceSets.jvmTest.dependencies {
     implementation(projects.core.testing)
+    implementation(libs.compose.ui.test)
   }
 }

@@ -4,17 +4,30 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Composable
+import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Avatar
+import dev.skillbill.desktop.core.designsystem.component.Segmented
+import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
+import dev.skillbill.desktop.core.designsystem.detail.SbBox
+import androidx.compose.foundation.text.BasicText
 import dev.skillbill.desktop.core.designsystem.component.ShortId
 import dev.skillbill.desktop.core.designsystem.detail.Breakdown
 import dev.skillbill.desktop.core.designsystem.detail.PaneSection
+import dev.skillbill.desktop.core.designsystem.detail.PhasePipeline
 import dev.skillbill.desktop.core.designsystem.detail.PropertyList
 import dev.skillbill.desktop.core.designsystem.detail.PropertyRow
 import dev.skillbill.desktop.core.designsystem.detail.PropertyText
@@ -28,22 +41,61 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 
 /**
- * The details pane (`.sb-pane`): one scroll, 16/20/32 padding, sections 24 apart with no dividers. Execution paints from the
- * header in the first frame; runs and fixes, the subtask inspector and the spec files fill in once the sections load.
+ * The side peek shows the selected row's results first, followed by execution facts and spec files.
  */
 @Composable
-internal fun DetailsPane(state: DetailUiState, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
-  Column(
-    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp),
-    verticalArrangement = Arrangement.spacedBy(24.dp),
-  ) {
-    val item = state.header
-    val detail = (state.sections as? SectionsUi.Loaded)?.detail
-    ExecutionSection(item, detail) { onAction(DetailAction.Copy(it)) }
-    if (detail != null) {
-      RunsSection(item.id, detail.attempts)
-      InspectorSection(item, detail, state.subtaskChoice.key, onAction, onJump)
-      if (item.kind == WorkKind.Goal) SpecFilesSection(detail, onAction)
+internal fun DetailsPane(state: DetailUiState, assessmentOrder: MutableState<AssessmentOrder>, onAction: (DetailAction) -> Unit) {
+  val collapse = rememberSectionCollapse()
+  val item = state.header
+  val detail = (state.sections as? SectionsUi.Loaded)?.detail
+  var resultTab by rememberSaveable(item.id) { mutableStateOf("assessment") }
+  val selected = detail?.let { selectedSubtask(item, it, state.subtaskChoice.key) }
+    ?: SubtaskKey.GoalFinish.takeIf { item.kind == WorkKind.Goal }
+  val scrollStates = rememberSaveableStateHolder()
+  Column(Modifier.fillMaxSize()) {
+    if (selected == SubtaskKey.GoalFinish) {
+      Segmented(
+        listOf(SegmentedOption("assessment", "Assessment"), SegmentedOption("qa", "QA")),
+        resultTab,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+      ) { resultTab = it }
+    }
+    scrollStates.SaveableStateProvider(if (selected == SubtaskKey.GoalFinish) resultTab else "subtask") {
+      LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp)) {
+        val sections = DetailSections(this, collapse, assessmentOrder)
+        if (detail != null) {
+          sections.item(key = "inspector") { InspectorSection(item, detail, selected, onAction) }
+          if (selected == SubtaskKey.GoalFinish) {
+            if (resultTab == "assessment") {
+              if (detail.goalAssessment != null) sections.goalAssessmentSection(detail) else sections.item(key = "assessment-unavailable") {
+                MissingResult("Goal assessment", "No assessment result is available for this run.")
+              }
+            } else {
+              if (detail.goalQa != null) sections.goalQaSection(detail) else sections.item(key = "qa-unavailable") {
+                MissingResult("Goal QA", "No QA result is available for this run.")
+              }
+            }
+          }
+        }
+        sections.item(key = "execution") {
+          Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            ExecutionSection(item, detail) { onAction(DetailAction.Copy(it)) }
+            if (detail != null) {
+              RunsSection(item.id, detail.attempts)
+              if (item.kind == WorkKind.Goal) SpecFilesSection(detail, onAction)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun MissingResult(title: String, message: String) {
+  PaneSection(title = title) {
+    SbBox {
+      BasicText(message, Modifier.padding(16.dp), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted))
     }
   }
 }
@@ -101,11 +153,11 @@ private fun RunsSection(itemId: String, attempts: DetailAttempts) {
 
 /** The selected subtask, or the Goal finish steps; goals with a subtask index only. */
 @Composable
-private fun InspectorSection(item: WorkItem, detail: Detail, chosen: SubtaskKey?, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
-  val key = selectedSubtask(item, detail, chosen) ?: return
+private fun InspectorSection(item: WorkItem, detail: Detail, chosen: SubtaskKey?, onAction: (DetailAction) -> Unit) {
+  val key = chosen ?: return
   val status = inspectorStatus(item, detail, key)
   when (key) {
-    SubtaskKey.GoalFinish -> PaneSection(title = "Goal finish", status = status) { GoalFinishInspector(item, detail, onJump) }
+    SubtaskKey.GoalFinish -> PaneSection(title = "Goal finish", status = status) { PhasePipeline(goalFinishSteps(item, detail)) }
     is SubtaskKey.Subtask -> {
       val subtask = detail.subtasks.firstOrNull { it.id == key.id } ?: return
       PaneSection(title = "Subtask ${subtaskNumber(subtask.id)}", status = status) { SubtaskInspector(detail, subtask, inline = false, onAction) }

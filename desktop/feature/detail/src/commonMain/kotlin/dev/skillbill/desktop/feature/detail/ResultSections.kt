@@ -2,6 +2,8 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
@@ -108,14 +110,15 @@ internal fun DetailSections.phaseResultsSection(item: WorkItem, detail: Detail) 
 /** HANDOFF 9.2 item 15: goal QA findings, the ones left for the operator first, with `desktop-tray`'s summary wording. */
 internal fun DetailSections.goalQaSection(detail: Detail) {
   val qa = detail.goalQa ?: return
-  if (qa.findings.isEmpty()) return
   // The design lists the findings in the runtime's order, each as ref, title and state with no meta line.
   val ordered = qa.findings
   val notFixed = ordered.count { !it.fixed }
   section(GOAL_QA_KEY, "Goal QA", count = qa.outcome) {
     item(key = "goal-qa-summary") {
-      // `.t-muted` at `--t-sm`, then the box 8 below.
-      SectionText(qaFindingsSummary(qa.findings.size, notFixed, qa.fixAttempts), SkillBillTheme.colors.fgMuted, Modifier.padding(bottom = 8.dp))
+      Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
+        if (qa.findings.isNotEmpty()) SectionText(qaFindingsSummary(qa.findings.size, notFixed, qa.fixAttempts), SkillBillTheme.colors.fgMuted)
+        if (!qa.reportText.isNullOrBlank() || !qa.reason.isNullOrBlank() || qa.failureKind != null) QaReportCard(qa)
+      }
     }
     itemsIndexed(ordered, key = { _, finding -> "goal-qa-${finding.id}" }) { index, finding ->
       val colors = SkillBillTheme.colors
@@ -138,19 +141,25 @@ internal fun GoalAssessmentState.word(): String = when (this) {
 }
 
 /** HANDOFF 9.2 item 16: the state and round in the header count, the findings in one box. */
+@OptIn(ExperimentalLayoutApi::class)
 internal fun DetailSections.goalAssessmentSection(detail: Detail) {
   val assessment = detail.goalAssessment ?: return
   val count = assessment.findings.size
   val order = assessmentOrder
   val findings = orderedFindings(assessment.findings, order.value)
-  section(
-    GOAL_ASSESSMENT_KEY, "Goal assessment",
-    count = "${assessment.state.word()} · round ${assessment.round}",
-    // Sorting only helps once there is more than one finding to compare.
-    actions = if (count < 2) null else { {
-      Segmented(AssessmentOrder.entries.map { SegmentedOption(it, it.label) }, order.value) { order.value = it }
-    } },
-  ) {
+  section(GOAL_ASSESSMENT_KEY, "Goal assessment") {
+    item(key = "assessment-order") {
+      FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(bottom = 12.dp),
+      ) {
+        SectionText("${assessment.state.word()} · round ${assessment.round}", SkillBillTheme.colors.fgFaint)
+        if (count > 1) {
+          Segmented(AssessmentOrder.entries.map { SegmentedOption(it, it.label) }, order.value) { order.value = it }
+        }
+      }
+    }
     itemsIndexed(findings, key = { _, finding -> "assessment-${finding.ref}" }) { index, finding ->
       val colors = SkillBillTheme.colors
       BoxedFindingRow(

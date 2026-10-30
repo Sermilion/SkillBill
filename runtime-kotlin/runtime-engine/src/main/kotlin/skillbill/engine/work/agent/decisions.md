@@ -1,3 +1,8 @@
+## [2026-10-30] Project the executing agent on board rows
+Context: The desktop board needs an agent on each row, but resolving it depends on goal, standalone run and runtime phase state.
+Decision: Resolve the display agent in the runtime projector and rebuild the persisted board model through its existing completeness path. Launches continue to use RunOptions.agentId.
+Reason: SQL cannot reproduce the projector's resolution rules. Keeping launch selection separate prevents a stale board value from choosing an agent.
+
 ## [2026-10-23] Keep incident and recovery decisions in the runtime
 Context: SKILL-435 requires terminal and desktop to present the same saved incident account for goals and standalone phases.
 Decision: Build progress, next action and recovery eligibility once in the runtime work projection. CLI and desktop render it; desktop recovery uses runtime preview and control services.

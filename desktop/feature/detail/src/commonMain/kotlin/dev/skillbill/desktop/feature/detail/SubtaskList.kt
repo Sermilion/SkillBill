@@ -40,7 +40,6 @@ import dev.skillbill.desktop.core.designsystem.list.SubtaskList
 import dev.skillbill.desktop.core.designsystem.list.SubtaskRow
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ShellInput
-import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
@@ -108,15 +107,11 @@ internal fun BoxedFindingRow(
   }
 }
 
-/** Subtask lists longer than this start collapsed. */
-private const val LONG_SUBTASK_LIST = 10
-
 /**
  * HANDOFF 9.2 item 9: the Subtasks index, one focusable box with the subtasks and a final Goal finish row. A row selects its
- * subtask for the inspector; while the details pane is hidden the selected row opens the inspector in place. The dependency and
- * validation lists the inspector reads page in behind it. Goals only.
+ * subtask for the side peek. The dependency and validation lists the inspector reads page in behind it. Goals only.
  */
-internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
+internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
   if (item.kind != WorkKind.Goal) return
   if (item.statusKind() == StatusKind.Planning) {
     val plans = item.planningProgress
@@ -137,27 +132,24 @@ internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state
     "subtasks", "Subtasks",
     count = progress?.let { "${it.done}/${it.total}" } ?: detail.subtasks.size.toString(),
     actions = if (progress == null) null else { { ProgressRing(progress.done, progress.total, showText = false) } },
-    // A long goal starts folded so the sections below stay in reach; the header count and ring still show progress.
-    collapsedByDefault = detail.subtasks.size > LONG_SUBTASK_LIST,
   ) {
-    item(key = "subtask-index") { SubtaskIndex(item, detail, state, onAction, onJump) }
+    item(key = "subtask-index") { SubtaskIndex(item, detail, state, onAction) }
   }
 }
 
 @Composable
-private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
+private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
   val colors = SkillBillTheme.colors
   val shellInput = LocalShellInput.current
   DisposableEffect(shellInput) { onDispose { shellInput.setFocusSource(ShellInput.SUBTASK_LIST_SOURCE, false) } }
-  val inline = !LocalShellLayout.current.showDetailsPane
   val selected = selectedSubtask(item, detail, state.subtaskChoice.key)
-  val expanded = inline && state.subtaskChoice.expanded
   val current = currentSubtask(item, detail)
-  // main.js `revealSub()`: after the reader moves the selection (click, chip, ↑/↓) the selected row scrolls into view, nearest
-  // edge. Only the reader's choice triggers it: the selection a goal opens with, and a default that moves on a refresh (the
-  // blocked or current subtask changed), do not scroll the document.
   val reveal = remember(item.id) { mutableMapOf<SubtaskKey, BringIntoViewRequester>() }
   var revealed by remember(item.id) { mutableStateOf(state.subtaskChoice) }
+  fun selectVisibleRow(key: SubtaskKey) {
+    revealed = SubtaskChoice(key)
+    onAction(DetailAction.SelectSubtask(key))
+  }
   LaunchedEffect(state.subtaskChoice) {
     if (state.subtaskChoice == revealed) return@LaunchedEffect
     revealed = state.subtaskChoice
@@ -189,7 +181,7 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
           title = subtask.name,
           current = isCurrent,
           selected = isSelected,
-          onClick = { onAction(DetailAction.SelectSubtask(key, inline)) },
+          onClick = { selectVisibleRow(key) },
           meta = {
             subtask.commitSha?.let { sha -> ShortId(sha, { onAction(DetailAction.Copy(it)) }, label = "commit") }
             // The design ticks the current subtask's clock only while the run is live.
@@ -200,7 +192,6 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
             }
             if (status == StatusKind.CompletedNoChange) SbLabel("no change")
           },
-          body = if (isSelected && expanded) { { SubtaskInspector(detail, subtask, inline = true, onAction) } } else null,
         )
       }
       PageFooter(DetailList.Subtasks, state, onAction, Modifier.fillMaxWidth().bottomRule(colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp))
@@ -211,13 +202,10 @@ private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, o
         progress = null,
         title = "Goal finish",
         selected = selected == SubtaskKey.GoalFinish,
-        onClick = { onAction(DetailAction.SelectSubtask(SubtaskKey.GoalFinish, inline)) },
+        onClick = { selectVisibleRow(SubtaskKey.GoalFinish) },
         divider = false,
-        // The finish steps (pr, monitor, monitor_fix) always show as chips under the row, as the prototype's Goal finish row does;
-        // the inline inspector adds below them when the pane is hidden.
         body = {
           PhasePipeline(goalFinishSteps(item, detail))
-          if (selected == SubtaskKey.GoalFinish && expanded) GoalFinishInspector(item, detail, onJump)
         },
       )
     }

@@ -12,7 +12,7 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 @SingleIn(WindowScope::class)
 class ShellPanes {
   var specsOpen by mutableStateOf(false)
-  var detailsPaneOpen by mutableStateOf(true)
+  var detailsPaneOpen by mutableStateOf(false)
   var drawerOpen by mutableStateOf(false)
   var shortcutsOpen by mutableStateOf(false)
 
