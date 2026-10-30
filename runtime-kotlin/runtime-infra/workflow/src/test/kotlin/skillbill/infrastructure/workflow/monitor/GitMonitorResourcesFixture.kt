@@ -67,6 +67,7 @@ internal class MonitorRepoFixture(root: Path) {
   ) {
     Files.writeString(inside.resolve(name), content)
     runGit(inside, "add", name)
+    runGit(inside, "config", "commit.gpgsign", "false")
     runGit(inside, "commit", "-m", "add $name")
   }
 
