@@ -25,9 +25,9 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.testPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.wire.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics

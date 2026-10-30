@@ -217,13 +217,13 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
-  fun `runtime-infra host package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-infra:host")
+  fun `runtime-infra host has no exact package cycles`() {
+    assertNoPackageCycles("runtime-infra:host")
   }
 
   @Test
-  fun `runtime-infra contracts package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-infra:contracts")
+  fun `runtime-infra contracts has no exact package cycles`() {
+    assertNoPackageCycles("runtime-infra:contracts")
   }
 
   @Test
@@ -245,13 +245,13 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
-  fun `runtime-infra launcher package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-infra:launcher")
+  fun `runtime-infra launcher has no exact package cycles`() {
+    assertNoPackageCycles("runtime-infra:launcher")
   }
 
   @Test
-  fun `runtime-infra workflow package cycles equal the recorded census`() {
-    assertPackageCyclesMatchBaseline("runtime-infra:workflow")
+  fun `runtime-infra workflow has no exact package cycles`() {
+    assertNoPackageCycles("runtime-infra:workflow")
   }
 
   @Test
@@ -343,7 +343,34 @@ class ApplicationPackageAcyclicityArchitectureTest {
   @Test
   fun `exact package source scan resolves nested and member imports without changing default scan`() {
     assertExactPackageCycleScan()
+    assertRootPackageCycleScan()
     assertAcyclicExactPackageScan()
+  }
+
+  private fun assertRootPackageCycleScan() {
+    val root = Files.createTempDirectory("architecture-root-package-cycle")
+    try {
+      writeFixtureFile(
+        root,
+        "skillbill/synthetic/Root.kt",
+        listOf("package skillbill.synthetic", "import skillbill.synthetic.zeta.Zeta", "class Root"),
+      )
+      writeFixtureFile(
+        root,
+        "skillbill/synthetic/zeta/Zeta.kt",
+        listOf("package skillbill.synthetic.zeta", "import skillbill.synthetic.Root", "class Zeta"),
+      )
+      assertEquals(
+        setOf(ArchitectureScanSupport.PackageCycle(listOf("skillbill.synthetic", "skillbill.synthetic.zeta"))),
+        ArchitectureScanSupport.packageCycles(
+          scanRoot = root.toString(),
+          packagePrefix = "skillbill.synthetic.",
+          granularity = ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC,
+        ),
+      )
+    } finally {
+      root.toFile().deleteRecursively()
+    }
   }
 
   private fun assertExactPackageCycleScan() {
@@ -526,6 +553,29 @@ class ApplicationPackageAcyclicityArchitectureTest {
         }
       }
     assertEquals(emptyList(), violations)
+  }
+
+  private fun assertNoPackageCycles(moduleName: String) {
+    val scanCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == moduleName }
+    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
+    assertEquals(null, scanCase.packageCycleBaseline)
+    assertTrue(
+      ArchitectureScanSupport.scannedPackages(scanCase.mainScanRoot, scanCase.packagePrefix).isNotEmpty(),
+      "The $moduleName scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
+    )
+    val cycles =
+      ArchitectureScanSupport.packageCycles(
+        scanRoot = scanCase.mainScanRoot,
+        packagePrefix = scanCase.packagePrefix,
+        granularity = scanCase.packageCycleGranularity,
+      )
+    assertEquals(
+      emptySet(),
+      cycles,
+      cycles.joinToString("\n") { cycle -> "Package cycle: ${cycle.areas.joinToString(" <-> ")}" },
+    )
   }
 
   private fun assertPackageCyclesMatchBaseline(moduleName: String) {

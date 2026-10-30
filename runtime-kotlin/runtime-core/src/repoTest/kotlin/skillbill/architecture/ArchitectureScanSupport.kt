@@ -792,7 +792,7 @@ object ArchitectureScanSupport {
     sourceFiles.forEach { sourceFile ->
       val source = sourceFile.readText()
       val packageName = declaredPackage(source) ?: return@forEach
-      if (!packageName.startsWith(packagePrefix)) return@forEach
+      if (!isScannedPackage(packageName, packagePrefix, granularity)) return@forEach
       val sourceNode =
         when (granularity) {
           PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR ->
@@ -818,6 +818,24 @@ object ArchitectureScanSupport {
     }
     return edges.mapValues { (_, value) -> value.toSet() }
   }
+
+  fun scannedPackages(
+    scanRoot: String,
+    packagePrefix: String,
+    granularity: PackageCycleGranularity = PackageCycleGranularity.EXACT_PACKAGE_SCC,
+  ): Set<String> =
+    kotlinFilesUnder(runtimeRoot.resolve(scanRoot))
+      .mapNotNull { sourceFile -> declaredPackage(sourceFile.readText()) }
+      .filter { packageName -> isScannedPackage(packageName, packagePrefix, granularity) }
+      .toSet()
+
+  private fun isScannedPackage(
+    packageName: String,
+    packagePrefix: String,
+    granularity: PackageCycleGranularity,
+  ): Boolean =
+    packageName.startsWith(packagePrefix) ||
+      (granularity == PackageCycleGranularity.EXACT_PACKAGE_SCC && packageName == packagePrefix.removeSuffix("."))
 
   fun modelPackageImportViolations(
     scanRoot: String,

@@ -2,7 +2,7 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.wire.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import kotlin.test.Test

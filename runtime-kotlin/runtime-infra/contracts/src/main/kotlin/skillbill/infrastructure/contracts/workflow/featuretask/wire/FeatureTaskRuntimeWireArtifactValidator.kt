@@ -1,7 +1,8 @@
-package skillbill.infrastructure.contracts
+package skillbill.infrastructure.contracts.workflow.featuretask.wire
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.infrastructure.contracts.requireFeatureTaskRuntimeArtifactMap
 import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairAuxiliarySchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeBuildReceiptSchemaValidator

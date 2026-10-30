@@ -1,8 +1,6 @@
 package skillbill.infrastructure.host.process
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.host.currentProcessIdentity
-import skillbill.infrastructure.host.inspectRecordedProcess
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.system.HostPlatformPort

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.assertThrows
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
-import skillbill.infrastructure.launcher.process.waitloop.writeAndCloseStdin
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream

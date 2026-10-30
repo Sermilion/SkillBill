@@ -1,4 +1,4 @@
-package skillbill.infrastructure.launcher.process.waitloop
+package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
 import skillbill.workflow.model.goalobservability.GoalProgressEvent

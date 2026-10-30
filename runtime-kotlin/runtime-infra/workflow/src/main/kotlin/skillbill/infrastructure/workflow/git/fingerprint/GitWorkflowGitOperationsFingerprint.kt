@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git
+package skillbill.infrastructure.workflow.git.fingerprint
 
 import skillbill.infrastructure.contracts.newSha256Digest
 import skillbill.infrastructure.host.jvm.requirePathContainedIn

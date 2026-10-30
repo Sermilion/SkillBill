@@ -34,11 +34,24 @@ object PrincipleEnforcementInventory {
       "runtime-engine",
       "runtime-infra:skills",
       "runtime-infra:sqlite",
+      "runtime-infra:contracts",
+      "runtime-infra:host",
+      "runtime-infra:workflow",
+      "runtime-infra:launcher",
       "runtime-ports",
     )
 
   private val BASELINE_FREE_PACKAGE_CYCLE_MODULES =
-    setOf("runtime-application", "runtime-infra:skills", "runtime-infra:sqlite", "runtime-ports")
+    setOf(
+      "runtime-application",
+      "runtime-infra:skills",
+      "runtime-infra:sqlite",
+      "runtime-infra:contracts",
+      "runtime-infra:host",
+      "runtime-infra:workflow",
+      "runtime-infra:launcher",
+      "runtime-ports",
+    )
 
   val moduleArchitectureScanCases: List<ModuleArchitectureScanCase> =
     RuntimeModuleCatalog.declaredGradleModules

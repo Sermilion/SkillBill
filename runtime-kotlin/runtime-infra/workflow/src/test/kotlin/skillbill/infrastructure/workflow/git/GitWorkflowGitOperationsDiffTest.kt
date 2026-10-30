@@ -1,5 +1,7 @@
 package skillbill.infrastructure.workflow.git
 
+import skillbill.infrastructure.workflow.git.fingerprint.parseDiffStat
+import skillbill.infrastructure.workflow.git.fingerprint.parseNumstatEntries
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat

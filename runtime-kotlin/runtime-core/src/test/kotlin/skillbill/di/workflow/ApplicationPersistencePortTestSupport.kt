@@ -156,7 +156,7 @@ import java.time.Clock
 import kotlin.test.assertEquals
 import java.lang.Double.TYPE as DoubleTYPE
 import java.lang.Long.TYPE as LongTYPE
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.wire.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 internal fun <T> noopPort(type: Class<T>): T {
   @Suppress("UNCHECKED_CAST")

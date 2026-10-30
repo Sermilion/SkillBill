@@ -1,10 +1,8 @@
-package skillbill.infrastructure.launcher.process.waitloop
+package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.idestatus.model.AgentActivityLabel
-import skillbill.infrastructure.launcher.process.launch.AgentRunIdleSignals
-import skillbill.infrastructure.launcher.process.launch.PROGRESS_POLL_INTERVAL_MILLIS
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 

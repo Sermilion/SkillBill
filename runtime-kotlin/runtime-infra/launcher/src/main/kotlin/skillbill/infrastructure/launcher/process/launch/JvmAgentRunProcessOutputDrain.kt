@@ -1,8 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.infrastructure.launcher.process.support.newLauncherSha256Digest
-import skillbill.infrastructure.launcher.process.waitloop.ProcessWait
-import skillbill.infrastructure.launcher.process.waitloop.decodeAvailable
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
@@ -10,6 +8,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
+import java.nio.charset.CoderResult
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.time.Clock
@@ -199,6 +198,23 @@ internal class Utf8Drain(
   fun totalByteSize(): Long = capture().totalByteSize
 
   fun contentDigest(): String = capture().sha256
+}
+
+internal fun Utf8Drain.decodeAvailable(
+  decoded: CharBuffer,
+  decode: () -> CoderResult,
+) {
+  while (true) {
+    val result = decode()
+    decoded.flip()
+    if (decoded.hasRemaining()) {
+      val chunk = decoded.toString()
+      onChunkRead(chunk)
+      outputSink.write(outputStream, chunk)
+    }
+    decoded.clear()
+    if (!result.isOverflow) return
+  }
 }
 
 internal class OutputObservationTracker(

@@ -4,11 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.infrastructure.host.jvm.GateJvmResolver
-import skillbill.infrastructure.launcher.process.waitloop.ProcessLifecycleEmitter
-import skillbill.infrastructure.launcher.process.waitloop.ProcessWait
-import skillbill.infrastructure.launcher.process.waitloop.ProcessWaitLoop
-import skillbill.infrastructure.launcher.process.waitloop.readStartupObserved
-import skillbill.infrastructure.launcher.process.waitloop.writeAndCloseStdin
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -17,9 +12,12 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration.between
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
+import kotlin.time.Duration
+import kotlin.time.toKotlinDuration
 
 @Inject
 class JvmAgentRunProcessRunner(
@@ -397,3 +395,36 @@ class JvmAgentRunProcessRunner(
     }
   }
 }
+
+internal fun runAgentRunContinuations(
+  request: AgentRunProcessRequest,
+  clock: Clock,
+  run: (AgentRunProcessRequest) -> AgentRunProcessResult,
+): AgentRunProcessResult {
+  val startedAt = clock.instant()
+  var current = request
+  while (true) {
+    val result = run(current)
+    if (!result.canContinue()) return result
+    val next = request.launch.continuation?.invoke(result) ?: return result
+    val elapsed = between(startedAt, clock.instant()).toKotlinDuration().coerceAtLeast(Duration.ZERO)
+    val timeout = request.timing.timeout?.minus(elapsed)
+    val deadline = request.timing.operationDeadline?.minus(elapsed)
+    if (timeout?.isPositive() == false || deadline?.isPositive() == false) {
+      return result.copy(exitStatus = null, timedOut = true)
+    }
+    current =
+      request.copy(
+        launch = next.copy(outputSink = request.launch.outputSink, continuation = request.launch.continuation),
+        timing = request.timing.copy(timeout = timeout, operationDeadline = deadline),
+      )
+  }
+}
+
+private fun AgentRunProcessResult.canContinue(): Boolean =
+  when {
+    timedOut || interrupted -> false
+    spawnFailed || spawnDenied != null -> false
+    outputCaptureIncomplete || stdoutTruncated -> false
+    else -> exitStatus != null && exitStatus != 0
+  }
