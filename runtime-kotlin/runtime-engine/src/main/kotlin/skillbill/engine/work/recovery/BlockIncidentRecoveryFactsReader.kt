@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.incident.recovery
+package skillbill.engine.work.recovery
 
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity

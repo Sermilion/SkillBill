@@ -3,8 +3,8 @@ package skillbill.engine.work
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.block.BlockIncidentLiveReferenceResolution
 import skillbill.engine.diagnostics.block.BlockIncidentLiveReferenceResolver
-import skillbill.engine.featuretask.incident.recovery.BlockIncidentProjectionAssessment
-import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryService
+import skillbill.engine.work.recovery.BlockIncidentProjectionAssessment
+import skillbill.engine.work.recovery.BlockIncidentRecoveryService
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.WorkIncidentEvidence

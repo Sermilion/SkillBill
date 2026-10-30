@@ -1,9 +1,10 @@
-package skillbill.engine.featuretask.incident.recovery
+package skillbill.engine.work.recovery
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
+import skillbill.engine.featuretask.incident.recovery.recordBlockIncidentRecoveryOutcome
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.status.releaseExecutionLeaseIfExpired

@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.incident.recovery
+package skillbill.engine.work.recovery
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery

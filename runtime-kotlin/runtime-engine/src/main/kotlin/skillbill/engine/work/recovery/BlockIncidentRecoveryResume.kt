@@ -1,6 +1,7 @@
-package skillbill.engine.featuretask.incident.recovery
+package skillbill.engine.work.recovery
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.incident.recovery.recordBlockIncidentRecoveryOutcome
 import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult

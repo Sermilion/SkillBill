@@ -2,8 +2,6 @@ package skillbill.engine.work.control
 
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryActions
-import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryService
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
@@ -21,6 +19,8 @@ import skillbill.engine.work.goalManifestState
 import skillbill.engine.work.ideStatusClock
 import skillbill.engine.work.ideStatusObservedAt
 import skillbill.engine.work.ideStatusService
+import skillbill.engine.work.recovery.BlockIncidentRecoveryActions
+import skillbill.engine.work.recovery.BlockIncidentRecoveryService
 import skillbill.engine.work.testGoalRepositoryIdentity
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GoalRunnerControlState

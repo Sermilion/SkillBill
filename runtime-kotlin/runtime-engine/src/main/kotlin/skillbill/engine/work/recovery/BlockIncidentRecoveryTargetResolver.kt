@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.incident.recovery
+package skillbill.engine.work.recovery
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.block.BlockIncidentAcceptedReferenceResolver
