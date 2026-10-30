@@ -9,8 +9,8 @@ import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.slot.PhaseStepSession
-import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
+import skillbill.engine.featuretask.slot.codereview.InlineReviewLanesSection
 import skillbill.engine.featuretask.slot.codereview.InlineReviewResultDecoder
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
 import skillbill.engine.operation.core.OperationContext
@@ -30,7 +30,7 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 interface VerifyDelegatedReviewer {
   fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome
 
-  fun qualityRubric(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
+  fun inlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
 }
 
 @Inject
@@ -39,8 +39,8 @@ class ParallelVerifyReviewer(
 ) : VerifyDelegatedReviewer {
   override fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome = reviewRunner.run(request)
 
-  override fun qualityRubric(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
-    reviewRunner.resolveInlineCodeQualityRubric(request)
+  override fun inlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
+    reviewRunner.resolveInlineReviewRubrics(request)
 }
 
 internal enum class VerifyReviewMode(val wireValue: String) {
@@ -74,9 +74,9 @@ internal class VerifyCodeReviewStep(
     val agentId = context.invokedAgentId.orEmpty()
     val input = GoalSubtaskReviewInput(baseRevision, headRevision, trackedDelta = "", ownedUntrackedPatches = "")
     val request = delegatedReviewRequest(agentId, context.repoRoot, context.projectStoreRoot, target, input)
-    val qualityRubric =
+    val laneRubrics =
       if (mode == VerifyReviewMode.INLINE) {
-        when (val prepared = delegatedReviewer.qualityRubric(request)) {
+        when (val prepared = delegatedReviewer.inlineReviewRubrics(request)) {
           is ParallelCodeReviewPlanned.Failed -> return VerifyCodeReviewOutcome.Failed(prepared.failure.message)
           is ParallelCodeReviewPlanned.Ready -> prepared.value
         }
@@ -86,10 +86,10 @@ internal class VerifyCodeReviewStep(
     val directive =
       buildString {
         append(VerifyPromptSections.codeReviewDirective(baseRevision, headRevision, target))
-        qualityRubric?.let {
+        laneRubrics?.let {
           appendLine()
           appendLine()
-          append(CodeQualityLaneSection.render(it))
+          append(InlineReviewLanesSection.render(it))
         }
       }
     var delegated: ParallelCodeReviewRunOutcome? = null

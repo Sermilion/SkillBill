@@ -73,6 +73,15 @@ class ParallelCodeReviewRunnerPlanning(
 
   internal fun resolveInlineCodeQualityRubrics(
     request: ParallelCodeReviewRequest,
+  ): ParallelCodeReviewPlanned<List<PlannedReviewRubric>> = resolveInlinePlannedRubrics(request, qualityOnly = true)
+
+  internal fun resolveInlineReviewRubrics(
+    request: ParallelCodeReviewRequest,
+  ): ParallelCodeReviewPlanned<List<PlannedReviewRubric>> = resolveInlinePlannedRubrics(request, qualityOnly = false)
+
+  private fun resolveInlinePlannedRubrics(
+    request: ParallelCodeReviewRequest,
+    qualityOnly: Boolean,
   ): ParallelCodeReviewPlanned<List<PlannedReviewRubric>> {
     val revisions =
       when (val resolved = resolveReviewRevisions(request)) {
@@ -84,10 +93,13 @@ class ParallelCodeReviewRunnerPlanning(
         is DiffResolution.Unresolved -> return resolved.toPlanningFailed()
         is DiffResolution.Resolved -> resolved.value
       }
-    return if (diff.isBlank()) ParallelCodeReviewPlanned.Ready(emptyList()) else resolveInlineCodeQualityRubrics(diff)
+    return if (diff.isBlank()) ParallelCodeReviewPlanned.Ready(emptyList()) else plannedRubrics(diff, qualityOnly)
   }
 
-  private fun resolveInlineCodeQualityRubrics(diff: String): ParallelCodeReviewPlanned<List<PlannedReviewRubric>> {
+  private fun plannedRubrics(
+    diff: String,
+    qualityOnly: Boolean,
+  ): ParallelCodeReviewPlanned<List<PlannedReviewRubric>> {
     val evidence =
       when (val parsed = ReviewDiffEvidence.parseOrRejection(diff)) {
         is ReviewDiffEvidenceParseResult.Parsed -> parsed.evidence
@@ -99,12 +111,9 @@ class ParallelCodeReviewRunnerPlanning(
         is ParallelCodeReviewPlanned.Failed -> return detected
         is ParallelCodeReviewPlanned.Ready -> detected.value
       }
+    val planned = rubricPlanning.resolvePlannedRubrics(evidence, detection, qualityOnly = qualityOnly)
     return ParallelCodeReviewPlanned.Ready(
-      rubricPlanning.resolvePlannedRubrics(
-        evidence,
-        detection,
-        qualityOnly = true,
-      ).filter { it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS },
+      if (qualityOnly) planned.filter { it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS } else planned,
     )
   }
 

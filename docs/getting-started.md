@@ -176,7 +176,7 @@ Choose standalone review execution explicitly with:
 /skill-bill phase:review mode:delegated
 ```
 
-Review mode is `mode:inline|delegated`; omission means inline, the default reduced-depth review in one review session, and `mode:auto` is still accepted as inline. `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `phase:review`. Feature workflows review inline (`/skill-bill <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
+Review mode is `mode:inline|delegated`; omission means inline, the default reduced-depth review in one review session that merges the selected lanes' rubrics into one prompt, and `mode:auto` is still accepted as inline. `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `phase:review`. Feature workflows review inline (`/skill-bill <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
 
 ## Runtime Fallback Boundary
 

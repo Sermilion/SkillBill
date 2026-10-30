@@ -43,8 +43,8 @@ class InlineReviewStrategy private constructor(
   PhaseVerdictCapability by codeReview {
   constructor(
     runner: PhaseRunner,
-    qualityRubricResolver: InlineCodeQualityRubricResolver? = null,
-  ) : this(runner, CodeReviewSlot(runner, InlineReviewPass(qualityRubricResolver)))
+    rubricResolver: InlineReviewRubricResolver? = null,
+  ) : this(runner, CodeReviewSlot(runner, InlineReviewPass(rubricResolver)))
 
   override val slot: PhaseSlot = PhaseSlot.CODE_REVIEW
   override val strategyId: String = ID
@@ -71,7 +71,7 @@ class InlineReviewStrategy private constructor(
 }
 
 internal class InlineReviewPass(
-  private val qualityRubricResolver: InlineCodeQualityRubricResolver?,
+  private val rubricResolver: InlineReviewRubricResolver?,
 ) : CodeReviewPass {
   override val policy =
     PhaseStepPolicy(
@@ -96,8 +96,8 @@ internal class InlineReviewPass(
     runner: PhaseRunner,
     state: PhaseReviewStepBinding,
   ): ParallelCodeReviewRunOutcome {
-    val qualityRubric =
-      qualityRubricResolver.resolveInlineRubric(
+    val laneRubrics =
+      rubricResolver.resolveInlineRubrics(
         delegatedReviewRequest(
           run.resolvedAgent.resolvedAgentId,
           run.request.repoRoot,
@@ -113,7 +113,7 @@ internal class InlineReviewPass(
         revisions = input.reviewBaseSha to input.currentHeadSha,
         specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
-        qualityRubric = qualityRubric,
+        laneRubrics = laneRubrics,
       )
     val supplement = state.modelDirectiveSupplements.directiveFor(run, state.acceptedOwner)
     val directive = if (supplement == null) composed else "$composed\n\n$supplement"
@@ -131,7 +131,7 @@ object InlineReviewDirective {
     revisions: Pair<String, String>,
     specPath: Path?,
     agentAddonsSection: String,
-    qualityRubric: String? = null,
+    laneRubrics: String? = null,
   ): String {
     val (baseRevision, headRevision) = revisions
     val prompt =
@@ -163,9 +163,9 @@ object InlineReviewDirective {
         append(CodeReviewDirectives.review)
         appendLine()
         append(CodeReviewDirectives.inlineReview)
-        qualityRubric?.let {
+        laneRubrics?.let {
           appendLine()
-          append(CodeQualityLaneSection.render(it))
+          append(InlineReviewLanesSection.render(it))
         }
         appendLine()
         appendLine(

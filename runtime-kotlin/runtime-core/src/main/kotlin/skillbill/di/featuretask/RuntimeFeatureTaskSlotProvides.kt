@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategyRegistration
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.engine.featuretask.slot.PhaseStrategySelection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
+import skillbill.engine.featuretask.slot.codereview.InlineReviewRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
@@ -98,7 +98,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
     pullRequest: PullRequestPhaseStrategies,
     qa: QaStrategy,
   ): PhaseStrategyRegistry {
-    val inlineRubricResolver = InlineCodeQualityRubricResolver(reviewRunner::resolveInlineCodeQualityRubric)
+    val inlineRubricResolver = InlineReviewRubricResolver(reviewRunner::resolveInlineReviewRubrics)
     return PhaseStrategyRegistry(
       listOf(
         planning.intake,

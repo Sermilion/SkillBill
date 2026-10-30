@@ -7,7 +7,7 @@ import skillbill.engine.featuretask.qa.report.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.qa.report.QaReportSettlement
 import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
+import skillbill.engine.featuretask.slot.codereview.InlineReviewRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.goalassessment.GoalAssessmentFixStrategy
@@ -90,7 +90,7 @@ fun testPhaseStrategies(
   qaReports: QaReportSettlement = unavailableQaReportSettlement(),
   qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
   qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
-  inlineRubricResolver: InlineCodeQualityRubricResolver? = null,
+  inlineRubricResolver: InlineReviewRubricResolver? = null,
   phaseInstructionSource: PhaseInstructionFileSource? = null,
 ): PhaseStrategyLookup {
   val runner = DefaultPhaseRunner(launcher, gitOperations)

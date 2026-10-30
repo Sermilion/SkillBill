@@ -83,7 +83,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
-import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
+import skillbill.engine.featuretask.slot.codereview.InlineReviewRubricResolver
 import skillbill.engine.featuretask.slot.harnessPendingVerifyFindingIds
 import skillbill.engine.featuretask.slot.harnessReviewRunnerSyncingPendingVerifyFindings
 import skillbill.engine.featuretask.slot.implementationCheckOutput
@@ -732,7 +732,7 @@ internal data class RuntimeHarnessConfig(
   val diagnostics: RuntimeDiagnostics? = null,
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
-  val inlineRubricResolver: InlineCodeQualityRubricResolver? = null,
+  val inlineRubricResolver: InlineReviewRubricResolver? = null,
   val gitOperationsOverride: WorkflowGitOperations? = null,
   val monitoredPullRequestLookup: PullRequestIdentityLookup =
     OpenPullRequestIdentityLookup(gitOperationsOverride ?: branchSetup.gitOperations),

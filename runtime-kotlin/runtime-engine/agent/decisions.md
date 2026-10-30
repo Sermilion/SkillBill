@@ -1,3 +1,9 @@
+## [2026-10-30] Inline review selects lanes and merges their rubrics into one prompt
+Context: SKILL-439 left inline review with the generic directive plus only the code-quality rubric. Lane selection ran only for delegated review, so inline reviews carried no area rubrics and often returned code-quality findings alone.
+Decision: Inline review resolves lanes with the delegated planner (`qualityOnly = false`: required lanes, optional lanes whose diff signals match changed paths, and the code-quality lane) and appends every selected rubric under "## Selected review lanes" in the single prompt. The standalone, full-run and verify inline paths share `InlineReviewRubricResolver` and `InlineReviewLanesSection`. Delegated standalone review keeps its quality-only rubric section.
+Reason: Inline should cover the same lanes as delegated at reduced depth, with one session and no subagent per lane. A planning failure still warns and runs the review without lanes, as SKILL-439 decided.
+Alternatives considered: Sending every declared area's rubric regardless of the diff, rejected because it bloats the prompt with lanes delegated review would never launch.
+
 ## [2026-10-25] Goal subtasks fill one detail page and anchored detail cursors ignore store writes
 Context: The desktop detail pane paged goal subtasks at 10, and its Load more cursor was refused with "Work changed. Refresh the detail." whenever the store revision moved. A live goal writes the store about once a second, so the second page of a 16-subtask goal never loaded.
 Decision: IdeStatusService.detail reads a goal's subtask list with goalSubtaskPageLimit, which is the page-size cap (100) whatever page size was requested; completed-subtask validation keeps the requested size. A detail cursor only requires an unchanged store observation when its position has no row anchor.

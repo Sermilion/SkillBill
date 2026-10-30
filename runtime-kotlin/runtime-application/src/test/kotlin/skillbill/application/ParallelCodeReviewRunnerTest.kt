@@ -771,6 +771,32 @@ class ParallelCodeReviewSuppliedDiffTest {
   }
 
   @Test
+  fun `inline review rubrics carry every lane the diff selects and leave unmatched optional lanes out`() {
+    val pack =
+      sparseReviewPack(
+        slug = "kotlin",
+        requiredArea = "code-quality",
+        pathAreas = mapOf("architecture" to listOf("src/"), "testing" to listOf("src/test/")),
+      )
+    val recorder = ReviewRecorder()
+    val runner =
+      reviewHarness(
+        ReviewHarnessConfig(listOf(pack), diff = diffForChanges("src/Main.kt" to "fun main() = Unit")),
+        recorder,
+      )
+
+    val rendered =
+      assertIs<ParallelCodeReviewPlanned.Ready<String?>>(
+        runner.resolveInlineReviewRubrics(harnessRequest(codeReviewMode = CodeReviewExecutionMode.INLINE)),
+      ).value.orEmpty()
+
+    assertTrue("Selected specialist: bill-kotlin-code-review-code-quality" in rendered, rendered)
+    assertTrue("Selected specialist: bill-kotlin-code-review-architecture" in rendered, rendered)
+    assertFalse("bill-kotlin-code-review-testing" in rendered, rendered)
+    assertTrue(recorder.parentLaunches.isEmpty())
+  }
+
+  @Test
   fun `a huge changed file leaves the sibling required lane selected and the parent composed`() {
     val pack =
       sparseReviewPack(

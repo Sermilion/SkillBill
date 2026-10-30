@@ -182,7 +182,7 @@ internal class VerifyOperationHarness : AutoCloseable {
             )
           }
 
-          override fun qualityRubric(request: ParallelCodeReviewRequest) =
+          override fun inlineReviewRubrics(request: ParallelCodeReviewRequest) =
             ParallelCodeReviewPlanned.Ready(inlineQualityRubric)
         },
         NoopRuntimeDiagnostics,

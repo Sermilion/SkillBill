@@ -27,12 +27,12 @@ import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.ReviewBindingFamily
-import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
-import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
+import skillbill.engine.featuretask.slot.codereview.InlineReviewLanesSection
+import skillbill.engine.featuretask.slot.codereview.InlineReviewRubricResolver
 import skillbill.engine.featuretask.slot.codereview.ReviewTargetResolver
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
-import skillbill.engine.featuretask.slot.codereview.resolveInlineRubric
+import skillbill.engine.featuretask.slot.codereview.resolveInlineRubrics
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -61,8 +61,8 @@ import kotlin.time.Duration.Companion.minutes
 
 open class InlineStandaloneReviewStrategy(
   runner: PhaseRunner,
-  qualityRubricResolver: InlineCodeQualityRubricResolver? = null,
-) : StandaloneReviewStrategy(runner, null, qualityRubricResolver) {
+  rubricResolver: InlineReviewRubricResolver? = null,
+) : StandaloneReviewStrategy(runner, null, rubricResolver) {
   override val strategyId: String = ID
 
   companion object {
@@ -84,8 +84,8 @@ open class DelegatedStandaloneReviewStrategy(
 abstract class StandaloneReviewStrategy(
   internal val runner: PhaseRunner,
   private val reviewRunner: ParallelCodeReviewRunner?,
-  private val qualityRubricResolver: InlineCodeQualityRubricResolver? =
-    reviewRunner?.let { InlineCodeQualityRubricResolver(it::resolveInlineCodeQualityRubric) },
+  private val rubricResolver: InlineReviewRubricResolver? =
+    reviewRunner?.let { InlineReviewRubricResolver(it::resolveInlineCodeQualityRubric) },
 ) : PhaseStrategy() {
   override val slot: PhaseSlot = PhaseSlot.STANDALONE_REVIEW
   override val steps: List<String> = listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS)
@@ -156,18 +156,18 @@ abstract class StandaloneReviewStrategy(
         target,
         reviewInput,
       )
-    val qualitySection =
+    val rubricSection =
       if (reviewRunner == null) {
-        qualityRubricResolver.resolveInlineRubric(rubricRequest, context.diagnostics)
-          ?.let(CodeQualityLaneSection::render)
+        rubricResolver.resolveInlineRubrics(rubricRequest, context.diagnostics)
+          ?.let(InlineReviewLanesSection::render)
       } else {
-        when (val resolved = qualityRubricResolver?.resolve(rubricRequest)) {
+        when (val resolved = rubricResolver?.resolve(rubricRequest)) {
           null -> null
           is ParallelCodeReviewPlanned.Failed -> return block(binding, iteration, resolved.failure.message)
           is ParallelCodeReviewPlanned.Ready -> resolved.value?.let(::delegatedQualityRubricSection)
         }
       }
-    val directive = standaloneDirective(run, binding, target, headSha, qualitySection)
+    val directive = standaloneDirective(run, binding, target, headSha, rubricSection)
     return runPreparedReview(
       run,
       binding,
@@ -319,7 +319,7 @@ abstract class StandaloneReviewStrategy(
     binding: PhaseReviewStepBinding,
     target: ReviewTarget,
     head: String,
-    qualitySection: String?,
+    rubricSection: String?,
   ): String =
     buildString {
       target.openingLines("$head^", head).forEach(::appendLine)
@@ -332,7 +332,7 @@ abstract class StandaloneReviewStrategy(
           "or launch another review command.",
       )
       appendLine("A changes_requested verdict is a valid completed report. The runtime will not repair findings.")
-      qualitySection?.let {
+      rubricSection?.let {
         appendLine()
         append(it)
       }
@@ -349,7 +349,7 @@ abstract class StandaloneReviewStrategy(
 
   private fun delegatedQualityRubricSection(rubric: String): String =
     buildString {
-      appendLine(CodeQualityLaneSection.HEADING)
+      appendLine(DELEGATED_QUALITY_RUBRIC_HEADING)
       appendLine("Use this complete owner rubric and attribute its findings with the exact specialist identity.")
       appendLine(rubric)
     }
@@ -532,6 +532,7 @@ private data class StandaloneReviewLaunchInput(
   val directive: String,
 )
 
+private const val DELEGATED_QUALITY_RUBRIC_HEADING = "## Selected local code-quality rubric"
 private const val MAX_FAILURE_DIAGNOSTICS = 5
 private const val MAX_FAILURE_DIAGNOSTIC_CHARS = 200
 private const val MAX_REPORT_SUMMARY_CHARS = 2000

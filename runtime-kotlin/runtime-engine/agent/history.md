@@ -1,3 +1,10 @@
+## [2026-10-30] Inline review merges the selected lanes into one prompt
+Areas: runtime-application review/parallel planning and runner; runtime-engine slot/codereview, slot/standalonereview, operation/verify; runtime-core di/featuretask
+- `ParallelCodeReviewRunner.resolveInlineReviewRubrics` returns every lane the delegated planner selects for the diff, rendered as "Selected specialist: <id>", the changed paths and the rubric body. `resolveInlineCodeQualityRubric` remains for the delegated standalone quality section. reusable
+- `InlineCodeQualityRubricResolver` became `InlineReviewRubricResolver` and `CodeQualityLaneSection` became `InlineReviewLanesSection` ("## Selected review lanes"). The section keeps the SKILL-439 framing and asks the agent to name the selected lanes in its summary.
+- Limits: inline runs still record no `review_run_lanes` rows; the selected lanes appear only in the prompt and the agent's summary.
+Feature flag: N/A
+
 ## [2026-10-24] SKILL-444 subtask 3: runtime spec-browser read model
 Areas: runtime-engine specbrowser (+model); runtime-ports projectstore (ProjectCatalogPort, ProjectCatalogEntry); runtime-infra host ProjectStoreResolver; runtime-core RuntimeComponent and PrincipleEnforcementInventory
 - SpecBrowserService (@RuntimeSingleton) exposes projects(), projectFor(repoRoot), snapshot(projectId, preferredRepoRoot) and control(projectId, bundlePath, preferredRepoRoot); RuntimeComponent has a specBrowserService accessor for the desktop. reusable

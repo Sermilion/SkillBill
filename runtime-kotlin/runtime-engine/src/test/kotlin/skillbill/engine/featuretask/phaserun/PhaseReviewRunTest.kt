@@ -26,10 +26,10 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
-import skillbill.engine.featuretask.slot.codereview.CodeQualityLaneSection
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_REVIEWED_PATH
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_SPECIALIST_ISSUE_KEY
-import skillbill.engine.featuretask.slot.codereview.InlineCodeQualityRubricResolver
+import skillbill.engine.featuretask.slot.codereview.InlineReviewLanesSection
+import skillbill.engine.featuretask.slot.codereview.InlineReviewRubricResolver
 import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.reviewStepOutput
@@ -168,15 +168,15 @@ class PhaseReviewRunTest {
   }
 
   @Test
-  fun `standalone inline review adds the code-quality lane without altering the rest of the prompt`() {
+  fun `standalone inline review adds the selected lanes without altering the rest of the prompt`() {
     val rubric = "Prefer cohesive helpers.\nIgnore: security defects belong to the security specialist."
-    val baseline = standaloneInlineDirective(InlineCodeQualityRubricResolver { ParallelCodeReviewPlanned.Ready(null) })
-    val laned = standaloneInlineDirective(InlineCodeQualityRubricResolver { ParallelCodeReviewPlanned.Ready(rubric) })
+    val baseline = standaloneInlineDirective(InlineReviewRubricResolver { ParallelCodeReviewPlanned.Ready(null) })
+    val laned = standaloneInlineDirective(InlineReviewRubricResolver { ParallelCodeReviewPlanned.Ready(rubric) })
 
-    val section = CodeQualityLaneSection.render(rubric)
+    val section = InlineReviewLanesSection.render(rubric)
     assertEquals(baseline, laned.replace("\n$section", ""))
     assertTrue(rubric in laned)
-    assertTrue("adds a code-quality lane" in section && "responsible for every review area" in section)
+    assertTrue("do not replace or narrow it" in section && "responsible for every review area" in section)
     assertTrue("apply only to delegated review" in section)
   }
 
@@ -185,13 +185,13 @@ class PhaseReviewRunTest {
     val diagnostics = RecordingDiagnostics()
     val directive =
       standaloneInlineDirective(
-        InlineCodeQualityRubricResolver {
+        InlineReviewRubricResolver {
           ParallelCodeReviewPlanned.Failed(ParallelCodeReviewPlanningFailure.DiffUnresolved(RUBRIC_FAILURE))
         },
         diagnostics,
       )
 
-    assertFalse(CodeQualityLaneSection.HEADING in directive)
+    assertFalse(InlineReviewLanesSection.HEADING in directive)
     assertTrue(diagnostics.warnings.single().contains(RUBRIC_FAILURE), diagnostics.warnings.toString())
   }
 
@@ -209,7 +209,7 @@ class PhaseReviewRunTest {
             reviewRunner = directiveRecordingReviewRunner(directives),
             diagnostics = diagnostics,
             inlineRubricResolver =
-              InlineCodeQualityRubricResolver {
+              InlineReviewRubricResolver {
                 ParallelCodeReviewPlanned.Failed(ParallelCodeReviewPlanningFailure.DiffUnresolved(RUBRIC_FAILURE))
               },
           ),
@@ -220,7 +220,7 @@ class PhaseReviewRunTest {
 
     val reviews = directives.filter { "Fix every Blocker and Major finding" in it }
     assertTrue(reviews.isNotEmpty(), "the full-run review must still launch")
-    assertTrue(reviews.none { CodeQualityLaneSection.HEADING in it })
+    assertTrue(reviews.none { InlineReviewLanesSection.HEADING in it })
     assertTrue(diagnostics.warnings.any { RUBRIC_FAILURE in it }, diagnostics.warnings.toString())
   }
 
@@ -370,7 +370,7 @@ class PhaseReviewRunTest {
     )
 
   private fun standaloneInlineDirective(
-    resolver: InlineCodeQualityRubricResolver,
+    resolver: InlineReviewRubricResolver,
     diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   ): String {
     val directives = mutableListOf<String>()

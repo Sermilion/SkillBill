@@ -9,32 +9,37 @@ import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
-/** Resolves the local code-quality rubric an inline review adds as its extra lane. */
-fun interface InlineCodeQualityRubricResolver {
+/** Resolves the specialist rubrics an inline review merges into its single prompt. */
+fun interface InlineReviewRubricResolver {
   fun resolve(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
 }
 
-internal object CodeQualityLaneSection {
-  const val HEADING = "## Selected local code-quality rubric"
+internal object InlineReviewLanesSection {
+  const val HEADING = "## Selected review lanes"
 
-  fun render(rubric: String): String =
+  fun render(rubrics: String): String =
     buildString {
       appendLine(HEADING)
-      appendLine("This section adds a code-quality lane to this review. It does not replace or narrow the review.")
+      appendLine(
+        "The runtime selected these specialist lanes for the changed paths, the same lanes a delegated review " +
+          "would launch. Apply every rubric below in this single review. Do not launch subagents.",
+      )
+      appendLine("The lanes add depth to this review. They do not replace or narrow it.")
       appendLine(
         "You remain responsible for every review area, including correctness, security, persistence, " +
-          "reliability, and accessibility.",
+          "reliability, and accessibility, whether or not a lane below covers it.",
       )
       appendLine(
-        "Routing or Ignore lines in the rubric below that hand defects to other lanes or specialists apply only " +
+        "Routing or Ignore lines in a rubric that hand defects to other lanes or specialists apply only " +
           "to delegated review. In this inline review, report those defects yourself.",
       )
-      appendLine("Attribute findings from this rubric with the exact specialist identity.")
-      appendLine(rubric)
+      appendLine("Attribute each finding with the exact specialist identity of the rubric it came from.")
+      appendLine("Name the selected lanes in your summary.")
+      appendLine(rubrics)
     }
 }
 
-internal fun InlineCodeQualityRubricResolver?.resolveInlineRubric(
+internal fun InlineReviewRubricResolver?.resolveInlineRubrics(
   request: ParallelCodeReviewRequest,
   diagnostics: RuntimeDiagnostics,
 ): String? =
@@ -43,7 +48,7 @@ internal fun InlineCodeQualityRubricResolver?.resolveInlineRubric(
     is ParallelCodeReviewPlanned.Ready -> resolved.value
     is ParallelCodeReviewPlanned.Failed -> {
       diagnostics.warning(
-        "code-quality rubric unavailable; running inline review without the code-quality lane: " +
+        "review lane planning failed; running inline review without selected lanes: " +
           resolved.failure.message,
       )
       null

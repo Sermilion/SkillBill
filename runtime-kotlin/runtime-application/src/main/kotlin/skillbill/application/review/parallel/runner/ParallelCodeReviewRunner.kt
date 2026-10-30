@@ -12,6 +12,7 @@ import skillbill.application.review.model.ParallelReviewAnalysisStageFailure
 import skillbill.application.review.model.ReviewClaimVerificationOutcome
 import skillbill.application.review.model.ReviewWorkerKind
 import skillbill.application.review.parallel.planning.ParallelCodeReviewRunnerPlanning
+import skillbill.application.review.parallel.planning.PlannedReviewRubric
 import skillbill.application.review.parallel.planning.hasSuppliedDiff
 import skillbill.application.review.parallel.planning.resolveDiff
 import skillbill.application.review.parallel.planning.resolveReviewRevisions
@@ -48,17 +49,25 @@ class ParallelCodeReviewRunner(
   private val nativeAgentPreflight: ReviewNativeAgentPreflightPort,
 ) {
   fun resolveInlineCodeQualityRubric(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
-    when (val planned = planning.resolveInlineCodeQualityRubrics(request)) {
+    renderedRubrics(planning.resolveInlineCodeQualityRubrics(request)) { "Selected code-quality specialist: $it" }
+
+  fun resolveInlineReviewRubrics(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
+    renderedRubrics(planning.resolveInlineReviewRubrics(request)) { "Selected specialist: $it" }
+
+  private fun renderedRubrics(
+    planned: ParallelCodeReviewPlanned<List<PlannedReviewRubric>>,
+    heading: (String) -> String,
+  ): ParallelCodeReviewPlanned<String?> =
+    when (planned) {
       is ParallelCodeReviewPlanned.Failed -> planned
-      is ParallelCodeReviewPlanned.Ready -> {
+      is ParallelCodeReviewPlanned.Ready ->
         ParallelCodeReviewPlanned.Ready(
           planned.value.takeIf { it.isNotEmpty() }?.joinToString("\n\n") { plannedRubric ->
             val paths = plannedRubric.descriptor.ownedPaths.joinToString("\n") { "- $it" }
-            "Selected code-quality specialist: ${plannedRubric.rubric.rubricId}\n" +
+            heading(plannedRubric.rubric.rubricId) + "\n" +
               "Apply this rubric to these changed paths:\n$paths\n\n${plannedRubric.rubric.body}"
           },
         )
-      }
     }
 
   fun run(originalRequest: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome {
