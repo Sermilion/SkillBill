@@ -1,3 +1,11 @@
+## [2026-10-30] SKILL-447 desktop app and configuration coordination
+Areas: desktop, runtime-kotlin, desktop-tray, installer and uninstall
+- Added a standalone desktop app alongside the shipped tray, with runtime read and control services, configuration editing, packaging and CI.
+- Cooperating configuration writers share persistent locks across runtime, installer, scaffold and uninstall. Locked reads supply path identity and fingerprints for conflict detection.
+- The installer continues to ship desktop-tray. Editors that ignore the locking protocol can race after the authoritative read.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-24] SKILL-420 subtask 2 backend and web pack QA guidance
 Areas: platform-packs (kotlin, go, rust, python, php, typescript manifests and qa/ guidance)
 - Six packs now declare a block-style qa_capability placed just before validation_gate, matching kmp, with no discovery_hints and no contract_version change. kotlin, go and rust: platforms backend, guidance qa/backend-qa.md. python and php: backend and web, qa/backend-web-qa.md. typescript: web and backend, qa/backend-web-qa.md.

@@ -1,3 +1,23 @@
+## [2026-10-30] Keep desktop signal generation stable across commits
+Context: Readers use generation to detect a replaced or migrated store and request a full resync.
+Decision: Store the generation in SQLite and renew it when migrations apply. Publish revision changes and bounded changed-id lists after commits; activity-only writes stay off board topics.
+Reason: A random generation on every publish forces a full resync for ordinary commits. Revision changes still notify the tray and desktop observers.
+
+## [2026-10-30] Page the board by projected order
+Context: Stored candidate order can differ from displayed state, including changes caused by time and process liveness.
+Decision: Project and filter eligible candidates before sorting and paging. Preserve observation, observedAt and filter scope in the cursor, and refuse a changed database observation.
+Reason: Limiting before projection can omit matches or put them on the wrong page. Fixed observedAt keeps time-based projection consistent, but current process liveness cannot be frozen without historical observations.
+
+## [2026-10-30] Protect the database path throughout goal purge
+Context: Purge has external effects that database transaction fences alone cannot protect against a replacement after discovery.
+Decision: Purge and supported database replacements share a path-scoped lock. Purge holds it through discovery and cleanup, retains identity fences, and rediscovers on partial-failure resume.
+Reason: The lock closes the replacement window for cooperating operations; uncooperative external replacement remains outside that protection.
+
+## [2026-10-30] Checkpoint WAL at committed lifecycle boundaries
+Context: Desktop reads need bounded WAL and journal growth without a periodic maintenance worker.
+Decision: Attempt truncation after goal completion and a fenced release with no active or reserved worker lease. Keep the latest journal tick per workflow and prune in the append transaction.
+Reason: Busy checkpoints can retry at a later boundary without changing a completed operation. Cancellation and interruption still propagate.
+
 ## [2026-10-26] One project store per repository, and only projects with specs in the spec picker
 Context: The desktop spec picker listed five projects for two repositories: scratch clones of skill-bill got their own stores (`…-2`, `…-3`) because their remote was the same repository in another URL form (`https://` against `git@`) or a local path to the working copy, non-git directories inside `~/.skill-bill` (the state folder, installed skills) became `d-…` stores, and a store whose checkout was gone showed its raw id.
 Decision: A second clone of a lineage shares the existing store when its remote names the same repository in any form git accepts (user, port, `.git` suffix, trailing slash and host case ignored) or is a local path to one of the store's checkouts; a remote elsewhere is still a fork with its own suffixed store. A non-git directory inside the state folder gets a location but never a record. The catalog reports `hasSpecs` and `lastCheckoutRoot`, the spec browser lists only projects with spec bundles, and a project without a live checkout is named after the checkout it was last recorded at.
@@ -3145,6 +3165,7 @@ Context: The desktop Room query Flow cannot receive invalidations from JDBC writ
 Decision: `SQLiteDatabaseSessionFactory` reads the desktop work-topic revisions inside each write transaction and compares them after the use case runs. After commit, it takes a per-store file lock, rereads the latest committed revisions, and atomically replaces a sibling signal file only when those revisions changed. A generation token distinguishes separate commits even if a restored store reaches the same revision numbers. The `DesktopCommitSignal` contract in `runtime-contracts` owns the shared file suffix and revision syntax used by SQLite and desktop. A failed signal write records a warning without changing the result of an already committed use case.
 Reason: The existing runtime revisions identify work-related commits without polling the database or adding schema objects. One coherent transaction produces one complete revision snapshot, and the file lock prevents an older writer from replacing a newer snapshot. Rollbacks and unrelated table writes stay silent.
 Review: A1 clean, the SQLite adapter owns database access. A2 clean, `runtime-infra:sqlite` and `desktop-tray` both consume `DesktopCommitSignal`. A3 clean, the composition root gains no collaborators. A4 clean, no port was added. A5 clean, no forwarding type or function was added. A6 clean, the shared file vocabulary has one owner. A7 clean, publication degradation is recorded and never changes a committed outcome. A8 clean, no ambient time, environment, property, or process read was added. A9 clean, package dependencies remain acyclic. A10 clean, publisher tests remain in `runtime-infra:sqlite`. A11 clean, new declarations stay internal. A12 clean, public inner-layer APIs expose no raw map. G1-G7 clean, no guard, fixture, baseline, or exemption changed.
+Superseded by: Keep desktop signal generation stable across commits (2026-10-30)
 
 ## [2026-10-16] Restore qualified monitor failures from existing runtime evidence
 

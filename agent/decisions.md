@@ -1,3 +1,9 @@
+## [2026-10-30] Bind config edits to locked document identities
+Context: A config file can move between legacy and current paths with identical bytes, or change while a desktop draft is open.
+Decision: Locked reads return the selected path, eligible candidates and fingerprint. Cooperating writers hold shared persistent locks through authoritative reads and publication; conflict recovery rebases only the selected row.
+Reason: A fingerprint alone cannot distinguish identical files at different paths. Shared locks coordinate Skill Bill writers, while an unrelated editor can still race after the read.
+Alternatives considered: A separate desktop lock or accepting any path transition would bypass the document boundary.
+
 ## [2026-10-23] Retired-plugin cleanup is a duplicated block, not a shared file
 Context: install.sh and uninstall.sh both need the retired IDE plugin cleanup, and the intake suggested a shared helper.
 Decision: One self-contained cleanup block, byte-identical in both scripts, delimited by markers and checked by a smoke-test parity assertion.
