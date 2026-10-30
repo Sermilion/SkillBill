@@ -1,7 +1,7 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle
 
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import java.sql.Connection
 
 internal fun lifecycleAlreadyFinished(

@@ -9,7 +9,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.redaction.redactIssueKey
 import skillbill.infrastructure.sqlite.telemetry.redaction.redactIssueKeyReferences
 import skillbill.ports.diagnostics.RuntimeDiagnostics

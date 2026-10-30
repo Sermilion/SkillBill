@@ -17,8 +17,8 @@ import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPat
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalQualityExecutionSchemaPaths
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files

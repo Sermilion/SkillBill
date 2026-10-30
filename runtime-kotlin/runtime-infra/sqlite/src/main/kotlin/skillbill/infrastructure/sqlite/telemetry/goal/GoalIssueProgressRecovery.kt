@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.telemetry.goal
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.telemetry.model.GoalIssueFinishedRecord
 import java.sql.Connection
 

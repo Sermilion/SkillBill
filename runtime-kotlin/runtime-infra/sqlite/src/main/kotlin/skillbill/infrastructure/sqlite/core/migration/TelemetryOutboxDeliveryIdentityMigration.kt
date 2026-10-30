@@ -1,6 +1,5 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration
 
-import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import java.sql.Connection
 import java.util.UUID

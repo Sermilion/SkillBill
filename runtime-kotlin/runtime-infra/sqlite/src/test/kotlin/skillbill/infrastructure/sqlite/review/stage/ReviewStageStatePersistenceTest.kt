@@ -2,8 +2,8 @@ package skillbill.infrastructure.sqlite.review.stage
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.infrastructure.sqlite.DatabaseRuntime
 import skillbill.infrastructure.sqlite.SQLiteReviewRunCompletenessRepository
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.tempDbConnection
 import skillbill.review.model.ParallelReviewMergedFinding

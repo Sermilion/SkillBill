@@ -1,12 +1,13 @@
-package skillbill.infrastructure.sqlite.core.migration
+package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
+import skillbill.infrastructure.sqlite.core.migration.MigrationLedger
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
 import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
 import skillbill.infrastructure.sqlite.core.schema.databasePath
-import skillbill.infrastructure.sqlite.databaseMigrations
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.sql.Connection
 import java.util.UUID

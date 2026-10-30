@@ -12,8 +12,8 @@ import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummaryPayloadKeys
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.SqliteLifecycleTelemetryMaterializationPayloadKeys
 import kotlin.test.Test
 import kotlin.test.assertEquals

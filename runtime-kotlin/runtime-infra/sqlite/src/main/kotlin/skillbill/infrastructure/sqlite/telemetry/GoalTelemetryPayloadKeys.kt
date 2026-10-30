@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.telemetry.goal
+package skillbill.infrastructure.sqlite.telemetry
 
 object GoalTelemetryPayloadKeys {
   const val SUBTASK_TOTAL: String = "subtask_total"

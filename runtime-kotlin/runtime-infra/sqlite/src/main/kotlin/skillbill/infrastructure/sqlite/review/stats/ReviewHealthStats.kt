@@ -1,5 +1,7 @@
 package skillbill.infrastructure.sqlite.review.stats
 
+import skillbill.infrastructure.sqlite.review.core.average
+import skillbill.infrastructure.sqlite.review.core.rate
 import skillbill.review.model.ReviewDeliveryGrainStats
 import skillbill.review.model.ReviewHealthStats
 import java.sql.Connection

@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.telemetry
+package skillbill.infrastructure.sqlite.telemetry.reconciliation
 
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll

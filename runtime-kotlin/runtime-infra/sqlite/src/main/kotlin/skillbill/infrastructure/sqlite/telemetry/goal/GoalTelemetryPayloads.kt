@@ -8,6 +8,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.booleanFromInt
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.intOrZero
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.longOrZero

@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.review.stats
+package skillbill.infrastructure.sqlite.review.core
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException

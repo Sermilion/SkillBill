@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.databasePath
+import skillbill.infrastructure.sqlite.diagnostics.FileRejectedOutputDiagnosticPermissions
 import java.io.IOException
 import java.net.URI
 import java.nio.file.FileSystems

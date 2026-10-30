@@ -3,8 +3,8 @@ package skillbill.infrastructure.sqlite.review.stage
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.review.stats.queryLatestFindingOutcomes
-import skillbill.infrastructure.sqlite.review.stats.rate
+import skillbill.infrastructure.sqlite.review.core.queryLatestFindingOutcomes
+import skillbill.infrastructure.sqlite.review.core.rate
 import skillbill.review.context.model.claim.ReviewClaimVerdictAdmission
 import skillbill.review.context.model.launch.ReviewSpecAdjudicationAdmission
 import skillbill.review.model.ReviewClaimVerdict

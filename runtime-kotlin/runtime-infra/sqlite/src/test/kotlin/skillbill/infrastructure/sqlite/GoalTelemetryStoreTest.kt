@@ -3,9 +3,8 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.GoalTelemetryRowFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.ports.telemetry.lifecycle.model.GoalStartedSupersession
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord

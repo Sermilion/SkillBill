@@ -3,10 +3,8 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.workflow.FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION
 import skillbill.infrastructure.sqlite.workflow.FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION
-import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily

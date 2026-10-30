@@ -1,13 +1,15 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
+import skillbill.contracts.workflow.goal.GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.planningStatusSnapshot
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.INVALIDATED_SHARED_PREPLAN_PAYLOAD
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import java.sql.Connection
+
+internal const val INVALIDATED_SHARED_PREPLAN_PAYLOAD = GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
 
 internal class GoalPlanningStatusProjectionSql(
   private val connection: Connection,

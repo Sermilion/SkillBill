@@ -1,9 +1,8 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.telemetry.goal.recordGoalIssueSegmentEnd
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.telemetry.model.GoalFinishedRecord

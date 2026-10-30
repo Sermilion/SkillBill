@@ -1,11 +1,8 @@
-package skillbill.infrastructure.sqlite.telemetry.lifecycle
+package skillbill.infrastructure.sqlite.telemetry.lifecycle.session
 
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryFeatureTaskSessionAdapter
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryFeatureVerifySessionAdapter
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryGoalSessionAdapter
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryMeasurementAdapter
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryQualityCheckSessionAdapter
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.enqueueTelemetry
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.prDescriptionPayload
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.lifecycle.FeatureTaskRuntimeLifecycleTelemetryRepository
 import skillbill.ports.telemetry.lifecycle.FeatureTaskRuntimeTelemetryMeasurementRepository

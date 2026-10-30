@@ -10,11 +10,10 @@ import skillbill.infrastructure.sqlite.SQLiteUnitOfWork
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.SqliteTestWorkflowSnapshotValidator
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
-import skillbill.infrastructure.sqlite.review.stage.TriageRuntime
 import skillbill.infrastructure.sqlite.review.stage.addLearning
 import skillbill.infrastructure.sqlite.reviewSessionId
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.listJson
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.infrastructure.sqlite.tempDbConnection
 import skillbill.infrastructure.sqlite.testLearningAppliedSessionWire

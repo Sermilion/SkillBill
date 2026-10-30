@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite
+package skillbill.infrastructure.sqlite.diagnostics
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode

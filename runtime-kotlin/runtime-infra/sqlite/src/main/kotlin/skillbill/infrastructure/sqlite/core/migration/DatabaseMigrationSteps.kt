@@ -1,7 +1,5 @@
 package skillbill.infrastructure.sqlite.core.migration
 
-import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
-import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewFindingColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewLedgerSchema
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.sql.Connection

@@ -18,14 +18,17 @@ object PrincipleEnforcementInventory {
     val mainScanRoot: String,
     val moduleSourceRoot: String,
     val packagePrefix: String,
-    val packageCycleBaseline: String,
+    val packageCycleBaseline: String?,
     val packageCycleGranularity: ArchitectureScanSupport.PackageCycleGranularity,
     val ambientClockBaseline: String,
     val ambientEnvironmentBaseline: String,
     val injectDefaultsBaseline: String,
   )
 
-  private val EXACT_PACKAGE_SCC_MODULES = setOf("runtime-domain", "runtime-contracts", "runtime-cli", "runtime-engine")
+  private val EXACT_PACKAGE_SCC_MODULES =
+    setOf("runtime-domain", "runtime-contracts", "runtime-cli", "runtime-engine", "runtime-infra:sqlite")
+
+  private val BASELINE_FREE_PACKAGE_CYCLE_MODULES = setOf("runtime-infra:sqlite")
 
   val moduleArchitectureScanCases: List<ModuleArchitectureScanCase> =
     RuntimeModuleCatalog.declaredGradleModules
@@ -67,8 +70,9 @@ object PrincipleEnforcementInventory {
   private fun packageCycleBaselineForModule(
     moduleName: String,
     baselineStem: String,
-  ): String =
+  ): String? =
     when (moduleName) {
+      in BASELINE_FREE_PACKAGE_CYCLE_MODULES -> null
       "runtime-application" -> "application-package-cycle-baseline.txt"
       "runtime-cli" -> "runtime-cli-package-cycle-baseline.txt"
       else -> "$baselineStem-package-cycle-baseline.txt"

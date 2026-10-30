@@ -1,6 +1,7 @@
-package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
+package skillbill.infrastructure.sqlite.workflow.goalrunner
 
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningStatusProjectionSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanStore

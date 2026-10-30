@@ -1,7 +1,6 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration
 
 import skillbill.contracts.review.ReviewVerificationSignalKeys
-import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.review.attribution.EXECUTION_MODE_DELEGATED
 import skillbill.review.attribution.canonicalPackSkillNames

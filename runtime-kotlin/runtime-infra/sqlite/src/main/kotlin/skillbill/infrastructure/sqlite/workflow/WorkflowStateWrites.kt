@@ -5,7 +5,6 @@ import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.workflow.featuretask.requireUnchangedExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
@@ -20,6 +19,7 @@ import java.time.format.DateTimeFormatter
 
 internal const val FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION: String = "0.1"
 internal const val FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION: String = "0.3"
+internal const val MINIMUM_OWNER_TOKEN_LENGTH: Int = 16
 
 private val terminalWorkflowStatusSqlValues: String =
   WorkflowStatus.terminalStatuses

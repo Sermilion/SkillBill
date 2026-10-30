@@ -5,7 +5,6 @@ import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.workflow.model.WorkflowStateRecord

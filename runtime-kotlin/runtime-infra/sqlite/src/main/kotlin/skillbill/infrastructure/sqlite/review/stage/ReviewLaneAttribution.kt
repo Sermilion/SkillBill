@@ -3,8 +3,8 @@ package skillbill.infrastructure.sqlite.review.stage
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.review.stats.acceptedFindingOutcomeTypes
-import skillbill.infrastructure.sqlite.review.stats.rejectedFindingOutcomeTypes
+import skillbill.infrastructure.sqlite.review.core.acceptedFindingOutcomeTypes
+import skillbill.infrastructure.sqlite.review.core.rejectedFindingOutcomeTypes
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.worklist.required
 import skillbill.ports.review.model.ReviewIntegrationPassRecord

@@ -230,7 +230,20 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
-  fun `runtime-infra sqlite package cycles equal the recorded census`() {
+  fun `runtime-infra sqlite has no exact-package cycles`() {
+    val scanCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == "runtime-infra:sqlite" }
+    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
+    assertEquals(null, scanCase.packageCycleBaseline)
+    assertTrue(
+      ArchitectureScanSupport.packageImportEdges(
+        scanRoot = scanCase.mainScanRoot,
+        packagePrefix = scanCase.packagePrefix,
+        granularity = scanCase.packageCycleGranularity,
+      ).isNotEmpty(),
+      "The runtime-infra:sqlite scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
+    )
     assertPackageCyclesMatchBaseline("runtime-infra:sqlite")
   }
 
@@ -482,10 +495,12 @@ class ApplicationPackageAcyclicityArchitectureTest {
         packagePrefix = scanCase.packagePrefix,
         granularity = scanCase.packageCycleGranularity,
       )
+    val baselineName = scanCase.packageCycleBaseline
     assertEquals(
-      baselineCycles(scanCase.packageCycleBaseline),
+      baselineName?.let(::baselineCycles).orEmpty(),
       current,
-      "Re-record ${scanCase.packageCycleBaseline} with RECORD_ARCHITECTURE_BASELINES=1.",
+      baselineName?.let { "Re-record $it with RECORD_ARCHITECTURE_BASELINES=1." }
+        ?: "$moduleName must stay free of exact-package cycles.",
     )
   }
 

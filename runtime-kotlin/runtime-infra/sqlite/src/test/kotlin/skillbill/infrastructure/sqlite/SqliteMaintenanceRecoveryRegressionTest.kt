@@ -3,7 +3,6 @@ package skillbill.infrastructure.sqlite
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
-import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files

@@ -4,12 +4,12 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
+import skillbill.infrastructure.sqlite.DatabaseRuntime
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.reconcileStaleTelemetrySessions
-import skillbill.infrastructure.sqlite.telemetry.StaleSessionReconciliationPolicy
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.StaleSessionReconciliationPolicy
 import skillbill.telemetry.model.FeatureTaskRuntimeFinishedRecord
 import skillbill.telemetry.model.FeatureTaskRuntimeStartedRecord
 import skillbill.telemetry.model.GoalFinishedRecord

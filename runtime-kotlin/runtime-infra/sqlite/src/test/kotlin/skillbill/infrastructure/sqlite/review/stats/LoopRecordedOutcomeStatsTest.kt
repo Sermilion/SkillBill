@@ -5,7 +5,8 @@ import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.infrastructure.sqlite.SAMPLE_REVIEW
 import skillbill.infrastructure.sqlite.SQLiteUnaddressedFindingsRepository
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
-import skillbill.infrastructure.sqlite.review.stage.TriageRuntime
+import skillbill.infrastructure.sqlite.review.core.queryLatestFindingOutcomes
+import skillbill.infrastructure.sqlite.review.core.summarizeFindingRows
 import skillbill.infrastructure.sqlite.tempDbConnection
 import skillbill.review.model.FeedbackRequest
 import skillbill.review.model.FeedbackTelemetryOptions

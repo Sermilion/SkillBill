@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.workflow.featuretask
+package skillbill.infrastructure.sqlite.workflow
 
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
 import skillbill.ports.workflow.model.WorkflowStateRecord

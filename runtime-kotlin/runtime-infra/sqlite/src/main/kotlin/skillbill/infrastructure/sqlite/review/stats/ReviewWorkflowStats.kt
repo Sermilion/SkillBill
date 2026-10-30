@@ -2,8 +2,17 @@ package skillbill.infrastructure.sqlite.review.stats
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.infrastructure.sqlite.review.core.average
+import skillbill.infrastructure.sqlite.review.core.booleanValue
+import skillbill.infrastructure.sqlite.review.core.collectRows
+import skillbill.infrastructure.sqlite.review.core.durationSeconds
+import skillbill.infrastructure.sqlite.review.core.intValue
+import skillbill.infrastructure.sqlite.review.core.nullableIntValue
+import skillbill.infrastructure.sqlite.review.core.parseJsonList
+import skillbill.infrastructure.sqlite.review.core.rate
+import skillbill.infrastructure.sqlite.review.core.stringValue
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
-import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.model.FeatureTaskRuntimeWorkflowStats
 import skillbill.review.model.FeatureVerifyWorkflowStats

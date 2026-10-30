@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite
+package skillbill.infrastructure.sqlite.diagnostics
 
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException

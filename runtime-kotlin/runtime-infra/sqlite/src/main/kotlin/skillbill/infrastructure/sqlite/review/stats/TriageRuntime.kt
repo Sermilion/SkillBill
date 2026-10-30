@@ -1,8 +1,7 @@
-package skillbill.infrastructure.sqlite.review.stage
+package skillbill.infrastructure.sqlite.review.stats
 
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.review.stats.ReviewFinishedTelemetryUpdateRequest
-import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
+import skillbill.infrastructure.sqlite.review.stage.ReviewRuntime
 import skillbill.review.model.FeedbackRequest
 import skillbill.review.model.FeedbackTelemetryOptions
 import skillbill.review.model.NumberedFinding

@@ -1,10 +1,7 @@
 package skillbill.infrastructure.sqlite.core.migration
 
-import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
-import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
-import skillbill.infrastructure.sqlite.core.migration.area.rekeyDiagnosticEvidenceByRepairTurn
+import skillbill.infrastructure.sqlite.core.migration.diagnosticevidence.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import java.sql.Connection
 
 internal object DatabaseColumnMigrations {

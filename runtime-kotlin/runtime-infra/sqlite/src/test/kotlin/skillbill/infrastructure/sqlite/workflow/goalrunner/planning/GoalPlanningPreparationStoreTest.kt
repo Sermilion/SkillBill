@@ -4,12 +4,13 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalPlanningStatusState
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.DatabaseRuntime
 import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.seedLegacySharedPreplan
 import skillbill.infrastructure.sqlite.seedLegacySubtaskPlan
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.infrastructure.sqlite.workflow.goalrunner.GoalPlanningPreparationStore
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationCountResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult

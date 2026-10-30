@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite
+package skillbill.infrastructure.sqlite.core.schema
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys

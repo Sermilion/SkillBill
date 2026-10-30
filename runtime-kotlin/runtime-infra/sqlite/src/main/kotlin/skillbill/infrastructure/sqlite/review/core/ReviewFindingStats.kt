@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.review.stats
+package skillbill.infrastructure.sqlite.review.core
 
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys

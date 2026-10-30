@@ -3,10 +3,8 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.DatabasePaths
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
-import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationStore
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.workflow.goalrunner.GoalPlanningPreparationStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement

@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration.diagnosticevidence
 
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import java.sql.Connection

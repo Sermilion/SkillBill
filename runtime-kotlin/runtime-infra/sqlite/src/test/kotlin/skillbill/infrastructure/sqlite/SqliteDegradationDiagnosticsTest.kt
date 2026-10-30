@@ -5,7 +5,6 @@ import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.UnresolvedEnvironmentContextFieldError
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
-import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.parseDurationSeconds
 import skillbill.infrastructure.sqlite.workflow.featuretask.parseWorkerLeaseInstant
 import skillbill.model.EnvironmentContext

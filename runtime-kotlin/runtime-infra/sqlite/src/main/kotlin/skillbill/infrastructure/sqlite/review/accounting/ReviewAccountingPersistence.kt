@@ -13,7 +13,7 @@ import skillbill.infrastructure.sqlite.review.stage.reviewSummarySql
 import skillbill.infrastructure.sqlite.review.stage.toReviewSummary
 import skillbill.infrastructure.sqlite.review.stage.updateFindingLaneAttribution
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.review.model.ImportedFinding

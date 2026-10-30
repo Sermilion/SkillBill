@@ -1,7 +1,6 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskPhaseReadStore
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry

@@ -1,11 +1,10 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.telemetry.StaleSessionReconciliationPolicy
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
-import skillbill.infrastructure.sqlite.telemetry.reconcileStaleFeatureTaskRuntimeSessions
-import skillbill.infrastructure.sqlite.telemetry.reconcileStaleTelemetrySessions
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.StaleSessionReconciliationPolicy
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.reconcileStaleFeatureTaskRuntimeSessions
+import skillbill.infrastructure.sqlite.telemetry.reconciliation.reconcileStaleTelemetrySessions
 import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
 import skillbill.telemetry.model.FeatureTaskRuntimeFinishedRecord
 import skillbill.telemetry.model.FeatureVerifyFinishedRecord

@@ -4,8 +4,6 @@ import org.junit.jupiter.api.Assumptions
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics

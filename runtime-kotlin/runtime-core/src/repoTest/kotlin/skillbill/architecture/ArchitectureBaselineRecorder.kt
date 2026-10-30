@@ -43,8 +43,9 @@ class ArchitectureBaselineRecorder {
 
   private fun recordPackageCycleBaselines(baselineDir: Path) {
     PrincipleEnforcementInventory.moduleArchitectureScanCases.forEach { scanCase ->
+      val baselineName = scanCase.packageCycleBaseline ?: return@forEach
       writePackageCycleBaseline(
-        baselineDir.resolve(scanCase.packageCycleBaseline),
+        baselineDir.resolve(baselineName),
         scanCase.mainScanRoot,
         scanCase.packagePrefix,
         scanCase.packageCycleGranularity,

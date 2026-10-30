@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.telemetry.goal
 
+import skillbill.infrastructure.sqlite.telemetry.GoalTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.intOrZero
 import skillbill.telemetry.model.GoalAssessmentTelemetryCounts
 import skillbill.telemetry.model.GoalSubtaskTraceProbeCounts

@@ -5,14 +5,11 @@ import skillbill.contracts.persistence.WorkBoardReadModelKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
-import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.infrastructure.sqlite.review.stats.loadGoalRows
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance

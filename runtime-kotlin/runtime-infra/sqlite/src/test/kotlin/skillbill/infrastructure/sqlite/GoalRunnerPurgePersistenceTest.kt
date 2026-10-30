@@ -1,7 +1,5 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
