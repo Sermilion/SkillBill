@@ -103,8 +103,13 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
         id = (row.node as? SpecNode.Bundle)?.issueKey,
         meta = { SpecMeta(row.node) },
         modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged {
-          shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, it.hasFocus)
-          if (it.isFocused) focusedPath = row.node.path
+          if (it.hasFocus) {
+            shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, true)
+            if (it.isFocused) focusedPath = row.node.path
+          } else if (focusedPath == row.node.path) {
+            focusedPath = null
+            shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, false)
+          }
         }.focusable(),
       )
     }

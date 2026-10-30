@@ -6,9 +6,11 @@ import dev.skillbill.desktop.core.common.DiagnosticsSwitch
 import dev.skillbill.desktop.core.data.di.DatabaseSessionScope
 import dev.skillbill.desktop.core.data.session.SessionSelectionHolder
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
 import skillbill.di.core.RuntimeComponent
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -36,16 +38,13 @@ class RuntimeReads(
     val start = if (switch.enabled) TimeSource.Monotonic.markNow() else null
     try {
       val call = scope.async(dispatcher.dispatcher) { block(runtime) }
-      val callerContext = currentCoroutineContext()
       try {
         return call.await()
-      } finally {
-        if (!callerContext.isActive) call.cancel()
+      } catch (failure: CancellationException) {
+        withContext(NonCancellable) { call.join() }
+        if (currentCoroutineContext().isActive) throw SessionClosedException(failure)
+        throw failure
       }
-    } catch (failure: CancellationException) {
-      // The session ended under a caller that is still running: report a stale session instead of cancelling the caller.
-      if (currentCoroutineContext().isActive) throw SessionClosedException(failure)
-      throw failure
     } finally {
       if (start != null) {
         val elapsed = start.elapsedNow().inWholeMilliseconds

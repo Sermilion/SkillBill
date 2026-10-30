@@ -693,23 +693,29 @@ internal object WorkBoardReadModelRead {
     request: ScanRequest,
   ): BoardPage {
     val indexed = mutableListOf<ProjectedBoardItem>()
-    var indexedAfter: WorkBoardReadModelKey? = null
+    var indexedAfter =
+      after?.let {
+        WorkBoardReadModelKey(it.displayPriority, formatReadModelInstant(it.updatedAt), it.workId)
+      }
     var examined = 0
     var moreRows = true
-    val limit = maxOf(pageSize + 1, WORK_BOARD_CANDIDATE_BATCH_SIZE)
-    while (moreRows) {
+    var hasNext = false
+    while (moreRows && indexed.size <= pageSize) {
+      val limit = pageSize + 1 - indexed.size
       val entries =
         unitOfWork.workBoardReadModel.page(
           WorkBoardReadModelPageQuery(request.finishedFrom, request.filter, indexedAfter, limit),
         ).entries
       examined += entries.size
       moreRows = entries.size == limit
-      entries.mapNotNullTo(indexed) { entry -> indexedItem(projection, unitOfWork, entry, request) }
+      entries.mapNotNull { entry -> indexedItem(projection, unitOfWork, entry, request) }
+        .filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
+        .let(indexed::addAll)
       indexedAfter = entries.lastOrNull()?.key ?: break
+      hasNext = indexed.size > pageSize
     }
     val ordered = indexed.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
-    val eligible = ordered.filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
-    return BoardPage(eligible.take(pageSize), eligible.size > pageSize, examined)
+    return BoardPage(ordered.take(pageSize), hasNext, examined)
   }
 
   private fun indexedItem(

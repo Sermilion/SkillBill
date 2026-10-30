@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
@@ -28,9 +29,10 @@ import dev.skillbill.desktop.feature.tray.trayHover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.SystemTray
 
 @Composable
-fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailability, intents: HostIntents, mainVisible: Boolean, onQuit: () -> Unit) {
+fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailability, intents: HostIntents, mainVisible: Boolean, reducedMotion: Boolean, onQuit: () -> Unit) {
   val state by model.state.collectAsState()
   val available by availability.state.collectAsState()
   var visible by remember { mutableStateOf(false) }
@@ -90,9 +92,12 @@ fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailabili
     onFailure = availability::unavailable,
     onDismiss = { scope.launch(Dispatchers.Main) { visible = false } },
   ) else {
+    SideEffect {
+      if (SystemTray.isSupported()) availability.available() else availability.unavailable()
+    }
     Tray(
       iconContent = {
-        SkillBillTheme(reducedMotion = false) {
+        SkillBillTheme(reducedMotion) {
           TrayIconRenderer.Content(status, running, NativeTrayHost.showsOverlay(System.getProperty("os.name")))
         }
       },
@@ -130,7 +135,7 @@ fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailabili
     resizable = false,
     state = windowState,
   ) {
-    SkillBillTheme(reducedMotion = false) {
+    SkillBillTheme(reducedMotion) {
       TrayPopoverContent(
         state,
         onAction = model::onAction,

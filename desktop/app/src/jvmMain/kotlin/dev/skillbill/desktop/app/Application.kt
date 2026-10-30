@@ -55,7 +55,7 @@ fun main() {
         }
       }
     }
-    TrayHost(trayModel, component.trayAvailability, component.hostIntents, mainVisible, onQuit = { exitApplication() })
+    TrayHost(trayModel, component.trayAvailability, component.hostIntents, mainVisible, reducedMotion) { exitApplication() }
     MainWindow(window, reducedMotion, mainVisible, focusRequest) {
       if (component.trayAvailability.state.value.canHideToTray) mainVisible = false else {
         component.trayAvailability.unavailable()
