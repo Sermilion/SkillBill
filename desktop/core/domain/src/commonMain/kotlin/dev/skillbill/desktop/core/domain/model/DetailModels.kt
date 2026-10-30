@@ -51,7 +51,9 @@ sealed interface DetailListOutcome {
 enum class QaVerdict { Attempted, Passed, Findings, Skipped, Incomplete }
 
 /** A workflow's recorded QA outcome, by wire value. */
-data class WorkQaOutcome(val outcome: String, val reason: String?, val failureKind: String?, val recordedAt: Instant)
+data class WorkQaOutcome(val outcome: QaVerdict, val reason: String?, val failureKind: String?, val recordedAt: Instant) {
+  val couldNotComplete: Boolean get() = outcome == QaVerdict.Incomplete && failureKind != null
+}
 
 /**
  * Every detail section below the header, as the runtime read it. The execution facts (workflow, invocation, agent, model,

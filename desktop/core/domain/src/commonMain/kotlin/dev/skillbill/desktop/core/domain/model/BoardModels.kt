@@ -2,8 +2,8 @@ package dev.skillbill.desktop.core.domain.model
 
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 
-/** One board read: the finished-work window, the runtime's text filter (blank for none) and the page size. */
-data class BoardQuery(val window: HistoryWindow, val filter: String, val pageSize: Int)
+/** One board read: the finished-work window, the runtime's text filter (blank for none), the page size and completeness. */
+data class BoardQuery(val window: HistoryWindow, val filter: String, val pageSize: Int, val complete: Boolean = false)
 
 /** The fixed board headers, in display order; each item lands in one by the runtime's live section verdict. */
 enum class BoardSectionKind { NeedsYou, Goals, Phases, Operations, Finished }

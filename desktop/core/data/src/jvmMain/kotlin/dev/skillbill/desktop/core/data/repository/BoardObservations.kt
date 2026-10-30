@@ -147,7 +147,9 @@ class BoardObservations internal constructor(
     )
 
     val state: StateFlow<BoardState> = merge(
-      triggers.conflate().mapLatest { Event.Read(reads.pages(query, pageCount.get())) },
+      triggers.conflate().mapLatest {
+        Event.Read(if (query.complete) reads.complete(query) else reads.pages(query, pageCount.get()))
+      },
       appends.map { Event.Append(it) },
     ).onEach { event ->
       if (event is Event.Read && event.result is Outcome.Success) deadline.value = nextDeadline(event.result.value)

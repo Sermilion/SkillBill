@@ -1,10 +1,13 @@
 package dev.skillbill.desktop.core.data.runtime
 
 import dev.skillbill.desktop.core.domain.model.DatabaseFileIdentity
+import dev.skillbill.desktop.core.domain.model.CompletionSource
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.PhaseExecution
 import dev.skillbill.desktop.core.domain.model.PhaseExecutionKind
 import dev.skillbill.desktop.core.domain.model.WorkControlIdentity
+import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
+import dev.skillbill.desktop.core.domain.model.QaVerdict
 import dev.skillbill.desktop.core.domain.model.WorkDisplayGroup
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
@@ -19,9 +22,11 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.WorkBoardItem
+import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.work.model.WorkStoreObservation
 import kotlin.time.toKotlinInstant
+import kotlin.time.Instant
 import skillbill.ports.idestatus.model.WorkLiveSection as RuntimeLiveSection
 import java.time.Instant as JavaInstant
 
@@ -46,13 +51,14 @@ internal class ItemVerdicts(
   val databaseFile: DatabaseFileObservation?,
   val sessionId: Long,
   val agentId: String? = null,
+  val completionSource: WorkBoardCompletionSource? = null,
 )
 
 internal fun WorkBoardItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toWorkItem(
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running, recentlyFinishedPhase, doneWithinDay, freshnessDeadline, membershipDeadline, exactPauseReason, controlLease,
-    observation, databaseFileObservation, sessionId, executingAgentId,
+    observation, databaseFileObservation, sessionId, executingAgentId, finishedAtSource,
   ),
 )
 
@@ -61,7 +67,7 @@ internal fun WorkDetailItem.toWorkItem(sessionId: Long): WorkItem = snapshot.toW
   ItemVerdicts(
     repositoryRoot, finishedAt, liveSection, displayGroup, displayPriority, requiresAttention, controlEligible, pauseEligible,
     running = false, recentlyFinishedPhase = false, doneWithinDay = false, freshnessDeadline, membershipDeadline = null,
-    exactPauseReason, controlLease, observation, databaseFileObservation, sessionId,
+    exactPauseReason, controlLease, observation, databaseFileObservation, sessionId, completionSource = finishedAtSource,
   ),
 )
 
@@ -130,7 +136,28 @@ internal fun IdeStatusSnapshot.toWorkItem(verdicts: ItemVerdicts): WorkItem {
       storeRevision = verdicts.observation?.revision,
       databaseFile = verdicts.databaseFile?.let { DatabaseFileIdentity(it.path.toString(), it.fileKey) },
     ),
+    completionSource = verdicts.completionSource?.toDomain(),
+    qaVerdict = execution?.qaOutcome?.toDomain(),
+    workflowQaOutcome = workflowQaOutcome?.toDomain(),
+    standaloneExecution = execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE,
   )
+}
+
+private fun WorkBoardCompletionSource.toDomain(): CompletionSource = when (this) {
+  WorkBoardCompletionSource.STANDALONE_FINISHED_AT -> CompletionSource.StandaloneFinishedAt
+  WorkBoardCompletionSource.WORKFLOW_COMPLETION -> CompletionSource.WorkflowCompletion
+  WorkBoardCompletionSource.GOAL_COMPLETION -> CompletionSource.GoalCompletion
+  WorkBoardCompletionSource.GOAL_STATE_ENTRY -> CompletionSource.GoalStateEntry
+  WorkBoardCompletionSource.ESTIMATED_GOAL_STATE_ENTRY -> CompletionSource.EstimatedGoalStateEntry
+}
+
+private fun skillbill.ports.idestatus.model.StandaloneQaOutcome.toDomain(): QaVerdict =
+  QaVerdict.valueOf(name.lowercase().replaceFirstChar(Char::uppercase))
+
+private fun skillbill.ports.idestatus.model.IdeStatusWorkflowQaOutcome.toDomain(): WorkQaOutcome? = try {
+  WorkQaOutcome(outcome.toDomain(), reason, failureKind, Instant.parse(recordedAt))
+} catch (_: IllegalArgumentException) {
+  null
 }
 
 /** HANDOFF 9.2's wording ("pass 2", "gate run 2"), and desktop-tray's for the other kinds. */

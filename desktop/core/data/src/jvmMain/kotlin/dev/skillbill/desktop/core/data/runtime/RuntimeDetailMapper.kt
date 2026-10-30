@@ -220,7 +220,7 @@ private fun StandaloneQaOutcome.toDomain(): QaVerdict = when (this) {
 
 /** An unparseable `recordedAt` drops the QA outcome for this item rather than failing the detail. */
 private fun IdeStatusWorkflowQaOutcome.toDomain(): WorkQaOutcome? =
-  runCatching { Instant.parse(recordedAt) }.getOrNull()?.let { WorkQaOutcome(outcome.wireValue, reason, failureKind, it) }
+  runCatching { Instant.parse(recordedAt) }.getOrNull()?.let { WorkQaOutcome(outcome.toDomain(), reason, failureKind, it) }
 
 private fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)

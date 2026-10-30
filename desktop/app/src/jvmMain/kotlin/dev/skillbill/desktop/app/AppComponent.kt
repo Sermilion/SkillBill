@@ -2,6 +2,10 @@ package dev.skillbill.desktop.app
 
 import dev.skillbill.desktop.app.di.WindowComponent
 import dev.skillbill.desktop.app.settings.StartAtLoginSync
+import dev.skillbill.desktop.app.notifications.TransitionNotifier
+import dev.skillbill.desktop.app.host.HostIntents
+import dev.skillbill.desktop.app.tray.TrayAvailability
+import dev.skillbill.desktop.feature.tray.TrayViewModel
 import dev.skillbill.desktop.core.common.ApplicationCoroutineScope
 import dev.skillbill.desktop.core.common.DatabaseDispatcher
 import dev.skillbill.desktop.core.common.DiagnosticsSwitch
@@ -30,6 +34,10 @@ abstract class AppComponent(
 ) {
   abstract val databaseSessionManager: DatabaseSessionManager
   abstract val startAtLoginSync: StartAtLoginSync
+  abstract val trayViewModel: () -> TrayViewModel
+  abstract val transitionNotifier: TransitionNotifier
+  abstract val trayAvailability: TrayAvailability
+  abstract val hostIntents: HostIntents
   abstract val workBoardRepository: WorkBoardRepository
   abstract val workControlRepository: WorkControlRepository
   abstract val workDetailRepository: WorkDetailRepository

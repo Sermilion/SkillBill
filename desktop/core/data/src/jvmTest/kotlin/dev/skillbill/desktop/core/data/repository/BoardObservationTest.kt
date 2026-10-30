@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.data.signal.ChangedIds
 import dev.skillbill.desktop.core.data.signal.SignalSnapshot
 import dev.skillbill.desktop.core.domain.model.BoardCounts
 import dev.skillbill.desktop.core.domain.model.BoardQuery
+import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.TrayStatus
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
@@ -28,6 +29,23 @@ import kotlin.time.Instant
 private val QUERY = BoardQuery(HistoryWindow.Day, filter = "", pageSize = 20)
 
 class BoardObservationTest {
+  @Test
+  fun `complete query loads every page in the shared observation`() = runTest {
+    val allItems = listOf(workItem("first"), workItem("unloaded"))
+    val (signals, reads, board) = fixture(items = allItems)
+    val completeQuery = QUERY.copy(pageSize = 1, complete = true)
+    var observedItems = emptyList<WorkItem>()
+    backgroundScope.launch {
+      board.observe(completeQuery).collect { state ->
+        if (state is BoardState.Loaded) observedItems = state.items
+      }
+    }
+    runCurrent()
+    assertEquals(allItems, observedItems)
+    assertEquals(1, reads.completeReads)
+    assertEquals(0, reads.pageReads)
+  }
+
   @Test
   fun `three owners of one query share one read per goals change`() = runTest {
     val (signals, reads, board) = fixture()
@@ -77,10 +95,16 @@ class BoardObservationTest {
 
   private class FakeBoardReads(private val items: List<WorkItem>, private val clock: Clock) : BoardReads {
     var pageReads = 0
+    var completeReads = 0
+
+    override suspend fun complete(query: BoardQuery): Outcome<BoardPage, Nothing> {
+      completeReads++
+      return Outcome.Success(BoardPage(items, nextCursor = null, observedAt = clock.now()))
+    }
 
     override suspend fun pages(query: BoardQuery, pageCount: Int): Outcome<BoardPage, Nothing> {
       pageReads++
-      return Outcome.Success(BoardPage(items, nextCursor = null, observedAt = clock.now()))
+      return Outcome.Success(BoardPage(items.take(query.pageSize), nextCursor = null, observedAt = clock.now()))
     }
 
     override suspend fun page(query: BoardQuery, cursor: String) = pages(query, 1)

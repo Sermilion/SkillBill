@@ -7,6 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -36,7 +37,7 @@ private val MIN_WINDOW_SIZE = Dimension(560, 420)
 
 /** The main window: the shell frame, the routes, the command menu, the shortcut sheet and the toasts, all on [window]'s graph. */
 @Composable
-fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean) {
+fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean, visible: Boolean, focusRequest: Int, onCloseRequest: () -> Unit) {
   DisposableEffect(window) {
     onDispose {
       window.terminal.close()
@@ -47,12 +48,23 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean)
   LaunchedEffect(window) { window.navigator.followSession() }
   val keyboard = window.keyboard
   Window(
-    onCloseRequest = ::exitApplication,
+    onCloseRequest = onCloseRequest,
+    visible = visible,
     title = "Skill Bill",
     state = rememberWindowState(size = DpSize(1280.dp, 820.dp)),
     onPreviewKeyEvent = { event -> event.toKeyPress()?.let(keyboard::onKey) ?: false },
   ) {
-    SideEffect { this.window.minimumSize = MIN_WINDOW_SIZE }
+    val awtWindow = this.window
+    SideEffect { awtWindow.minimumSize = MIN_WINDOW_SIZE }
+    LaunchedEffect(visible, focusRequest) {
+      if (visible) {
+        withFrameNanos { }
+        val desktop = if (java.awt.Desktop.isDesktopSupported()) java.awt.Desktop.getDesktop() else null
+        if (desktop?.isSupported(java.awt.Desktop.Action.APP_REQUEST_FOREGROUND) == true) desktop.requestForeground(true)
+        awtWindow.toFront()
+        awtWindow.requestFocus()
+      }
+    }
     SkillBillTheme(reducedMotion) {
       val focusManager = LocalFocusManager.current
       SideEffect { keyboard.clearFocus = { focusManager.clearFocus() } }

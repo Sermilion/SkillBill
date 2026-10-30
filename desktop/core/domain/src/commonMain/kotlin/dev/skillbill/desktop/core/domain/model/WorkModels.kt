@@ -16,6 +16,8 @@ enum class WorkLiveSection { NeedsYou, Goals, Phases, Operations }
 
 data class WorkProgress(val done: Int, val total: Int)
 
+enum class CompletionSource { StandaloneFinishedAt, WorkflowCompletion, GoalCompletion, GoalStateEntry, EstimatedGoalStateEntry }
+
 enum class PhaseExecutionKind { Pass, SemanticLoop, GateRun, BoundedEdge, Attempt }
 
 data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?, val criterionRef: String?)
@@ -89,4 +91,8 @@ data class WorkItem(
   val currentSubtaskId: String?,
   val reason: String?,
   val control: WorkControlIdentity,
+  val completionSource: CompletionSource? = null,
+  val qaVerdict: QaVerdict? = null,
+  val workflowQaOutcome: WorkQaOutcome? = null,
+  val standaloneExecution: Boolean = false,
 )
