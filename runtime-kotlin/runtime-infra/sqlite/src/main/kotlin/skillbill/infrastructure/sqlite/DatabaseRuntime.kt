@@ -9,6 +9,7 @@ import skillbill.error.core.databaseIncompatible
 import skillbill.infrastructure.sqlite.core.migration.MigrationLedger
 import skillbill.infrastructure.sqlite.core.schema.DatabasePaths
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
+import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.core.schema.databaseFileIdentity
 import skillbill.infrastructure.sqlite.core.schema.fileObservation
@@ -20,16 +21,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
-
-internal data class OpenDatabase(
-  internal val connection: Connection,
-  internal val dbPath: Path,
-  internal val fileObservation: DatabaseFileObservation,
-) : AutoCloseable {
-  override fun close() {
-    connection.close()
-  }
-}
 
 internal object DatabaseRuntime {
   const val BUSY_TIMEOUT_MILLIS: Int = 5000

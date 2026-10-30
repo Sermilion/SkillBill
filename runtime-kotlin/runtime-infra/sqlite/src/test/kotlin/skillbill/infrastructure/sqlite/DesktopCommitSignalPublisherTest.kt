@@ -4,19 +4,19 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.AgentActivityStamp
-import skillbill.infrastructure.sqlite.core.schema.desktopCommitSignalPath
+import skillbill.infrastructure.sqlite.core.ops.desktopCommitSignalPath
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import java.nio.file.Files
-import java.sql.Connection
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import java.nio.file.Files
+import java.sql.Connection
+import java.time.Instant
 
 class DesktopCommitSignalPublisherTest {
   @Test

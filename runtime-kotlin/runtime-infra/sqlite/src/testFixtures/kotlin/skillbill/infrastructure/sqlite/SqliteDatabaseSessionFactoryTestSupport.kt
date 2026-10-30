@@ -2,8 +2,8 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.infrastructure.contracts.BlockIncidentSchemaValidator
 import skillbill.model.EnvironmentContext
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.workflow.engine.model.WorkflowStateSnapshot

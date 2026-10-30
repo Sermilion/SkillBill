@@ -2,7 +2,6 @@ package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.model.GoalPreflightGateBlock
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
@@ -16,6 +15,7 @@ import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
+import skillbill.engine.work.eligibility.recordedLaunchAgent
 import skillbill.engine.work.observation.workerOwnership
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -36,7 +36,6 @@ import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -342,27 +341,6 @@ class WorkRunActions(
     phase?.agentEnvironment
       ?: item.snapshot.workflowId?.let(unit.standalonePhaseStatuses::latestWorkflowExecution)?.agentEnvironment
       ?: emptyMap()
-}
-
-internal fun standaloneLaunchAgent(
-  record: StandalonePhaseStatusRecord,
-  unit: UnitOfWork,
-): String? =
-  (record.launchAgentId ?: recordedLaunchAgent(record.workflowId, unit))?.takeIf { it in SupportedAgent.supportedIds }
-
-private fun recordedLaunchAgent(
-  workflowId: String?,
-  unit: UnitOfWork,
-): String? {
-  val workflow = workflowId?.let { unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it) } ?: return null
-  val plan =
-    JsonCodec.anyToStringAnyMap(
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(workflow.artifacts),
-    )
-  val assignments = plan?.get(FeatureTaskRuntimeExecutionPlanKeys.STEP_LAUNCH_ASSIGNMENTS) as? List<*> ?: return null
-  val records = assignments.mapNotNull(JsonCodec::anyToStringAnyMap)
-  val current = records.firstOrNull { it[FeatureTaskRuntimeExecutionPlanKeys.STEP_ID] == workflow.currentStepId }
-  return (current ?: records.firstOrNull())?.get(FeatureTaskRuntimeExecutionPlanKeys.AGENT_ID) as? String
 }
 
 internal fun goalStartRefusal(result: GoalPreflightResult): String? {

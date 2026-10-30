@@ -1,12 +1,10 @@
-package skillbill.infrastructure.sqlite.core.schema
+package skillbill.infrastructure.sqlite.core.ops
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.persistence.DesktopCommitSignal
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.storedDesktopGeneration
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope

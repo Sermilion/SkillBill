@@ -33,9 +33,9 @@ import skillbill.idestatus.model.IdeStatusRepositoryIdentityFamily
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityPolicy
 import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
-import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution

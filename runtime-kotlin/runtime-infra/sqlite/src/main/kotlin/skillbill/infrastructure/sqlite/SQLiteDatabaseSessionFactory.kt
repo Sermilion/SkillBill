@@ -13,12 +13,14 @@ import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
 import skillbill.infrastructure.sqlite.core.ops.ReadConnectionLease
 import skillbill.infrastructure.sqlite.core.ops.ReadConnectionPool
 import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
+import skillbill.infrastructure.sqlite.core.ops.publishDesktopCommitSignal
+import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.core.schema.fileObservation
-import skillbill.infrastructure.sqlite.core.schema.publishDesktopCommitSignal
 import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentContext
 import skillbill.infrastructure.sqlite.pathlock.DatabasePathFileLock
 import skillbill.model.EnvironmentContext
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.blockincident.BlockIncidentContractValidator
 import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseReadConnections
@@ -29,16 +31,15 @@ import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.filesystem.model.DatabaseFileObservation
-import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
 import skillbill.ports.workflow.WorkflowSnapshotValidator
+import kotlin.coroutines.cancellation.CancellationException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
 import java.sql.SQLException
 import java.time.Clock
-import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class SQLiteDatabaseSessionFactory(

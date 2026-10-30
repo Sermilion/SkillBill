@@ -1,6 +1,5 @@
-package skillbill.ports.idestatus
+package skillbill.ports
 
-import skillbill.ports.UnitOfWork
 import java.time.Instant
 
 /** Updates persisted board rows from the current work state. */

@@ -2,9 +2,9 @@ package skillbill.engine.work
 
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.ports.WorkBoardReadModelProjector
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.idestatus.WorkBoardReadModelRepository
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -13,10 +13,10 @@ import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.persistence.UnitOfWork
-import java.sql.Connection
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import java.sql.Connection
+import java.time.Instant
 
 class WorkBoardMigrationReadTest {
   @Test

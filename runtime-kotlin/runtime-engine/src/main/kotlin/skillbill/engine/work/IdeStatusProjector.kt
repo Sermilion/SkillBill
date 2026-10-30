@@ -15,7 +15,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
-import skillbill.engine.work.control.standaloneLaunchAgent
+import skillbill.engine.work.eligibility.standaloneLaunchAgent
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
