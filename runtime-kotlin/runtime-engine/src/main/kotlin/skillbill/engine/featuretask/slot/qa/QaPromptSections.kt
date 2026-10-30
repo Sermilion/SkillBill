@@ -101,12 +101,13 @@ internal object QaPromptSections {
     |  produce: inject a fault, force an error response, add a debug hook, or shorten a timeout. Rebuild after such
     |  an edit. Edit nothing outside the QA checkout and the invocation directory, and never commit, push, or open
     |  a pull request. QA reports findings; it does not repair them.
-    |- QA runs on a test account with test data. Within the environment and isolation rules, every in-app
-    |  action is allowed: create, edit, and delete records, add profiles, remove cards, log out. Never leave a flow
-    |  untested to protect device or account state.
-    |- When the app, build, or repository offers an environment, flavor, profile, or server choice, use a local or
-    |  disposable isolated one when available, else staging. Never use production. When only production is
-    |  available, exercise no flow: report `skipped` and name the missing environment.
+    |- For device QA, build, install, launch, and sign in as needed. An existing signed-in session may be used;
+    |  synthetic account provenance is not a prerequisite. Every in-app action needed by the acceptance criteria
+    |  is allowed, including creating, editing, deleting records, and logging out.
+    |- For device QA, look for a staging environment switch in the app, build flavors, or configuration. Select
+    |  staging when available; otherwise continue with the app's default environment. Record which was used.
+    |  Do not require a local backend, disposable database, or outbound substitutes to exercise device flows.
+    |  Backend isolation requirements below apply only to backend and web targets, including in mixed runs.
     |- Derive flows from this run's acceptance criteria. Do not add flows the criteria do not ask for; report anything
     |  else you notice as a finding.
     |- QA never blocks the run. A missing report is recorded with a warning and the run continues, so report
@@ -132,7 +133,10 @@ internal object QaPromptSections {
 
   private val ENVIRONMENT_AND_ISOLATION_RULES: String =
     """
-    |Environment and isolation:
+    |Backend and web environment isolation:
+    |
+    |These requirements apply only to backend and web targets, not device QA. A backend or web setup failure
+    |does not prevent testing an available device app.
     |
     |- Use the repository's existing QA Compose files, test profiles, Testcontainers fixtures, or local isolated
     |  setups, and pick exactly one as the environment owner. Inspect effective configuration, not names such as
@@ -205,8 +209,9 @@ internal object QaPromptSections {
     |  `- <kind>: <passed|findings_open|skipped|incomplete> [reason: <token>] [backend: real|mocked|none]`. The
     |  `backend:` field is required on a `web` line.
     |- Under a `## Assertions` heading, list each exercised assertion with its flow and outcome.
-    |- Under a `## Isolation` heading, state the environment mechanism, the disposable database or its absence,
-    |  the outbound substitutes, and any rejected configuration. Never include secret values.
+    |- Under a `## Isolation` heading, record the selected environment or app defaults. For backend and web
+    |  targets also state the disposable database or its absence, outbound substitutes, and rejected configuration.
+    |  Never include secret values.
     |- Under a `## Temporary edits` heading, list every file you changed in the QA checkout, what you changed, and
     |  the flows the change made possible. Write `None.` when you changed nothing.
     """.trimMargin()

@@ -13,9 +13,10 @@ Drive the app on one iPhone or simulator, check the changed behavior, and write 
 
 ## Test account and environment
 
-- QA runs on a test account with test data. Every in-app action is allowed: create, edit, and delete records, add profiles, remove cards, log out. Never leave a flow untested to protect device or account state.
-- When the app or build offers an environment, flavor, or server choice, use Local when a local backend is available, else staging. Never use production.
-- When only production is available, exercise no flow. Write a `skipped` report that names the missing environment.
+- Build, install, launch, and sign in as needed. An existing signed-in session may be used. Do not require proof that the account was created as synthetic QA data.
+- Look for a staging environment switch in the app, build flavors, or configuration. Select staging when available; otherwise continue with the app's default environment. Record which was used.
+- Exercise every in-app action required by the acceptance criteria, including creating, editing, deleting records, and logging out. Never leave a flow untested to protect device or account state.
+- Device QA does not require a local backend, disposable database, or outbound substitutes. Backend and web isolation requirements apply only to those targets. Their setup failures do not block device flows.
 
 ## Prerequisites
 

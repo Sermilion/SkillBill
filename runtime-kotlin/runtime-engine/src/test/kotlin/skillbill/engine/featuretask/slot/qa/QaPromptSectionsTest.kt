@@ -10,6 +10,7 @@ import skillbill.scaffold.model.QaTargetKind
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertFalse
 
 class QaPromptSectionsTest {
   @Test
@@ -45,5 +46,36 @@ class QaPromptSectionsTest {
       "- Target `web`: kinds web, desktop; guidance `/packs/web/qa/guide.md`. Read it first and follow it.",
     )
     assertContains(supplement, "- Report coverage for every kind listed above.")
+  }
+
+  @Test
+  fun `device QA can use staging or defaults without satisfying backend isolation`() {
+    val directory = Path.of("/tmp/qa-device")
+    val qa =
+      QaExecutionContext(
+        workspace = QaWorkspace("phr-qa-device", directory, directory.resolve("report.md"), "$directory/"),
+        expected = qaTestExpected(),
+        target =
+          QaExecutionTarget.Supported(
+            targets =
+              listOf(
+                QaDeclaredTarget("kmp", setOf(QaTargetKind("android")), FileLocation("/packs/kmp/qa/android.md")),
+                QaDeclaredTarget("backend", setOf(QaTargetKind("backend")), FileLocation("/packs/backend/qa.md")),
+              ),
+            checkout = Path.of("/tmp/qa-checkout"),
+          ),
+      )
+
+    val supplement = QaPromptSections.supplement(qa).replace(Regex("\\s+"), " ")
+
+    assertContains(supplement, "look for a staging environment switch in the app, build flavors, or configuration")
+    assertContains(supplement, "Select staging when available; otherwise continue with the app's default environment")
+    assertContains(supplement, "An existing signed-in session may be used")
+    assertContains(supplement, "synthetic account provenance is not a prerequisite")
+    assertContains(supplement, "Do not require a local backend, disposable database, or outbound substitutes")
+    assertContains(supplement, "These requirements apply only to backend and web targets, not device QA")
+    assertContains(supplement, "A backend or web setup failure does not prevent testing an available device app")
+    assertContains(supplement, "Use fresh owned volumes")
+    assertFalse("Never use production" in supplement)
   }
 }
