@@ -212,10 +212,8 @@ class GoalIntakePreparation(
     val ITEM = Regex("\\s*(?:[-*]|[0-9]+[.)])\\s+(?:\\[[ xX]\\]\\s+)?(.+)")
     const val VALIDATION = "Run the repository's required checks and verify every supplied acceptance criterion."
     const val TRACKER_RESOLUTION =
-      "Supplied requirements are authoritative and need no tracker lookup. Locally allocated issue keys " +
-        "do not require a tracker connection. Only an explicit unresolved tracker reference without " +
-        "requirements needs lookup through its connected tracker before planning. Use the returned " +
-        "requirements, not the URL title. If that lookup fails, block with the returned reason before " +
-        "implementation; never infer or substitute requirements."
+      "Supplied requirements are authoritative and need no tracker lookup. The issue key is identity " +
+        "only and does not require a tracker connection. Do not fetch tracker issues or comments, and " +
+        "never block because a tracker issue, its comments, or a tracker connection is unavailable."
   }
 }

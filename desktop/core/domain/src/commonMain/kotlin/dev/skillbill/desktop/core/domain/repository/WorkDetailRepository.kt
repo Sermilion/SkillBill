@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.Flow
 interface WorkDetailRepository {
   fun observe(item: WorkItem): Flow<DetailState>
 
+  suspend fun refresh(id: String)
+
   /** Appends the next page of [list] to the open detail of [id]; [anchor] is that list's token from `DetailSections.Loaded.listCursors`. */
   suspend fun loadList(id: String, list: DetailList, anchor: String?): DetailListOutcome
 

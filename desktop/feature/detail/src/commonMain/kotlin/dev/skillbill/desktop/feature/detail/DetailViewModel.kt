@@ -2,6 +2,8 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
+import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.BoardState
 import dev.skillbill.desktop.core.domain.model.liveRows
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
@@ -78,22 +80,50 @@ class DetailViewModel(
 
   private var observation: Job? = null
   private var latestBoardRow = item
+  private var latestBoardItems = listOf(item)
+  private var relaunchedPhase: StandaloneRelaunch? = null
+  private var launchAccepted = false
 
-  private val controls = DetailControls(viewModelScope, workControls, toasts) { mutableState.value }
+  private val controls = DetailControls(viewModelScope, workControls, toasts, ::launchStarted, ::launchFinished) { mutableState.value }
 
   init {
     selection.select(null)
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
     observe()
     board.observe(ShellBoard.query).onEach { boardState ->
+      if (boardState is BoardState.Loaded) latestBoardItems = boardState.items
+      followRelaunchedPhase()
       val row = (boardState as? BoardState.Loaded)?.items?.firstOrNull { it.id == item.id }
+      val changed = row != null && (
+        row.lifecycle != latestBoardRow.lifecycle || row.fresh != latestBoardRow.fresh ||
+          row.pauseRequested != latestBoardRow.pauseRequested || row.stepLabel != latestBoardRow.stepLabel
+        )
       if (row != null) latestBoardRow = row
       mutableState.update { state ->
         val header = row?.let(state.header::withBoardVerdicts) ?: state.header
         state.copy(header = header, boardPosition = boardPosition(boardState, state.header.id))
       }
+      if (changed) detail.refresh(item.id)
     }
       .launchIn(viewModelScope)
+  }
+
+  private fun launchStarted(source: WorkItem) {
+    relaunchedPhase = if (source.standaloneExecution) StandaloneRelaunch(source, latestBoardItems.mapTo(HashSet()) { it.id }) else null
+    launchAccepted = false
+  }
+
+  private fun launchFinished(outcome: ControlOutcome) {
+    launchAccepted = outcome == ControlOutcome.RequestAccepted
+    if (!launchAccepted) relaunchedPhase = null
+    followRelaunchedPhase()
+  }
+
+  private fun followRelaunchedPhase() {
+    if (!launchAccepted) return
+    val successor = relaunchedPhase?.successor(latestBoardItems) ?: return
+    relaunchedPhase = null
+    effectChannel.trySend(DetailEffect.OpenItem(successor))
   }
 
   /**

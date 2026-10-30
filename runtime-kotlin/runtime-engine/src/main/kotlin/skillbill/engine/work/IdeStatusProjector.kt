@@ -656,18 +656,24 @@ class IdeStatusProjector(
       updatedAt = updatedAt,
       freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
       summary = summary,
-      title =
-        if (family == WorkflowFamily.TASK_RUNTIME) {
-          candidate.issueKey
-            ?.let { manifestStore.loadDurableByIssueKey(it, context.repoRoot) }
-            ?.takeIf { it.parentWorkflowId == candidate.workflowId }
-            ?.manifest?.featureName?.takeIf(String::isNotBlank)
-            ?: IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
-        } else {
-          IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
-        },
+      title = workflowTitle(candidate, context, family),
     )
   }
+
+  private fun workflowTitle(
+    candidate: IdeStatusCandidate,
+    context: IdeStatusProjectionContext,
+    family: WorkflowFamily,
+  ): String =
+    if (family == WorkflowFamily.TASK_RUNTIME) {
+      candidate.issueKey
+        ?.let { manifestStore.loadDurableByIssueKey(it, context.repoRoot) }
+        ?.takeIf { it.parentWorkflowId == candidate.workflowId }
+        ?.manifest?.featureName?.takeIf(String::isNotBlank)
+        ?: IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
+    } else {
+      IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
+    }
 
   private fun incompatible(
     candidate: IdeStatusCandidate,

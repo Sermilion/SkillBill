@@ -54,6 +54,8 @@ class FakeWorkDetailRepository(var runOptions: Map<String, RunOptions> = emptyMa
 
   override fun observe(item: WorkItem): Flow<DetailState> = details[item.id] ?: emptyFlow()
 
+  override suspend fun refresh(id: String) = Unit
+
   override suspend fun loadList(id: String, list: DetailList, anchor: String?): DetailListOutcome = DetailListOutcome.End
 
   override suspend fun prefetch(id: String): RunOptions? {

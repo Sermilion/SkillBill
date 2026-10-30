@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.data.runtime.BoardPage
 import dev.skillbill.desktop.core.data.session.LaunchBoardTarget
 import dev.skillbill.desktop.core.data.session.LaunchReservations
 import dev.skillbill.desktop.core.data.session.ReservationAdmission
+import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.test.runCurrent
@@ -28,6 +29,29 @@ class LaunchReservationsTest {
   private fun reserve(launches: LaunchReservations) = launches.reserve(
     KEY, SESSION, LaunchBoardTarget.Item(paused.id, paused.kind, paused.control.repositoryIdentity), paused.lifecycle, page(paused),
   )
+
+  @Test
+  fun `a standalone relaunch releases its reservation when a new invocation registers`() = runTest {
+    val source = paused.copy(standaloneExecution = true, control = paused.control.copy(invocationId = paused.id, phaseId = "plan"))
+    val launches = reservations()
+    val handle = assertIs<ReservationAdmission.Reserved>(launches.reserve(
+      KEY, SESSION, LaunchBoardTarget.Item(source.id, source.kind, source.control.repositoryIdentity), source.lifecycle, page(source),
+    )).handle
+    launches.settle(handle, succeeded = true)
+    val successor = source.copy(id = "new-invocation", running = true, lifecycle = Lifecycle.Active)
+
+    launches.onBoard(SESSION, BoardPage(listOf(source, successor), null, Instant.fromEpochMilliseconds(1)))
+
+    assertEquals(emptySet(), launches.keys.value)
+  }
+
+  @Test
+  fun `a standalone relaunch refuses an ambiguous new invocation`() {
+    val source = paused.copy(standaloneExecution = true, control = paused.control.copy(phaseId = "plan"))
+    val target = StandaloneRelaunch(source, setOf(source.id))
+
+    assertEquals(null, target.successor(listOf(source.copy(id = "new-a"), source.copy(id = "new-b"))))
+  }
 
   @Test
   fun `a refused launch releases its key`() = runTest {

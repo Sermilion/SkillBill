@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.feature.detail
 
 import dev.skillbill.desktop.core.designsystem.component.ToastData
+import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
 import dev.skillbill.desktop.core.domain.model.DecisionOutcome
 import dev.skillbill.desktop.core.domain.model.OperatorDecision
@@ -41,6 +42,8 @@ internal class DetailControls(
   private val scope: CoroutineScope,
   private val controls: WorkControlRepository,
   private val toasts: ToastQueue,
+  private val onLaunchStarted: (WorkItem) -> Unit,
+  private val onLaunchFinished: (ControlOutcome) -> Unit,
   private val current: () -> DetailUiState,
 ) {
   private val mutableState = MutableStateFlow(ControlsUiState())
@@ -67,7 +70,10 @@ internal class DetailControls(
           mutableState.update { it.copy(agentMenuOpen = true) }
           true
         } else {
-          runControl(ui, view, view.launch, InFlightControl.Launch, ControlAction.Launch, agentId) { controls.launch(item, agentId) }
+          runControl(ui, view, view.launch, InFlightControl.Launch, ControlAction.Launch, agentId) {
+            onLaunchStarted(item)
+            controls.launch(item, agentId).also(onLaunchFinished)
+          }
         }
       }
       ControlsAction.OpenAgentMenu -> update { it.copy(agentMenuOpen = view.agent?.enabled == true) }

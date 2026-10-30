@@ -25,6 +25,10 @@ class RuntimeWorkDetailRepository(private val sessions: DatabaseSessionManager) 
     failed = { DetailState(item, DetailSections.Failed(ReadProblem.Storage(it))) },
   ) { it.details.observe(item) }
 
+  override suspend fun refresh(id: String) {
+    sessions.sessions.value?.details?.refresh(id)
+  }
+
   override suspend fun loadList(id: String, list: DetailList, anchor: String?): DetailListOutcome =
     sessions.sessions.value?.details?.loadList(id, list, anchor) ?: DetailListOutcome.End
 

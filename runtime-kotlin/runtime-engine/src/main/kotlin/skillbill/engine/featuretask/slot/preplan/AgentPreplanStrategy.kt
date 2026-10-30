@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
-import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
@@ -54,7 +53,7 @@ class AgentPreplanStrategy : PhaseStrategy() {
 
   override fun stepDescriptor(stepId: String): PhaseStepDescriptor<*> {
     policies.policyOf(stepId)
-    return PhaseStepDescriptor(PhaseBindingFamily.Agent, PhaseStepHooks.None) { run, state ->
+    return PhaseStepDescriptor(PhaseBindingFamily.Agent, PreplanTrackerBlockHooks) { run, state ->
       runAgentStep(run, state)
     }
   }
@@ -84,13 +83,11 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "feature, a shared client, a platform wrapper, or a dependency coordinate unless the plan needs that " +
         "fact to specify this task. Follow a wrapper when required information, setup or lifecycle authority " +
         "must pass through it; a forwarding signature alone does not prove that transport. Otherwise a " +
-        "wrapper that only forwards a call you have already read is not a new question. Supplied requirements " +
-        "are authoritative and need no tracker lookup, even when the intake includes an issue key; a locally " +
-        "allocated issue key is identity only. Only when the intake is an unresolved tracker reference without " +
-        "requirements, and does not already carry its comments, fetch the issue and its comments together: " +
-        "request every tool schema you need in one round, then make every tracker call in the next, alongside " +
-        "your first code lookups. Do not fetch the tracker again after " +
-        "that. Each tool round resends this whole conversation, so issue every lookup you can name " +
+        "wrapper that only forwards a call you have already read is not a new question. The intake carries " +
+        "the requirements, and they are authoritative. The issue key is identity only, even when the " +
+        "requirements describe a tracker integration. Do not call tracker tools, and never block because a " +
+        "tracker issue, its comments, or a tracker connection is unavailable. Each tool round resends this " +
+        "whole conversation, so issue every lookup you can name " +
         "now in one round, and start a new round only for a lookup that depends on what the last round " +
         "returned. Batching never adds a lookup: each lookup in a round must still answer an open question. " +
         "Open each file once and read every part this task needs in that read. Read a file under 300 lines " +

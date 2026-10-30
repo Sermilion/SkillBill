@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.data.session
 
 import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.data.runtime.BoardPage
+import dev.skillbill.desktop.core.domain.model.StandaloneRelaunch
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkItem
@@ -14,7 +15,7 @@ import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 internal val WorkItem.launchKey: String get() = issueKey ?: id
 
 internal sealed interface LaunchBoardTarget {
-  data class Item(val id: String, val kind: WorkKind?, val repositoryIdentity: String) : LaunchBoardTarget
+  data class Item(val id: String, val kind: WorkKind?, val repositoryIdentity: String, val relaunch: StandaloneRelaunch? = null) : LaunchBoardTarget
 
   data class Goal(val issueKey: String, val repositoryIdentity: String, val workId: String? = null) : LaunchBoardTarget
 }
@@ -64,7 +65,12 @@ class LaunchReservations {
     val snapshot = newest(latest[sessionId], Snapshot(page, sessionId))
     latest[sessionId] = snapshot
     val selected = target.select(snapshot.page.items)
-    val boundTarget = if (target is LaunchBoardTarget.Goal && selected != null) target.copy(workId = selected.id) else target
+    val boundTarget = when {
+      target is LaunchBoardTarget.Goal && selected != null -> target.copy(workId = selected.id)
+      target is LaunchBoardTarget.Item && selected?.standaloneExecution == true ->
+        target.copy(relaunch = StandaloneRelaunch(selected, snapshot.page.items.mapTo(HashSet()) { it.id }))
+      else -> target
+    }
     val selectedBaseline = if (target is LaunchBoardTarget.Goal) selected?.lifecycle else baseline
     held[key] = Reservation(handle, boundTarget, selectedBaseline, snapshot.page.observedAt, Phase.InFlight)
     publish()
@@ -115,7 +121,7 @@ class LaunchReservations {
   }
 
   private fun LaunchBoardTarget.select(items: List<WorkItem>): WorkItem? = when (this) {
-    is LaunchBoardTarget.Item -> items.firstOrNull {
+    is LaunchBoardTarget.Item -> relaunch?.successor(items) ?: items.firstOrNull {
       it.id == id && it.kind == kind && it.control.repositoryIdentity == repositoryIdentity
     }
     is LaunchBoardTarget.Goal -> items.singleOrNull {

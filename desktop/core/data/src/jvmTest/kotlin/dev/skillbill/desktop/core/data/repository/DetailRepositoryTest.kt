@@ -7,6 +7,7 @@ import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
 import dev.skillbill.desktop.core.domain.model.ActivityEvent
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -105,7 +106,28 @@ class DetailRepositoryTest {
     assertFalse(states.last().header.running)
   }
 
+  @Test
+  fun `an explicit refresh replaces the open header and launch options without a commit signal`() = runTest {
+    val reads = FakeDetailReads()
+    val details = DetailObservations(backgroundScope, MutableStateFlow(signal()), reads)
+    val states = mutableListOf<DetailState>()
+    backgroundScope.launch { details.observe(ROW).collect { states += it } }
+    runCurrent()
+    reads.header = ROW.copy(lifecycle = Lifecycle.Paused)
+    reads.options = OPTIONS.copy(canLaunch = false)
+
+    details.refresh(ROW.id)
+    runCurrent()
+
+    assertEquals(1, reads.refreshes)
+    assertEquals(Lifecycle.Paused, states.last().header.lifecycle)
+    assertFalse(assertIs<DetailSections.Loaded>(states.last().sections).runOptions!!.canLaunch)
+    assertTrue(states.drop(1).none { it.sections == DetailSections.Pending })
+  }
+
   private class FakeDetailReads : DetailReads {
+    var header = ROW
+    var options = OPTIONS
     var firstReads = 0
     var refreshes = 0
     var activityReads = 0
@@ -131,9 +153,9 @@ class DetailRepositoryTest {
     override suspend fun list(id: String, list: DetailList, cursor: String?): DetailRead = loaded()
 
     private fun loaded(observedAtMs: Long = 0) = DetailRead.Loaded(
-      ROW,
+      header,
       DetailSections.Loaded(
-        emptyDetail(Instant.fromEpochMilliseconds(observedAtMs)), OPTIONS, emptyMap(), emptySet(), stale = false,
+        emptyDetail(Instant.fromEpochMilliseconds(observedAtMs)), options, emptyMap(), emptySet(), stale = false,
       ),
     )
   }

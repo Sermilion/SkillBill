@@ -5,6 +5,9 @@ import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
+import dev.skillbill.desktop.core.domain.model.ControlOutcome
+import dev.skillbill.desktop.core.domain.model.WorkKind
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.OpenOutcome
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.RunOptions
@@ -25,6 +28,7 @@ import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +36,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -55,8 +60,11 @@ class DetailViewModelTest {
     override fun reopen() = Unit
   }
 
-  private fun viewModel(board: FakeWorkBoardRepository = FakeWorkBoardRepository()) =
-    DetailViewModel(item, session, details, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, FakeWorkControlRepository(), ToastQueue())
+  private fun viewModel(
+    board: FakeWorkBoardRepository = FakeWorkBoardRepository(),
+    source: WorkItem = item,
+    workControls: FakeWorkControlRepository = FakeWorkControlRepository(),
+  ) = DetailViewModel(source, session, details, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, workControls, ToastQueue())
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {
@@ -110,6 +118,67 @@ class DetailViewModelTest {
     assertTrue(viewModel.state.value.header.running)
   }
 
+  @Test
+  fun `resuming a goal on the board refreshes the open detail without navigation`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val board = FakeWorkBoardRepository()
+    val viewModel = viewModel(board)
+    advanceUntilIdle()
+    val idle = item.copy(lifecycle = Lifecycle.Idle, fresh = false, running = false)
+    board.state.value = loadedBoard(items = listOf(idle))
+    advanceUntilIdle()
+    details.flow.emit(DetailState(idle, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    details.refreshes.clear()
+
+    val active = idle.copy(lifecycle = Lifecycle.Active, fresh = true, running = true)
+    board.state.value = loadedBoard(items = listOf(active))
+    advanceUntilIdle()
+
+    assertEquals(listOf(item.id), details.refreshes)
+    details.flow.emit(DetailState(active, DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    assertEquals(Lifecycle.Active, viewModel.state.value.header.lifecycle)
+    assertTrue(viewModel.state.value.header.fresh)
+    assertEquals(null, runActionsView(viewModel.state.value).launch)
+  }
+
+  @Test
+  fun `resuming a standalone phase opens its new invocation and leaves historical runs alone`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val source = item.copy(
+      kind = WorkKind.Phase, lifecycle = Lifecycle.Blocked, standaloneExecution = true,
+      control = item.control.copy(invocationId = item.id, phaseId = "plan"),
+    )
+    val existing = source.copy(id = "previous-plan")
+    val board = FakeWorkBoardRepository().apply { state.value = loadedBoard(items = listOf(source, existing)) }
+    val viewModel = viewModel(board, source, FakeWorkControlRepository(ControlOutcome.RequestAccepted))
+    val effects = mutableListOf<DetailEffect>()
+    backgroundScope.launch { viewModel.effects.collect { effects += it } }
+    advanceUntilIdle()
+    val options = RunOptions(true, true, "Resume", "codex", listOf("codex"), null)
+    details.flow.emit(DetailState(source, DetailSections.Loaded(emptyDetail, options, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+    assertEquals(emptyList(), effects)
+
+    viewModel.onAction(ControlsAction.Launch)
+    advanceUntilIdle()
+    assertEquals(emptyList(), effects)
+    val successor = source.copy(
+      id = "new-plan", lifecycle = Lifecycle.Active, running = true,
+      control = source.control.copy(invocationId = "new-plan"),
+    )
+    val otherRepository = successor.copy(id = "other-repo", control = successor.control.copy(repositoryIdentity = "other"))
+    board.state.value = loadedBoard(items = listOf(source, existing, otherRepository, successor))
+    advanceUntilIdle()
+
+    runCurrent()
+    assertEquals(listOf<DetailEffect>(DetailEffect.OpenItem(successor)), effects)
+    board.state.value = loadedBoard(items = listOf(source, successor.copy(stepLabel = "next")))
+    advanceUntilIdle()
+    assertEquals(1, effects.size)
+  }
+
   private fun loaded(anchor: String) = DetailState(
     item,
     DetailSections.Loaded(emptyDetail, null, mapOf(DetailList.Subtasks to anchor), setOf(DetailList.Subtasks), stale = false),
@@ -118,8 +187,11 @@ class DetailViewModelTest {
   private class RecordingDetailRepository : WorkDetailRepository {
     val flow = MutableSharedFlow<DetailState>()
     val loads = mutableListOf<Triple<String, DetailList, String?>>()
+    val refreshes = mutableListOf<String>()
 
     override fun observe(item: WorkItem): Flow<DetailState> = flow
+
+    override suspend fun refresh(id: String) { refreshes += id }
 
     override suspend fun loadList(id: String, list: DetailList, anchor: String?): DetailListOutcome {
       loads += Triple(id, list, anchor)

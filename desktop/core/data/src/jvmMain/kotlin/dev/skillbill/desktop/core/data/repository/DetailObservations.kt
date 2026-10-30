@@ -23,6 +23,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.conflate
@@ -52,6 +54,7 @@ class DetailObservations internal constructor(
   /** A first load and the signal snapshot captured before it ran, so a commit landing during the read still triggers. */
   private class Loaded(val read: DetailRead, val applied: SignalSnapshot)
 
+  private val requestedRefreshes = MutableSharedFlow<String>()
   private val lock = Any()
   private val cache = object : LinkedHashMap<String, Loaded>(PREFETCH_CAPACITY + 1, 1f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Loaded>) = size > PREFETCH_CAPACITY
@@ -85,12 +88,19 @@ class DetailObservations internal constructor(
   private fun refreshes(item: WorkItem, appliedAtLoad: SignalSnapshot): Flow<DetailRead> {
     val ids = setOfNotNull(item.id, item.control.workflowId, item.control.invocationId)
     var applied = appliedAtLoad
-    return signals
-      .mapNotNull { snapshot -> refreshKind(snapshot, applied, ids).also { applied = snapshot } }
+    return merge(
+      signals.mapNotNull { snapshot -> refreshKind(snapshot, applied, ids).also { applied = snapshot } },
+      requestedRefreshes.mapNotNull { id -> DetailRefreshKind.FULL.takeIf { id == item.id } },
+    )
       .conflate()
       .mapLatest { kind ->
         if (kind == DetailRefreshKind.ACTIVITY) reads.activity(item.id) else reads.refresh(item.id, extended[item.id].orEmpty())
       }
+  }
+
+  suspend fun refresh(id: String) {
+    synchronized(lock) { cache.remove(id) }
+    requestedRefreshes.emit(id)
   }
 
   suspend fun loadList(id: String, list: DetailList, cursor: String?): DetailListOutcome {

@@ -11,6 +11,7 @@ import dev.skillbill.desktop.core.domain.model.PurgeOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryOutcome
 import dev.skillbill.desktop.core.domain.model.RecoveryPreview
 import dev.skillbill.desktop.core.domain.model.RecoveryPreviewOutcome
+import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.WorkControlRepository
 import dev.skillbill.desktop.core.testing.workItem
@@ -21,9 +22,34 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DetailControlsTest {
+  @Test
+  fun `an idle goal keeps Resume visible when run options have not loaded`() {
+    val state = loadedState(workItem("SKILL-447", lifecycle = Lifecycle.Idle), incident = null)
+
+    val actions = runActionsView(state)
+
+    assertEquals("Resume", assertNotNull(actions.launch).label)
+    assertFalse(actions.launch.enabled)
+    assertTrue(actions.refreshNeeded)
+  }
+
+  @Test
+  fun `an idle goal can resume after fresh options arrive and stays disabled on a failed refresh`() {
+    val state = loadedState(workItem("SKILL-447", lifecycle = Lifecycle.Idle).copy(fresh = false), incident = null)
+    val sections = state.sections as SectionsUi.Loaded
+    val loaded = state.copy(sections = sections.copy(runOptions = RunOptions(true, true, "Resume", "codex", listOf("codex"), null)))
+
+    assertTrue(assertNotNull(runActionsView(loaded).launch).enabled)
+    assertFalse(assertNotNull(runActionsView(loaded.copy(stale = true)).launch).enabled)
+    assertNull(runActionsView(loaded.copy(header = loaded.header.copy(lifecycle = Lifecycle.Active))).launch)
+    assertNull(runActionsView(loaded.copy(header = loaded.header.copy(lifecycle = Lifecycle.Terminal))).launch)
+  }
+
   @Test
   fun `a pending pause keeps immediate pause available and disables another pause request`() {
     val item = workItem("SKILL-1", lifecycle = Lifecycle.Active).copy(
@@ -61,7 +87,7 @@ class DetailControlsTest {
     val item = workItem("SKILL-1", lifecycle = Lifecycle.Paused).copy(awaitsOperatorDecision = true, currentSubtaskId = "8")
     val state = loadedState(item, incident = null)
     val repository = DecisionRecordingControls()
-    val controls = DetailControls(backgroundScope, repository, ToastQueue()) { state }
+    val controls = DetailControls(backgroundScope, repository, ToastQueue(), {}, {}) { state }
 
     controls.onAction(ControlsAction.EditInstructions("   "))
     controls.onAction(ControlsAction.RecordDecision)
