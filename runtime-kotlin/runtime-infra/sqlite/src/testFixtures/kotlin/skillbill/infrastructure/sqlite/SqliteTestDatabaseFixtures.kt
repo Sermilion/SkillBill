@@ -18,7 +18,6 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
-import kotlin.io.path.readBytes
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
@@ -26,6 +25,7 @@ import java.sql.DriverManager
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import kotlin.io.path.readBytes
 
 object SqliteTestDatabasePaths {
   const val DB_ENVIRONMENT_KEY: String = RuntimeDatabaseEnvironmentKeys.DATABASE_PATH

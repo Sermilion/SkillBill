@@ -27,6 +27,7 @@ import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersiste
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.model.RepositoryRoot
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -113,6 +114,7 @@ fun engineWorkflowGoalRunnerManifestStore(
       workflowSnapshotValidator,
       featureTaskRuntimeWireArtifactValidatorForTest(),
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+      SqliteWorkflowArtifactWireEncoder(),
     )
   val qualityExecution = testWorkflowGoalRunnerQualityExecutionStore(database, workflowSnapshotValidator)
   return WorkflowGoalRunnerManifestStore(
@@ -210,6 +212,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
         workflowSnapshotValidator,
         featureTaskRuntimeWireArtifactValidatorForTest(),
         FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+        SqliteWorkflowArtifactWireEncoder(),
       ),
     gitOperations = gitOperations,
     workerSupervisor = workerSupervisor,
@@ -232,6 +235,7 @@ fun testWorkflowGoalRunnerQualityExecutionStore(
       workflowSnapshotValidator,
       featureTaskRuntimeWireArtifactValidatorForTest(),
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+      SqliteWorkflowArtifactWireEncoder(),
     ),
   )
 }

@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepair
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
@@ -73,6 +74,7 @@ internal fun harnessAcceptanceRecorder(
         gitOperations,
         source,
         RUNNER_TEST_PROJECT_STORE,
+        SqliteWorkflowArtifactWireEncoder(),
       ),
       AcceptanceCriterionRepairAuditAdmission(validator),
     ),

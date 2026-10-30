@@ -46,6 +46,7 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.seedLegacySharedPreplan
 import skillbill.infrastructure.sqlite.seedLegacySubtaskPlan
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -97,6 +98,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
+
+private fun encodedArtifacts(artifacts: Map<String, Any?>): String =
+  SqliteWorkflowArtifactWireEncoder().encode(DurableWorkflowArtifacts.fromMap(artifacts))
 
 class FeatureTaskExecutionPlanCreationTest {
   @Test
@@ -493,7 +497,7 @@ class FeatureTaskExecutionPlanCreationTest {
           SlotBaselineSqlite.updateFeatureTaskArtifacts(
             databasePath,
             CHILD,
-            JsonCodec.mapToJsonString(row.toSnapshot().artifacts + family.entry(descriptor)),
+            encodedArtifacts(row.toSnapshot().artifacts + family.entry(descriptor)),
           )
         } else {
           database.selfManagedWrite { unit ->
@@ -619,6 +623,7 @@ class FeatureTaskExecutionPlanCreationTest {
           testWorkflowSnapshotValidator,
           featureTaskRuntimeWireArtifactValidatorForTest(),
           FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+          SqliteWorkflowArtifactWireEncoder(),
         ),
         testWorkflowGoalRunnerQualityExecutionStore(database, testWorkflowSnapshotValidator),
       )
@@ -828,14 +833,16 @@ class FeatureTaskExecutionPlanCreationTest {
               fixture.execution.inputs.copy(phaseTimeoutMillis = 1),
             ).let { fixture.execution.validator.read(it, "changed execution policy") }
         }
-      JsonCodec.mapToJsonString(
-        if (replacement == null) {
-          row.artifacts.toMutableMap().also(
-            family::removeFrom,
-          )
-        } else {
-          row.artifacts + family.entry(replacement)
-        },
+      SqliteWorkflowArtifactWireEncoder().encode(
+        DurableWorkflowArtifacts.fromMap(
+          if (replacement == null) {
+            row.artifacts.toMutableMap().also(
+              family::removeFrom,
+            )
+          } else {
+            row.artifacts + family.entry(replacement)
+          },
+        ),
       )
     }
   }
@@ -867,7 +874,7 @@ class FeatureTaskExecutionPlanCreationTest {
       SlotBaselineSqlite.updateFeatureTaskArtifacts(
         databasePath,
         workflowId,
-        JsonCodec.mapToJsonString(row.toSnapshot().artifacts + family.entry(descriptor)),
+        encodedArtifacts(row.toSnapshot().artifacts + family.entry(descriptor)),
       )
     } else {
       database.selfManagedWrite { unit ->

@@ -13,12 +13,14 @@ import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -83,7 +85,7 @@ class GoalObservabilityModelsTest {
           artifacts =
             FeatureTaskRuntimeWorkflowArtifactMap.from(
               mapOf(
-                "goal_continuation" to mapOf("issue_key" to "SKILL-372", "subtask_id" to 1),
+                "goal_continuation" to continuation("SKILL-372"),
                 "progress_event" to mapOf("timestamp" to "2026-06-01T00:00:00Z", "sequence" to 2.7),
               ),
             ),
@@ -105,7 +107,7 @@ class GoalObservabilityModelsTest {
             FeatureTaskRuntimeWorkflowArtifactMap.from(
               first +
                 mapOf(
-                  "goal_continuation" to mapOf("issue_key" to "SKILL-378", "subtask_id" to 1),
+                  "goal_continuation" to continuation("SKILL-378"),
                   "progress_event" to mapOf("timestamp" to "2026-06-01T00:01:00Z", "sequence" to 0),
                 ),
             ),
@@ -122,6 +124,15 @@ class GoalObservabilityModelsTest {
 
     assertEquals(listOf(0, 1, 2), sequences)
   }
+
+  private fun continuation(issueKey: String) =
+    FeatureTaskRuntimeGoalContinuationArtifact(
+      issueKey = issueKey,
+      subtaskId = 1,
+      suppressPr = true,
+      goalBranch = "feat/$issueKey",
+      codeReviewMode = CodeReviewExecutionMode.INLINE,
+    )
 
   private fun runtimeEventPatch(
     artifacts: Any,

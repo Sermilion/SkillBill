@@ -13,7 +13,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.time.Instant
 import kotlin.test.Test
@@ -103,9 +106,9 @@ class GoalRunnerOutcomeScopeTest {
   ): WorkflowStateRecord {
     val record = runtimeCandidateRecord(workflowId, Instant.parse("2026-10-20T19:20:19Z"))
     val artifacts = decodeWorkflowArtifactsForTest(record.artifactsJson).toMutableMap()
-    val continuation = (artifacts.getValue("goal_continuation") as Map<*, *>).toMutableMap()
-    continuation["parent_workflow_id"] = parentId
-    artifacts["goal_continuation"] = continuation
+    val continuation =
+      requireNotNull(record.typedArtifacts.goalContinuationArtifact()).copy(parentWorkflowId = parentId)
+    val continuationEntry = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(continuation)
     if (complete) {
       artifacts["goal_continuation_outcome"] =
         mapOf(
@@ -122,6 +125,7 @@ class GoalRunnerOutcomeScopeTest {
       workflowStatus = if (complete) "completed" else "running",
       currentStepId = if (complete) "commit_push" else "validate",
       artifactsJson = JsonCodec.valueToJsonString(artifacts),
+      typedArtifacts = DurableWorkflowArtifacts.fromMap(record.typedArtifacts + continuationEntry),
     ).let { if (complete) it.withSettledLegacyHistorySkip() else it }
   }
 }

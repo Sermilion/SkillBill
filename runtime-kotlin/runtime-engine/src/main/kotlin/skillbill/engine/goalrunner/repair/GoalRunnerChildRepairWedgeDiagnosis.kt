@@ -18,6 +18,7 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Path
@@ -127,8 +128,9 @@ class GoalRunnerChildRepairWedgeDiagnosis(
     passed: MutableList<String>,
   ) {
     val importArtifact =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(artifacts) as? Map<*, *>
-    val storedVersion = importArtifact?.get("phase_output_contract_version") as? String
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(artifacts)
+        as? FeatureTaskRuntimeGoalPlanningImport
+    val storedVersion = importArtifact?.phaseOutputContractVersion
     if (storedVersion == null || storedVersion == FEATURE_TASK_RUNTIME_CONTRACT_VERSION) {
       passed += PASSED_PHASE_OUTPUT_CONTRACT
       return

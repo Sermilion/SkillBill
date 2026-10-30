@@ -81,6 +81,7 @@ import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequest
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepositoryDefaults
@@ -143,12 +144,14 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePhaseLedgerEntryFromArtifact
+import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleSubtask
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -288,7 +291,10 @@ class WorkflowServiceTest {
     assertEquals(listOf("operator_abandonment"), abandoned.acknowledgement.updatedArtifactKeys)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode(opened.workflowId, RUNTIME)).toSnapshot()
     assertEquals("abandoned", saved.workflowStatus.wireValue)
-    assertContains(JsonCodec.mapToJsonString(saved.artifacts.toMap()), "Superseded after a deterministic policy block.")
+    assertContains(
+      SqliteWorkflowArtifactWireEncoder().encode(saved.artifacts),
+      "Superseded after a deterministic policy block.",
+    )
     val repeated =
       assertIs<WorkflowUpdateResult.Error>(
         service.abandonFeatureTaskRuntime(opened.workflowId, "Try again."),
@@ -391,7 +397,7 @@ class WorkflowServiceTest {
     assertEquals("abandoned", abandoned.acknowledgement.workflowStatus.wireValue)
     assertEquals(listOf("operator_abandonment"), abandoned.acknowledgement.updatedArtifactKeys)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode(opened.workflowId, RUNTIME)).toSnapshot()
-    assertContains(JsonCodec.mapToJsonString(saved.artifacts.toMap()), "Operator abandoned the goal.")
+    assertContains(SqliteWorkflowArtifactWireEncoder().encode(saved.artifacts), "Operator abandoned the goal.")
     assertTrue(saved.workflowStatus.wireValue in FeatureTaskRuntimePhaseWorkflowDefinition.definition.terminalStatuses)
     assertTrue(WorkflowStatus.PAUSED.wireValue in FeatureTaskRuntimePhaseWorkflowDefinition.definition.workflowStatuses)
     assertIs<WorkflowUpdateResult.Error>(service.abandonFeatureTaskRuntime(opened.workflowId, "Again."))
@@ -455,7 +461,7 @@ class WorkflowServiceTest {
       )
     assertEquals(listOf("operator_identity_repair"), repaired.acknowledgement.updatedArtifactKeys)
     val saved = requireNotNull(workflows.getFeatureTaskWorkflowAsMode(opened.workflowId, RUNTIME)).toSnapshot()
-    assertContains(JsonCodec.mapToJsonString(saved.artifacts.toMap()), "Repair a legacy identity.")
+    assertContains(SqliteWorkflowArtifactWireEncoder().encode(saved.artifacts), "Repair a legacy identity.")
   }
 
   @Test
@@ -784,14 +790,7 @@ class WorkflowServiceTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "issue_key" to "SKILL-61",
-                    "subtask_id" to 1,
-                    "suppress_pr" to true,
-                    "goal_branch" to "feat/SKILL-61",
-                    "code_review_mode" to "auto",
-                  ),
+                "goal_continuation" to childContinuation("SKILL-61", "feat/SKILL-61", parentWorkflowId = null),
                 "progress_event" to
                   mapOf(
                     "step_id" to "implement",
@@ -963,15 +962,7 @@ class WorkflowServiceDecomposedParentTest {
           WorkflowArtifactPatch.from(
             mapOf(
               "plan" to mapOf("mode" to "decompose"),
-              "goal_continuation" to
-                mapOf(
-                  "enabled" to true,
-                  "issue_key" to "SKILL-52.1",
-                  "subtask_id" to 1,
-                  "suppress_pr" to true,
-                  "goal_branch" to "feat/SKILL-52",
-                  "code_review_mode" to "auto",
-                ),
+              "goal_continuation" to childContinuation(parentWorkflowId = null),
               DECOMPOSITION_RUNTIME_ARTIFACT_KEY to
                 testDecompositionManifestValidator.encodeManifestWireMap(decompositionRuntime(status = "in_progress")),
             ),
@@ -1849,18 +1840,7 @@ class WorkflowGoalStatusProjectionTest {
     ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).seed(workflows, "wfl-authoritative", "SKILL-52.1")
   }
 
-  private fun goalContinuationArtifact(): Map<String, Any?> =
-    mapOf(
-      "goal_continuation" to
-        mapOf(
-          "issue_key" to "SKILL-52.1",
-          "subtask_id" to 1,
-          "parent_workflow_id" to "wfl-parent",
-          "suppress_pr" to true,
-          "goal_branch" to "feat/SKILL-52",
-          "code_review_mode" to "auto",
-        ),
-    )
+  private fun goalContinuationArtifact(): Map<String, Any?> = mapOf("goal_continuation" to childContinuation())
 
   private fun staleObservabilityArtifact(): Map<String, Any?> =
     mapOf(
@@ -2121,15 +2101,7 @@ class GoalRunnerCommitShaRecoveryTest {
         artifactsPatch =
           WorkflowArtifactPatch.from(
             mapOf(
-              "goal_continuation" to
-                mapOf(
-                  "parent_workflow_id" to "wfl-parent",
-                  "issue_key" to "SKILL-52.1",
-                  "subtask_id" to 1,
-                  "suppress_pr" to true,
-                  "goal_branch" to "feat/SKILL-52",
-                  "code_review_mode" to "auto",
-                ),
+              "goal_continuation" to childContinuation(),
             ),
           ),
       ),
@@ -2242,15 +2214,7 @@ class GoalRunnerCommitShaRecoveryTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "SKILL-52.1",
-                    "subtask_id" to 1,
-                    "suppress_pr" to true,
-                    "goal_branch" to "feat/SKILL-52",
-                    "code_review_mode" to "auto",
-                  ),
+                "goal_continuation" to childContinuation(),
               ),
             ),
           sessionId = "ftr-no-sha",
@@ -2283,15 +2247,7 @@ class GoalRunnerCommitShaRecoveryTest {
         artifactsPatch =
           WorkflowArtifactPatch.from(
             mapOf(
-              "goal_continuation" to
-                mapOf(
-                  "parent_workflow_id" to "wfl-parent",
-                  "issue_key" to "SKILL-52.1",
-                  "subtask_id" to 1,
-                  "suppress_pr" to true,
-                  "goal_branch" to "feat/SKILL-52",
-                  "code_review_mode" to "auto",
-                ),
+              "goal_continuation" to childContinuation(),
               "goal_continuation_outcome" to
                 mapOf(
                   "issue_key" to "SKILL-52.1",
@@ -2334,15 +2290,7 @@ class GoalRunnerCommitShaRecoveryTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "SKILL-52.1",
-                    "subtask_id" to 1,
-                    "suppress_pr" to true,
-                    "goal_branch" to "feat/SKILL-52",
-                    "code_review_mode" to "auto",
-                  ),
+                "goal_continuation" to childContinuation(),
                 "goal_continuation_outcome" to
                   mapOf(
                     "issue_key" to "SKILL-52.1",
@@ -2469,15 +2417,7 @@ class WorkflowGoalRunnerOutcomeStoreTest {
         artifactsPatch =
           WorkflowArtifactPatch.from(
             mapOf(
-              "goal_continuation" to
-                mapOf(
-                  "parent_workflow_id" to "wfl-parent",
-                  "issue_key" to "SKILL-52.1",
-                  "subtask_id" to 1,
-                  "suppress_pr" to true,
-                  "goal_branch" to "feat/SKILL-52",
-                  "code_review_mode" to "auto",
-                ),
+              "goal_continuation" to childContinuation(),
               "goal_continuation_outcome" to
                 mapOf(
                   "issue_key" to "SKILL-52.1",
@@ -2539,7 +2479,7 @@ class WorkflowGoalRunnerReconciliationTest {
     val stale = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-stale")).toSnapshot()
     assertEquals("blocked", stale.workflowStatus.wireValue)
     assertEquals("blocked", decodeWorkflowStepsForTest(stale.steps).getValue("implement"))
-    assertContains(JsonCodec.mapToJsonString(stale.artifacts.toMap()), "stale running child 'wfl-stale'")
+    assertContains(SqliteWorkflowArtifactWireEncoder().encode(stale.artifacts), "stale running child 'wfl-stale'")
   }
 
   @Test
@@ -2565,15 +2505,7 @@ class WorkflowGoalRunnerReconciliationTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "SKILL-52.1",
-                    "subtask_id" to 1,
-                    "suppress_pr" to true,
-                    "goal_branch" to "feat/SKILL-52",
-                    "code_review_mode" to "auto",
-                  ),
+                "goal_continuation" to childContinuation(),
               ),
             ),
           sessionId = "ftr-001",
@@ -2593,7 +2525,7 @@ class WorkflowGoalRunnerReconciliationTest {
     assertEquals("wfl-orphan", outcome.workflowId)
     val orphan = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-orphan")).toSnapshot()
     assertEquals("blocked", orphan.workflowStatus.wireValue)
-    assertContains(JsonCodec.mapToJsonString(orphan.artifacts.toMap()), "no longer active")
+    assertContains(SqliteWorkflowArtifactWireEncoder().encode(orphan.artifacts), "no longer active")
   }
 
   @Test
@@ -2619,15 +2551,7 @@ class WorkflowGoalRunnerReconciliationTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "SKILL-52.1",
-                    "subtask_id" to 1,
-                    "suppress_pr" to true,
-                    "goal_branch" to "feat/SKILL-52",
-                    "code_review_mode" to "auto",
-                  ),
+                "goal_continuation" to childContinuation(),
               ),
             ),
           sessionId = "ftr-001",
@@ -2697,15 +2621,7 @@ class WorkflowGoalRunnerReconciliationTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "SKILL-52.1",
-                    "subtask_id" to 1,
-                    "suppress_pr" to true,
-                    "goal_branch" to "feat/SKILL-52",
-                    "code_review_mode" to "auto",
-                  ),
+                "goal_continuation" to childContinuation(),
               ),
             ),
           sessionId = "ftr-001",
@@ -2753,13 +2669,7 @@ class WorkflowGoalRunnerReconciliationTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "SKILL-85",
-                    "subtask_id" to 1,
-                    "suppress_pr" to true,
-                  ),
+                "goal_continuation" to childContinuation("SKILL-85", "feat/SKILL-85"),
                 "feature_task_runtime_phase_records" to completedPlanningPhaseRecords(),
               ),
             ),
@@ -2811,13 +2721,7 @@ class WorkflowGoalRunnerReconciliationTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "PS-24",
-                    "subtask_id" to 2,
-                    "suppress_pr" to true,
-                  ),
+                "goal_continuation" to childContinuation("PS-24", "feat/PS-24", subtaskId = 2),
               ),
             ),
           sessionId = "ftr-002",
@@ -2867,13 +2771,7 @@ class WorkflowGoalRunnerReconciliationTest {
           artifactsPatch =
             WorkflowArtifactPatch.from(
               mapOf(
-                "goal_continuation" to
-                  mapOf(
-                    "parent_workflow_id" to "wfl-parent",
-                    "issue_key" to "PS-24",
-                    "subtask_id" to 3,
-                    "suppress_pr" to true,
-                  ),
+                "goal_continuation" to childContinuation("PS-24", "feat/PS-24", subtaskId = 3),
               ),
             ),
           sessionId = "ftr-003",
@@ -2953,15 +2851,7 @@ private fun staleRunningChildRecord(definition: WorkflowDefinition) =
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-52.1",
-                "subtask_id" to 1,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-52",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to childContinuation(),
           ),
         ),
       sessionId = "ftr-001",
@@ -2985,15 +2875,7 @@ private fun authoritativeCompleteChildRecord(definition: WorkflowDefinition) =
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-52.1",
-                "subtask_id" to 1,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-52",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to childContinuation(),
             "goal_continuation_outcome" to
               mapOf(
                 "issue_key" to "SKILL-52.1",
@@ -3026,15 +2908,7 @@ private fun blockedSiblingChildRecord(definition: WorkflowDefinition) =
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-52.1",
-                "subtask_id" to 1,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-52",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to childContinuation(),
           ),
         ),
       sessionId = "ftr-001",
@@ -3058,15 +2932,7 @@ private fun activeRetryChildRecord(definition: WorkflowDefinition) =
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-52.1",
-                "subtask_id" to 1,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-52",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to childContinuation(),
           ),
         ),
       sessionId = "ftr-002",
@@ -3387,14 +3253,7 @@ class WorkflowGoalRunnerProgressStoreTest {
       workflowRecord(
         "wfl-child",
         mapOf(
-          "goal_continuation" to
-            mapOf(
-              "issue_key" to "SKILL-64",
-              "subtask_id" to 1,
-              "suppress_pr" to true,
-              "goal_branch" to "feat/SKILL-64",
-              "code_review_mode" to "auto",
-            ),
+          "goal_continuation" to childContinuation("SKILL-64", "feat/SKILL-64", parentWorkflowId = null),
         ),
       ),
       PROSE,
@@ -3420,14 +3279,7 @@ class WorkflowGoalRunnerProgressStoreTest {
       workflowRecord(
         "wfl-child",
         mapOf(
-          "goal_continuation" to
-            mapOf(
-              "issue_key" to "SKILL-64",
-              "subtask_id" to 1,
-              "suppress_pr" to true,
-              "goal_branch" to "feat/SKILL-64",
-              "code_review_mode" to "auto",
-            ),
+          "goal_continuation" to childContinuation("SKILL-64", "feat/SKILL-64", parentWorkflowId = null),
         ),
       ),
       PROSE,
@@ -3715,6 +3567,20 @@ private val testFeatureTaskRuntimeWireArtifactValidator: FeatureTaskRuntimeWireA
     ): String? = null
   }
 
+private fun childContinuation(
+  issueKey: String = "SKILL-52.1",
+  goalBranch: String = "feat/SKILL-52",
+  parentWorkflowId: String? = "wfl-parent",
+  subtaskId: Int = 1,
+) = FeatureTaskRuntimeGoalContinuationArtifact(
+  issueKey = issueKey,
+  subtaskId = subtaskId,
+  suppressPr = true,
+  goalBranch = goalBranch,
+  parentWorkflowId = parentWorkflowId,
+  codeReviewMode = CodeReviewExecutionMode.AUTO,
+)
+
 private fun workflowRecord(
   workflowId: String,
   artifactsPatch: WorkflowArtifactPatch?,
@@ -3917,8 +3783,8 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
 
     val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
     assertContains(child.artifactsJson, "- Details from the plan workflow.")
-    assertContains(child.artifactsJson, """"kind":"plan_workflow"""")
-    assertContains(child.artifactsJson, PLAN_WORKFLOW_ID)
+    assertEquals("plan_workflow", child.typedArtifacts.goalPlanningImport()?.source?.kind)
+    assertEquals(PLAN_WORKFLOW_ID, child.typedArtifacts.goalPlanningImport()?.source?.planWorkflowId)
     assertFalse(child.artifactsJson.contains("legacy_tables"))
     assertEquals(readsBefore, harness.preparations.readCount, "legacy goal tables must not be read")
     val resumed = harness.newStore().saveNewChildWorkflow(harness.state, setup)
@@ -3948,7 +3814,7 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     harness.store.saveNewChildWorkflow(harness.state, harness.setup)
 
     val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
-    assertContains(child.artifactsJson, """"kind":"legacy_tables"""")
+    assertEquals("legacy_tables", child.typedArtifacts.goalPlanningImport()?.source?.kind)
     assertFalse(child.artifactsJson.contains("plan_workflow"))
   }
 
@@ -4138,21 +4004,13 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     val harness = hydrationHarness()
     harness.store.saveNewChildWorkflow(harness.state, harness.setup)
     val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
-    val artifacts =
-      JsonCodec.parseObjectOrNull(child.artifactsJson)
-        ?.let(JsonCodec::jsonElementToValue)
-        ?.let(JsonCodec::anyToStringAnyMap)
-        .orEmpty()
-        .toMutableMap()
-    val importArtifact =
-      (artifacts["goal_planning_import"] as Map<*, *>)
-        .entries
-        .associate { (key, value) -> key.toString() to value }
-        .toMutableMap()
-    importArtifact["parent_goal_workflow_id"] = "wfl-some-other-parent"
-    artifacts["goal_planning_import"] = importArtifact
+    val storedImport = requireNotNull(child.typedArtifacts.goalPlanningImport())
+    val divergedImport =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(
+        storedImport.copy(parentGoalWorkflowId = "wfl-some-other-parent"),
+      )
     harness.workflows.saveFeatureTaskWorkflow(
-      child.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts)),
+      child.copy(typedArtifacts = DurableWorkflowArtifacts.fromMap(child.typedArtifacts + divergedImport)),
       RUNTIME,
     )
 
@@ -4169,10 +4027,11 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     val harness = hydrationHarness()
     harness.store.saveNewChildWorkflow(harness.state, harness.setup)
     val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
-    val artifacts = parseChildArtifacts(child)
-    artifacts.remove("goal_planning_import")
     harness.workflows.saveFeatureTaskWorkflow(
-      child.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts)),
+      child.copy(
+        typedArtifacts =
+          DurableWorkflowArtifacts.fromMap(child.typedArtifacts - "goal_planning_import"),
+      ),
       RUNTIME,
     )
 

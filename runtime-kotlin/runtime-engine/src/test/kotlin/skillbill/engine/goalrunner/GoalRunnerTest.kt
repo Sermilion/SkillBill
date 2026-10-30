@@ -264,7 +264,7 @@ class GoalRunnerTest {
           issueKey = "SKILL-352",
           artifactsJson =
             JsonCodec.mapToJsonString(
-              child.toSnapshot().artifacts.toMap() +
+              JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(child.artifactsJson)).orEmpty() +
                 DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(execution.descriptor()),
             ),
         ),

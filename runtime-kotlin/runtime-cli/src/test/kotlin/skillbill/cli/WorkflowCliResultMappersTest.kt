@@ -12,6 +12,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowSnapshotView
@@ -25,6 +27,7 @@ import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunk
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Instant
 import kotlin.test.Test
@@ -35,6 +38,35 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WorkflowCliResultMappersTest {
+  @Test
+  fun `workflow show renders typed goal continuation with the persisted wire keys`() {
+    val continuation =
+      FeatureTaskRuntimeGoalContinuationArtifact(
+        issueKey = "SKILL-448",
+        subtaskId = 17,
+        suppressPr = true,
+        goalBranch = "feat/SKILL-448",
+        codeReviewMode = CodeReviewExecutionMode.INLINE,
+      )
+    val snapshot =
+      snapshotWithObservability().copy(
+        artifacts = DurableWorkflowArtifacts.fromMap(mapOf("goal_continuation" to continuation)),
+      )
+    val mapped =
+      WorkflowGetResult.Ok("wfl-1", "/tmp/metrics.db", snapshot)
+        .toCliMap(SqliteWorkflowArtifactWireEncoder())
+    val rendered = JsonCodec.parseObjectOrNull(JsonCodec.mapToJsonString(mapped))
+    val artifacts = JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(requireNotNull(rendered)["artifacts"]!!))
+
+    assertEquals(
+      JsonCodec.parseValue(
+        """{"issue_key":"SKILL-448","subtask_id":17,"suppress_pr":true,""" +
+          """"goal_branch":"feat/SKILL-448","code_review_mode":"inline"}""",
+      ),
+      requireNotNull(artifacts)["goal_continuation"],
+    )
+  }
+
   @Test
   fun `workflow update mapper emits compact acknowledgement without full state`() {
     val mapped =
@@ -52,7 +84,7 @@ class WorkflowCliResultMappersTest {
             updatedArtifactKeys = listOf("implementation_summary"),
             readOnlyFullStateGuidance = "Use workflow show.",
           ),
-      ).toPayload()
+      ).toPayload(SqliteWorkflowArtifactWireEncoder())
 
     assertEquals("ok", mapped["status"])
     assertEquals("wfl-1", mapped["workflow_id"])
@@ -194,7 +226,7 @@ class WorkflowCliResultMappersTest {
         workflowId = "wfl-1",
         dbPath = "/tmp/metrics.db",
         snapshot = snapshotWithObservability(),
-      ).withDecodedGoalObservability().toCliMap()
+      ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
 
     val observability = mapped["goal_observability"] as Map<*, *>
     assertEquals("implement", observability["workflow_phase"])
@@ -224,7 +256,7 @@ class WorkflowCliResultMappersTest {
                   "timestamp" to "2026-06-01T00:00:00Z",
                 ),
             ),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "at '<root>'")
@@ -238,7 +270,7 @@ class WorkflowCliResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("unknown" to true)),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "at '<root>'")
@@ -255,7 +287,7 @@ class WorkflowCliResultMappersTest {
             snapshotWithObservability(
               event = snapshotWithObservabilityEvent() + ("changed_file_summary" to "not-an-object"),
             ),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "changed_file_summary")
@@ -272,7 +304,7 @@ class WorkflowCliResultMappersTest {
             snapshotWithObservability(
               event = snapshotWithObservabilityEvent() + ("changed_files" to listOf(123)),
             ),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(changedFilesError.message.orEmpty(), "changed_files[0]")
 
@@ -297,7 +329,7 @@ class WorkflowCliResultMappersTest {
                     )
                 ),
             ),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(samplePathsError.message.orEmpty(), "changed_file_summary.sample_paths")
   }
@@ -310,7 +342,7 @@ class WorkflowCliResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("issue_key" to 61)),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(issueKeyError.message.orEmpty(), "issue_key")
 
@@ -320,7 +352,7 @@ class WorkflowCliResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("subtask_id" to "1")),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(subtaskIdError.message.orEmpty(), "subtask_id")
 
@@ -330,7 +362,7 @@ class WorkflowCliResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("timestamp" to 20260601)),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(timestampError.message.orEmpty(), "timestamp")
   }
@@ -346,7 +378,7 @@ class WorkflowCliResultMappersTest {
             snapshotWithObservability(
               event = snapshotWithObservabilityEvent() + ("changed_files" to List(501) { "file-$it.kt" }),
             ),
-        ).withDecodedGoalObservability().toCliMap()
+        ).withDecodedGoalObservability().toCliMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "changed_files")

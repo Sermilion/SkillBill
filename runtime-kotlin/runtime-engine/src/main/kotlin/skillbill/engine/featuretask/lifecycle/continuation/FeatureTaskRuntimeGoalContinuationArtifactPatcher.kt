@@ -14,7 +14,6 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -96,9 +95,7 @@ internal fun continuationPatch(
     continuation == null || continuation == existing -> emptyMap()
     existing == null ->
       mapOf(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
-          continuation.asWorkflowArtifactEntry(),
-        ),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(continuation),
         "install_sync_result" to
           mapOf(
             SharedPayloadKeys.STATUS to "deferred",
@@ -107,12 +104,7 @@ internal fun continuationPatch(
               "deferred install sync must not block subtask completion",
           ),
       )
-    else ->
-      mapOf(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
-          continuation.asWorkflowArtifactEntry(),
-        ),
-      )
+    else -> mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(continuation))
   }
 
 fun FeatureTaskRuntimeGoalContinuationArtifact?.compatibleWith(

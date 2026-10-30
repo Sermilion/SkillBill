@@ -162,7 +162,8 @@ class WorkflowService(
 
   private fun WorkflowOpenResult.withGoalObservability(): WorkflowOpenResult =
     when (this) {
-      is WorkflowOpenResult.Ok -> copy(goalObservability = goalObservabilityOf(snapshot))
+      is WorkflowOpenResult.Ok ->
+        copy(goalObservability = goalObservabilityOf(snapshot))
       is WorkflowOpenResult.Error -> this
     }
 

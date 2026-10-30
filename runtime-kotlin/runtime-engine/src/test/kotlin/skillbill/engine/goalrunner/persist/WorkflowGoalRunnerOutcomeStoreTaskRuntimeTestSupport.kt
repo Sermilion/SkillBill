@@ -28,7 +28,6 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -74,15 +73,7 @@ internal fun blockedContinuationRecord(fixture: BlockedContinuationRecordFixture
   val opened = engine.openRecord(definition, workflowId, "fis-176", "preplan")
   val artifacts =
     linkedMapOf<String, Any?>(
-      "goal_continuation" to
-        mapOf(
-          "parent_workflow_id" to "wfl-parent",
-          "issue_key" to "SKILL-176.4",
-          "subtask_id" to 4,
-          "suppress_pr" to true,
-          "goal_branch" to "feat/SKILL-176",
-          "code_review_mode" to "auto",
-        ),
+      "goal_continuation" to autoReviewContinuation("SKILL-176.4", 4, "feat/SKILL-176"),
       "goal_continuation_outcome" to
         mapOf(
           "issue_key" to "SKILL-176.4",
@@ -151,15 +142,7 @@ internal fun completeWithoutShaContinuationRecord(workflowId: String): WorkflowS
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-176.4",
-                "subtask_id" to 4,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-176",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to autoReviewContinuation("SKILL-176.4", 4, "feat/SKILL-176"),
             "goal_continuation_outcome" to
               mapOf(
                 "issue_key" to "SKILL-176.4",
@@ -198,15 +181,7 @@ internal fun runtimeCandidateRecordNoDeclaredEvent(
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-87.1",
-                "subtask_id" to 1,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-87",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to autoReviewContinuation("SKILL-87.1", 1, "feat/SKILL-87"),
           ),
         ),
       sessionId = "ftr-001",
@@ -241,7 +216,7 @@ internal fun goalReviewWorkflowRecord(
                 parentWorkflowId = "wfl-parent",
                 goalBranch = "feat/SKILL-119",
                 codeReviewMode = CodeReviewExecutionMode.AUTO,
-              ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
+              ),
             GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to state.toPersistenceWire(),
             GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY to mapOf("1" to rawReviewResult),
           ),
@@ -286,15 +261,7 @@ internal fun runtimeCandidateRecord(
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-87.1",
-                "subtask_id" to 1,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-87",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to autoReviewContinuation("SKILL-87.1", 1, "feat/SKILL-87"),
             "goal_progress_latest_event" to declaredEvent.toPersistenceWire(),
           ),
         ),
@@ -374,15 +341,7 @@ internal fun tornBlockedReviewRecord(workflowId: String): WorkflowStateRecord {
               mapOf(
                 "review" to reviewRecord.asWorkflowArtifactEntry(),
               ),
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-191",
-                "subtask_id" to 9,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-191",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to autoReviewContinuation("SKILL-191", 9, "feat/SKILL-191"),
           ),
         ),
       sessionId = "ftr-001",
@@ -405,21 +364,26 @@ internal fun crashedChildRecord(workflowId: String): WorkflowStateRecord {
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
-            "goal_continuation" to
-              mapOf(
-                "parent_workflow_id" to "wfl-parent",
-                "issue_key" to "SKILL-87.1",
-                "subtask_id" to 1,
-                "suppress_pr" to true,
-                "goal_branch" to "feat/SKILL-87",
-                "code_review_mode" to "auto",
-              ),
+            "goal_continuation" to autoReviewContinuation("SKILL-87.1", 1, "feat/SKILL-87"),
           ),
         ),
       sessionId = "ftr-001",
     ),
   ).toRecord()
 }
+
+private fun autoReviewContinuation(
+  issueKey: String,
+  subtaskId: Int,
+  goalBranch: String,
+) = FeatureTaskRuntimeGoalContinuationArtifact(
+  issueKey = issueKey,
+  subtaskId = subtaskId,
+  suppressPr = true,
+  goalBranch = goalBranch,
+  parentWorkflowId = "wfl-parent",
+  codeReviewMode = CodeReviewExecutionMode.AUTO,
+)
 
 internal fun expiredLeaseOwnership(
   workflowId: String,
@@ -515,7 +479,7 @@ internal fun WorkflowStateRecord.withSettledLegacyHistorySkip(): WorkflowStateRe
   return copy(
     artifactsJson =
       JsonCodec.mapToJsonString(
-        toSnapshot().artifacts.toMap() +
+        JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(artifactsJson)).orEmpty() +
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(toSnapshot().artifacts)
               ?: ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD).descriptor(),
@@ -537,7 +501,7 @@ internal fun blockedBuildContinuation(
     stepsJson = blockedBuildStepsJson(record),
     artifactsJson =
       JsonCodec.valueToJsonString(
-        record.toSnapshot().artifacts + (
+        JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(record.artifactsJson)).orEmpty() + (
           "goal_continuation_outcome" to
             mapOf(
               "issue_key" to "SKILL-191",

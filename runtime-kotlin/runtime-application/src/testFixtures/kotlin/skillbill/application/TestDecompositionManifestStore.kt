@@ -118,9 +118,12 @@ private fun manifestsUnder(specsRoot: Path): List<Path> {
   }
 }
 
-private fun decodeArtifacts(raw: String): DurableWorkflowArtifacts =
+private fun decodeArtifacts(
+  raw: String,
+  typedArtifacts: Map<String, Any?>,
+): DurableWorkflowArtifacts =
   DurableWorkflowArtifacts.fromMap(
-    requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(raw))),
+    requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(raw))) + typedArtifacts,
   )
 
 fun loadDecompositionManifest(path: Path) =
@@ -142,11 +145,12 @@ fun writeFromWorkflowUpdate(
   existingArtifactsJson: String,
   artifactsPatch: Map<String, Any?>?,
   runtimeUpdate: DecompositionManifestRuntimeUpdate? = null,
+  typedArtifacts: Map<String, Any?> = emptyMap(),
 ): DecompositionManifestWriteResult? =
   testDecompositionManifestWriter.writeFromWorkflowUpdate(
     DecompositionManifestWorkflowProjectionInput(
       repoRoot = repoRoot,
-      existingArtifacts = decodeArtifacts(existingArtifactsJson),
+      existingArtifacts = decodeArtifacts(existingArtifactsJson, typedArtifacts),
       validator = testDecompositionManifestValidator,
       planningResult =
         artifactsPatch?.get(WorkflowArtifactKeys.PLAN)
@@ -161,12 +165,13 @@ fun writeFromWorkflowUpdate(
 fun writeProjectionFromWorkflowState(
   repoRoot: Path,
   artifactsJson: String,
+  typedArtifacts: Map<String, Any?> = emptyMap(),
 ): DecompositionManifestWriteResult? =
   when (
     val outcome =
       testDecompositionManifestWriter.writeProjectionFromWorkflowState(
         repoRoot = repoRoot,
-        artifacts = decodeArtifacts(artifactsJson),
+        artifacts = decodeArtifacts(artifactsJson, typedArtifacts),
         validator = testDecompositionManifestValidator,
         fileStore = TestDecompositionManifestStore,
       )

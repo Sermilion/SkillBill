@@ -17,16 +17,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.sql.Connection
 import java.sql.SQLException
 
-internal data class OpenDatabase(
-  internal val connection: Connection,
-  internal val dbPath: Path,
-  internal val fileObservation: DatabaseFileObservation,
-) : AutoCloseable {
-  override fun close() {
-    connection.close()
-  }
-}
-
 internal fun fileObservation(
   path: Path,
   operation: DatabaseAccessOperation = DatabaseAccessOperation.OPEN,

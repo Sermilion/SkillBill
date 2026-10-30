@@ -8,9 +8,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeImplementationAttemptRecordToWire
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeImplementationAttemptsFromWire
@@ -65,18 +62,6 @@ fun FeatureTaskRuntimeResolvedBranch.asWorkflowArtifactEntry(): FeatureTaskRunti
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun FeatureTaskRuntimeDecomposeTerminal.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
-  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
-
-fun FeatureTaskRuntimeGoalContinuationArtifact.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
-  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
-
-fun decodeGoalContinuationArtifactFromArtifact(raw: Any?): FeatureTaskRuntimeGoalContinuationArtifact? =
-  JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeGoalContinuationArtifact::fromArtifactMap)
-
-fun FeatureTaskRuntimeGoalContinuationFieldAdoption.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
-  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
-
-fun FeatureTaskRuntimeGoalPlanningImport.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun FeatureTaskRuntimeDeliveredProjectionRecord.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =

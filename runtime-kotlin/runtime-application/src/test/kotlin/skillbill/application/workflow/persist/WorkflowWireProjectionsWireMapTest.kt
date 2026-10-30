@@ -3,6 +3,7 @@ package skillbill.application.workflow.persist
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
+import skillbill.ports.workflow.PlainWorkflowArtifactWireEncoder
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowCompactContinueView
 import skillbill.workflow.engine.model.WorkflowContinuationFieldMap
@@ -24,7 +25,7 @@ import kotlin.test.assertTrue
 class WorkflowWireProjectionsWireMapTest {
   @Test
   fun `full workflow wire map omits mode when null and preserves key order`() {
-    val wire = WorkflowWireProjections.snapshotMap(snapshotView()).toPayload()
+    val wire = WorkflowWireProjections.snapshotMap(snapshotView(), PlainWorkflowArtifactWireEncoder).toPayload()
 
     assertFalse(wire.containsKey(WorkflowWirePayloadKeys.MODE))
     assertEquals(
@@ -63,7 +64,7 @@ class WorkflowWireProjectionsWireMapTest {
       summary.keys.toList(),
     )
 
-    val wire = WorkflowWireProjections.resumeMap(resumeView()).toPayload()
+    val wire = WorkflowWireProjections.resumeMap(resumeView(), PlainWorkflowArtifactWireEncoder).toPayload()
     assertEquals(
       listOf(
         SharedPayloadKeys.WORKFLOW_ID,
@@ -100,6 +101,7 @@ class WorkflowWireProjectionsWireMapTest {
             "marker_key" to "from_extra",
           ),
         ),
+        PlainWorkflowArtifactWireEncoder,
       ).toPayload()
     val keys = wire.keys.toList()
     val extraIndex = keys.indexOf("marker_key")

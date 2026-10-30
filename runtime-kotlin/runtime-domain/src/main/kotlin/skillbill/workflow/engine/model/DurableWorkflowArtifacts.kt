@@ -8,6 +8,10 @@ class DurableWorkflowArtifacts private constructor(
 ) : Map<String, Any?> by delegate {
   internal fun toMutableMap(): MutableMap<String, Any?> = LinkedHashMap(delegate)
 
+  override fun equals(other: Any?): Boolean = other is DurableWorkflowArtifacts && delegate == other.delegate
+
+  override fun hashCode(): Int = delegate.hashCode()
+
   companion object {
     val EMPTY: DurableWorkflowArtifacts = DurableWorkflowArtifacts(emptyMap())
 

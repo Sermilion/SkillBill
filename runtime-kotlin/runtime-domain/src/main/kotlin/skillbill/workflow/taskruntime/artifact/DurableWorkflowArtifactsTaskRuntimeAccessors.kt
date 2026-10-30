@@ -1,9 +1,12 @@
 package skillbill.workflow.taskruntime.artifact
 
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
+import skillbill.workflow.taskruntime.model.persistence.typedArtifactRecordOrNull
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
@@ -27,5 +30,10 @@ fun DurableWorkflowArtifacts.operatorBlockRetry(): FeatureTaskRuntimeOperatorBlo
 
 fun DurableWorkflowArtifacts.goalContinuationFieldAdoption(): FeatureTaskRuntimeGoalContinuationFieldAdoption? =
   goalContinuationFieldAdoptionFrom(this)
+
+fun DurableWorkflowArtifacts.goalPlanningImport(): FeatureTaskRuntimeGoalPlanningImport? =
+  typedArtifactRecordOrNull<FeatureTaskRuntimeGoalPlanningImport>(
+    FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT_ARTIFACT_KEY,
+  )
 
 fun DurableWorkflowArtifacts.decomposeTerminal(): FeatureTaskRuntimeDecomposeTerminal? = decomposeTerminalFrom(this)

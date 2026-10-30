@@ -7,6 +7,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.artifact.FeatureTaskWorkflowArtifactsCodec
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.sql.Connection
@@ -335,6 +336,7 @@ internal fun ResultSet.toFeatureTaskWorkflowStateRecord(): WorkflowStateRecord {
       ?: throw invalidWorkflowStateSchemaError(
         "Feature-task workflow '$workflowId' has unknown mode '$rawMode'.",
       )
+  val artifacts = FeatureTaskWorkflowArtifactsCodec.split(getString("artifacts_json"))
   return WorkflowStateRecord(
     workflowId = workflowId,
     sessionId = getString("session_id"),
@@ -343,7 +345,7 @@ internal fun ResultSet.toFeatureTaskWorkflowStateRecord(): WorkflowStateRecord {
     workflowStatus = getString("workflow_status"),
     currentStepId = getString("current_step_id"),
     stepsJson = getString("steps_json"),
-    artifactsJson = getString("artifacts_json"),
+    artifactsJson = artifacts.remainderJson,
     issueKey = getString(SharedPayloadKeys.ISSUE_KEY),
     startedAt = getString("started_at"),
     updatedAt = getString("updated_at"),
@@ -352,5 +354,6 @@ internal fun ResultSet.toFeatureTaskWorkflowStateRecord(): WorkflowStateRecord {
     finishedAt = getString("finished_at"),
     mode = mode,
     implementationSkill = getString("implementation_skill"),
+    typedArtifacts = artifacts.typed,
   )
 }

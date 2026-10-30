@@ -3,6 +3,7 @@ import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.proseFeatureTaskWorkflowWriteRefusedError
 import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.workflow.FeatureTaskWorkflowUpsertRequest
+import skillbill.infrastructure.sqlite.workflow.artifact.FeatureTaskWorkflowArtifactsCodec
 import skillbill.infrastructure.sqlite.workflow.defaultContractVersion
 import skillbill.infrastructure.sqlite.workflow.defaultImplementationSkill
 import skillbill.infrastructure.sqlite.workflow.getFeatureTaskWorkflowRow
@@ -30,17 +31,18 @@ internal class FeatureTaskWorkflowRowStore(
     if (mode == FeatureTaskWorkflowMode.PROSE) {
       throw proseFeatureTaskWorkflowWriteRefusedError(row.workflowId)
     }
+    val normalized = FeatureTaskWorkflowArtifactsCodec.normalizeRecord(row)
     val current = connection.getFeatureTaskWorkflowRow(row.workflowId)
     if (
       !acceptedSnapshotMutation &&
       current != null &&
       WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal == true
     ) {
-      if (current.sameTerminalSnapshot(row)) return
+      if (current.sameTerminalSnapshot(normalized)) return
       throw terminalWorkflowWriteRefusedError(row.workflowId)
     }
     connection.upsertFeatureTaskWorkflowRow(
-      row = row,
+      row = normalized,
       request =
         FeatureTaskWorkflowUpsertRequest(
           mode = mode,
@@ -85,10 +87,11 @@ internal class FeatureTaskWorkflowRowStore(
     listFeatureTaskWorkflows(mode, 1).firstOrNull()
 
   fun terminalizeLegacyProseFeatureTaskWorkflow(row: WorkflowStateRecord) {
-    connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row)
+    connection.terminalizeLegacyProseFeatureTaskWorkflowRow(FeatureTaskWorkflowArtifactsCodec.normalizeRecord(row))
   }
 }
 
 private fun WorkflowStateRecord.sameTerminalSnapshot(other: WorkflowStateRecord): Boolean =
   workflowStatus == other.workflowStatus && currentStepId == other.currentStepId &&
-    stepsJson == other.stepsJson && artifactsJson == other.artifactsJson && finishedAt == other.finishedAt
+    stepsJson == other.stepsJson && artifactsJson == other.artifactsJson &&
+    typedArtifacts == other.typedArtifacts && finishedAt == other.finishedAt

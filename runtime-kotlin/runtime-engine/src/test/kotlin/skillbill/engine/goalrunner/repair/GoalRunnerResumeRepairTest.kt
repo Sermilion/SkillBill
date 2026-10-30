@@ -5,13 +5,13 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
-import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
@@ -85,7 +85,7 @@ internal class GoalRunnerResumeRepairTest : GoalRunnerRepairFixtures() {
       workflows,
       workflowId,
       healthyReviewState(),
-      mapOf("goal_planning_import" to mapOf("phase_output_contract_version" to "0.3")),
+      incompatiblePlanningImportArtifacts(),
     )
     val stale = interruptedControlState(expiredLease())
     val manifestStore = MutableRepairManifestStore(workflowId, stale)
@@ -148,9 +148,7 @@ internal class GoalRunnerResumeRepairTest : GoalRunnerRepairFixtures() {
     workflows: InMemoryWorkflowStates,
     workflowId: String,
   ): Map<String, Any?> =
-    decodeWorkflowArtifactsForTest(
-      requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson,
-    )
+    requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).toSnapshot().artifacts
 
   private fun remediatedReview(remediationBaseSha: String): GoalSubtaskReviewState =
     GoalSubtaskReviewState.initial(

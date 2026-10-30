@@ -3426,3 +3426,7 @@ Goal intake refuses new work without requirements, so pre-planning always has th
 ## [2026-10-30] Status reads treat an unreadable briefing map as no briefings
 
 `FeatureTaskRuntimeStatusService.phaseBriefingTexts` returns each phase's saved launch briefing text for the detail view. When the briefing map fails to parse, it returns an empty map so the rest of the status read stays usable.
+
+## 2026-10-30 — SKILL-448 goal-continuation validation repairs
+
+Whole-artifact wire encoding stays at the CLI and MCP projection boundaries. WorkflowService retains typed artifacts in its snapshot views, avoiding both a twelfth constructor collaborator and a map-form round trip inside the application service. The sqlite encoder port exchanges JSON text because runtime-ports forbids serialization-library types; consumers parse only the whole object and never encode the goal-continuation fields. Parse-boundary guards follow the codecs into sqlite rather than selecting deleted domain parsers.

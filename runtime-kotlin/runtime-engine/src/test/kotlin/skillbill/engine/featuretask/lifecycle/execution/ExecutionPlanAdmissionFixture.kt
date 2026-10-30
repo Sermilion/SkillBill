@@ -30,7 +30,6 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
@@ -139,7 +138,7 @@ class ExecutionPlanAdmissionFixture(
         issueKey = issueKey,
         artifactsJson =
           JsonCodec.mapToJsonString(
-            existing.toSnapshot().artifacts +
+            JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(existing.artifactsJson)).orEmpty() +
               DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
           ),
       ),

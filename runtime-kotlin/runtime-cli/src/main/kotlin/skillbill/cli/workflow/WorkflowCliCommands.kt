@@ -27,6 +27,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.contracts.workflow.payload.WorkflowArtifactKeys
 import skillbill.error.core.MalformedJsonTextError
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -63,6 +64,7 @@ class VerifyWorkflowCommands(
 
 @Inject
 class VerifyWorkflowOpenCommand(
+  private val encoder: WorkflowArtifactWireEncoder,
   private val service: WorkflowService,
   private val state: CliRunState,
 ) : DocumentedCliCommand("open", "Open durable workflow state.") {
@@ -84,13 +86,14 @@ class VerifyWorkflowOpenCommand(
           routeScope = FeatureTaskRouteScope.STANDALONE,
         ),
       )
-    val payload = opened.toCliMap()
+    val payload = opened.toCliMap(encoder)
     state.complete(payload, format, exitCode = payload.exitCode())
   }
 }
 
 @Inject
 class VerifyWorkflowUpdateCommand(
+  private val encoder: WorkflowArtifactWireEncoder,
   private val service: WorkflowService,
   private val state: CliRunState,
 ) : DocumentedCliCommand("update", "Update durable workflow state and return a compact acknowledgement.") {
@@ -117,28 +120,31 @@ class VerifyWorkflowUpdateCommand(
             ?.let { DecompositionPlanningResult.fromWireMap(it, "cli.artifacts_patch.plan") },
         sessionId = sessionId,
       )
-    val payload = service.update(VERIFY_KIND, request).toPayload()
+    val payload = service.update(VERIFY_KIND, request).toPayload(encoder)
     state.complete(payload, format, exitCode = payload.exitCode())
   }
 }
 
 @Inject
 class VerifyWorkflowShowCommand(
+  encoder: WorkflowArtifactWireEncoder,
   service: WorkflowService,
   state: CliRunState,
-) : WorkflowGetCommand("show", service, state, VERIFY_KIND)
+) : WorkflowGetCommand("show", service, state, VERIFY_KIND, encoder)
 
 @Inject
 class VerifyWorkflowGetCommand(
+  encoder: WorkflowArtifactWireEncoder,
   service: WorkflowService,
   state: CliRunState,
-) : WorkflowGetCommand("get", service, state, VERIFY_KIND)
+) : WorkflowGetCommand("get", service, state, VERIFY_KIND, encoder)
 
 open class WorkflowGetCommand(
   name: String,
   private val service: WorkflowService,
   private val state: CliRunState,
   private val kind: WorkflowFamilyKind,
+  private val encoder: WorkflowArtifactWireEncoder,
 ) : DocumentedCliCommand(name, "Fetch read-only full durable workflow state.") {
   private val workflowId by argument(help = "Workflow id to inspect.").optional()
   private val latest by option("--latest", help = "Resolve the most recently updated workflow.").flag(default = false)
@@ -150,7 +156,7 @@ open class WorkflowGetCommand(
       if (resolution.errorPayload != null) {
         resolution.errorPayload
       } else {
-        service.get(kind, requireNotNull(resolution.workflowId)).toCliMap()
+        service.get(kind, requireNotNull(resolution.workflowId)).toCliMap(encoder)
       }
     state.complete(payload, format, exitCode = payload.exitCode())
   }
@@ -186,6 +192,7 @@ class VerifyWorkflowLatestCommand(
 
 @Inject
 class VerifyWorkflowResumeCommand(
+  private val encoder: WorkflowArtifactWireEncoder,
   private val service: WorkflowService,
   private val state: CliRunState,
 ) : DocumentedCliCommand("resume", "Summarize how to resume or recover a workflow run.") {
@@ -199,7 +206,7 @@ class VerifyWorkflowResumeCommand(
       if (resolution.errorPayload != null) {
         resolution.errorPayload
       } else {
-        service.resume(VERIFY_KIND, requireNotNull(resolution.workflowId)).toCliMap()
+        service.resume(VERIFY_KIND, requireNotNull(resolution.workflowId)).toCliMap(encoder)
       }
     state.complete(payload, format, exitCode = payload.exitCode())
   }

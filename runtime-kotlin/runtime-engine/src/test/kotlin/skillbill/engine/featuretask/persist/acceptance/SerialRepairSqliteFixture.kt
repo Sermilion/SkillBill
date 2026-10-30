@@ -28,6 +28,7 @@ import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.wire.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -233,6 +234,7 @@ internal class SerialRepairSqliteFixture(
         gitOperations,
         source,
         testProjectStore,
+        SqliteWorkflowArtifactWireEncoder(),
       ),
       AcceptanceCriterionRepairAuditAdmission(validator),
     )

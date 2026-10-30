@@ -34,7 +34,7 @@ internal fun workflowOpen(
         WorkflowArtifactPatch.from(verifyQaInitialArtifacts(arguments.verifyQaSelection()))
           ?: WorkflowArtifactPatch.EMPTY,
     ),
-  ).toMcpMap()
+  ).toMcpMap(component.workflowArtifactWireEncoder)
 
 internal fun workflowUpdate(
   arguments: McpToolArguments,
@@ -59,13 +59,17 @@ internal fun workflowUpdate(
         sessionId = arguments.string(WorkflowWirePayloadKeys.SESSION_ID),
       )
     },
-  ).toMcpMap()
+  ).toMcpMap(component.workflowArtifactWireEncoder)
 }
 
 internal fun workflowGet(
   arguments: McpToolArguments,
   component: McpComponent,
-): Map<String, Any?> = component.workflowService.get(VERIFY, arguments.string(SharedPayloadKeys.WORKFLOW_ID)).toMcpMap()
+): Map<String, Any?> =
+  component.workflowService.get(
+    VERIFY,
+    arguments.string(SharedPayloadKeys.WORKFLOW_ID),
+  ).toMcpMap(component.workflowArtifactWireEncoder)
 
 internal fun workflowList(
   arguments: McpToolArguments,
@@ -82,7 +86,7 @@ internal fun workflowResume(
 ): Map<String, Any?> {
   val workflowId = arguments.string(SharedPayloadKeys.WORKFLOW_ID)
   arguments.guardStoredVerifyQa(component, workflowId)
-  return component.workflowService.resume(VERIFY, workflowId).toMcpMap()
+  return component.workflowService.resume(VERIFY, workflowId).toMcpMap(component.workflowArtifactWireEncoder)
 }
 
 internal fun workflowContinue(

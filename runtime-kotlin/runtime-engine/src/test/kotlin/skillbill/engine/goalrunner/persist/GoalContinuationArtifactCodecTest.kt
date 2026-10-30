@@ -1,7 +1,5 @@
 package skillbill.engine.goalrunner.persist
 
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
@@ -13,6 +11,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.taskruntime.model.persistence.UndecodedTypedArtifact
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,19 +23,16 @@ private val FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY =
 
 class GoalContinuationArtifactCodecTest {
   @Test
-  fun `engine continuation reader rejects malformed payload instead of treating it as no child`() {
+  fun `engine continuation reader rethrows the stored decode failure instead of treating it as no child`() {
+    val undecoded =
+      UndecodedTypedArtifact(
+        jsonText = """{"issue_key":"SKILL-372","subtask_id":2.7}""",
+        failure = invalidWorkflowStateSchemaError("Goal-continuation artifact subtask_id must be an integer."),
+      )
+
     assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
-        mapOf(
-          FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to
-            mapOf(
-              SharedPayloadKeys.ISSUE_KEY to "SKILL-372",
-              SharedPayloadKeys.SUBTASK_ID to 2.7,
-              FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUPPRESS_PR to true,
-              FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.GOAL_BRANCH to "feat/SKILL-372",
-              FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE to "inline",
-            ),
-        ),
+        mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to undecoded),
       ).goalContinuation()
     }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }

@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.history
 
+import kotlinx.serialization.json.JsonObject
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
@@ -14,6 +15,7 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.executionplan.FeatureTaskRuntimeExecutionPlanValidator
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
@@ -33,6 +35,7 @@ import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -44,6 +47,7 @@ class GoalChildHistoryEvidenceStore(
   private val snapshots: WorkflowSnapshotValidator,
   private val wireArtifacts: FeatureTaskRuntimeWireArtifactValidator,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanValidator,
+  private val artifactWire: WorkflowArtifactWireEncoder,
 ) {
   private val engine = WorkflowEngine()
   private val family = DurableWorkflowArtifactFamily.GOAL_CHILD_HISTORY_EVIDENCE
@@ -61,9 +65,8 @@ class GoalChildHistoryEvidenceStore(
       return@guarded
     }
     snapshots.validate(child, child.workflowName)
-    val continuationFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION
     val continuation =
-      JsonCodec.anyToStringAnyMap(continuationFamily.value(child.artifacts))
+      continuationWire(child.artifacts)
         ?: throw invalid("Child '$childId' has no continuation to preserve.")
     val record =
       GoalChildHistoryEvidence(
@@ -317,9 +320,7 @@ class GoalChildHistoryEvidenceStore(
         throw invalid("Child '$childId' is not owned by the goal-child route.")
       }
       val continuation =
-        JsonCodec.anyToStringAnyMap(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.value(child.artifacts),
-        )
+        continuationWire(child.artifacts)
           ?: throw invalid("Recorded child continuation is missing.")
       val evidence =
         GoalChildHistoryEvidence(
@@ -524,11 +525,7 @@ class GoalChildHistoryEvidenceStore(
     record: GoalChildHistoryEvidence,
     childDefinition: SkeletonDefinition,
   ) {
-    val artifacts =
-      mapOf(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(record.continuation),
-      )
-    val continuation = DurableWorkflowArtifacts.fromMap(artifacts).goalContinuationArtifact()
+    val continuation = continuationRecord(record)
     val parentId = continuation?.parentWorkflowId
     val parentMismatch = parentId != null && parentId != record.parentWorkflowId
     val requiredParentMissing =
@@ -541,9 +538,22 @@ class GoalChildHistoryEvidenceStore(
   }
 
   private fun continuationParent(record: GoalChildHistoryEvidence): String? =
-    DurableWorkflowArtifacts.fromMap(
-      mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(record.continuation)),
-    ).goalContinuationArtifact()?.parentWorkflowId?.takeIf(String::isNotBlank)
+    continuationRecord(record)?.parentWorkflowId?.takeIf(String::isNotBlank)
+
+  private fun continuationWire(artifacts: DurableWorkflowArtifacts): Map<String, Any?>? {
+    val key = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()
+    if (!artifacts.containsKey(key)) return null
+    val wire =
+      JsonCodec.parseObjectOrNull(artifactWire.encode(DurableWorkflowArtifacts.fromMap(mapOf(key to artifacts[key]))))
+        ?: throw invalid("Continuation wire payload is not an object.")
+    return JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(wire.getValue(key)))
+  }
+
+  private fun continuationRecord(record: GoalChildHistoryEvidence): FeatureTaskRuntimeGoalContinuationArtifact? {
+    val key = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()
+    val wire = JsonObject(mapOf(key to JsonCodec.valueToJsonElement(record.continuation)))
+    return artifactWire.decode(JsonCodec.valueToJsonString(wire)).goalContinuationArtifact()
+  }
 
   private fun save(
     unit: UnitOfWork,

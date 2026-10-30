@@ -32,6 +32,7 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
@@ -114,7 +115,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         val patch =
           mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(phaseOutputs.records))
         val migratedArtifacts = initialSnapshot.artifacts + patch
-        states.migrateFeatureTaskArtifacts(row, JsonCodec.valueToJsonString(migratedArtifacts))
+        states.migrateFeatureTaskArtifacts(row, DurableWorkflowArtifacts.fromMap(migratedArtifacts))
       }
       AdmittedFeatureTaskRuntimeExecution(
         identity,

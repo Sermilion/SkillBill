@@ -27,7 +27,7 @@ interface WorkflowStateRepository :
   FeatureTaskRuntimeWorkerRepository {
   fun migrateFeatureTaskArtifacts(
     source: WorkflowStateRecord,
-    targetArtifactsJson: String,
+    targetArtifacts: DurableWorkflowArtifacts,
   )
 
   fun save(

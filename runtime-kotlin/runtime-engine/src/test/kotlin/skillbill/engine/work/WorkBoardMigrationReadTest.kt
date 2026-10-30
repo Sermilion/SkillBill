@@ -13,10 +13,10 @@ import skillbill.ports.idestatus.model.WorkBoardReadModelPage
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.persistence.UnitOfWork
-import kotlin.test.Test
-import kotlin.test.assertEquals
 import java.sql.Connection
 import java.time.Instant
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class WorkBoardMigrationReadTest {
   @Test

@@ -354,9 +354,7 @@ class PlanSubtasksReopeningTest {
           artifacts =
             DurableWorkflowArtifacts.fromMap(
               child.artifacts +
-                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(
-                  imported.asWorkflowArtifactEntry(),
-                ),
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(imported),
             ),
         ),
       )

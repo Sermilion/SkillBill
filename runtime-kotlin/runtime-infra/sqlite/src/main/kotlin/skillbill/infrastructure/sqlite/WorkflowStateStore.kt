@@ -5,6 +5,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
 import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.artifact.FeatureTaskWorkflowArtifactsCodec
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskWorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureVerifyWorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.getFeatureTaskWorkflowRows
@@ -20,6 +21,7 @@ import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.WorkflowStateWriteResult
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -56,7 +58,7 @@ internal class WorkflowStateStore private constructor(
 
   override fun migrateFeatureTaskArtifacts(
     source: WorkflowStateRecord,
-    targetArtifactsJson: String,
+    targetArtifacts: DurableWorkflowArtifacts,
   ) {
     try {
       if (!transactionActive) {
@@ -68,23 +70,23 @@ internal class WorkflowStateStore private constructor(
       if (featureTaskStore.getFeatureTaskWorkflow(source.workflowId) != source) {
         staleArtifactMigration()
       }
-      val targetSnapshot = source.copy(artifactsJson = targetArtifactsJson).toSnapshot()
+      val targetSnapshot = source.toSnapshot().copy(artifacts = targetArtifacts)
       workflowSnapshotValidator.validate(targetSnapshot, source.workflowName)
+      val target = targetSnapshot.toRecord(source)
       val goalColumns = targetSnapshot.artifacts.goalContinuationColumns()
       connection.prepareStatement(
         """
         UPDATE feature_task_workflows
         SET artifacts_json = ?, parent_workflow_id = ?, goal_subtask_id = ?, goal_issue_key = ?
-        WHERE workflow_id = ? AND artifacts_json = ?
+        WHERE workflow_id = ?
         """.trimIndent(),
       ).use {
         it.bindAll(
-          targetArtifactsJson,
+          FeatureTaskWorkflowArtifactsCodec.merge(target.artifactsJson, target.typedArtifacts),
           goalColumns.parentWorkflowId,
           goalColumns.subtaskId,
           goalColumns.issueKey,
           source.workflowId,
-          source.artifactsJson,
         )
         if (it.executeUpdate() != 1) {
           staleArtifactMigration()
@@ -186,7 +188,8 @@ internal class WorkflowStateStore private constructor(
 
   private fun WorkflowStateRecord.sameTerminalSnapshot(other: WorkflowStateRecord): Boolean =
     workflowStatus == other.workflowStatus && currentStepId == other.currentStepId &&
-      stepsJson == other.stepsJson && artifactsJson == other.artifactsJson && finishedAt == other.finishedAt
+      stepsJson == other.stepsJson && artifactsJson == other.artifactsJson &&
+      typedArtifacts == other.typedArtifacts && finishedAt == other.finishedAt
 
   override fun get(
     family: WorkflowFamily,

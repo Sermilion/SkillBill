@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.core
 
-import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.execution.requireCurrent
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
@@ -50,9 +49,7 @@ class AcquiredFeatureTaskRuntimeWorker internal constructor(
 
   internal fun originalSnapshot(states: WorkflowStateRepository): WorkflowStateSnapshot? {
     val current = states.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return null
-    return original.takeIf {
-      JsonCodec.valueToJsonString(admittedSnapshot.artifacts) == JsonCodec.valueToJsonString(current.artifacts)
-    }
+    return original.takeIf { admittedSnapshot.artifacts == current.artifacts }
   }
 
   internal fun close() {

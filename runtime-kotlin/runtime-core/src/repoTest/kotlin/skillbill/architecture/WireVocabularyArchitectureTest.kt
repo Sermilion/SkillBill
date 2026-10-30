@@ -207,7 +207,7 @@ class WireVocabularyArchitectureTest {
     val files =
       listOf(
         syntheticSourceFile(
-          "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifactKeys.kt",
+          "infrastructure/sqlite/workflow/artifact/GoalContinuationArtifactKeys.kt",
           """
 
           object FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys {
@@ -216,7 +216,7 @@ class WireVocabularyArchitectureTest {
           """.trimIndent(),
         ),
         syntheticSourceFile(
-          "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifact.kt",
+          "infrastructure/sqlite/workflow/artifact/GoalContinuationArtifactCodec.kt",
           """
 
           fun read(raw: Map<String, Any?>) = raw["suppress_pr"]

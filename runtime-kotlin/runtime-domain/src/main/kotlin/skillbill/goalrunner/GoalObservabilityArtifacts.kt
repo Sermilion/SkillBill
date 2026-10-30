@@ -4,6 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
@@ -11,6 +12,7 @@ import skillbill.workflow.model.goalobservability.asGoalWorkflowArtifactMap
 import skillbill.workflow.model.goalobservability.goalObservabilityHistoryFromArtifacts
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 
 object GoalObservabilityArtifacts {
   private data class RequiredProgressFields(
@@ -64,17 +66,10 @@ object GoalObservabilityArtifacts {
   private fun requiredProgressFields(input: GoalObservabilityProgressInput): RequiredProgressFields? {
     val artifacts = input.artifacts.asGoalWorkflowArtifactMap("goal observability progress input")
     val progressEvent = artifacts["progress_event"] as? Map<*, *>
-    val continuation = artifacts["goal_continuation"] as? Map<*, *>
-    val issueKey = continuation?.get(SharedPayloadKeys.ISSUE_KEY)?.toString()?.takeIf(String::isNotBlank)
-    val subtaskId =
-      continuation?.get(SharedPayloadKeys.SUBTASK_ID)?.let { value ->
-        value.asExactIntOrNull()
-          ?: throw invalidGoalObservabilityEventSchemaError(
-            "goal observability progress input",
-            SharedPayloadKeys.SUBTASK_ID,
-            "must be an integer.",
-          )
-      }
+    val continuation =
+      artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY] as? FeatureTaskRuntimeGoalContinuationArtifact
+    val issueKey = continuation?.issueKey
+    val subtaskId = continuation?.subtaskId
     val timestamp = progressEvent?.get("timestamp")?.toString()?.takeIf(String::isNotBlank)
     return when {
       progressEvent == null -> null

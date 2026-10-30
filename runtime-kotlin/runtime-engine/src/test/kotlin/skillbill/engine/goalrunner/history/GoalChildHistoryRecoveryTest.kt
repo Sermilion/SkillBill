@@ -18,11 +18,11 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraftDisposition
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.decomposition.resetManifest
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
@@ -96,7 +96,9 @@ class GoalChildHistoryRecoveryTest {
         parent.copy(
           artifactsJson =
             JsonCodec.mapToJsonString(
-              parent.toSnapshot().artifacts.toMap() - DurableWorkflowArtifactFamily.GOAL_CHILD_HISTORY_DRAFTS.label(),
+              JsonCodec.anyToStringAnyMap(
+                JsonCodec.parseValue(parent.artifactsJson),
+              ).orEmpty() - DurableWorkflowArtifactFamily.GOAL_CHILD_HISTORY_DRAFTS.label(),
             ),
         ),
         FeatureTaskWorkflowMode.RUNTIME,
@@ -261,7 +263,9 @@ class GoalChildHistoryRecoveryTest {
         parent.copy(
           artifactsJson =
             JsonCodec.mapToJsonString(
-              parent.toSnapshot().artifacts.toMap() - DurableWorkflowArtifactFamily.GOAL_CHILD_HISTORY_EVIDENCE.label(),
+              JsonCodec.anyToStringAnyMap(
+                JsonCodec.parseValue(parent.artifactsJson),
+              ).orEmpty() - DurableWorkflowArtifactFamily.GOAL_CHILD_HISTORY_EVIDENCE.label(),
             ),
         ),
         FeatureTaskWorkflowMode.RUNTIME,
@@ -286,7 +290,7 @@ class GoalChildHistoryRecoveryTest {
         parent.copy(
           artifactsJson =
             JsonCodec.mapToJsonString(
-              parent.toSnapshot().artifacts.toMap() +
+              JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(parent.artifactsJson)).orEmpty() +
                 DurableWorkflowArtifactFamily.GOAL_CHILD_HISTORY_EVIDENCE.entry(
                   listOf(mapOf("contract_version" to "wrong")),
                 ),
@@ -320,6 +324,7 @@ private class RecoveryFixture(definition: SkeletonDefinition, initialStatus: Str
       testWorkflowSnapshotValidator,
       featureTaskRuntimeWireArtifactValidatorForTest(),
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+      SqliteWorkflowArtifactWireEncoder(),
     )
   val state: GoalRunnerManifestState
 
@@ -336,7 +341,7 @@ private class RecoveryFixture(definition: SkeletonDefinition, initialStatus: Str
           issueKey = "SKILL-446",
           artifactsJson =
             JsonCodec.mapToJsonString(
-              child.toSnapshot().artifacts.toMap() +
+              JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(child.artifactsJson)).orEmpty() +
                 DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(execution.descriptor()),
             ),
         ),
@@ -410,7 +415,7 @@ private class RecoveryFixture(definition: SkeletonDefinition, initialStatus: Str
         record.copy(
           artifactsJson =
             JsonCodec.mapToJsonString(
-              record.toSnapshot().artifacts.toMap() +
+              JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(record.artifactsJson)).orEmpty() +
                 DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
                   mapOf("write_history" to history.asWorkflowArtifactEntry()),
                 ),

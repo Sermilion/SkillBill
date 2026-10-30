@@ -58,6 +58,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -79,7 +80,9 @@ import skillbill.workflow.taskruntime.artifact.phaseLedgerFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
@@ -232,13 +235,7 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
           workflowId = workflowId,
           continuation = continuationMap(includeValidationDepth = true),
           reviewState = healthyReviewState(),
-          extraArtifacts =
-            mapOf(
-              "goal_planning_import" to
-                mapOf(
-                  "phase_output_contract_version" to "0.3",
-                ),
-            ),
+          extraArtifacts = incompatiblePlanningImportArtifacts(),
         ),
       ),
       RUNTIME,
@@ -592,7 +589,7 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
             codeReviewMode = CodeReviewExecutionMode.INLINE,
             validationDepth = ValidationDepth.FULL,
             qualityGateSelection = FeatureTaskRuntimeQualityGateSelection.BUILD,
-          ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
+          ),
         GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to healthyReviewState().toPersistenceWire(),
         FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to
           mapOf(
@@ -837,7 +834,7 @@ internal class GoalRunnerRepairContinuationTest : GoalRunnerRepairFixtures() {
     assertEquals("running", updated.workflowStatus)
     assertEquals("verify_findings", updated.currentStepId)
     val after = decodeWorkflowArtifactsForTest(updated.artifactsJson)
-    assertEquals("full", (after["goal_continuation"] as Map<*, *>)["validation_depth"])
+    assertEquals(ValidationDepth.FULL, storedContinuation(updated).validationDepth)
     val records = phaseRecordsFromWorkflowArtifacts(after)
     assertEquals("pending", records.getValue("verify_findings").status.wireValue)
     assertEquals("pending", records.getValue("implement_fix").status.wireValue)
@@ -917,12 +914,9 @@ internal class GoalRunnerRepairContinuationTest : GoalRunnerRepairFixtures() {
 
     assertEquals(1, applied.repairs.size)
     assertEquals(GoalRunnerWedgeClass.MISSING_QUALITY_GATE_SELECTION, applied.repairs.single().wedgeClass)
-    val after =
-      decodeWorkflowArtifactsForTest(
-        requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson,
-      )
-    val continuation = after["goal_continuation"] as Map<*, *>
-    assertEquals("validate", continuation["quality_gate_selection"])
+    val updated = requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
+    val after = decodeWorkflowArtifactsForTest(updated.artifactsJson)
+    assertEquals(FeatureTaskRuntimeQualityGateSelection.VALIDATE, storedContinuation(updated).qualityGateSelection)
     val evidence = (after[GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY] as List<*>).single() as Map<*, *>
     assertEquals("missing_quality_gate_selection", evidence["wedge_class"])
     assertEquals("quality_gate_selection", evidence["field"])
@@ -955,9 +949,7 @@ internal class GoalRunnerRepairContinuationTest : GoalRunnerRepairFixtures() {
       RUNTIME,
     )
     val before =
-      decodeWorkflowArtifactsForTest(
-        requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson,
-      )
+      requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).toSnapshot().artifacts
     val store = repairStore(workflows, git = ReachableGit())
 
     val applied =
@@ -973,18 +965,15 @@ internal class GoalRunnerRepairContinuationTest : GoalRunnerRepairFixtures() {
 
     assertEquals(1, applied.repairs.size)
     assertEquals("full", applied.repairs.single().newValue)
-    val after =
-      decodeWorkflowArtifactsForTest(
-        requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson,
-      )
+    val updated = requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
+    val after = decodeWorkflowArtifactsForTest(updated.artifactsJson)
     assertEquals(COMPLETED_COMMIT, after["commit_sha"])
     assertEquals(
       before[GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY],
       after[GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY],
       "review pass results must survive validation_depth repair",
     )
-    val continuation = after["goal_continuation"] as Map<*, *>
-    assertEquals("full", continuation["validation_depth"])
+    assertEquals(ValidationDepth.FULL, storedContinuation(updated).validationDepth)
     val evidence = (after[GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY] as List<*>).single() as Map<*, *>
     assertEquals("missing_validation_depth", evidence["wedge_class"])
     assertEquals("validation_depth", evidence["field"])
@@ -1019,9 +1008,9 @@ internal class GoalRunnerRepairContinuationTest : GoalRunnerRepairFixtures() {
       RUNTIME,
     )
     val beforeReview =
-      decodeWorkflowArtifactsForTest(
-        requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson,
-      )[GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY]
+      requireNotNull(
+        workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME),
+      ).toSnapshot().artifacts[GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY]
     val store = repairStore(workflows, git = ReachableGit())
 
     val applied =
@@ -1039,9 +1028,7 @@ internal class GoalRunnerRepairContinuationTest : GoalRunnerRepairFixtures() {
     assertEquals(staleReason, applied.repairs.single().priorValue)
     assertNull(applied.repairs.single().newValue)
     val after =
-      decodeWorkflowArtifactsForTest(
-        requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson,
-      )
+      requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).toSnapshot().artifacts
     assertNull(after["goal_continuation_outcome"])
     assertEquals(COMPLETED_COMMIT, after["commit_sha"])
     assertEquals(beforeReview, after[GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY])
@@ -1098,9 +1085,7 @@ internal class GoalRunnerRepairContinuationTest : GoalRunnerRepairFixtures() {
     assertEquals(unreachable, applied.repairs.single().priorValue)
     assertEquals(recovered, applied.repairs.single().newValue)
     val after =
-      decodeWorkflowArtifactsForTest(
-        requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson,
-      )
+      requireNotNull(workflows.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).toSnapshot().artifacts
     val state = requireNotNull(GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(after))
     assertEquals(recovered, state.remediationBaseSha)
     assertEquals(1, state.completedPassCount)
@@ -1724,7 +1709,7 @@ internal abstract class GoalRunnerRepairFixtures {
 
   protected data class RepairChildRecordArgs(
     val workflowId: String,
-    val continuation: Map<String, Any?>,
+    val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
     val reviewState: GoalSubtaskReviewState,
     val workflowStatus: String = "running",
     val goalContinuationOutcome: Map<String, Any?>? = null,
@@ -1779,7 +1764,7 @@ internal abstract class GoalRunnerRepairFixtures {
   protected fun continuationMap(
     includeValidationDepth: Boolean,
     includeQualityGateSelection: Boolean = true,
-  ): Map<String, Any?> =
+  ): FeatureTaskRuntimeGoalContinuationArtifact =
     FeatureTaskRuntimeGoalContinuationArtifact(
       issueKey = ISSUE_KEY,
       subtaskId = 1,
@@ -1794,13 +1779,32 @@ internal abstract class GoalRunnerRepairFixtures {
         } else {
           null
         },
-    ).asWorkflowArtifactEntry().toWorkflowArtifactMap().let { map ->
-      buildMap {
-        putAll(map)
-        if (!includeValidationDepth) remove("validation_depth")
-        if (!includeQualityGateSelection) remove("quality_gate_selection")
-      }
-    }
+    )
+
+  protected fun incompatiblePlanningImportArtifacts(): Map<String, Any?> =
+    mapOf(
+      "goal_planning_import" to
+        FeatureTaskRuntimeGoalPlanningImport(
+          parentGoalWorkflowId = "wfl-parent",
+          normalizedIssueKey = ISSUE_KEY,
+          repositoryIdentity = "repo-root-realpath-v1:/tmp/skillbill-repair",
+          parentSpecHash = "a".repeat(64),
+          decompositionManifestHash = "b".repeat(64),
+          planningContractId = "goal-planning",
+          planningContractVersion = "0.3",
+          phaseOutputContractId = "phase-output",
+          phaseOutputContractVersion = "0.3",
+          subtaskId = 1,
+          manifestOrder = 1,
+          governedSubSpecPath = ".feature-specs/$ISSUE_KEY/spec_subtask_1.md",
+          subSpecHash = "c".repeat(64),
+          preplanPayloadSha256 = "d".repeat(64),
+          planPayloadSha256 = "e".repeat(64),
+        ),
+    )
+
+  protected fun storedContinuation(record: WorkflowStateRecord): FeatureTaskRuntimeGoalContinuationArtifact =
+    requireNotNull(record.typedArtifacts.goalContinuationArtifact())
 
   protected fun healthyReviewState(): GoalSubtaskReviewState =
     GoalSubtaskReviewState.initial(
@@ -1832,7 +1836,7 @@ internal abstract class GoalRunnerRepairFixtures {
           codeReviewMode = CodeReviewExecutionMode.INLINE,
           validationDepth = ValidationDepth.FULL,
           qualityGateSelection = FeatureTaskRuntimeQualityGateSelection.BUILD,
-        ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
+        ),
       GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to healthyReviewState().toPersistenceWire(),
       FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to
         mapOf(

@@ -5,6 +5,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.workflow.FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION
 import skillbill.infrastructure.sqlite.workflow.FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION
+import skillbill.infrastructure.sqlite.workflow.artifact.FeatureTaskWorkflowArtifactsCodec
 import skillbill.infrastructure.sqlite.worklist.readWorkGoalChildRepositoryIdentity
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -1207,7 +1208,7 @@ class WorkflowStateStoreLifecycleTest {
 
       store.migrateFeatureTaskArtifacts(
         requireNotNull(store.getFeatureTaskWorkflow(child.workflowId)),
-        goalContinuationJson("P2", 5, "K2"),
+        FeatureTaskWorkflowArtifactsCodec.split(goalContinuationJson("P2", 5, "K2")).typed,
       )
 
       assertEquals(Triple("P2", 5, "K2"), goalColumns(connection, child.workflowId))

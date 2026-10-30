@@ -36,7 +36,6 @@ import skillbill.workflow.decomposition.runtime.withImportedGoalQualityReadiness
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.decomposition.withStartedSubtask
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -223,20 +222,8 @@ class DecompositionWorkflowContinuation(
     val snapshot = findSubtaskSnapshot(subtask, issueKey, unitOfWork) ?: return subtask
     val artifacts = DurableWorkflowArtifacts.fromMap(snapshot.artifacts)
     val commitPushResult = artifacts.commitPushResultArtifact()
-    val goalContinuation =
-      (
-        artifacts[
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.value(snapshot.artifacts),
-        ] as? Map<*, *>
-      )
-    val commitPushCompleted =
-      snapshot.steps.any { step ->
-        step.stepId == "commit_push" && step.status == WorkflowStepStatus.COMPLETED
-      }
     return when {
-      snapshot.workflowStatus == WorkflowStatus.COMPLETED ||
-        goalContinuation?.get("suppress_pr") == true &&
-        (snapshot.currentStepId == "pr" || commitPushResult?.commitSha != null) ->
+      snapshot.workflowStatus == WorkflowStatus.COMPLETED ->
         subtask.copy(
           status = DecompositionStatus.COMPLETE.wireValue,
           blockedReason = null,
@@ -252,14 +239,6 @@ class DecompositionWorkflowContinuation(
               category = "runtime",
               fallback = "Workflow step '${snapshot.currentStepId.ifBlank { "unknown" }}' is blocked.",
             ),
-        )
-      goalContinuation?.get("suppress_pr") == true &&
-        commitPushCompleted &&
-        commitPushResult?.commitSha == null ->
-        subtask.copy(
-          status = DecompositionStatus.BLOCKED.wireValue,
-          blockedReason = "git: Goal-continuation commit_push completed without commit_push_result.commit_sha.",
-          lastResumableStep = snapshot.currentStepId,
         )
       else -> subtask
     }

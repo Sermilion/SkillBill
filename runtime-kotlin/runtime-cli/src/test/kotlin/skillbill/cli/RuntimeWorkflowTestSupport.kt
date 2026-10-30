@@ -35,14 +35,15 @@ internal object RuntimeWorkflowTestSupport {
     dbPath: Path,
     context: CliRuntimeContext,
   ): Map<String, Any?> {
-    val service = component(context, dbPath).workflowService
+    val runtime = component(context, dbPath)
+    val service = runtime.workflowService
     val result =
       service.open(
         WorkflowServiceOpenArgs(
           kind = WorkflowFamilyKind.TASK_RUNTIME,
         ),
       )
-    return assertIs<WorkflowOpenResult.Ok>(result).toCliMap()
+    return assertIs<WorkflowOpenResult.Ok>(result).toCliMap(runtime.workflowArtifactWireEncoder)
   }
 
   data class UpdateArgs(
@@ -56,7 +57,8 @@ internal object RuntimeWorkflowTestSupport {
   )
 
   fun update(args: UpdateArgs): Map<String, Any?> {
-    val service = component(args.context, args.dbPath).workflowService
+    val runtime = component(args.context, args.dbPath)
+    val service = runtime.workflowService
     val result =
       service.update(
         WorkflowFamilyKind.TASK_RUNTIME,
@@ -72,7 +74,7 @@ internal object RuntimeWorkflowTestSupport {
               ?.let { DecompositionPlanningResult.fromWireMap(it, "test.artifacts_patch.plan") },
         ),
       )
-    return assertIs<WorkflowUpdateResult.Ok>(result).toPayload()
+    return assertIs<WorkflowUpdateResult.Ok>(result).toPayload(runtime.workflowArtifactWireEncoder)
   }
 
   fun get(
@@ -80,9 +82,10 @@ internal object RuntimeWorkflowTestSupport {
     workflowId: String,
     context: CliRuntimeContext,
   ): Map<String, Any?> {
-    val service = component(context, dbPath).workflowService
+    val runtime = component(context, dbPath)
+    val service = runtime.workflowService
     val result = service.get(WorkflowFamilyKind.TASK_RUNTIME, workflowId)
-    return assertIs<WorkflowGetResult.Ok>(result).toCliMap()
+    return assertIs<WorkflowGetResult.Ok>(result).toCliMap(runtime.workflowArtifactWireEncoder)
   }
 
   fun continueByIssueKey(
@@ -91,7 +94,8 @@ internal object RuntimeWorkflowTestSupport {
     subtaskId: Int?,
     context: CliRuntimeContext,
   ): Map<String, Any?> {
-    val service = component(context, dbPath).workflowService
+    val runtime = component(context, dbPath)
+    val service = runtime.workflowService
     val result =
       service.continueWorkflow(
         kind = WorkflowFamilyKind.TASK_RUNTIME,

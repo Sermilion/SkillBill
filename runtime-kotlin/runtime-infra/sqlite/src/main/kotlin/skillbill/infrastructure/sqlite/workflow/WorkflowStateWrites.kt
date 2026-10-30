@@ -1,12 +1,12 @@
 package skillbill.infrastructure.sqlite.workflow
 
-import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.artifact.FeatureTaskWorkflowArtifactsCodec
+import skillbill.infrastructure.sqlite.workflow.artifact.GoalContinuationArtifactCodec
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
@@ -15,6 +15,8 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.isTerminal
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.UndecodedTypedArtifact
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.time.Clock
@@ -58,22 +60,16 @@ internal data class GoalContinuationColumns(
   }
 }
 
-internal fun DurableWorkflowArtifacts.goalContinuationColumns(): GoalContinuationColumns {
-  val continuation =
-    JsonCodec.anyToStringAnyMap(this[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()])
-      ?: return GoalContinuationColumns.NONE
-  return GoalContinuationColumns(
-    parentWorkflowId =
-      continuation[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID] as? String,
-    subtaskId =
-      when (val subtask = continuation[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUBTASK_ID]) {
-        is Int -> subtask.toLong()
-        is Long -> subtask
-        else -> null
-      },
-    issueKey = continuation[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ISSUE_KEY] as? String,
-  )
-}
+internal fun DurableWorkflowArtifacts.goalContinuationColumns(): GoalContinuationColumns =
+  when (val continuation = this[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()]) {
+    is FeatureTaskRuntimeGoalContinuationArtifact ->
+      GoalContinuationColumns(continuation.parentWorkflowId, continuation.subtaskId.toLong(), continuation.issueKey)
+    is UndecodedTypedArtifact ->
+      GoalContinuationArtifactCodec.lenientIdentity(continuation.jsonText)
+        ?.let { GoalContinuationColumns(it.parentWorkflowId, it.subtaskId, it.issueKey) }
+        ?: GoalContinuationColumns.NONE
+    else -> GoalContinuationColumns.NONE
+  }
 
 internal fun Connection.upsertWorkflowRow(
   tableName: String,
@@ -233,7 +229,7 @@ private fun ordinaryTerminalConflictPredicate(
   }
 
 internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: WorkflowStateRecord) {
-  val goalColumns = row.artifactsWithoutStrictSnapshotDecode().goalContinuationColumns()
+  val goalColumns = row.typedArtifacts.goalContinuationColumns()
   val transitionTimestamp = nextStateEnteredAtSql("feature_task_workflows")
   prepareStatement(
     """
@@ -260,7 +256,7 @@ internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: Workfl
   ).use { statement ->
     val parameters = SqlParameterBinder(statement)
     parameters.text(row.workflowStatus)
-    parameters.text(row.artifactsJson)
+    parameters.text(FeatureTaskWorkflowArtifactsCodec.merge(row.artifactsJson, row.typedArtifacts))
     parameters.goalContinuation(goalColumns)
     parameters.text(row.currentStepId)
     parameters.text(row.workflowStatus)
@@ -277,9 +273,6 @@ internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: Workfl
     }
   }
 }
-
-private fun WorkflowStateRecord.artifactsWithoutStrictSnapshotDecode(): DurableWorkflowArtifacts =
-  DurableWorkflowArtifacts.fromAny(JsonCodec.parseValue(artifactsJson))
 
 private fun PreparedStatement.bindWorkflowRow(
   row: WorkflowStateRecord,
@@ -324,7 +317,7 @@ private fun PreparedStatement.bindFeatureTaskWorkflowRow(
   parameters.text(row.workflowStatus)
   parameters.text(row.currentStepId)
   parameters.text(row.stepsJson)
-  parameters.text(row.artifactsJson)
+  parameters.text(FeatureTaskWorkflowArtifactsCodec.merge(row.artifactsJson, row.typedArtifacts))
   parameters.text(row.issueKey)
   parameters.text(insertionTimestamp)
   parameters.text(insertionTimestamp)

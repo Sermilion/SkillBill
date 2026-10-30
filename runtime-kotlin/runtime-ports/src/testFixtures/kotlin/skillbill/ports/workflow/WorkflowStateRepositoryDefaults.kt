@@ -22,6 +22,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.artifact.phaseLedger
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 
 abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
@@ -94,7 +95,7 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
 
   open override fun migrateFeatureTaskArtifacts(
     source: WorkflowStateRecord,
-    targetArtifactsJson: String,
+    targetArtifacts: DurableWorkflowArtifacts,
   ) {
     throw UnsupportedOperationException("Fixture does not support durable artifact migration")
   }
@@ -150,8 +151,9 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
           val artifacts = JsonCodec.parseValue(row.artifactsJson) as Map<*, *>
           val runtime = artifacts[DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()] as? Map<*, *>
           val continuation =
-            artifacts[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()] as? Map<*, *>
-          (runtime?.get(SharedPayloadKeys.ISSUE_KEY) ?: continuation?.get(SharedPayloadKeys.ISSUE_KEY))?.toString()
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.value(row.typedArtifacts)
+              as? FeatureTaskRuntimeGoalContinuationArtifact
+          (runtime?.get(SharedPayloadKeys.ISSUE_KEY) ?: continuation?.issueKey)?.toString()
         }
       key?.trim()?.uppercase() == normalizedIssueKey
     }

@@ -14,8 +14,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
+import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImportSource
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -50,10 +49,7 @@ internal fun WorkflowStateRepository.findImportedSubtaskPlanWorkflowIds(
   subtasks.mapNotNull { subtask ->
     val workflowId = subtask.workflowId ?: return@mapNotNull null
     val child = get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@mapNotNull null
-    val raw =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(child.artifacts)
-        ?: return@mapNotNull null
-    val imported = FeatureTaskRuntimeGoalPlanningImport.fromArtifactMap(FeatureTaskRuntimeWorkflowArtifactMap.from(raw))
+    val imported = child.artifacts.goalPlanningImport() ?: return@mapNotNull null
     if (imported.parentGoalWorkflowId != identity.parentGoalWorkflowId ||
       imported.normalizedIssueKey != identity.normalizedIssueKey ||
       imported.repositoryIdentity != identity.repositoryIdentity

@@ -217,6 +217,7 @@ import skillbill.scaffold.model.ValidationGateFindingsFormat.JUNIT_XML
 import skillbill.scaffold.model.ValidationGateFindingsLocator
 import skillbill.telemetry.model.TelemetrySettings
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -2657,6 +2658,9 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
 
   private val taskRuntimeRows = linkedMapOf<String, WorkflowStateRecord>()
   private val implementRows = linkedMapOf<String, WorkflowStateRecord>()
+
+  fun taskRuntimeTypedArtifacts(workflowId: String): DurableWorkflowArtifacts =
+    requireNotNull(taskRuntimeRows[workflowId]) { "no runtime row for $workflowId" }.typedArtifacts
 
   fun taskRuntimeArtifacts(workflowId: String): Map<String, Any?> {
     val record = requireNotNull(taskRuntimeRows[workflowId]) { "no runtime row for $workflowId" }

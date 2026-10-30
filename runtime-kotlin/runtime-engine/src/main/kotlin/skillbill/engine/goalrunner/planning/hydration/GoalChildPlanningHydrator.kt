@@ -10,7 +10,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrationOutcome.Conflicted
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrationOutcome.Hydrated
 import skillbill.engine.goalrunner.planning.model.GoalChildPlanningHydration
-import skillbill.engine.goalrunner.planning.model.expectedProvenance
+import skillbill.engine.goalrunner.planning.model.provenanceMismatches
 import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
@@ -34,6 +34,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
+import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
@@ -157,7 +158,7 @@ class GoalChildPlanningHydrator(
   private fun createProvenance(
     request: GoalChildPlanningHydrationRequest,
     prepared: PreparedGoalPlanning,
-  ): Map<String, Any?> =
+  ): FeatureTaskRuntimeGoalPlanningImport =
     FeatureTaskRuntimeGoalPlanningImport(
       parentGoalWorkflowId = request.identity.parentGoalWorkflowId,
       normalizedIssueKey = request.identity.normalizedIssueKey,
@@ -175,7 +176,7 @@ class GoalChildPlanningHydrator(
       preplanPayloadSha256 = sha256HexUtf8(prepared.preplan.storedPayload),
       planPayloadSha256 = sha256HexUtf8(prepared.plan.storedPayload),
       source = prepared.source,
-    ).asWorkflowArtifactEntry().let(::workflowArtifactEntryMap)
+    )
 }
 
 private class PlanWorkflowPlanningReader(
@@ -349,10 +350,10 @@ private class GoalChildPlanningImportMatcher(
   ): GoalPlanningPreparationConflict? {
     val artifacts = existing.artifacts
     val expected =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(artifacts) as? Map<*, *>
+      artifacts.goalPlanningImport()
         ?: return conflict(request, setup, "child carries no goal planning import artifact")
-    val phaseIds = if (expected["source"] == null) LEGACY_ERA_PHASE_IDS else PLANNING_PHASE_IDS
-    val storedFromPlanWorkflow = FeatureTaskRuntimeGoalPlanningImportSource.isPlanWorkflowArtifact(expected)
+    val phaseIds = if (expected.source == null) LEGACY_ERA_PHASE_IDS else PLANNING_PHASE_IDS
+    val storedFromPlanWorkflow = expected.source?.kind == FeatureTaskRuntimeGoalPlanningImportSource.PLAN_WORKFLOW
     val sourceDivergence =
       if (request.planWorkflowId != null && storedFromPlanWorkflow) {
         planWorkflowDivergence(unitOfWork, expected, setup, request, request.planWorkflowId)
@@ -365,7 +366,7 @@ private class GoalChildPlanningImportMatcher(
       provenanceDivergence != null -> conflict(request, setup, provenanceDivergence)
       !ledgerMatches(artifacts, phaseIds) ->
         conflict(request, setup, "phase ledger no longer opens with the goal planning import prefix")
-      !planningPhasesSettled(artifacts, existing, phaseIds) ->
+      !planningPhasesSettled(artifacts, existing, phaseIds, expected) ->
         conflict(request, setup, "child planning phases are not settled as completed")
       else -> null
     }
@@ -379,7 +380,7 @@ private class GoalChildPlanningImportMatcher(
 
   private fun planWorkflowDivergence(
     unitOfWork: GoalRunnerPersistenceSession,
-    expected: Map<*, *>,
+    expected: FeatureTaskRuntimeGoalPlanningImport,
     setup: GoalRunnerChildWorkflowSetup,
     request: GoalChildPlanningHydrationRequest,
     planWorkflowId: String,
@@ -389,11 +390,7 @@ private class GoalChildPlanningImportMatcher(
         is PreparationRead.Conflicted -> return read.conflict
         is PreparationRead.Prepared -> read.value
       }
-    val stored = expected["source"] as? Map<*, *>
-    val matches =
-      stored?.get("kind") == prepared.source.kind &&
-        stored["plan_workflow_id"] == prepared.source.planWorkflowId &&
-        stored["details_sha256"] == prepared.source.detailsSha256
+    val matches = expected.source == prepared.source
     return if (matches) {
       null
     } else {
@@ -496,10 +493,10 @@ private class GoalChildPlanningImportMatcher(
   }
 
   private fun provenanceDivergence(
-    expected: Map<*, *>,
+    expected: FeatureTaskRuntimeGoalPlanningImport,
     request: GoalChildPlanningHydrationRequest,
   ): String? {
-    val mismatched = expectedProvenance(request).filter { (key, value) -> expected[key] != value }.keys
+    val mismatched = expected.provenanceMismatches(request)
     if (mismatched.isEmpty()) return null
     return "stored import provenance differs from the hydration request at " +
       mismatched.joinToString(", ")
@@ -522,19 +519,17 @@ private class GoalChildPlanningImportMatcher(
     artifacts: Map<String, Any?>,
     existing: WorkflowStateSnapshot,
     phaseIds: List<String>,
+    expected: FeatureTaskRuntimeGoalPlanningImport,
   ): Boolean {
     val records =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(artifacts) as? Map<*, *> ?: return false
-    val expected =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(artifacts) as? Map<*, *>
-        ?: return false
     val expectedStepStatuses =
       phaseIds.mapNotNull { phaseId ->
         settledStepStatus(records[phaseId] as? Map<*, *>, phaseId)?.let { phaseId to it }
       }.toMap()
     val preplanOutput = (records["preplan"] as? Map<*, *>)?.get("output_artifact") as? String ?: return false
     return expectedStepStatuses.size == phaseIds.size &&
-      sha256HexUtf8(preplanOutput) == expected["preplan_payload_sha256"] &&
+      sha256HexUtf8(preplanOutput) == expected.preplanPayloadSha256 &&
       stepsSettled(existing, expectedStepStatuses, phaseIds)
   }
 

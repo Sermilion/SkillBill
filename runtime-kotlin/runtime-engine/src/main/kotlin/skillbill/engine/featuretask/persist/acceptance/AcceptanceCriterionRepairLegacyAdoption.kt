@@ -26,18 +26,18 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArtifact
-import skillbill.workflow.taskruntime.artifact.decodeGoalContinuationArtifactFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
+import skillbill.workflow.taskruntime.artifact.goalPlanningImport
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionAuditResult
 import skillbill.workflow.taskruntime.artifact.isPreviousVersionAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.upgradeAuditResultFromPrevious
@@ -47,7 +47,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -65,6 +65,7 @@ class AcceptanceCriterionRepairLegacyAdoption(
   private val git: WorkflowGitOperations,
   private val source: FeatureTaskRuntimeRunInvariantsSource,
   private val projectStore: ProjectStorePort,
+  private val artifactWire: WorkflowArtifactWireEncoder,
 ) {
   internal fun sourceMatches(
     worker: AcquiredFeatureTaskRuntimeWorker,
@@ -312,15 +313,8 @@ class AcceptanceCriterionRepairLegacyAdoption(
     binding: AcceptanceCriterionRepairBinding,
     audit: ResolvedPhaseStrategyIdentity,
   ): Boolean {
-    val imported =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(original.artifacts)
-        ?: return false
-    val evidence =
-      FeatureTaskRuntimeGoalPlanningImport.fromArtifactMap(FeatureTaskRuntimeWorkflowArtifactMap.from(imported))
-    val child =
-      decodeGoalContinuationArtifactFromArtifact(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.value(original.artifacts),
-      ) ?: return false
+    val evidence = original.artifacts.goalPlanningImport() ?: return false
+    val child = original.artifacts.goalContinuationArtifact() ?: return false
     val discovery = decodePhaseRecords(original.artifacts)[audit.entryStep] ?: return false
     return evidence.parentGoalWorkflowId == child.parentWorkflowId &&
       evidence.normalizedIssueKey == child.issueKey && evidence.normalizedIssueKey == identity.normalizedIssueKey &&
@@ -345,7 +339,8 @@ class AcceptanceCriterionRepairLegacyAdoption(
 
   private fun receipt(request: LegacyReceiptRequest): FeatureTaskRuntimeWorkflowArtifactMap {
     val audit = request.recorded.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }
-    val originalJson = JsonCodec.valueToJsonString(request.original.artifacts)
+    val originalArtifacts = JsonCodec.parseValue(artifactWire.encode(request.original.artifacts))
+    val originalJson = JsonCodec.valueToJsonString(originalArtifacts)
     return FeatureTaskRuntimeWorkflowArtifactMap.from(
       mapOf(
         Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION,
@@ -386,7 +381,7 @@ class AcceptanceCriterionRepairLegacyAdoption(
           ),
         Keys.PROSPECTIVE_BUDGET to true,
         Keys.STRUCTURED_DISCOVERY_REQUIRED to true,
-        Keys.ORIGINAL_ARTIFACTS to request.original.artifacts,
+        Keys.ORIGINAL_ARTIFACTS to originalArtifacts,
       ),
     )
   }
@@ -421,7 +416,7 @@ class AcceptanceCriterionRepairLegacyAdoption(
     current: WorkflowStateSnapshot,
   ): RetainedPlan? {
     val originalArtifacts = FeatureTaskRuntimeWorkflowArtifactMap.from(receipt[RepairKeys.ORIGINAL_ARTIFACTS])
-    val original = current.copy(artifacts = DurableWorkflowArtifacts.fromMap(originalArtifacts))
+    val original = current.copy(artifacts = artifactWire.decode(JsonCodec.mapToJsonString(originalArtifacts)))
     val descriptor =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original.artifacts)
         ?: return null

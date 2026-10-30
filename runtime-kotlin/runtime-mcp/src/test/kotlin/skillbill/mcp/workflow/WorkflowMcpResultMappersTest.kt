@@ -5,6 +5,7 @@ import skillbill.application.workflow.model.WorkflowGetResult
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.sqlite.workflow.artifact.SqliteWorkflowArtifactWireEncoder
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStepState
@@ -37,7 +38,7 @@ class WorkflowMcpResultMappersTest {
             updatedArtifactKeys = listOf("implementation_summary"),
             readOnlyFullStateGuidance = "Use workflow show.",
           ),
-      ).toMcpMap()
+      ).toMcpMap(SqliteWorkflowArtifactWireEncoder())
 
     assertEquals("ok", mapped["status"])
     assertEquals("wfl-1", mapped["workflow_id"])
@@ -59,7 +60,7 @@ class WorkflowMcpResultMappersTest {
         workflowId = "wfl-1",
         dbPath = "/tmp/metrics.db",
         snapshot = snapshotWithObservability(),
-      ).withDecodedGoalObservability().toMcpMap()
+      ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
 
     val observability = mapped["goal_observability"] as Map<*, *>
     assertEquals("implement", observability["workflow_phase"])
@@ -83,7 +84,7 @@ class WorkflowMcpResultMappersTest {
                 ),
               ),
           ),
-      ).withDecodedGoalObservability().toMcpMap()
+      ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
 
     assertFalse(mapped.containsKey("goal_session_accounting_latest"))
   }
@@ -109,7 +110,7 @@ class WorkflowMcpResultMappersTest {
                   "timestamp" to "2026-06-01T00:00:00Z",
                 ),
             ),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "contract_version")
@@ -123,7 +124,7 @@ class WorkflowMcpResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("unknown" to true)),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "at '<root>'")
@@ -140,7 +141,7 @@ class WorkflowMcpResultMappersTest {
             snapshotWithObservability(
               event = snapshotWithObservabilityEvent() + ("changed_file_summary" to "not-an-object"),
             ),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "changed_file_summary")
@@ -157,7 +158,7 @@ class WorkflowMcpResultMappersTest {
             snapshotWithObservability(
               event = snapshotWithObservabilityEvent() + ("changed_files" to listOf(123)),
             ),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(changedFilesError.message.orEmpty(), "changed_files[0]")
 
@@ -182,7 +183,7 @@ class WorkflowMcpResultMappersTest {
                     )
                 ),
             ),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(samplePathsError.message.orEmpty(), "changed_file_summary.sample_paths")
   }
@@ -195,7 +196,7 @@ class WorkflowMcpResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("issue_key" to 61)),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(issueKeyError.message.orEmpty(), "issue_key")
 
@@ -205,7 +206,7 @@ class WorkflowMcpResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("subtask_id" to "1")),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(subtaskIdError.message.orEmpty(), "subtask_id")
 
@@ -215,7 +216,7 @@ class WorkflowMcpResultMappersTest {
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("timestamp" to 20260601)),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
     assertContains(timestampError.message.orEmpty(), "timestamp")
   }
@@ -231,7 +232,7 @@ class WorkflowMcpResultMappersTest {
             snapshotWithObservability(
               event = snapshotWithObservabilityEvent() + ("changed_files" to List(501) { "file-$it.kt" }),
             ),
-        ).withDecodedGoalObservability().toMcpMap()
+        ).withDecodedGoalObservability().toMcpMap(SqliteWorkflowArtifactWireEncoder())
       }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "changed_files")

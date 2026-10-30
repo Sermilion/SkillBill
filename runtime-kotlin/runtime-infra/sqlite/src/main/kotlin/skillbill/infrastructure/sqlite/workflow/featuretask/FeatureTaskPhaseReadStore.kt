@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.artifact.FeatureTaskWorkflowArtifactsCodec
 import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
 import skillbill.ports.workflow.model.FeatureTaskRuntimeWorkflowHeader
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -31,11 +32,10 @@ internal class FeatureTaskPhaseReadStore(private val connection: Connection) {
       statement.executeQuery().use { rows ->
         if (!rows.next()) return@use null
         requireRuntimeMode(rows.getString("mode"))
-        val value =
+        val selected =
           JsonCodec.parseObjectOrNull(rows.getString("selected_artifacts"))
-            ?.let(JsonCodec::jsonElementToValue)?.let(JsonCodec::anyToStringAnyMap)
             ?: throw invalidWorkflowStateSchemaError("Selected runtime artifacts must be an object.")
-        DurableWorkflowArtifacts.fromMap(value)
+        FeatureTaskWorkflowArtifactsCodec.decode(selected)
       }
     }
   }

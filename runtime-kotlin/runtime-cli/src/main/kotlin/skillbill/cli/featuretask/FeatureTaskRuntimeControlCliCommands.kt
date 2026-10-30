@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import java.nio.file.Path
 
 @Inject
@@ -118,6 +119,7 @@ class FeatureTaskRuntimeResumeCommand(
 
 @Inject
 class FeatureTaskRuntimeAbandonCommand(
+  private val encoder: WorkflowArtifactWireEncoder,
   private val workflowService: WorkflowService,
   private val state: CliRunState,
 ) : DocumentedCliCommand(
@@ -130,12 +132,13 @@ class FeatureTaskRuntimeAbandonCommand(
 
   override fun run() {
     val result = workflowService.abandonFeatureTaskRuntime(workflowId, reason)
-    state.complete(result.toPayload(), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
+    state.complete(result.toPayload(encoder), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
   }
 }
 
 @Inject
 class FeatureTaskRuntimeRetryBlockedCommand(
+  private val encoder: WorkflowArtifactWireEncoder,
   private val workflowService: WorkflowService,
   private val state: CliRunState,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
@@ -155,12 +158,13 @@ class FeatureTaskRuntimeRetryBlockedCommand(
   override fun run() {
     crashReconciler.reconcile(workflowId)
     val result = workflowService.retryBlockedFeatureTaskRuntimePhase(workflowId, phaseId, reason, mandate)
-    state.complete(result.toPayload(), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
+    state.complete(result.toPayload(encoder), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
   }
 }
 
 @Inject
 class FeatureTaskRuntimeRepairIdentityCommand(
+  private val encoder: WorkflowArtifactWireEncoder,
   private val workflowService: WorkflowService,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val projectStorePort: ProjectStorePort,
@@ -193,6 +197,6 @@ class FeatureTaskRuntimeRepairIdentityCommand(
           reason = reason,
         ),
       )
-    state.complete(result.toPayload(), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
+    state.complete(result.toPayload(encoder), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
   }
 }

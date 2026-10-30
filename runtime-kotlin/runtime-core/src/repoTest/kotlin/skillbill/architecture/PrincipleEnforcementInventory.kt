@@ -480,9 +480,9 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "FeatureTaskRuntimeGoalContinuationArtifact.kt",
-        functionNames = setOf("fromArtifactMap"),
+          "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/artifact/" +
+            "GoalContinuationArtifactCodec.kt",
+        functionNames = setOf("decode"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
@@ -522,9 +522,9 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "FeatureTaskRuntimeGoalContinuationPersistenceModels.kt",
-        functionNames = setOf("fromArtifactMap"),
+          "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/artifact/" +
+            "GoalPlanningArtifactCodecs.kt",
+        functionNames = setOf("decode"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
@@ -710,6 +710,7 @@ object PrincipleEnforcementInventory {
       "workControlService",
       "workObservationService",
       "workListService",
+      "workflowArtifactWireEncoder",
       "workflowService",
     )
 

@@ -4,7 +4,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.workflow.taskruntime.artifact.asTelemetryPayload
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePhaseOutputRepairEvidenceFromArtifact
-import skillbill.workflow.taskruntime.artifact.goalContinuationFieldAdoptionFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeDiagnosticDegradationMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
@@ -12,11 +11,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 
 internal fun FeatureTaskRuntimePhaseOutputRepairEvidence.encodeWorkflowArtifact(): Any = asWorkflowArtifactEntry()
-
-internal fun decodeGoalContinuationFieldAdoption(artifacts: Any?) =
-  goalContinuationFieldAdoptionFromWorkflowArtifacts(
-    artifacts,
-  )
 
 internal fun decodePhaseOutputRepairEvidence(json: String): FeatureTaskRuntimePhaseOutputRepairEvidence? =
   decodePhaseOutputRepairEvidenceFromArtifact(

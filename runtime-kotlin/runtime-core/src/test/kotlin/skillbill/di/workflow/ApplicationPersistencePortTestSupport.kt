@@ -132,8 +132,6 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
@@ -880,7 +878,7 @@ internal fun blockedGoalChildRetryFixture(): BlockedGoalChildRetryFixture {
                 goalBranch = "feat/SKILL-51-demo",
                 parentWorkflowId = parentWorkflowId,
                 codeReviewMode = CodeReviewExecutionMode.INLINE,
-              ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
+              ),
           ),
         ),
     ),

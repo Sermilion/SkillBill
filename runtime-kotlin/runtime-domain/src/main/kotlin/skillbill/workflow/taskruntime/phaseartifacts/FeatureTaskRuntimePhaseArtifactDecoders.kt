@@ -12,6 +12,7 @@ import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_REVIEW_GENERATION_AR
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
+import skillbill.workflow.taskruntime.model.persistence.typedArtifactRecordOrNull
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY
@@ -119,17 +120,10 @@ internal fun operatorBlockRetryFrom(artifacts: Map<String, Any?>): FeatureTaskRu
 
 internal fun goalContinuationFieldAdoptionFrom(
   artifacts: Map<String, Any?>,
-): FeatureTaskRuntimeGoalContinuationFieldAdoption? {
-  if (FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY !in artifacts) return null
-  val raw = artifacts[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY]
-  val entryMap =
-    JsonCodec.anyToStringAnyMap(raw)
-      ?: schemaError(
-        "Feature-task-runtime artifact " +
-          "'$FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY' must decode to a map.",
-      )
-  return FeatureTaskRuntimeGoalContinuationFieldAdoption.fromArtifactMap(entryMap)
-}
+): FeatureTaskRuntimeGoalContinuationFieldAdoption? =
+  artifacts.typedArtifactRecordOrNull<FeatureTaskRuntimeGoalContinuationFieldAdoption>(
+    FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY,
+  )
 
 private fun Map<String, Any?>.requiredOperatorRetryString(field: String): String =
   (this[field] as? String)?.takeIf(String::isNotBlank)

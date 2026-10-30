@@ -73,7 +73,7 @@ internal fun seedCurrentParent(
     parent.copy(
       artifactsJson =
         JsonCodec.mapToJsonString(
-          parent.toSnapshot().artifacts.toMap() +
+          JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(parent.artifactsJson)).orEmpty() +
             DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
               DecompositionManifestSchemaValidator().encodeManifestWireMap(goal),
             ),
@@ -121,7 +121,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
       parent.copy(
         artifactsJson =
           JsonCodec.mapToJsonString(
-            parent.toSnapshot().artifacts.toMap() +
+            JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(parent.artifactsJson)).orEmpty() +
               DurableWorkflowArtifactFamily.GOAL_QUALITY_EXECUTION.entry(quality.toPersistenceWire()),
           ),
       ),
@@ -324,7 +324,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         parent.copy(
           artifactsJson =
             JsonCodec.mapToJsonString(
-              parent.toSnapshot().artifacts.toMap() +
+              JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(parent.artifactsJson)).orEmpty() +
                 DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
                   DecompositionManifestSchemaValidator().encodeManifestWireMap(manifest),
                 ),
@@ -627,7 +627,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
       original.copy(
         artifactsJson =
           JsonCodec.valueToJsonString(
-            original.toSnapshot().artifacts +
+            JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(original.artifactsJson)).orEmpty() +
               (DecompositionManifestPayloadKeys.BLOCKED_REASON to oldReason),
           ),
       ),

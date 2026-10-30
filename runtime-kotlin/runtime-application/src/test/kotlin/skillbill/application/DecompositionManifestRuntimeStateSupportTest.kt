@@ -6,6 +6,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.statusFromUpdate
 import skillbill.application.decomposition.withRuntimeFields
 import skillbill.goalrunner.goalContinuationOutcome
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.intentFor
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -13,6 +14,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -150,12 +152,12 @@ class DecompositionManifestRuntimeStateSupportTest {
           buildMap {
             put(
               "goal_continuation",
-              mapOf(
-                "issue_key" to "SKILL-68",
-                "subtask_id" to 5,
-                "suppress_pr" to true,
-                "goal_branch" to "feature/SKILL-68",
-                "code_review_mode" to "inline",
+              FeatureTaskRuntimeGoalContinuationArtifact(
+                issueKey = "SKILL-68",
+                subtaskId = 5,
+                suppressPr = true,
+                goalBranch = "feature/SKILL-68",
+                codeReviewMode = CodeReviewExecutionMode.INLINE,
               ),
             )
             commitPushResult?.let { put("commit_push_result", it) }

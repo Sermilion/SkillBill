@@ -127,6 +127,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.ports.validation.RepoValidationGateway
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import java.time.Clock
 
@@ -351,6 +352,7 @@ abstract class RuntimeComponent(
   abstract val skillBillUninstallService: SkillBillUninstallService
   abstract val telemetryLevelMutator: TelemetryLevelMutator
   abstract val telemetryService: TelemetryService
+  abstract val workflowArtifactWireEncoder: WorkflowArtifactWireEncoder
   abstract val workflowService: WorkflowService
   abstract val workListService: WorkListService
   abstract val workControlService: WorkControlService

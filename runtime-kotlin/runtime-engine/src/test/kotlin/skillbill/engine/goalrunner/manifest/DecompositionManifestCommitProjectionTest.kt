@@ -40,6 +40,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
@@ -53,6 +54,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -96,6 +98,7 @@ class DecompositionManifestCommitProjectionTest {
       writeFromWorkflowUpdate(
         repoRoot = repoRoot,
         existingArtifactsJson = durableRuntimeArtifactsJson(initial.manifest, subtaskSpec),
+        typedArtifacts = durableRuntimeContinuation(initial.manifest),
         artifactsPatch =
           WorkflowArtifactPatch.from(
             mapOf("commit_push_result" to mapOf("pre_commit_projection" to true)),
@@ -138,6 +141,7 @@ class DecompositionManifestCommitProjectionTest {
       writeFromWorkflowUpdate(
         repoRoot = repoRoot,
         existingArtifactsJson = durableRuntimeArtifactsJson(manifest, subtaskSpec),
+        typedArtifacts = durableRuntimeContinuation(manifest),
         artifactsPatch =
           WorkflowArtifactPatch.from(
             mapOf("commit_push_result" to mapOf("commit_sha" to "commit-subtask-1")),
@@ -193,6 +197,7 @@ class DecompositionManifestCommitProjectionTest {
       writeFromWorkflowUpdate(
         repoRoot = repoRoot,
         existingArtifactsJson = durableRuntimeArtifactsJson(initial.manifest, subtaskSpec),
+        typedArtifacts = durableRuntimeContinuation(initial.manifest),
         artifactsPatch =
           WorkflowArtifactPatch.from(
             mapOf("commit_push_result" to mapOf("commit_sha" to "commit-subtask-1")),
@@ -254,6 +259,7 @@ class DecompositionManifestCommitProjectionTest {
       writeProjectionFromWorkflowState(
         repoRoot = repoRoot,
         artifactsJson = durableRuntimeArtifactsJson(runtimeManifest, subtaskSpec),
+        typedArtifacts = durableRuntimeContinuation(runtimeManifest),
       )
 
     assertNotNull(result)
@@ -656,14 +662,19 @@ class DecompositionManifestCommitProjectionTest {
             DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label(),
           ),
         "assessment" to mapOf("spec_path" to subtaskSpec.toString()),
-        "goal_continuation" to
-          mapOf(
-            "issue_key" to "SKILL-51",
-            "subtask_id" to 1,
-            "suppress_pr" to true,
-            "goal_branch" to manifest.featureBranch,
-            "code_review_mode" to "inline",
-          ),
+      ),
+    )
+
+  private fun durableRuntimeContinuation(manifest: DecompositionManifest): Map<String, Any?> =
+    mapOf(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
+        FeatureTaskRuntimeGoalContinuationArtifact(
+          issueKey = "SKILL-51",
+          subtaskId = 1,
+          suppressPr = true,
+          goalBranch = requireNotNull(manifest.featureBranch),
+          codeReviewMode = CodeReviewExecutionMode.INLINE,
+        ),
       ),
     )
 
@@ -676,7 +687,7 @@ class DecompositionManifestCommitProjectionTest {
         JsonCodec.anyToStringAnyMap(
           JsonCodec.parseValue(durableRuntimeArtifactsJson(manifest, subtaskSpec)),
         ),
-      ),
+      ) + durableRuntimeContinuation(manifest),
     )
 }
 

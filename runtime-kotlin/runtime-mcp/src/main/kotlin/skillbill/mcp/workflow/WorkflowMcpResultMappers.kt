@@ -11,6 +11,7 @@ import skillbill.application.workflow.persist.WorkflowWireProjections
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.ports.workflow.WorkflowArtifactWireEncoder
 
 internal fun WorkflowContinueResult.toMcpMap(): Map<String, Any?> =
   when (this) {
@@ -30,14 +31,14 @@ internal fun WorkflowContinueResult.toMcpMap(): Map<String, Any?> =
       )
   }
 
-internal fun WorkflowOpenResult.toMcpMap(): Map<String, Any?> =
+internal fun WorkflowOpenResult.toMcpMap(encoder: WorkflowArtifactWireEncoder): Map<String, Any?> =
   when (this) {
     is WorkflowOpenResult.Ok ->
-      workflowSnapshotMcpMap(snapshot, goalObservability).apply {
+      workflowSnapshotMcpMap(snapshot, encoder, goalObservability).apply {
         launchProjection?.let {
           put(
             WorkflowWirePayloadKeys.LAUNCH_PROJECTION,
-            WorkflowWireProjections.inputProjectionMap(it).toPayload(),
+            WorkflowWireProjections.inputProjectionMap(it, encoder).toPayload(),
           )
         }
         put(SharedPayloadKeys.STATUS, "ok")
@@ -51,7 +52,7 @@ internal fun WorkflowOpenResult.toMcpMap(): Map<String, Any?> =
       )
   }
 
-internal fun WorkflowUpdateResult.toMcpMap(): Map<String, Any?> =
+internal fun WorkflowUpdateResult.toMcpMap(encoder: WorkflowArtifactWireEncoder): Map<String, Any?> =
   when (this) {
     is WorkflowUpdateResult.Ok ->
       LinkedHashMap(
@@ -60,7 +61,7 @@ internal fun WorkflowUpdateResult.toMcpMap(): Map<String, Any?> =
         launchProjection?.let {
           put(
             WorkflowWirePayloadKeys.LAUNCH_PROJECTION,
-            WorkflowWireProjections.inputProjectionMap(it).toPayload(),
+            WorkflowWireProjections.inputProjectionMap(it, encoder).toPayload(),
           )
         }
         put(
@@ -77,10 +78,10 @@ internal fun WorkflowUpdateResult.toMcpMap(): Map<String, Any?> =
       ).apply { dbPath?.let { put(WorkflowWirePayloadKeys.DB_PATH, it) } }
   }
 
-internal fun WorkflowGetResult.toMcpMap(): Map<String, Any?> =
+internal fun WorkflowGetResult.toMcpMap(encoder: WorkflowArtifactWireEncoder): Map<String, Any?> =
   when (this) {
     is WorkflowGetResult.Ok ->
-      workflowSnapshotMcpMap(snapshot, goalObservability).apply {
+      workflowSnapshotMcpMap(snapshot, encoder, goalObservability).apply {
         put(SharedPayloadKeys.STATUS, "ok")
         put(WorkflowWirePayloadKeys.DB_PATH, dbPath)
       }
@@ -116,10 +117,10 @@ internal fun WorkflowLatestResult.toMcpMap(): Map<String, Any?> =
       )
   }
 
-internal fun WorkflowResumeResult.toMcpMap(): Map<String, Any?> =
+internal fun WorkflowResumeResult.toMcpMap(encoder: WorkflowArtifactWireEncoder): Map<String, Any?> =
   when (this) {
     is WorkflowResumeResult.Ok ->
-      LinkedHashMap(WorkflowWireProjections.resumeMap(resume).toPayload()).apply {
+      LinkedHashMap(WorkflowWireProjections.resumeMap(resume, encoder).toPayload()).apply {
         put(SharedPayloadKeys.STATUS, "ok")
         put(WorkflowWirePayloadKeys.DB_PATH, dbPath)
       }

@@ -34,12 +34,12 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
 import skillbill.ports.workflow.WorkflowSnapshotValidator
-import kotlin.coroutines.cancellation.CancellationException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
 import java.sql.SQLException
 import java.time.Clock
+import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class SQLiteDatabaseSessionFactory(
