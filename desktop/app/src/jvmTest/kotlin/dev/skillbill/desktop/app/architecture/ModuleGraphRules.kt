@@ -41,7 +41,7 @@ internal fun loadManifests(): List<ModuleManifest> {
 
 internal object ModuleGraphRules {
   const val DOMAIN = ":core:domain"
-  private val runtimeReachers = setOf(":app", ":core:data")
+  private val runtimeReachers = setOf(":app", ":core:data", ":benchmark")
   private val runtimeCoordinates = listOf("dev.skillbill:runtime-", "project::runtime-kotlin")
   private val domainForbidden = listOf("org.jetbrains.compose", "androidx.", "org.xerial:sqlite-jdbc") + runtimeCoordinates
   private val productionClasspaths = listOf("jvmCompileClasspath", "jvmRuntimeClasspath")

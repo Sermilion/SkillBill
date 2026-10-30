@@ -2,6 +2,7 @@ import org.gradle.api.tasks.Exec
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.jvm.toolchain.JvmVendorSpec
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
   id("skillbill.desktop.application")
@@ -52,6 +53,9 @@ kotlin {
   }
   sourceSets.jvmTest.dependencies {
     implementation(projects.core.testing)
+    implementation("dev.skillbill:runtime-core")
+    implementation("dev.skillbill:runtime-contracts")
+    implementation("dev.skillbill:runtime-infra-host")
     // The architecture test parses the per-module manifests.
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlin.compiler.embeddable)
@@ -71,6 +75,22 @@ dependencies {
 compose.desktop {
   application {
     mainClass = "dev.skillbill.desktop.app.DesktopLauncherKt"
+    nativeDistributions {
+      targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
+      macOS {
+        iconFile.set(layout.projectDirectory.file("packaging/icons/skill-bill.icns"))
+      }
+      windows {
+        menuGroup = "Skill Bill"
+        upgradeUuid = "e9c88238-8cb5-4be4-bb0a-17a1d6de7671"
+        iconFile.set(layout.projectDirectory.file("packaging/icons/skill-bill.ico"))
+      }
+      linux {
+        packageName = "skill-bill-desktop"
+        appCategory = "Development"
+        iconFile.set(layout.projectDirectory.file("packaging/icons/skill-bill.png"))
+      }
+    }
   }
 }
 
@@ -108,4 +128,17 @@ if (System.getProperty("os.name").contains("mac", true)) {
 tasks.named<Test>("jvmTest") {
   systemProperty("desktopRoot", rootDir.absolutePath)
   inputs.files(rootDir.resolve("settings.gradle.kts"), rootDir.resolve("build.gradle.kts")).withPropertyName("desktopRootBuildScripts")
+}
+
+tasks.register<Exec>("packagedDataSmoke") {
+  // Keep the launcher smoke opt-in so check never starts a packaged desktop process.
+  group = "verification"
+  description = "Runs the packaged desktop image against a seeded runtime store."
+  dependsOn("createDistributable", "compileTestKotlinJvm", gradle.includedBuild("runtime-kotlin").task(":runtime-cli:installDist"))
+  val script = layout.projectDirectory.file("scripts/packaged-data-smoke.py")
+  val runtimeInstall = rootDir.parentFile.resolve("runtime-kotlin/runtime-cli/build/install/runtime-cli")
+  doFirst {
+    val python = if (System.getProperty("os.name").contains("windows", true)) "python" else "python3"
+    commandLine(python, script.asFile.absolutePath, runtimeInstall.absolutePath)
+  }
 }
