@@ -110,7 +110,7 @@ internal fun LazyListScope.phaseResultsSection(detail: Detail, state: DetailUiSt
         }
       }
     }
-    pageFooter(DetailList.Phases, state, onAction)
+    pageFooter(DetailList.Validation, state, onAction)
   }
 }
 

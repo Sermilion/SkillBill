@@ -57,12 +57,11 @@ class DetailViewModel(
   workControls: WorkControlRepository,
   toasts: ToastQueue,
 ) : ViewModel() {
-  private val initiallyOpen = session.state.value as? DatabaseSessionState.Open
   private val mutableState = MutableStateFlow(
     DetailUiState(
       header = item,
       sections = SectionsUi.Pending,
-      itemResolved = initiallyOpen?.sessionId == item.control.sessionId,
+      itemResolved = false,
       stale = false,
       renderedAt = clock.now(),
     ),
@@ -77,6 +76,7 @@ class DetailViewModel(
   private val controls = DetailControls(viewModelScope, workControls, toasts) { mutableState.value }
 
   init {
+    selection.select(null)
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
     observe()
     board.observe(ShellBoard.query).onEach { board -> mutableState.update { it.copy(boardPosition = boardPosition(board, it.header.id)) } }

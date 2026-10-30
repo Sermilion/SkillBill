@@ -3,6 +3,7 @@ package dev.skillbill.desktop.core.ui.status
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import kotlin.time.Instant
 
 fun statusKind(lifecycle: Lifecycle, planningPrepared: Boolean, stalledSince: Instant?): StatusKind = when (lifecycle) {
@@ -19,7 +20,7 @@ fun statusKind(lifecycle: Lifecycle, planningPrepared: Boolean, stalledSince: In
   Lifecycle.Idle -> StatusKind.Pending
 }
 
-fun WorkItem.statusKind(): StatusKind = statusKind(lifecycle, planningPrepared, stalledSince)
+fun WorkItem.statusKind(): StatusKind = statusKind(lifecycle, kind != WorkKind.Goal || planningPrepared, stalledSince)
 
 fun subtaskStatusKind(status: String): StatusKind = when (status) {
   SubtaskStatusKeys.COMPLETE -> StatusKind.Completed

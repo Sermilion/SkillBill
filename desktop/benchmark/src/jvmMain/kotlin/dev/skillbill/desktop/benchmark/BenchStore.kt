@@ -6,8 +6,6 @@ import skillbill.di.core.RuntimeContext
 import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.create
-import skillbill.idestatus.model.WorktreeEditSource
-import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.model.EnvironmentContext
@@ -16,14 +14,18 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
-import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
+import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
 import java.sql.DriverManager
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 
-data class LiveRecord(val record: StandalonePhaseStatusRecord)
+data class LiveRecord(val record: StandalonePhaseStatusRecord, val worker: FeatureTaskRuntimeWorkerOwnership)
 data class LifecycleResult(val finishedId: String, val replacementId: String, val committedAtNanos: Long, val live: List<LiveRecord>)
 
 fun runtimeWriter(database: Path, home: Path): RuntimeComponent = RuntimeComponent::class.create(
@@ -92,11 +94,12 @@ fun registerLive(writer: RuntimeComponent, count: Int, root: Path, namespace: St
         registration(root, namespace, invocationId, issueKey, now, now.plusSeconds(3600)),
       )
       val workflowId = "bench-workflow-$invocationId"
+      val worker = registerBenchmarkWorker(unit, workflowId, issueKey, now)
       check(
         record.invocationId == invocationId && record.executionId == expectedExecutionId &&
           record.workflowId == workflowId && record.issueKey == issueKey && record.leaseExpiresAt.isAfter(now),
       ) { "Benchmark registration did not produce the fresh live record '$invocationId'." }
-      LiveRecord(record)
+      LiveRecord(record, worker)
     }
   }
 }
@@ -105,73 +108,95 @@ fun replayActivity(writer: RuntimeComponent, live: List<LiveRecord>): List<LiveR
   val updated = live.map { liveRecord ->
     writer.databaseSession.transaction { unit ->
       val now = Instant.now()
-      unit.worktreeEditJournal.append(
-        requireNotNull(liveRecord.record.workflowId),
-        WorktreeEditTick(now, "review", WorktreeEditSource.WORKTREE_PROBE, listOf(GoalObservabilityFileDiffStat("src/Bench.kt", 1, 0))),
-      )
-    }
-    writer.databaseSession.transaction { unit ->
-      val record = liveRecord.record
-      val now = Instant.now()
-      val result = unit.standalonePhaseStatuses.update(
-        StandalonePhaseStatusUpdate(
-          record.executionId, record.statusRevision, record.leaseOwner, record.leaseGeneration, "active", "review", "heartbeat", now,
-        ),
-      )
-      check(result == StandalonePhaseStatusUpdateResult.ACCEPTED) {
-        "Benchmark heartbeat for '${record.invocationId}' was rejected: $result."
+      val worker = liveRecord.worker.copy(heartbeatAt = now.toString(), expiresAt = now.plusSeconds(3600).toString())
+      check(unit.workflowStates.heartbeatFeatureTaskRuntimeWorker(worker)) {
+        "Benchmark heartbeat for '${liveRecord.record.invocationId}' was rejected."
       }
-      val current = checkNotNull(unit.standalonePhaseStatuses.readByInvocation(record.invocationId)) {
-        "Benchmark heartbeat record '${record.invocationId}' could not be read back."
-      }
-      check(current.executionId == record.executionId && current.statusRevision != record.statusRevision) {
-        "Benchmark heartbeat for '${record.invocationId}' did not advance its execution revision."
-      }
-      current
+      worker
     }
   }
-  return updated.map(::LiveRecord)
+  return live.zip(updated) { previous, worker -> previous.copy(worker = worker) }
 }
 
 fun commitLifecycle(writer: RuntimeComponent, live: List<LiveRecord>, root: Path, namespace: String): LifecycleResult {
-  val finished = live.first().record
+  val finished = live.first()
+  val finishedRecord = finished.record
   val replacementId = "$namespace-live-${UUID.randomUUID()}"
   val replacement = writer.databaseSession.transaction { unit ->
     val now = Instant.now()
     val result = unit.standalonePhaseStatuses.update(
       StandalonePhaseStatusUpdate(
-        finished.executionId, finished.statusRevision, finished.leaseOwner, finished.leaseGeneration, "terminal", "review", null,
+        finishedRecord.executionId, finishedRecord.statusRevision, finishedRecord.leaseOwner, finishedRecord.leaseGeneration, "terminal", "review", null,
         now, finishedAt = now, terminalResult = "completed",
       ),
     )
     check(result == StandalonePhaseStatusUpdateResult.ACCEPTED) {
-      "Benchmark lifecycle transition for '${finished.invocationId}' was rejected: $result."
+      "Benchmark lifecycle transition for '${finishedRecord.invocationId}' was rejected: $result."
     }
-    val terminal = checkNotNull(unit.standalonePhaseStatuses.readByInvocation(finished.invocationId)) {
-      "Benchmark lifecycle record '${finished.invocationId}' could not be read back."
+    val terminal = checkNotNull(unit.standalonePhaseStatuses.readByInvocation(finishedRecord.invocationId)) {
+      "Benchmark lifecycle record '${finishedRecord.invocationId}' could not be read back."
     }
-    check(terminal.executionId == finished.executionId && terminal.lifecycleState == "terminal" && terminal.statusRevision != finished.statusRevision) {
-      "Benchmark lifecycle transition for '${finished.invocationId}' did not persist its terminal state."
+    check(terminal.executionId == finishedRecord.executionId && terminal.lifecycleState == "terminal" && terminal.statusRevision != finishedRecord.statusRevision) {
+      "Benchmark lifecycle transition for '${finishedRecord.invocationId}' did not persist its terminal state."
     }
+    check(unit.workflowStates.releaseFeatureTaskRuntimeWorker(finished.worker.workflowId, finished.worker.ownerToken, finished.worker.generation))
     val issueKey = "SKILL-BENCH-${namespace.take(8)}-replacement-${UUID.randomUUID()}"
     val registered = unit.standalonePhaseStatuses.register(
       registration(root, namespace, replacementId, issueKey, now, now.plusSeconds(3600)),
     )
+    val worker = registerBenchmarkWorker(unit, "bench-workflow-$replacementId", issueKey, now)
     check(
       registered.invocationId == replacementId && registered.executionId == "execution-$replacementId" &&
         registered.workflowId == "bench-workflow-$replacementId" && registered.issueKey == issueKey && registered.leaseExpiresAt.isAfter(now),
     ) {
       "Benchmark replacement '$replacementId' was not registered as a fresh live record."
     }
-    registered
+    registered to worker
   }
   val committedAtNanos = System.nanoTime()
   return LifecycleResult(
-    finished.invocationId,
-    replacement.invocationId,
+    finishedRecord.invocationId,
+    replacement.first.invocationId,
     committedAtNanos,
-    live.drop(1) + LiveRecord(replacement),
+    live.drop(1) + LiveRecord(replacement.first, replacement.second),
   )
+}
+
+private fun registerBenchmarkWorker(
+  unit: skillbill.ports.persistence.UnitOfWork,
+  workflowId: String,
+  issueKey: String,
+  now: Instant,
+): FeatureTaskRuntimeWorkerOwnership {
+  val row = WorkflowStateRecord(
+    workflowId = workflowId,
+    sessionId = "benchmark-$workflowId",
+    workflowName = "bill-feature-task",
+    contractVersion = "0.1",
+    workflowStatus = WorkflowStatus.RUNNING.wireValue,
+    currentStepId = "review",
+    stepsJson = "[]",
+    artifactsJson = "{}",
+    startedAt = now.toString(),
+    updatedAt = null,
+    finishedAt = null,
+    mode = FeatureTaskWorkflowMode.RUNTIME,
+    issueKey = issueKey,
+  )
+  unit.workflowStates.saveFeatureTaskWorkflow(row, FeatureTaskWorkflowMode.RUNTIME)
+  val process = JdkFeatureTaskRuntimeWorkerSupervisor(
+    object : RuntimeDiagnostics {
+      override fun warning(message: String, error: Throwable?) = Unit
+      override fun error(message: String, error: Throwable?) = Unit
+    },
+    JdkHostPlatformPort,
+  ).currentProcess()
+  val ownership = FeatureTaskRuntimeWorkerOwnership(
+    workflowId, 1, "benchmark-owner-$workflowId", process.hostIdentity, process.bootIdentity, process.pid,
+    process.processBirthToken, FeatureTaskRuntimeWorkerLeaseState.ACTIVE, now.toString(), now.plusSeconds(3600).toString(), "review", 1,
+  )
+  check(unit.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.updatedAt))
+  return ownership
 }
 
 private fun registration(root: Path, namespace: String, id: String, issue: String, startedAt: Instant, leaseExpiresAt: Instant) =

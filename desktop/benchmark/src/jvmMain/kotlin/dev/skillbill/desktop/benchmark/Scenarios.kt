@@ -53,7 +53,7 @@ fun runScenarios(database: String, home: String, bursts: Int, samples: Int): Sce
     val namespace = java.util.UUID.randomUUID().toString()
     val writer = runtimeWriter(Path.of(database), root)
     var live = registerLive(writer, maxOf(12, samples), root, namespace)
-    val query = BoardQuery(HistoryWindow.Day, "", maxOf(50, samples))
+    val query = BoardQuery(HistoryWindow.Day, "SKILL-BENCH-${namespace.take(8)}", maxOf(50, samples))
     val sampleIds = live.take(samples).mapTo(HashSet()) { it.record.invocationId }
     val loaded = withTimeout(30.seconds) {
       app.workBoardRepository.observe(query).first { state ->
@@ -118,7 +118,6 @@ fun runScenarios(database: String, home: String, bursts: Int, samples: Int): Sce
       val beforeEmissions = emissions.get()
       val beforeReads = diagnostics.snapshot().size
       val updated = replayActivity(writer, live)
-      boardObservations.awaitActivity(updated)
       burstBoardEmissions += emissions.get() - beforeEmissions
       burstRuntimeReads += diagnostics.snapshot().size - beforeReads
       val lifecycle = commitLifecycle(writer, updated, root, namespace)
@@ -158,19 +157,6 @@ private class BoardObservationCursor(private val events: Channel<BoardEmission>)
         val observation = latest ?: receive()
         if (observation.showsLive(candidateId)) return@withTimeout
         receive()
-      }
-    }
-  }
-
-  suspend fun awaitActivity(updated: List<LiveRecord>) {
-    val revisions = updated.associate { it.record.invocationId to it.record.statusRevision }
-    withTimeout(30.seconds) {
-      while (true) {
-        val observation = receive()
-        val observedRevisions = observation.board.items
-          .filter { it.control.invocationId in revisions }
-          .associate { it.control.invocationId to it.control.statusRevision }
-        if (observedRevisions == revisions) return@withTimeout
       }
     }
   }

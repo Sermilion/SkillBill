@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 
 internal val WorkItem.launchKey: String get() = issueKey ?: id
 
@@ -40,6 +42,7 @@ class LaunchReservations {
     val baseline: Lifecycle?,
     val baselineObservedAt: kotlin.time.Instant?,
     val phase: Phase,
+    val awaitingSince: kotlin.time.Instant? = null,
   )
 
   private data class Snapshot(val page: BoardPage, val sessionId: Long)
@@ -76,7 +79,7 @@ class LaunchReservations {
     if (!succeeded) {
       held.remove(handle.key)
     } else {
-      held[handle.key] = current.copy(phase = Phase.AwaitingBoard)
+      held[handle.key] = current.copy(phase = Phase.AwaitingBoard, awaitingSince = Clock.System.now())
       latest[handle.sessionId]?.let { settleFromBoard(handle.key, held[handle.key], it) }
     }
     publish()
@@ -106,7 +109,13 @@ class LaunchReservations {
   private fun settleFromBoard(key: String, reservation: Reservation?, snapshot: Snapshot) {
     if (reservation == null || reservation.phase != Phase.AwaitingBoard || reservation.handle.sessionId != snapshot.sessionId) return
     if (reservation.baselineObservedAt != null && snapshot.page.observedAt < reservation.baselineObservedAt) return
-    val item = reservation.target.select(snapshot.page.items) ?: return
+    val item = reservation.target.select(snapshot.page.items)
+    if (item == null) {
+      val awaitingSince = reservation.awaitingSince ?: return
+      // shortcut: expire on the next board read after 30 seconds, add an app-scope timer if board reads can stop.
+      if (snapshot.page.observedAt >= awaitingSince + REGISTRATION_TIMEOUT) held.remove(key)
+      return
+    }
     if (reservation.target is LaunchBoardTarget.Goal && reservation.target.workId == null) {
       held[key] = reservation.copy(target = reservation.target.copy(workId = item.id))
     }
@@ -130,5 +139,9 @@ class LaunchReservations {
     mutableKeys.value = held.keys.toSet()
     val activeSessions = held.values.mapTo(HashSet()) { it.handle.sessionId }
     latest.keys.removeAll { it !in activeSessions }
+  }
+
+  private companion object {
+    val REGISTRATION_TIMEOUT = 30.seconds
   }
 }

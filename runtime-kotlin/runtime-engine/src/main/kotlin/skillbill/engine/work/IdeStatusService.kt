@@ -49,6 +49,9 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
 import skillbill.ports.idestatus.model.WorkBoardItem
+import skillbill.ports.idestatus.model.WorkBoardReadModelKey
+import skillbill.ports.idestatus.model.WorkBoardReadModelPage
+import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkBoardResult
 import skillbill.ports.idestatus.model.WorkDetailItem
@@ -74,6 +77,8 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.Locale
 
@@ -648,15 +653,19 @@ internal object WorkBoardReadModelRead {
     val finishedFrom = observedAt.minus(request.finishedWithin.duration)
     val filter = normalizeFilter(request.filter)
     val diagnostics = mutableListOf<WorkBoardDiagnostic>()
-    val scanned = scanCandidates(projection, unitOfWork, ScanRequest(observedAt, finishedFrom, filter, diagnostics))
-    val projected = scanned.items
-    val examined = scanned.examined
-
-    val ordered = projected.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
-    val eligible =
-      ordered.asSequence().filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }.toList()
-    val page = eligible.take(request.pageSize)
-    val hasNext = eligible.size > request.pageSize
+    val scanRequest = ScanRequest(observedAt, finishedFrom, filter, diagnostics)
+    val result =
+      if (unitOfWork.workBoardReadModel.isComplete()) {
+        readIndexed(projection, unitOfWork, request.pageSize, after, scanRequest)
+      } else {
+        val scanned = scanCandidates(projection, unitOfWork, scanRequest)
+        val ordered = scanned.items.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
+        val eligible = ordered.filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
+        BoardPage(eligible.take(request.pageSize), eligible.size > request.pageSize, scanned.examined)
+      }
+    val page = result.items
+    val hasNext = result.hasNext
+    val examined = result.examined
     val nextCursor =
       page.lastOrNull()?.takeIf { hasNext }?.let {
         workBoardNextCursor(request, observedAt, encodePosition(it.position), observation)
@@ -676,6 +685,81 @@ internal object WorkBoardReadModelRead {
     )
   }
 
+  private fun readIndexed(
+    projection: WorkBoardItemProjection,
+    unitOfWork: UnitOfWork,
+    pageSize: Int,
+    after: ProjectedBoardPosition?,
+    request: ScanRequest,
+  ): BoardPage {
+    val indexed = mutableListOf<ProjectedBoardItem>()
+    var indexedAfter =
+      after?.let {
+        WorkBoardReadModelKey(it.displayPriority, formatReadModelInstant(it.updatedAt), it.workId)
+      }
+    var examined = 0
+    var moreRows = true
+    val limit = pageSize + 1
+    while (indexed.size <= pageSize && moreRows) {
+      val entries =
+        unitOfWork.workBoardReadModel.page(
+          WorkBoardReadModelPageQuery(request.finishedFrom, request.filter, indexedAfter, limit),
+        ).entries
+      examined += entries.size
+      moreRows = entries.size == limit
+      entries.mapNotNullTo(indexed) { entry -> indexedItem(projection, unitOfWork, entry, request) }
+      indexedAfter = entries.lastOrNull()?.key ?: break
+    }
+    return BoardPage(indexed.take(pageSize), indexed.size > pageSize, examined)
+  }
+
+  private fun indexedItem(
+    projection: WorkBoardItemProjection,
+    unitOfWork: UnitOfWork,
+    entry: WorkBoardReadModelPage.Entry,
+    request: ScanRequest,
+  ): ProjectedBoardItem? {
+    val row = (entry as? WorkBoardReadModelPage.Entry.Decoded)?.row
+    val needsProjection =
+      row == null || row.reprojectAt?.let { !it.isAfter(request.observedAt) } == true ||
+        row.membershipDeadline?.let { !it.isAfter(request.observedAt) } == true
+    val item =
+      if (needsProjection) {
+        projection.projectBoardCandidate(
+          unitOfWork,
+          entry.workId,
+          BoardProjectionWindow(request.observedAt, request.finishedFrom),
+          request.diagnostics,
+          AggregateSkipDiagnostics(),
+        )
+      } else {
+        row.item
+      } ?: return null
+    val projectedId = projection.boardId(item)
+    if (projectedId == null || projectedId != entry.workId || '\n' in projectedId) {
+      invalidWorkPaginationRequest("Work changed. Refresh the board.")
+    }
+    if (item.finishedAt?.isAfter(
+        request.observedAt,
+      ) == true || !projection.matchesFilter(item, request.filter)
+    ) {
+      return null
+    }
+    val updatedAt =
+      try {
+        Instant.parse(entry.key.updatedAtText)
+      } catch (_: DateTimeParseException) {
+        null
+      }
+    return ProjectedBoardItem(
+      item,
+      projectedId,
+      updatedAt?.let { ProjectedBoardPosition(entry.key.displayPriority, it, entry.workId) },
+    )
+  }
+
+  private data class BoardPage(val items: List<ProjectedBoardItem>, val hasNext: Boolean, val examined: Int)
+
   private fun scanCandidates(
     projection: WorkBoardItemProjection,
     unitOfWork: UnitOfWork,
@@ -685,7 +769,6 @@ internal object WorkBoardReadModelRead {
     val finishedFrom = request.finishedFrom
     val filter = request.filter
     val diagnostics = request.diagnostics
-    val readModelComplete = unitOfWork.workBoardReadModel.isComplete()
     val skipDiagnostics = AggregateSkipDiagnostics()
     val projected = mutableListOf<ProjectedBoardItem>()
     val seenIds = mutableSetOf<String>()
@@ -704,9 +787,6 @@ internal object WorkBoardReadModelRead {
         )
       if (rows.isEmpty()) break
       candidateCursor = rows.last().key
-      if (readModelComplete) {
-        unitOfWork.workBoardReadModel.readByWorkIds(rows.mapTo(linkedSetOf()) { it.id })
-      }
       for (row in rows) {
         if (seenIds.add(row.id)) {
           examined++
@@ -750,7 +830,7 @@ internal object WorkBoardReadModelRead {
     listOf(
       PROJECTED_CURSOR_PREFIX.trimEnd('\n'),
       position.displayPriority.toString(),
-      position.updatedAt.toString(),
+      formatReadModelInstant(position.updatedAt),
       position.workId,
     )
       .joinToString("\n")
@@ -764,7 +844,7 @@ internal object WorkBoardReadModelRead {
     if (priority.toString() != parts[1]) invalidWorkPaginationRequest("Work changed. Refresh the board.")
     val updatedAt =
       try {
-        Instant.parse(parts[2]).takeIf { it.toString() == parts[2] }
+        Instant.parse(parts[2]).takeIf { it.toString() == parts[2] || formatReadModelInstant(it) == parts[2] }
           ?: invalidWorkPaginationRequest("Work changed. Refresh the board.")
       } catch (_: DateTimeParseException) {
         invalidWorkPaginationRequest("Work changed. Refresh the board.")
@@ -778,9 +858,15 @@ internal object WorkBoardReadModelRead {
 
   private fun validPositionWorkId(id: String): Boolean = id.isNotBlank() && '\n' !in id
 
-  private data class ProjectedBoardItem(val item: WorkBoardItem, val workId: String) {
+  private fun formatReadModelInstant(value: Instant): String = READ_MODEL_INSTANT_FORMATTER.format(value)
+
+  private data class ProjectedBoardItem(
+    val item: WorkBoardItem,
+    val workId: String,
+    private val indexedPosition: ProjectedBoardPosition? = null,
+  ) {
     val position: ProjectedBoardPosition
-      get() = ProjectedBoardPosition(item.displayPriority, item.snapshot.updatedAt, workId)
+      get() = indexedPosition ?: ProjectedBoardPosition(item.displayPriority, item.snapshot.updatedAt, workId)
   }
 
   private data class ProjectedBoardPosition(val displayPriority: Int, val updatedAt: Instant, val workId: String)
@@ -793,4 +879,6 @@ internal object WorkBoardReadModelRead {
   private const val PROJECTED_CURSOR_PREFIX = "p\n"
   private const val POSITION_FIELD_COUNT = 4
   private const val POSITION_WORK_ID_INDEX = 3
+  private val READ_MODEL_INSTANT_FORMATTER =
+    DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSS'Z'").withZone(ZoneOffset.UTC)
 }

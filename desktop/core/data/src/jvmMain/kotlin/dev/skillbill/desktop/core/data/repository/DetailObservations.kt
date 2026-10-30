@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.CancellationException
@@ -108,7 +109,8 @@ class DetailObservations internal constructor(
 
   /** Runs the first load for [id] in the session scope, replacing an in-flight prefetch of another id. */
   suspend fun prefetch(id: String): RunOptions? {
-    synchronized(lock) { cache[id] }?.let { return it.read.runOptions() }
+    val cached = synchronized(lock) { cache[id] }
+    if (cached != null && !needsRefresh(signals.value, cached.applied, cached.read.detailIds(id))) return cached.read.runOptions()
     val pending = synchronized(lock) {
       inFlight?.takeIf { it.first == id }?.second ?: run {
         inFlight?.second?.cancel()
@@ -179,11 +181,16 @@ private fun DetailState.refreshedBy(read: DetailRead): DetailState = when (read)
 
 /** The detail read carries no running or membership verdicts, so the loaded header keeps the ones the board row had. */
 private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
-  running = row.running,
+  running = lifecycle == Lifecycle.Active,
   recentlyFinishedPhase = row.recentlyFinishedPhase,
   doneWithinDay = row.doneWithinDay,
   membershipDeadline = row.membershipDeadline,
 )
+
+private fun DetailRead.detailIds(id: String): Set<String> = when (this) {
+  is DetailRead.Loaded -> setOfNotNull(id, header.control.workflowId, header.control.invocationId)
+  DetailRead.Gone, is DetailRead.Failed -> setOf(id)
+}
 
 private fun MutableStateFlow<DetailState>.updateAndGetSections(
   transform: (DetailSections.Loaded) -> DetailSections.Loaded,

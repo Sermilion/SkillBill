@@ -21,6 +21,7 @@ import dev.skillbill.desktop.app.command.CommandMenu
 import dev.skillbill.desktop.app.di.WindowComponent
 import dev.skillbill.desktop.app.keyboard.ShortcutSheet
 import dev.skillbill.desktop.app.keyboard.toKeyPress
+import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
@@ -52,7 +53,15 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
     visible = visible,
     title = "Skill Bill",
     state = rememberWindowState(size = DpSize(1280.dp, 820.dp)),
-    onPreviewKeyEvent = { event -> event.toKeyPress()?.let(keyboard::onKey) ?: false },
+    onPreviewKeyEvent = { event ->
+      val press = event.toKeyPress()
+      val treeKey = when (press?.key) {
+        ShellKey.Up, ShellKey.Down, ShellKey.Enter -> true
+        else -> false
+      }
+      if (window.panes.specsOpen && treeKey) false
+      else press?.let(keyboard::onKey) ?: false
+    },
   ) {
     val awtWindow = this.window
     SideEffect { awtWindow.minimumSize = MIN_WINDOW_SIZE }

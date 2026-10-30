@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -52,8 +53,9 @@ fun SidebarItem(
   val type = SkillBillTheme.type
   val interaction = remember { MutableInteractionSource() }
   val hovered = interaction.collectIsHoveredAsState().value
+  val focused = interaction.collectIsFocusedAsState().value
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  val fill = rememberHoverColor(hovered, if (on) colors.bgActive else Color.Transparent, if (on) colors.bgActive else colors.bgHover).value
+  val fill = rememberHoverColor(hovered || focused, if (on) colors.bgActive else Color.Transparent, if (on) colors.bgActive else colors.bgHover).value
   val textColor = if (on || hovered) colors.fg else colors.fg2
   val item: @Composable () -> Unit = {
     Row(

@@ -58,16 +58,16 @@ class WindowNavigator(private val session: DatabaseSessionController, private va
     return true
   }
 
-  /** Rebinds each session-owned entry to the new generation while keeping the window's route history. */
+  /** A database switch returns the window to its board and keeps Settings open when it initiated the switch. */
   suspend fun followSession() {
     session.state.collect { state ->
       val next = (state as? DatabaseSessionState.Open)?.sessionId
       if (next == sessionId) return@collect
       sessionId = next
-      backStack.indices.forEach { index ->
-        val entry = backStack[index]
-        backStack[index] = if (entry.route is SettingsRoute) entry else RouteEntry(entry.route, next)
-      }
+      val settings = backStack.lastOrNull()?.takeIf { it.route is SettingsRoute }
+      backStack.clear()
+      backStack += RouteEntry(WorkRoute(null), next)
+      if (settings != null) backStack += settings
       selection.select(null)
     }
   }

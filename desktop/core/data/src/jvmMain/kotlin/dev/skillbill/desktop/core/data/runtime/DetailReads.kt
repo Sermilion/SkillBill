@@ -49,10 +49,23 @@ internal class RuntimeDetailReads(
     val head = result.toRead(component, options, sessionId)
     if (head !is DetailRead.Loaded) return@read head
     extended.entries.fold(head) { loaded, (list, count) ->
-      val pageSize = count.coerceIn(1, WorkPaginationLimits.MAX_PAGE_SIZE)
-      val page = component.ideStatusService.detail(WorkDetailRequest(id, pageSize = pageSize, list = list.toRuntime()))
-      val pageDetail = page.item?.toDetail(page.observedAt) ?: return@fold loaded
-      loaded.copy(sections = loaded.sections.withList(list, pageDetail, page.listCursors[list.toRuntime()], append = false))
+      var remaining = count
+      var cursor: String? = null
+      var sections = loaded.sections
+      while (remaining > 0) {
+        val pageSize = remaining.coerceAtMost(WorkPaginationLimits.MAX_PAGE_SIZE)
+        val page = component.ideStatusService.detail(
+          WorkDetailRequest(id, pageSize = pageSize, list = list.toRuntime(), cursor = cursor),
+        )
+        val pageDetail = page.item?.toDetail(page.observedAt) ?: break
+        val next = page.listCursors[list.toRuntime()]
+        sections = sections.withList(list, pageDetail, next, append = cursor != null)
+        val fetched = pageDetail.size(list)
+        if (fetched == 0 || next == null || next == cursor) break
+        remaining -= fetched
+        cursor = next
+      }
+      loaded.copy(sections = sections)
     }
   }
 

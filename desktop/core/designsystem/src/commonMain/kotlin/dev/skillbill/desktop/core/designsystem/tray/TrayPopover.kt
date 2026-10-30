@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -81,7 +83,7 @@ fun TrayPopover(
       }
     }
     Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 10.dp, vertical = 8.dp)) { tabs() }
-    Column(Modifier.fillMaxWidth().padding(4.dp), content = rows)
+    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(4.dp), content = rows)
     Row(
       Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
       horizontalArrangement = Arrangement.SpaceBetween,

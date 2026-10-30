@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
@@ -89,36 +90,39 @@ fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailabili
     onAvailable = availability::available,
     onFailure = availability::unavailable,
     onDismiss = { scope.launch(Dispatchers.Main) { visible = false } },
-  ) else Tray(
-    iconContent = {
-      SkillBillTheme(reducedMotion = false) {
-        TrayIconRenderer.Content(status, running, NativeTrayHost.showsOverlay(System.getProperty("os.name")))
-      }
-    },
-    tooltip = if (linux) state.trayHover() else when {
-      state.problem != null -> "Skill Bill could not refresh the board · ${state.problem?.summary()}"
-      state.stale -> "Skill Bill is showing stale work data"
-      status == TrayStatus.Failed -> "Skill Bill has a failed goal"
-      status == TrayStatus.NeedsYou -> "Skill Bill needs you"
-      running > 0 -> "Skill Bill, $running running"
-      else -> "Skill Bill is idle"
-    },
-    primaryAction = {
-      availability.available()
-      if (!mainVisible) intents.send(HostIntent.ShowMain)
-      else if (visible) visible = false
-      else if (!opening) {
-        opening = true
-        scope.launch {
-          try {
-            val anchor = trayIconAnchor()
-            windowState.position = withContext(Dispatchers.IO) { placement.position(windowState.size, anchor, 16) }
-            visible = true
-          } finally { opening = false }
+  ) else {
+    SideEffect { availability.available() }
+    Tray(
+      iconContent = {
+        SkillBillTheme(reducedMotion = false) {
+          TrayIconRenderer.Content(status, running, NativeTrayHost.showsOverlay(System.getProperty("os.name")))
         }
-      }
-    },
-  )
+      },
+      tooltip = if (linux) state.trayHover() else when {
+        state.problem != null -> "Skill Bill could not refresh the board · ${state.problem?.summary()}"
+        state.stale -> "Skill Bill is showing stale work data"
+        status == TrayStatus.Failed -> "Skill Bill has a failed goal"
+        status == TrayStatus.NeedsYou -> "Skill Bill needs you"
+        running > 0 -> "Skill Bill, $running running"
+        else -> "Skill Bill is idle"
+      },
+      primaryAction = {
+        availability.available()
+        if (!mainVisible) intents.send(HostIntent.ShowMain)
+        else if (visible) visible = false
+        else if (!opening) {
+          opening = true
+          scope.launch {
+            try {
+              val anchor = trayIconAnchor()
+              windowState.position = withContext(Dispatchers.IO) { placement.position(windowState.size, anchor, 16) }
+              visible = true
+            } finally { opening = false }
+          }
+        }
+      },
+    )
+  }
   if (visible) Window(
     onCloseRequest = { visible = false },
     title = "Skill Bill tray",
