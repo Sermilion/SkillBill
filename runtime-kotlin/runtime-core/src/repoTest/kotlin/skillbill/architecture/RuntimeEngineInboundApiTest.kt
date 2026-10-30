@@ -139,6 +139,8 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.goalrunner.model.GoalPreflightResult",
         "skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest",
         "skillbill.engine.goalrunner.model.GoalRunnerAcceptResult",
+        "skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest",
+        "skillbill.engine.goalrunner.model.GoalRunnerCompleteResult",
         "skillbill.engine.goalrunner.model.GoalRunnerEventSink",
         "skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest",
         "skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult",

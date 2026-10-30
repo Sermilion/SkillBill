@@ -1,6 +1,7 @@
 package skillbill.cli.goal.control
 
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
+import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
@@ -76,4 +77,10 @@ internal fun goalAcceptExitCode(result: GoalRunnerAcceptResult): Int =
   when (result) {
     is GoalRunnerAcceptResult.Accepted -> 0
     is GoalRunnerAcceptResult.Rejected -> 1
+  }
+
+internal fun goalCompleteExitCode(result: GoalRunnerCompleteResult): Int =
+  when (result) {
+    is GoalRunnerCompleteResult.Completed -> 0
+    is GoalRunnerCompleteResult.Rejected -> 1
   }

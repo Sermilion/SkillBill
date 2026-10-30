@@ -84,6 +84,20 @@ execution with new cycles. The command refuses while a runner holds the goal and
 when the parent has no ambiguous state. It does not change subtasks, child
 workflows, specs or commits.
 
+## Completing a goal outside the runtime
+
+When a goal's work has landed by other means, run
+`skill-bill goal complete <KEY> --commit <sha> --reason <reason> --confirm-issue-key <KEY>`
+(`--force` skips the confirmation). The runtime resolves the commit, records an
+out-of-band acceptance against it for every subtask that is not complete, skipped,
+or completed without changes, marks those subtasks complete, retires any active
+final-quality execution, and records the goal as complete, all in one transaction.
+Subtasks the runtime already finished keep their own commits and history. Later goal
+runs report the goal as already complete; an accepted subtask needs no child history
+draft. The command refuses while a runner holds a live execution lease (stop it with
+`skill-bill goal stop <KEY>` first) and when the goal is already complete. It runs no
+quality gates and opens no pull request.
+
 ## Block incident recovery
 
 Work detail includes the runtime-built `incident` projection and `incident_history`. Status and run output use that same projection for the diagnosis, next action, report, and telemetry lines. The detail JSON adds `recover_command` only when recovery is available or prerequisites need confirmation; it includes the incident revision and one `--confirm-prerequisite` flag for each unmet prerequisite.

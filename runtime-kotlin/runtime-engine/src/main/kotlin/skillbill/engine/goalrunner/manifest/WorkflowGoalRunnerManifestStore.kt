@@ -13,6 +13,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.persist.quality.WorkflowGoalRunnerQualityExecutionStore
 import skillbill.engine.goalrunner.reset.GoalChildWorkflowSaveResult
+import skillbill.engine.goalrunner.reset.GoalRunnerOperatorCompletion
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
 import skillbill.engine.goalrunner.status.GoalRunnerControlCoordinator
@@ -83,6 +84,7 @@ class WorkflowGoalRunnerManifestStore
         historyEvidence,
         qualityExecution,
       )
+    private val operatorCompletion = GoalRunnerOperatorCompletion(qualityExecution, projectionPersistence)
     private val controls =
       GoalRunnerControlCoordinator(
         database,
@@ -253,6 +255,20 @@ class WorkflowGoalRunnerManifestStore
           )
         }
       }
+
+    override fun saveOperatorGoalCompletion(
+      state: GoalRunnerManifestState,
+      commitSha: String,
+      reason: String,
+      completedAt: String,
+    ): GoalRunnerManifestState {
+      val saved =
+        database.transaction { unitOfWork ->
+          operatorCompletion.saveInTransaction(unitOfWork, state, commitSha, reason, completedAt)
+        }
+      projectionPersistence.writeProjectionFile(state, saved.projectionArtifacts)
+      return saved.state
+    }
 
     override fun saveHardReset(
       state: GoalRunnerManifestState,

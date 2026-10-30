@@ -244,6 +244,19 @@ interface GoalRunnerManifestStateWrites {
   ): GoalRunnerChildWorkflowSaveResult
 }
 
+interface GoalRunnerManifestCompletionWrites {
+  /**
+   * Accepts every unfinished subtask against [commitSha], retires any active quality execution and
+   * records goal completion at [completedAt] in one transaction.
+   */
+  fun saveOperatorGoalCompletion(
+    state: GoalRunnerManifestState,
+    commitSha: String,
+    reason: String,
+    completedAt: String,
+  ): GoalRunnerManifestState
+}
+
 interface GoalRunnerManifestPurgeCommands {
   fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String>
 
@@ -275,4 +288,5 @@ interface GoalRunnerManifestStore :
   GoalRunnerManifestExecutionCommands,
   GoalRunnerManifestControlWrites,
   GoalRunnerManifestStateWrites,
+  GoalRunnerManifestCompletionWrites,
   GoalRunnerManifestPurgeCommands

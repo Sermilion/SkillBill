@@ -7,11 +7,15 @@ import skillbill.engine.goalrunner.model.GoalChildHistoryAcceptanceRestoreResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptanceEvidence
+import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
+import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.unfinishedSubtaskIds
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
@@ -60,6 +64,56 @@ class GoalRunnerAcceptanceCoordinator(
     )
   }
 
+  fun complete(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult {
+    val repoRoot =
+      request.repoRoot
+        ?: return GoalRunnerCompleteResult.Rejected(
+          request.issueKey,
+          "A repository root is required to verify the completion commit.",
+        )
+    val loaded =
+      manifestStore.loadDurableByIssueKey(request.issueKey, repoRoot)
+        ?: return GoalRunnerCompleteResult.Rejected(
+          request.issueKey,
+          "No prepared goal exists for '${request.issueKey}'.",
+        )
+    val evidence =
+      completionRejection(loaded)?.let(GoalRunnerAcceptanceEvidence::Rejected)
+        ?: resolvedAcceptanceEvidence(request.commitSha, repoRoot)
+    val commitSha =
+      when (evidence) {
+        is GoalRunnerAcceptanceEvidence.Rejected -> return GoalRunnerCompleteResult.Rejected(
+          request.issueKey,
+          evidence.reason,
+        )
+        is GoalRunnerAcceptanceEvidence.Resolved -> evidence.commitSha
+      }
+    val completedAt = clock.instant().atOffset(ZoneOffset.UTC).toString()
+    val saved = manifestStore.saveOperatorGoalCompletion(loaded, commitSha, request.reason, completedAt)
+    return GoalRunnerCompleteResult.Completed(
+      issueKey = saved.manifest.issueKey,
+      parentWorkflowId = saved.parentWorkflowId,
+      commitSha = commitSha,
+      reason = request.reason,
+      completedAt = completedAt,
+      acceptedSubtaskIds = loaded.manifest.unfinishedSubtaskIds(),
+      before = loaded.manifest.toResetSnapshot(),
+      after = saved.manifest.toResetSnapshot(),
+    )
+  }
+
+  private fun completionRejection(loaded: GoalRunnerManifestState): String? {
+    val issueKey = loaded.manifest.issueKey
+    val lease = manifestStore.executionLease(loaded.parentWorkflowId)
+    return when {
+      lease != null && lease.expiresAt.isAfter(clock.instant()) ->
+        "Goal '$issueKey' is running (pid ${lease.pid}). Stop it with `skill-bill goal stop $issueKey` first."
+      loaded.controlState.goalCompletedAt != null && loaded.manifest.unfinishedSubtaskIds().isEmpty() ->
+        "Goal '$issueKey' is already complete."
+      else -> null
+    }
+  }
+
   private fun acceptanceRejection(request: GoalRunnerAcceptRequest): String? =
     when {
       !request.restoreAfterHardReset ->
@@ -95,7 +149,7 @@ class GoalRunnerAcceptanceCoordinator(
         "Subtask ${request.subtaskId} depends on subtask $unsatisfiedDependencyId, which is not complete or skipped.",
       )
     }
-    return resolvedAcceptanceEvidence(request, repoRoot)
+    return resolvedAcceptanceEvidence(request.commitSha, repoRoot)
   }
 
   private fun acceptanceStateRejection(
@@ -120,17 +174,17 @@ class GoalRunnerAcceptanceCoordinator(
   }
 
   private fun resolvedAcceptanceEvidence(
-    request: GoalRunnerAcceptRequest,
+    commitSha: String,
     repoRoot: Path,
   ): GoalRunnerAcceptanceEvidence {
-    val resolved = gitOperations.resolveCommit(repoRoot, request.commitSha)
+    val resolved = gitOperations.resolveCommit(repoRoot, commitSha)
     val resolvedSha = resolved.value.trim()
     return if (resolved is WorkflowGitOperationResult.Ok && resolvedSha.isNotBlank()) {
       GoalRunnerAcceptanceEvidence.Resolved(resolvedSha)
     } else {
       GoalRunnerAcceptanceEvidence.Rejected(
         resolved.error.takeIf(String::isNotBlank)
-          ?: "Commit '${request.commitSha}' could not be resolved in this repository.",
+          ?: "Commit '$commitSha' could not be resolved in this repository.",
       )
     }
   }

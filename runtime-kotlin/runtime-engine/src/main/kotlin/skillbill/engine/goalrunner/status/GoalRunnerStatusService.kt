@@ -5,6 +5,8 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerAcceptanceCoordinato
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
+import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
+import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
@@ -111,6 +113,8 @@ class GoalRunnerStatusService(
     freshQualityCoordinator.choose(
       request.copy(repoRoot = effectiveGoalRepoRoot(request.repoRoot, repositoryRoot)),
     )
+
+  fun complete(request: GoalRunnerCompleteRequest): GoalRunnerCompleteResult = acceptanceCoordinator.complete(request)
 }
 
 fun effectiveGoalRepoRoot(

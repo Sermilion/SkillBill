@@ -3,6 +3,7 @@ package skillbill.cli.goal.control
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
+import skillbill.engine.goalrunner.model.GoalRunnerCompleteResult
 import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
 import skillbill.engine.goalrunner.model.GoalRunnerReplanSnapshot
 import skillbill.engine.goalrunner.model.GoalRunnerResetResult
@@ -146,6 +147,54 @@ internal fun goalAcceptText(result: GoalRunnerAcceptResult): String =
         appendGoalResetSubtaskLines(this, result.after.subtasks)
       }
       is GoalRunnerAcceptResult.Rejected -> {
+        appendLine("goal: ${result.issueKey}")
+        appendLine("status: rejected")
+        appendLine("reason: ${result.reason}")
+      }
+    }
+  }
+
+internal fun GoalRunnerCompleteResult.toGoalCompleteCliMap(): Map<String, Any?> =
+  when (this) {
+    is GoalRunnerCompleteResult.Completed ->
+      linkedMapOf(
+        SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
+        SharedPayloadKeys.ISSUE_KEY to issueKey,
+        "parent_workflow_id" to parentWorkflowId,
+        "commit_sha" to commitSha,
+        "reason" to reason,
+        "completed_at" to completedAt,
+        "accepted_subtask_ids" to acceptedSubtaskIds,
+        "before" to resetSnapshotMap(before),
+        "after" to resetSnapshotMap(after),
+      )
+    is GoalRunnerCompleteResult.Rejected ->
+      linkedMapOf(
+        SharedPayloadKeys.STATUS to "rejected",
+        SharedPayloadKeys.ISSUE_KEY to issueKey,
+        "reason" to reason,
+      )
+  }
+
+internal fun goalCompleteText(result: GoalRunnerCompleteResult): String =
+  buildString {
+    when (result) {
+      is GoalRunnerCompleteResult.Completed -> {
+        appendLine("goal: ${result.issueKey}")
+        appendLine("status: ok")
+        appendLine("reason: ${result.reason}")
+        appendLine("commit_sha: ${result.commitSha}")
+        appendLine("completed_at: ${result.completedAt}")
+        appendLine("accepted_subtasks: ${result.acceptedSubtaskIds.joinToString(",").ifEmpty { "none" }}")
+        appendLine("parent_workflow_id: ${result.parentWorkflowId}")
+        appendLine(
+          "before: status=${result.before.status}; current_subtask=${result.before.currentSubtaskId ?: "none"}",
+        )
+        appendLine("after: status=${result.after.status}; current_subtask=${result.after.currentSubtaskId ?: "none"}")
+        appendLine("after_subtasks:")
+        appendGoalResetSubtaskLines(this, result.after.subtasks)
+      }
+      is GoalRunnerCompleteResult.Rejected -> {
         appendLine("goal: ${result.issueKey}")
         appendLine("status: rejected")
         appendLine("reason: ${result.reason}")

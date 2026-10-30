@@ -198,6 +198,8 @@ import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.decomposition.unfinishedSubtaskIds
+import skillbill.workflow.decomposition.withOperatorCompletedSubtasks
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -4786,6 +4788,24 @@ internal class InMemoryGoalManifestStore(
     acceptedParentWorkflowIds += parentWorkflowId
     acceptances = acceptances + (acceptance.subtaskId to acceptance)
     return acceptance
+  }
+
+  override fun saveOperatorGoalCompletion(
+    state: GoalRunnerManifestState,
+    commitSha: String,
+    reason: String,
+    completedAt: String,
+  ): GoalRunnerManifestState {
+    val unfinished = manifest.unfinishedSubtaskIds()
+    unfinished.forEach {
+      persistOutOfBandAcceptance(
+        state.parentWorkflowId,
+        GoalRunnerOutOfBandAcceptance(it, commitSha, reason, completedAt),
+      )
+    }
+    manifest = manifest.withOperatorCompletedSubtasks(unfinished.toSet(), commitSha)
+    controlState = controlState.copy(goalCompletedAt = completedAt)
+    return state.copy(manifest = manifest, controlState = controlState)
   }
 
   fun mutate(block: (DecompositionManifest) -> DecompositionManifest) {

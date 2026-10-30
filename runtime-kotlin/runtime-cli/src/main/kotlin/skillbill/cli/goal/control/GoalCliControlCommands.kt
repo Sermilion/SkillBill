@@ -19,6 +19,7 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
+import skillbill.engine.goalrunner.model.GoalRunnerCompleteRequest
 import skillbill.engine.goalrunner.model.GoalRunnerFreshQualityRequest
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRepairRequest
@@ -243,6 +244,47 @@ class GoalAcceptCommand(
       )
     val payload = result.toGoalAcceptCliMap()
     state.completeText(goalAcceptText(result), payload, exitCode = goalAcceptExitCode(result))
+  }
+}
+
+@Inject
+class GoalCompleteCommand(
+  private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+) : DocumentedCliCommand(
+    "complete",
+    "Mark a goal fully complete when its work landed outside the runtime. Every unfinished subtask is " +
+      "accepted against --commit, any active final-quality execution is retired, and the goal is recorded " +
+      "as complete. Later goal runs report it as already complete.",
+  ) {
+  private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
+  private val commit by option("--commit", help = "Commit that carries the finished work.").required()
+  private val reason by option("--reason", help = "Why the goal was finished outside the runtime.").required()
+  private val confirmIssueKey by option(
+    "--confirm-issue-key",
+    help = "Confirmation gate. Must match the issue key.",
+  )
+  private val force by option("--force", "--yes", help = "Bypass the confirmation gate.").flag(default = false)
+  private val repoRoot by option("--repo-root", help = "Repository root used to verify the commit.")
+
+  override fun run() {
+    if (!force && confirmIssueKey != issueKey) {
+      throw UsageError(
+        "Completing a goal requires explicit confirmation. Pass --confirm-issue-key $issueKey or --force.",
+      )
+    }
+    val result =
+      goalRunnerStatusService.complete(
+        GoalRunnerCompleteRequest(
+          issueKey = issueKey,
+          commitSha = commit,
+          reason = reason,
+          repoRoot = resolveCliRepositoryRoot(repoRoot, inputs),
+        ),
+      )
+    val payload = result.toGoalCompleteCliMap()
+    state.completeText(goalCompleteText(result), payload, exitCode = goalCompleteExitCode(result))
   }
 }
 

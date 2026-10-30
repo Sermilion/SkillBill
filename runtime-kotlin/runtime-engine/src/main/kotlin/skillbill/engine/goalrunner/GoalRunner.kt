@@ -183,11 +183,13 @@ class GoalRunner(
   private fun alreadyCompleteReport(state: GoalRunnerManifestState): GoalRunnerRunReport.AlreadyComplete? {
     val completedAt = state.controlState.goalCompletedAt ?: return null
     if (GoalRunnerPlanner.selectNext(state.manifest) !is GoalRunnerSelection.Done) return null
+    val acceptances = manifestStore.outOfBandAcceptances(state.parentWorkflowId)
     state.manifest.subtasks
       .filter {
         it.status.decompositionStatus() in
           setOf(DecompositionStatus.COMPLETE, DecompositionStatus.COMPLETED_NO_CHANGE)
       }
+      .filterNot { subtask -> acceptances[subtask.id]?.let { it.commitSha == subtask.commitSha } == true }
       .forEach { subtask ->
         val childWorkflowId =
           subtask.workflowId?.takeIf(String::isNotBlank)

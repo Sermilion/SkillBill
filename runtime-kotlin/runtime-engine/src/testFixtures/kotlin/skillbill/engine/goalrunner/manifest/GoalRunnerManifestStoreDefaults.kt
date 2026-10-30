@@ -282,6 +282,13 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
   ): GoalChildHistoryAcceptanceRestoreResult =
     GoalChildHistoryAcceptanceRestoreResult.Refused("No preserved reset evidence in this test store.")
 
+  override fun saveOperatorGoalCompletion(
+    state: GoalRunnerManifestState,
+    commitSha: String,
+    reason: String,
+    completedAt: String,
+  ): GoalRunnerManifestState = error("Operator goal completion is not supported by this test store.")
+
   open fun persistOutOfBandAcceptance(
     parentWorkflowId: String,
     acceptance: GoalRunnerOutOfBandAcceptance,

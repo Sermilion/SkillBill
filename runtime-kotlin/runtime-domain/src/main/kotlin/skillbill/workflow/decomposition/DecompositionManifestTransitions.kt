@@ -169,6 +169,36 @@ fun DecompositionManifest.withCompletedSubtask(
   }
 }
 
+fun DecompositionManifest.unfinishedSubtaskIds(): List<Int> =
+  subtasks
+    .filter {
+      it.status.decompositionStatus() !in
+        setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE)
+    }
+    .map(DecompositionSubtask::id)
+
+fun DecompositionManifest.withOperatorCompletedSubtasks(
+  subtaskIds: Set<Int>,
+  commitSha: String,
+): DecompositionManifest =
+  copy(
+    currentSubtaskIntent =
+      CurrentSubtaskIntent(subtaskId = 0, action = DecompositionSubtaskAction.COMPLETE.wireValue),
+    subtasks =
+      subtasks.map { subtask ->
+        if (subtask.id in subtaskIds) {
+          subtask.copy(
+            status = DecompositionStatus.COMPLETE.wireValue,
+            commitSha = commitSha,
+            blockedReason = null,
+            lastResumableStep = null,
+          )
+        } else {
+          subtask
+        }
+      },
+  ).withParentStatus()
+
 fun DecompositionManifest.withStoppedSubtask(
   subtaskId: Int,
   outcome: GoalRunnerReconciledOutcome.Stop,

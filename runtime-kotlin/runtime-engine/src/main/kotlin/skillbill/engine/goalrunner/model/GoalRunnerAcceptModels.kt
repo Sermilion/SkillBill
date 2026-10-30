@@ -33,6 +33,34 @@ sealed interface GoalRunnerAcceptResult {
   data class Rejected(val issueKey: String, val reason: String) : GoalRunnerAcceptResult
 }
 
+data class GoalRunnerCompleteRequest(
+  val issueKey: String,
+  val commitSha: String,
+  val reason: String,
+  val repoRoot: Path? = null,
+) {
+  init {
+    require(issueKey.isNotBlank()) { "issueKey is required." }
+    require(commitSha.isNotBlank()) { "commitSha is required." }
+    require(reason.isNotBlank()) { "reason is required." }
+  }
+}
+
+sealed interface GoalRunnerCompleteResult {
+  data class Completed(
+    val issueKey: String,
+    val parentWorkflowId: String,
+    val commitSha: String,
+    val reason: String,
+    val completedAt: String,
+    val acceptedSubtaskIds: List<Int>,
+    val before: GoalRunnerResetSnapshot,
+    val after: GoalRunnerResetSnapshot,
+  ) : GoalRunnerCompleteResult
+
+  data class Rejected(val issueKey: String, val reason: String) : GoalRunnerCompleteResult
+}
+
 sealed interface GoalRunnerAcceptanceEvidence {
   data class Resolved(val commitSha: String) : GoalRunnerAcceptanceEvidence
 

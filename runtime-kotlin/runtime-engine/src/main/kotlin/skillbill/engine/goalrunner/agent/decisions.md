@@ -1,5 +1,10 @@
 # goalrunner boundary decisions
 
+## [2026-10-29] Let an operator mark a whole goal complete
+Context: A goal whose work landed outside the runtime had no way out. Ordinary out-of-band accept is disabled, and a hard reset of runtime-completed subtasks cannot be restored because they carry no acceptance.
+Decision: `goal complete` accepts every unfinished subtask against one resolved commit, marks them complete, retires any active quality execution and sets `goalCompletedAt` in one transaction. It refuses while a live execution lease exists. The already-complete check lets a subtask whose recorded acceptance matches its commit skip the child history draft requirement.
+Reason: Out-of-band accept stays disabled for single subtasks because accepting past one leaves the runtime to continue on unverified work. Completing the whole goal ends the run instead, so nothing later depends on the accepted subtasks. No drafts are fabricated; finalization and per-child completion keep requiring them.
+
 ## [2026-10-27] Write goal boundary memory after final repairs
 Context: SKILL-446 child drafts precede goal QA and validation repairs, so child-time file writes cannot describe the final published change.
 Decision: Run the existing boundary writer once in goal finalization after existing final checks and before commit and PR. Supply manifest-ordered drafts, explicit skips, stable identities and final repair context; honor recorded legacy dispositions.
