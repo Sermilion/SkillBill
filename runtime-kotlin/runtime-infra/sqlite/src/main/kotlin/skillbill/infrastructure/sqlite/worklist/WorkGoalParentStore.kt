@@ -3,7 +3,6 @@ package skillbill.infrastructure.sqlite.worklist
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkGoalParentCandidate
@@ -16,17 +15,13 @@ internal fun readWorkGoalChildRepositoryIdentity(
   connection: Connection,
   parentWorkflowId: String,
 ): IssueRepositoryIdentityLookup {
-  val continuation = "$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}"
-  val parentPath = "$continuation.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}"
   return connection.prepareStatement(
     """
     SELECT DISTINCT identities.repository_identity
     FROM feature_task_workflows AS workflows
     JOIN feature_task_execution_identities AS identities ON identities.workflow_id = workflows.workflow_id
     WHERE identities.route_scope = 'goal_child'
-      AND CASE WHEN json_valid(workflows.artifacts_json)
-        THEN json_extract(workflows.artifacts_json, '$parentPath')
-      END = ?
+      AND workflows.parent_workflow_id = ?
     ORDER BY identities.repository_identity LIMIT 2
     """.trimIndent(),
   ).use { statement ->
@@ -51,7 +46,6 @@ internal fun readWorkGoalParentCandidatePage(
 ): List<WorkGoalParentCandidate> {
   require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
   val manifest = "$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}"
-  val continuation = "$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}"
   return connection.prepareStatement(
     """
     SELECT workflow_id, json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.STATUS}') AS manifest_status,
@@ -59,7 +53,7 @@ internal fun readWorkGoalParentCandidatePage(
         WHERE json_extract(value, '$.${SharedPayloadKeys.STATUS}') NOT IN (?, ?)) AS unsettled
     FROM feature_task_workflows
     WHERE mode = ? AND json_type(artifacts_json, '$manifest') = 'object'
-      AND json_type(artifacts_json, '$continuation') IS NULL
+      AND goal_issue_key IS NULL
       AND json_extract(artifacts_json, '$manifest.${SharedPayloadKeys.ISSUE_KEY}') = ?
       AND (? IS NULL OR COALESCE(
         (SELECT repository_identity FROM goal_planning_preparations WHERE parent_goal_workflow_id = workflow_id LIMIT 1),

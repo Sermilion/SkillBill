@@ -57,7 +57,7 @@ internal object DatabaseSchema {
       "idx_feature_task_workflows_issue_key",
       "idx_feature_task_workflows_normalized_issue_key",
       "idx_feature_task_workflows_missing_issue_key",
-      "idx_feature_task_workflows_goal_parent",
+      "idx_feature_task_workflows_parent_workflow_id",
       "idx_feature_task_identity_lookup",
       "idx_feature_implement_reconciliation_candidates",
       "idx_feature_task_runtime_reconciliation_candidates",

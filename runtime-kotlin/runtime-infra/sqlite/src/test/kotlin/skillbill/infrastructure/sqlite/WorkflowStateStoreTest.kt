@@ -5,6 +5,8 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.workflow.FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION
 import skillbill.infrastructure.sqlite.workflow.FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION
+import skillbill.infrastructure.sqlite.worklist.readWorkGoalChildRepositoryIdentity
+import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -22,6 +24,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
+import java.sql.Connection
 import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
@@ -1168,4 +1171,66 @@ class WorkflowStateStoreLifecycleTest {
       }.also { assertEquals(WorkflowFailureCode.PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED, it.code) }
     }
   }
+
+  @Test
+  fun `goal continuation columns follow the artifact through insert update and removal`() {
+    val dbPath = Files.createTempDirectory("goal-continuation-columns-write").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val child = goalChildWorkflow("wftr-child", "P1").copy(artifactsJson = goalContinuationJson("P1", 4, "K"))
+
+      store.saveFeatureTaskWorkflow(child, RUNTIME)
+      assertEquals(Triple("P1", 4, "K"), goalColumns(connection, child.workflowId))
+
+      store.saveFeatureTaskWorkflow(child.copy(artifactsJson = goalContinuationJson("P2", 4, "K")), RUNTIME)
+      assertEquals(Triple("P2", 4, "K"), goalColumns(connection, child.workflowId))
+      store.saveFeatureTaskExecutionIdentity(goalChildIdentity(child))
+      assertEquals(
+        IssueRepositoryIdentityLookup.Unique("repo"),
+        readWorkGoalChildRepositoryIdentity(connection, "P2"),
+      )
+      assertEquals(IssueRepositoryIdentityLookup.Missing, readWorkGoalChildRepositoryIdentity(connection, "P1"))
+
+      store.saveFeatureTaskWorkflow(child.copy(artifactsJson = "{}"), RUNTIME)
+      assertEquals(Triple(null, null, null), goalColumns(connection, child.workflowId))
+    }
+  }
+
+  @Test
+  fun `durable output migration updates the goal continuation columns with the artifact`() {
+    val dbPath = Files.createTempDirectory("goal-continuation-columns-migrate").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store =
+        WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator, SqliteTestDiagnostics, true)
+      val child = goalChildWorkflow("wftr-child", "P1").copy(artifactsJson = goalContinuationJson("P1", 4, "K"))
+      store.saveFeatureTaskWorkflow(child, RUNTIME)
+
+      store.migrateFeatureTaskArtifacts(
+        requireNotNull(store.getFeatureTaskWorkflow(child.workflowId)),
+        goalContinuationJson("P2", 5, "K2"),
+      )
+
+      assertEquals(Triple("P2", 5, "K2"), goalColumns(connection, child.workflowId))
+    }
+  }
+
+  private fun goalContinuationJson(
+    parent: String,
+    subtaskId: Int,
+    issueKey: String,
+  ) = """{"goal_continuation":{"issue_key":"$issueKey","subtask_id":$subtaskId,"parent_workflow_id":"$parent"}}"""
+
+  private fun goalColumns(
+    connection: Connection,
+    workflowId: String,
+  ): Triple<String?, Int?, String?> =
+    connection.prepareStatement(
+      "SELECT parent_workflow_id, goal_subtask_id, goal_issue_key FROM feature_task_workflows WHERE workflow_id = ?",
+    ).use { statement ->
+      statement.setString(1, workflowId)
+      statement.executeQuery().use { rows ->
+        assertTrue(rows.next())
+        Triple(rows.getString(1), rows.getInt(2).takeUnless { rows.wasNull() }, rows.getString(3))
+      }
+    }
 }

@@ -2,7 +2,6 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.child
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.workflow.GoalChildWorkflowStateRepository
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
@@ -21,8 +20,7 @@ internal class GoalChildWorkflowStore(
       JOIN feature_task_execution_identities AS identities
         ON identities.workflow_id = workflows.workflow_id
       WHERE identities.route_scope = 'goal_child'
-        AND CASE WHEN json_valid(workflows.artifacts_json)
-          THEN json_extract(workflows.artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') END = ?
+        AND workflows.parent_workflow_id = ?
       UNION
       SELECT children.workflow_id
       FROM feature_task_workflows AS parent
@@ -60,8 +58,7 @@ internal class GoalChildWorkflowStore(
           ON identities.workflow_id = workflows.workflow_id
         WHERE identities.route_scope = 'goal_child'
           AND (
-            CASE WHEN json_valid(workflows.artifacts_json)
-              THEN json_extract(workflows.artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') END = ?
+            workflows.parent_workflow_id = ?
             OR EXISTS (
               SELECT 1 FROM feature_task_workflows AS parent
               JOIN json_each(
@@ -97,11 +94,11 @@ internal class GoalChildWorkflowStore(
           WHERE identities.workflow_id = feature_task_workflows.workflow_id
             AND identities.route_scope = 'goal_child'
         )
-        AND json_extract(artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUBTASK_ID}') = ?
+        AND goal_subtask_id = ?
         AND (
-          json_extract(artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') = ?
+          parent_workflow_id = ?
           OR (
-            json_extract(artifacts_json, '$.${DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()}.${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID}') IS NULL
+            parent_workflow_id IS NULL
             AND EXISTS (
               SELECT 1 FROM feature_task_workflows AS parent
               JOIN json_each(

@@ -22,6 +22,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastEr
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
+import skillbill.infrastructure.sqlite.core.migration.area.addGoalContinuationColumns
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
@@ -925,4 +926,9 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 93,
       name = "rebuild-work-board-titles",
       operation = WorkBoardReadModelRebuildMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 94,
+      name = "add-goal-continuation-columns",
+      operation = ::addGoalContinuationColumns,
     )

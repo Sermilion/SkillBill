@@ -2485,4 +2485,5 @@ private val expectedMigrationDefinitions =
     91 to "correct-worktree-edit-journal-prune-chronological-order",
     92 to "rebuild-work-board-executing-agent",
     93 to "rebuild-work-board-titles",
+    94 to "add-goal-continuation-columns",
   )

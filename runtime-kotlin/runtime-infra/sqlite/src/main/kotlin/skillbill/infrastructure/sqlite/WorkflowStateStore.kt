@@ -8,6 +8,7 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskWorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureVerifyWorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.getFeatureTaskWorkflowRows
+import skillbill.infrastructure.sqlite.workflow.goalContinuationColumns
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.FeatureTaskRuntimeWorkerRepository
 import skillbill.ports.workflow.FeatureTaskWorkflowStateRepository
@@ -67,14 +68,24 @@ internal class WorkflowStateStore private constructor(
       if (featureTaskStore.getFeatureTaskWorkflow(source.workflowId) != source) {
         staleArtifactMigration()
       }
-      workflowSnapshotValidator.validate(
-        source.copy(artifactsJson = targetArtifactsJson).toSnapshot(),
-        source.workflowName,
-      )
+      val targetSnapshot = source.copy(artifactsJson = targetArtifactsJson).toSnapshot()
+      workflowSnapshotValidator.validate(targetSnapshot, source.workflowName)
+      val goalColumns = targetSnapshot.artifacts.goalContinuationColumns()
       connection.prepareStatement(
-        "UPDATE feature_task_workflows SET artifacts_json = ? WHERE workflow_id = ? AND artifacts_json = ?",
+        """
+        UPDATE feature_task_workflows
+        SET artifacts_json = ?, parent_workflow_id = ?, goal_subtask_id = ?, goal_issue_key = ?
+        WHERE workflow_id = ? AND artifacts_json = ?
+        """.trimIndent(),
       ).use {
-        it.bindAll(targetArtifactsJson, source.workflowId, source.artifactsJson)
+        it.bindAll(
+          targetArtifactsJson,
+          goalColumns.parentWorkflowId,
+          goalColumns.subtaskId,
+          goalColumns.issueKey,
+          source.workflowId,
+          source.artifactsJson,
+        )
         if (it.executeUpdate() != 1) {
           staleArtifactMigration()
         }

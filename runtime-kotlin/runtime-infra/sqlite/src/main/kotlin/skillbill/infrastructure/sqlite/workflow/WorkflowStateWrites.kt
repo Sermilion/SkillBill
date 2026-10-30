@@ -1,13 +1,17 @@
 package skillbill.infrastructure.sqlite.workflow
 
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.isTerminal
@@ -43,6 +47,33 @@ internal val FeatureTaskWorkflowMode.defaultContractVersion: String
     }
 
 internal object WorkflowStateSqlWrites
+
+internal data class GoalContinuationColumns(
+  val parentWorkflowId: String?,
+  val subtaskId: Long?,
+  val issueKey: String?,
+) {
+  companion object {
+    val NONE: GoalContinuationColumns = GoalContinuationColumns(null, null, null)
+  }
+}
+
+internal fun DurableWorkflowArtifacts.goalContinuationColumns(): GoalContinuationColumns {
+  val continuation =
+    JsonCodec.anyToStringAnyMap(this[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()])
+      ?: return GoalContinuationColumns.NONE
+  return GoalContinuationColumns(
+    parentWorkflowId =
+      continuation[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARENT_WORKFLOW_ID] as? String,
+    subtaskId =
+      when (val subtask = continuation[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUBTASK_ID]) {
+        is Int -> subtask.toLong()
+        is Long -> subtask
+        else -> null
+      },
+    issueKey = continuation[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ISSUE_KEY] as? String,
+  )
+}
 
 internal fun Connection.upsertWorkflowRow(
   tableName: String,
@@ -94,7 +125,9 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
   request: FeatureTaskWorkflowUpsertRequest,
 ) {
   requireUnchangedExecutionPlan(getFeatureTaskWorkflowRow(row.workflowId), row)
-  request.workflowSnapshotValidator.validate(row.toSnapshot(), row.workflowName)
+  val snapshot = row.toSnapshot()
+  request.workflowSnapshotValidator.validate(snapshot, row.workflowName)
+  val goalColumns = snapshot.artifacts.goalContinuationColumns()
   val transitionTimestamp = nextStateEnteredAtSql("feature_task_workflows")
   val insertionTimestamp = row.startedAt.orInsertionTimestamp(request.clock)
   prepareStatement(
@@ -102,9 +135,10 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
     INSERT INTO feature_task_workflows (
       workflow_id, session_id, workflow_name, contract_version, workflow_status, current_step_id,
       steps_json, artifacts_json, issue_key, started_at, updated_at, state_entered_at,
-      state_entered_at_estimated, finished_at, mode, implementation_skill
+      state_entered_at_estimated, finished_at, mode, implementation_skill,
+      parent_workflow_id, goal_subtask_id, goal_issue_key
     ) VALUES (?, ?, 'bill-feature-task', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0,
-              CASE WHEN ? THEN COALESCE(NULLIF(?, ''), CURRENT_TIMESTAMP) ELSE NULL END, ?, ?)
+              CASE WHEN ? THEN COALESCE(NULLIF(?, ''), CURRENT_TIMESTAMP) ELSE NULL END, ?, ?, ?, ?, ?)
     ON CONFLICT(workflow_id) DO UPDATE SET
       session_id = excluded.session_id,
       workflow_name = 'bill-feature-task',
@@ -125,17 +159,14 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
       END,
       ${conflictFinishedAtSql("feature_task_workflows", request.acceptedSnapshotMutation)},
       mode = excluded.mode,
-      implementation_skill = excluded.implementation_skill
+      implementation_skill = excluded.implementation_skill,
+      parent_workflow_id = excluded.parent_workflow_id,
+      goal_subtask_id = excluded.goal_subtask_id,
+      goal_issue_key = excluded.goal_issue_key
     ${ordinaryTerminalConflictPredicate("feature_task_workflows", request.acceptedSnapshotMutation)}
     """.trimIndent(),
   ).use { statement ->
-    statement.bindFeatureTaskWorkflowRow(
-      row,
-      request.mode,
-      request.implementationSkill,
-      request.defaultContractVersion,
-      insertionTimestamp,
-    )
+    statement.bindFeatureTaskWorkflowRow(row, request, insertionTimestamp, goalColumns)
     if (statement.executeUpdate() != 1) {
       throw terminalWorkflowWriteRefusedError(row.workflowId)
     }
@@ -202,12 +233,16 @@ private fun ordinaryTerminalConflictPredicate(
   }
 
 internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: WorkflowStateRecord) {
+  val goalColumns = row.artifactsWithoutStrictSnapshotDecode().goalContinuationColumns()
   val transitionTimestamp = nextStateEnteredAtSql("feature_task_workflows")
   prepareStatement(
     """
     UPDATE feature_task_workflows
     SET workflow_status = ?,
         artifacts_json = ?,
+        parent_workflow_id = ?,
+        goal_subtask_id = ?,
+        goal_issue_key = ?,
         current_step_id = ?,
         updated_at = CURRENT_TIMESTAMP,
         state_entered_at = CASE
@@ -226,6 +261,7 @@ internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: Workfl
     val parameters = SqlParameterBinder(statement)
     parameters.text(row.workflowStatus)
     parameters.text(row.artifactsJson)
+    parameters.goalContinuation(goalColumns)
     parameters.text(row.currentStepId)
     parameters.text(row.workflowStatus)
     parameters.text(row.workflowStatus)
@@ -241,6 +277,9 @@ internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: Workfl
     }
   }
 }
+
+private fun WorkflowStateRecord.artifactsWithoutStrictSnapshotDecode(): DurableWorkflowArtifacts =
+  DurableWorkflowArtifacts.fromAny(JsonCodec.parseValue(artifactsJson))
 
 private fun PreparedStatement.bindWorkflowRow(
   row: WorkflowStateRecord,
@@ -267,17 +306,16 @@ private fun PreparedStatement.bindWorkflowRow(
 
 private fun PreparedStatement.bindFeatureTaskWorkflowRow(
   row: WorkflowStateRecord,
-  mode: FeatureTaskWorkflowMode,
-  implementationSkill: String,
-  defaultContractVersion: String,
+  request: FeatureTaskWorkflowUpsertRequest,
   insertionTimestamp: String,
+  goalColumns: GoalContinuationColumns,
 ) {
   val parameters = SqlParameterBinder(this)
   parameters.text(row.workflowId)
   parameters.text(row.sessionId)
-  val storedVersion = row.contractVersion.ifBlank { defaultContractVersion }
+  val storedVersion = row.contractVersion.ifBlank { request.defaultContractVersion }
   parameters.text(
-    if (mode == FeatureTaskWorkflowMode.RUNTIME) {
+    if (request.mode == FeatureTaskWorkflowMode.RUNTIME) {
       persistableWorkflowStateContractVersion(storedVersion)
     } else {
       storedVersion
@@ -293,8 +331,9 @@ private fun PreparedStatement.bindFeatureTaskWorkflowRow(
   parameters.text(insertionTimestamp)
   parameters.boolean(WorkflowStatus.fromWire(row.workflowStatus)?.isTerminal == true)
   parameters.text(row.finishedAt)
-  parameters.text(mode.wireValue)
-  parameters.text(implementationSkill)
+  parameters.text(request.mode.wireValue)
+  parameters.text(request.implementationSkill)
+  parameters.goalContinuation(goalColumns)
   parameters.bind()
 }
 
@@ -328,6 +367,12 @@ private class SqlParameterBinder(
 
   fun boolean(value: Boolean) {
     values += value
+  }
+
+  fun goalContinuation(columns: GoalContinuationColumns) {
+    values += columns.parentWorkflowId
+    values += columns.subtaskId
+    values += columns.issueKey
   }
 
   fun bind() {

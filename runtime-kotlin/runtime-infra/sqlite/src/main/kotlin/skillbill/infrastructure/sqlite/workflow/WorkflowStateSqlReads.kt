@@ -247,7 +247,7 @@ internal fun Connection.listFeatureTaskWorkflowRows(
       AND (UPPER(TRIM(issue_key)) = ? OR (
         issue_key IS NULL AND CASE WHEN json_valid(artifacts_json)
           THEN UPPER(TRIM(COALESCE(json_extract(artifacts_json, '$.decomposition_runtime.issue_key'),
-            json_extract(artifacts_json, '$.goal_continuation.issue_key')))) = ?
+            goal_issue_key))) = ?
           ELSE 0 END
       ))
       """.trimIndent()
