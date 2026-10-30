@@ -3,7 +3,6 @@ package skillbill.application.review.parallel.planning
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewRequest
-import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_HEAD_REVISION
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import java.nio.file.Path

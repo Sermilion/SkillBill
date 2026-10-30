@@ -9,13 +9,7 @@ import skillbill.application.workflow.model.CheckoutAndValidateBranchRequest
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.persist.generateWorkflowId
-import skillbill.application.workflow.service.ContinuationStepResult
-import skillbill.application.workflow.service.blockedGitResult
-import skillbill.application.workflow.service.blockedSubtaskResult
-import skillbill.application.workflow.service.decompositionRuntimeArtifacts
-import skillbill.application.workflow.service.doneDecompositionResult
-import skillbill.application.workflow.service.migrateLegacyGoalRunnerControls
-import skillbill.application.workflow.service.missingSubtaskWorkflowResult
+import skillbill.application.workflow.persist.migrateLegacyGoalRunnerControls
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys

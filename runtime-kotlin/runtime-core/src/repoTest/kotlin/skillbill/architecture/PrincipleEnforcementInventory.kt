@@ -30,12 +30,14 @@ object PrincipleEnforcementInventory {
       "runtime-domain",
       "runtime-contracts",
       "runtime-cli",
+      "runtime-application",
       "runtime-engine",
       "runtime-infra:skills",
       "runtime-infra:sqlite",
     )
 
-  private val BASELINE_FREE_PACKAGE_CYCLE_MODULES = setOf("runtime-infra:skills", "runtime-infra:sqlite")
+  private val BASELINE_FREE_PACKAGE_CYCLE_MODULES =
+    setOf("runtime-application", "runtime-infra:skills", "runtime-infra:sqlite")
 
   val moduleArchitectureScanCases: List<ModuleArchitectureScanCase> =
     RuntimeModuleCatalog.declaredGradleModules
@@ -80,7 +82,6 @@ object PrincipleEnforcementInventory {
   ): String? =
     when (moduleName) {
       in BASELINE_FREE_PACKAGE_CYCLE_MODULES -> null
-      "runtime-application" -> "application-package-cycle-baseline.txt"
       "runtime-cli" -> "runtime-cli-package-cycle-baseline.txt"
       else -> "$baselineStem-package-cycle-baseline.txt"
     }
@@ -406,7 +407,7 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/workflow/service/" +
+          "runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/workflow/persist/" +
             "LegacyGoalRunnerControlMigration.kt",
         functionNames =
           setOf(

@@ -1,4 +1,4 @@
-package skillbill.application.review.parallel.runner
+package skillbill.application.review.parallel.planning
 
 import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest

@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.review.core
 
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
+import skillbill.application.reviewevidence.parseOrRejection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.model.ReviewDiffQuery

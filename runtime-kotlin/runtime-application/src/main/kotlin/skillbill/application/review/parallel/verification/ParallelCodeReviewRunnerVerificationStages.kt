@@ -7,8 +7,8 @@ import skillbill.application.review.model.ReviewClaimVerificationOutcome
 import skillbill.application.review.model.ReviewClaimVerificationRunRequest
 import skillbill.application.review.model.ReviewSpecAdjudicationOutcome
 import skillbill.application.review.model.ReviewSpecAdjudicationRunRequest
-import skillbill.application.review.parallel.runner.ParallelCodeReviewInitialRun
-import skillbill.application.review.parallel.runner.delegatedStageLaunch
+import skillbill.application.review.parallel.planning.ParallelCodeReviewInitialRun
+import skillbill.application.review.parallel.planning.delegatedStageLaunch
 import skillbill.application.review.spec.ReviewSpecAdjudicationRunner
 import skillbill.application.review.verification.ReviewClaimVerificationRunner
 import skillbill.application.review.verification.reviewOutputNeedsProseVerification

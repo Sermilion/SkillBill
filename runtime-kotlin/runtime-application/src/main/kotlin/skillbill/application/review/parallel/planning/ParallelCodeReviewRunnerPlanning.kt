@@ -8,12 +8,6 @@ import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
-import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_SHARED_EVIDENCE_WORKFLOW_ID
-import skillbill.application.review.parallel.runner.ParallelCodeReviewCompiledLaunches
-import skillbill.application.review.parallel.runner.ParallelCodeReviewInitialRun
-import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
-import skillbill.application.review.parallel.runner.PlanningPrepareArgs
-import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerLanePlanRecording
 import skillbill.application.review.spec.SpecIntentProjectionResolver
 import skillbill.application.reviewevidence.ReviewCommitRange
 import skillbill.application.reviewevidence.SharedReviewEvidenceProjection
@@ -23,6 +17,8 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceResolution
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
+import skillbill.application.reviewevidence.parse
+import skillbill.application.reviewevidence.parseOrRejection
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.config.RepoLocalConfigPort

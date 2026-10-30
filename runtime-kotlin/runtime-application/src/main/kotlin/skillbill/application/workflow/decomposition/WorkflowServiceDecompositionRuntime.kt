@@ -1,9 +1,7 @@
-package skillbill.application.workflow.service
+package skillbill.application.workflow.decomposition
 
 import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
 import skillbill.application.decomposition.model.DecompositionManifestWorkflowProjectionInput
-import skillbill.application.workflow.decomposition.findDecomposedParentWorkflowForRuntime
-import skillbill.application.workflow.decomposition.persistParentDecompositionRuntime
 import skillbill.application.workflow.model.DecompositionRuntimeWriteArgs
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator

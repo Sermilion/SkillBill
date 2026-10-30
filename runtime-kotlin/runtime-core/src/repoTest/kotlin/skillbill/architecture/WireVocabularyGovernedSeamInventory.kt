@@ -101,7 +101,7 @@ internal object WireVocabularyGovernedSeamInventory {
         schemaRepoRelativePath = GOAL_RUNNER_CONTROLS_AUTHORITY,
         governedRelativePathMarkers =
           listOf(
-            "application/workflow/service/LegacyGoalRunnerControlMigration",
+            "application/workflow/persist/LegacyGoalRunnerControlMigration",
             "infrastructure/sqlite/workflow/goalrunner/runner/LegacyGoalRunnerControlLedgerMigration",
             "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodePolicies",
             "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreEncode",

@@ -5,7 +5,6 @@ import skillbill.application.review.model.ReviewPreparationResult
 import skillbill.application.review.packet.ReviewHunkStoreIndexing
 import skillbill.application.review.packet.toAssignmentEnvelope
 import skillbill.application.review.packet.toParentPacketEnvelope
-import skillbill.application.review.parallel.planning.criteriaReferences
 import skillbill.application.review.preparation.model.ReviewPreparationFacts
 import skillbill.application.updatecheck.unknown
 import skillbill.error.shellcontent.invalidReviewContextSchemaError

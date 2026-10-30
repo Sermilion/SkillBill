@@ -1,4 +1,4 @@
-package skillbill.application.workflow.service
+package skillbill.application.workflow.persist
 
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry

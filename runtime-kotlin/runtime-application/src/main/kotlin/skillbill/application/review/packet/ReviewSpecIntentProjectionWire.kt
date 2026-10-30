@@ -1,4 +1,4 @@
-package skillbill.application.review.spec
+package skillbill.application.review.packet
 
 import skillbill.review.context.model.execution.SpecIntentProjection
 

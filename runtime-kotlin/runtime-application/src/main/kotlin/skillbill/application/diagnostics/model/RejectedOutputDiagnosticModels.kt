@@ -1,9 +1,9 @@
 package skillbill.application.diagnostics.model
 
-import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticInvalidConfigurationMessage
+import java.security.MessageDigest
 import java.time.Duration
 
 private const val DEFAULT_MAXIMUM_PAYLOAD_BYTES: Long = 1_048_576
@@ -40,8 +40,11 @@ data class RejectedOutputDiagnosticRequest(
   val model: String,
   val rawResponse: ByteArray,
   val observedByteSize: Long = rawResponse.size.toLong(),
-  val observedSha256: String = RejectedOutputDiagnosticService.sha256(rawResponse),
+  val observedSha256: String = rejectedOutputDiagnosticSha256(rawResponse),
   val truncated: Boolean = false,
   val repairTurn: Int = 0,
   val exhaustedFixLoop: Boolean? = null,
 )
+
+fun rejectedOutputDiagnosticSha256(bytes: ByteArray): String =
+  MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

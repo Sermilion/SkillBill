@@ -1,6 +1,6 @@
 package skillbill.application.workflow.decomposition
 
-import skillbill.application.workflow.service.migrateLegacyGoalRunnerControls
+import skillbill.application.workflow.persist.migrateLegacyGoalRunnerControls
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator

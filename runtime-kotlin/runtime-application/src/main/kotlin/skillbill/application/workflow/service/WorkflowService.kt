@@ -2,16 +2,20 @@ package skillbill.application.workflow.service
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.RetryDecompositionManifestProjectionArgs
 import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
 import skillbill.application.decomposition.model.DecompositionManifestProjectionFailurePersistence
-import skillbill.application.decomposition.model.RetryDecompositionManifestProjectionArgs
 import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.application.decomposition.retryDecompositionManifestProjectionFromAuthoritativeState
 import skillbill.application.workflow.ProjectCheckout
+import skillbill.application.workflow.decomposition.ContinuationStepResult
+import skillbill.application.workflow.decomposition.DecompositionRuntimeInput
 import skillbill.application.workflow.decomposition.DecompositionWorkflowContinuation
 import skillbill.application.workflow.decomposition.PendingDecompositionProjection
 import skillbill.application.workflow.decomposition.continueExistingWorkflow
 import skillbill.application.workflow.decomposition.resolveDecompositionProjectionOwner
+import skillbill.application.workflow.decomposition.syncDecompositionParentRuntime
+import skillbill.application.workflow.decomposition.withDecompositionRuntime
 import skillbill.application.workflow.model.BuildFeatureTaskExecutionIdentityArgs
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
 import skillbill.application.workflow.model.DecompositionRuntimeWriteArgs
@@ -26,8 +30,10 @@ import skillbill.application.workflow.model.WorkflowListResult
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowResumeResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
+import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
+import skillbill.application.workflow.persist.FEATURE_TASK_FAMILY_KINDS
 import skillbill.application.workflow.persist.WorkflowPersistenceContext
 import skillbill.application.workflow.persist.buildFeatureTaskExecutionIdentity
 import skillbill.application.workflow.persist.buildUpdateOk
@@ -638,4 +644,23 @@ private sealed interface OrdinaryWorkflowSave {
   data class Saved(val snapshot: WorkflowStateSnapshot) : OrdinaryWorkflowSave
 
   data class Rejected(val persistence: WorkflowUpdatePersistence) : OrdinaryWorkflowSave
+}
+
+fun WorkflowService.openFeatureTask(args: WorkflowServiceOpenFeatureTaskArgs): WorkflowOpenResult {
+  require(args.kind in FEATURE_TASK_FAMILY_KINDS) {
+    "Only runtime feature-task workflows use execution identity."
+  }
+  return open(
+    WorkflowServiceOpenArgs(
+      kind = args.kind,
+      sessionId = args.sessionId,
+      currentStepId = args.currentStepId,
+      issueKey = args.issueKey,
+      repositoryIdentity = args.repositoryIdentity,
+      governedSpecPath = args.governedSpecPath,
+      routeScope = args.routeScope,
+      executionPlan = args.executionPlan,
+      initialArtifacts = args.initialArtifacts,
+    ),
+  )
 }

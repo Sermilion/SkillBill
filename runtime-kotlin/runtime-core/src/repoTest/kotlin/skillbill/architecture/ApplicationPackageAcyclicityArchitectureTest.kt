@@ -10,14 +10,31 @@ import kotlin.test.assertTrue
 
 class ApplicationPackageAcyclicityArchitectureTest {
   @Test
-  fun `application package cycles match the recorded baseline`() {
-    val violations =
-      ArchitectureScanSupport.packageCycleViolations(
-        baselineCycles = baselineCycles("application-package-cycle-baseline.txt"),
-        scanRoot = PrincipleEnforcementInventory.RUNTIME_APPLICATION_MAIN,
-        packagePrefix = PrincipleEnforcementInventory.APPLICATION_PACKAGE_PREFIX,
+  fun `runtime-application has no exact package cycles`() {
+    val scanCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == "runtime-application" }
+    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
+    assertEquals(null, scanCase.packageCycleBaseline)
+    assertTrue(
+      ArchitectureScanSupport.packageImportEdges(
+        scanRoot = scanCase.mainScanRoot,
+        packagePrefix = scanCase.packagePrefix,
+        granularity = scanCase.packageCycleGranularity,
+      ).isNotEmpty(),
+      "The runtime-application scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
+    )
+    val cycles =
+      ArchitectureScanSupport.packageCycles(
+        scanRoot = scanCase.mainScanRoot,
+        packagePrefix = scanCase.packagePrefix,
+        granularity = scanCase.packageCycleGranularity,
       )
-    assertEquals(emptyList(), violations, violations.joinToString("\n"))
+    assertEquals(
+      emptySet(),
+      cycles,
+      cycles.joinToString("\n") { cycle -> "Package cycle: ${cycle.areas.joinToString(" <-> ")}" },
+    )
   }
 
   @Test

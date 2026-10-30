@@ -3,6 +3,7 @@ package skillbill.application.review.spec
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.application.review.packet.toProjectionPayload
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.ReviewContextFailureCode

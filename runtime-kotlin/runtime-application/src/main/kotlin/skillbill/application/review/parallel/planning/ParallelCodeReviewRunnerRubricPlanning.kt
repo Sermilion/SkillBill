@@ -3,7 +3,6 @@ package skillbill.application.review.parallel.planning
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.model.ReviewRubricProjection
 import skillbill.application.review.model.ReviewWorkerKind.GENERIC
-import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
 import skillbill.application.reviewevidence.model.ReviewChangedFileEvidence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.error.shellcontent.reviewAggregationIntegrityError

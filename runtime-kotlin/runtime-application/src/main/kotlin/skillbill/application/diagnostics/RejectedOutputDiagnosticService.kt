@@ -6,6 +6,7 @@ import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRawRead
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
+import skillbill.application.diagnostics.model.rejectedOutputDiagnosticSha256
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticCorruptMessage
@@ -22,7 +23,6 @@ import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
 import skillbill.text.RECORD_FIELD_SEPARATOR
 import java.io.IOException
-import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
 
@@ -170,8 +170,7 @@ class RejectedOutputDiagnosticService(
       return "rod_${sha256(preimage.encodeToByteArray())}"
     }
 
-    fun sha256(bytes: ByteArray): String =
-      MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    fun sha256(bytes: ByteArray): String = rejectedOutputDiagnosticSha256(bytes)
   }
 }
 

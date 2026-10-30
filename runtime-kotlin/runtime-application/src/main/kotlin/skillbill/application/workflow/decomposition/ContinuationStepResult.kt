@@ -1,6 +1,5 @@
-package skillbill.application.workflow.service
+package skillbill.application.workflow.decomposition
 
-import skillbill.application.workflow.decomposition.withPendingProjection
 import skillbill.application.workflow.model.GoalContinuationOutcome
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.ports.persistence.UnitOfWork
