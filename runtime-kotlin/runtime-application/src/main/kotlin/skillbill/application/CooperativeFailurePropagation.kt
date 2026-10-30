@@ -1,12 +1,9 @@
 package skillbill.application
 
-import kotlin.coroutines.cancellation.CancellationException
+import skillbill.error.core.isCooperativeCancellation
 
 fun Throwable.rethrowIfCooperativeCancellationOrInterruption(): Nothing? {
-  when (this) {
-    is CancellationException -> throw this
-    is InterruptedException -> throw this
-  }
+  if (isCooperativeCancellation()) throw this
   return null
 }
 

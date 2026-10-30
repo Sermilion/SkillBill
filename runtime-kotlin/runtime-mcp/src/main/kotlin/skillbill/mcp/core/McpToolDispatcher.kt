@@ -3,6 +3,7 @@ package skillbill.mcp.core
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.learning.InvalidLearningSourceError
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.mcp.shared.InvalidMcpToolArgumentError
@@ -12,7 +13,6 @@ import skillbill.mcp.shared.McpToolPayloadKeys
 import skillbill.mcp.telemetry.TELEMETRY_EVENT_CONTRACT_VERSION
 import skillbill.mcp.telemetry.TelemetryEventSchemaValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import kotlin.coroutines.cancellation.CancellationException
 
 internal object McpToolDispatcher {
   fun dispatch(
@@ -20,7 +20,7 @@ internal object McpToolDispatcher {
     rawArguments: Map<String, Any?>,
     component: McpComponent,
   ): Map<String, Any?> =
-    runCatching {
+    catchingNonCancellation {
       val payload = invoke(toolName, rawArguments, component)
       mcpToolResult(
         payload - McpToolPayloadKeys.IS_ERROR,
@@ -29,7 +29,6 @@ internal object McpToolDispatcher {
     }
       .getOrElse { error ->
         when {
-          error is CancellationException -> throw error
           error.uncapturedAtMcp() -> mcpToolErrorResult(toolName, error)
           error is Exception -> {
             recordCaptureFailure(
@@ -109,7 +108,7 @@ internal fun recordCaptureFailure(
   capture: () -> Unit,
   diagnostics: RuntimeDiagnostics,
 ) {
-  runCatching { capture() }.onFailure { captureError ->
+  catchingNonCancellation { capture() }.onFailure { captureError ->
     diagnostics.error("MCP telemetry capture failed for tool '$workflowPhase'.", captureError)
   }
 }

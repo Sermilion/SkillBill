@@ -14,10 +14,10 @@ import skillbill.cli.model.CliStdoutCompletion
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.util.concurrent.CancellationException
 
 object CliRuntime {
   fun run(
@@ -25,7 +25,10 @@ object CliRuntime {
     context: CliRuntimeContext = CliRuntimeContext(),
   ): CliExecutionResult {
     val rootFlags = RootFlagProbeCommand()
-    runCatching { CommandLineParser.parseAndRun(rootFlags, arguments) { } }
+    try {
+      CommandLineParser.parseAndRun(rootFlags, arguments) { }
+    } catch (_: CliktError) {
+    }
     val runtimeComponent =
       RuntimeComponent::class.create(
         context.toRuntimeContext(
@@ -57,7 +60,7 @@ object CliRuntime {
     runtimeComponent: RuntimeComponent,
   ): CliExecutionResult {
     val rootCommand = cliComponent.rootCommand
-    return runCatching {
+    return catchingNonCancellation {
       CommandLineParser.parseAndRun(rootCommand, rootCommand.routeIntake(arguments)) { command -> command.run() }
       cliComponent.runState.result
         ?: CliExecutionResult(
@@ -72,8 +75,6 @@ object CliRuntime {
         is SkillBillRuntimeException -> diagnosticResult(runState, error, "Command failed.")
         is NoSuchFileException -> diagnosticResult(runState, error, error.toString())
         is AccessDeniedException -> diagnosticResult(runState, error, error.toString())
-        is CancellationException -> throw error
-        is InterruptedException -> throw error
         else -> unexpectedErrorResult(runtimeComponent, runState, error)
       }
     }

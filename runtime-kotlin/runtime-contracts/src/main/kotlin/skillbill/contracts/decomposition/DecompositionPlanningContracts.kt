@@ -278,19 +278,35 @@ private fun Any?.asInt(
     is Short -> toInt()
     is Int -> this
     is Long -> takeIf { it in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() }?.toInt()
-    is BigInteger -> runCatching { intValueExact() }.getOrNull()
-    is BigDecimal -> runCatching { intValueExact() }.getOrNull()
-    is Float, is Double -> {
-      val doubleValue = (this as Number).toDouble()
-      runCatching {
-        require(doubleValue.isFinite())
-        require(doubleValue >= Int.MIN_VALUE.toDouble())
-        require(doubleValue <= Int.MAX_VALUE.toDouble())
-        BigDecimal.valueOf(doubleValue).intValueExact()
-      }.getOrNull()?.takeIf { this is Double || it.toFloat() == this }
+    is BigInteger -> takeIf { bitLength() < Int.SIZE_BITS }?.toInt()
+    is BigDecimal -> {
+      try {
+        intValueExact()
+      } catch (_: ArithmeticException) {
+        null
+      }
     }
+    is Float, is Double -> (this as Number).toExactPlanningIntOrNull()
     else -> null
   } ?: invalidPlanning(sourceLabel, "$fieldPath must be an integer.")
+
+private fun Number.toExactPlanningIntOrNull(): Int? {
+  val doubleValue = toDouble()
+  if (
+    !doubleValue.isFinite() ||
+    doubleValue < Int.MIN_VALUE.toDouble() ||
+    doubleValue > Int.MAX_VALUE.toDouble()
+  ) {
+    return null
+  }
+  val exact =
+    try {
+      BigDecimal.valueOf(doubleValue).intValueExact()
+    } catch (_: ArithmeticException) {
+      null
+    }
+  return exact?.takeIf { this is Double || it.toFloat() == this }
+}
 
 private fun invalidPlanning(
   sourceLabel: String,

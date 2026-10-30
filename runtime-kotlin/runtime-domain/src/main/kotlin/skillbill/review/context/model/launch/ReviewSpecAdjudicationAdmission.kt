@@ -48,7 +48,7 @@ object ReviewSpecAdjudicationAdmission {
     }
     val requested =
       uniqueDisposition(worker)
-        ?.let { wire -> runCatching { ReviewScopeDisposition.fromWire(wire) }.getOrNull() }
+        ?.let(ReviewScopeDisposition::fromWireOrNull)
         ?: return inScope(claim, stage1, recordedAt, AMBIGUOUS)
     val cited = citedSpec(worker, projection)
     val requestedAdjustment = parsedAdjustment(worker)
@@ -78,9 +78,8 @@ object ReviewSpecAdjudicationAdmission {
 
   private fun parsedAdjustment(worker: ReviewSpecAdjudicationWorkerResult): ReviewSeverityAdjustment? {
     val direction =
-      worker.severityAdjustmentDirection?.trim()?.lowercase()?.let { wire ->
-        runCatching { ReviewSeverityAdjustmentDirection.fromWire(wire) }.getOrNull()
-      } ?: return null
+      worker.severityAdjustmentDirection?.trim()?.lowercase()?.let(ReviewSeverityAdjustmentDirection::fromWireOrNull)
+        ?: return null
     val justification =
       listOfNotNull(
         worker.adjustedSeverity?.trim()?.takeIf { it.isNotEmpty() },

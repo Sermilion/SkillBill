@@ -176,7 +176,10 @@ internal class WorkflowGoalRunnerProgressRecording(
         latestGoalObservabilityEvent = observabilityEvent?.toProgressEvent(),
         latestDeclaredProgressEvent = declaredProgressEvent,
         lastSnapshotUpdatedAt = record.updatedAt?.toString(),
-        currentStepEnteredAt = DurableWorkflowArtifacts.fromMap(artifacts).goalProgressCurrentStepEnteredAt(),
+        currentStepEnteredAt =
+          runCatching {
+            DurableWorkflowArtifacts.fromMap(artifacts).goalProgressCurrentStepEnteredAt()
+          }.getOrNull(),
       )
     return progress.copy(latestLivenessSignal = progress.resolvedLivenessSignal())
   }

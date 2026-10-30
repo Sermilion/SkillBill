@@ -16,6 +16,7 @@ import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePhaseOutputSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
@@ -177,20 +178,16 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
     schema: JsonNode,
     resource: String,
   ) {
-    runCatching { ClasspathContractSchemaLoader.compileUncachedYamlNode(schema) }.getOrElse { error ->
-      when (error) {
-        is SkillBillRuntimeException -> throw error
-        is CancellationException -> throw error
-        is InterruptedException -> {
-          Thread.currentThread().interrupt()
-          propagate(error)
-        }
-        else -> fail(resource, error)
+    try {
+      catchingNonCancellation { ClasspathContractSchemaLoader.compileUncachedYamlNode(schema) }.getOrElse { error ->
+        if (error is SkillBillRuntimeException) throw error
+        fail(resource, error)
       }
+    } catch (error: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw error
     }
   }
-
-  private fun propagate(error: Throwable): Nothing = throw error
 
   private fun pin(
     node: JsonNode,

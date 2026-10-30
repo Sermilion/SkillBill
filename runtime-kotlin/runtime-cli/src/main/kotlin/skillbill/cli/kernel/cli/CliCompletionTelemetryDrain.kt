@@ -1,7 +1,9 @@
 package skillbill.cli.kernel.cli
 
 import skillbill.application.telemetry.service.TelemetryService
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import kotlin.coroutines.cancellation.CancellationException
 
 private const val DRAIN_TIMEOUT_MILLIS = 5_000L
 
@@ -11,8 +13,15 @@ internal fun drainTelemetryOnCompletion(
 ) {
   val worker =
     Thread {
-      runCatching { telemetryService.autoSync() }
-        .onFailure { error -> diagnostics.warning("telemetry completion drain failed to flush the outbox", error) }
+      try {
+        catchingNonCancellation { telemetryService.autoSync() }
+          .onFailure { error -> diagnostics.warning("telemetry completion drain failed to flush the outbox", error) }
+      } catch (interrupted: InterruptedException) {
+        diagnostics.warning("telemetry completion drain interrupted before the outbox flushed", interrupted)
+        Thread.currentThread().interrupt()
+      } catch (cancelled: CancellationException) {
+        diagnostics.warning("telemetry completion drain cancelled before the outbox flushed", cancelled)
+      }
     }
   worker.isDaemon = true
   worker.start()

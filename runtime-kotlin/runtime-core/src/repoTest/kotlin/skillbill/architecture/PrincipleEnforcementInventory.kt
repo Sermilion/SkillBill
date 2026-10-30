@@ -221,6 +221,11 @@ object PrincipleEnforcementInventory {
         InlineFqnArchitectureTest::class,
       ),
       EnforcedRule(
+        "runCatching ban: every catalog main source root outside the single pending-root list has no " +
+          "runCatching call, and every pending root still contains one.",
+        RunCatchingBanArchitectureTest::class,
+      ),
+      EnforcedRule(
         "Convention ownership: module build files do not re-apply Test or toolchain settings owned by " +
           "configureKotlinJvm.",
         ConventionReapplicationArchitectureTest::class,

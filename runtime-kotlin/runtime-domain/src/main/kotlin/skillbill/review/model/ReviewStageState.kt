@@ -37,8 +37,10 @@ enum class ReviewScopeDisposition(val wireValue: String) {
   ;
 
   companion object {
+    fun fromWireOrNull(value: String): ReviewScopeDisposition? = entries.firstOrNull { it.wireValue == value }
+
     fun fromWire(value: String): ReviewScopeDisposition =
-      entries.firstOrNull { it.wireValue == value }
+      fromWireOrNull(value)
         ?: throw invalidReviewContextSchemaError("scope_disposition", "Unknown scope disposition '$value'.")
   }
 }
@@ -49,8 +51,11 @@ enum class ReviewSeverityAdjustmentDirection(val wireValue: String) {
   ;
 
   companion object {
-    fun fromWire(value: String): ReviewSeverityAdjustmentDirection =
+    fun fromWireOrNull(value: String): ReviewSeverityAdjustmentDirection? =
       entries.firstOrNull { it.wireValue == value }
+
+    fun fromWire(value: String): ReviewSeverityAdjustmentDirection =
+      fromWireOrNull(value)
         ?: throw invalidReviewContextSchemaError(
           "severity_adjustment_direction",
           "Unknown severity adjustment direction '$value'.",

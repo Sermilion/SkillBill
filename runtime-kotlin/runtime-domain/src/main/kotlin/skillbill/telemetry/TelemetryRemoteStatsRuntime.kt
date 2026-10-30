@@ -4,6 +4,7 @@ import skillbill.telemetry.model.RemoteStatsRequest
 import skillbill.telemetry.model.TelemetryProxyCapabilities
 import skillbill.telemetry.model.TelemetrySettings
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
 
 fun parseRemoteStatsWindow(
   since: String = "",
@@ -83,8 +84,10 @@ private fun parseIsoDate(
   rawValue: String,
   fieldName: String,
 ): LocalDate =
-  runCatching { LocalDate.parse(rawValue) }.getOrElse {
-    throw IllegalArgumentException("$fieldName must use YYYY-MM-DD format.")
+  try {
+    LocalDate.parse(rawValue)
+  } catch (error: DateTimeParseException) {
+    throw IllegalArgumentException("$fieldName must use YYYY-MM-DD format.", error)
   }
 
 private fun parseSinceDays(rawValue: String): Int {

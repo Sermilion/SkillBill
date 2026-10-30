@@ -20,7 +20,5 @@ abstract class DocumentedNoOpCliCommand(
 }
 
 internal fun usageError(error: Throwable): Nothing {
-  throw UsageError(error.message.orEmpty()).also { usage ->
-    runCatching { usage.initCause(error) }
-  }
+  throw UsageError(error.message.orEmpty())
 }

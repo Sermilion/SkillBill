@@ -176,18 +176,22 @@ private fun decodeInstant(
   raw: String?,
   field: String,
 ): Instant? =
-  raw?.takeIf(String::isNotBlank)?.let {
+  raw?.takeIf(String::isNotBlank)?.let { value ->
+    decodeInstantOrNull(value)
+      ?: throw invalidWorkflowStateSchemaError("Workflow state $field contains an invalid timestamp.")
+  }
+
+private fun decodeInstantOrNull(raw: String): Instant? =
+  try {
+    Instant.parse(raw)
+  } catch (_: DateTimeParseException) {
     try {
-      Instant.parse(it)
+      OffsetDateTime.parse(raw).toInstant()
     } catch (_: DateTimeParseException) {
       try {
-        OffsetDateTime.parse(it).toInstant()
+        LocalDateTime.parse(raw, DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss")).toInstant(ZoneOffset.UTC)
       } catch (_: DateTimeParseException) {
-        try {
-          LocalDateTime.parse(it, DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss")).toInstant(ZoneOffset.UTC)
-        } catch (error: DateTimeParseException) {
-          throw invalidWorkflowStateSchemaError("Workflow state $field contains an invalid timestamp.", error)
-        }
+        null
       }
     }
   }
@@ -199,7 +203,7 @@ private fun encodeInstant(
   if (value == null) {
     source?.takeIf(String::isBlank)
   } else {
-    source?.takeIf { runCatching { decodeInstant(it, "timestamp") == value }.getOrDefault(false) }
+    source?.takeIf { decodeInstantOrNull(it) == value }
       ?: formatChangedInstant(value, source)
   }
 
@@ -211,7 +215,12 @@ private fun formatChangedInstant(
   if (sourceText.matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"))) {
     return DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC).format(value)
   }
-  val offsetSource = runCatching { OffsetDateTime.parse(sourceText) }.getOrNull()
+  val offsetSource =
+    try {
+      OffsetDateTime.parse(sourceText)
+    } catch (_: DateTimeParseException) {
+      null
+    }
   if (offsetSource != null) {
     val fractionDigits = Regex("\\.(\\d+)(?=Z|[+-]\\d{2}:\\d{2}$)").find(sourceText)?.groupValues?.get(1)?.length ?: 0
     val formatter =
@@ -233,8 +242,14 @@ private fun Any?.toExactIntOrNull(): Int? =
     is Short -> toInt()
     is Int -> this
     is Long -> takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
-    is BigInteger -> runCatching { intValueExact() }.getOrNull()
-    is BigDecimal -> runCatching { intValueExact() }.getOrNull()
+    is BigInteger -> takeIf { bitLength() < Int.SIZE_BITS }?.toInt()
+    is BigDecimal -> {
+      try {
+        intValueExact()
+      } catch (_: ArithmeticException) {
+        null
+      }
+    }
     is String -> toIntOrNull()
     else -> null
   }

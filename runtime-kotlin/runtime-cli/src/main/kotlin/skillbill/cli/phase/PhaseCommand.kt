@@ -45,6 +45,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Path
 
 @Inject
@@ -424,7 +425,7 @@ private fun FeatureTaskRuntimeRunEvent.CiStillRunning.ciStillRunningLine(): Stri
 }
 
 private fun boundedHttpLink(value: String): String =
-  runCatching {
+  try {
     val uri = URI(value)
     val scheme = uri.scheme?.takeIf { it == "http" || it == "https" }
     val host = uri.host?.takeIf(String::isNotBlank)
@@ -433,7 +434,9 @@ private fun boundedHttpLink(value: String): String =
     } else {
       URI(scheme, null, host, uri.port, uri.path, null, null).toASCIIString().take(MAX_PROGRESS_LINK_LENGTH)
     }
-  }.getOrDefault("")
+  } catch (_: URISyntaxException) {
+    ""
+  }
 
 private const val MAX_VISIBLE_PROGRESS_CHECKS = 4
 private const val MAX_PROGRESS_NAME_LENGTH = 48
