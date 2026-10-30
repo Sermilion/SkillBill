@@ -13,6 +13,7 @@ Do not reference this repo-relative path directly from installable skills — us
 
 - Review only changed code in the current PR or unit of work
 - Surface only meaningful issues such as bugs, logic flaws, security risks, regression risks, or architectural breakage
+- Report a defect only when it is material: a realistic user, operator, or runtime action reaches it in normal use, and it causes a visible failure, wrong behavior, or loss of data someone relies on. Do not report paths reachable only through hand-crafted or contrived input, representational differences that leave effective behavior unchanged (an explicit null rewritten to the default it already meant, null versus an empty list that every reader treats alike), races that need precisely timed concurrent writers with no practical trigger, or failures that end in a clear error without data loss. The code-quality lane keeps its own rules below
 - Flag newly introduced deprecated APIs or patterns when a supported alternative exists, or when deprecated usage is broad and unjustified
 - Flag comments that only restate **what** the code does (paraphrasing adjacent code) as a maintainability finding — this is an explicit contract item, report it at `Minor`. Do not flag comments that explain **why**: a decision or non-obvious constraint the code cannot express is warranted and must be left alone
 - Ignore style-only nits, formatting preferences, and naming bikeshedding — a comment that merely restates the code is a maintainability defect under the rule above, not a style nit

@@ -4,6 +4,7 @@ import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -55,7 +56,8 @@ internal object InlineReviewPromptSections {
       "finding in this same session before you emit. Emit remaining findings and a verdict of approved or " +
       "changes_requested. Do not run `skill-bill phase review` or launch review subagents. Criterion-gap " +
       "detection remains exclusive to the audit phase. Do not run `./gradlew check`, the pack collect-all " +
-      "gate, or `skill-bill phase validation`; validate owns those."
+      "gate, or `skill-bill phase validation`; validate owns those. For correctness, reliability, security, " +
+      "and contract findings: $MATERIALITY_RULE Do not report or fix such cases."
 
   const val VERIFY_FINDINGS_DIRECTIVE: String =
     "Verify every finding from the single preceding review pass against the subtask spec intent " +
@@ -79,7 +81,9 @@ internal object InlineReviewPromptSections {
   private const val VERIFY_FINDINGS_VALUE_CONTENT: String =
     "Name every review finding by its finding id and say for each whether verification verified it or " +
       "rejected it. Reject a finding only when you can cite the file:line construct that shows it is not a " +
-      "defect; a finding you do not address, or cannot settle, stays verified and is carried into repair."
+      "defect, or when it is not material: name the guard, caller, or reader that makes it unreachable or " +
+      "behavior-neutral. $MATERIALITY_RULE A finding you do not address, or cannot settle, stays verified " +
+      "and is carried into repair."
 
   private const val IMPLEMENT_FIX_VALUE_CONTENT: String =
     "Name every carried finding by its finding id and say whether you fixed it, found that no edit was " +

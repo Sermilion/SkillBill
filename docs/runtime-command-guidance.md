@@ -538,9 +538,19 @@ accounting. The runtime keeps authored text and aliases with that accounting. It
 does not require headings, field labels, IDs written by the agent, coverage
 markers, or a strict adoption receipt in an audit or repair plan.
 
+Audit counts only material gaps. A gap is material when a realistic user, operator
+or runtime action reaches it in normal use and it causes a visible failure, wrong
+behavior, or loss of data someone relies on. Absolute criterion wording ("never",
+"every") is read as its practical intent. Paths that need contrived input,
+representation changes that leave effective behavior unchanged, races that need
+precisely timed concurrent writers, and failures that end in a clear error without
+data loss are not gaps. They never keep a criterion open and are mentioned at most
+as non-blocking notes.
+
 `audit_plan_fix` is a read-only reasoning step. Its prose plan covers the selected
 criterion's remaining defect class: the latest gap plus sibling production paths of
-the same forbidden pattern. A repair may include shared
+the same forbidden pattern. Every planned item must be a material gap. The plan names
+reported cases it leaves out as immaterial and adds no code for them. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
 repair cycle records at most one unsuccessful outcome. Every repair implementation
 that leaves the selected criterion unfinished consumes one unsuccessful attempt,

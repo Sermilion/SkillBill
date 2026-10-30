@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.assessment
 
 import org.junit.jupiter.api.io.TempDir
+import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.qa.GoalPostChangeValidationResult
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
@@ -65,6 +66,26 @@ class GoalAssessmentLoopTest {
         AssessmentCall.VERIFIER,
       )
     assertEquals(expectedCalls, fixture.calls)
+  }
+
+  @Test
+  fun `assessment and verifier prompts admit only material defects`() {
+    val fixture =
+      GoalAssessmentGateFixture(home, fixedWorktreeStatus = " M src/Feature.kt") { call ->
+        when (call) {
+          AssessmentCall.FIRST_SUBTASK -> MAJOR_FINDING
+          AssessmentCall.VERIFIER -> CONFIRM_FIRST
+          AssessmentCall.FIX -> "GA-001: fixed: src/Feature.kt guards the first call"
+          else -> NO_FINDING
+        }
+      }
+
+    fixture.gate().run(fixture.state(), fixture.request())
+
+    listOf(AssessmentCall.FIRST_SUBTASK, AssessmentCall.CROSS_SUBTASK, AssessmentCall.VERIFIER).forEach { call ->
+      assertTrue(MATERIALITY_RULE in fixture.prompts.getValue(call), "$call prompt must carry the materiality rule")
+    }
+    assertTrue("Refute a candidate that is not material" in fixture.prompts.getValue(AssessmentCall.VERIFIER))
   }
 
   @Test

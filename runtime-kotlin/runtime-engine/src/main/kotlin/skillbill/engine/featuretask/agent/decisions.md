@@ -687,3 +687,11 @@ Decision: The JVM agent process runner creates a fresh directory under `<state d
 
 Reason: Cleanup that depends on the agent remembering fails exactly when runs go wrong. Owning the directory makes deletion a runtime guarantee. Launcher tests prove a failing run leaves nothing behind and that the sweep keeps a live owner's directory.
 
+## [2026-10-29] Audit counts only material acceptance gaps
+
+Context: SKILL-447 subtask 20 kept AC-004 ("edge states never lose user data") open through repeated focused audits. Each round confirmed the previous fix and named a new case: a hand-written numeric `install_id`, an explicit null rewritten to the default it already meant, a duplicate JSON key the reader already ignored, `null` versus an empty list in a rolled-back field, and a conflict recovery that needs another writer to delete the open row's override at the same moment. Most changed nothing a user could observe. The defect-class fan-out rule told audit to report every sibling path, and nothing asked whether a path was reachable or mattered, so the absolute wording never converged.
+
+Decision: Audit, interaction-trace rechecks and `audit_plan_fix` count only material gaps: a realistic action reaches the gap in normal use and it causes a visible failure, wrong behavior or loss of relied-on data. Absolute criterion wording is read as its practical intent. Contrived input, behavior-neutral representation changes, precisely timed concurrent-writer races and failures that end in a clear error without data loss are not gaps. They do not appear in the Open criteria line or keep a criterion open, and repair planning names them as left out without adding code. Defect-class fan-out still applies to material siblings.
+
+Reason: Repair attempts are a fixed budget and each unreachable case costs a full plan, implement and audit round plus code to maintain. The fix is prompt wording, consistent with the defect-class decision; no semantic revision bump is needed.
+

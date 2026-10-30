@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phase.prompt.compose
 
 import skillbill.engine.featuretask.model.audit.UnknownInteractionScenarioContext
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
+import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -200,6 +201,28 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(planPrompt, "remaining defect class")
     assertContains(planPrompt, "plan every remaining sibling")
     assertContains(repairPrompt, "sibling of a planned defect class")
+  }
+
+  @Test
+  fun `audit and repair planning count only material gaps`() {
+    val auditPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
+    val planPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX)
+
+    assertContains(auditPrompt, AcceptanceAuditPromptSections.MATERIAL_GAP_SENTENCE)
+    assertContains(auditPrompt, "Report only siblings that are material gaps")
+    assertContains(planPrompt, "Plan repairs only for material gaps")
+    assertContains(planPrompt, "add no code for it")
+  }
+
+  @Test
+  fun `review and finding verification admit only material defects`() {
+    val reviewPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW)
+    val verifyPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS)
+
+    assertContains(reviewPrompt, MATERIALITY_RULE)
+    assertContains(reviewPrompt, "Do not report or fix such cases")
+    assertContains(verifyPrompt, MATERIALITY_RULE)
+    assertContains(verifyPrompt, "or when it is not material")
   }
 
   @Test

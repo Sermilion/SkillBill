@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.audit.planning
 
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.featuretask.slot.plan.planningCapabilityClosureDirective
 
 internal object AuditPlanFixPromptSections {
@@ -19,6 +20,8 @@ internal object AuditPlanFixPromptSections {
       "saves the plan before audit_implement_fix executes it. The latest named gap is an example of a " +
       "remaining defect class, not the whole plan. Inspect current source for sibling production paths " +
       "of the same forbidden pattern under this criterion and plan every remaining sibling in this step. " +
+      "Plan repairs only for material gaps. $MATERIALITY_RULE Name each reported case you leave out " +
+      "as immaterial and why, and add no code for it. " +
       "Split independent gaps under one " +
       "criterion into separate plan items. For each item, identify the missing behavior, actual " +
       "consumer and owning production paths, exact changes and their execution order, dependencies " +

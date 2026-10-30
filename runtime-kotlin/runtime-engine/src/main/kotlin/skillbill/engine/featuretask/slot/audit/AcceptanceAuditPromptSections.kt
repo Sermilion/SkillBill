@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceAuditInteractionTraceS
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionInteractionTraceRound
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.engine.featuretask.phase.prompt.directives.PHASE_COMPLETE_SETTLEMENT_TOOL
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 
@@ -13,12 +14,17 @@ internal object AcceptanceAuditPromptSections {
       "command: build owns compilation and build proof, validate owns tests and failures, and audit reports " +
       "gaps for audit_plan_fix."
 
+  const val MATERIAL_GAP_SENTENCE: String =
+    "$MATERIALITY_RULE Leave such cases out of the Open criteria line and the gap report, and do not keep " +
+      "a criterion open for them. Mention them at most once as non-blocking notes."
+
   const val DEFECT_CLASS_FANOUT_SENTENCE: String =
     "Treat each named production gap as one instance of a remaining defect class. Name the forbidden " +
       "pattern and report every remaining sibling production path in this criterion's family: the same " +
       "store, the same list, board, status, or history seam, and callers of the function you would change. " +
-      "Do not leave a cousin path for the next audit round. Do not open a different criterion to chase " +
-      "unrelated work. The latest reported gap is context, not a scope limit."
+      "Do not leave a cousin path for the next audit round. Report only siblings that are material gaps. " +
+      "Do not open a different criterion to chase unrelated work. The latest reported gap is context, " +
+      "not a scope limit."
 
   const val ACCEPTED_RECHECK_SENTENCE: String =
     "Criteria accepted by an earlier audit are re-checked only when the runtime lists them in the " +
@@ -47,7 +53,8 @@ internal object AcceptanceAuditPromptSections {
   private const val SCENARIO_RULES: String =
     "A broken line must name an owner from that scenario's criteria, or " +
       "one of the two members of a pair. Use unknown when source cannot establish the outcome; unknown " +
-      "reopens nothing. "
+      "reopens nothing. Mark a scenario or re-check broken or regressed only for a material gap. " +
+      "$MATERIAL_GAP_SENTENCE "
 
   private const val TRACE_VALUE_CONTENT: String =
     "Report the trace in ordinary prose and end with exactly one Interaction line per pending ref, in the " +
@@ -102,6 +109,7 @@ internal object AcceptanceAuditPromptSections {
       "Preserve the original criterion identifiers and spec text; this exclusion governs audit admission. " +
       "Treat upstream receipts as claims and inspect current production code. Audit is read-only: do not edit " +
       "files or repair gaps. Do not spawn subagents or invoke repair skills. " +
+      "$MATERIAL_GAP_SENTENCE " +
       "Report remaining acceptance criteria with criterion identifiers, concrete missing production behavior " +
       "and relevant production " +
       "paths. The runtime passes those findings to audit_plan_fix using the configured reasoning " +
@@ -153,7 +161,8 @@ internal object AcceptanceAuditPromptSections {
       "fixed format. " +
       "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
       "before downstream review. Focused audits inspect the runtime-selected criterion. " +
-      "List every remaining sibling of that criterion's defect class, not only the last named gap. " +
+      "List every remaining material sibling of that criterion's defect class, not only the last named gap. " +
+      "Unreachable, contrived, or behavior-neutral cases are not gaps and never keep a criterion open. " +
       "For capability " +
       "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
       "inside an authorized review consumer alone does not prove a non-review access path. " +

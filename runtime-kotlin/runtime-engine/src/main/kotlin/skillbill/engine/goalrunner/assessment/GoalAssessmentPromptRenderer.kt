@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.assessment
 
+import skillbill.engine.featuretask.phase.prompt.directives.MATERIALITY_RULE
 import skillbill.review.spec.model.InteractionScenario
 import skillbill.review.spec.model.TransitionalRegression
 
@@ -85,13 +86,15 @@ internal object GoalAssessmentPromptRenderer {
     return "Assess subtask $subtaskId ($name): judge each of its criteria against its spec and the parent spec " +
       "in the code at the head commit, not at its own commit. Use its commit range to find what it changed. " +
       "Report defects in the code it touched as it stands at the head commit, and tests it added that would " +
-      "still pass if the behavior they name broke. " +
+      "still pass if the behavior they name broke. Report only material defects. $MATERIALITY_RULE " +
       "Answer with `Finding:` and `Test value:` lines only; write `Finding: none` when you find no defect."
   }
 
   private fun verifierRole(candidates: List<GoalAssessmentVerifierCandidate>): String =
     "Verify each candidate defect below against the code at the head commit. Try to refute it: re-derive the " +
       "failure scenario from the code and settle it as confirmed or refuted with file and line evidence. " +
+      "Refute a candidate that is not material, citing what makes it unreachable or behavior-neutral. " +
+      "$MATERIALITY_RULE " +
       "Answer with one `Verify <GA-NNN>:` line per candidate.\n\n" +
       candidates.joinToString("\n") { "- ${it.findingRef} ${it.path}:${it.line} - ${it.failureScenario}" }
 
@@ -101,5 +104,6 @@ internal object GoalAssessmentPromptRenderer {
     "Assess how the subtasks fit together in the code at the head commit. Settle every declared interaction " +
       "scenario with a `Scenario <IS-NNN>:` line and every declared transitional regression with a " +
       "`Regression <TR-NNN>:` line. Report each broken scenario and each defect that only appears when " +
-      "subtasks interact as a `Finding:` line. Write `Finding: none` when you find no such defect."
+      "subtasks interact as a `Finding:` line. Report only material defects. $MATERIALITY_RULE " +
+      "Write `Finding: none` when you find no such defect."
 }
