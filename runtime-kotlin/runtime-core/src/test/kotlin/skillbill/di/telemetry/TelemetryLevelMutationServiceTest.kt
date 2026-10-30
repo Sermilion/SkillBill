@@ -20,6 +20,7 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.review.EmptyReviewAttributionPort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
@@ -262,6 +263,7 @@ class TelemetryLevelMutationServiceTest {
         clock = Clock.systemUTC(),
         diagnostics = NoopRuntimeDiagnostics,
         workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+        reviewAttributionPort = EmptyReviewAttributionPort,
       )
 
     val result =

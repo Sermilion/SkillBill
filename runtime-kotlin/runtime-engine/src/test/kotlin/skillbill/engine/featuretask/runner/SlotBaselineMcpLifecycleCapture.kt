@@ -6,6 +6,7 @@ import skillbill.application.telemetry.model.QualityCheckFinishedRequest
 import skillbill.application.telemetry.model.QualityCheckStartedRequest
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.review.EmptyReviewAttributionPort
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 
 internal object SlotBaselineMcpLifecycleCapture {
@@ -24,6 +25,7 @@ internal object SlotBaselineMcpLifecycleCapture {
           SlotBaselineFullRunCapture.sqliteClock,
           NoopRuntimeDiagnostics,
           workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+          reviewAttributionPort = EmptyReviewAttributionPort,
         )
       val started =
         service.qualityCheckStarted(

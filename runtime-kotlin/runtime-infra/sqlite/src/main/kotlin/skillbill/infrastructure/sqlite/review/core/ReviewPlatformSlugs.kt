@@ -23,7 +23,7 @@ internal fun reviewPlatformSlug(
   routedSkill: String?,
   routedSkillPlatformSlugs: Map<String, String> = emptyMap(),
 ): String {
-  val normalizedDetectedStack = normalizePlatformSlug(detectedStack)
+  val normalizedDetectedStack = normalizePlatformSlug(detectedStack, routedSkillPlatformSlugs.values)
   val routedPlatformSlug = platformSlugFromRoutedSkill(routedSkill, routedSkillPlatformSlugs)
   return when {
     routedPlatformSlug != "unknown" && detectedStack.isDescriptiveStackLabel(normalizedDetectedStack) ->
@@ -39,7 +39,7 @@ private fun normalizedRoutedSkillPlatformSlugs(
   routedSkillPlatformSlugs
     .mapNotNull { (skillName, platformSlug) ->
       val normalizedSkillName = normalizeTelemetrySlug(skillName)
-      val normalizedPlatformSlug = normalizePlatformSlug(platformSlug)
+      val normalizedPlatformSlug = normalizePlatformSlug(platformSlug, routedSkillPlatformSlugs.values)
       if (normalizedSkillName == "unknown" || normalizedPlatformSlug == "unknown") {
         null
       } else {

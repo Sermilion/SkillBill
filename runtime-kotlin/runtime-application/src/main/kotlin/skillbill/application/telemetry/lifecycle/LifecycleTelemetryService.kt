@@ -14,6 +14,7 @@ import skillbill.application.telemetry.validation.validateQualityCheckStarted
 import skillbill.contracts.JsonPayloadContract
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.review.preparation.ReviewAttributionPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import java.time.Clock
@@ -25,6 +26,7 @@ class LifecycleTelemetryService(
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
+  private val reviewAttributionPort: ReviewAttributionPort,
 ) : GoalLifecycleTelemetryEmitter by
   LifecycleTelemetryGoalEmission(database, settingsProvider, diagnostics, clock, workerSupervisor) {
   fun featureTaskRuntimeStarted(request: FeatureTaskRuntimeStartedRequest): JsonPayloadContract {
@@ -46,7 +48,7 @@ class LifecycleTelemetryService(
 
   fun qualityCheckStarted(request: QualityCheckStartedRequest): JsonPayloadContract {
     val sessionId = generateLifecycleSessionId("qck", clock)
-    val normalizedRequest = request.normalizedLabels()
+    val normalizedRequest = request.normalizedLabels(reviewAttributionPort.knownPlatformSlugs())
     return when {
       normalizedRequest.orchestrated -> orchestratedStartedSkippedPayload()
       else ->
@@ -64,7 +66,7 @@ class LifecycleTelemetryService(
   }
 
   fun qualityCheckFinished(request: QualityCheckFinishedRequest): JsonPayloadContract {
-    val normalizedRequest = request.normalizedLabels()
+    val normalizedRequest = request.normalizedLabels(reviewAttributionPort.knownPlatformSlugs())
     return validateQualityCheckFinished(normalizedRequest)
       ?.let { lifecycleErrorPayload(normalizedRequest.sessionId, it) }
       ?: when {

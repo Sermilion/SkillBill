@@ -50,7 +50,12 @@ class ReviewFinishedTelemetryNormalizationTest {
             .replace("Detected stack: kotlin", "Detected stack: Kotlin Gradle JVM"),
         )
 
-      val payload = reviewFinishedPayload(connection, review.reviewRunId)
+      val payload =
+        reviewFinishedPayload(
+          connection,
+          review.reviewRunId,
+          mapOf("bill-kotlin-code-review" to "kotlin"),
+        )
 
       assertEquals("bill-kotlin-code-review", payload["routed_skill"])
       assertEquals("kotlin", payload["review_platform"])
@@ -144,7 +149,12 @@ class ReviewFinishedTelemetryNormalizationTest {
             .replace("Detected stack: kotlin", "Detected stack: backend-kotlin"),
         )
 
-      val payload = reviewFinishedPayload(connection, review.reviewRunId)
+      val payload =
+        reviewFinishedPayload(
+          connection,
+          review.reviewRunId,
+          mapOf("bill-kotlin-code-review" to "kotlin"),
+        )
 
       assertEquals("kotlin", payload["review_platform"])
       assertEquals("kotlin", payload["platform_slug"])

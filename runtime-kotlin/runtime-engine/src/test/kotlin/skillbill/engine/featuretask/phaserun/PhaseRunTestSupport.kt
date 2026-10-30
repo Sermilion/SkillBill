@@ -56,6 +56,7 @@ import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
 import skillbill.ports.monitor.model.MonitorWorktree
 import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
+import skillbill.ports.review.EmptyReviewAttributionPort
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -128,6 +129,7 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         clock,
         NoopRuntimeDiagnostics,
         workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+        reviewAttributionPort = EmptyReviewAttributionPort,
       ),
     diagnostics = diagnostics,
     clock = clock,

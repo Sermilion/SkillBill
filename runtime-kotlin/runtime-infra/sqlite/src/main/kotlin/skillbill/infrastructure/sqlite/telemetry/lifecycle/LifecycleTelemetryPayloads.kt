@@ -14,7 +14,7 @@ import skillbill.infrastructure.sqlite.telemetry.redaction.redactIssueKey
 import skillbill.infrastructure.sqlite.telemetry.redaction.redactIssueKeyReferences
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.attribution.normalizeRoutedSkill
-import skillbill.review.attribution.normalizeStackLabel
+import skillbill.review.attribution.normalizeTelemetrySlug
 import skillbill.telemetry.model.PrDescriptionGeneratedRecord
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys as LifeKeys
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys as RevTelKeys
@@ -207,21 +207,18 @@ private fun parseStoredJsonArray(
 }
 
 internal fun qualityCheckStartedPayload(row: Map<String, Any?>): Map<String, Any?> {
-  val normalizedStack = normalizeStackLabel(row.stringOrEmpty(LifeKeys.DETECTED_STACK))
-  val fallback = row.booleanFromInt(LifeKeys.FALLBACK) || normalizedStack.fallback
+  val fallback = row.booleanFromInt(LifeKeys.FALLBACK)
+  val detectedStack = normalizeTelemetrySlug(row.stringOrEmpty(LifeKeys.DETECTED_STACK)).ifBlank { "unknown" }
   return linkedMapOf<String, Any?>(
     LifeKeys.SESSION_ID to row.stringOrEmpty(LifeKeys.SESSION_ID),
     LifeKeys.ROUTED_SKILL to normalizeRoutedSkill(row.stringOrEmpty(LifeKeys.ROUTED_SKILL)),
-    LifeKeys.DETECTED_STACK to normalizedStack.stack,
+    LifeKeys.DETECTED_STACK to detectedStack,
     LifeKeys.FALLBACK to fallback,
     LifeKeys.SCOPE_TYPE to row.stringOrEmpty(LifeKeys.SCOPE_TYPE),
     LifeKeys.INITIAL_FAILURE_COUNT to row.intOrZero(LifeKeys.INITIAL_FAILURE_COUNT),
     MatKeys.ORCHESTRATED to false,
   ).apply {
-    val fallbackReason =
-      row.stringOrEmpty(LifeKeys.FALLBACK_REASON).ifBlank {
-        normalizedStack.fallbackReason.orEmpty()
-      }
+    val fallbackReason = row.stringOrEmpty(LifeKeys.FALLBACK_REASON)
     if (fallback && fallbackReason.isNotBlank()) {
       put(LifeKeys.FALLBACK_REASON, fallbackReason)
     }

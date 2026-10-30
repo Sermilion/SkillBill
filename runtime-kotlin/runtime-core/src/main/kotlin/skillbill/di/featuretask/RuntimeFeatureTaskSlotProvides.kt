@@ -40,8 +40,6 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
-import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
-import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -72,12 +70,6 @@ internal interface RuntimeFeatureTaskSlotProvides {
       pullRequestIdentityLookup,
       templateFiles,
     )
-
-  @Provides
-  fun monitorStrategy(
-    pullRequestIdentityLookup: MergeStatePullRequestIdentityLookup,
-    pullRequestChecksLookup: PullRequestChecksLookup,
-  ): MonitorStrategy = MonitorStrategy(pullRequestIdentityLookup, pullRequestChecksLookup)
 
   @Provides
   fun pullRequestPhaseStrategies(

@@ -29,7 +29,7 @@ internal fun reviewFinishedPayload(
 ): ReviewFinishedTelemetry {
   val stats = filterReviewFinishedSummary(summarizeFindingRows(findingRows), level)
   val learningsSection = buildLearningsSection(connection, reviewSummary.reviewSessionId.orEmpty(), level)
-  val normalizedStack = normalizeStackLabel(reviewSummary.detectedStack)
+  val normalizedStack = normalizeStackLabel(reviewSummary.detectedStack, routedSkillPlatformSlugs.values)
   val normalizedRoutedSkill = normalizeRoutedSkill(reviewSummary.routedSkill)
   val normalizedPlatformSlug =
     reviewPlatformSlug(

@@ -1,5 +1,6 @@
 package skillbill.di.core
 import me.tatarka.inject.annotations.Provides
+import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.infrastructure.host.process.InstallerProcessAdapter
 import skillbill.infrastructure.http.HttpInstallerScriptFetchAdapter
 import skillbill.infrastructure.launcher.agentrun.FileSystemAgentRunLauncher
@@ -12,7 +13,6 @@ import skillbill.infrastructure.workflow.github.GhPullRequestIdentityLookup
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
-import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
@@ -36,12 +36,18 @@ internal interface RuntimeOptionalCallbackProvides {
     callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup()
 
   @Provides
-  fun mergeStatePullRequestIdentityLookup(callbacks: OptionalCallbacks): MergeStatePullRequestIdentityLookup =
-    callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup(includeMergeState = true)
-
-  @Provides
   fun pullRequestChecksLookup(callbacks: OptionalCallbacks): PullRequestChecksLookup =
     callbacks.pullRequestChecksLookup ?: GhPullRequestChecksLookup()
+
+  @Provides
+  fun monitorStrategy(
+    callbacks: OptionalCallbacks,
+    pullRequestChecksLookup: PullRequestChecksLookup,
+  ): MonitorStrategy =
+    MonitorStrategy(
+      callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup(includeMergeState = true),
+      pullRequestChecksLookup,
+    )
 
   @Provides
   fun pullRequestTemplateFiles(): PullRequestTemplateFiles = FileSystemPullRequestTemplateFiles()

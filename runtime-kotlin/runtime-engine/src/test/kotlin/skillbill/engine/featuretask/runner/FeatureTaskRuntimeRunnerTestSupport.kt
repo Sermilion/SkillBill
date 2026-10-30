@@ -165,6 +165,7 @@ import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.projectstore.model.resolveSpecPath
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.review.EmptyReviewAttributionPort
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.DERIVING_SHARED_EVIDENCE_RESOLVER
@@ -827,6 +828,7 @@ private fun disabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory):
       Clock.systemUTC(),
       NoopRuntimeDiagnostics,
       workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+      reviewAttributionPort = EmptyReviewAttributionPort,
     ),
     NoopRuntimeDiagnostics,
   )
@@ -1363,6 +1365,7 @@ private fun enabledRuntimeLifecycleTelemetry(database: DatabaseSessionFactory): 
       Clock.systemUTC(),
       NoopRuntimeDiagnostics,
       workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+      reviewAttributionPort = EmptyReviewAttributionPort,
     ),
     NoopRuntimeDiagnostics,
   )
@@ -1587,6 +1590,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
         Clock.systemUTC(),
         NoopRuntimeDiagnostics,
         workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+        reviewAttributionPort = EmptyReviewAttributionPort,
       ),
       NoopRuntimeDiagnostics,
     ),
