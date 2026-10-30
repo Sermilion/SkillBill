@@ -41,10 +41,12 @@ internal fun rememberSkillBillType(): SkillBillType {
     Font(Res.font.inter, weight = Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
     Font(Res.font.inter, weight = Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
     Font(Res.font.inter, weight = SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(Res.font.inter, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
   )
   val monoFonts = listOf(
     Font(Res.font.jetbrains_mono, weight = Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
     Font(Res.font.jetbrains_mono, weight = Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(Res.font.jetbrains_mono, weight = SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
     Font(Res.font.jetbrains_mono, weight = FontWeight(800), variationSettings = FontVariation.Settings(FontVariation.weight(800))),
   )
   val inter = remember(interFonts) { FontFamily(*interFonts.toTypedArray()) }

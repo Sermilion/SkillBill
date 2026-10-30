@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -48,55 +49,67 @@ sealed interface SbMenuEntry {
 
 @Composable
 fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false) {
+  val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
-  val active = highlighted || interaction.collectIsHoveredAsState().value || interaction.collectIsFocusedAsState().value
-  val fg = when { !item.enabled -> SkillBillTheme.colors.fgFaint; item.danger -> SkillBillTheme.colors.stFailed; active -> SkillBillTheme.colors.fg; else -> SkillBillTheme.colors.fg2 }
+  // `[disabled]` sets pointer-events: none, so a disabled item never takes the hover fill.
+  val active = item.enabled && (highlighted || interaction.collectIsHoveredAsState().value || interaction.collectIsFocusedAsState().value)
+  // Danger keeps its red on hover; disabled items keep their color and fade to 40%.
+  val fg = when { item.danger -> colors.stFailed; active -> colors.fg; else -> colors.fg2 }
+  val shape = RoundedCornerShape(SkillBillRadius.sm)
   Row(
-    Modifier.fillMaxWidth().height(30.dp).background(if (active) SkillBillTheme.colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(SkillBillRadius.sm))
+    Modifier.fillMaxWidth().height(30.dp).background(if (active) colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, shape)
       .alpha(if (item.enabled) 1f else .4f).hoverable(interaction).clickable(interaction, null, enabled = item.enabled, onClick = item.onClick)
-      .sbFocusRing(interaction, RoundedCornerShape(SkillBillRadius.sm))
+      .sbFocusRing(interaction, shape)
       .semantics { role = Role.Button; contentDescription = item.label; if (!item.enabled) disabled(); if (item.checked) selected = true }
       .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    CompositionLocalProvider(LocalContentColor provides (if (item.danger) SkillBillTheme.colors.stFailed else if (active) SkillBillTheme.colors.fg else SkillBillTheme.colors.fgMuted)) {
+    // `.sb-menu-item .sb-icon` stays fg-muted on hover.
+    CompositionLocalProvider(LocalContentColor provides (if (item.danger) colors.stFailed else colors.fgMuted)) {
       when { item.lead != null -> item.lead.invoke(); item.icon != null -> SbIcon(item.icon, SbIconSize.Md) }
     }
-    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    item.endText?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint), maxLines = 1) }
-    if (item.checked) SbIcon(LucideIcons.check, SbIconSize.Sm)
-    item.shortcut?.let { Kbd(it) }
+    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg, lineHeight = 1.em), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    if (item.endText != null || item.checked || item.shortcut != null) {
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        item.endText?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1, softWrap = false) }
+        if (item.checked) CompositionLocalProvider(LocalContentColor provides (if (item.danger) colors.stFailed else colors.fgMuted)) { SbIcon(LucideIcons.check, SbIconSize.Sm) }
+        item.shortcut?.let { Kbd(it) }
+      }
+    }
   }
 }
 
 @Composable
 fun SbMenu(entries: List<SbMenuEntry>, searchHint: String? = null) {
-  val dividerColor = SkillBillTheme.colors.borderSubtle
+  val colors = SkillBillTheme.colors
+  val dividerColor = colors.borderSubtle
   val edgeBleedPx = with(androidx.compose.ui.platform.LocalDensity.current) { MENU_EDGE_BLEED.toPx() }
   val dividerStrokePx = with(androidx.compose.ui.platform.LocalDensity.current) { 1.dp.toPx() }
-  androidx.compose.foundation.layout.Column(Modifier.padding(4.dp)) {
+  androidx.compose.foundation.layout.Column {
+    // `.sb-menu-search` cancels the popover padding with margin: -4px -4px 4px.
     searchHint?.let {
       Row(
         Modifier.fillMaxWidth().height(32.dp).drawBehind {
           val y = size.height - dividerStrokePx / 2
-          drawLine(dividerColor, Offset(-edgeBleedPx, y), Offset(size.width + edgeBleedPx, y), dividerStrokePx)
+          drawLine(dividerColor, Offset(0f, y), Offset(size.width, y), dividerStrokePx)
         }.padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        SbIcon(LucideIcons.search, SbIconSize.Sm)
-        BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint), maxLines = 1)
+        CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(LucideIcons.search, SbIconSize.Sm) }
+        BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1, softWrap = false)
       }
-      androidx.compose.foundation.layout.Spacer(Modifier.height(4.dp))
     }
-    entries.forEach { entry ->
-      when (entry) {
-        is SbMenuEntry.Item -> SbMenuItem(entry)
-        is SbMenuEntry.Head -> BasicText(entry.text, Modifier.padding(start = 8.dp, top = 6.dp, bottom = 4.dp), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint), maxLines = 1)
-        SbMenuEntry.Separator -> Box(
-          Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).drawBehind {
-            drawLine(dividerColor, Offset(-edgeBleedPx, size.height / 2), Offset(size.width + edgeBleedPx, size.height / 2), dividerStrokePx)
-          },
-        )
+    androidx.compose.foundation.layout.Column(Modifier.padding(MENU_EDGE_BLEED)) {
+      entries.forEach { entry ->
+        when (entry) {
+          is SbMenuEntry.Item -> SbMenuItem(entry)
+          is SbMenuEntry.Head -> BasicText(entry.text, Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 4.dp), style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1)
+          SbMenuEntry.Separator -> Box(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).drawBehind {
+              drawLine(dividerColor, Offset(-edgeBleedPx, size.height / 2), Offset(size.width + edgeBleedPx, size.height / 2), dividerStrokePx)
+            },
+          )
+        }
       }
     }
   }

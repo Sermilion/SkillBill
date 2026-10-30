@@ -20,9 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,6 +45,9 @@ import dev.skillbill.desktop.core.designsystem.tabular
 @Immutable
 class Crumb(val label: String, val lead: (@Composable () -> Unit)? = null, val onClick: (() -> Unit)? = null)
 
+/** The shell provides a sidebar toggle while the sidebar is a drawer; every [ViewHeader] shows it by default. */
+val LocalSidebarToggle = staticCompositionLocalOf<(() -> Unit)?> { null }
+
 /** [sidebarToggle] shows the sidebar toggle button when non-null; the shell decides when, this component holds no breakpoint. */
 @Composable
 fun ViewHeader(
@@ -50,7 +55,7 @@ fun ViewHeader(
   modifier: Modifier = Modifier,
   middle: (@Composable () -> Unit)? = null,
   actions: @Composable RowScope.() -> Unit = {},
-  sidebarToggle: (() -> Unit)? = null,
+  sidebarToggle: (() -> Unit)? = LocalSidebarToggle.current,
 ) {
   val colors = SkillBillTheme.colors
   Row(
@@ -58,7 +63,7 @@ fun ViewHeader(
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    sidebarToggle?.let { SbIconButton(LucideIcons.panelLeft, "Toggle sidebar", it, size = SbControlSize.Small, shortcut = "[") }
+    sidebarToggle?.let { SbIconButton(LucideIcons.panelLeft, "Toggle sidebar", it, shortcut = "[") }
     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
       Row(Modifier.weight(1f, fill = false), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         crumbs.forEachIndexed { index, crumb ->
@@ -67,7 +72,8 @@ fun ViewHeader(
         }
       }
       if (middle != null) {
-        Box(Modifier.weight(1f, fill = false).padding(start = 8.dp).horizontalScroll(rememberScrollState())) { middle() }
+        // The header's 8 dp gap plus the slot's own 8 dp start margin.
+        Box(Modifier.weight(1f, fill = false).padding(start = 16.dp).horizontalScroll(rememberScrollState())) { middle() }
       }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
@@ -92,7 +98,8 @@ private fun RowScope.CrumbItem(crumb: Crumb, last: Boolean) {
   val active = hovered && onClick != null
   val fill = rememberHoverColor(active, Color.Transparent, colors.bgHover).value
   Row(
-    Modifier.background(fill, shape)
+    // Bleeds the 6 dp hover padding into the gaps so the label lines up with the header edge and the chevrons.
+    Modifier.negativeHorizontalMargin(6.dp).background(fill, shape)
       .then(if (onClick != null) Modifier.hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onClick) else Modifier)
       .padding(horizontal = 6.dp, vertical = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -103,10 +110,18 @@ private fun RowScope.CrumbItem(crumb: Crumb, last: Boolean) {
   }
 }
 
+private fun Modifier.negativeHorizontalMargin(margin: androidx.compose.ui.unit.Dp) = layout { measurable, constraints ->
+  val bleed = margin.roundToPx()
+  val widened = if (constraints.hasBoundedWidth) constraints.copy(maxWidth = constraints.maxWidth + bleed * 2) else constraints
+  val placeable = measurable.measure(widened.copy(minWidth = 0))
+  val width = (placeable.width - bleed * 2).coerceAtLeast(0)
+  layout(width, placeable.height) { placeable.placeRelative(-bleed, 0) }
+}
+
 @Composable
 fun Pager(index: Int, total: Int, onPrevious: () -> Unit, onNext: () -> Unit, modifier: Modifier = Modifier) {
   Row(modifier.padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-    BasicText("${index + 1} / $total", Modifier.padding(end = 4.dp), style = SkillBillTheme.type.tSm.tabular().copy(color = SkillBillTheme.colors.fgFaint))
+    BasicText("${index + 1} / $total", style = SkillBillTheme.type.tSm.tabular().copy(color = SkillBillTheme.colors.fgFaint))
     SbIconButton(LucideIcons.chevronUp, "Previous", onPrevious, size = SbControlSize.Small, shortcut = "K")
     SbIconButton(LucideIcons.chevronDown, "Next", onNext, size = SbControlSize.Small, shortcut = "J")
   }

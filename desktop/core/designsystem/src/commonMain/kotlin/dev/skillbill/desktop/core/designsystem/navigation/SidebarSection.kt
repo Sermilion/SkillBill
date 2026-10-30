@@ -36,6 +36,7 @@ fun SidebarSection(
   expanded: Boolean,
   onToggle: () -> Unit,
   modifier: Modifier = Modifier,
+  collapsible: Boolean = true,
   items: @Composable ColumnScope.() -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -46,8 +47,9 @@ fun SidebarSection(
   Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
     Row(
       Modifier.padding(top = 12.dp).fillMaxWidth().height(28.dp)
-        .hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onToggle)
-        .expandSemantics(expanded).padding(horizontal = 8.dp),
+        .hoverable(interaction)
+        .then(if (collapsible) Modifier.clickable(interaction, indication = null, role = Role.Button, onClick = onToggle).expandSemantics(expanded) else Modifier)
+        .padding(horizontal = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(4.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -56,6 +58,6 @@ fun SidebarSection(
         SbIcon(LucideIcons.chevronDown, SbIconSize.Xs, modifier = Modifier.rotate(rotation))
       }
     }
-    if (expanded) items()
+    if (expanded || !collapsible) items()
   }
 }

@@ -23,10 +23,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.tabular
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.list.TreeRow as DesignTreeRow
@@ -92,15 +92,16 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
         onDispose { requesters.remove(row.node.path) }
       }
       DesignTreeRow(
-        title = (row.node as? SpecNode.Bundle)?.title ?: row.node.name,
+        title = row.node.treeTitle(),
         onClick = { focusedPath = row.node.path; onAction(SpecsAction.Click(row.node.path)) },
         level = row.depth,
         expandable = row.hasChildren,
         expanded = row.expanded,
         focused = row.node.path == state.selectedPath,
         file = row.node is SpecNode.File,
+        muted = (row.node as? SpecNode.Bundle)?.status == SpecStatus.Canceled,
         lead = { SpecLead(row.node) },
-        id = (row.node as? SpecNode.Bundle)?.issueKey,
+        id = row.node.treeId(),
         meta = { SpecMeta(row.node) },
         modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged {
           if (it.hasFocus) {
@@ -116,30 +117,44 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
   }
 }
 
+// screens.js specTree: status icons take the default half fill; the n/m text carries the progress.
 @Composable
 private fun SpecLead(node: SpecNode) {
   when (node) {
     is SpecNode.Folder -> SbIcon(LucideIcons.folder, SbIconSize.Sm)
-    is SpecNode.Bundle -> StatusIcon(node.status.toStatusKind(), progress(node.subtasksDone, node.subtasksTotal))
-    is SpecNode.File -> if (node.kind == SpecFileKind.SubtaskSpec && node.status != null) {
-      StatusIcon(requireNotNull(node.status).toStatusKind(), null)
-    } else SbIcon(LucideIcons.file, SbIconSize.Sm)
+    is SpecNode.Bundle -> StatusIcon(node.status.toStatusKind(), null)
+    is SpecNode.File -> when {
+      node.kind == SpecFileKind.SubtaskSpec && node.status != null -> StatusIcon(requireNotNull(node.status).toStatusKind(), null)
+      node.kind == SpecFileKind.ParentSpec -> SbIcon(LucideIcons.fileText, SbIconSize.Sm)
+      else -> SbIcon(LucideIcons.file, SbIconSize.Sm)
+    }
   }
 }
 
+/** The folder's bundle count and the bundle's `done/total`, in the row's 11.5 px tabular faint text. Canceled bundles show none. */
 @Composable
 private fun SpecMeta(node: SpecNode) {
+  val style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal).tabular()
   when (node) {
-    is SpecNode.Folder -> BasicText(node.bundleCount.toString(), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgFaint))
-    is SpecNode.Bundle -> {
-      node.subtasksDone?.let { done -> node.subtasksTotal?.let { total ->
-        BasicText("$done/$total", style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgFaint))
-      } }
+    is SpecNode.Folder -> BasicText(node.bundleCount.toString(), style = style, maxLines = 1)
+    is SpecNode.Bundle -> if (node.status != SpecStatus.Canceled) {
+      node.subtasksDone?.let { done -> node.subtasksTotal?.let { total -> BasicText("$done/$total", style = style, maxLines = 1) } }
     }
-    is SpecNode.File -> node.subtaskId?.let { id ->
-      BasicText(id.toString().padStart(2, '0'), style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgFaint), maxLines = 1, overflow = TextOverflow.Clip)
-    }
+    is SpecNode.File -> Unit
   }
+}
+
+private fun SpecNode.treeTitle(): String = when (this) {
+  is SpecNode.Bundle -> title
+  is SpecNode.File -> subtaskName?.takeIf { kind == SpecFileKind.SubtaskSpec && it.isNotBlank() } ?: name
+  is SpecNode.Folder -> name
+}
+
+/** The bundle's issue key, or a subtask spec's two-digit number, shown as the id tag before the title. */
+private fun SpecNode.treeId(): String? = when (this) {
+  is SpecNode.Bundle -> issueKey
+  is SpecNode.File -> subtaskId?.toString()?.padStart(2, '0')
+  is SpecNode.Folder -> null
 }
 
 private fun SpecStatus.toStatusKind() = when (this) {
@@ -150,5 +165,3 @@ private fun SpecStatus.toStatusKind() = when (this) {
   SpecStatus.Blocked -> StatusKind.Blocked
   SpecStatus.Canceled -> StatusKind.Canceled
 }
-
-private fun progress(done: Int?, total: Int?): Float? = if (done != null && total != null && total > 0) done.toFloat() / total else null

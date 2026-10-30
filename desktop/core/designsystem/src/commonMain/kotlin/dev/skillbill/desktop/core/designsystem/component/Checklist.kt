@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
 data class ChecklistItem(val id: String, val text: String, val checked: Boolean)
@@ -19,7 +20,7 @@ fun Checklist(items: List<ChecklistItem>, onCheckedChange: (id: String, checked:
     items.forEach { item ->
       Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
         SbCheckbox(item.checked, { onCheckedChange(item.id, it) }, item.text, modifier = Modifier.padding(top = 2.dp))
-        BasicText(item.text, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2))
+        BasicText(item.text, Modifier.weight(1f), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg2, lineHeight = 1.45.em))
       }
     }
   }

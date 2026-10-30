@@ -8,11 +8,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import dev.skillbill.desktop.app.di.WindowComponent
-import dev.skillbill.desktop.core.designsystem.component.IdTag
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.overlay.CommandGroup
 import dev.skillbill.desktop.core.designsystem.overlay.CommandItem
 import dev.skillbill.desktop.core.designsystem.overlay.CommandPalette
 import dev.skillbill.desktop.core.domain.model.RunOptions
+import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.navigation.CommandContext
 
 /** The command menu over the window. Opening it prefetches the current item's run options; it closes before a command runs. */
@@ -47,6 +49,11 @@ fun CommandMenu(window: WindowComponent) {
       command.run()
     },
     onDismiss = menu::close,
-    context = item?.let { current -> { IdTag(current.issueKey ?: current.id) } },
+    // `Label({ text: rowKey, dot: false })` above the input, as main.js's palette context.
+    context = item?.let { current -> { SbLabel(rowKey(current)) } },
   )
 }
+
+/** The key the item's rows show, as the prototype's `rowKey`: the issue key for goals, else the phase or operation id. */
+internal fun rowKey(item: WorkItem): String =
+  if (item.kind == WorkKind.Goal) item.issueKey ?: item.id else item.control.phaseId ?: item.issueKey ?: item.id

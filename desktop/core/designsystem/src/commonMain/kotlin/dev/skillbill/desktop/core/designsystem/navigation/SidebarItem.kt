@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -28,11 +27,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
+import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.tabular
 
@@ -53,15 +54,14 @@ fun SidebarItem(
   val type = SkillBillTheme.type
   val interaction = remember { MutableInteractionSource() }
   val hovered = interaction.collectIsHoveredAsState().value
-  val focused = interaction.collectIsFocusedAsState().value
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  val fill = rememberHoverColor(hovered || focused, if (on) colors.bgActive else Color.Transparent, if (on) colors.bgActive else colors.bgHover).value
+  val fill = rememberHoverColor(hovered, if (on) colors.bgActive else Color.Transparent, if (on) colors.bgActive else colors.bgHover).value
   val textColor = if (on || hovered) colors.fg else colors.fg2
   val item: @Composable () -> Unit = {
     Row(
       modifier.fillMaxWidth().height(28.dp).background(fill, shape)
         .hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
-        .semantics { selected = on }.padding(horizontal = 8.dp),
+        .sbFocusRing(interaction, shape).semantics { selected = on }.padding(horizontal = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(9.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -75,7 +75,12 @@ fun SidebarItem(
           Modifier.defaultMinSize(minWidth = 18.dp).height(18.dp).background(colors.accentTint, SkillBillRadius.full).padding(horizontal = 5.dp),
           contentAlignment = Alignment.Center,
         ) {
-          BasicText(attention.toString(), style = type.t2xs.tabular().copy(color = colors.accentText, fontWeight = FontWeight.SemiBold))
+          // 600 at the 2xs size in the sans face, 18 px line, as `.sb-nav .att`; the 2xs type token is the mono face.
+          BasicText(
+            attention.toString(),
+            style = type.tXs.tabular().copy(color = colors.accentText, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp),
+            maxLines = 1,
+          )
         }
       } else if (count != null) {
         BasicText(count.toString(), style = type.tSm.tabular().copy(color = colors.fgFaint))

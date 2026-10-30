@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -104,11 +105,12 @@ fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () ->
             .layeredShadow(SkillBillTheme.shadows.popover, shape)
             .background(SkillBillTheme.colors.bgOverlay, shape)
             .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+            // `.sb-tip` pads 5px 8px inside its 1px border.
+            .padding(horizontal = 9.dp, vertical = 6.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          BasicText(text, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fg), maxLines = 1)
+          BasicText(text, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.2.em), maxLines = 1, softWrap = false)
           shortcut?.let { Kbd(it) }
         }
       }

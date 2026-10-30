@@ -48,6 +48,31 @@ internal fun statusColor(kind: StatusKind): Color {
   }
 }
 
+/** The lifecycle chip's word, as the design's `LIFE` table names it: the raw lifecycle, not the derived status. */
+internal fun lifecycleLabel(lifecycle: Lifecycle): String = when (lifecycle) {
+  Lifecycle.Active -> "Active"
+  Lifecycle.Paused -> "Paused"
+  Lifecycle.Blocked -> "Blocked"
+  Lifecycle.Failed -> "Failed"
+  Lifecycle.Terminal -> "Completed"
+  Lifecycle.Canceled -> "Canceled"
+  Lifecycle.Idle -> "Idle"
+}
+
+/** The lifecycle color the chip and the run reason's left rule use. */
+@Composable
+internal fun lifecycleColor(lifecycle: Lifecycle): Color {
+  val colors = SkillBillTheme.colors
+  return when (lifecycle) {
+    Lifecycle.Active -> colors.stActive
+    Lifecycle.Paused -> colors.stPaused
+    Lifecycle.Blocked -> colors.stBlocked
+    Lifecycle.Failed -> colors.stFailed
+    Lifecycle.Terminal -> colors.stDone
+    Lifecycle.Canceled, Lifecycle.Idle -> colors.stPending
+  }
+}
+
 /** `desktop-tray`'s age: "2h 5m", "4m 10s" or "12s". */
 internal fun age(duration: Duration): String = (if (duration.isNegative()) Duration.ZERO else duration).toComponents { hours, minutes, seconds, _ ->
   when {

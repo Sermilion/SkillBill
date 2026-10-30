@@ -1,8 +1,10 @@
 package dev.skillbill.desktop.core.designsystem.component
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,11 +46,13 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
@@ -78,26 +83,32 @@ fun SbDialog(title: String, onDismissRequest: () -> Unit, icon: (@Composable () 
     BoxWithConstraints(Modifier.fillMaxSize().clickable(onClick = onDismissRequest)) {
       val shape = RoundedCornerShape(SkillBillRadius.lg)
       val dialogWidth = SkillBillSize.dialog.coerceAtMost((maxWidth - 32.dp).coerceAtLeast(0.dp))
-      AnimatedVisibility(true, modifier = Modifier.align(Alignment.TopCenter).padding(top = maxHeight * .18f), enter = fadeIn(menuSpec()) + scaleIn(menuSpec(), initialScale = .98f)) {
+      // A visible = true AnimatedVisibility skips its enter transition, so start from a hidden state.
+      val appear = remember { MutableTransitionState(false).apply { targetState = true } }
+      val liftPx = with(LocalDensity.current) { 2.dp.roundToPx() }
+      // Layer padding-top 14vh plus the dialog's margin-top 4vh.
+      AnimatedVisibility(appear, modifier = Modifier.align(Alignment.TopCenter).padding(top = maxHeight * .18f), enter = fadeIn(menuSpec()) + slideInVertically(menuSpec()) { -liftPx } + scaleIn(menuSpec(), initialScale = .98f)) {
         Column(
-          Modifier.width(dialogWidth).background(SkillBillTheme.colors.bgOverlay, shape)
+          Modifier.width(dialogWidth).layeredShadow(SkillBillTheme.shadows.modal, shape).background(SkillBillTheme.colors.bgOverlay, shape)
             .clickable(interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
-            .border(1.dp, SkillBillTheme.colors.borderStrong, shape).layeredShadow(SkillBillTheme.shadows.modal, shape)
+            .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
+            // Header, body and footer paddings sit inside this 1px border.
+            .padding(1.dp)
             .verticalScroll(rememberScrollState())
             .focusRequester(dialogFocus).focusProperties { onExit = { cancelFocusChange() } }.focusGroup().focusable(fallbackFocus).semantics { paneTitle = title }
             .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { onDismissRequest(); true } else false },
         ) {
           Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             icon?.invoke()
-            BasicText(title, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+            BasicText(title, style = SkillBillTheme.type.tMd.copy(color = SkillBillTheme.colors.fg, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, lineHeight = 1.3.em))
           }
           CompositionLocalProvider(
-            LocalSbDialogTextStyle provides SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted),
+            LocalSbDialogTextStyle provides SkillBillTheme.type.tBase.copy(color = SkillBillTheme.colors.fgMuted, lineHeight = 1.55.em),
             LocalContentColor provides SkillBillTheme.colors.fgMuted,
           ) {
             Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = body)
           }
-          FlowRow(Modifier.align(Alignment.End).padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
+          FlowRow(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
         }
       }
     }

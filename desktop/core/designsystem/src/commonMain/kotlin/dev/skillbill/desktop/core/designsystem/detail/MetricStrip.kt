@@ -15,12 +15,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.Edge
@@ -29,7 +32,7 @@ import dev.skillbill.desktop.core.designsystem.tabular
 
 private val metricMinCellWidth = 140.dp
 
-/** [valueContent] replaces [value] when the value is live, for example a running clock. */
+/** [valueContent] replaces [value] when the value is live, for example a running clock; it should draw in [metricValueStyle]. */
 @Immutable
 class MetricCell(
   val label: String,
@@ -38,6 +41,11 @@ class MetricCell(
   val note: String? = null,
   val valueContent: (@Composable () -> Unit)? = null,
 )
+
+/** `.sb-metric > b`: 16/500 at line height 1, tabular, tracking −0.01em. */
+@Composable
+fun metricValueStyle(): TextStyle =
+  SkillBillTheme.type.tLg.tabular().copy(color = SkillBillTheme.colors.fg, fontWeight = FontWeight.Medium, letterSpacing = (-0.01).em, lineHeight = 1.em)
 
 @Composable
 fun MetricStrip(cells: List<MetricCell>, modifier: Modifier = Modifier) {
@@ -61,21 +69,23 @@ fun MetricStrip(cells: List<MetricCell>, modifier: Modifier = Modifier) {
   }
 }
 
+/** `.sb-metric`: 12/14 padding, 6 between label, value and note; the label and note are 11.5 at the regular weight. */
 @Composable
 private fun MetricCellView(cell: MetricCell, modifier: Modifier) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
+  val caption = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal)
   Column(modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    BasicText(cell.label, style = type.tXs.copy(color = colors.fgFaint), maxLines = 1)
+    BasicText(cell.label, style = caption, maxLines = 1)
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       val valueModifier = Modifier.alignByBaseline()
       if (cell.valueContent != null) {
-        Box(valueModifier) { cell.valueContent.invoke() }
+        Box(valueModifier) { CompositionLocalProvider(LocalContentColor provides colors.fg) { cell.valueContent.invoke() } }
       } else {
-        BasicText(cell.value, valueModifier, style = type.tLg.tabular().copy(color = colors.fg, fontWeight = FontWeight.Medium, letterSpacing = (-0.01).em), maxLines = 1)
+        BasicText(cell.value, valueModifier, style = metricValueStyle(), maxLines = 1)
       }
-      cell.unit?.let { BasicText(it, Modifier.alignByBaseline(), style = type.tSm.copy(color = colors.fgFaint), maxLines = 1) }
+      cell.unit?.let { BasicText(it, Modifier.alignByBaseline(), style = type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1) }
     }
-    cell.note?.let { BasicText(it, style = type.tXs.copy(color = colors.fgFaint)) }
+    cell.note?.let { BasicText(it, style = caption) }
   }
 }

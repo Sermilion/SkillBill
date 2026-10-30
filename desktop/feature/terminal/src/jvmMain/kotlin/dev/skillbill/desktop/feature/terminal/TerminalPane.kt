@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.terminal
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -72,7 +73,8 @@ private fun TerminalSurface(workspace: TerminalWorkspace, tab: TerminalTabUi) {
   when (val current = start) {
     // SwingPanel calls its factory once, so another session's widget needs a new panel.
     is TerminalStart.Started -> key(current.view) {
-      SwingPanel(factory = { current.view.component }, modifier = Modifier.fillMaxSize())
+      // `.sb-term-out` insets the output 10 px top and bottom, 14 px left and right, over the pane's bg-inset.
+      SwingPanel(factory = { current.view.component }, modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp))
       LaunchedEffect(current.view) { SwingUtilities.invokeLater(current.view::requestFocus) }
     }
     is TerminalStart.Failed -> LaunchedEffect(current) { workspace.startFailed(tab.id, current.message) }

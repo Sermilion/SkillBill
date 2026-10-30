@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.designsystem.component
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
@@ -12,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -46,19 +48,24 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
+import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.designsystem.menuSpec
 
-private val POPOVER_MIN_WIDTH = 220.dp
-private val POPOVER_MAX_WIDTH = 340.dp
-private val POPOVER_WINDOW_MARGIN = 12.dp
+private val POPOVER_MIN_WIDTH = SkillBillSize.popoverMin
+private val POPOVER_MAX_WIDTH = SkillBillSize.popoverMax
+// max-width: min(340px, 100vw - 24px)
+private val POPOVER_WIDTH_MARGIN = 12.dp
+// placePopover keeps the panel 8px inside the window.
+private val POPOVER_WINDOW_MARGIN = 8.dp
 
 @Composable
 fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset = DpOffset.Zero, width: Dp? = null, returnFocusTo: FocusRequester? = null, content: @Composable ColumnScope.() -> Unit) {
   val density = LocalDensity.current
   val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
   val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
-  val maxWidth = (windowWidth - POPOVER_WINDOW_MARGIN * 2).coerceAtLeast(0.dp)
+  val maxWidth = (windowWidth - POPOVER_WIDTH_MARGIN * 2).coerceAtLeast(0.dp)
   val maxHeight = (windowHeight - POPOVER_WINDOW_MARGIN * 2).coerceAtLeast(0.dp)
   val panelMaxWidth = (width ?: POPOVER_MAX_WIDTH).coerceAtLeast(0.dp).coerceAtMost(maxWidth)
   val panelMinWidth = if (width != null) panelMaxWidth else POPOVER_MIN_WIDTH.coerceAtMost(panelMaxWidth)
@@ -80,17 +87,22 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
     ) {
       val focusManager = LocalFocusManager.current
       LaunchedEffect(focusManager) { focusManager.moveFocus(FocusDirection.Next) }
+      // A visible = true AnimatedVisibility skips its enter transition, so start from a hidden state.
+      val appear = remember { MutableTransitionState(false).apply { targetState = true } }
+      val liftPx = with(density) { 2.dp.roundToPx() }
       AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(dev.skillbill.desktop.core.designsystem.menuSpec()) +
-          slideInVertically(dev.skillbill.desktop.core.designsystem.menuSpec()) { -2 } +
-          scaleIn(dev.skillbill.desktop.core.designsystem.menuSpec(), initialScale = .98f),
+        visibleState = appear,
+        enter = fadeIn(menuSpec()) +
+          slideInVertically(menuSpec()) { -liftPx } +
+          scaleIn(menuSpec(), initialScale = .98f),
       ) {
         Column(
           Modifier.widthIn(min = panelMinWidth, max = panelMaxWidth).heightIn(max = maxHeight)
+            .layeredShadow(SkillBillTheme.shadows.popover, shape)
             .background(SkillBillTheme.colors.bgOverlay, shape)
             .border(1.dp, SkillBillTheme.colors.borderStrong, shape)
-            .layeredShadow(SkillBillTheme.shadows.popover, shape)
+            // The menu's 4px padding sits inside this 1px border.
+            .padding(1.dp)
             .verticalScroll(rememberScrollState())
             .semantics { paneTitle = "Menu" }
             .focusGroup()

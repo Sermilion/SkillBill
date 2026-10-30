@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -48,6 +49,6 @@ fun SettingsGroup(
         row()
       }
     }
-    foot?.let { BasicText(it, style = type.tXs.copy(color = colors.fgFaint)) }
+    foot?.let { BasicText(it, style = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal)) }
   }
 }

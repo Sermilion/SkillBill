@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -45,6 +48,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -57,11 +61,12 @@ import dev.skillbill.desktop.core.designsystem.tabular
 
 private val idColumnWidth = 74.dp
 private val timeColumnWidth = 64.dp
-private val titleSummaryGap = 10.dp
+private val titleSummaryGap = 8.dp
 
 /**
  * [focused] is the list cursor the screen owns, drawn as the active fill and the accent bar; it is not OS focus.
  * [onContextMenu] receives the press position in row coordinates, or the row's start for Shift+F10 and the Menu key.
+ * [narrow] is the shell's narrow-window layout: the id column sizes to its text and the row's padding tightens to 16/12.
  */
 @Composable
 fun ListRow(
@@ -79,6 +84,7 @@ fun ListRow(
   selected: Boolean = false,
   faded: Boolean = false,
   divider: Boolean = true,
+  narrow: Boolean = false,
   onContextMenu: ((Offset) -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
@@ -112,11 +118,11 @@ fun ListRow(
       .onSizeChanged { rowSize = it }.hoverable(interaction).then(menu)
       .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
       .semantics(mergeDescendants = true) { this.selected = selected }
-      .padding(start = if (compact) 12.dp else 20.dp, end = if (compact) 12.dp else 16.dp),
+      .padding(start = if (compact) 12.dp else if (narrow) 16.dp else 20.dp, end = if (compact || narrow) 12.dp else 16.dp),
     horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    if (id != null) Box(if (compact) Modifier else Modifier.width(idColumnWidth)) { IdTag(id) }
+    if (id != null) Box(if (compact || narrow) Modifier else Modifier.width(idColumnWidth)) { IdTag(id) }
     status?.invoke()
     TitleSummary(
       title = { BasicText(title, style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -126,7 +132,9 @@ fun ListRow(
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, content = meta)
     if (time != null || timeContent != null) {
       Box(if (compact) Modifier else Modifier.width(timeColumnWidth), contentAlignment = Alignment.CenterEnd) {
-        timeContent?.invoke() ?: BasicText(time.orEmpty(), style = type.tSm.tabular().copy(color = colors.fgFaint, textAlign = TextAlign.End), maxLines = 1)
+        // `.sb-row-time` is faint for both the finished time and a live clock.
+        CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { timeContent?.invoke() }
+        if (timeContent == null) BasicText(time.orEmpty(), style = type.tSm.tabular().copy(color = colors.fgFaint, textAlign = TextAlign.End), maxLines = 1)
       }
     }
   }
@@ -134,17 +142,23 @@ fun ListRow(
 
 @Composable
 private fun TitleSummary(title: @Composable () -> Unit, summary: (@Composable () -> Unit)?, modifier: Modifier) {
+  // Title and summary share a baseline, as `.sb-row-ti` aligns them (`align-items: baseline`).
   Layout(content = { title(); summary?.invoke() }, modifier = modifier) { measurables, constraints ->
     val loose = constraints.copy(minWidth = 0)
     val titlePlaceable = measurables[0].measure(loose)
     val gap = titleSummaryGap.roundToPx()
     val remaining = (constraints.maxWidth - titlePlaceable.width - gap).coerceAtLeast(0)
     val summaryPlaceable = measurables.getOrNull(1)?.takeIf { remaining > 0 }?.measure(Constraints(maxWidth = remaining, maxHeight = constraints.maxHeight))
-    val height = maxOf(titlePlaceable.height, summaryPlaceable?.height ?: 0)
+    val titleBaseline = titlePlaceable[FirstBaseline].takeIf { it != AlignmentLine.Unspecified } ?: titlePlaceable.height
+    val summaryBaseline = summaryPlaceable?.let { p -> p[FirstBaseline].takeIf { it != AlignmentLine.Unspecified } ?: p.height } ?: 0
+    val baseline = maxOf(titleBaseline, summaryBaseline)
+    val titleY = baseline - titleBaseline
+    val summaryY = baseline - summaryBaseline
+    val height = maxOf(titleY + titlePlaceable.height, summaryPlaceable?.let { summaryY + it.height } ?: 0)
     val width = if (constraints.hasBoundedWidth) constraints.maxWidth else titlePlaceable.width + (summaryPlaceable?.let { gap + it.width } ?: 0)
     layout(width, height) {
-      titlePlaceable.placeRelative(0, (height - titlePlaceable.height) / 2)
-      summaryPlaceable?.placeRelative(titlePlaceable.width + gap, (height - summaryPlaceable.height) / 2)
+      titlePlaceable.placeRelative(0, titleY)
+      summaryPlaceable?.placeRelative(titlePlaceable.width + gap, summaryY)
     }
   }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -35,8 +36,10 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
 private val BUTTON_HEIGHT = 28.dp
 private val BUTTON_SMALL_HEIGHT = 24.dp
-private val BUTTON_PADDING = 10.dp
-private val BUTTON_SMALL_PADDING = 8.dp
+// `.sb-btn` pads 10px (8px small) inside a 1px border that every variant keeps, transparent or not.
+private val BUTTON_BORDER = 1.dp
+private val BUTTON_PADDING = 10.dp + BUTTON_BORDER
+private val BUTTON_SMALL_PADDING = 8.dp + BUTTON_BORDER
 private val BUTTON_GAP = 6.dp
 
 enum class SbButtonVariant { Secondary, Primary, Ghost, Danger, DangerSolid }
@@ -52,12 +55,13 @@ fun SbButton(
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   val interaction = remember { MutableInteractionSource() }
-  val hover = interaction.collectIsHoveredAsState().value
+  // `[disabled]` sets pointer-events: none, so a disabled button never shows its hover state.
+  val hover = interaction.collectIsHoveredAsState().value && enabled
   val bg = rememberHoverColor(hover, variant.background(colors, false), variant.background(colors, true)).value
   val fg = when (variant) {
     SbButtonVariant.Primary -> colors.accentFg
     SbButtonVariant.Danger -> colors.stFailed
-    SbButtonVariant.DangerSolid -> colors.fg
+    SbButtonVariant.DangerSolid -> Color.White
     SbButtonVariant.Ghost -> if (hover) colors.fg else colors.fgMuted
     SbButtonVariant.Secondary -> colors.fg
   }
@@ -67,7 +71,7 @@ fun SbButton(
         .alpha(if (enabled) 1f else .45f)
         .background(bg, shape)
         .then(if (variant == SbButtonVariant.Primary || variant == SbButtonVariant.Ghost || variant == SbButtonVariant.DangerSolid) Modifier
-        else Modifier.border(1.dp, if (variant == SbButtonVariant.Danger && hover) colors.stFailed.copy(alpha = .4f) else if (hover) colors.borderStrong else colors.border, shape))
+        else Modifier.border(BUTTON_BORDER, if (variant == SbButtonVariant.Danger && hover) colors.stFailed.copy(alpha = .4f) else if (hover) colors.borderStrong else colors.border, shape))
         .hoverable(interaction)
         .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
         .sbFocusRing(interaction, shape)
@@ -82,14 +86,17 @@ fun SbButton(
     ) {
       CompositionLocalProvider(LocalContentColor provides fg) {
         icon?.let {
+          // `.sb-btn .sb-icon` stays fg-muted on hover; only primary and the danger variants recolor it.
           val iconColor = when (variant) {
-            SbButtonVariant.Secondary -> if (hover) colors.fg else colors.fgMuted
-            SbButtonVariant.Ghost -> if (hover) colors.fg else colors.fgMuted
+            SbButtonVariant.Secondary, SbButtonVariant.Ghost -> colors.fgMuted
             else -> fg
           }
           CompositionLocalProvider(LocalContentColor provides iconColor) { SbIcon(it, SbIconSize.Sm) }
         }
-        label?.let { BasicText(it, style = if (size == SbControlSize.Small) SkillBillTheme.type.tXs.copy(color = fg) else SkillBillTheme.type.tSmMedium.copy(color = fg)) }
+        label?.let {
+          val style = if (size == SbControlSize.Small) SkillBillTheme.type.tXs else SkillBillTheme.type.tSmMedium
+          BasicText(it, style = style.copy(color = fg, lineHeight = 1.em), maxLines = 1, softWrap = false)
+        }
         shortcut?.let { Kbd(it.split(' ').filter(String::isNotBlank), onAccent = variant == SbButtonVariant.Primary) }
       }
     }
@@ -103,5 +110,5 @@ private fun SbButtonVariant.background(colors: dev.skillbill.desktop.core.design
   SbButtonVariant.Primary -> if (hovered) colors.accentHover else colors.accent
   SbButtonVariant.Ghost -> if (hovered) colors.bgHover else Color.Transparent
   SbButtonVariant.Danger -> if (hovered) colors.stFailed.copy(alpha = .10f) else colors.bgRaised
-  SbButtonVariant.DangerSolid -> if (hovered) lerp(colors.fg, colors.stFailed, .88f) else colors.stFailed
+  SbButtonVariant.DangerSolid -> if (hovered) lerp(Color.White, colors.stFailed, .88f) else colors.stFailed
 }

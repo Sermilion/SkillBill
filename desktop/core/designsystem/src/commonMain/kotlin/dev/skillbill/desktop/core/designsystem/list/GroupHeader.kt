@@ -40,7 +40,8 @@ fun GroupHeader(
   ) {
     lead?.invoke()
     BasicText(label, Modifier.weight(1f, fill = false), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    BasicText(count.toString(), style = type.tBase.tabular().copy(color = colors.fgFaint))
+    // The count inherits the header's 500 weight, as `.sb-gh .n`.
+    BasicText(count.toString(), style = type.tBaseMedium.tabular().copy(color = colors.fgFaint), maxLines = 1)
     if (end != null) {
       Spacer(Modifier.weight(1f))
       Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically, content = end)

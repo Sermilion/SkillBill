@@ -4,8 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,17 +29,17 @@ fun FindingRow(title: String, severity: String? = null, ref: String? = null, loc
   val dividerColor = SkillBillTheme.colors.borderSubtle
   val locationFontFamily = SkillBillTheme.type.monoSm.fontFamily
   Row(Modifier.drawBehind { if (showDivider) drawLine(dividerColor, Offset.Zero, Offset(size.width, 0f), 1.dp.toPx()) }.padding(horizontal = 12.dp, vertical = 9.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-    severity?.let { BasicText(it.uppercase(), Modifier.defaultMinSize(minWidth = FINDING_SEVERITY_WIDTH).padding(top = 2.dp), style = SkillBillTheme.type.t2xs.copy(color = severityColor(it), fontWeight = FontWeight.SemiBold, letterSpacing = .04f.em), maxLines = 1) }
-    ref?.let { androidx.compose.foundation.layout.Box(Modifier.padding(top = 2.dp)) { IdTag(it) } }
+    severity?.let { BasicText(it.uppercase(), Modifier.width(FINDING_SEVERITY_WIDTH), style = SkillBillTheme.type.t2xs.copy(color = severityColor(it), fontWeight = FontWeight.SemiBold, letterSpacing = .04f.em, lineHeight = 1.6.em), maxLines = 1) }
+    ref?.let { IdTag(it, Modifier.padding(top = 2.dp)) }
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-      BasicText(title, style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg))
+      BasicText(title, style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.45.em))
       if (location != null || meta != null) {
         val text = buildAnnotatedString {
           if (location != null) withStyle(SpanStyle(fontFamily = locationFontFamily)) { append(location) }
           if (location != null && meta != null) append(" · ")
           meta?.let(::append)
         }
-        BasicText(text, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
+        BasicText(text, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em))
       }
     }
     state?.let { SbLabel(it, SbLabelStyle.Dot(stateColor ?: SkillBillTheme.colors.fgFaint)) }

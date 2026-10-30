@@ -61,12 +61,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Kbd
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.composite.runAfterCurrentEvent
@@ -125,6 +125,8 @@ fun CommandPalette(
       Modifier.width(SkillBillSize.commandMenu.coerceAtMost((windowWidth - paletteWindowMargin).coerceAtLeast(0.dp)))
         .layeredShadow(SkillBillTheme.shadows.modal, shape).background(colors.bgOverlay, shape)
         .border(1.dp, colors.borderStrong, shape).clip(shape)
+        // Context, input, list and footer sit inside this 1px border.
+        .padding(1.dp)
         .semantics { paneTitle = "Command palette" }
         .onPreviewKeyEvent {
           if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -142,11 +144,11 @@ fun CommandPalette(
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, content = context)
       }
       Box(Modifier.fillMaxWidth().height(paletteInputHeight).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
-        if (query.isEmpty()) BasicText(placeholder, style = type.tLg.copy(color = colors.fgFaint), maxLines = 1)
+        if (query.isEmpty()) BasicText(placeholder, style = type.tLg.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1)
         BasicTextField(
           query, onQueryChange,
           Modifier.fillMaxWidth().focusRequester(input).onFocusChanged { inputFocused = it.isFocused }.semantics { contentDescription = placeholder },
-          textStyle = type.tLg.copy(color = colors.fg),
+          textStyle = type.tLg.copy(color = colors.fg, lineHeight = 1.em),
           singleLine = true,
           cursorBrush = SolidColor(colors.fg),
         )
@@ -169,7 +171,8 @@ fun CommandPalette(
 private fun FooterHint(keys: String, label: String) {
   Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
     Kbd(keys)
-    BasicText(label, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint))
+    // `.sb-cmdk-foot` sets only font-size, so the weight stays 400.
+    BasicText(label, style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal), maxLines = 1)
   }
 }
 
@@ -214,7 +217,7 @@ fun CommandList(groups: List<CommandGroup>, highlight: Int, onRun: (String) -> U
       var flatIndex = 0
       visible.forEachIndexed { groupIndex, group ->
         item(key = "head:$groupIndex") {
-          BasicText(group.head, Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 6.dp), style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Medium))
+          BasicText(group.head, Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 6.dp), style = SkillBillTheme.type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Medium, lineHeight = 1.em), maxLines = 1)
         }
         group.items.forEach { command ->
           val index = flatIndex++
@@ -229,11 +232,13 @@ fun CommandList(groups: List<CommandGroup>, highlight: Int, onRun: (String) -> U
 private fun CommandRow(item: CommandItem, highlighted: Boolean, onRun: () -> Unit, pointerLive: Boolean, onHover: () -> Unit) {
   val colors = SkillBillTheme.colors
   val interaction = remember { MutableInteractionSource() }
-  val hovered = interaction.collectIsHoveredAsState().value
+  // `[disabled]` sets pointer-events: none, so hovering a disabled command never moves the highlight.
+  val hovered = interaction.collectIsHoveredAsState().value && item.enabled
   LaunchedEffect(hovered, pointerLive) { if (hovered && pointerLive) onHover() }
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  val fill = rememberHoverColor(highlighted, Color.Transparent, colors.bgActive).value
-  val fg = when { item.danger -> colors.stFailed; highlighted -> colors.fg; else -> colors.fg2 }
+  // `.sb-menu-item` declares no transition.
+  val fill = if (highlighted && item.enabled) colors.bgActive else Color.Transparent
+  val fg = when { item.danger -> colors.stFailed; highlighted && item.enabled -> colors.fg; else -> colors.fg2 }
   val iconColor = if (item.danger) colors.stFailed else colors.fgMuted
   Row(
     Modifier.fillMaxWidth().height(40.dp).background(fill, shape).hoverable(interaction)
@@ -244,7 +249,7 @@ private fun CommandRow(item: CommandItem, highlighted: Boolean, onRun: () -> Uni
     verticalAlignment = Alignment.CenterVertically,
   ) {
     item.icon?.let { CompositionLocalProvider(LocalContentColor provides iconColor) { SbIcon(it) } }
-    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg, lineHeight = 1.em), maxLines = 1, overflow = TextOverflow.Ellipsis)
     item.shortcut?.let { Kbd(it) }
   }
 }

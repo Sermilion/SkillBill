@@ -6,14 +6,14 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -38,7 +40,16 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
-/** [editor] renders in place under the row while [expanded]; [enabled] false makes the row read-only. */
+private val phaseColumnWidth = 156.dp
+private val settingValueMaxWidth = 280.dp
+
+/**
+ * Two layouts share one row. Without [label] it is the model-matrix row: [key] in a 156 dp mono column, the
+ * [tier] badge, the resolved [value], tags and an edit icon, 36 dp tall. With [label] it reads like a setting
+ * row: [label] and [description] on the left, the mono [value] on the right. [editor] renders in place under the
+ * row while [expanded]; [enabled] false makes the row read-only. [override] adds the "override" tag,
+ * [tierChanged] the "tier changed" tag, and [emphasized] draws the value in the foreground color.
+ */
 @Composable
 fun ConfigRow(
   key: String,
@@ -47,7 +58,10 @@ fun ConfigRow(
   modifier: Modifier = Modifier,
   expanded: Boolean = false,
   override: Boolean = false,
-  defaultValue: String? = null,
+  emphasized: Boolean = override,
+  tierChanged: Boolean = false,
+  label: String? = null,
+  description: String? = null,
   tier: Tier? = null,
   enabled: Boolean = true,
   tags: @Composable RowScope.() -> Unit = {},
@@ -59,77 +73,58 @@ fun ConfigRow(
   val interaction = remember { MutableInteractionSource() }
   val hovered = enabled && interaction.collectIsHoveredAsState().value
   val fill = rememberHoverColor(hovered, if (expanded) colors.bgActive else Color.Transparent, if (expanded) colors.bgActive else colors.bgHover).value
+  val interactive = if (enabled) {
+    Modifier.hoverable(interaction)
+      .clickable(interaction, indication = null, onClickLabel = "Edit ${label ?: key}", role = Role.Button, onClick = onToggle)
+      .expandSemantics(expanded)
+  } else Modifier
+  val trailing: @Composable RowScope.() -> Unit = {
+    if (override) SbLabel("override", SbLabelStyle.Tint(colors.accent))
+    if (tierChanged) SbLabel("tier changed")
+    tags()
+    if (enabled) CompositionLocalProvider(LocalContentColor provides colors.fg) {
+      SbIcon(if (expanded) LucideIcons.chevronUp else LucideIcons.pencil, SbIconSize.Sm)
+    }
+  }
   Column(modifier.fillMaxWidth()) {
-    BoxWithConstraints(
-      Modifier.fillMaxWidth().heightIn(min = SkillBillSize.row).background(fill)
-        .then(
-          if (enabled) Modifier.hoverable(interaction)
-            .clickable(interaction, indication = null, onClickLabel = "Edit $key", role = Role.Button, onClick = onToggle)
-            .expandSemantics(expanded)
-          else Modifier,
+    if (label == null) {
+      Row(
+        Modifier.fillMaxWidth().height(SkillBillSize.row).background(fill).then(interactive)
+          .padding(start = 16.dp, end = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        BasicText(
+          key, Modifier.width(phaseColumnWidth),
+          style = type.tSm.copy(fontFamily = mono, fontWeight = FontWeight.Medium, color = colors.fg),
+          maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
-    ) {
-      val compact = maxWidth < 720.dp
-      if (compact) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          BasicText(key, Modifier.fillMaxWidth(), style = type.tSm.copy(fontFamily = mono, fontWeight = FontWeight.Medium, color = colors.fg))
-          Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            tier?.let { TierBadge(it) }
-            BasicText(
-              value, Modifier.weight(1f),
-              style = type.tSm.copy(fontFamily = mono, color = if (override) colors.fg else colors.fgMuted),
-              maxLines = 1,
-              overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            )
-            if (override) SbLabel("override", SbLabelStyle.Tint(colors.accent))
-            tags()
-            if (enabled) CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
-              SbIcon(if (expanded) LucideIcons.chevronUp else LucideIcons.pencil, SbIconSize.Sm)
-            }
-          }
-          defaultValue?.let {
-            BasicText("default $it", Modifier.fillMaxWidth(), style = type.t2xs.copy(fontFamily = mono, color = colors.fgFaint))
-          }
+        tier?.let { TierBadge(it) }
+        BasicText(
+          value, Modifier.weight(1f),
+          style = type.tSm.copy(fontFamily = mono, fontWeight = FontWeight.Normal, color = if (emphasized) colors.fg else colors.fgMuted),
+          maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+        trailing()
+      }
+    } else {
+      Row(
+        Modifier.fillMaxWidth().background(fill).then(interactive).padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+          BasicText(label, style = type.tBaseMedium.copy(color = colors.fg))
+          description?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted, lineHeight = 1.45.em)) }
         }
-      } else {
-        Row(
-          Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
-          verticalAlignment = Alignment.Top,
-        ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+          tier?.let { TierBadge(it) }
           BasicText(
-            key,
-            Modifier.weight(0.8f, fill = false).widthIn(min = 120.dp, max = 320.dp),
-            style = type.tSm.copy(fontFamily = mono, fontWeight = FontWeight.Medium, color = colors.fg),
+            value, Modifier.widthIn(max = settingValueMaxWidth),
+            style = type.tSm.copy(fontFamily = mono, fontWeight = FontWeight.Normal, color = if (emphasized) colors.fg else colors.fgFaint),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
           )
-          Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(
-              Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(10.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              tier?.let { TierBadge(it) }
-              BasicText(
-                value, Modifier.weight(1f),
-                style = type.tSm.copy(fontFamily = mono, color = if (override) colors.fg else colors.fgMuted),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-              )
-              if (override) SbLabel("override", SbLabelStyle.Tint(colors.accent))
-              tags()
-              if (enabled) CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
-                SbIcon(if (expanded) LucideIcons.chevronUp else LucideIcons.pencil, SbIconSize.Sm)
-              }
-            }
-            defaultValue?.let {
-              BasicText("default $it", Modifier.fillMaxWidth(), style = type.t2xs.copy(fontFamily = mono, color = colors.fgFaint))
-            }
-          }
+          trailing()
         }
       }
     }

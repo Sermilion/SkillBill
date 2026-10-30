@@ -10,19 +10,21 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.Sidebar
 import dev.skillbill.desktop.core.designsystem.navigation.SidebarItem
@@ -44,27 +46,28 @@ fun SettingsScreen(
 ) {
   val colors = SkillBillTheme.colors
   val groups = pages.pages.groupBy { it.contribution.group }
-  val expanded = remember { mutableStateMapOf<String, Boolean>().apply { groups.keys.forEach { put(it, true) } } }
   val selected = pages.pages.firstOrNull { it.contribution.id == route.page }
   val shape = RoundedCornerShape(SkillBillRadius.lg)
   Row(Modifier.fillMaxSize().background(colors.bgFrame)) {
     Sidebar(
       top = {
-        SbButton("Back to app", shell::backToApp, variant = SbButtonVariant.Ghost, icon = dev.skillbill.desktop.core.designsystem.icon.LucideIcons.arrowLeft, shortcut = "esc")
+        Column(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 8.dp)) {
+          SbButton("Back to app", shell::backToApp, Modifier.fillMaxWidth(), variant = SbButtonVariant.Ghost, icon = LucideIcons.arrowLeft, shortcut = "esc")
+        }
       },
-      footer = { SidebarItem("Keyboard shortcuts", shell::openKeyboardShortcuts, shortcut = "?") },
+      footer = {},
       items = {
         groups.forEach { (group, groupPages) ->
-          SidebarSection(group, expanded[group] != false, { expanded[group] = !(expanded[group] ?: true) }) {
+          SidebarSection(group, expanded = true, onToggle = {}, collapsible = false) {
             groupPages.forEach { page ->
-              SidebarItem(page.contribution.label, { onSelectPage(page.contribution.id) }, on = page.contribution.id == route.page)
+              SidebarItem(page.contribution.label, { onSelectPage(page.contribution.id) }, icon = settingsPageIcon(page.contribution.id), on = page.contribution.id == route.page)
             }
           }
         }
       },
     )
     Box(
-      Modifier.weight(1f).fillMaxHeight().padding(8.dp).clip(shape).background(colors.bgPanel)
+      Modifier.weight(1f).fillMaxHeight().padding(top = 8.dp, end = 8.dp, bottom = 8.dp).clip(shape).background(colors.bgPanel)
         .border(1.dp, colors.borderSubtle, shape),
     ) {
       Column(Modifier.fillMaxSize()) {
@@ -74,14 +77,32 @@ fun SettingsScreen(
             Crumb(selected?.contribution?.label ?: "General"),
           ),
         )
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-          when (route.page) {
-            SettingsPageId.App -> GeneralPage(state, sessionState, onAction)
-            SettingsPageId.Notifications -> NotificationsPage(state, onAction)
-            else -> selected?.owner?.Content(route)
+        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+          Column(
+            Modifier.align(Alignment.TopCenter).widthIn(max = SETTINGS_PAGE_MAX_WIDTH).fillMaxWidth()
+              .padding(start = 40.dp, top = 40.dp, end = 40.dp, bottom = 72.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+          ) {
+            when (route.page) {
+              SettingsPageId.App -> GeneralPage(state, sessionState, onAction)
+              SettingsPageId.Notifications -> NotificationsPage(state, onAction)
+              else -> selected?.owner?.Content(route)
+            }
           }
         }
       }
     }
   }
+}
+
+private val SETTINGS_PAGE_MAX_WIDTH = 720.dp
+
+private fun settingsPageIcon(id: SettingsPageId): ImageVector? = when (id.id) {
+  SettingsPageId.App.id -> LucideIcons.user
+  SettingsPageId.Notifications.id -> LucideIcons.bell
+  "models" -> LucideIcons.cpu
+  "compaction" -> LucideIcons.gauge
+  "project" -> LucideIcons.repo
+  "telemetry" -> LucideIcons.shield
+  else -> null
 }

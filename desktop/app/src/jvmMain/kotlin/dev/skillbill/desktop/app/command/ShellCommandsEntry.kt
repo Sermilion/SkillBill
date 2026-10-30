@@ -57,7 +57,7 @@ class ShellCommandsEntry(
       ShellCommand(CommandItem("refresh", "Refresh", LucideIcons.refresh), board::refresh),
     )
     val work = boardState.view.value.lastLoaded?.items.orEmpty().map { item ->
-      val key = item.issueKey ?: item.id
+      val key = rowKey(item)
       ShellCommand(CommandItem("open:${item.id}", "$key ${item.title} ${item.repositoryName}")) { navigator.navigate(DetailRoute(item)) }
     }
     val config = listOf(

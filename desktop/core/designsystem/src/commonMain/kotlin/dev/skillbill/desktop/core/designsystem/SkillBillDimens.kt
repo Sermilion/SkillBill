@@ -35,5 +35,8 @@ object SkillBillSize {
   val commandMenu = 640.dp
   val dialog = 460.dp
   val toast = 340.dp
+  val emptyStateBody = 340.dp
+  val popoverMin = 220.dp
+  val popoverMax = 340.dp
   val trayPopover = 360.dp
 }

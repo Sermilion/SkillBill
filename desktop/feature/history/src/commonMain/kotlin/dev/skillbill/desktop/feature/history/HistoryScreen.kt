@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -20,6 +21,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillSpace
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
@@ -48,14 +50,17 @@ import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
+import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.status.statusKind
 
 private val FILTER_WIDTH = 200.dp
+private val DURATION_WIDTH = 56.dp
 
+/** The retention as Settings words it ("6h", "24h", "7d"), for "Finished within 24h". */
 internal fun retentionText(window: HistoryWindow): String = when (window) {
-  HistoryWindow.SixHours -> "6 hours"
-  HistoryWindow.Day -> "24 hours"
-  HistoryWindow.Week -> "7 days"
+  HistoryWindow.SixHours -> "6h"
+  HistoryWindow.Day -> "24h"
+  HistoryWindow.Week -> "7d"
 }
 
 /** The id a row shows: the issue key for goals, the phase or operation id otherwise, as the prototype's `rowKey`. */
@@ -73,40 +78,44 @@ internal class HistoryScreenHost(val specsOpen: Boolean, val terminalOpen: Boole
 
 @Composable
 internal fun HistoryScreen(state: HistoryUiState, filterFocus: FocusRequester, host: HistoryScreenHost, onAction: (HistoryAction) -> Unit) {
+  // Narrow windows drop the header's middle slot, as `.sb-vh-mid` hides below 760 px.
+  val narrow = LocalShellLayout.current.drawerMode
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = listOf(Crumb("History")),
-      middle = {
-        Row(horizontalArrangement = Arrangement.spacedBy(SkillBillSpace.s3), verticalAlignment = Alignment.CenterVertically) {
-          ViewTabs(HistoryTab.entries.map { ViewTab(it, it.label) }, state.tab) { onAction(HistoryAction.ChooseTab(it)) }
-          SbInput(
-            state.filter,
-            { onAction(HistoryAction.FilterChanged(it)) },
-            Modifier.width(FILTER_WIDTH).focusRequester(filterFocus).gatesShortcutsWhileFocused(),
-            placeholder = "Filter history",
-            leadingIcon = LucideIcons.search,
-          )
+      middle = if (narrow) null else {
+        {
+          Row(horizontalArrangement = Arrangement.spacedBy(SkillBillSpace.s3), verticalAlignment = Alignment.CenterVertically) {
+            ViewTabs(HistoryTab.entries.map { ViewTab(it, it.label) }, state.tab) { onAction(HistoryAction.ChooseTab(it)) }
+            SbInput(
+              state.filter,
+              { onAction(HistoryAction.FilterChanged(it)) },
+              Modifier.width(FILTER_WIDTH).focusRequester(filterFocus).gatesShortcutsWhileFocused(),
+              placeholder = "Filter history",
+              leadingIcon = LucideIcons.search,
+            )
+          }
         }
       },
       actions = {
         if ((state.board as? BoardState.Loaded)?.stale == true) StaleIndicator()
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(HistoryAction.Refresh) })
-        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, selected = host.specsOpen)
-        SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, selected = host.terminalOpen)
+        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
+        SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
       },
     )
     Box(Modifier.weight(1f)) {
       when (val board = state.board) {
         BoardState.Loading -> Centered { EmptyState("Loading your work", LucideIcons.inbox) }
         is BoardState.Failed -> Centered { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
-        is BoardState.Loaded -> HistoryBody(state, board, onAction)
+        is BoardState.Loaded -> HistoryBody(state, board, narrow, onAction)
       }
     }
   }
 }
 
 @Composable
-private fun HistoryBody(state: HistoryUiState, board: BoardState.Loaded, onAction: (HistoryAction) -> Unit) {
+private fun HistoryBody(state: HistoryUiState, board: BoardState.Loaded, narrow: Boolean, onAction: (HistoryAction) -> Unit) {
   val retention = retentionText(state.window)
   val rows = state.rows
   if (rows.isEmpty()) {
@@ -129,7 +138,7 @@ private fun HistoryBody(state: HistoryUiState, board: BoardState.Loaded, onActio
     groupHeader(key = "header", label = "Finished within $retention", count = rows.size)
     items(rows, key = { it.id }) { item ->
       Box {
-        HistoryRow(item, focused = item.id == state.focusedId, state, onAction)
+        HistoryRow(item, focused = item.id == state.focusedId, state, narrow, onAction)
         if (state.menu?.id == item.id) {
           val close = { onAction(HistoryAction.CloseMenu) }
           ShellLayer(close)
@@ -143,7 +152,7 @@ private fun HistoryBody(state: HistoryUiState, board: BoardState.Loaded, onActio
 }
 
 @Composable
-private fun HistoryRow(item: WorkItem, focused: Boolean, state: HistoryUiState, onAction: (HistoryAction) -> Unit) {
+private fun HistoryRow(item: WorkItem, focused: Boolean, state: HistoryUiState, narrow: Boolean, onAction: (HistoryAction) -> Unit) {
   val finishedAt = item.finishedAt
   val renderedAt = state.renderedAt
   ListRow(
@@ -153,11 +162,17 @@ private fun HistoryRow(item: WorkItem, focused: Boolean, state: HistoryUiState, 
     status = { StatusIcon(item.statusKind(), null) },
     summary = kindCaption(item.kind),
     meta = {
-      SbLabel(item.repositoryName, SbLabelStyle.Dot(SkillBillTheme.colors.dataColorFor(item.repositoryName)))
-      SbClock(item.activeDurationMs, item.activeDurationAsOf, live = false)
+      if (!narrow) SbLabel(item.repositoryName, SbLabelStyle.Dot(SkillBillTheme.colors.dataColorFor(item.repositoryName)))
+      // Total run time: a faint 56 dp right-aligned cell, as the prototype's history meta.
+      Box(Modifier.width(DURATION_WIDTH), contentAlignment = Alignment.CenterEnd) {
+        CompositionLocalProvider(LocalContentColor provides SkillBillTheme.colors.fgFaint) {
+          SbClock(item.activeDurationMs, item.activeDurationAsOf, live = false)
+        }
+      }
     },
     time = if (finishedAt != null && renderedAt != null) finishedTimeText(finishedAt, renderedAt) else null,
     focused = focused,
+    narrow = narrow,
     onContextMenu = { _: Offset -> onAction(HistoryAction.OpenMenu(item)) },
   )
 }

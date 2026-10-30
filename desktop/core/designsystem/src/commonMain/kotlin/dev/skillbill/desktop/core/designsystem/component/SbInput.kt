@@ -71,7 +71,8 @@ fun SbInput(
     enabled = enabled,
     singleLine = true,
     textStyle = (if (mono) SkillBillTheme.type.monoSm else SkillBillTheme.type.tBase).copy(color = colors.fg),
-    cursorBrush = SolidColor(colors.accent),
+    // caret-color defaults to the text color.
+    cursorBrush = SolidColor(colors.fg),
     interactionSource = interaction,
     modifier = modifier.height(INPUT_HEIGHT).background(colors.bgInset, shape)
       .drawBehind {
@@ -86,10 +87,11 @@ fun SbInput(
           )
         }
       }
+      // `.sb-input` sets outline: none; focus shows through the border and the 3px tint ring only.
       .border(1.dp, baseBorder, shape)
-      .sbFocusRing(interaction, shape)
       .semantics { if (!enabled) disabled() }
-      .padding(start = if (leadingIcon == null) 10.dp else 9.dp, end = 10.dp)
+      // 10px padding inside the 1px border; a leading icon sits 9px from the outer edge.
+      .padding(start = if (leadingIcon == null) 11.dp else 9.dp, end = 11.dp)
       .onPreviewKeyEvent { event ->
         if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && enabled && onSubmit != null) {
           onSubmit()
@@ -100,7 +102,8 @@ fun SbInput(
       Row(
         Modifier.fillMaxHeight(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (leadingIcon == null) 8.dp else 7.dp),
+        // With an icon the text starts at padding-left 30px + 1px border: 9 + 14 + 8.
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
           leadingIcon?.let { SbIcon(it, SbIconSize.Sm) }

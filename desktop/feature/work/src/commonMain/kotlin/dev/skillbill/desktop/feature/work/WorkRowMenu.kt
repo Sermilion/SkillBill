@@ -6,6 +6,7 @@ import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.input.ShellLayer
@@ -39,7 +40,10 @@ internal fun WorkRowMenu(
       )
       add(entry("Pause", LucideIcons.stop, "⇧ P", danger = true, enabled = state.canPauseNow(item)) { onAction(WorkAction.PauseNow(item)) })
     }
-    add(entry(options?.launchLabel ?: "Resume", LucideIcons.play, "R", enabled = state.canLaunch(item)) { onAction(WorkAction.Launch(item)) })
+    // Resume / Run again is listed only for resumable work (not active, not completed), as the prototype's row menu.
+    if (item.lifecycle != Lifecycle.Active && item.lifecycle != Lifecycle.Terminal) {
+      add(entry(options?.launchLabel ?: "Resume", LucideIcons.play, "R", enabled = state.canLaunch(item)) { onAction(WorkAction.Launch(item)) })
+    }
     add(entry("Cancel", LucideIcons.x, danger = true, enabled = state.canCancel(item)) { onAction(WorkAction.Cancel(item)) })
   }
   ShellLayer(close)

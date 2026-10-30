@@ -36,9 +36,11 @@ fun SbIconButton(
 ) {
   require(label.isNotBlank())
   val interaction = remember { MutableInteractionSource() }
-  val hovered = interaction.collectIsHoveredAsState().value
+  val hovered = interaction.collectIsHoveredAsState().value && enabled
   val colors = SkillBillTheme.colors
   val background = rememberHoverColor(hovered || selected, if (boxed) colors.bgRaised else androidx.compose.ui.graphics.Color.Transparent, colors.bgHover).value
+  // `.sb-ibtn` transitions both background and color over --dur-fast.
+  val iconColor = rememberHoverColor(hovered || selected, colors.fgMuted, colors.fg).value
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   val dimension = if (size == SbControlSize.Small) 24.dp else 28.dp
   val content: @Composable () -> Unit = {
@@ -55,7 +57,7 @@ fun SbIconButton(
         },
       contentAlignment = Alignment.Center,
     ) {
-      CompositionLocalProvider(LocalContentColor provides if (hovered || selected) colors.fg else colors.fgMuted) {
+      CompositionLocalProvider(LocalContentColor provides iconColor) {
         SbIcon(icon, if (size == SbControlSize.Small) SbIconSize.Sm else SbIconSize.Md)
       }
     }

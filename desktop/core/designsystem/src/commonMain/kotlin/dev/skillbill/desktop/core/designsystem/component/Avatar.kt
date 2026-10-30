@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
 private object AgentIds { const val Claude = "claude"; const val Codex = "codex"; const val Cursor = "cursor"; const val Junie = "junie" }
@@ -50,7 +51,7 @@ fun Avatar(agentId: String, small: Boolean = false, tooltip: String? = agentId) 
   val diameter = if (small) 16.dp else 18.dp
   val content: @Composable () -> Unit = {
     Box(Modifier.size(diameter).background(color.copy(alpha = .22f), CircleShape).semantics { contentDescription = agentId }, contentAlignment = Alignment.Center) {
-      BasicText(agentInitials(agentId), style = SkillBillTheme.type.tXs.copy(color = color, fontWeight = FontWeight.SemiBold, fontSize = if (small) 8.5.sp else 9.sp, letterSpacing = (-.02).em), maxLines = 1)
+      BasicText(agentInitials(agentId), style = SkillBillTheme.type.tXs.copy(color = color, fontWeight = FontWeight.SemiBold, fontSize = if (small) 8.5.sp else 9.sp, letterSpacing = (-.02).em, lineHeight = 1.em), maxLines = 1, softWrap = false)
     }
   }
   if (tooltip != null) SbTooltip(tooltip) { content() } else content()
@@ -58,7 +59,7 @@ fun Avatar(agentId: String, small: Boolean = false, tooltip: String? = agentId) 
 
 @Composable
 fun RepoIcon(name: String, color: Color = SkillBillTheme.colors.dataColorFor(name)) {
-  Box(Modifier.size(16.dp).background(color.copy(alpha = .18f), RoundedCornerShape(4.dp)).semantics { contentDescription = name }, contentAlignment = Alignment.Center) {
-    BasicText(name.take(1).uppercase(), style = SkillBillTheme.type.tXs.copy(color = color, fontWeight = FontWeight.Bold, fontSize = 9.sp), maxLines = 1)
+  Box(Modifier.size(16.dp).background(color.copy(alpha = .18f), RoundedCornerShape(SkillBillRadius.xs)).semantics { contentDescription = name }, contentAlignment = Alignment.Center) {
+    BasicText(name.take(1).uppercase(), style = SkillBillTheme.type.tXs.copy(color = color, fontWeight = FontWeight.Bold, fontSize = 9.sp, lineHeight = 1.em), maxLines = 1, softWrap = false)
   }
 }

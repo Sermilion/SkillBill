@@ -47,8 +47,8 @@ class CommandCatalog(
   }
 
   private fun itemSection(item: WorkItem, context: CommandContext, runOptions: RunOptions?, reservations: Set<String>): CommandSection {
-    val key = item.issueKey ?: item.id
-    val reserved = key in reservations
+    val key = rowKey(item)
+    val reserved = (item.issueKey ?: item.id) in reservations
     val subject = FeedbackSubject(key, runOptions?.launchLabel, runOptions?.agentId)
     val commands = buildList {
       if ((context.topRoute as? DetailRoute)?.item?.id != item.id) {

@@ -1,10 +1,12 @@
 package dev.skillbill.desktop.feature.tray
 
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -61,10 +63,11 @@ fun TrayPopoverContent(
     },
     footer = {
       SbButton("Open Skill Bill", onClick = onOpen, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
-      Spacer(Modifier.weight(1f))
-      SbIconButton(LucideIcons.refresh, "Refresh", onClick = { onAction(TrayAction.Refresh) })
-      SbIconButton(LucideIcons.sliders, "Settings", onClick = onSettings)
-      SbButton("Quit", onClick = onQuit, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+      Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        SbIconButton(LucideIcons.refresh, "Refresh", onClick = { onAction(TrayAction.Refresh) }, size = SbControlSize.Small)
+        SbIconButton(LucideIcons.sliders, "Settings", onClick = onSettings, size = SbControlSize.Small)
+        SbButton("Quit", onClick = onQuit, variant = SbButtonVariant.Ghost, size = SbControlSize.Small)
+      }
     },
     headerEnd = if (state.stale) ({ StaleIndicator() }) else null,
   ) {
@@ -94,7 +97,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.workRows(items: List<
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.finishedRows(items: List<WorkItem>, onAction: (TrayAction) -> Unit) {
   if (items.isNotEmpty()) {
-    BasicText("Finished in the last hour", Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), style = SkillBillTheme.type.tXs)
+    // A menu head (`.sb-menu-head`) with the tray's 8/12/4 padding.
+    BasicText(
+      "Finished in the last hour",
+      Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+      style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint),
+    )
     items.forEach { TrayRow(it, true) { onAction(TrayAction.Select(it)) } }
   }
 }
@@ -114,15 +122,37 @@ private fun TrayRow(item: WorkItem, finished: Boolean, onClick: () -> Unit) {
     onClick = onClick,
     id = if (item.kind == WorkKind.Goal) item.issueKey ?: item.id else item.control.phaseId ?: item.issueKey ?: item.id,
     status = { StatusIcon(kind, progress?.let { it.done.toFloat() / it.total.coerceAtLeast(1) }) },
-    summary = when { item.pauseRequested -> "Pause requested"; item.lifecycle == Lifecycle.Active -> item.stepLabel; else -> item.lifecycle.name.lowercase() },
+    summary = when {
+      item.pauseRequested -> "Pause requested"
+      item.lifecycle == Lifecycle.Active -> trayStepText(item, planning)
+      else -> lifecycleWord(item.lifecycle)
+    },
     meta = {
       if (item.kind == WorkKind.Goal && progress != null) ProgressRing(progress.done, progress.total, if (planning) ProgressRingTone.PlansSaved else ProgressRingTone.Subtasks, showText = false)
     },
     time = item.finishedAt?.let { trayFinishedTimeText(it, Clock.System.now()) },
-    timeContent = if (item.finishedAt == null) ({ SbClock(item.activeDurationMs, item.activeDurationAsOf, live = true, showSeconds = false) }) else null,
+    timeContent = if (item.finishedAt == null) ({ SbClock(item.activeDurationMs, item.activeDurationAsOf, live = true, showSeconds = item.kind != WorkKind.Goal) }) else null,
     compact = true,
     faded = finished,
   )
+}
+
+/** The step a live row shows, as the Work board's step label: "n/m plans saved" while planning, else the step and its execution. */
+private fun trayStepText(item: WorkItem, planning: Boolean): String {
+  val planned = item.planningProgress
+  return if (planning && planned != null) "${planned.done}/${planned.total} plans saved"
+  else item.stepLabel + item.phaseExecutionLabel?.let { " · $it" }.orEmpty()
+}
+
+/** The lifecycle's display word in lower case, as the prototype's `LIFE` labels: Terminal reads "completed". */
+private fun lifecycleWord(lifecycle: Lifecycle): String = when (lifecycle) {
+  Lifecycle.Active -> "active"
+  Lifecycle.Paused -> "paused"
+  Lifecycle.Blocked -> "blocked"
+  Lifecycle.Failed -> "failed"
+  Lifecycle.Terminal -> "completed"
+  Lifecycle.Canceled -> "canceled"
+  Lifecycle.Idle -> "idle"
 }
 
 internal expect fun trayFinishedTimeText(finishedAt: Instant, now: Instant): String

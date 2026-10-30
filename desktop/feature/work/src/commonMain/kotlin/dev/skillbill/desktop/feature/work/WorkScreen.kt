@@ -33,6 +33,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
+import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 
 private val FILTER_WIDTH = 280.dp
 
@@ -72,39 +73,47 @@ internal class WorkScreenHost(
 internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: WorkScreenHost, onAction: (WorkAction) -> Unit) {
   val section = state.section
   val crumbs = if (section == null) listOf(Crumb("Work")) else listOf(Crumb("Work", onClick = host.onShowAllWork), Crumb(sectionLabel(section)))
+  // Narrow windows drop the header's middle slot, as `.sb-vh-mid` hides below 760 px.
+  val narrow = LocalShellLayout.current.drawerMode
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = crumbs,
-      middle = {
-        SbInput(
-          state.filter,
-          { onAction(WorkAction.FilterChanged(it)) },
-          Modifier.width(FILTER_WIDTH).focusRequester(filterFocus).gatesShortcutsWhileFocused(),
-          placeholder = "Filter work",
-          leadingIcon = LucideIcons.search,
-        )
+      middle = if (narrow) null else {
+        {
+          SbInput(
+            state.filter,
+            { onAction(WorkAction.FilterChanged(it)) },
+            Modifier.width(FILTER_WIDTH).focusRequester(filterFocus).gatesShortcutsWhileFocused(),
+            placeholder = "Filter work",
+            leadingIcon = LucideIcons.search,
+          )
+        }
       },
       actions = {
         if ((state.board as? BoardState.Loaded)?.stale == true) StaleIndicator()
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(WorkAction.Refresh) })
-        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, selected = host.specsOpen)
-        SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, selected = host.terminalOpen)
+        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
+        SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
       },
     )
     Box(Modifier.weight(1f)) {
       when (val board = state.board) {
         BoardState.Loading -> Centered { EmptyState("Loading your work", LucideIcons.inbox) }
         is BoardState.Failed -> Centered { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
-        is BoardState.Loaded -> WorkBody(state, board, host, onAction)
+        is BoardState.Loaded -> WorkBody(state, board, host, narrow, onAction)
       }
     }
   }
 }
 
 @Composable
-private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScreenHost, onAction: (WorkAction) -> Unit) {
+private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScreenHost, narrow: Boolean, onAction: (WorkAction) -> Unit) {
   val filtering = state.filter.isNotBlank()
-  val sections = state.shownSections
+  // The whole board leaves empty sections out, as the prototype's `work()` does; a chosen section always shows, with its empty
+  // note. An entirely empty, unfiltered board keeps every header so the board still reads as the board.
+  val sections = state.shownSections.let { shown ->
+    if (state.section == null && shown.any { it.items.isNotEmpty() }) shown.filter { it.items.isNotEmpty() } else shown
+  }
   if (filtering && sections.all { it.items.isEmpty() }) {
     LaunchedEffect(board.nextCursor) { if (board.nextCursor != null) onAction(WorkAction.LoadMore) }
     Centered {
@@ -128,7 +137,7 @@ private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScr
       groupHeader(key = "header:$kind", label = sectionLabel(kind), count = boardSection.items.size, lead = { StatusIcon(sectionLead(kind), 0.5f) })
       items(boardSection.items, key = { "$kind:${it.id}" }) { item ->
         Box {
-          WorkRow(item, focused = item.id == state.focusedId, renderedAt = state.renderedAt, onAction = onAction)
+          WorkRow(item, focused = item.id == state.focusedId, renderedAt = state.renderedAt, narrow = narrow, onAction = onAction)
           if (state.menu?.id == item.id) WorkRowMenu(state, item, onAction, host.onOpenTerminal, host.onCopyReason)
         }
       }

@@ -79,7 +79,8 @@ fun TreeRow(
           SbIcon(LucideIcons.chevronRight, SbIconSize.Xs, modifier = Modifier.rotate(rotation))
         }
       }
-      lead()
+      // `.sb-tree-row > .sb-icon`: lead icons stay faint on every row state; status icons draw their own color.
+      CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { lead() }
       id?.let { IdTag(it) }
       BasicText(title, Modifier.weight(1f), style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = meta)

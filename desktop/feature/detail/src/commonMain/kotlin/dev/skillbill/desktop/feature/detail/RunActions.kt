@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
@@ -23,7 +24,10 @@ import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 
-/** HANDOFF 9.2 items 4 and 5: the run-actions row and the lines under it. Pause and Cancel act at once; only Recover confirms. */
+/**
+ * HANDOFF 9.2 item 4: the run-actions row and the lines under it; the pause notice (item 5) is its own document block. Pause
+ * and Cancel act at once; only Recover confirms.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RunActions(
@@ -56,9 +60,9 @@ internal fun RunActions(
       ActionButton(view.cancel, LucideIcons.x, variant = SbButtonVariant.Danger) { onAction(ControlsAction.Cancel) }
       view.recover?.let { ActionButton(it, LucideIcons.refresh, modifier = Modifier.focusRequester(recoverFocus)) { onAction(ControlsAction.Recover) } }
     }
+    // `.t-faint` at `--t-xs`, regular weight.
+    if (view.launchNote) BasicText("Starts the installed agent harness", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal))
     view.unavailableReason?.let { Hint(it, FeedbackTone.Warn) }
-    if (view.launchNote) BasicText("Starts the installed agent harness", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
-    if (view.pausePending) Hint("Pause recorded. The goal pauses at its next checkpoint.", FeedbackTone.Info, LucideIcons.pause)
     if (view.refreshNeeded) Hint(REFRESH_BEFORE_CONTROLS, FeedbackTone.Warn)
   }
 }

@@ -1,11 +1,12 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -24,8 +25,11 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
+import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
+import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
+import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
@@ -38,6 +42,10 @@ import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 import dev.skillbill.desktop.core.ui.shell.DetailsPaneSlot
+import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
+
+/** `.sb-doc` max-width, padding included. */
+private val DOC_MAX_WIDTH = 780.dp
 
 /** The shell facts the detail shows without depending on the shell. */
 internal class DetailScreenHost(val detailsPaneOpen: Boolean, val detailsShortcut: String, val onToggleDetails: () -> Unit)
@@ -65,6 +73,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
   val item = state.header
   val view = runActionsView(state)
+  val sectionExpansion = remember(item.id) { DetailSectionExpansion() }
   val recoverFocus = remember { FocusRequester() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
@@ -82,21 +91,34 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
       },
     )
     Row(Modifier.weight(1f).fillMaxWidth()) {
-      LazyColumn(
-        Modifier.weight(1f).fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 32.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-      ) {
-        item(key = "header") {
-          DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) })
-        }
-        if (state.sections != SectionsUi.Gone) item(key = "run-actions") {
-          val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
-          RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
-        }
-        if (item.kind != WorkKind.Phase) {
-          item(key = "reason") { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
-          document(state, view, onAction)
+      // `.sb-doc`: a 780 column (padding included) centred in the scroll area, 32/40/64 padding, 20/16/48 in a narrow window.
+      // The list adds no spacing of its own: each block brings its 28 gap, so a section's rows can sit flush in one box.
+      BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+        val narrow = LocalShellLayout.current.drawerMode
+        val inset = if (narrow) 16.dp else 40.dp
+        val side = maxOf(inset, (maxWidth - (DOC_MAX_WIDTH - inset * 2)) / 2)
+        LazyColumn(
+          Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
+        ) {
+          item(key = "header") {
+            DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }) {
+              if (state.sections != SectionsUi.Gone) {
+                val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
+                RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
+              }
+            }
+          }
+          // HANDOFF 9.2 item 5: the pause notice is its own block under the header.
+          if (view.pausePending) item(key = "pause-notice") {
+            Column(Modifier.padding(top = DocBlockGap)) { Hint("Pause recorded. The goal pauses at its next checkpoint.", FeedbackTone.Info, LucideIcons.pause) }
+          }
+          if (item.kind != WorkKind.Phase) {
+            if (item.reason != null) item(key = "reason") {
+              Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
+            }
+            document(state, view, sectionExpansion, onAction)
+          }
         }
       }
       DetailsPaneSlot { DetailsPane(state) }
@@ -123,15 +145,15 @@ private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, o
     }
   }
   if (detail != null && (incident != null || detail.incidentHistory.isNotEmpty())) item(key = "incident") {
-    IncidentSection(incident, detail.incidentHistory, view, decision, onAction) { onAction(DetailAction.Copy(it)) }
+    IncidentSection(incident, detail.incidentHistory, view, decision, onAction, Modifier.padding(top = DocBlockGap)) { onAction(DetailAction.Copy(it)) }
   }
   if (incident == null && view.decision != null && state.sections != SectionsUi.Gone) item(key = "decision") {
-    Section(title = "Operator decision") { decision() }
+    Section(title = "Operator decision", Modifier.padding(top = DocBlockGap)) { decision() }
   }
 }
 
 /** The sections in HANDOFF 9.2 order; placeholders hold their place until the first read lands. */
-private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, expansion: DetailSectionExpansion, onAction: (DetailAction) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -141,12 +163,15 @@ private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, o
     }
     is SectionsUi.Loaded -> {
       val detail = sections.detail
-      item(key = "metrics") { DetailMetrics(item, detail) }
+      // HANDOFF 9.2 order: the incident (item 7) comes before the metrics (item 8).
       incident(state, view, onAction)
-      subtaskSection(item, detail, state, onAction)
+      if (item.kind != WorkKind.Operation) item(key = "metrics") {
+        Column(Modifier.padding(top = DocBlockGap)) { DetailMetrics(item, detail) }
+      }
+      subtaskSection(item, detail, state, expansion, onAction)
       pipelineSection(item, detail)
-      dependencySection(detail, state, onAction)
-      activitySection(item.kind, detail, state.renderedAt)
+      dependencySection(detail, state, expansion, onAction)
+      activitySection(item.kind, detail, state.renderedAt, expansion)
       validationSection(detail)
       phaseResultsSection(detail)
       pageFooter(DetailList.Validation, state, onAction)
@@ -173,7 +198,7 @@ private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, o
 private fun LazyListScope.placeholder(key: String, height: Dp) {
   item(key = key) {
     val shape = RoundedCornerShape(SkillBillRadius.md)
-    Box(Modifier.fillMaxWidth().heightIn(min = height).border(1.dp, SkillBillTheme.colors.borderSubtle, shape).padding(12.dp), contentAlignment = Alignment.TopStart) {
+    Box(Modifier.padding(top = DocBlockGap).fillMaxWidth().heightIn(min = height).border(1.dp, SkillBillTheme.colors.borderSubtle, shape).padding(12.dp), contentAlignment = Alignment.TopStart) {
       BasicText("Loading", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgFaint))
     }
   }

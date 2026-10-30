@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 /** The `t-sm` size from the design system, in points. */
 private const val TERMINAL_FONT_SIZE = 12f
 
+private const val TERMINAL_LINE_SPACING = 1.2f
+
 /** The design system's inset palette for the terminal: `bgInset` behind `fg2`, the selection `accentFg` on `accent`. */
 class TerminalSettings(private val colors: SkillBillColors, private val font: Font) : DefaultSettingsProvider() {
   override fun getDefaultForeground(): TerminalColor = colors.fg2.terminalColor()
@@ -35,6 +37,10 @@ class TerminalSettings(private val colors: SkillBillColors, private val font: Fo
   override fun getTerminalFont(): Font = font
 
   override fun getTerminalFontSize(): Float = TERMINAL_FONT_SIZE
+
+  // `.sb-term-out` sets line-height 1.6. JediTerm multiplies the font's own height (about 1.32 em for JetBrains Mono), so
+  // 1.2 lands near 19 px rows at 12 px.
+  override fun getLineSpacing(): Float = TERMINAL_LINE_SPACING
 }
 
 private fun ComposeColor.terminalColor(): TerminalColor {

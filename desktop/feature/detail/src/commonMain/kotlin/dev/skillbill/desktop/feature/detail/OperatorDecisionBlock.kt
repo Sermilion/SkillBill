@@ -1,14 +1,18 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
@@ -35,7 +39,12 @@ internal fun OperatorDecisionBlock(draft: DecisionDraft, recordEnabled: Boolean,
   }
   val type = SkillBillTheme.type
   val colors = SkillBillTheme.colors
-  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+  // The design's decision panel: 12 padding inside a hairline `--r-md` frame, parts 12 apart.
+  val shape = RoundedCornerShape(SkillBillRadius.md)
+  Column(
+    Modifier.fillMaxWidth().border(1.dp, colors.borderSubtle, shape).padding(12.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
       BasicText(draft.subtaskId?.let { "Decide subtask $it" } ?: "Decide the current subtask", style = type.tSmMedium.copy(color = colors.fg))
       BasicText("Recorded now, applied when the goal resumes", style = type.tSm.copy(color = colors.fgFaint))

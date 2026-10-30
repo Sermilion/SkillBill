@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 
@@ -31,10 +30,8 @@ fun WorkArea(
         Box(Modifier.weight(1f).fillMaxWidth()) { main() }
         if (bottom != null) Box(Modifier.fillMaxWidth()) { bottom() }
       }
-      if (right != null && !drawerMode) {
-        Box(Modifier.width(1.dp).fillMaxHeight().background(SkillBillTheme.colors.borderSubtle))
-        Box(Modifier.width(SkillBillSize.specsPane).fillMaxHeight()) { right() }
-      }
+      // The 400 dp includes the pane's own start hairline (SidePane draws it), as `.sb-sidepane` is border-box.
+      if (right != null && !drawerMode) Box(Modifier.width(SkillBillSize.specsPane).fillMaxHeight()) { right() }
     }
     if (right != null && drawerMode) Box(Modifier.fillMaxSize().background(SkillBillTheme.colors.bgPanel)) { right() }
   }

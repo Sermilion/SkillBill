@@ -10,6 +10,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -27,6 +28,7 @@ import dev.skillbill.desktop.app.keyboard.toKeyPress
 import dev.skillbill.desktop.app.keyboard.ShellKey
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ToastStack
+import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.PaneSlot
@@ -92,7 +94,9 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
             SideEffect { keyboard.drawerMode = drawerMode }
             val panes = window.panes
             val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !narrow, drawerMode = drawerMode)
-            CompositionLocalProvider(LocalShellLayout provides layout) {
+            // Below the drawer breakpoint every view header leads with the sidebar toggle, as `.sb-side-toggle`.
+            val sidebarToggle: (() -> Unit)? = remember(drawerMode, panes) { if (drawerMode) ({ panes.drawerOpen = !panes.drawerOpen }) else null }
+            CompositionLocalProvider(LocalShellLayout provides layout, LocalSidebarToggle provides sidebarToggle) {
               ShellContent(window, drawerMode)
               CommandMenu(window)
               if (panes.shortcutsOpen) ShortcutSheet { panes.shortcutsOpen = false }

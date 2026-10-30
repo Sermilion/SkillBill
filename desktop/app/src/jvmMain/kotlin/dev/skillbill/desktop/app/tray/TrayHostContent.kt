@@ -1,5 +1,8 @@
 package dev.skillbill.desktop.app.tray
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -9,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -136,13 +140,16 @@ fun ApplicationScope.TrayHost(model: TrayViewModel, availability: TrayAvailabili
     state = windowState,
   ) {
     SkillBillTheme(reducedMotion) {
-      TrayPopoverContent(
-        state,
-        onAction = model::onAction,
-        onOpen = { intents.send(HostIntent.ShowMain); visible = false },
-        onSettings = { intents.send(HostIntent.OpenSettings); visible = false },
-        onQuit = onQuit,
-      )
+      // The 380 dp transparent window leaves 10 dp around the 360 dp popover for its shadow.
+      Box(Modifier.fillMaxSize().padding(10.dp)) {
+        TrayPopoverContent(
+          state,
+          onAction = model::onAction,
+          onOpen = { intents.send(HostIntent.ShowMain); visible = false },
+          onSettings = { intents.send(HostIntent.OpenSettings); visible = false },
+          onQuit = onQuit,
+        )
+      }
     }
   }
 }

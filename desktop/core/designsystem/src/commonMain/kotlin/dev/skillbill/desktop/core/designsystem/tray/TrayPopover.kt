@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -77,13 +78,15 @@ fun TrayPopover(
     Row(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 10.dp)) {
       stats.forEach { stat ->
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          BasicText(stat.value, style = type.tLg.tabular().copy(color = stat.tone.color(colors), fontWeight = FontWeight.SemiBold), maxLines = 1)
-          BasicText(stat.label, style = type.tXs.copy(color = colors.fgFaint), maxLines = 1)
+          // `.sb-tray-stats b` is 600 at the lg size on a 1.0 line; the label is regular weight.
+          BasicText(stat.value, style = type.tLg.tabular().copy(color = stat.tone.color(colors), fontWeight = FontWeight.SemiBold, lineHeight = 16.sp), maxLines = 1)
+          BasicText(stat.label, style = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal), maxLines = 1)
         }
       }
     }
     Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 10.dp, vertical = 8.dp)) { tabs() }
-    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(4.dp), content = rows)
+    // The body takes its content's height, scrolling only once the popover reaches the window's height.
+    Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(4.dp), content = rows)
     Row(
       Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
       horizontalArrangement = Arrangement.SpaceBetween,

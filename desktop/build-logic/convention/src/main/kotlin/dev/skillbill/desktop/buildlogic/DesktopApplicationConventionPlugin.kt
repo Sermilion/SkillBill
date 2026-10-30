@@ -29,13 +29,18 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
       vendor.set(JvmVendorSpec.ADOPTIUM)
     }.get().metadata.installationPath.asFile.absolutePath
     val packageVersion = providers.environmentVariable("RELEASE_VERSION").orNull?.substringBefore('-') ?: "0.1.0"
+    val macOSPackageVersion = packageVersion.takeUnless { it.startsWith("0.") } ?: "1.0.0"
     extensions.getByType(ComposeExtension::class.java).extensions.getByType(DesktopExtension::class.java).application {
       this.javaHome = javaHome
       nativeDistributions {
         modules("java.sql", "java.net.http", "java.management", "jdk.unsupported")
         packageName = "Skill Bill"
         this.packageVersion = packageVersion
-        macOS { bundleID = "dev.skillbill.desktop" }
+        macOS {
+          bundleID = "dev.skillbill.desktop"
+          this.packageVersion = macOSPackageVersion
+          packageBuildVersion = macOSPackageVersion
+        }
       }
     }
     registerSharedRuntimeVersionCheck()

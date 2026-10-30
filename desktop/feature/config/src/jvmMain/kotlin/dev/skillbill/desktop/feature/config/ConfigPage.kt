@@ -1,35 +1,62 @@
 package dev.skillbill.desktop.feature.config
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import dev.skillbill.desktop.core.designsystem.settings.SettingRange
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.component.Avatar
 import dev.skillbill.desktop.core.designsystem.component.Callout
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
 import dev.skillbill.desktop.core.designsystem.component.Hint
+import dev.skillbill.desktop.core.designsystem.component.RepoIcon
 import dev.skillbill.desktop.core.designsystem.component.SbButton
+import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbDialog
 import dev.skillbill.desktop.core.designsystem.component.SbDialogText
 import dev.skillbill.desktop.core.designsystem.component.SbField
 import dev.skillbill.desktop.core.designsystem.component.SbInput
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
+import dev.skillbill.desktop.core.designsystem.component.SbMenu
+import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
+import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.SbToggle
 import dev.skillbill.desktop.core.designsystem.component.Segmented
 import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
 import dev.skillbill.desktop.core.designsystem.component.ToastData
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.settings.ConfigRow
+import dev.skillbill.desktop.core.designsystem.settings.SettingPick
 import dev.skillbill.desktop.core.designsystem.settings.SettingRow
 import dev.skillbill.desktop.core.designsystem.settings.SettingsGroup
 import dev.skillbill.desktop.core.designsystem.settings.SettingsHeader
@@ -44,9 +71,9 @@ import dev.skillbill.desktop.core.domain.model.ExecutionMatrixConfig
 import dev.skillbill.desktop.core.domain.model.MachineConfig
 import dev.skillbill.desktop.core.domain.model.MachineConfigAgentPhaseOverrideEdit
 import dev.skillbill.desktop.core.domain.model.MachineConfigAgentTierDirectiveEdit
+import dev.skillbill.desktop.core.domain.model.MachineConfigChange
 import dev.skillbill.desktop.core.domain.model.MachineConfigCompactionEditIntent
 import dev.skillbill.desktop.core.domain.model.MachineConfigCompactionField
-import dev.skillbill.desktop.core.domain.model.MachineConfigChange
 import dev.skillbill.desktop.core.domain.model.MachineConfigExecutionMatrixEditIntent
 import dev.skillbill.desktop.core.domain.model.MachineConfigPhaseTierEdit
 import dev.skillbill.desktop.core.domain.model.ModelDirective
@@ -68,6 +95,7 @@ import dev.skillbill.desktop.core.domain.repository.ConfigRead
 import dev.skillbill.desktop.core.domain.repository.ModelMatrixRead
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
 import dev.skillbill.desktop.core.domain.repository.SpecRepository
+import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastMessage
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.feedback.ToastTone
@@ -75,12 +103,12 @@ import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.ShellEdit
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
-import dev.skillbill.desktop.core.ui.di.WindowScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.Path
+import java.util.Locale
 
 internal data class ConfigEdit(
   val key: String,
@@ -96,6 +124,9 @@ internal data class ConfigEdit(
   val save: suspend (Map<String, String>, Map<String, Map<String, String>>, ConfigDraftBasis) -> ConfigWriteOutcome,
   val remove: (suspend (ConfigDraftBasis) -> ConfigWriteOutcome)? = null,
   val toastId: String = key,
+  val label: String? = null,
+  val description: String? = null,
+  val matrixKey: String? = null,
 )
 
 internal enum class ModelRowKind { TIER, PHASE }
@@ -1057,8 +1088,10 @@ internal fun ConfigPage(
     fields: Map<String, String> = mapOf(key to value),
     remove: (suspend (ConfigDraftBasis) -> ConfigWriteOutcome)? = null,
     sectionChange: ((Map<String, Map<String, String>>) -> MachineConfigChange)? = null,
+    label: String? = null,
+    description: String? = null,
     change: (Map<String, String>) -> MachineConfigChange,
-  ) = ConfigEdit(key, if (unavailableDocument) "unavailable" else value, default, fields, group, fieldPaths = machineFieldPaths(key, fields), save = save@{ input, included, basis ->
+  ) = ConfigEdit(key, if (unavailableDocument) "unavailable" else value, default, fields, group, fieldPaths = machineFieldPaths(key, fields), label = label, description = description, save = save@{ input, included, basis ->
     val edit = try {
       sectionChange?.invoke(included + (key to input)) ?: change(input)
     } catch (_: IllegalArgumentException) {
@@ -1072,11 +1105,116 @@ internal fun ConfigPage(
   val projectStorePath = (document as? ConfigDocument.Present<*>)?.projectStorePath
     ?: (document as? ConfigDocument.Absent)?.projectStorePath
     ?: (document as? ConfigDocument.Unreadable)?.projectStorePath
-  SettingsHeader(title, body = if (page == "project") projectStorePath ?: path else path)
+  val fileName = path.substringAfterLast('/')
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  val monoSpan = SpanStyle(fontFamily = type.mono.fontFamily)
+  SettingsHeader(
+    title,
+    buildAnnotatedString {
+      when (page) {
+        "models" -> {
+          append("Each phase runs on its tier's model unless the agent has an override for that phase. Saved as ")
+          withStyle(monoSpan) { append("execution_matrix") }
+          append(" in ")
+          withStyle(monoSpan) { append(displayPath(path.ifBlank { "config.json" })) }
+          append(".")
+        }
+        "compaction" -> {
+          append("Compacts an agent's context before it fills. Saved as ")
+          withStyle(monoSpan) { append("compaction") }
+          append(" in ${fileName.ifBlank { "config.json" }}.")
+        }
+        "project" -> {
+          append("Settings in the project store's ")
+          withStyle(monoSpan) { append("config.yaml") }
+          val store = projectStorePath ?: path
+          if (store.isNotBlank()) {
+            append(" (")
+            withStyle(monoSpan) { append(displayPath(store)) }
+            append(")")
+          }
+          append(", plus the phase instructions committed in the repository.")
+        }
+        else -> {
+          append("Machine-wide settings in ")
+          withStyle(monoSpan) { append(displayPath(path.ifBlank { "config.json" })) }
+          append(".")
+        }
+      }
+    },
+  )
   (document as? ConfigDocument.Unreadable)?.let {
     Callout(FeedbackTone.Error, title = it.keyPath ?: it.path, body = it.reason)
   }
   readProblem?.let { Callout(FeedbackTone.Error, body = it) }
+
+  fun toggleRow(row: ConfigEdit) {
+    if (row.key in openRows) {
+      if (!saving) cancelEditor(row.key)
+    } else {
+      open(row)
+    }
+  }
+
+  fun rowFor(
+    row: ConfigEdit,
+    onActivate: (() -> Unit)? = null,
+    onFieldChange: ((String, Map<String, String>) -> Unit)? = null,
+  ): @Composable () -> Unit = configRow(row, openRows, ::toggleRow, enabled) {
+    renderEditor(
+      fileName, row, rowDrafts.value[row.key] ?: row.fields,
+      rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null,
+      row.key in conflictedRows, saving, enabled, resolutionActionsEnabled,
+      { updateDraft(row.key, it) }, { scope.launch { save(row.key) } },
+      { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } },
+      { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } },
+      onActivate = onActivate,
+      onFieldChange = onFieldChange,
+    )
+  }
+
+  fun inlineValue(row: ConfigEdit, field: String): String = (rowDrafts.value[row.key] ?: row.fields)[field].orEmpty()
+
+  fun inlineEnabled(row: ConfigEdit): Boolean = enabled && row.key !in conflictedRows && row.value != "unavailable"
+
+  /** Inline controls reuse the row editor state: the first change opens the row's draft, a commit saves it. */
+  fun inlineEdit(row: ConfigEdit, field: String, newValue: String, commit: Boolean) {
+    if (row.key !in openRows) open(row)
+    if (row.key !in openRows) return
+    updateDraftField(row.key, field, (rowDrafts.value[row.key] ?: row.fields) + (field to newValue))
+    if (commit) scope.launch { save(row.key) }
+  }
+
+  fun inlineCommit(row: ConfigEdit) {
+    if (row.key !in openRows || row.key in conflictedRows) return
+    val current = rowDrafts.value[row.key]
+    if (current == null || current == row.fields) cancelEditor(row.key) else scope.launch { save(row.key) }
+  }
+
+  fun inlineRow(row: ConfigEdit, content: @Composable () -> Unit): @Composable () -> Unit = {
+    Column(Modifier.fillMaxWidth()) {
+      content()
+      val rowErrorText = rowErrors.value[row.key].orEmpty().values.distinct()
+      val rowHint = (if (editorKey == row.key) hint else null) ?: rowHints.value[row.key]
+      val conflicted = row.key in conflictedRows
+      if (row.key in openRows && (rowErrorText.isNotEmpty() || rowHint != null || conflicted)) {
+        Column(
+          Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          rowErrorText.forEach { Hint(it, FeedbackTone.Error) }
+          rowHint?.let { Hint(it, FeedbackTone.Error) }
+          if (conflicted) {
+            Callout(FeedbackTone.Warn, title = "$fileName changed on disk", body = "Another program saved this file after you opened it. Nothing was saved.", actions = {
+              SbButton("Reload", { scope.launch { reload(false, row.key) } }, enabled = resolutionActionsEnabled)
+              SbButton("Keep editing", { scope.launch { reload(true, row.key) } }, enabled = resolutionActionsEnabled)
+            })
+          }
+        }
+      }
+    }
+  }
 
   when (page) {
     "models" -> {
@@ -1088,9 +1226,6 @@ internal fun ConfigPage(
             sessions.selectedAgent.value = selected
           }
         }
-      }
-      defaults.agents.filterNot { it.modelCapable }.forEach { item ->
-        Hint("${item.id} cannot honor a model or effort directive")
       }
       val current = machine?.executionMatrix ?: ExecutionMatrixConfig(emptyMap(), emptyMap(), emptyMap())
       val resolved = matrix?.agents?.get(agent)
@@ -1118,12 +1253,13 @@ internal fun ConfigPage(
         val fields = linkedMapOf(ConfigFileKeys.MODEL to directive?.model.orEmpty(), ConfigFileKeys.EFFORT to directive?.effort.orEmpty())
         if (phase) fields[ConfigFileKeys.TIER] = tier.name.lowercase()
         val value = if (unavailable) "unavailable" else directive?.let { it.model + (it.effort?.let { effort -> " · $effort" } ?: "") } ?: "not set"
+        val matrixKey = if (phase) id else if (tier == ModelTier.REASONING) "Reasoning tier" else "Implementation tier"
         built += ConfigEdit(configKey, value, if (phase) "${defaults.phases.firstOrNull { it.id == id }?.defaultTier?.name?.lowercase()} tier" else "not set", fields, if (phase) defaults.phases.firstOrNull { it.id == id }?.group?.name?.replace('_', ' ') ?: "Other" else "Tiers", fieldPaths = fields.keys.associateWith { field ->
           when (field) {
             ConfigFileKeys.TIER -> "execution_matrix.phase_tiers.$id"
             else -> "execution_matrix.agents.$agent.$id.$field"
           }
-        }, modelRow = if (phase) ModelRowKind.PHASE else ModelRowKind.TIER, tier = if (phase && !unavailable) tier else null, override = overridden, tierChanged = tierChanged, save = { input, included, basis ->
+        }, modelRow = if (phase) ModelRowKind.PHASE else ModelRowKind.TIER, tier = if (!unavailable) tier else null, override = overridden, tierChanged = tierChanged, save = { input, included, basis ->
           val model = input[ConfigFileKeys.MODEL].orEmpty()
           if (model.isBlank()) ConfigWriteOutcome.Invalid("$configKey.model", "A model is required.")
           else {
@@ -1161,7 +1297,7 @@ internal fun ConfigPage(
             ),
             basis.fingerprint,
           )
-        }) else null, toastId = key)
+        }) else null, toastId = key, matrixKey = matrixKey)
       }
       ModelTier.entries.forEach { tier -> modelRow(tier.name.lowercase(), tier, resolved?.tiers?.get(tier), false, false, unavailable = unavailableDocument) }
       if (unavailableDocument) {
@@ -1170,37 +1306,14 @@ internal fun ConfigPage(
         resolved?.phases?.forEach { phase -> modelRow(phase.phaseId, phase.tier, phase.directive, true, phase.override, phase.tierChanged) }
       }
       SettingsGroup(
-        title = "Reasoning and implementation tiers",
-        rows = built.filter { it.group == "Tiers" }.map { row ->
-          configRow(row, openRows, ::open, enabled) {
-            renderEditor(
-              path.substringAfterLast('/'), row, rowDrafts.value[row.key] ?: row.fields,
-              rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null,
-              row.key in conflictedRows, saving, enabled, resolutionActionsEnabled,
-              { updateDraft(row.key, it) }, { scope.launch { save(row.key) } },
-              { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } },
-              { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } },
-              onActivate = { activate(row.key) },
-            )
-          }
-        },
+        title = "Tiers",
+        rows = built.filter { it.group == "Tiers" }.map { row -> rowFor(row, onActivate = { activate(row.key) }) },
       )
       defaults.phases.map { it.group }.distinct().forEach { kind ->
         val groupRows = built.filter { it.group == kind.name.replace('_', ' ') }
         if (groupRows.isNotEmpty()) {
           SettingsGroup(title = groupTitle(kind.name), rows = groupRows.map { row ->
-            configRow(row, openRows, ::open, enabled) {
-              renderEditor(
-                path.substringAfterLast('/'), row, rowDrafts.value[row.key] ?: row.fields,
-                rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null,
-                row.key in conflictedRows, saving, enabled, resolutionActionsEnabled,
-                { updateDraft(row.key, it) }, { scope.launch { save(row.key) } },
-                { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } },
-                { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } },
-                onActivate = { activate(row.key) },
-                onFieldChange = { field, input -> editModelDraft(row, field, input) },
-              )
-            }
+            rowFor(row, onActivate = { activate(row.key) }, onFieldChange = { field, input -> editModelDraft(row, field, input) })
           })
         }
       }
@@ -1236,12 +1349,26 @@ internal fun ConfigPage(
           compactionEditIntent(editedFields, newPhaseIds),
         )
       }
-      built += machineRow("compaction.enabled", value.enabled.toString(), "on", "Compaction", mapOf(ConfigFileKeys.ENABLED to value.enabled.toString()), sectionChange = compactionSave) { input -> compactionSave(mapOf("compaction.enabled" to input)) }
-      built += machineRow("compaction.window_tokens", value.windowTokens.toString(), defaults.compaction.windowTokens.toString(), "Compaction", mapOf(ConfigFileKeys.WINDOW_TOKENS to value.windowTokens.toString()), sectionChange = compactionSave) { input -> compactionSave(mapOf("compaction.window_tokens" to input)) }
-      built += machineRow("compaction.trigger_pct", value.triggerPct.toString(), defaults.compaction.triggerPct.toString(), "Compaction", mapOf(ConfigFileKeys.TRIGGER_PCT to value.triggerPct.toString()), sectionChange = compactionSave) { input -> compactionSave(mapOf("compaction.trigger_pct" to input)) }
+      val triggerTokens = value.windowTokens.toLong() / 100 * value.triggerPct
+      built += machineRow(
+        "compaction.enabled", onOff(value.enabled), onOff(defaults.compaction.enabled), "Compaction",
+        mapOf(ConfigFileKeys.ENABLED to value.enabled.toString()), sectionChange = compactionSave,
+        label = "Compact long phases", description = "enabled · default ${onOff(defaults.compaction.enabled)}",
+      ) { input -> compactionSave(mapOf("compaction.enabled" to input)) }
+      built += machineRow(
+        "compaction.window_tokens", formatCount(value.windowTokens.toLong()), formatCount(defaults.compaction.windowTokens.toLong()), "Compaction",
+        mapOf(ConfigFileKeys.WINDOW_TOKENS to value.windowTokens.toString()), sectionChange = compactionSave,
+        label = "Context window", description = "window_tokens · default ${formatCount(defaults.compaction.windowTokens.toLong())}",
+      ) { input -> compactionSave(mapOf("compaction.window_tokens" to input)) }
+      built += machineRow(
+        "compaction.trigger_pct", "${value.triggerPct}%", "${defaults.compaction.triggerPct}%", "Compaction",
+        mapOf(ConfigFileKeys.TRIGGER_PCT to value.triggerPct.toString()), sectionChange = compactionSave,
+        label = "Compact at ${value.triggerPct}%",
+        description = "trigger_pct · default ${defaults.compaction.triggerPct} · compacts at ${formatCount(triggerTokens)} tokens",
+      ) { input -> compactionSave(mapOf("compaction.trigger_pct" to input)) }
       value.phases.forEach { (id, override) ->
         val key = "compaction.phases.$id"
-        built += machineRow("compaction.phases.$id", "${override.windowTokens} tokens · ${override.triggerPct}%", "inherits", "Per-phase overrides", mapOf(ConfigFileKeys.WINDOW_TOKENS to override.windowTokens.toString(), ConfigFileKeys.TRIGGER_PCT to override.triggerPct.toString()), change = { input ->
+        built += machineRow("compaction.phases.$id", "${formatCount(override.windowTokens.toLong())} tokens · ${override.triggerPct}%", "inherits", "Per-phase overrides", mapOf(ConfigFileKeys.WINDOW_TOKENS to override.windowTokens.toString(), ConfigFileKeys.TRIGGER_PCT to override.triggerPct.toString()), change = { input ->
           compactionSave(mapOf(key to input))
         }, remove = { basis ->
           repository.writeMachineConfigFromSnapshot(
@@ -1254,7 +1381,7 @@ internal fun ConfigPage(
             ),
             basis.fingerprint,
           )
-        }, sectionChange = compactionSave)
+        }, sectionChange = compactionSave, label = id, description = "compaction.phases.$id")
       }
       retainedPhaseIds.filterNot { it in value.phases }.forEach { id ->
         val key = "compaction.phases.$id"
@@ -1263,35 +1390,118 @@ internal fun ConfigPage(
           ConfigFileKeys.TRIGGER_PCT to value.triggerPct.toString(),
         )
         val fields = if (freshCompactionValuesAvailable) inheritedFields else rowDrafts.value[key] ?: emptyMap()
-        val inheritedValue = "not saved · inherits ${value.windowTokens} tokens · ${value.triggerPct}%"
-        built += machineRow(key, if (freshCompactionValuesAvailable) inheritedValue else "unavailable", "inherits the global settings", "Per-phase overrides", fields, sectionChange = compactionSave) { input ->
+        val inheritedValue = "inherits ${formatCount(value.windowTokens.toLong())} tokens · ${value.triggerPct}%"
+        built += machineRow(
+          key, if (freshCompactionValuesAvailable) inheritedValue else "unavailable", "inherits the global settings", "Per-phase overrides", fields,
+          sectionChange = compactionSave, label = id, description = "compaction.phases.$id · not saved",
+        ) { input ->
           compactionSave(mapOf(key to input))
         }
       }
-      SettingsGroup(title = "Compaction", rows = built.filter { it.group == "Compaction" }.map { row -> configRow(row, openRows, ::open, enabled) { renderEditor(path.substringAfterLast('/'), row, rowDrafts.value[row.key] ?: row.fields, rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null, row.key in conflictedRows, saving, enabled, resolutionActionsEnabled, { updateDraft(row.key, it) }, { scope.launch { save(row.key) } }, { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } }, { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } }, onFieldChange = { field, values -> updateDraftField(row.key, field, values) }) } })
-      if (!unavailableDocument && value.phases.isEmpty()) Hint("compaction.phases is empty, so every phase uses the setting above.")
-      SettingsGroup(title = "Per-phase overrides", rows = built.filter { it.group == "Per-phase overrides" }.map { row -> configRow(row, openRows, ::open, enabled) { renderEditor(path.substringAfterLast('/'), row, rowDrafts.value[row.key] ?: row.fields, rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null, row.key in conflictedRows, saving, enabled, resolutionActionsEnabled, { updateDraft(row.key, it) }, { scope.launch { save(row.key) } }, { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } }, { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } }, onFieldChange = { field, values -> updateDraftField(row.key, field, values) }) } })
+      val compactionRows = built.filter { it.group == "Compaction" }.associateBy { it.key }
+      SettingsGroup(rows = buildList<@Composable () -> Unit> {
+        compactionRows["compaction.enabled"]?.let { row ->
+          add(inlineRow(row) {
+            SettingRow(label = row.label, description = row.description, control = {
+              SbToggle(
+                inlineValue(row, ConfigFileKeys.ENABLED).toBoolean(),
+                { inlineEdit(row, ConfigFileKeys.ENABLED, it.toString(), commit = true) },
+                "Compact long phases",
+                enabled = inlineEnabled(row),
+              )
+            })
+          })
+        }
+        compactionRows["compaction.window_tokens"]?.let { row ->
+          add(inlineRow(row) {
+            SettingRow(label = row.label, description = row.description, control = {
+              InlineConfigInput(
+                if (row.key in openRows) inlineValue(row, ConfigFileKeys.WINDOW_TOKENS) else row.value,
+                { inlineEdit(row, ConfigFileKeys.WINDOW_TOKENS, it, commit = false) },
+                { inlineCommit(row) },
+                "Context window",
+                Modifier.width(140.dp),
+                isError = rowErrors.value[row.key]?.get(ConfigFileKeys.WINDOW_TOKENS) != null,
+                enabled = inlineEnabled(row),
+              )
+            })
+          })
+        }
+        compactionRows["compaction.trigger_pct"]?.let { row ->
+          add(inlineRow(row) {
+            val pct = inlineValue(row, ConfigFileKeys.TRIGGER_PCT).toIntOrNull() ?: value.triggerPct
+            val windowDraft = compactionRows["compaction.window_tokens"]?.let { inlineValue(it, ConfigFileKeys.WINDOW_TOKENS) }
+              ?.replace(",", "")?.replace("_", "")?.trim()?.toLongOrNull() ?: value.windowTokens.toLong()
+            val trigger = windowDraft / 100 * pct
+            SettingRow(
+              stacked = true,
+              label = "Compact at $pct%",
+              description = "trigger_pct · default ${defaults.compaction.triggerPct} · compacts at ${formatCount(trigger)} tokens",
+              control = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  SettingRange(
+                    pct,
+                    { inlineEdit(row, ConfigFileKeys.TRIGGER_PCT, it.toString(), commit = false) },
+                    "Compact at percent",
+                    Modifier.fillMaxWidth(),
+                    min = 1,
+                    max = 100,
+                    enabled = inlineEnabled(row),
+                    onValueChangeFinished = { inlineCommit(row) },
+                  )
+                  if (!unavailableDocument && trigger < MIN_COMPACTION_TRIGGER_TOKENS) {
+                    Hint("The trigger must be at least 200,000 tokens.", FeedbackTone.Error)
+                  }
+                }
+              },
+            )
+          })
+        }
+      })
       val missing = if (!freshCompactionValuesAvailable) emptyList() else defaults.phases.filterNot { it.id in value.phases || it.id in retainedPhaseIds }
-      if (missing.isNotEmpty()) {
-        SettingsGroup(title = "Add phase override", rows = missing.map { phase ->
-          { SettingRow(label = phase.id, description = "Add an override for this phase", control = {
-            SbButton("Add override", {
-              if (changedOnDisk || saving || sessions.hasConflictResolution() || sessions.hasWriteInFlight()) return@SbButton
-              val key = "compaction.phases.${phase.id}"
-              if (key in rowDrafts.value) return@SbButton
-              pendingPhaseIds = pendingPhaseIds + phase.id
-              editorKey = key
-              editorPage = page
-              openRows = openRows + editorKey!!
-              rowActivity = listOf(editorKey!!) + rowActivity.filterNot { it == editorKey }
-              draft = mapOf(ConfigFileKeys.WINDOW_TOKENS to value.windowTokens.toString(), ConfigFileKeys.TRIGGER_PCT to value.triggerPct.toString())
-              rowDrafts.value = rowDrafts.value + (editorKey!! to draft)
-              basisOf(document)?.let { rowBases.value = rowBases.value + (editorKey!! to it) }
-              errors = emptyMap()
-              hint = null
-            }, enabled = enabled && !changedOnDisk && !saving && !anyResolutionBusy && !sessions.hasWriteInFlight())
-          }) }
-        })
+      fun addPhaseOverride(phaseId: String) {
+        if (changedOnDisk || saving || sessions.hasConflictResolution() || sessions.hasWriteInFlight()) return
+        val key = "compaction.phases.$phaseId"
+        if (key in rowDrafts.value) return
+        pendingPhaseIds = pendingPhaseIds + phaseId
+        editorKey = key
+        editorPage = page
+        openRows = openRows + key
+        rowActivity = listOf(key) + rowActivity.filterNot { it == key }
+        draft = mapOf(ConfigFileKeys.WINDOW_TOKENS to value.windowTokens.toString(), ConfigFileKeys.TRIGGER_PCT to value.triggerPct.toString())
+        rowDrafts.value = rowDrafts.value + (key to draft)
+        basisOf(document)?.let { rowBases.value = rowBases.value + (key to it) }
+        errors = emptyMap()
+        hint = null
+      }
+      var addMenuOpen by remember { mutableStateOf(false) }
+      val addEnabled = enabled && !changedOnDisk && !saving && !anyResolutionBusy && !sessions.hasWriteInFlight()
+      val addOverride: (@Composable RowScope.() -> Unit)? = if (missing.isEmpty()) null else {
+        {
+          Box {
+            SbButton("Add phase override", { addMenuOpen = true }, size = SbControlSize.Small, icon = LucideIcons.plus, enabled = addEnabled)
+            if (addMenuOpen) {
+              ShellLayer { addMenuOpen = false }
+              SbPopover(true, { addMenuOpen = false }) {
+                SbMenu(
+                  listOf(SbMenuEntry.Head("Pick a phase to override")) +
+                    missing.map { phase -> SbMenuEntry.Item(phase.id, { addMenuOpen = false; addPhaseOverride(phase.id) }) },
+                )
+              }
+            }
+          }
+        }
+      }
+      val overrideRows = buildList<@Composable () -> Unit> {
+        built.filter { it.group == "Per-phase overrides" }.forEach { row ->
+          add(rowFor(row, onFieldChange = { field, values -> updateDraftField(row.key, field, values) }))
+        }
+        if (isEmpty() && !unavailableDocument) {
+          add { SettingRow(stacked = true, control = { Hint("compaction.phases is empty, so every phase uses the setting above.") }) }
+        }
+      }
+      if (overrideRows.isNotEmpty() || addOverride != null) {
+        SettingsGroup(title = "Per-phase overrides", end = addOverride, rows = overrideRows)
       }
     }
     "telemetry" -> {
@@ -1300,12 +1510,20 @@ internal fun ConfigPage(
         ?: TelemetryLevel.entries.firstOrNull { it.wireValue == level }
           ?.let(TelemetryPreviousLevel::Known)
         ?: TelemetryPreviousLevel.Unavailable
-      built += ConfigEdit("telemetry.level", currentLevel, "anonymous", mapOf(ConfigFileKeys.LEVEL to (level ?: "")), "Telemetry", fieldPaths = mapOf(ConfigFileKeys.LEVEL to "telemetry.level"), save = { input, _, basis ->
+      built += ConfigEdit("telemetry.level", currentLevel, "anonymous", mapOf(ConfigFileKeys.LEVEL to (level ?: "")), "Telemetry", fieldPaths = mapOf(ConfigFileKeys.LEVEL to "telemetry.level"), label = "Level", description = "telemetry.level · default anonymous", save = { input, _, basis ->
         val selected = TelemetryLevel.entries.firstOrNull { it.wireValue == input[ConfigFileKeys.LEVEL] }
         if (selected == null) ConfigWriteOutcome.Invalid("telemetry.level", "Choose off, anonymous or full.") else repository.setTelemetryLevelFromSnapshot(selected, basis.path, basis.fingerprint, previousLevel)
       })
-      built += machineRow("telemetry.proxy_url", machine?.telemetryProxyUrl.orEmpty(), "default endpoint", "Telemetry", mapOf(ConfigFileKeys.PROXY_URL to machine?.telemetryProxyUrl.orEmpty())) { input -> MachineConfigChange.SetTelemetryProxyUrl(input.getValue(ConfigFileKeys.PROXY_URL).ifBlank { null }) }
-      built += machineRow("telemetry.batch_size", machine?.telemetryBatchSize?.toString() ?: defaults.telemetryBatchSize.toString(), defaults.telemetryBatchSize.toString(), "Telemetry", mapOf(ConfigFileKeys.BATCH_SIZE to (machine?.telemetryBatchSize?.toString() ?: defaults.telemetryBatchSize.toString()))) { input -> MachineConfigChange.SetTelemetryBatchSize(input.getValue(ConfigFileKeys.BATCH_SIZE).ifBlank { null }?.let(::number)) }
+      built += machineRow(
+        "telemetry.proxy_url", machine?.telemetryProxyUrl.orEmpty().ifBlank { "default" }, "default", "Telemetry",
+        mapOf(ConfigFileKeys.PROXY_URL to machine?.telemetryProxyUrl.orEmpty()),
+        label = "Proxy URL", description = "telemetry.proxy_url · blank uses the default endpoint",
+      ) { input -> MachineConfigChange.SetTelemetryProxyUrl(input.getValue(ConfigFileKeys.PROXY_URL).ifBlank { null }) }
+      built += machineRow(
+        "telemetry.batch_size", machine?.telemetryBatchSize?.toString() ?: defaults.telemetryBatchSize.toString(), defaults.telemetryBatchSize.toString(), "Telemetry",
+        mapOf(ConfigFileKeys.BATCH_SIZE to (machine?.telemetryBatchSize?.toString() ?: defaults.telemetryBatchSize.toString())),
+        label = "Batch size", description = "telemetry.batch_size · default ${defaults.telemetryBatchSize}",
+      ) { input -> MachineConfigChange.SetTelemetryBatchSize(input.getValue(ConfigFileKeys.BATCH_SIZE).ifBlank { null }?.let(::number)) }
       telemetrySnapshot?.let { snapshot ->
         if (snapshot.levelEnvironmentOverride) {
           when (val effective = snapshot.effectiveLevel) {
@@ -1327,53 +1545,129 @@ internal fun ConfigPage(
           Hint("The environment supplies the install ID. This config file does not store one.")
         }
       }
-      SettingsGroup(title = "Telemetry", rows = built.map { row -> configRow(row, openRows, ::open, enabled) { renderEditor(path.substringAfterLast('/'), row, rowDrafts.value[row.key] ?: row.fields, rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null, row.key in conflictedRows, saving, enabled, resolutionActionsEnabled, { updateDraft(row.key, it) }, { scope.launch { save(row.key) } }, { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } }, { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } }) } })
-      SettingsGroup(title = "Agents", foot = "Detected agents are read-only.", rows = defaults.agents.map { item ->
-        {
-          val status = when (val result = detected) {
-            is DetectedAgentsRead.Success -> if (result.agents.any { it.name.equals(item.id, true) }) "detected" else "not detected"
-            is DetectedAgentsRead.Failed -> "detection unavailable · ${readProblemText(result.problem)}"
-            null -> "detection unavailable"
-          }
-          BasicText("${item.id} · $status${if (item.modelCapable) "" else " · Cannot take a model or effort setting"}", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg))
+      val telemetryRows = built.associateBy { it.key }
+      SettingsGroup(title = "Telemetry", rows = buildList<@Composable () -> Unit> {
+        telemetryRows["telemetry.level"]?.let { row ->
+          add(inlineRow(row) {
+            SettingRow(label = row.label, description = row.description, control = {
+              Segmented(
+                listOf("off" to "Off", "anonymous" to "Anonymous", "full" to "Full").map { (id, text) -> SegmentedOption(id, text, enabled = inlineEnabled(row)) },
+                inlineValue(row, ConfigFileKeys.LEVEL),
+              ) { inlineEdit(row, ConfigFileKeys.LEVEL, it, commit = true) }
+            })
+          })
+        }
+        telemetryRows["telemetry.proxy_url"]?.let { row ->
+          add(inlineRow(row) {
+            SettingRow(label = row.label, description = row.description, control = {
+              InlineConfigInput(
+                inlineValue(row, ConfigFileKeys.PROXY_URL),
+                { inlineEdit(row, ConfigFileKeys.PROXY_URL, it, commit = false) },
+                { inlineCommit(row) },
+                "Proxy URL",
+                Modifier.width(220.dp),
+                placeholder = "default",
+                isError = rowErrors.value[row.key]?.get(ConfigFileKeys.PROXY_URL) != null,
+                enabled = inlineEnabled(row),
+              )
+            })
+          })
+        }
+        telemetryRows["telemetry.batch_size"]?.let { row ->
+          add(inlineRow(row) {
+            SettingRow(label = row.label, description = row.description, control = {
+              InlineConfigInput(
+                inlineValue(row, ConfigFileKeys.BATCH_SIZE),
+                { inlineEdit(row, ConfigFileKeys.BATCH_SIZE, it, commit = false) },
+                { inlineCommit(row) },
+                "Batch size",
+                Modifier.width(80.dp),
+                isError = rowErrors.value[row.key]?.get(ConfigFileKeys.BATCH_SIZE) != null,
+                enabled = inlineEnabled(row),
+              )
+            })
+          })
         }
       })
+      SettingsGroup(title = "Agents", end = { SbLabel("read-only") }, rows = defaults.agents.map { item ->
+        {
+          val found = when (val result = detected) {
+            is DetectedAgentsRead.Success -> result.agents.any { it.name.equals(item.id, true) }
+            is DetectedAgentsRead.Failed, null -> null
+          }
+          SettingRow(
+            label = item.id,
+            labelLead = { Avatar(item.id, tooltip = null) },
+            description = if (item.modelCapable) null else "Cannot take a model or effort setting",
+            control = {
+              when (found) {
+                true -> SbLabel("detected", SbLabelStyle.Dot(colors.stDone))
+                false -> SbLabel("not detected", SbLabelStyle.Dot(colors.fgFaint))
+                null -> SbLabel("detection unavailable", SbLabelStyle.Dot(colors.fgFaint))
+              }
+            },
+          )
+        }
+      })
+      (detected as? DetectedAgentsRead.Failed)?.let { Hint(readProblemText(it.problem), FeedbackTone.Warn) }
       SettingsGroup(title = "Files", rows = listOf(path, defaults.installSelectionPath).map { file ->
-        { SettingRow(label = file, control = { SbButton("Open", { scope.launch { openFile(file) } }) }) }
+        {
+          SettingRow(
+            label = displayPath(file),
+            labelStyle = type.monoSm.copy(color = colors.fg, fontWeight = FontWeight.Medium),
+            control = { SbButton("Open", { scope.launch { openFile(file) } }, size = SbControlSize.Small, icon = LucideIcons.external) },
+          )
+        }
       })
     }
     "project" -> {
-      if (projects.isNotEmpty()) {
-        SettingsGroup(title = "Project", rows = projects.map { item ->
-          { SettingRow(label = item.displayName, description = if (project?.projectId == item.projectId) "Selected" else null, control = {
-            SbButton(if (project?.projectId == item.projectId) "Selected" else "Choose", {
-              if (changedOnDisk || saving || sessions.hasConflictResolution() || sessions.hasWriteInFlight()) return@SbButton
-              sessions.selectProject(item)
-            }, enabled = !changedOnDisk && !saving && !anyResolutionBusy && !sessions.hasWriteInFlight() && commentConfirmation == null)
-          }) }
-        })
+      var projectMenuOpen by remember { mutableStateOf(false) }
+      val canSwitchProject = !changedOnDisk && !saving && !anyResolutionBusy && !sessions.hasWriteInFlight() && commentConfirmation == null
+      val storePath = projectStorePath ?: path
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        project?.let { RepoIcon(it.displayName) }
+        if (projects.size > 1) {
+          Box {
+            SettingPick(project?.displayName ?: "Choose a project", { projectMenuOpen = true }, enabled = canSwitchProject, contentDescription = "Project: ${project?.displayName ?: "none"}")
+            if (projectMenuOpen) {
+              ShellLayer { projectMenuOpen = false }
+              SbPopover(true, { projectMenuOpen = false }) {
+                SbMenu(projects.map { item ->
+                  SbMenuEntry.Item(item.displayName, {
+                    projectMenuOpen = false
+                    if (!(changedOnDisk || saving || sessions.hasConflictResolution() || sessions.hasWriteInFlight() || commentConfirmation != null)) {
+                      sessions.selectProject(item)
+                    }
+                  }, checked = project?.projectId == item.projectId)
+                })
+              }
+            }
+          }
+        } else {
+          project?.let { BasicText(it.displayName, style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1) }
+        }
+        Spacer(Modifier.weight(1f))
+        if (projectRepoRoot != null) {
+          SbButton("Open config.yaml", { scope.launch { openFile(storePath) } }, size = SbControlSize.Small, icon = LucideIcons.external, enabled = storePath.isNotBlank() && projectSelectionLoaded)
+        }
       }
-      project?.let { BasicText("${it.displayName} · ${it.specsRoot}", style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fg)) }
       if (projectRepoRoot == null) {
         Callout(FeedbackTone.Info, title = "No local checkout", body = "This project has no checkout on this machine, so its config.yaml cannot be read.")
       } else {
-        val storePath = projectStorePath ?: path
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          BasicText(storePath, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fgMuted))
-          SbButton("Open config.yaml", { scope.launch { openFile(storePath) } }, enabled = storePath.isNotBlank() && projectSelectionLoaded)
-        }
         val budget = projectConfig?.reviewBudget ?: defaults.reviewBudget
         val currentBudget = reviewBudgetValues(budget)
         val defaultBudget = reviewBudgetValues(defaults.reviewBudget)
         val budgetPrefix = "${ConfigFileKeys.REVIEW_CONTEXT_BUDGET}."
-        fun projectRow(key: String, value: String, default: String, group: String, change: (String) -> ProjectConfigChange) {
+        fun projectRow(key: String, value: String, display: String, default: String, group: String, label: String, description: String, change: (String) -> ProjectConfigChange) {
           val selectedRoot = projectRepoRoot ?: return
           built += ConfigEdit(
             key,
-            if (unavailableDocument) "unavailable" else value,
+            if (unavailableDocument) "unavailable" else display,
             default,
             mapOf(key to value),
             group,
+            label = label,
+            description = description,
             save = { input, _, basis ->
               repository.writeProjectConfigFromSnapshot(
                 selectedRoot,
@@ -1387,12 +1681,16 @@ internal fun ConfigPage(
         fun projectBudgetRow(key: String, value: Number) {
           val selectedRoot = projectRepoRoot ?: return
           val rowKey = "$budgetPrefix$key"
+          val default = defaultBudget.getValue(key)
+          val changed = default.toLong() != value.toLong()
           built += ConfigEdit(
             rowKey,
-            if (unavailableDocument) "unavailable" else value.toString(),
-            defaultBudget.getValue(key).toString(),
+            if (unavailableDocument) "unavailable" else budgetValueText(key, value),
+            budgetValueText(key, default),
             mapOf(rowKey to value.toString()),
             "Review context budget",
+            label = budgetLabel(key),
+            description = if (changed) "$key · default ${budgetValueText(key, default)}" else key,
             save = save@{ input, included, basis ->
               val edits = included + (rowKey to input)
               val section = linkedMapOf<String, Any?>().apply {
@@ -1419,41 +1717,103 @@ internal fun ConfigPage(
             },
           )
         }
-        projectRow(ConfigFileKeys.SPEC_TYPE, projectConfig?.specSource?.name?.lowercase() ?: "local", "local", "Project config") {
+        val specType = projectConfig?.specSource?.name?.lowercase() ?: "local"
+        projectRow(ConfigFileKeys.SPEC_TYPE, specType, specType, "local", "Project config", "Spec source", "spec_type · default local") {
           ProjectConfigChange.SetSpecType(SpecSource.entries.first { source -> source.name.equals(it, true) })
         }
-        projectRow(ConfigFileKeys.GRADLE_WRAPPER, projectConfig?.gradleWrapper.orEmpty(), "./gradlew", "Project config") {
+        val gradleWrapper = projectConfig?.gradleWrapper.orEmpty()
+        projectRow(
+          ConfigFileKeys.GRADLE_WRAPPER, gradleWrapper, gradleWrapper.ifBlank { "./gradlew" }, "./gradlew", "Project config",
+          "Gradle wrapper", "validation_gate.gradle_wrapper · blank uses the repository's ./gradlew",
+        ) {
           ProjectConfigChange.SetGradleWrapper(it.ifBlank { null })
         }
         currentBudget.forEach { (key, value) -> projectBudgetRow(key, value) }
-        SettingsGroup(title = "Project config", rows = built.filter { it.group == "Project config" }.map { row -> configRow(row, openRows, ::open, enabled) { renderEditor(path.substringAfterLast('/'), row, rowDrafts.value[row.key] ?: row.fields, rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null, row.key in conflictedRows, saving, enabled, resolutionActionsEnabled, { updateDraft(row.key, it) }, { scope.launch { save(row.key) } }, { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } }, { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } }) } })
-        SettingsGroup(title = "Review context budget", foot = "Byte limits must be positive.", rows = built.filter { it.group == "Review context budget" }.map { row -> configRow(row, openRows, ::open, enabled) { renderEditor(path.substringAfterLast('/'), row, rowDrafts.value[row.key] ?: row.fields, rowErrors.value[row.key].orEmpty(), if (editorKey == row.key) hint else null, row.key in conflictedRows, saving, enabled, resolutionActionsEnabled, { updateDraft(row.key, it) }, { scope.launch { save(row.key) } }, { cancelEditor(row.key) }, { scope.launch { reload(false, row.key) } }, { scope.launch { reload(true, row.key) } }, { scope.launch { remove(row) } }, onFieldChange = { field, values -> updateDraftField(row.key, field, values) }) } })
+        val projectRows = built.filter { it.group == "Project config" }.associateBy { it.key }
+        SettingsGroup(rows = buildList<@Composable () -> Unit> {
+          projectRows[ConfigFileKeys.SPEC_TYPE]?.let { row ->
+            add(inlineRow(row) {
+              SettingRow(label = row.label, description = row.description, control = {
+                Segmented(
+                  listOf("local" to "Local files", "linear" to "Linear").map { (id, text) -> SegmentedOption(id, text, enabled = inlineEnabled(row)) },
+                  inlineValue(row, ConfigFileKeys.SPEC_TYPE),
+                ) { inlineEdit(row, ConfigFileKeys.SPEC_TYPE, it, commit = true) }
+              })
+            })
+          }
+          projectRows[ConfigFileKeys.GRADLE_WRAPPER]?.let { row ->
+            add(inlineRow(row) {
+              val wrapper = inlineValue(row, ConfigFileKeys.GRADLE_WRAPPER)
+              val invalid = gradleWrapperInvalid(wrapper)
+              SettingRow(stacked = true, control = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  SbField(
+                    "Gradle wrapper",
+                    help = "validation_gate.gradle_wrapper. Repo-relative, no \".\" or \"..\" segments. Leave empty to use the repository's ./gradlew.",
+                  ) {
+                    InlineConfigInput(
+                      wrapper,
+                      { inlineEdit(row, ConfigFileKeys.GRADLE_WRAPPER, it, commit = false) },
+                      { inlineCommit(row) },
+                      "Gradle wrapper",
+                      Modifier.fillMaxWidth(),
+                      placeholder = "gradlew",
+                      isError = invalid || rowErrors.value[row.key]?.get(ConfigFileKeys.GRADLE_WRAPPER) != null,
+                      enabled = inlineEnabled(row),
+                    )
+                  }
+                  if (invalid) Hint("Use a repo-relative path without \".\" or \"..\" segments.", FeedbackTone.Error)
+                }
+              })
+            })
+          }
+        })
         val instructionFiles = instructions?.files.orEmpty()
-        SettingsGroup(title = "Phase instructions", rows = instructionFiles.map { file ->
-          val expectedProjectId = project?.projectId
-          val expectedRepoRoot = projectRepoRoot
-          val expectedReadRevision = readRevision
-          val sizeDescription = file.sizeBytes?.let { size ->
-            "$size of ${defaults.phaseInstructionCapBytes} bytes${if (file.exceedsCap == true) " · over the 16 KiB cap" else ""}"
-          } ?: "Size unavailable · ${defaults.phaseInstructionCapBytes / 1024} KiB cap"
-          {
-            SettingRow(
-              label = ".skill-bill/phases/${file.phaseId}.md",
-              description = sizeDescription,
-              control = {
-                SbButton(
-                  "Open",
-                  {
-                    scope.launch {
-                      val selectedProjectId = expectedProjectId ?: return@launch
-                      val selectedRepoRoot = expectedRepoRoot ?: return@launch
-                      openPhaseInstruction(file.path, selectedProjectId, selectedRepoRoot, expectedReadRevision)
-                    }
-                  },
-                  enabled = projectSelectionLoaded && !readInFlight && instructions != null,
-                )
-              },
-            )
+        val instructionCap = defaults.phaseInstructionCapBytes
+        SettingsGroup(title = "Phase instructions", rows = buildList<@Composable () -> Unit> {
+          instructionFiles.forEach { file ->
+            val expectedProjectId = project?.projectId
+            val expectedRepoRoot = projectRepoRoot
+            val expectedReadRevision = readRevision
+            val sizeDescription = file.sizeBytes?.let { size ->
+              "${formatFileSize(size)} of ${formatFileSize(instructionCap)} · read at launch for the ${file.phaseId} phase" +
+                if (file.exceedsCap == true) " · over the ${formatFileSize(instructionCap)} cap" else ""
+            } ?: "Size unavailable · ${formatFileSize(instructionCap)} cap"
+            add {
+              SettingRow(
+                label = ".skill-bill/phases/${file.phaseId}.md",
+                labelStyle = type.mono.copy(color = colors.fg, fontWeight = FontWeight.Medium),
+                description = sizeDescription,
+                control = {
+                  SbButton(
+                    "Open",
+                    {
+                      scope.launch {
+                        val selectedProjectId = expectedProjectId ?: return@launch
+                        val selectedRepoRoot = expectedRepoRoot ?: return@launch
+                        openPhaseInstruction(file.path, selectedProjectId, selectedRepoRoot, expectedReadRevision)
+                      }
+                    },
+                    size = SbControlSize.Small,
+                    icon = LucideIcons.external,
+                    enabled = projectSelectionLoaded && !readInFlight && instructions != null,
+                  )
+                },
+              )
+            }
+          }
+          add {
+            SettingRow(stacked = true, control = {
+              Hint(
+                buildAnnotatedString {
+                  append("Add ")
+                  withStyle(monoSpan) { append("<phase-id>.md") }
+                  append(" to ")
+                  withStyle(monoSpan) { append(".skill-bill/phases/") }
+                  append(" in the repository. Files are committed, so the team shares them.")
+                },
+              )
+            })
           }
         })
         (instructions as? PhaseInstructionFilesRead.Incomplete)?.let { result ->
@@ -1464,7 +1824,18 @@ internal fun ConfigPage(
             body = problem.ifBlank { "Some phase instruction files could not be inspected. The page will retry on its next load." },
           )
         }
-        Hint("Phase instruction files are committed with the repository, have a 16 KiB cap, and are read at launch.")
+        val changedBudget = currentBudget.count { (key, value) -> defaultBudget[key]?.toLong() != value.toLong() }
+        val budgetEnd: (@Composable RowScope.() -> Unit)? = if (changedBudget == 0) null else {
+          { SbLabel("$changedBudget changed", SbLabelStyle.Dot(colors.accent)) }
+        }
+        SettingsGroup(
+          title = "Review context budget",
+          end = budgetEnd,
+          foot = "Byte limits must be positive.",
+          rows = built.filter { it.group == "Review context budget" }.map { row ->
+            rowFor(row, onFieldChange = { field, values -> updateDraftField(row.key, field, values) })
+          },
+        )
       }
     }
   }
@@ -1575,20 +1946,23 @@ internal fun ConfigPage(
   }
 }
 
-@Composable
-private fun configRow(row: ConfigEdit, openRows: Set<String>, open: (ConfigEdit) -> Unit, enabled: Boolean, editor: @Composable ColumnScope.() -> Unit): @Composable () -> Unit = {
+private val SAVE_SHORTCUT = if (System.getProperty("os.name").orEmpty().startsWith("Mac")) "⌘ ↵" else "Ctrl ↵"
+private const val MIN_COMPACTION_TRIGGER_TOKENS = 200_000L
+
+private fun configRow(row: ConfigEdit, openRows: Set<String>, onToggle: (ConfigEdit) -> Unit, enabled: Boolean, editor: @Composable ColumnScope.() -> Unit): @Composable () -> Unit = {
   ConfigRow(
-    key = row.key,
+    key = row.matrixKey ?: row.key,
     value = row.value,
-    onToggle = { open(row) },
+    onToggle = { onToggle(row) },
     expanded = row.key in openRows,
     override = row.override,
-    defaultValue = row.default,
+    emphasized = row.override || row.modelRow == ModelRowKind.TIER ||
+      (row.modelRow == null && row.value != row.default && row.value != "unavailable"),
+    tierChanged = row.tierChanged,
+    label = row.label,
+    description = row.description,
     enabled = enabled,
     tier = row.tier?.let { if (it == ModelTier.REASONING) Tier.Reasoning else Tier.Implementation },
-    tags = {
-      if (row.tierChanged) BasicText("tier changed", style = SkillBillTheme.type.t2xs.copy(color = SkillBillTheme.colors.fgMuted))
-    },
     editor = editor,
   )
 }
@@ -1613,58 +1987,199 @@ private fun renderEditor(
   onActivate: (() -> Unit)? = null,
   onFieldChange: ((String, Map<String, String>) -> Unit)? = null,
 ) {
-  fun change(field: String, values: Map<String, String>) {
+  val change: (String, Map<String, String>) -> Unit = { field, values ->
     val handler = onFieldChange
     if (handler == null) onDraft(values) else handler(field, values)
   }
+  val inputsEnabled = editorEnabled && !saving && !changed
 
   Column(
     modifier = onActivate?.let { activate ->
       Modifier.focusGroup().onFocusChanged { if (it.hasFocus) activate() }
     } ?: Modifier,
-    verticalArrangement = Arrangement.spacedBy(10.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    draft.forEach { (field, value) ->
-      val options = when (field) {
-        "tier" -> listOf("reasoning", "implementation")
-        "level" -> listOf("off", "anonymous", "full")
-        "spec_type" -> listOf("local", "linear")
-        "enabled" -> listOf("true", "false")
-        else -> emptyList()
-      }
-      SbField(
-        label = when (field) { "model" -> "Model"; "effort" -> "Effort"; "tier" -> "Tier"; "proxy_url" -> "Proxy URL"; "batch_size" -> "Batch size"; "window_tokens" -> "Window tokens"; "trigger_pct" -> "Trigger percent"; "enabled" -> "Enabled"; "level" -> "Level"; "spec_type" -> "Spec source"; else -> field.substringAfterLast('.') },
-        help = when (field) { "model" -> "Passed to the agent as typed."; "effort" -> "Optional."; "tier" -> "Applies to every agent."; else -> null },
-        error = errors[field],
-      ) {
-        if (field == "enabled") {
-          SbToggle(value.toBoolean(), { change(field, draft + (field to it.toString())) }, "Enabled", enabled = editorEnabled && !saving && !changed)
-        } else if (options.isEmpty()) {
-          SbInput(
-            value,
-            { change(field, draft + (field to it)) },
-            Modifier.gatesShortcutsWhileFocused(),
-            placeholder = if (field == "effort") "unset" else if (field == "proxy_url") "default" else null,
-            mono = true,
-            isError = errors[field] != null,
-            enabled = editorEnabled && !saving && !changed,
-          )
-        } else {
-          Segmented(options.map { SegmentedOption(it, it, enabled = editorEnabled && !saving && !changed) }, value) { change(field, draft + (field to it)) }
+    val fields = draft.keys.filter { it == ConfigFileKeys.TIER } + draft.keys.filterNot { it == ConfigFileKeys.TIER }
+      .filterNot { it == ConfigFileKeys.EFFORT && ConfigFileKeys.MODEL in draft }
+    fields.forEach { field ->
+      if (field == ConfigFileKeys.MODEL && ConfigFileKeys.EFFORT in draft) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+          Box(Modifier.weight(1f).widthIn(min = 200.dp)) { ConfigEditorField(row, ConfigFileKeys.MODEL, draft, errors, inputsEnabled, change) }
+          Box(Modifier.width(150.dp)) { ConfigEditorField(row, ConfigFileKeys.EFFORT, draft, errors, inputsEnabled, change) }
         }
+      } else {
+        ConfigEditorField(row, field, draft, errors, inputsEnabled, change)
       }
+    }
+    if (row.key == ConfigFileKeys.GRADLE_WRAPPER && gradleWrapperInvalid(draft[ConfigFileKeys.GRADLE_WRAPPER].orEmpty())) {
+      Hint("Use a repo-relative path without \".\" or \"..\" segments.", FeedbackTone.Error)
     }
     hint?.let { Hint(it, FeedbackTone.Error) }
     if (changed) Callout(FeedbackTone.Warn, title = "$fileName changed on disk", body = "Another program saved this file after you opened it. Nothing was saved.", actions = {
       SbButton("Reload", onReload, enabled = resolutionActionsEnabled)
       SbButton("Keep editing", onKeepEditing, enabled = resolutionActionsEnabled)
     })
-    if (row.remove != null) SbButton(if (row.modelRow == ModelRowKind.PHASE) "Reset to tier" else "Remove override", onRemove, enabled = editorEnabled && !saving && !changed)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      SbButton("Save", onSave, enabled = editorEnabled && !saving && !changed && (draft[ConfigFileKeys.MODEL]?.isNotBlank() != false))
-      SbButton("Cancel", onCancel, enabled = !saving && resolutionActionsEnabled)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+      SbButton("Save", onSave, variant = SbButtonVariant.Primary, shortcut = SAVE_SHORTCUT, enabled = inputsEnabled && (draft[ConfigFileKeys.MODEL]?.isNotBlank() != false))
+      SbButton("Cancel", onCancel, variant = SbButtonVariant.Ghost, enabled = !saving && resolutionActionsEnabled)
+      Spacer(Modifier.weight(1f))
+      if (row.remove != null) {
+        val phaseRow = row.modelRow == ModelRowKind.PHASE
+        SbButton(
+          if (phaseRow) "Reset to tier" else "Remove override", onRemove,
+          variant = SbButtonVariant.Ghost, icon = if (phaseRow) LucideIcons.rerun else LucideIcons.trash, enabled = inputsEnabled,
+        )
+      }
     }
   }
+}
+
+@Composable
+private fun ConfigEditorField(
+  row: ConfigEdit,
+  field: String,
+  draft: Map<String, String>,
+  errors: Map<String, String>,
+  enabled: Boolean,
+  change: (String, Map<String, String>) -> Unit,
+) {
+  val value = draft[field].orEmpty()
+  val options = when (field) {
+    ConfigFileKeys.TIER -> listOf("reasoning" to "Reasoning", "implementation" to "Implementation")
+    ConfigFileKeys.LEVEL -> listOf("off" to "Off", "anonymous" to "Anonymous", "full" to "Full")
+    ConfigFileKeys.SPEC_TYPE -> listOf("local" to "Local files", "linear" to "Linear")
+    else -> emptyList()
+  }
+  val blankModel = field == ConfigFileKeys.MODEL && value.isBlank()
+  val gradleInvalid = field == ConfigFileKeys.GRADLE_WRAPPER && gradleWrapperInvalid(value)
+  val label = when (field) {
+    ConfigFileKeys.MODEL -> "Model"
+    ConfigFileKeys.EFFORT -> "Effort"
+    ConfigFileKeys.TIER -> "Tier"
+    ConfigFileKeys.PROXY_URL -> "Proxy URL"
+    ConfigFileKeys.BATCH_SIZE -> "Batch size"
+    ConfigFileKeys.WINDOW_TOKENS -> "Context window"
+    ConfigFileKeys.TRIGGER_PCT -> "Trigger percent"
+    ConfigFileKeys.ENABLED -> "Compact long phases"
+    ConfigFileKeys.LEVEL -> "Level"
+    ConfigFileKeys.SPEC_TYPE -> "Spec source"
+    ConfigFileKeys.GRADLE_WRAPPER -> "Gradle wrapper"
+    else -> row.label ?: field.substringAfterLast('.')
+  }
+  val help = when (field) {
+    ConfigFileKeys.MODEL -> if (blankModel) "A model is required. To drop an override, use Reset to tier." else "Passed to the agent as typed."
+    ConfigFileKeys.EFFORT -> "Optional."
+    ConfigFileKeys.TIER -> "Saved under execution_matrix.phase_tiers. It applies to every agent."
+    ConfigFileKeys.GRADLE_WRAPPER -> "validation_gate.gradle_wrapper. Repo-relative, no \".\" or \"..\" segments. Leave empty to use the repository's ./gradlew."
+    else -> null
+  }
+  val inputModifier = when (field) {
+    ConfigFileKeys.MODEL, ConfigFileKeys.EFFORT, ConfigFileKeys.GRADLE_WRAPPER -> Modifier.fillMaxWidth()
+    ConfigFileKeys.PROXY_URL -> Modifier.width(220.dp)
+    ConfigFileKeys.BATCH_SIZE -> Modifier.width(80.dp)
+    else -> Modifier.width(140.dp)
+  }
+  SbField(label = label, help = help, error = errors[field]) {
+    when {
+      field == ConfigFileKeys.ENABLED ->
+        SbToggle(value.toBoolean(), { change(field, draft + (field to it.toString())) }, label, enabled = enabled)
+      options.isEmpty() -> SbInput(
+        value,
+        { change(field, draft + (field to it)) },
+        inputModifier.gatesShortcutsWhileFocused(),
+        placeholder = when (field) {
+          ConfigFileKeys.EFFORT -> "unset"
+          ConfigFileKeys.PROXY_URL -> "default"
+          ConfigFileKeys.GRADLE_WRAPPER -> "gradlew"
+          else -> null
+        },
+        mono = true,
+        isError = errors[field] != null || blankModel || gradleInvalid,
+        enabled = enabled,
+      )
+      else -> Segmented(options.map { (id, text) -> SegmentedOption(id, text, enabled = enabled) }, value) { change(field, draft + (field to it)) }
+    }
+  }
+}
+
+/** A mono input that commits on Enter and when focus leaves it. */
+@Composable
+private fun InlineConfigInput(
+  value: String,
+  onValueChange: (String) -> Unit,
+  onCommit: () -> Unit,
+  label: String,
+  modifier: Modifier = Modifier,
+  placeholder: String? = null,
+  isError: Boolean = false,
+  enabled: Boolean = true,
+) {
+  var focused by remember { mutableStateOf(false) }
+  val commit by rememberUpdatedState(onCommit)
+  SbInput(
+    value,
+    onValueChange,
+    modifier
+      .onFocusChanged { state ->
+        if (focused && !state.hasFocus) commit()
+        focused = state.hasFocus
+      }
+      .gatesShortcutsWhileFocused()
+      .semantics { contentDescription = label },
+    placeholder = placeholder,
+    mono = true,
+    isError = isError,
+    enabled = enabled,
+    onSubmit = { commit() },
+  )
+}
+
+private fun gradleWrapperInvalid(value: String): Boolean =
+  value.isNotBlank() && (value.startsWith("/") || value.split('/').any { it == "." || it == ".." })
+
+private fun onOff(value: Boolean) = if (value) "on" else "off"
+
+private fun formatCount(value: Long): String = String.format(Locale.US, "%,d", value)
+
+private const val KIB = 1024L
+private const val MIB = 1024L * 1024L
+
+private fun formatFileSize(bytes: Long): String = when {
+  bytes < KIB -> "$bytes B"
+  bytes < MIB -> "${trimDecimal(bytes.toDouble() / KIB)} KiB"
+  else -> "${trimDecimal(bytes.toDouble() / MIB)} MiB"
+}
+
+private fun trimDecimal(value: Double): String = String.format(Locale.US, "%.1f", value).removeSuffix(".0")
+
+private fun budgetValueText(key: String, value: Number): String {
+  val number = value.toLong()
+  if (!key.endsWith("_bytes")) return formatCount(number)
+  return when {
+    number > 0 && number % MIB == 0L -> "${number / MIB} MiB"
+    number > 0 && number % KIB == 0L -> "${number / KIB} KiB"
+    else -> "${formatCount(number)} B"
+  }
+}
+
+private fun budgetLabel(key: String): String = when (key) {
+  ConfigFileKeys.MAX_PARENT_PACKET_BYTES -> "Parent packet"
+  ConfigFileKeys.MAX_LANE_LAUNCH_BYTES -> "Lane launch"
+  ConfigFileKeys.MAX_LANE_EVIDENCE_BYTES -> "Lane evidence"
+  ConfigFileKeys.MAX_EVIDENCE_RESULT_BYTES -> "Evidence result"
+  ConfigFileKeys.MAX_LANE_RESULT_BYTES -> "Lane result"
+  ConfigFileKeys.MAX_ASSIGNMENT_EXPANSIONS -> "Assignment expansions"
+  ConfigFileKeys.MAX_SPECIALIST_TOOL_CALLS -> "Specialist tool calls"
+  ConfigFileKeys.MAX_SPECIALIST_MODEL_TURNS -> "Specialist model turns"
+  ConfigFileKeys.MAX_ROUTING_ANALYSIS_PAIRS -> "Routing analysis pairs"
+  ConfigFileKeys.MAX_ROUTING_ANALYSIS_BYTES -> "Routing analysis bytes"
+  else -> key
+}
+
+/** Shows a path under the user's home directory as `~/...`, the way the design writes config paths. */
+private fun displayPath(path: String): String {
+  val home = System.getProperty("user.home").orEmpty().trimEnd('/')
+  return if (home.isNotEmpty() && (path == home || path.startsWith("$home/"))) "~" + path.removePrefix(home) else path
 }
 
 private fun number(text: String): Int = text.replace(",", "").replace("_", "").trim().toIntOrNull() ?: throw IllegalArgumentException("Enter a whole number.")

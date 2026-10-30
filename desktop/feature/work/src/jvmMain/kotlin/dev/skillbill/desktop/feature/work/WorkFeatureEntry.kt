@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.focus.FocusRequester
 import dev.skillbill.desktop.core.designsystem.component.ToastData
 import dev.skillbill.desktop.core.designsystem.component.ToastLead
@@ -20,15 +21,16 @@ import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
+import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.IntoSet
 import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
-import java.awt.Toolkit
-import java.awt.datatransfer.StringSelection
-import java.nio.file.Path
 
 /** Renders [WorkRoute]. Every section shares one ViewModel, so choosing a section keeps the filter and focus. */
 @Inject
@@ -56,10 +58,12 @@ class WorkFeatureEntry(
       }
     }
     val filterFocus = remember { FocusRequester() }
+    // Narrow windows hide the filter with the header's middle slot, so "/" has nothing to focus there.
+    val filterShown by rememberUpdatedState(!LocalShellLayout.current.drawerMode)
     ScreenKeyHandler { key ->
       if (key == ScreenKey.FocusFilter) {
-        filterFocus.requestFocus()
-        true
+        if (filterShown) filterFocus.requestFocus()
+        filterShown
       } else {
         workKeyAction(key)?.let(viewModel::onAction) != null
       }

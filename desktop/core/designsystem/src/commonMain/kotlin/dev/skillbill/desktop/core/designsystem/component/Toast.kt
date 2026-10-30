@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.designsystem.component
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
@@ -30,7 +32,10 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import kotlinx.coroutines.delay
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.layeredShadow
@@ -72,25 +77,34 @@ fun Toast(data: ToastData, onDismiss: () -> Unit) {
   val density = LocalDensity.current
   val maxWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() - TOAST_WINDOW_INSET }.coerceAtLeast(0.dp)
   val toastWidth = SkillBillSize.toast.coerceAtMost(maxWidth)
-  val shape = RoundedCornerShape(8.dp)
+  val shape = RoundedCornerShape(SkillBillRadius.md)
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
   Row(
-    Modifier.widthIn(max = toastWidth).width(toastWidth).background(SkillBillTheme.colors.bgOverlay, shape).border(1.dp, SkillBillTheme.colors.borderStrong, shape)
-      .layeredShadow(SkillBillTheme.shadows.popover, shape).semantics { liveRegion = LiveRegionMode.Polite }.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 14.dp),
+    Modifier.widthIn(max = toastWidth).width(toastWidth).layeredShadow(SkillBillTheme.shadows.popover, shape)
+      .background(colors.bgOverlay, shape).border(1.dp, colors.borderStrong, shape)
+      // `.sb-toast` pads 12px 12px 12px 14px inside its 1px border.
+      .semantics { liveRegion = LiveRegionMode.Polite }.padding(start = 15.dp, top = 13.dp, end = 13.dp, bottom = 13.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top,
   ) {
+    // Only the status icon and brand mark get margin-top: 2px; a plain icon sits on the top edge.
     when (val lead = data.lead) {
-      is ToastLead.Icon -> SbIcon(lead.icon, SbIconSize.Md, modifier = Modifier.padding(top = 2.dp))
+      is ToastLead.Icon -> CompositionLocalProvider(LocalContentColor provides colors.fg) { SbIcon(lead.icon, SbIconSize.Md) }
       is ToastLead.Status -> StatusIcon(lead.kind, lead.progress, modifier = Modifier.padding(top = 2.dp))
-      ToastLead.System -> BrandMark(18.dp)
+      ToastLead.System -> Box(Modifier.padding(top = 2.dp)) { BrandMark(18.dp) }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
       if (data.appName != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BasicText(data.appName, Modifier.weight(1f), style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint), maxLines = 1)
-        BasicText(data.time ?: "now", style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint), maxLines = 1)
+        val appStyle = type.tXs.copy(color = colors.fgFaint, lineHeight = 1.3.em)
+        BasicText(data.appName, Modifier.weight(1f), style = appStyle, maxLines = 1)
+        BasicText(data.time ?: "now", style = appStyle, maxLines = 1)
       }
-      BasicText(data.title, style = SkillBillTheme.type.tBaseMedium.copy(color = SkillBillTheme.colors.fg), maxLines = 2)
-      data.body?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted)) }
-      if (data.actions.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { data.actions.forEach { SbButton(it.label, it.onClick, variant = SbButtonVariant.Ghost, size = SbControlSize.Small) } }
+      BasicText(data.title, style = type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.35.em))
+      data.body?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted, lineHeight = 1.4.em)) }
+    }
+    // `.sb-toast-ac` is a sibling of the text column, centered on the cross axis.
+    if (data.actions.isNotEmpty()) Row(Modifier.align(Alignment.CenterVertically), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+      data.actions.forEach { SbButton(it.label, it.onClick, variant = SbButtonVariant.Ghost, size = SbControlSize.Small) }
     }
   }
 }
@@ -103,7 +117,9 @@ fun ToastStack(state: ToastHostState) {
     Column(Modifier.align(Alignment.BottomEnd).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
       state.toasts.forEach { shown ->
         key(state, shown.id) {
-          AnimatedVisibility(true, enter = fadeIn(toastInSpec()) + slideInVertically(animationSpec = toastInSpec(), initialOffsetY = { slideOffsetPx })) {
+          // A visible = true AnimatedVisibility skips its enter transition, so start from a hidden state.
+          val appear = remember { MutableTransitionState(false).apply { targetState = true } }
+          AnimatedVisibility(appear, enter = fadeIn(toastInSpec()) + slideInVertically(animationSpec = toastInSpec(), initialOffsetY = { slideOffsetPx })) {
             Toast(shown.data) { state.dismiss(shown.id) }
           }
         }

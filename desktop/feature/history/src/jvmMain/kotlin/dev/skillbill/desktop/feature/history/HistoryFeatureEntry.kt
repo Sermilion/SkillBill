@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.focus.FocusRequester
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.input.ScreenKey
@@ -16,6 +17,7 @@ import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
 import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
 import dev.skillbill.desktop.core.ui.pane.PaneCommands
+import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.IntoSet
@@ -45,10 +47,12 @@ class HistoryFeatureEntry(
       }
     }
     val filterFocus = remember { FocusRequester() }
+    // Narrow windows hide the filter with the header's middle slot, so "/" has nothing to focus there.
+    val filterShown by rememberUpdatedState(!LocalShellLayout.current.drawerMode)
     ScreenKeyHandler { key ->
       if (key == ScreenKey.FocusFilter) {
-        filterFocus.requestFocus()
-        true
+        if (filterShown) filterFocus.requestFocus()
+        filterShown
       } else {
         historyKeyAction(key)?.let(viewModel::onAction) != null
       }

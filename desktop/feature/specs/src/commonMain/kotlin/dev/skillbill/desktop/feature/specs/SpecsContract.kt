@@ -89,9 +89,10 @@ internal const val FILTER_HINT = "Filter by key, title or file"
 internal const val KEEP_RUNNING = "Keep running"
 internal const val CANCEL_GOAL = "Cancel goal"
 internal const val KEEP_RUN_HISTORY = "Keep run history"
+internal const val RUN_ON = "Run on"
 internal const val PURGE_INTRO = "Purge deletes everything Skill Bill recorded while running this spec, so it can start again from scratch."
-internal val PURGE_DELETED = listOf("goal and subtask run history", "run evidence and task tracking", "checkpoint refs", "subtask progress, back to not started")
-internal val PURGE_KEPT = listOf("every spec file in the folder", "your branch and its commits", "open pull requests")
+internal val PURGE_DELETED = listOf("Goal and subtask run history", "Run evidence and task tracking", "Checkpoint refs", "Subtask progress, back to not started")
+internal val PURGE_KEPT = listOf("Every spec file in the folder", "Your branch and its commits", "Open pull requests")
 internal const val PURGE_WARNING = "This can't be undone. Afterwards the spec shows as not started and Start runs it from the first subtask."
 
 internal fun fileHint(key: String) = "Actions run a whole spec folder, not one subtask. Select $key to control it."
