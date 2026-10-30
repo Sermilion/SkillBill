@@ -1,9 +1,5 @@
-package skillbill.engine.diagnostics.block
+package skillbill.engine.featuretask.incident.investigation
 
-import skillbill.engine.diagnostics.block.investigation.BlockIncidentAgentOutputParser
-import skillbill.engine.diagnostics.block.investigation.BlockIncidentAgentPass
-import skillbill.engine.diagnostics.block.investigation.BlockIncidentEvidenceCollector
-import skillbill.engine.diagnostics.block.investigation.EvidenceBlockIncidentInvestigator
 import skillbill.install.model.SupportedAgent
 import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion

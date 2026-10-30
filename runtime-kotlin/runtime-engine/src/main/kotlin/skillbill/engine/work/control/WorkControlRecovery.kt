@@ -1,11 +1,11 @@
 package skillbill.engine.work.control
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryRefusal
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryRequest
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryResult
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryResumeClaim
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryRefusal
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryRequest
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryResult
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryResumeClaim
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryService
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult

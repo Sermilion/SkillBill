@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.idestatus.model.boundedIdeStatusActivity

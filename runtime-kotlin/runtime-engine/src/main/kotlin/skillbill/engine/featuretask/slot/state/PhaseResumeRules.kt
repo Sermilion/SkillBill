@@ -74,6 +74,14 @@ internal enum class PhaseBlockResume {
 internal fun isRetiredAuditGapLoop(loopId: String?): Boolean =
   loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID
 
+private val PULL_REQUEST_INCIDENT_PHASES =
+  setOf(
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+  )
+
+internal fun carriesPullRequestIncidentFields(phaseId: String): Boolean = phaseId in PULL_REQUEST_INCIDENT_PHASES
+
 internal fun recordEnvelope(record: FeatureTaskRuntimePhaseRecord): Map<String, Any?>? =
   record.outputArtifact?.let { artifact ->
     runCatching {

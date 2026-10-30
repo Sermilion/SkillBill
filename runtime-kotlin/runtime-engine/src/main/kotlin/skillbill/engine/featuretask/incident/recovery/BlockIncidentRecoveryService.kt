@@ -1,4 +1,4 @@
-package skillbill.engine.diagnostics.block.recovery
+package skillbill.engine.featuretask.incident.recovery
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
@@ -713,7 +713,7 @@ class BlockIncidentRecoveryService(
       unit.workflowStates.getFeatureTaskExecutionIdentity(
         target.mutationWorkflowId,
       ) == target.executionIdentity
-    val step = reread.steps.firstOrNull { it.stepId == target.phaseId }
+    val step = reread.step(target.phaseId)
     val phase = decodePhaseRecords(reread.artifacts)[target.phaseId]
     val phaseCleared =
       step != null && phase != null && step.status != WorkflowStepStatus.BLOCKED &&
@@ -838,7 +838,7 @@ class BlockIncidentRecoveryService(
       val lease = unit.goalRunnerControls.controlState(workflowId).executionLease ?: continue
       val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
       val phaseId = workflow.currentStepId
-      val phaseAttempt = workflow.steps.firstOrNull { it.stepId == phaseId }?.attemptCount ?: return false
+      val phaseAttempt = workflow.step(phaseId)?.attemptCount ?: return false
       val ownership = lease.asWorkerOwnership(workflowId, phaseId, phaseAttempt)
       if (lease.expiresAtInstant.isAfter(now) ||
         workerSupervisor.inspect(ownership) != FeatureTaskRuntimeProcessInspection.NotRunning

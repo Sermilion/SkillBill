@@ -2,8 +2,8 @@ package skillbill.engine.work.control
 
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryActions
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryActions
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryService
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService

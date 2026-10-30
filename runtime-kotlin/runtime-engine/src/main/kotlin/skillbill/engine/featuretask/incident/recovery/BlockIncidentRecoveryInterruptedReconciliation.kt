@@ -1,4 +1,4 @@
-package skillbill.engine.diagnostics.block.recovery
+package skillbill.engine.featuretask.incident.recovery
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning

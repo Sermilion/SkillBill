@@ -1,4 +1,4 @@
-package skillbill.engine.diagnostics.block.recovery
+package skillbill.engine.featuretask.incident.recovery
 
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident

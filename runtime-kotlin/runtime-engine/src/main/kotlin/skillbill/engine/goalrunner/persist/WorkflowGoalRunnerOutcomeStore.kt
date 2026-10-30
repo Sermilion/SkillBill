@@ -3,8 +3,8 @@ package skillbill.engine.goalrunner.persist
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
-import skillbill.engine.diagnostics.block.BlockIncidentCaptureOutcome
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
+import skillbill.engine.featuretask.incident.BlockIncidentCaptureOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords

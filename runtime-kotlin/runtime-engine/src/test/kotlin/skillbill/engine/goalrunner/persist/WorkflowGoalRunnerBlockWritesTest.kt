@@ -3,12 +3,12 @@ package skillbill.engine.goalrunner.persist
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
-import skillbill.engine.diagnostics.block.BlockIncidentCaptureOutcome
-import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.diagnostics.block.BlockIncidentService
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
+import skillbill.engine.featuretask.incident.BlockIncidentCaptureOutcome
+import skillbill.engine.featuretask.incident.BlockIncidentFeatureTaskCorrelation
 import skillbill.engine.goalrunner.model.GoalRunnerBlockRequest
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWriteResult
 import skillbill.goalrunner.model.GoalRunnerAcceptedBlockReference

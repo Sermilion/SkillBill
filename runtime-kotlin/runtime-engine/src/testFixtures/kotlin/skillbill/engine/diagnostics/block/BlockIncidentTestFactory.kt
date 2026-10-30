@@ -1,9 +1,11 @@
 package skillbill.engine.diagnostics.block
 
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryActions
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryInterruptedReconciliation
-import skillbill.engine.diagnostics.block.recovery.BlockIncidentRecoveryService
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
+import skillbill.engine.featuretask.incident.BlockIncidentEntryReconciler
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryActions
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryInterruptedReconciliation
+import skillbill.engine.featuretask.incident.recovery.BlockIncidentRecoveryService
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeStandaloneIncidentRecovery
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.work.WorkIncidentProjectionBuilder

@@ -1,4 +1,4 @@
-package skillbill.engine.diagnostics.block.recovery
+package skillbill.engine.featuretask.incident.recovery
 
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
@@ -41,7 +41,7 @@ internal object BlockIncidentRecoveryFactsReader {
       unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, target.mutationWorkflowId)
         ?: return BlockIncidentRecoveryFactsRead.Unavailable("the target workflow is missing")
     val step =
-      workflow.steps.firstOrNull { it.stepId == target.phaseId }
+      workflow.step(target.phaseId)
         ?: return BlockIncidentRecoveryFactsRead.Unavailable("the blocked phase step is missing")
     val generation =
       unit.workflowStates.getLatestFeatureTaskRuntimeWorkerGeneration(target.mutationWorkflowId)

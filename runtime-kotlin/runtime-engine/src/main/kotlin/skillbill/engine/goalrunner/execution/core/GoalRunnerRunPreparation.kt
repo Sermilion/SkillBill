@@ -2,7 +2,7 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonSelection
-import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
+import skillbill.engine.featuretask.incident.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest

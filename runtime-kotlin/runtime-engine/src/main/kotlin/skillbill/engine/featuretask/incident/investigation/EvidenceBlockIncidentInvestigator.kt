@@ -1,10 +1,10 @@
-package skillbill.engine.diagnostics.block.investigation
+package skillbill.engine.featuretask.incident.investigation
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigationResult
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
-import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFacts
-import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFactsReader
+import skillbill.engine.featuretask.incident.report.BlockIncidentLaunchFacts
+import skillbill.engine.featuretask.incident.report.BlockIncidentLaunchFactsReader
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncident
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentClassifier

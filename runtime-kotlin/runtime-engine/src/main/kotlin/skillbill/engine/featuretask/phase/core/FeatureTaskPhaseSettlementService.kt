@@ -6,8 +6,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.diagnostics.block.BlockIncidentAliases
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
-import skillbill.engine.diagnostics.block.BlockIncidentFeatureTaskCorrelation
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
+import skillbill.engine.featuretask.incident.BlockIncidentFeatureTaskCorrelation
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckStatus
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknowledgment
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest

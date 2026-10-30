@@ -1,4 +1,4 @@
-package skillbill.engine.diagnostics.block.investigation
+package skillbill.engine.featuretask.incident.investigation
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec

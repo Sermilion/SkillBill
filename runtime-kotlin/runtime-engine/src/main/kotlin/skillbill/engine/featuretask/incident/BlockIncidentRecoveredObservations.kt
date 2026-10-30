@@ -1,6 +1,10 @@
-package skillbill.engine.diagnostics.block
+package skillbill.engine.featuretask.incident
 
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentIdentity
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.featuretask.slot.state.carriesPullRequestIncidentFields
 import skillbill.ports.blockincident.model.BlockedWorkflowWithoutIncident
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -33,7 +37,7 @@ internal object BlockIncidentRecoveredObservations {
           put(BlockIncidentCorrelatedField.REASON, BlockIncidentFieldAvailability.NOT_CAPTURED)
         }
       }
-    val currentAttempt = record.steps.firstOrNull { it.stepId == record.currentStepId }?.attemptCount
+    val currentAttempt = record.step(record.currentStepId)?.attemptCount
     val applicable =
       identity?.takeIf {
         it.stepId == record.currentStepId &&
@@ -170,7 +174,7 @@ internal object BlockIncidentRecoveredObservations {
     return BlockIncidentObservation(
       workflowId = record.workflowId,
       phaseId = stepId,
-      attempt = record.steps.firstOrNull { it.stepId == stepId }?.attemptCount?.takeIf { it > 0 },
+      attempt = record.step(stepId)?.attemptCount?.takeIf { it > 0 },
       reason = reason,
       alias = alias,
       generation = null,
@@ -186,7 +190,7 @@ internal object BlockIncidentRecoveredObservations {
 
   private fun phaseFields(phaseId: String): Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability> {
     val pullRequestAvailability =
-      if (phaseId in BlockIncidentFeatureTaskCorrelation.PULL_REQUEST_PHASES) {
+      if (carriesPullRequestIncidentFields(phaseId)) {
         BlockIncidentFieldAvailability.NOT_CAPTURED
       } else {
         BlockIncidentFieldAvailability.NOT_APPLICABLE

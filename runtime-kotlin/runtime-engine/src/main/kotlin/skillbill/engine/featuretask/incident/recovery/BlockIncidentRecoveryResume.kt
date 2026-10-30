@@ -1,4 +1,4 @@
-package skillbill.engine.diagnostics.block.recovery
+package skillbill.engine.featuretask.incident.recovery
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition

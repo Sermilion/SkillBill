@@ -1,4 +1,4 @@
-package skillbill.engine.diagnostics.block.recovery
+package skillbill.engine.featuretask.incident.recovery
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.block.BlockIncidentAcceptedReferenceResolver
@@ -94,7 +94,7 @@ internal object BlockIncidentRecoveryTargetResolver {
       decodePhaseRecords(workflow.artifacts)[occurrence.phaseId]
         ?: return BlockIncidentRecoveryTargetFailure.MISSING_PHASE_RECORD
     val step =
-      workflow.steps.firstOrNull { it.stepId == occurrence.phaseId }
+      occurrence.phaseId?.let(workflow::step)
         ?: return BlockIncidentRecoveryTargetFailure.MISSING_WORKFLOW_STEP
     return when {
       !matchesIncident(evidence) || !aliasesOwned(unit, evidence) ->

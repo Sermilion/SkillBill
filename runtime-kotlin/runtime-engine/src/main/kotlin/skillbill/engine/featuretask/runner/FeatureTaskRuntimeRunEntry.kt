@@ -7,7 +7,7 @@ import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
-import skillbill.engine.diagnostics.block.BlockIncidentEntryReconciler
+import skillbill.engine.featuretask.incident.BlockIncidentEntryReconciler
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment

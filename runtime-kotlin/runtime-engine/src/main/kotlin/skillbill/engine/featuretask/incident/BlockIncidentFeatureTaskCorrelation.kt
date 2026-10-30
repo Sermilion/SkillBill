@@ -1,7 +1,12 @@
-package skillbill.engine.diagnostics.block
+package skillbill.engine.featuretask.incident
 
+import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentFailureFacts
+import skillbill.engine.diagnostics.block.BlockIncidentIdentity
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.engine.featuretask.slot.state.carriesPullRequestIncidentFields
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.workflow.WorkflowStateRepository
@@ -16,7 +21,6 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentFieldAvai
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal class BlockIncidentFeatureTaskCorrelation private constructor(
   private val workflowId: String?,
@@ -141,11 +145,6 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
       stepId == phaseId && attempt == acceptedAttempt && generation == acceptedGeneration && alias == canonical
 
     private const val MAX_IDENTITY_CHARS = 512
-    internal val PULL_REQUEST_PHASES =
-      setOf(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
-      )
     internal val PULL_REQUEST_FIELDS =
       listOf(
         BlockIncidentCorrelatedField.MONITOR_SELECTOR,
@@ -179,7 +178,7 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
           ?: states.getFeatureTaskRuntimeWorkerOwnership(workflowId)
             ?.takeIf { it.workflowId == workflowId && it.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE }
       val pullRequestAvailability =
-        if (phaseId in PULL_REQUEST_PHASES) {
+        if (carriesPullRequestIncidentFields(phaseId)) {
           BlockIncidentFieldAvailability.NOT_CAPTURED
         } else {
           BlockIncidentFieldAvailability.NOT_APPLICABLE

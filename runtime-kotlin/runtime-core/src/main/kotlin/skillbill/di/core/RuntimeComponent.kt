@@ -45,12 +45,12 @@ import skillbill.di.scaffold.RuntimeScaffoldValidationProvides
 import skillbill.di.telemetry.RuntimeTelemetryProvides
 import skillbill.di.workflow.RuntimeWorkflowProvides
 import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
-import skillbill.engine.diagnostics.block.BlockIncidentCapture
 import skillbill.engine.diagnostics.block.BlockIncidentInvestigator
-import skillbill.engine.diagnostics.block.investigation.EvidenceBlockIncidentInvestigator
-import skillbill.engine.diagnostics.block.report.BlockIncidentLaunchFactsReader
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.block.report.ProductReportScheduler
+import skillbill.engine.featuretask.incident.BlockIncidentCapture
+import skillbill.engine.featuretask.incident.investigation.EvidenceBlockIncidentInvestigator
+import skillbill.engine.featuretask.incident.report.BlockIncidentLaunchFactsReader
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator

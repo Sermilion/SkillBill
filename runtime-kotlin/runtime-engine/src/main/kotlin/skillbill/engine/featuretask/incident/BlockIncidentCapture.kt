@@ -1,7 +1,13 @@
-package skillbill.engine.diagnostics.block
+package skillbill.engine.featuretask.incident
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.block.BlockIncidentAcceptedReferenceResolver
+import skillbill.engine.diagnostics.block.BlockIncidentAliases
+import skillbill.engine.diagnostics.block.BlockIncidentObservation
+import skillbill.engine.diagnostics.block.BlockIncidentService
+import skillbill.engine.diagnostics.block.bestEffort
+import skillbill.engine.diagnostics.block.recoverableFailureOf
 import skillbill.error.blockincident.BlockIncidentFailureCode
 import skillbill.ports.blockincident.BlockIncidentSpool
 import skillbill.ports.blockincident.model.BlockIncidentSpoolAppend
