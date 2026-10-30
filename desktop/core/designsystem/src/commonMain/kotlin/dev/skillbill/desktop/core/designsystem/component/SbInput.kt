@@ -36,6 +36,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.text.style.TextOverflow
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -65,12 +67,14 @@ fun SbInput(
     animationSpec = hoverSpec(),
     label = "input-focus-ring",
   ).value
+  // `.sb-input` sets 400 13px/1 sans; `--mono` swaps the family and drops to 12px. The placeholder inherits the same font.
+  val textStyle = (if (mono) SkillBillTheme.type.monoSm else SkillBillTheme.type.tBase).copy(lineHeight = 1.em)
   BasicTextField(
     value = value,
     onValueChange = onValueChange,
     enabled = enabled,
     singleLine = true,
-    textStyle = (if (mono) SkillBillTheme.type.monoSm else SkillBillTheme.type.tBase).copy(color = colors.fg),
+    textStyle = textStyle.copy(color = colors.fg),
     // caret-color defaults to the text color.
     cursorBrush = SolidColor(colors.fg),
     interactionSource = interaction,
@@ -110,7 +114,7 @@ fun SbInput(
         }
         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
           if (value.isEmpty() && placeholder != null) {
-            BasicText(placeholder, style = SkillBillTheme.type.tBase.copy(color = colors.fgFaint), maxLines = 1)
+            BasicText(placeholder, style = textStyle.copy(color = colors.fgFaint), maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
           }
           innerTextField()
         }

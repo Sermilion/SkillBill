@@ -3,6 +3,8 @@ package dev.skillbill.desktop.feature.work
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,11 +13,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.SbButton
@@ -34,6 +39,7 @@ import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
+import kotlin.math.roundToInt
 
 private val FILTER_WIDTH = 280.dp
 
@@ -114,7 +120,8 @@ private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScr
   val sections = state.shownSections.let { shown ->
     if (state.section == null && shown.any { it.items.isNotEmpty() }) shown.filter { it.items.isNotEmpty() } else shown
   }
-  if (filtering && sections.all { it.items.isEmpty() }) {
+  // A chosen section keeps its header and shows its own "No matching work" note, as the prototype's `work()` does.
+  if (filtering && state.section == null && sections.all { it.items.isEmpty() }) {
     LaunchedEffect(board.nextCursor) { if (board.nextCursor != null) onAction(WorkAction.LoadMore) }
     Centered {
       EmptyState("No matching work", LucideIcons.search, body = "Nothing on the board matches the filter.") {
@@ -131,14 +138,20 @@ private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScr
     }
   }
   LaunchedEffect(atEnd, board.nextCursor) { if (atEnd && board.nextCursor != null) onAction(WorkAction.LoadMore) }
+  // Where the row was right-clicked, in row pixels; the row menu opens at that point, as the prototype's contextmenu handler.
+  var menuAt by remember { mutableStateOf(IntOffset.Zero) }
   LazyColumn(Modifier.fillMaxSize(), listState) {
     sections.forEach { boardSection ->
       val kind = boardSection.kind
       groupHeader(key = "header:$kind", label = sectionLabel(kind), count = boardSection.items.size, lead = { StatusIcon(sectionLead(kind), 0.5f) })
       items(boardSection.items, key = { "$kind:${it.id}" }) { item ->
         Box {
-          WorkRow(item, focused = item.id == state.focusedId, renderedAt = state.renderedAt, narrow = narrow, onAction = onAction)
-          if (state.menu?.id == item.id) WorkRowMenu(state, item, onAction, host.onOpenTerminal, host.onCopyReason)
+          WorkRow(item, focused = item.id == state.focusedId, renderedAt = state.renderedAt, narrow = narrow, onAction = onAction) { at ->
+            menuAt = IntOffset(at.x.roundToInt(), at.y.roundToInt())
+          }
+          if (state.menu?.id == item.id) {
+            Box(Modifier.offset { menuAt }.size(0.dp)) { WorkRowMenu(state, item, onAction, host.onOpenTerminal, host.onCopyReason) }
+          }
         }
       }
       if (boardSection.items.isEmpty()) {

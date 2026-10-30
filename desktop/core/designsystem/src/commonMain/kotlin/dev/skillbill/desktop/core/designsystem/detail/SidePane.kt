@@ -42,10 +42,13 @@ fun SidePane(
   val colors = SkillBillTheme.colors
   Column(
     modifier.then(if (fillWidth) Modifier.fillMaxSize() else Modifier.width(SkillBillSize.specsPane).fillMaxHeight())
-      .background(colors.bgPanel).then(if (showStartBorder) Modifier.hairline(Edge.Start, colors.borderSubtle) else Modifier).semantics { paneTitle = title },
+      .background(colors.bgPanel)
+      // The CSS border takes 1px of the box, so the content starts after it rather than under it.
+      .then(if (showStartBorder) Modifier.hairline(Edge.Start, colors.borderSubtle).padding(start = 1.dp) else Modifier)
+      .semantics { paneTitle = title },
   ) {
     Row(
-      Modifier.fillMaxWidth().height(SkillBillSize.header).hairline(Edge.Bottom, colors.borderSubtle).padding(start = 16.dp, end = 8.dp),
+      Modifier.fillMaxWidth().height(SkillBillSize.header).hairline(Edge.Bottom, colors.borderSubtle).padding(start = 16.dp, end = 8.dp, bottom = 1.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {

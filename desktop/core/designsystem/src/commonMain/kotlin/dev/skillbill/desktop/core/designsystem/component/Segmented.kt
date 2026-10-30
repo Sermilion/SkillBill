@@ -46,10 +46,10 @@ data class SegmentedOption<T>(val value: T, val label: String, val icon: ImageVe
 data class ViewTab<T>(val value: T, val label: String, val icon: ImageVector? = null, val count: Int? = null, val attention: Boolean = false)
 
 @Composable
-fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, onSelect: (T) -> Unit) {
+fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
   val colors = SkillBillTheme.colors
   // `.sb-seg` pads 2px inside its 1px border.
-  Row(Modifier.background(colors.bgRaised, RoundedCornerShape(SkillBillRadius.sm)).border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.sm)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+  Row(modifier.background(colors.bgRaised, RoundedCornerShape(SkillBillRadius.sm)).border(1.dp, colors.border, RoundedCornerShape(SkillBillRadius.sm)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
     options.forEach { option ->
       val isSelected = option.value == selected
       val source = remember(option.value) { MutableInteractionSource() }

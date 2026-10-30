@@ -42,7 +42,8 @@ internal fun RunActions(
       view.pauseAfter?.let { ActionButton(it, LucideIcons.pause, "P") { onAction(ControlsAction.PauseAfterSubtask) } }
       view.pauseNow?.let { ActionButton(it, LucideIcons.stop, "⇧ P", SbButtonVariant.Danger) { onAction(ControlsAction.PauseNow) } }
       view.launch?.let { button ->
-        val variant = if (button.enabled) SbButtonVariant.Primary else SbButtonVariant.Secondary
+        // screens.js `runActions()`: primary whenever the run options allow a launch, as the harness note shows.
+        val variant = if (view.launchNote) SbButtonVariant.Primary else SbButtonVariant.Secondary
         ActionButton(button, LucideIcons.play, "R", variant) { onAction(ControlsAction.Launch) }
       }
       view.agent?.let { button ->

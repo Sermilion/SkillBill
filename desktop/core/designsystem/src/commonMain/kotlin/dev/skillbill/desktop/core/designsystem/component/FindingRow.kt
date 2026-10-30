@@ -28,7 +28,14 @@ private val FINDING_SEVERITY_WIDTH = 58.dp
 fun FindingRow(title: String, severity: String? = null, ref: String? = null, location: String? = null, meta: String? = null, state: String? = null, stateColor: Color? = null, showDivider: Boolean = true) {
   val dividerColor = SkillBillTheme.colors.borderSubtle
   val locationFontFamily = SkillBillTheme.type.monoSm.fontFamily
-  Row(Modifier.drawBehind { if (showDivider) drawLine(dividerColor, Offset.Zero, Offset(size.width, 0f), 1.dp.toPx()) }.padding(horizontal = 12.dp, vertical = 9.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+  // `.sb-finding` border-top takes its own 1px above the 9px padding; the line sits inside the row, not half above it.
+  Row(
+    Modifier.drawBehind {
+      if (showDivider) {
+        val stroke = 1.dp.toPx()
+        drawLine(dividerColor, Offset(0f, stroke / 2), Offset(size.width, stroke / 2), stroke)
+      }
+    }.padding(start = 12.dp, end = 12.dp, top = if (showDivider) 10.dp else 9.dp, bottom = 9.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
     severity?.let { BasicText(it.uppercase(), Modifier.width(FINDING_SEVERITY_WIDTH), style = SkillBillTheme.type.t2xs.copy(color = severityColor(it), fontWeight = FontWeight.SemiBold, letterSpacing = .04f.em, lineHeight = 1.6.em), maxLines = 1) }
     ref?.let { IdTag(it, Modifier.padding(top = 2.dp)) }
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

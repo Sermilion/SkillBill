@@ -58,6 +58,16 @@ fun SbButton(
   // `[disabled]` sets pointer-events: none, so a disabled button never shows its hover state.
   val hover = interaction.collectIsHoveredAsState().value && enabled
   val bg = rememberHoverColor(hover, variant.background(colors, false), variant.background(colors, true)).value
+  // `.sb-btn` transitions border-color with the background over --dur-fast.
+  val borderColor = rememberHoverColor(
+    hover,
+    if (variant == SbButtonVariant.Danger || variant == SbButtonVariant.Secondary) colors.border else Color.Transparent,
+    when (variant) {
+      SbButtonVariant.Danger -> colors.stFailed.copy(alpha = .4f)
+      SbButtonVariant.Secondary -> colors.borderStrong
+      else -> Color.Transparent
+    },
+  ).value
   val fg = when (variant) {
     SbButtonVariant.Primary -> colors.accentFg
     SbButtonVariant.Danger -> colors.stFailed
@@ -71,7 +81,7 @@ fun SbButton(
         .alpha(if (enabled) 1f else .45f)
         .background(bg, shape)
         .then(if (variant == SbButtonVariant.Primary || variant == SbButtonVariant.Ghost || variant == SbButtonVariant.DangerSolid) Modifier
-        else Modifier.border(BUTTON_BORDER, if (variant == SbButtonVariant.Danger && hover) colors.stFailed.copy(alpha = .4f) else if (hover) colors.borderStrong else colors.border, shape))
+        else Modifier.border(BUTTON_BORDER, borderColor, shape))
         .hoverable(interaction)
         .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
         .sbFocusRing(interaction, shape)

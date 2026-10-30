@@ -1,6 +1,7 @@
 package dev.skillbill.desktop.core.designsystem.list
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,7 +32,6 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.IdTag
 import dev.skillbill.desktop.core.designsystem.composite.expandSemantics
 import dev.skillbill.desktop.core.designsystem.composite.focusBar
-import dev.skillbill.desktop.core.designsystem.composite.rowFill
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -66,7 +67,9 @@ fun TreeRow(
     else -> type.tBaseMedium.copy(color = colors.fg)
   }
   Row(
-    modifier.fillMaxWidth().height(SkillBillSize.compactRow).rowFill(hovered, focused, false).focusBar(focused)
+    // `.sb-tree-row` has no background transition: hover and focus fills switch at once.
+    modifier.fillMaxWidth().height(SkillBillSize.compactRow)
+      .background(if (focused) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent).focusBar(focused)
       .hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
       .then(if (expandable) Modifier.expandSemantics(expanded) else Modifier)
       .padding(start = treeBasePadding + treeIndent * level, end = 16.dp),

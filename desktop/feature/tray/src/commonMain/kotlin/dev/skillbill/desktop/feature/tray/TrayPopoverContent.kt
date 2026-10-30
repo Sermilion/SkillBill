@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ProgressRing
 import dev.skillbill.desktop.core.designsystem.component.ProgressRingTone
@@ -101,7 +102,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.finishedRows(items: L
     BasicText(
       "Finished in the last hour",
       Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
-      style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint),
+      // 500 at the xs size on a 1.0 line, as `.sb-menu-head`.
+      style = SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, lineHeight = 1.em),
+      maxLines = 1,
     )
     items.forEach { TrayRow(it, true) { onAction(TrayAction.Select(it)) } }
   }

@@ -68,7 +68,8 @@ fun SettingsScreen(
     )
     Box(
       Modifier.weight(1f).fillMaxHeight().padding(top = 8.dp, end = 8.dp, bottom = 8.dp).clip(shape).background(colors.bgPanel)
-        .border(1.dp, colors.borderSubtle, shape),
+        // `.sb-main` content starts inside its 1px border; Compose's border does not inset content.
+        .border(1.dp, colors.borderSubtle, shape).padding(1.dp),
     ) {
       Column(Modifier.fillMaxSize()) {
         ViewHeader(

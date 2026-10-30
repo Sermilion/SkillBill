@@ -39,17 +39,18 @@ internal fun OperatorDecisionBlock(draft: DecisionDraft, recordEnabled: Boolean,
   }
   val type = SkillBillTheme.type
   val colors = SkillBillTheme.colors
-  // The design's decision panel: 12 padding inside a hairline `--r-md` frame, parts 12 apart.
+  // The design's decision panel: 12 padding inside a 1px `--r-md` frame (13 from the outer edge), parts 12 apart.
   val shape = RoundedCornerShape(SkillBillRadius.md)
   Column(
-    Modifier.fillMaxWidth().border(1.dp, colors.borderSubtle, shape).padding(12.dp),
+    Modifier.fillMaxWidth().border(1.dp, colors.borderSubtle, shape).padding(13.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
       BasicText(draft.subtaskId?.let { "Decide subtask $it" } ?: "Decide the current subtask", style = type.tSmMedium.copy(color = colors.fg))
       BasicText("Recorded now, applied when the goal resumes", style = type.tSm.copy(color = colors.fgFaint))
     }
-    Segmented(OperatorDecision.entries.map { SegmentedOption(it, it.label(), enabled = editable) }, draft.decision) { onAction(ControlsAction.ChooseDecision(it)) }
+    // `.sb-seg` is a flex item of the `.l-col`, so it stretches to the panel's width; its buttons stay at the start.
+    Segmented(OperatorDecision.entries.map { SegmentedOption(it, it.label(), enabled = editable) }, draft.decision, Modifier.fillMaxWidth()) { onAction(ControlsAction.ChooseDecision(it)) }
     if (draft.decision == OperatorDecision.RETRY_FIX) {
       SbField("Instructions for the retry", help = "Required for Retry fix.", error = draft.fieldError) {
         SbInput(

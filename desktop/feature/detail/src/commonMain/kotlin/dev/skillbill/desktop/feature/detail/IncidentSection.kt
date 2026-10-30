@@ -1,7 +1,6 @@
 package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -10,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,7 +29,6 @@ import dev.skillbill.desktop.core.designsystem.component.SbCheckbox
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
-import dev.skillbill.desktop.core.designsystem.detail.CollapsibleSectionHeader
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -41,106 +37,76 @@ import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.IncidentRecoveryEligibility
 
 /**
- * HANDOFF 9.2 item 7: the current incident, its prerequisites, the [decision] slot, evidence and report, then the past incidents
- * as `IncidentPanel.kt` lists them. The caller adds it only when there is either.
+ * HANDOFF 9.2 item 7: the current incident, its prerequisites, the [decision] slot, evidence and report, as screens.js
+ * `incidentPanel` lays them out. The caller adds it only when there is an incident.
  */
 @Composable
 internal fun IncidentSection(
-  incident: Incident?,
-  history: List<Incident>,
+  incident: Incident,
   view: RunActionsView,
   decision: @Composable () -> Unit,
   onAction: (ControlsAction) -> Unit,
   modifier: Modifier = Modifier,
-  onCopy: (String) -> Unit,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  val labelColor = incident?.let { incidentLabelColor(it) }
-  Section(title = "Incident", modifier = modifier, actions = incident?.let { { SbLabel(it.progress.label(), SbLabelStyle.Dot(labelColor)) } }) {
-    if (incident != null) {
-      // The callout body (screens.js incidentPanel): an `.l-col g-1` of faint-led Cause and Next lines and the `--t-xs`
-      // certainty line, then the prerequisite checklist 8 below it, inside the callout.
-      val bodyStyle = type.tSm.copy(color = colors.fgMuted, lineHeight = 1.5.em)
-      val checklist = view.checklist
-      Callout(incident.tone(), incident.progress.label(), modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          BasicText(
-            buildAnnotatedString {
-              withStyle(SpanStyle(color = colors.fgFaint)) { append("Cause:") }
-              append(" ${incident.cause ?: "Unknown"}")
-            },
-            style = bodyStyle,
-          )
-          BasicText(
-            buildAnnotatedString {
-              withStyle(SpanStyle(color = colors.fgFaint)) { append("Next:") }
-              append(" ${incident.nextAction}")
-            },
-            style = bodyStyle,
-          )
-          BasicText(
-            "certainty ${incident.certainty}" + (unavailableText(incident)?.let { " · recovery unavailable: $it" } ?: ""),
-            style = bodyStyle.copy(color = colors.fgFaint, fontSize = type.tXs.fontSize),
-          )
-        }
-        // `.sb-checklist`: rows 6 apart, checkbox and text 10 apart, top-aligned with the box 2 down.
-        if (checklist != null || incident.prerequisites.isNotEmpty()) {
-          Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val rowStyle = type.tSm.copy(color = colors.fg2, lineHeight = 1.45.em)
-            if (checklist != null) {
-              checklist.forEach { item ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-                  SbCheckbox(item.checked, { onAction(ControlsAction.ConfirmPrerequisite(item.id, it)) }, item.text, enabled = view.checklistEnabled, modifier = Modifier.padding(top = 2.dp))
-                  BasicText(item.text, Modifier.weight(1f), style = rowStyle)
-                }
+  val labelColor = incidentLabelColor(incident)
+  Section(title = "Incident", modifier = modifier, actions = { SbLabel(incident.progress.label(), SbLabelStyle.Dot(labelColor)) }) {
+    // The callout body (screens.js incidentPanel): an `.l-col g-1` of faint-led Cause and Next lines and the `--t-xs`
+    // certainty line, then the prerequisite checklist 8 below it, inside the callout.
+    val bodyStyle = type.tSm.copy(color = colors.fgMuted, lineHeight = 1.5.em)
+    val checklist = view.checklist
+    Callout(incident.tone(), incident.progress.label(), modifier = Modifier.fillMaxWidth()) {
+      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        BasicText(
+          buildAnnotatedString {
+            withStyle(SpanStyle(color = colors.fgFaint)) { append("Cause:") }
+            append(" ${incident.cause ?: "Unknown"}")
+          },
+          style = bodyStyle,
+        )
+        BasicText(
+          buildAnnotatedString {
+            withStyle(SpanStyle(color = colors.fgFaint)) { append("Next:") }
+            append(" ${incident.nextAction}")
+          },
+          style = bodyStyle,
+        )
+        BasicText(
+          "certainty ${incident.certainty}" + (unavailableText(incident)?.let { " · recovery unavailable: $it" } ?: ""),
+          style = bodyStyle.copy(color = colors.fgFaint, fontSize = type.tXs.fontSize),
+        )
+      }
+      // `.sb-checklist`: rows 6 apart, checkbox and text 10 apart, top-aligned with the box 2 down.
+      if (checklist != null || incident.prerequisites.isNotEmpty()) {
+        Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          val rowStyle = type.tSm.copy(color = colors.fg2, lineHeight = 1.45.em)
+          if (checklist != null) {
+            checklist.forEach { item ->
+              Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                SbCheckbox(item.checked, { onAction(ControlsAction.ConfirmPrerequisite(item.id, it)) }, item.text, enabled = view.checklistEnabled, modifier = Modifier.padding(top = 2.dp))
+                BasicText(item.text, Modifier.weight(1f), style = rowStyle)
               }
-            } else {
-              incident.prerequisites.forEach { BasicText(it.instruction, style = rowStyle) }
             }
+          } else {
+            incident.prerequisites.forEach { BasicText(it.instruction, style = rowStyle) }
           }
         }
       }
-      decision()
-      if (incident.evidence.isNotEmpty()) {
-        // `.l-col g-2`: the faint `--t-xs` caption, then the evidence rows in one box.
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          BasicText("Evidence", style = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal))
-          SbBox {
-            incident.evidence.forEachIndexed { index, evidence ->
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) {
-                  FindingRow(
-                    title = evidence.summary,
-                    ref = evidence.referenceId,
-                    meta = "${evidence.kind} · ${if (evidence.trusted) "trusted" else "untrusted"}",
-                    showDivider = index > 0,
-                  )
-                }
-                SbButton("Copy ${evidence.referenceId}", { onCopy(evidence.referenceId) }, variant = SbButtonVariant.Ghost, size = SbControlSize.Small, icon = LucideIcons.copy)
-              }
-            }
+    }
+    decision()
+    if (incident.evidence.isNotEmpty()) {
+      // `.l-col g-2`: the faint `--t-xs` caption, then the evidence rows in one box.
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        BasicText("Evidence", style = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal))
+        SbBox {
+          incident.evidence.forEachIndexed { index, evidence ->
+            FindingRow(title = evidence.summary, ref = evidence.referenceId, meta = evidence.kind, showDivider = index > 0)
           }
         }
       }
-      ReportRow(incident)
     }
-    if (history.isNotEmpty()) IncidentHistory(history)
-  }
-}
-
-@Composable
-private fun IncidentHistory(history: List<Incident>) {
-  val expanded = remember(history) { mutableStateOf(false) }
-  val colors = SkillBillTheme.colors
-  val type = SkillBillTheme.type
-  CollapsibleSectionHeader("History", expanded.value, { expanded.value = !expanded.value }, count = history.size.toString())
-  if (expanded.value) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      history.forEach { past ->
-        BasicText("${past.progress.label()} · ${past.cause ?: past.summary} · ${past.observedAt}", style = type.tSm.copy(color = colors.fgMuted))
-      }
-    }
+    ReportRow(incident)
   }
 }
 

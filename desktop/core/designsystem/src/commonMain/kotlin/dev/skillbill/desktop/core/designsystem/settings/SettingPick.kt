@@ -65,7 +65,8 @@ fun SettingPick(
         this.contentDescription = contentDescription
         if (!enabled) disabled()
       }
-      .padding(horizontal = 8.dp),
+      // `.sb-pick` pads 8px inside its 1px border.
+      .padding(horizontal = 9.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

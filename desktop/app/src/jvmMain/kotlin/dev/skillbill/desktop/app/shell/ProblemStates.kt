@@ -43,18 +43,16 @@ private const val LOAD_FAILED = "Couldn't load your work"
 
 /** The problem state's copy and actions, shared by the main window and the runtime refusal window. */
 @Composable
-fun ProblemStatePanel(problem: ShellProblem, onRefresh: () -> Unit = {}, onOpenSettings: () -> Unit = {}, onRetry: () -> Unit = {}) {
-  val loadActions: @Composable RowScope.() -> Unit = {
-    SbButton("Refresh", onRefresh, variant = SbButtonVariant.Primary, icon = LucideIcons.refresh)
-    SbButton("Open settings", onOpenSettings, icon = LucideIcons.sliders)
-  }
+fun ProblemStatePanel(problem: ShellProblem, onRefresh: () -> Unit = {}, onRetry: () -> Unit = {}) {
+  // One secondary Retry, as the prototype's "Couldn't load your work" state; the body points at Settings in the sidebar.
+  val loadActions: @Composable RowScope.() -> Unit = { SbButton("Retry", onRefresh) }
   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     when (problem) {
       is ShellProblem.RuntimeUnavailable -> EmptyState(
         "Skill Bill runtime unavailable",
         LucideIcons.warn,
         body = runtimeUnavailableBody(problem.problem),
-      ) { SbButton("Retry", onRetry, variant = SbButtonVariant.Primary, icon = LucideIcons.refresh) }
+      ) { SbButton("Retry", onRetry, variant = SbButtonVariant.Primary) }
       ShellProblem.Opening -> EmptyState("Opening your database", LucideIcons.refresh, body = "Skill Bill is switching to the selected database.")
       is ShellProblem.SessionFailed -> EmptyState(LOAD_FAILED, LucideIcons.alert, body = storageFailureText(problem.failure), actions = loadActions)
       is ShellProblem.BoardFailed -> EmptyState(LOAD_FAILED, LucideIcons.alert, body = boardFailureBody(problem.problem), actions = loadActions)
@@ -79,5 +77,5 @@ private fun runtimeUnavailableBody(problem: RuntimeBuildProblem): String {
     is RuntimeBuildProblem.Unreadable -> problem.installedIdentity?.let { "\nInstalled $it." }.orEmpty()
     is RuntimeBuildProblem.NotInstalled -> ""
   }
-  return "$reason\nInstall a matched runtime and desktop pair with ${problem.reinstallCommand}, then retry.$identities"
+  return "$reason Install a matched runtime and desktop pair with ${problem.reinstallCommand}, then retry.$identities"
 }

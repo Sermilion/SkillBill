@@ -102,8 +102,8 @@ fun Toast(data: ToastData, onDismiss: () -> Unit) {
       BasicText(data.title, style = type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.35.em))
       data.body?.let { BasicText(it, style = type.tSm.copy(color = colors.fgMuted, lineHeight = 1.4.em)) }
     }
-    // `.sb-toast-ac` is a sibling of the text column, centered on the cross axis.
-    if (data.actions.isNotEmpty()) Row(Modifier.align(Alignment.CenterVertically), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    // `.sb-toast-ac` is a flex item of `.sb-toast { align-items: flex-start }`, so it sits at the top.
+    if (data.actions.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
       data.actions.forEach { SbButton(it.label, it.onClick, variant = SbButtonVariant.Ghost, size = SbControlSize.Small) }
     }
   }

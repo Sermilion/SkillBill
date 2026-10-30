@@ -1,37 +1,27 @@
 package dev.skillbill.desktop.feature.detail
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.FindingRow
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
+import dev.skillbill.desktop.core.designsystem.detail.PropertyList
+import dev.skillbill.desktop.core.designsystem.detail.PropertyRow
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.section
-import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.icon.SbIcon
-import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
@@ -44,44 +34,39 @@ private fun SectionText(text: String, color: Color = SkillBillTheme.colors.fg2, 
   BasicText(text, modifier, style = SkillBillTheme.type.tSm.copy(color = color))
 }
 
-/**
- * One activity category: a `.sb-prop` row whose label folds its value away. The label column is the property list's 92 dp,
- * with the 12 dp chevron in front of the label.
- */
+/** One `.sb-prop` value of the activity list: the text, then a faint "· 4m ago" when it has an age. */
 @Composable
-private fun ActivityRow(label: String, value: String, expanded: Boolean, onToggle: () -> Unit) {
+private fun RowScope.ActivityValue(text: String, ago: String?, mono: Boolean) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
-  val interaction = remember { MutableInteractionSource() }
-  val hovered = interaction.collectIsHoveredAsState().value
-  val chevron = rememberHoverColor(hovered, colors.fgFaint, colors.fgMuted).value
-  Row(
-    Modifier.fillMaxWidth().heightIn(min = 30.dp)
-      .hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onToggle)
-      .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Row(Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      CompositionLocalProvider(LocalContentColor provides chevron) {
-        SbIcon(if (expanded) LucideIcons.chevronDown else LucideIcons.chevronRight, SbIconSize.Xs)
-      }
-      BasicText(label, style = type.tSm.copy(color = colors.fgMuted), maxLines = 1)
+  val main = if (mono) type.monoSm.copy(fontSize = type.tXs.fontSize, color = colors.fg2) else type.tSm.copy(color = colors.fg2)
+  if (mono) {
+    // Last edit: the mono span and the faint age are two `dd` children, 8 apart.
+    BasicText(text, Modifier.weight(1f, fill = false), style = main, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    ago?.let { BasicText("· $it ago", style = type.tSm.copy(color = colors.fgFaint), maxLines = 1) }
+  } else {
+    // Agent activity: one span, the faint age inline after a space.
+    val value = buildAnnotatedString {
+      append(text)
+      ago?.let { withStyle(SpanStyle(color = colors.fgFaint)) { append(" · $it ago") } }
     }
-    if (expanded) BasicText(value, Modifier.weight(1f), style = type.tSm.copy(color = colors.fg2))
+    BasicText(value, Modifier.weight(1f, fill = false), style = main, maxLines = 2, overflow = TextOverflow.Ellipsis)
   }
 }
 
-/** HANDOFF 9.2 item 12: the latest agent activity, edit and event, as `desktop-tray`'s detail words them. */
-internal fun LazyListScope.activitySection(kind: WorkKind?, detail: Detail, now: Instant, expansion: DetailSectionExpansion) {
-  fun ago(at: Instant?) = at?.let { " · ${age(now - it)} ago" }.orEmpty()
+private class ActivityRow(val label: String, val text: String, val ago: String?, val mono: Boolean = false)
+
+/** HANDOFF 9.2 item 12: the latest agent activity, edit and event in a property list, as `desktop-tray`'s detail words them. */
+internal fun LazyListScope.activitySection(kind: WorkKind?, detail: Detail, now: Instant) {
+  fun ago(at: Instant?) = at?.let { age(now - it) }
   val rows = buildList {
-    detail.lastAgentActivityLabel?.let { add("Agent activity" to it + ago(detail.lastAgentActivityAt)) }
+    detail.lastAgentActivityLabel?.let { add(ActivityRow("Agent activity", it, ago(detail.lastAgentActivityAt))) }
     detail.latestActivity.edit?.let { edit ->
       val paths = edit.paths.joinToString { "…/" + it.substringAfterLast('/') }
-      add("Last edit" to "$paths +${edit.insertions ?: 0} −${edit.deletions ?: 0}${ago(edit.recordedAt)}")
+      add(ActivityRow("Last edit", "$paths +${edit.insertions ?: 0} −${edit.deletions ?: 0}", ago(edit.recordedAt), mono = true))
     }
     detail.latestActivity.event?.let { event ->
-      add("Event" to listOfNotNull(event.workflowPhase, event.workerRole, event.summary).joinToString(" · "))
+      add(ActivityRow("Event", listOfNotNull(event.workflowPhase, event.workerRole, event.summary).joinToString(" · "), null))
     }
   }
   if (rows.isEmpty()) return
@@ -92,15 +77,8 @@ internal fun LazyListScope.activitySection(kind: WorkKind?, detail: Detail, now:
   }
   section("activity", title) {
     item(key = "activity-rows") {
-      // `.sb-props`: rows 2 apart.
-      Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        rows.forEach { (label, value) ->
-          val expanded = label in expansion.activityCategories.value
-          ActivityRow(label, value, expanded) {
-            val categories = expansion.activityCategories.value
-            expansion.activityCategories.value = if (expanded) categories - label else categories + label
-          }
-        }
+      PropertyList {
+        rows.forEach { row -> PropertyRow(row.label) { ActivityValue(row.text, row.ago, row.mono) } }
       }
     }
   }
@@ -186,12 +164,13 @@ internal fun LazyListScope.phaseResultsSection(detail: Detail) {
 internal fun LazyListScope.goalQaSection(detail: Detail) {
   val qa = detail.goalQa ?: return
   if (qa.findings.isEmpty()) return
-  val (fixed, notFixed) = qa.findings.partition { it.fixed }
-  val ordered = notFixed + fixed
+  // The design lists the findings in the runtime's order, each as ref, title and state with no meta line.
+  val ordered = qa.findings
+  val notFixed = ordered.count { !it.fixed }
   section("goal-qa", "Goal QA", count = qa.outcome) {
     item(key = "goal-qa-summary") {
       // `.t-muted` at `--t-sm`, then the box 8 below.
-      SectionText(qaFindingsSummary(qa.findings.size, notFixed.size, qa.fixAttempts), SkillBillTheme.colors.fgMuted, Modifier.padding(bottom = 8.dp))
+      SectionText(qaFindingsSummary(qa.findings.size, notFixed, qa.fixAttempts), SkillBillTheme.colors.fgMuted, Modifier.padding(bottom = 8.dp))
     }
     itemsIndexed(ordered, key = { _, finding -> "goal-qa-${finding.id}" }) { index, finding ->
       val colors = SkillBillTheme.colors
@@ -199,7 +178,6 @@ internal fun LazyListScope.goalQaSection(detail: Detail) {
         index, ordered.size,
         title = finding.title.ifBlank { finding.id },
         ref = finding.id,
-        location = finding.evidencePath,
         state = if (finding.fixed) "Fixed" else "Not fixed",
         stateColor = if (finding.fixed) colors.stDone else colors.stFailed,
       )

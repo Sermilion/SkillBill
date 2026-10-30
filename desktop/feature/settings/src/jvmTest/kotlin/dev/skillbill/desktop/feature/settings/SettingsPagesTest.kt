@@ -72,7 +72,5 @@ class SettingsPagesTest {
 
   private object EmptyShellActions : SettingsShellActions {
     override fun backToApp() = Unit
-
-    override fun openKeyboardShortcuts() = Unit
   }
 }

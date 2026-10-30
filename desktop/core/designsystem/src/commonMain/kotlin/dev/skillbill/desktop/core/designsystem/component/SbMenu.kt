@@ -42,7 +42,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 private val MENU_EDGE_BLEED = 4.dp
 
 sealed interface SbMenuEntry {
-  data class Item(val label: String, val onClick: () -> Unit, val icon: ImageVector? = null, val lead: (@Composable () -> Unit)? = null, val endText: String? = null, val checked: Boolean = false, val shortcut: String? = null, val danger: Boolean = false, val enabled: Boolean = true) : SbMenuEntry
+  data class Item(val label: String, val onClick: () -> Unit, val icon: ImageVector? = null, val lead: (@Composable () -> Unit)? = null, val endText: String? = null, val checked: Boolean = false, val shortcut: String? = null, val danger: Boolean = false, val enabled: Boolean = true, val mono: Boolean = false) : SbMenuEntry
   data class Head(val text: String) : SbMenuEntry
   data object Separator : SbMenuEntry
 }
@@ -67,7 +67,8 @@ fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false) {
     CompositionLocalProvider(LocalContentColor provides (if (item.danger) colors.stFailed else colors.fgMuted)) {
       when { item.lead != null -> item.lead.invoke(); item.icon != null -> SbIcon(item.icon, SbIconSize.Md) }
     }
-    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg, lineHeight = 1.em), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    // `<span class="mono">` labels switch family only and keep the item's 13px size.
+    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg, lineHeight = 1.em, fontFamily = if (item.mono) SkillBillTheme.type.mono.fontFamily else SkillBillTheme.type.tBase.fontFamily), maxLines = 1, overflow = TextOverflow.Ellipsis)
     if (item.endText != null || item.checked || item.shortcut != null) {
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         item.endText?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1, softWrap = false) }

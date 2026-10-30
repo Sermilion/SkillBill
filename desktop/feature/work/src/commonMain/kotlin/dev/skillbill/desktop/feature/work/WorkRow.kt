@@ -39,7 +39,7 @@ internal fun stalledTooltip(stalledSince: Instant, now: Instant?): String? {
 
 /** One board row with the HANDOFF 9.1 facts, in the prototype's order. [narrow] drops the repository label, as `.hide-sm`. */
 @Composable
-internal fun WorkRow(item: WorkItem, focused: Boolean, renderedAt: Instant?, narrow: Boolean, onAction: (WorkAction) -> Unit) {
+internal fun WorkRow(item: WorkItem, focused: Boolean, renderedAt: Instant?, narrow: Boolean, onAction: (WorkAction) -> Unit, onMenuAt: (Offset) -> Unit = {}) {
   val kind = item.statusKind()
   val planning = kind == StatusKind.Planning
   val planned = item.planningProgress
@@ -76,6 +76,9 @@ internal fun WorkRow(item: WorkItem, focused: Boolean, renderedAt: Instant?, nar
     focused = focused,
     faded = finishedAt != null,
     narrow = narrow,
-    onContextMenu = { _: Offset -> onAction(WorkAction.OpenMenu(item)) },
+    onContextMenu = { at: Offset ->
+      onMenuAt(at)
+      onAction(WorkAction.OpenMenu(item))
+    },
   )
 }

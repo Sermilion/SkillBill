@@ -1220,13 +1220,13 @@ internal fun ConfigPage(
     "models" -> {
       Segmented(defaults.agents.map { item ->
         SegmentedOption(item.id, item.id, enabled = modelAgentSelectable(item) && !changedOnDisk && !saving && !anyResolutionBusy && commentConfirmation == null, tooltip = if (item.modelCapable) null else "${item.id} cannot honor a model or effort directive")
-      }, agent) { selected ->
+      }, agent, onSelect = { selected ->
         if (!changedOnDisk && !saving && !sessions.hasConflictResolution() && !sessions.hasWriteInFlight() && commentConfirmation == null && defaults.agents.any { it.id == selected && modelAgentSelectable(it) }) {
           if (selected != agent) {
             sessions.selectedAgent.value = selected
           }
         }
-      }
+      })
       val current = machine?.executionMatrix ?: ExecutionMatrixConfig(emptyMap(), emptyMap(), emptyMap())
       val resolved = matrix?.agents?.get(agent)
       fun editModelDraft(row: ConfigEdit, field: String, input: Map<String, String>) {
@@ -1553,7 +1553,8 @@ internal fun ConfigPage(
               Segmented(
                 listOf("off" to "Off", "anonymous" to "Anonymous", "full" to "Full").map { (id, text) -> SegmentedOption(id, text, enabled = inlineEnabled(row)) },
                 inlineValue(row, ConfigFileKeys.LEVEL),
-              ) { inlineEdit(row, ConfigFileKeys.LEVEL, it, commit = true) }
+                onSelect = { inlineEdit(row, ConfigFileKeys.LEVEL, it, commit = true) },
+              )
             })
           })
         }
@@ -1597,7 +1598,7 @@ internal fun ConfigPage(
           }
           SettingRow(
             label = item.id,
-            labelLead = { Avatar(item.id, tooltip = null) },
+            labelLead = { Avatar(item.id) },
             description = if (item.modelCapable) null else "Cannot take a model or effort setting",
             control = {
               when (found) {
@@ -1737,7 +1738,8 @@ internal fun ConfigPage(
                 Segmented(
                   listOf("local" to "Local files", "linear" to "Linear").map { (id, text) -> SegmentedOption(id, text, enabled = inlineEnabled(row)) },
                   inlineValue(row, ConfigFileKeys.SPEC_TYPE),
-                ) { inlineEdit(row, ConfigFileKeys.SPEC_TYPE, it, commit = true) }
+                  onSelect = { inlineEdit(row, ConfigFileKeys.SPEC_TYPE, it, commit = true) },
+                )
               })
             })
           }
@@ -2097,7 +2099,7 @@ private fun ConfigEditorField(
         isError = errors[field] != null || blankModel || gradleInvalid,
         enabled = enabled,
       )
-      else -> Segmented(options.map { (id, text) -> SegmentedOption(id, text, enabled = enabled) }, value) { change(field, draft + (field to it)) }
+      else -> Segmented(options.map { (id, text) -> SegmentedOption(id, text, enabled = enabled) }, value, onSelect = { change(field, draft + (field to it)) })
     }
   }
 }

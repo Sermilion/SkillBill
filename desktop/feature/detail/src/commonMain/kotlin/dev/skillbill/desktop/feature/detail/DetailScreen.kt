@@ -35,11 +35,13 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.Pager
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
+import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.DetailList
-import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
+import dev.skillbill.desktop.core.ui.navigation.AppRoute
+import dev.skillbill.desktop.core.ui.navigation.HistoryRoute
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 import dev.skillbill.desktop.core.ui.shell.DetailsPaneSlot
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
@@ -48,7 +50,15 @@ import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 private val DOC_MAX_WIDTH = 780.dp
 
 /** The shell facts the detail shows without depending on the shell. */
-internal class DetailScreenHost(val detailsPaneOpen: Boolean, val detailsShortcut: String, val onToggleDetails: () -> Unit)
+internal class DetailScreenHost(
+  val detailsPaneOpen: Boolean,
+  val detailsShortcut: String,
+  val onToggleDetails: () -> Unit,
+  val specsOpen: Boolean = false,
+  val terminalOpen: Boolean = false,
+  val onToggleSpecs: () -> Unit = {},
+  val onToggleTerminal: () -> Unit = {},
+)
 
 private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
   WorkLiveSection.NeedsYou -> "Needs you"
@@ -56,6 +66,15 @@ private fun sectionCrumb(section: WorkLiveSection?): String = when (section) {
   WorkLiveSection.Phases -> "Standalone phases"
   WorkLiveSection.Operations -> "Operations"
   null -> "History"
+}
+
+/** screens.js `detail()`: the middle crumb opens its board section, or History for a finished item. */
+private fun sectionRoute(section: WorkLiveSection?): AppRoute = when (section) {
+  WorkLiveSection.NeedsYou -> WorkRoute(BoardSectionKind.NeedsYou)
+  WorkLiveSection.Goals -> WorkRoute(BoardSectionKind.Goals)
+  WorkLiveSection.Phases -> WorkRoute(BoardSectionKind.Phases)
+  WorkLiveSection.Operations -> WorkRoute(BoardSectionKind.Operations)
+  null -> HistoryRoute
 }
 
 @Composable
@@ -73,13 +92,12 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   }
   val item = state.header
   val view = runActionsView(state)
-  val sectionExpansion = remember(item.id) { DetailSectionExpansion() }
   val recoverFocus = remember { FocusRequester() }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = listOf(
         Crumb("Work", onClick = { onAction(DetailAction.Navigate(WorkRoute(null))) }),
-        Crumb(sectionCrumb(item.liveSection)),
+        Crumb(sectionCrumb(item.liveSection), onClick = { onAction(DetailAction.Navigate(sectionRoute(item.liveSection))) }),
         Crumb(rowKey(item)),
       ),
       actions = {
@@ -87,6 +105,10 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           Pager(position.index, position.total, onPrevious = { onAction(DetailAction.Previous) }, onNext = { onAction(DetailAction.Next) })
         }
         if (state.stale) StaleIndicator()
+        // paneToggles(st), then the details toggle.
+        SbIconButton(LucideIcons.refresh, "Refresh", { onAction(DetailAction.Retry) })
+        SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
+        SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
         SbIconButton(LucideIcons.panelRight, "Toggle details", host.onToggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)
       },
     )
@@ -113,12 +135,10 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           if (view.pausePending) item(key = "pause-notice") {
             Column(Modifier.padding(top = DocBlockGap)) { Hint("Pause recorded. The goal pauses at its next checkpoint.", FeedbackTone.Info, LucideIcons.pause) }
           }
-          if (item.kind != WorkKind.Phase) {
-            if (item.reason != null) item(key = "reason") {
-              Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
-            }
-            document(state, view, sectionExpansion, onAction)
+          if (item.reason != null) item(key = "reason") {
+            Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
+          document(state, view, onAction)
         }
       }
       DetailsPaneSlot { DetailsPane(state) }
@@ -144,8 +164,8 @@ private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, o
       OperatorDecisionBlock(it, view.recordEnabled, view.usable && state.controls.inFlight == null, state.controls.inFlight == InFlightControl.Decision, onAction)
     }
   }
-  if (detail != null && (incident != null || detail.incidentHistory.isNotEmpty())) item(key = "incident") {
-    IncidentSection(incident, detail.incidentHistory, view, decision, onAction, Modifier.padding(top = DocBlockGap)) { onAction(DetailAction.Copy(it)) }
+  if (incident != null) item(key = "incident") {
+    IncidentSection(incident, view, decision, onAction, Modifier.padding(top = DocBlockGap))
   }
   if (incident == null && view.decision != null && state.sections != SectionsUi.Gone) item(key = "decision") {
     Section(title = "Operator decision", Modifier.padding(top = DocBlockGap)) { decision() }
@@ -153,7 +173,7 @@ private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, o
 }
 
 /** The sections in HANDOFF 9.2 order; placeholders hold their place until the first read lands. */
-private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, expansion: DetailSectionExpansion, onAction: (DetailAction) -> Unit) {
+private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -165,13 +185,13 @@ private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, e
       val detail = sections.detail
       // HANDOFF 9.2 order: the incident (item 7) comes before the metrics (item 8).
       incident(state, view, onAction)
-      if (item.kind != WorkKind.Operation) item(key = "metrics") {
+      item(key = "metrics") {
         Column(Modifier.padding(top = DocBlockGap)) { DetailMetrics(item, detail) }
       }
-      subtaskSection(item, detail, state, expansion, onAction)
+      subtaskSection(item, detail, state, onAction)
       pipelineSection(item, detail)
-      dependencySection(detail, state, expansion, onAction)
-      activitySection(item.kind, detail, state.renderedAt, expansion)
+      dependencySection(detail, state, onAction)
+      activitySection(item.kind, detail, state.renderedAt)
       validationSection(detail)
       phaseResultsSection(detail)
       pageFooter(DetailList.Validation, state, onAction)

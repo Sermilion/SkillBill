@@ -47,20 +47,25 @@ class MetricCell(
 fun metricValueStyle(): TextStyle =
   SkillBillTheme.type.tLg.tabular().copy(color = SkillBillTheme.colors.fg, fontWeight = FontWeight.Medium, letterSpacing = (-0.01).em, lineHeight = 1.em)
 
+/**
+ * `.sb-metrics`: a 1px frame with the grid inside it, `repeat(auto-fit, minmax(140px, 1fr))`. Every cell but the first draws
+ * `border-left`, including the first cell of a wrapped row, and the grid draws no rule between rows.
+ */
 @Composable
 fun MetricStrip(cells: List<MetricCell>, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.md)
-  BoxWithConstraints(modifier.fillMaxWidth().clip(shape).border(1.dp, colors.borderSubtle, shape)) {
+  BoxWithConstraints(modifier.fillMaxWidth().clip(shape).border(1.dp, colors.borderSubtle, shape).padding(1.dp)) {
     val columns = (maxWidth / metricMinCellWidth).toInt().coerceAtLeast(1).coerceAtMost(cells.size.coerceAtLeast(1))
     Column {
       cells.chunked(columns).forEachIndexed { rowIndex, rowCells ->
-        Row(
-          Modifier.fillMaxWidth().height(IntrinsicSize.Min)
-            .then(if (rowIndex > 0) Modifier.hairline(Edge.Top, colors.borderSubtle) else Modifier),
-        ) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
           rowCells.forEachIndexed { index, cell ->
-            MetricCellView(cell, Modifier.weight(1f).fillMaxHeight().then(if (index > 0) Modifier.hairline(Edge.Start, colors.borderSubtle) else Modifier))
+            val bordered = rowIndex > 0 || index > 0
+            MetricCellView(
+              cell,
+              Modifier.weight(1f).fillMaxHeight().then(if (bordered) Modifier.hairline(Edge.Start, colors.borderSubtle).padding(start = 1.dp) else Modifier),
+            )
           }
           repeat(columns - rowCells.size) { Spacer(Modifier.weight(1f)) }
         }

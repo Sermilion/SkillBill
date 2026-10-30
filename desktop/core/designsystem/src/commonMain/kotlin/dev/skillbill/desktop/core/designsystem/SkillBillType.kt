@@ -10,6 +10,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontWeight.Companion.Medium
 import androidx.compose.ui.text.font.FontWeight.Companion.Normal
 import androidx.compose.ui.text.font.FontWeight.Companion.SemiBold
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
@@ -51,24 +52,28 @@ internal fun rememberSkillBillType(): SkillBillType {
   )
   val inter = remember(interFonts) { FontFamily(*interFonts.toTypedArray()) }
   val mono = remember(monoFonts) { FontFamily(*monoFonts.toTypedArray()) }
+  // Sizes below t2xl/tXl inherit `body { line-height: 1.5 }`; components override where CSS sets its own.
   return remember(inter, mono) {
     SkillBillType(
       t2xl = interStyle(inter, 24f, SemiBold, 30f, (-0.012).em),
       tXl = interStyle(inter, 20f, SemiBold, 25f),
-      tLg = interStyle(inter, 16f, Normal, 23f),
-      tLgStrong = interStyle(inter, 16f, SemiBold, 23f),
-      tMd = interStyle(inter, 14f, Medium, 20f),
-      tBase = interStyle(inter, 13f, Normal, 19f),
-      tBaseMedium = interStyle(inter, 13f, Medium, 19f),
-      tSm = interStyle(inter, 12f, Normal, 17f),
-      tSmMedium = interStyle(inter, 12f, Medium, 17f),
-      tXs = interStyle(inter, 11.5f, Medium, 17f),
-      t2xs = monoStyle(mono, 10.5f, Medium, 15f),
-      mono = monoStyle(mono, 13f, Normal, 19f),
-      monoSm = monoStyle(mono, 12f, Normal, 17f),
+      tLg = interStyle(inter, 16f, Normal, 24f),
+      tLgStrong = interStyle(inter, 16f, SemiBold, 24f),
+      tMd = interStyle(inter, 14f, Medium, 21f),
+      tBase = interStyle(inter, 13f, Normal, 19.5f),
+      tBaseMedium = interStyle(inter, 13f, Medium, 19.5f),
+      tSm = interStyle(inter, 12f, Normal, 18f),
+      tSmMedium = interStyle(inter, 12f, Medium, 18f),
+      tXs = interStyle(inter, 11.5f, Medium, 17.25f),
+      t2xs = monoStyle(mono, 10.5f, Medium, 15.75f),
+      mono = monoStyle(mono, 13f, Normal, 19.5f),
+      monoSm = monoStyle(mono, 12f, Normal, 18f),
     )
   }
 }
+
+/** CSS splits line-height leading evenly above and below the glyphs; Compose defaults to proportional. */
+private val CssLineHeight = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
 
 fun TextStyle.tabular(): TextStyle =
   copy(fontFeatureSettings = listOfNotNull(fontFeatureSettings, "tnum").joinToString(", "))
@@ -86,6 +91,7 @@ private fun interStyle(
   lineHeight = lineHeight.sp,
   letterSpacing = letterSpacing,
   fontFeatureSettings = "cv11, ss01, ss03",
+  lineHeightStyle = CssLineHeight,
 )
 
 private fun monoStyle(family: FontFamily, size: Float, weight: FontWeight, lineHeight: Float) = TextStyle(
@@ -93,4 +99,5 @@ private fun monoStyle(family: FontFamily, size: Float, weight: FontWeight, lineH
   fontWeight = weight,
   fontSize = size.sp,
   lineHeight = lineHeight.sp,
+  lineHeightStyle = CssLineHeight,
 )

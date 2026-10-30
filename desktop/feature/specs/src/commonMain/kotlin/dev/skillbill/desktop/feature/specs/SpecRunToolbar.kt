@@ -76,8 +76,9 @@ internal fun SpecRunToolbar(state: SpecsUiState, onAction: (SpecsAction) -> Unit
           if (control?.purgeVisible == true) {
             Spacer(Modifier.weight(1f))
             val enabled = control.canPurge && !toolbar.inFlight
-            // The icon button's tooltip is its label, so the disabled reason is the label while purging is unavailable.
-            SbIconButton(LucideIcons.trash, if (enabled) purgeLabel(key ?: "spec") else PURGE_DISABLED_TOOLTIP, { onAction(SpecsAction.RequestPurge) }, size = SbControlSize.Small, enabled = enabled)
+            // screens.js renders this icon button at full strength in both states (`S.IconButton` has no disabled form); the
+            // label, which is also its tooltip, carries the reason and the click does nothing while purging is unavailable.
+            SbIconButton(LucideIcons.trash, if (enabled) purgeLabel(key ?: "spec") else PURGE_DISABLED_TOOLTIP, { if (enabled) onAction(SpecsAction.RequestPurge) }, size = SbControlSize.Small)
           }
         }
         control?.unavailableReason?.let { Hint(it, FeedbackTone.Error) }

@@ -65,8 +65,6 @@ class HistoryViewModel(
         effectChannel.trySend(HistoryEffect.OpenDetail(action.item))
       }
       HistoryAction.OpenFocused -> state.value.run { rows.firstOrNull { it.id == focusedId } }?.let { effectChannel.trySend(HistoryEffect.OpenDetail(it)) }
-      is HistoryAction.OpenMenu -> mutableState.update { it.copy(menu = action.item) }
-      HistoryAction.CloseMenu -> mutableState.update { it.copy(menu = null) }
     }
   }
 

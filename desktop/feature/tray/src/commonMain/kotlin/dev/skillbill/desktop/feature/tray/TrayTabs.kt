@@ -17,8 +17,5 @@ internal fun BoardState.Loaded.toTrayBoard(): TrayBoard.Loaded {
   )
 }
 
-fun TrayBoard.Loaded.attention(tab: TrayTab): Boolean = when (tab) {
-  TrayTab.Goals -> goals.any(WorkItem::requiresAttention)
-  TrayTab.Phases -> livePhases.any(WorkItem::requiresAttention)
-  TrayTab.Operations -> liveOperations.any(WorkItem::requiresAttention)
-}
+/** The tab attention dot, as library.js draws it: on Goals only, whenever the board's Needs you count is above zero. */
+fun TrayBoard.Loaded.attention(tab: TrayTab): Boolean = tab == TrayTab.Goals && counts.needsYou > 0

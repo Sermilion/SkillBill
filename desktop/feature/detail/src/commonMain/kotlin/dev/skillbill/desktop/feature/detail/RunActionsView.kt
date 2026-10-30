@@ -64,7 +64,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   val resumable = options != null && item.lifecycle != Lifecycle.Active && item.lifecycle != Lifecycle.Terminal
   val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
   val agentId = controls.chosenAgent ?: options?.agentId
-  val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel.orEmpty()), launchable).takeIf { resumable }
+  val launch = ControlButton(label(InFlightControl.Launch, options?.launchLabel?.ifBlank { null } ?: "Resume"), launchable).takeIf { resumable }
   val agent = ControlButton(agentId?.let { "Agent: $it" } ?: "Choose agent", launchable).takeIf { resumable }
 
   val confirmed = confirmedPrerequisites(state, incident)

@@ -75,9 +75,9 @@ fun GeneralPage(state: SettingsUiState, sessionState: DatabaseSessionState, onAc
     title = "History retention",
     rows = listOf {
       SettingRow(label = "Keep finished work for", description = "How long History and the tray list finished work.", control = {
-        Segmented(HistoryWindow.entries.map { SegmentedOption(it, it.label(), enabled = state.ready) }, state.settings.historyWindow) {
+        Segmented(HistoryWindow.entries.map { SegmentedOption(it, it.label(), enabled = state.ready) }, state.settings.historyWindow, onSelect = {
           onAction(SettingsAction.RetentionChosen(it))
-        }
+        })
       })
     },
   )
@@ -136,7 +136,7 @@ private fun BoxWithClaudeMenu(value: String, chosen: String?, expanded: Boolean,
         SbMenu(
           listOf(SbMenuEntry.Head("Claude config directories found")) +
             directories.map { directory ->
-              SbMenuEntry.Item(directory, { onChoose(directory); setExpanded(false) }, icon = LucideIcons.folder, checked = directory == chosen)
+              SbMenuEntry.Item(directory, { onChoose(directory); setExpanded(false) }, icon = LucideIcons.folder, checked = directory == chosen, mono = true)
             },
         )
       }

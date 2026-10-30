@@ -46,7 +46,7 @@ fun runRuntimeUnavailable(runtimeRoot: String, appRecordPath: String): Array<Str
             // No sidebar here, so the state sits in the content panel inset 8 dp on every side, as the main window's panel.
             val shape = RoundedCornerShape(SkillBillRadius.lg)
             val colors = SkillBillTheme.colors
-            Box(Modifier.fillMaxSize().padding(8.dp).clip(shape).background(colors.bgPanel).border(1.dp, colors.borderSubtle, shape)) {
+            Box(Modifier.fillMaxSize().padding(8.dp).clip(shape).background(colors.bgPanel).border(1.dp, colors.borderSubtle, shape).padding(1.dp)) {
               ProblemStatePanel(ShellProblem.RuntimeUnavailable(availability.problem), onRetry = { installation = gate.check() })
             }
           }

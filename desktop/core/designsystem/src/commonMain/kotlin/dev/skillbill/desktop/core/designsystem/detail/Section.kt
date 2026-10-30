@@ -1,12 +1,5 @@
 package dev.skillbill.desktop.core.designsystem.detail
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -20,29 +13,23 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
-import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
-import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
-import dev.skillbill.desktop.core.designsystem.icon.SbIcon
-import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
-import dev.skillbill.desktop.core.designsystem.tabular
 
 /** `.sb-doc` gap: the space between the detail document's blocks. */
 val DocBlockGap = 28.dp
@@ -58,52 +45,18 @@ private fun SectionHeaderRow(
   lead: (@Composable () -> Unit)?,
   actions: (@Composable RowScope.() -> Unit)?,
   modifier: Modifier = Modifier,
-  trailing: (@Composable () -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
     lead?.invoke()
     BasicText(title, Modifier.semantics { heading() }, style = type.tBaseMedium.copy(color = colors.fg, lineHeight = 1.em), maxLines = 1)
-    count?.let { BasicText(it, style = type.tBase.tabular().copy(color = colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.em), maxLines = 1) }
-    trailing?.invoke()
+    count?.let { BasicText(it, style = type.tBase.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.em), maxLines = 1) }
     if (actions != null) {
       Spacer(Modifier.weight(1f))
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
     }
   }
-}
-
-/**
- * A [Section] header the operator can fold: the `.sb-sec-hd` row with a 12 dp chevron after the title and count, in the
- * sidebar section's colors (faint, muted on hover).
- */
-@Composable
-fun CollapsibleSectionHeader(
-  title: String,
-  expanded: Boolean,
-  onToggle: () -> Unit,
-  modifier: Modifier = Modifier,
-  count: String? = null,
-  lead: (@Composable () -> Unit)? = null,
-  actions: (@Composable RowScope.() -> Unit)? = null,
-) {
-  val colors = SkillBillTheme.colors
-  val interaction = remember { MutableInteractionSource() }
-  val hovered = interaction.collectIsHoveredAsState().value
-  val chevronColor = rememberHoverColor(hovered, colors.fgFaint, colors.fgMuted).value
-  SectionHeaderRow(
-    title, count, lead, actions,
-    modifier.hoverable(interaction)
-      .clickable(interaction, indication = null, role = Role.Button, onClick = onToggle)
-      .sbFocusRing(interaction, RoundedCornerShape(SkillBillRadius.xs))
-      .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
-    trailing = {
-      CompositionLocalProvider(LocalContentColor provides chevronColor) {
-        SbIcon(if (expanded) LucideIcons.chevronDown else LucideIcons.chevronRight, SbIconSize.Xs)
-      }
-    },
-  )
 }
 
 @Composable
@@ -127,54 +80,65 @@ private fun LazyListScope.blockGap(key: Any, spaceBefore: Dp) {
 }
 
 /**
- * Lazy form of [Section]: the header pins while the rows that [content] adds scroll beneath it. The rows sit flush, so a box
- * is drawn from `boxSegment` items, and the list itself must not space its items. [headerBackground] must be opaque.
+ * Lazy form of [Section]: the header and the rows that [content] adds scroll together, as `.sb-sec` does. The rows sit flush, so a
+ * box is drawn from [sbBoxSegment] items, and the list itself must not space its items.
  */
-@OptIn(ExperimentalFoundationApi::class)
 fun LazyListScope.section(
   key: Any,
   title: String,
   count: String? = null,
   lead: (@Composable () -> Unit)? = null,
   actions: (@Composable RowScope.() -> Unit)? = null,
-  headerBackground: @Composable () -> Color = { SkillBillTheme.colors.bgPanel },
   spaceBefore: Dp = DocBlockGap,
   content: LazyListScope.() -> Unit,
 ) {
   blockGap(key, spaceBefore)
-  stickyHeader(key) {
-    SectionHeaderRow(title, count, lead, actions, Modifier.background(headerBackground()).padding(bottom = sectionBodyGap))
+  item(key) {
+    SectionHeaderRow(title, count, lead, actions, Modifier.padding(bottom = sectionBodyGap))
   }
   content()
 }
 
-/** [section] with a header that folds its rows away. */
-@OptIn(ExperimentalFoundationApi::class)
-fun LazyListScope.collapsibleSection(
-  key: Any,
-  title: String,
-  expanded: Boolean,
-  onToggle: () -> Unit,
-  count: String? = null,
-  lead: (@Composable () -> Unit)? = null,
-  actions: (@Composable RowScope.() -> Unit)? = null,
-  headerBackground: @Composable () -> Color = { SkillBillTheme.colors.bgPanel },
-  spaceBefore: Dp = DocBlockGap,
-  content: LazyListScope.() -> Unit,
-) {
-  blockGap(key, spaceBefore)
-  stickyHeader(key) {
-    CollapsibleSectionHeader(
-      title, expanded, onToggle,
-      Modifier.background(headerBackground()).padding(bottom = if (expanded) sectionBodyGap else 0.dp),
-      count, lead, actions,
-    )
-  }
-  if (expanded) content()
-}
-
+/** `.sb-box`: a 1px `--border-subtle` frame, radius 8, with the content inside the border, clipped to the inner corners. */
 @Composable
 fun SbBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-  val shape = RoundedCornerShape(SkillBillRadius.md)
-  Column(modifier.fillMaxWidth().clip(shape).border(1.dp, SkillBillTheme.colors.borderSubtle, shape), content = content)
+  Column(modifier.fillMaxWidth().sbBoxSegment(0, 1), content = content)
+}
+
+/**
+ * Draws one lazy-list item as a segment of an [SbBox]. The CSS border takes 1px of the box, so the segment insets its content by
+ * 1 on both sides, and on the top of the first and the bottom of the last; the border draws over the content, so a row's own
+ * background (the current subtask's) never covers it, and the first and last segments draw the rounded corners.
+ */
+@Composable
+fun Modifier.sbBoxSegment(index: Int, count: Int): Modifier {
+  val first = index == 0
+  val last = index == count - 1
+  val radius = SkillBillRadius.md
+  val inner = radius - 1.dp
+  val clipShape = RoundedCornerShape(
+    topStart = if (first) inner else 0.dp,
+    topEnd = if (first) inner else 0.dp,
+    bottomStart = if (last) inner else 0.dp,
+    bottomEnd = if (last) inner else 0.dp,
+  )
+  val border = SkillBillTheme.colors.borderSubtle
+  return drawWithContent {
+    drawContent()
+    val stroke = 1.dp.toPx()
+    val half = stroke / 2
+    val r = radius.toPx()
+    // A rounded frame that runs past the segment's open ends; clipping to the segment leaves only this segment's part.
+    val top = if (first) half else -2 * r
+    val bottom = if (last) size.height - half else size.height + 2 * r
+    clipRect {
+      drawRoundRect(
+        border,
+        topLeft = Offset(half, top),
+        size = Size(size.width - stroke, bottom - top),
+        cornerRadius = CornerRadius(r - half),
+        style = Stroke(stroke),
+      )
+    }
+  }.padding(start = 1.dp, end = 1.dp, top = if (first) 1.dp else 0.dp, bottom = if (last) 1.dp else 0.dp).clip(clipShape)
 }

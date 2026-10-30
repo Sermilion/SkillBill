@@ -20,6 +20,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -44,10 +47,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.component.Segmented
 import dev.skillbill.desktop.core.designsystem.component.SegmentedOption
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.detail.SidePane
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -109,6 +110,8 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
         ),
         selected = state.statusFilter,
         onSelect = { onAction(SpecsAction.ChooseStatus(it)) },
+        // `.sb-seg` stretches across the `.sb-filters` column with its options packed at the start.
+        modifier = Modifier.fillMaxWidth(),
       )
     }
     Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -117,7 +120,7 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
           SbButton("Retry", { onAction(SpecsAction.Retry) })
         })
         SpecTreeState.NoCheckout -> EmptyState(NO_CHECKOUT, icon = LucideIcons.folder)
-        is SpecTreeState.NoSpecs -> EmptyState(NO_SPECS, icon = LucideIcons.fileText, body = NO_SPECS_BODY)
+        is SpecTreeState.NoSpecs -> EmptyState(NO_SPECS, icon = LucideIcons.fileText, body = noSpecsBody())
         SpecTreeState.Loading -> Unit
         is SpecTreeState.Loaded -> if (state.rows.isEmpty() && state.filtersActive) {
           EmptyState(NO_MATCH, icon = LucideIcons.search, body = NO_MATCH_BODY, actions = {
@@ -140,33 +143,33 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
   }
 }
 
-/** `.sb-pick`: a 24 px bordered button with the repository icon, the project name and a 12 px faint chevron. */
+/** `.sb-pick`: a 24 px bordered button with the repository icon, the project name and a 12 px faint chevron. It has no tooltip. */
 @Composable
 private fun ProjectPicker(name: String?, onClick: () -> Unit) {
   val colors = SkillBillTheme.colors
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   val interaction = remember { MutableInteractionSource() }
   val hovered = interaction.collectIsHoveredAsState().value
-  val fill = rememberHoverColor(hovered, Color.Transparent, colors.bgHover).value
+  // `.sb-pick` has no transition, so hover switches at once.
+  val fill = if (hovered) colors.bgHover else Color.Transparent
   val text = if (hovered) colors.fg else colors.fg2
-  SbTooltip(CHOOSE_PROJECT) {
-    Row(
-      Modifier.height(24.dp).background(fill, shape).border(1.dp, colors.border, shape)
-        .hoverable(interaction)
-        .clickable(interaction, indication = null, onClick = onClick)
-        .sbFocusRing(interaction, shape)
-        .semantics {
-          role = Role.Button
-          contentDescription = name ?: CHOOSE_PROJECT
-        }
-        .padding(horizontal = 8.dp),
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      name?.let { RepoIcon(it) }
-      BasicText(name ?: CHOOSE_PROJECT, style = SkillBillTheme.type.tSmMedium.copy(color = text), maxLines = 1, overflow = TextOverflow.Ellipsis)
-      CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(LucideIcons.chevronDown, SbIconSize.Xs) }
-    }
+  Row(
+    Modifier.height(24.dp).background(fill, shape).border(1.dp, colors.border, shape)
+      .hoverable(interaction)
+      .clickable(interaction, indication = null, onClick = onClick)
+      .sbFocusRing(interaction, shape)
+      .semantics {
+        role = Role.Button
+        contentDescription = name ?: CHOOSE_PROJECT
+      }
+      // 8 px of CSS padding inside the 1 px border.
+      .padding(horizontal = 9.dp),
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    name?.let { RepoIcon(it) }
+    BasicText(name ?: CHOOSE_PROJECT, style = SkillBillTheme.type.tSmMedium.copy(color = text), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { SbIcon(LucideIcons.chevronDown, SbIconSize.Xs) }
   }
 }
 
@@ -175,4 +178,15 @@ private fun Modifier.rule(bottom: Boolean, color: Color) = drawBehind {
   val stroke = 1.dp.toPx()
   val y = if (bottom) size.height - stroke / 2 else stroke / 2
   drawLine(color, Offset(0f, y), Offset(size.width, y), stroke)
+}
+
+/** "No specs yet" body with the plan command in mono, as screens.js renders it. */
+@Composable
+private fun noSpecsBody(): AnnotatedString {
+  val command = "/skill-bill phase:plan"
+  val start = NO_SPECS_BODY.indexOf(command)
+  return buildAnnotatedString {
+    append(NO_SPECS_BODY)
+    if (start >= 0) addStyle(SpanStyle(fontFamily = SkillBillTheme.type.mono.fontFamily), start, start + command.length)
+  }
 }

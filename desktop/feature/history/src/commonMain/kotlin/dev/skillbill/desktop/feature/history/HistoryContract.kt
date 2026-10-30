@@ -20,7 +20,6 @@ data class HistoryUiState(
   val window: HistoryWindow = HistoryWindow.DEFAULT,
   val board: BoardState = BoardState.Loading,
   val focusedId: String? = null,
-  val menu: WorkItem? = null,
   val renderedAt: Instant? = null,
 ) {
   /** The loaded items whose run finished, of the tab's kind, in runtime order; a stale board keeps its rows. */
@@ -36,8 +35,6 @@ sealed interface HistoryAction {
   data class MoveFocus(val delta: Int) : HistoryAction
   data class Open(val item: WorkItem) : HistoryAction
   data object OpenFocused : HistoryAction
-  data class OpenMenu(val item: WorkItem) : HistoryAction
-  data object CloseMenu : HistoryAction
 }
 
 sealed interface HistoryEffect {

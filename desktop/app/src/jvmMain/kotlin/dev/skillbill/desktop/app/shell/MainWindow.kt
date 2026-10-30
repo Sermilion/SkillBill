@@ -32,7 +32,6 @@ import dev.skillbill.desktop.core.designsystem.navigation.LocalSidebarToggle
 import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.PaneSlot
-import dev.skillbill.desktop.core.ui.navigation.SettingsPageId
 import dev.skillbill.desktop.core.ui.navigation.SettingsRoute
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.shell.ShellLayout
@@ -145,7 +144,6 @@ private fun ShellContent(window: WindowComponent, drawerMode: Boolean) {
         ProblemStatePanel(
           problem,
           onRefresh = { if (problem is ShellProblem.SessionFailed) window.session.reopen() else window.boardRepository.refresh() },
-          onOpenSettings = { navigate(SettingsRoute(SettingsPageId.App)) },
         )
       }
     }

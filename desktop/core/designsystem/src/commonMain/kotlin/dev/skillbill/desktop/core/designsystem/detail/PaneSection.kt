@@ -17,7 +17,7 @@ import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 
-/** [separated] draws the top rule and spacing between stacked sections; the pane's first section passes false. */
+/** `.sb-pane-sec + .sb-pane-sec`: 16 padding below a 1px rule, so the content starts 17 down. [separated] draws the top rule and spacing between stacked sections; the pane's first section passes false. */
 @Composable
 fun PaneSection(
   modifier: Modifier = Modifier,
@@ -28,7 +28,7 @@ fun PaneSection(
 ) {
   val colors = SkillBillTheme.colors
   Column(
-    modifier.fillMaxWidth().then(if (separated) Modifier.hairline(Edge.Top, colors.borderSubtle).padding(top = 16.dp) else Modifier),
+    modifier.fillMaxWidth().then(if (separated) Modifier.hairline(Edge.Top, colors.borderSubtle).padding(top = 17.dp) else Modifier),
     verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     if (title != null || end != null) {

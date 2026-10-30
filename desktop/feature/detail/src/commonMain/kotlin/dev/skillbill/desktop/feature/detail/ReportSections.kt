@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.ReasonBlock
-import dev.skillbill.desktop.core.designsystem.composite.boxSegment
+import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.section
@@ -98,7 +98,7 @@ internal fun LazyListScope.specBundleSection(detail: Detail, onAction: (DetailAc
       TreeRow(
         title = name,
         onClick = { onAction(DetailAction.OpenSpecFile(path)) },
-        modifier = Modifier.boxSegment(index, paths.size),
+        modifier = Modifier.sbBoxSegment(index, paths.size),
         file = true,
         // The design gives YAML the plain file icon and every other file the text icon.
         lead = { SbIcon(if (name.endsWith(".yaml") || name.endsWith(".yml")) LucideIcons.file else LucideIcons.fileText, SbIconSize.Sm) },

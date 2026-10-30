@@ -43,7 +43,8 @@ fun SubtaskRow(
   val pending = status == StatusKind.Pending
   Column(
     modifier.fillMaxWidth().background(if (current) colors.bgSelected else Color.Transparent)
-      .then(if (divider) Modifier.hairline(Edge.Bottom, colors.borderSubtle) else Modifier),
+      // `.sb-sub` border-bottom: the rule takes its own 1px below the row and body.
+      .then(if (divider) Modifier.hairline(Edge.Bottom, colors.borderSubtle).padding(bottom = 1.dp) else Modifier),
   ) {
     Row(
       Modifier.fillMaxWidth().heightIn(min = SkillBillSize.row).padding(horizontal = 12.dp),

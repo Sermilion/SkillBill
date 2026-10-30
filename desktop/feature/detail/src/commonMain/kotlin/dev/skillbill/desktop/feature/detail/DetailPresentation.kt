@@ -91,9 +91,14 @@ internal fun elapsedLabel(kind: WorkKind?): String = when (kind) {
   WorkKind.Phase, null -> "Phase elapsed"
 }
 
-/** Places a run on a step pipeline: steps before the current one are done, and a finished run completes them all. */
+/**
+ * Places a run on a step pipeline: steps before the current one are done, and a finished run completes them all. The goal
+ * finish pipeline ([goal]) only has a current step once no subtask is running. screens.js `pipelineSteps()` puts the execution
+ * count on a goal's current phase whatever its state; a standalone run's steps carry it only on the running step.
+ */
 internal fun pipelineSteps(item: WorkItem, detail: Detail, pipeline: List<String>, goal: Boolean = false): List<PipelineStep> {
-  val current = if (item.currentSubtaskId == null) pipeline.indexOf(detail.currentPhase) else -1
+  val current = if (!goal || item.currentSubtaskId == null) pipeline.indexOf(detail.currentPhase) else -1
+  val countOnAnyState = item.kind == WorkKind.Goal && !goal
   return pipeline.mapIndexed { index, id ->
     val state = when {
       item.lifecycle == Lifecycle.Terminal -> PipelineStepState.Done
@@ -107,7 +112,8 @@ internal fun pipelineSteps(item: WorkItem, detail: Detail, pipeline: List<String
       }
       else -> PipelineStepState.Pending
     }
-    PipelineStep(id, state, count = item.phaseExecutionLabel.takeIf { state == PipelineStepState.Current }, goal = goal)
+    val counted = if (countOnAnyState) index == current && state != PipelineStepState.Done else state == PipelineStepState.Current
+    PipelineStep(id, state, count = item.phaseExecutionLabel.takeIf { counted }, goal = goal)
   }
 }
 
@@ -129,12 +135,13 @@ internal fun goalFinishSteps(item: WorkItem, detail: Detail): List<PipelineStep>
 internal fun planSummary(report: PlanRunReport): String =
   if (report.subtasks.size == 1) "Planned 1 subtask." else "Planned ${report.subtasks.size} subtasks."
 
+/** screens.js Goal QA: "QA found 3 findings; all fixed after 2 fix attempts." or "QA could not fix 1 finding. Review them yourself." */
 internal fun qaFindingsSummary(total: Int, notFixed: Int, attempts: Int): String {
-  val after = when (attempts) { 0 -> ""; 1 -> " after 1 attempt"; else -> " after $attempts attempts" }
+  val after = when (attempts) { 0 -> ""; 1 -> " after 1 fix attempt"; else -> " after $attempts fix attempts" }
   return if (notFixed == 0) {
     "QA found ${findingCount(total)}; all fixed$after."
   } else {
-    "QA could not fix ${findingCount(notFixed)}$after. Review them yourself."
+    "QA could not fix ${findingCount(notFixed)}. Review them yourself."
   }
 }
 

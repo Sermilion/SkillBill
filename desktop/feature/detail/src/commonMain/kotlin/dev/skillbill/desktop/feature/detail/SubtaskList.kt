@@ -28,9 +28,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
-import dev.skillbill.desktop.core.designsystem.composite.boxSegment
+import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.detail.PhasePipeline
-import dev.skillbill.desktop.core.designsystem.detail.collapsibleSection
 import dev.skillbill.desktop.core.designsystem.detail.section
 import dev.skillbill.desktop.core.designsystem.list.SubtaskRow
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
@@ -53,7 +52,7 @@ internal fun LazyListScope.pageFooter(list: DetailList, state: DetailUiState, on
   item(key = "more-${list.name}") {
     val anchor = loaded.listAnchors[list]
     val load = state.listLoads[list]
-    val frame = if (inBox) Modifier.fillMaxWidth().boxSegment(1, 3).bottomRule(SkillBillTheme.colors.borderSubtle).padding(horizontal = 12.dp) else Modifier
+    val frame = if (inBox) Modifier.fillMaxWidth().sbBoxSegment(1, 3).bottomRule(SkillBillTheme.colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp) else Modifier
     Column(frame.padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       if (load is ListLoad.Failed) {
         Hint(readProblemText(load.problem), FeedbackTone.Warn)
@@ -85,21 +84,19 @@ internal fun BoxedFindingRow(
   state: String? = null,
   stateColor: Color? = null,
 ) {
-  Box(Modifier.fillMaxWidth().boxSegment(index, count)) {
+  Box(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
     FindingRow(title, severity, ref, location, meta, state, stateColor, showDivider = index > 0)
   }
 }
 
-private fun DetailSectionExpansion.toggleSubtasks() { subtasks.value = !subtasks.value }
-
 /** HANDOFF 9.2 item 9: the subtasks in one box, then the Goal finish row. Goals only. */
-internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, expansion: DetailSectionExpansion, onAction: (DetailAction) -> Unit) {
+internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
   if (item.kind != WorkKind.Goal) return
   if (item.statusKind() == StatusKind.Planning) {
     val plans = item.planningProgress
     // The design's count reads "2/5 plans saved" and the header has no ring while planning.
-    collapsibleSection(
-      "subtasks", "Subtasks", expansion.subtasks.value, expansion::toggleSubtasks,
+    section(
+      "subtasks", "Subtasks",
       count = plans?.let { "${it.done}/${it.total} plans saved" },
     ) {
       item(key = "subtasks-planning") { Hint("Subtasks appear here once their plans are saved.") }
@@ -109,8 +106,8 @@ internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state:
   val finished = finishedAt(item) != null
   val count = detail.subtasks.size + 1
   val progress = item.progress
-  collapsibleSection(
-    "subtasks", "Subtasks", expansion.subtasks.value, expansion::toggleSubtasks,
+  section(
+    "subtasks", "Subtasks",
     count = progress?.let { "${it.done}/${it.total}" } ?: detail.subtasks.size.toString(),
     actions = if (progress == null) null else { { ProgressRing(progress.done, progress.total, showText = false) } },
   ) {
@@ -124,7 +121,7 @@ internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state:
         status = status,
         progress = null,
         title = subtask.name,
-        modifier = Modifier.boxSegment(index, count),
+        modifier = Modifier.sbBoxSegment(index, count),
         current = current,
         meta = {
           // `.mono.t-faint` at `--t-2xs`: plain text, not a pill.
@@ -149,7 +146,7 @@ internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state:
         status = if (finished) StatusKind.Completed else StatusKind.Pending,
         progress = null,
         title = "Goal finish",
-        modifier = Modifier.boxSegment(count - 1, count),
+        modifier = Modifier.sbBoxSegment(count - 1, count),
         divider = false,
         body = { PhasePipeline(goalFinishSteps(item, detail)) },
       )
@@ -157,12 +154,11 @@ internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state:
   }
 }
 
-/** HANDOFF 9.2 item 10: goals past planning and standalone phases with more than one step. Operations show none. */
+/** HANDOFF 9.2 item 10, per screens.js: goals past planning, and any other run with more than one step. */
 internal fun LazyListScope.pipelineSection(item: WorkItem, detail: Detail) {
   val show = when (item.kind) {
     WorkKind.Goal -> item.statusKind() != StatusKind.Planning
-    WorkKind.Operation -> false
-    WorkKind.Phase, null -> detail.stepPipeline.size > 1
+    WorkKind.Operation, WorkKind.Phase, null -> detail.stepPipeline.size > 1
   }
   if (!show || detail.stepPipeline.isEmpty()) return
   section("pipeline", "Phase pipeline") {
@@ -171,13 +167,10 @@ internal fun LazyListScope.pipelineSection(item: WorkItem, detail: Detail) {
 }
 
 /** HANDOFF 9.2 item 11: one boxed row per edge; the design's header carries no count. */
-internal fun LazyListScope.dependencySection(detail: Detail, state: DetailUiState, expansion: DetailSectionExpansion, onAction: (DetailAction) -> Unit) {
+internal fun LazyListScope.dependencySection(detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
   if (detail.dependencies.isEmpty()) return
   val count = detail.dependencies.size
-  collapsibleSection(
-    "dependencies", "Dependencies", expansion.dependencies.value,
-    { expansion.dependencies.value = !expansion.dependencies.value },
-  ) {
+  section("dependencies", "Dependencies") {
     itemsIndexed(detail.dependencies, key = { index, dependency -> "dependency-${dependency.subtaskId}-${dependency.dependency.subtaskId}-$index" }) { index, entry ->
       BoxedFindingRow(
         index, count,

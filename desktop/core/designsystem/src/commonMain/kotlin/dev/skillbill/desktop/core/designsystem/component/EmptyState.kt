@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -27,7 +28,13 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun EmptyState(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector = LucideIcons.inbox, body: String? = null, actions: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = null) {
+fun EmptyState(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector = LucideIcons.inbox, body: String? = null, actions: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = null) =
+  EmptyState(title, icon, body?.let(::AnnotatedString), actions)
+
+/** The same empty state with rich body text, for inline mono spans such as a command. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun EmptyState(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector = LucideIcons.inbox, body: AnnotatedString?, actions: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = null) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val iconShape = RoundedCornerShape(SkillBillRadius.lg)

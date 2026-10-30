@@ -67,7 +67,6 @@ import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.composite.verticalResizePointerIcon
@@ -110,7 +109,8 @@ fun TerminalPaneChrome(
   val density = LocalDensity.current
   val drag = rememberDraggableState { delta -> onResizeBy(with(density) { (-delta).toDp() }) }
   Box(modifier.fillMaxWidth().heightIn(min = SkillBillSize.terminalMin).height(height).background(colors.bgInset).hairline(Edge.Top, colors.border)) {
-    Column {
+    // `.sb-term`'s 1 px top border sits outside its content, so the bar starts below the hairline.
+    Column(Modifier.padding(top = 1.dp)) {
       Row(
         Modifier.fillMaxWidth().height(terminalBarHeight).hairline(Edge.Bottom, colors.borderSubtle).padding(start = 12.dp, end = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -162,7 +162,8 @@ private fun TerminalTab(
   val interaction = remember { MutableInteractionSource() }
   val hovered = interaction.collectIsHoveredAsState().value
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  val fill = rememberHoverColor(hovered, if (active) colors.bgActive else Color.Transparent, if (active) colors.bgActive else colors.bgHover).value
+  // `.sb-ttab` has no transition, so the hover fill switches at once.
+  val fill = if (active) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent
   val textColor = if (active || hovered) colors.fg else colors.fgMuted
   Row(
     Modifier.height(24.dp).background(fill, shape).hoverable(interaction)
@@ -216,7 +217,8 @@ private fun RenameField(
         }
       }
       .semantics { contentDescription = "Tab name" }
-      .padding(horizontal = 6.dp).wrapContentHeight(Alignment.CenterVertically),
+      // `.sb-ttab-in` pads 6 px inside its 1 px border.
+      .padding(horizontal = 7.dp).wrapContentHeight(Alignment.CenterVertically),
     textStyle = SkillBillTheme.type.tSmMedium.copy(color = colors.fg),
     singleLine = true,
     cursorBrush = SolidColor(colors.fg),

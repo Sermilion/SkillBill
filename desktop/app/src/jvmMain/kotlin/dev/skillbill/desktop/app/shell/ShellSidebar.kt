@@ -85,7 +85,7 @@ fun ShellSidebar(
 }
 
 /** The Board section's status glyph, the same one its group header leads with. */
-private fun sectionLead(kind: BoardSectionKind): StatusKind = when (kind) {
+internal fun sectionLead(kind: BoardSectionKind): StatusKind = when (kind) {
   BoardSectionKind.NeedsYou -> StatusKind.Blocked
   BoardSectionKind.Finished -> StatusKind.Completed
   BoardSectionKind.Goals, BoardSectionKind.Phases, BoardSectionKind.Operations -> StatusKind.Active

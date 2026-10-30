@@ -19,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillSpace
@@ -30,9 +29,6 @@ import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.component.SbInput
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
-import dev.skillbill.desktop.core.designsystem.component.SbMenu
-import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
-import dev.skillbill.desktop.core.designsystem.component.SbPopover
 import dev.skillbill.desktop.core.designsystem.component.ViewTab
 import dev.skillbill.desktop.core.designsystem.component.ViewTabs
 import dev.skillbill.desktop.core.designsystem.component.dataColorFor
@@ -48,7 +44,6 @@ import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.settings.HistoryWindow
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
-import dev.skillbill.desktop.core.ui.input.ShellLayer
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.ui.status.statusKind
@@ -137,16 +132,8 @@ private fun HistoryBody(state: HistoryUiState, board: BoardState.Loaded, narrow:
   LazyColumn(Modifier.fillMaxSize(), listState) {
     groupHeader(key = "header", label = "Finished within $retention", count = rows.size)
     items(rows, key = { it.id }) { item ->
-      Box {
-        HistoryRow(item, focused = item.id == state.focusedId, state, narrow, onAction)
-        if (state.menu?.id == item.id) {
-          val close = { onAction(HistoryAction.CloseMenu) }
-          ShellLayer(close)
-          SbPopover(expanded = true, onDismissRequest = close) {
-            SbMenu(listOf(SbMenuEntry.Item("Open", { onAction(HistoryAction.Open(item)); close() }, icon = LucideIcons.external, shortcut = "↵")))
-          }
-        }
-      }
+      // History rows carry no context menu: the prototype's history `ListRow` has no `ctx`.
+      HistoryRow(item, focused = item.id == state.focusedId, state, narrow, onAction)
     }
   }
 }
@@ -173,7 +160,6 @@ private fun HistoryRow(item: WorkItem, focused: Boolean, state: HistoryUiState, 
     time = if (finishedAt != null && renderedAt != null) finishedTimeText(finishedAt, renderedAt) else null,
     focused = focused,
     narrow = narrow,
-    onContextMenu = { _: Offset -> onAction(HistoryAction.OpenMenu(item)) },
   )
 }
 

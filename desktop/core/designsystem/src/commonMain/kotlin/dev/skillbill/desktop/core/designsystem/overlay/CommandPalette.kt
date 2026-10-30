@@ -87,6 +87,13 @@ class CommandItem(
   val shortcut: String? = null,
   val danger: Boolean = false,
   val enabled: Boolean = true,
+  /** A composable lead, such as a status icon, drawn in place of [icon]. */
+  val lead: (@Composable () -> Unit)? = null,
+  /** What the row shows when it differs from [label], which stays the filter text: a faint [displayKey] 8 before [displayTitle]. */
+  val displayKey: String? = null,
+  val displayTitle: String? = null,
+  /** Faint trailing text (`.sb-menu-item .end`), such as the repository. */
+  val end: String? = null,
 )
 
 @Immutable
@@ -210,7 +217,8 @@ fun CommandList(groups: List<CommandGroup>, highlight: Int, onRun: (String) -> U
     },
   ) {
     if (visible.isEmpty()) {
-      BasicText("No commands match", Modifier.align(Alignment.Center).padding(horizontal = 16.dp, vertical = 28.dp), style = SkillBillTheme.type.tBase.copy(color = colors.fgFaint))
+      // `.sb-cmdk-empty` (padding 28px 16px) renders inside `.sb-cmdk-list` and its 4px 8px 8px padding.
+      BasicText("No commands match", Modifier.align(Alignment.Center).padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp).padding(horizontal = 16.dp, vertical = 28.dp), style = SkillBillTheme.type.tBase.copy(color = colors.fgFaint))
       return@Box
     }
     LazyColumn(Modifier.fillMaxWidth().heightIn(max = maxHeight), state = state, contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp)) {
@@ -248,8 +256,25 @@ private fun CommandRow(item: CommandItem, highlighted: Boolean, onRun: () -> Uni
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    item.icon?.let { CompositionLocalProvider(LocalContentColor provides iconColor) { SbIcon(it) } }
-    BasicText(item.label, Modifier.weight(1f), style = SkillBillTheme.type.tBase.copy(color = fg, lineHeight = 1.em), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    item.shortcut?.let { Kbd(it) }
+    CompositionLocalProvider(LocalContentColor provides iconColor) {
+      when { item.lead != null -> item.lead.invoke(); item.icon != null -> SbIcon(item.icon) }
+    }
+    val textStyle = SkillBillTheme.type.tBase.copy(color = fg, lineHeight = 1.em)
+    if (item.displayKey != null) {
+      // `<span class="t-faint" style="margin-right:8px">key</span>title`.
+      Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        BasicText(item.displayKey, style = textStyle.copy(color = colors.fgFaint), maxLines = 1, softWrap = false)
+        BasicText(item.displayTitle ?: item.label, Modifier.weight(1f, fill = false), style = textStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+    } else {
+      BasicText(item.displayTitle ?: item.label, Modifier.weight(1f), style = textStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    if (item.end != null || item.shortcut != null) {
+      // `.sb-menu-item .end`: faint `--t-sm` text and the key cap, 6 apart.
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        item.end?.let { BasicText(it, style = SkillBillTheme.type.tSm.copy(color = colors.fgFaint, lineHeight = 1.em), maxLines = 1, softWrap = false) }
+        item.shortcut?.let { Kbd(it) }
+      }
+    }
   }
 }

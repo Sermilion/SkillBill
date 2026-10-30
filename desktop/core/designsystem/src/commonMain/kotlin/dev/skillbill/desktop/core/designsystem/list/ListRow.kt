@@ -112,9 +112,10 @@ fun ListRow(
       if (it.type == KeyEventType.KeyDown && menuKey) { onContextMenu(Offset(if (rtl) rowSize.width.toFloat() else 0f, rowSize.height / 2f)); true } else false
     }
   Row(
-    modifier.fillMaxWidth().height(if (compact) SkillBillSize.compactRow else SkillBillSize.row)
+    // `.sb-row.faded` is element opacity, so it fades the fill, the focus bar and the hairline too, not only the content.
+    modifier.then(if (faded) Modifier.alpha(0.6f) else Modifier)
+      .fillMaxWidth().height(if (compact) SkillBillSize.compactRow else SkillBillSize.row)
       .then(shape).rowFill(hovered, focused, selected).focusBar(focused).then(line)
-      .then(if (faded) Modifier.alpha(0.6f) else Modifier)
       .onSizeChanged { rowSize = it }.hoverable(interaction).then(menu)
       .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
       .semantics(mergeDescendants = true) { this.selected = selected }

@@ -37,4 +37,6 @@ internal fun RecoveryDialog(preview: RecoveryPreview, applying: Boolean, returnF
 }
 
 @Composable
-private fun MonoValue(text: String) = BasicText(text, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fg2))
+/** `.sb-prop > dd .mono`: 11.5 px. */
+private fun MonoValue(text: String) =
+  BasicText(text, style = SkillBillTheme.type.monoSm.copy(color = SkillBillTheme.colors.fg2, fontSize = SkillBillTheme.type.tXs.fontSize))

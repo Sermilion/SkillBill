@@ -47,6 +47,8 @@ fun ShellFrame(
         val panel = if (drawerMode) Modifier.background(colors.bgPanel)
         else Modifier.padding(start = 0.dp, top = PANEL_INSET, end = PANEL_INSET, bottom = PANEL_INSET)
           .clip(shape).background(colors.bgPanel).border(1.dp, colors.borderSubtle, shape)
+          // `.sb-main`'s content sits inside its 1px border; Modifier.border draws over the content instead of insetting it.
+          .padding(1.dp)
         Box(Modifier.weight(1f).fillMaxHeight().then(panel)) { content() }
       }
     }

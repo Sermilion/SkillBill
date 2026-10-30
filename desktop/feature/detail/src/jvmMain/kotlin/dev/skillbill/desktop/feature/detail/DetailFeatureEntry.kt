@@ -17,6 +17,7 @@ import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
 import dev.skillbill.desktop.core.ui.navigation.FeatureEntry
 import dev.skillbill.desktop.core.ui.navigation.rememberEntryViewModel
+import dev.skillbill.desktop.core.ui.pane.PaneCommands
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.IntoSet
@@ -41,6 +42,7 @@ class DetailFeatureEntry(
   private val navigator: AppNavigator,
   private val toasts: ToastQueue,
   private val shellPanes: ShellPanes,
+  private val paneCommands: PaneCommands,
 ) : FeatureEntry {
   override fun renders(route: AppRoute): Boolean = route is DetailRoute
 
@@ -66,10 +68,15 @@ class DetailFeatureEntry(
         else -> viewModel.onKey(key)
       }
     }
+    val terminalOpen by paneCommands.terminalOpen.collectAsState()
     val host = DetailScreenHost(
       detailsPaneOpen = shellPanes.detailsPaneOpen,
       detailsShortcut = DETAILS_SHORTCUT,
       onToggleDetails = { shellPanes.detailsPaneOpen = !shellPanes.detailsPaneOpen },
+      specsOpen = shellPanes.specsOpen,
+      terminalOpen = terminalOpen,
+      onToggleSpecs = { shellPanes.specsOpen = !shellPanes.specsOpen },
+      onToggleTerminal = paneCommands::toggleTerminal,
     )
     DetailScreen(state, host, viewModel::onAction)
   }

@@ -89,7 +89,8 @@ fun ConfigRow(
   Column(modifier.fillMaxWidth()) {
     if (label == null) {
       Row(
-        Modifier.fillMaxWidth().height(SkillBillSize.row).background(fill).then(interactive)
+        // `.sb-cfg` is 36px including the divider above it, which SettingsGroup draws as a separate 1 dp line.
+        Modifier.fillMaxWidth().height(if (LocalSettingsRowDivided.current) SkillBillSize.row - 1.dp else SkillBillSize.row).background(fill).then(interactive)
           .padding(start = 16.dp, end = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,

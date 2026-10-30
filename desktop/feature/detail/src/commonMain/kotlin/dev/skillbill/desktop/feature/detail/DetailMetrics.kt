@@ -18,10 +18,9 @@ import dev.skillbill.desktop.core.ui.status.statusKind
 
 private fun activeNote(running: Boolean) = if (running) "ticking" else "last known duration"
 
-/** HANDOFF 9.2 item 8. Operations show no metrics. */
+/** HANDOFF 9.2 item 8, as screens.js `detail()` builds the strip: operations and phases get Step and the elapsed clock. */
 @Composable
 internal fun DetailMetrics(item: WorkItem, detail: Detail) {
-  if (item.kind == WorkKind.Operation) return
   val goal = item.kind == WorkKind.Goal
   val planning = item.statusKind() == StatusKind.Planning
   val finished = finishedAt(item)

@@ -2,6 +2,8 @@ package dev.skillbill.desktop.feature.work
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.SbMenu
 import dev.skillbill.desktop.core.designsystem.component.SbMenuEntry
 import dev.skillbill.desktop.core.designsystem.component.SbPopover
@@ -47,5 +49,6 @@ internal fun WorkRowMenu(
     add(entry("Cancel", LucideIcons.x, danger = true, enabled = state.canCancel(item)) { onAction(WorkAction.Cancel(item)) })
   }
   ShellLayer(close)
-  SbPopover(expanded = true, onDismissRequest = close) { SbMenu(entries) }
+  // The anchor is the click point; -4 cancels the popover's anchor gap so the menu's corner sits on the pointer.
+  SbPopover(expanded = true, onDismissRequest = close, offset = DpOffset(0.dp, (-4).dp)) { SbMenu(entries) }
 }

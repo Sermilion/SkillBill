@@ -67,8 +67,11 @@ fun SbPopover(expanded: Boolean, onDismissRequest: () -> Unit, offset: DpOffset 
   val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
   val maxWidth = (windowWidth - POPOVER_WIDTH_MARGIN * 2).coerceAtLeast(0.dp)
   val maxHeight = (windowHeight - POPOVER_WINDOW_MARGIN * 2).coerceAtLeast(0.dp)
-  val panelMaxWidth = (width ?: POPOVER_MAX_WIDTH).coerceAtLeast(0.dp).coerceAtMost(maxWidth)
-  val panelMinWidth = if (width != null) panelMaxWidth else POPOVER_MIN_WIDTH.coerceAtMost(panelMaxWidth)
+  // An inline width still answers to min-width: 220px and max-width: min(340px, 100vw - 24px).
+  val capWidth = POPOVER_MAX_WIDTH.coerceAtMost(maxWidth)
+  val floorWidth = POPOVER_MIN_WIDTH.coerceAtMost(capWidth)
+  val panelMaxWidth = width?.coerceIn(floorWidth, capWidth) ?: capWidth
+  val panelMinWidth = if (width != null) panelMaxWidth else floorWidth
   val offsetPx = with(density) { IntOffset(offset.x.roundToPx(), offset.y.roundToPx()) }
   val gapPx = with(density) { 4.dp.roundToPx() }
   val marginPx = with(density) { POPOVER_WINDOW_MARGIN.roundToPx() }

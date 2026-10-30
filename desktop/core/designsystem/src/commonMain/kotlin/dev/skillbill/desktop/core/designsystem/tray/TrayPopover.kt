@@ -61,7 +61,9 @@ fun TrayPopover(
   val shape = RoundedCornerShape(SkillBillRadius.lg)
   Column(
     modifier.width(SkillBillSize.trayPopover).layeredShadow(SkillBillTheme.shadows.popover, shape)
-      .background(colors.bgOverlay, shape).border(1.dp, colors.borderStrong, shape).clip(shape),
+      .background(colors.bgOverlay, shape).border(1.dp, colors.borderStrong, shape).clip(shape)
+      // `.sb-tray` is border-box: its sections sit inside the 1px border, which Modifier.border does not inset.
+      .padding(1.dp),
   ) {
     Row(
       Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 10.dp),
