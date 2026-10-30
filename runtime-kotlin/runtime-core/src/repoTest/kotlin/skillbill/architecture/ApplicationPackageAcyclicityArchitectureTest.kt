@@ -210,7 +210,20 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
-  fun `runtime-infra skills package cycles equal the recorded census`() {
+  fun `runtime-infra skills has no exact-package cycles`() {
+    val scanCase =
+      PrincipleEnforcementInventory.moduleArchitectureScanCases
+        .single { scanCase -> scanCase.moduleName == "runtime-infra:skills" }
+    assertEquals(ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC, scanCase.packageCycleGranularity)
+    assertEquals(null, scanCase.packageCycleBaseline)
+    assertTrue(
+      ArchitectureScanSupport.packageImportEdges(
+        scanRoot = scanCase.mainScanRoot,
+        packagePrefix = scanCase.packagePrefix,
+        granularity = scanCase.packageCycleGranularity,
+      ).isNotEmpty(),
+      "The runtime-infra:skills scan found no packages; check ${scanCase.mainScanRoot} and ${scanCase.packagePrefix}.",
+    )
     assertPackageCyclesMatchBaseline("runtime-infra:skills")
   }
 

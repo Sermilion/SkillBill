@@ -1,12 +1,11 @@
-package skillbill.infrastructure.skills.nativeagent.composition
+package skillbill.infrastructure.skills.nativeagent.rendering
 
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionKind
+import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
+import skillbill.infrastructure.skills.nativeagent.composition.invalidCompositionInput
+import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPack
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPackLoader
-import skillbill.infrastructure.skills.nativeagent.rendering.composeGovernedAgentBody
-import skillbill.infrastructure.skills.nativeagent.rendering.enforceAddonProjectionParity
-import skillbill.infrastructure.skills.nativeagent.rendering.enforceComposedAgentBudget
 import java.nio.file.Path
 
 internal data class NativeAgentCompositionTarget(
@@ -19,23 +18,6 @@ enum class NativeAgentCompositionTargetSource {
   PlatformManifest,
   SiblingContent,
 }
-
-internal fun parseCompositionDirective(
-  rawValue: String?,
-  label: String,
-): NativeAgentCompositionDirective? =
-  rawValue?.let { value ->
-    if (value.isBlank()) {
-      invalidCompositionInput("$label: native agent compose directive is required when the compose key is present")
-    }
-    val kind =
-      NativeAgentCompositionKind.entries.firstOrNull { it.wireValue == value }
-        ?: invalidCompositionInput("$label: unsupported native agent compose directive '$value'")
-    NativeAgentCompositionDirective(kind)
-  }
-
-internal fun invalidCompositionInput(message: String): Nothing =
-  throw SkillBillRuntimeException(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, message)
 
 internal fun resolveNativeAgentCompositionTarget(
   repoRoot: Path,
@@ -127,16 +109,3 @@ internal fun composeNativeAgentSource(
   )
   return composed
 }
-
-internal fun renderComposedNativeAgentSource(
-  repoRoot: Path,
-  source: NativeAgentSource,
-  context: NativeAgentCompositionContext,
-): String =
-  renderNativeAgentSource(
-    composeNativeAgentSource(
-      repoRoot,
-      source,
-      context,
-    ),
-  )

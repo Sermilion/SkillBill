@@ -6,11 +6,14 @@ import skillbill.infrastructure.host.jvm.rollbackDeleteEmptyDirectory
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.host.jvm.rollbackDeleteRegularFileOrSymlink
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
-import skillbill.infrastructure.skills.scaffold.runtime.service.externalpack.rollbackRegisteredExternalPlatformPack
+import skillbill.install.model.ExternalPlatformPackSource
+import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceUnregisterRequest
+import skillbill.ports.repository.toFileLocation
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.coroutines.cancellation.CancellationException
 
 internal fun rollback(
   txn: ScaffoldTransaction,
@@ -74,6 +77,28 @@ internal fun rollbackDirs(
       rollbackDeleteEmptyDirectory(directory)
     }
   }
+}
+
+internal fun rollbackRegisteredExternalPlatformPack(
+  txn: ScaffoldTransaction,
+  errors: MutableList<String>,
+) {
+  val root = txn.registeredExternalPackRoot ?: return
+  val home = txn.externalPackConfigHome ?: return
+  val store = txn.packSourceConfig ?: return
+  val failure =
+    runCatching {
+      store.unregisterExternalPlatformPackSource(
+        ExternalPlatformPackSourceUnregisterRequest(
+          userHome = home,
+          environment = txn.externalPackConfigEnvironment,
+          source = ExternalPlatformPackSource(root.toFileLocation()),
+          restoreEmptyFieldState = txn.externalPackPreviousFieldState,
+        ),
+      )
+    }.exceptionOrNull() ?: return
+  if (failure is CancellationException) throw failure
+  errors += "external platform pack registration $root: ${failure.message}"
 }
 
 private fun recordRollbackFailure(

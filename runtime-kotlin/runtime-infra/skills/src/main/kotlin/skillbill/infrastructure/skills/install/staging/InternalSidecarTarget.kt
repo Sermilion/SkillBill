@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install.staging
 
 import skillbill.error.shellcontent.internalSkillSidecarCollision
 import skillbill.error.shellcontent.invalidAuthoredSkillSidecar
+import skillbill.infrastructure.skills.install.identity.AUTHORED_SKILL_CONTENT_FILENAME
 import skillbill.infrastructure.skills.scaffold.authoring.discoverTargets
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.infrastructure.skills.scaffold.authoring.renderWrapper

@@ -5,7 +5,7 @@ import skillbill.infrastructure.skills.install.apply.currentNativeAgentApplyCach
 import skillbill.infrastructure.skills.install.nativeagent.InstallNativeAgentResult
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
 import skillbill.infrastructure.skills.install.nativeagent.link.installNativeAgentFile
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.install.model.AgentTarget

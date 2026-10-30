@@ -1,4 +1,4 @@
-package skillbill.infrastructure.skills.scaffold.validation.shape
+package skillbill.infrastructure.skills.scaffold.runtime.validation
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless

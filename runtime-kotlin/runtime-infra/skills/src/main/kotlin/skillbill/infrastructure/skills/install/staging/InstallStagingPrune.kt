@@ -1,8 +1,7 @@
 package skillbill.infrastructure.skills.install.staging
 
-import skillbill.infrastructure.skills.install.staging.content.INSTALL_CACHE_KEY_BYTES
-import skillbill.infrastructure.skills.install.staging.content.installedSkillNameSlug
-import skillbill.infrastructure.skills.install.staging.content.installedSkillSlug
+import skillbill.infrastructure.skills.install.identity.installedSkillNameSlug
+import skillbill.infrastructure.skills.install.identity.installedSkillSlug
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.Files

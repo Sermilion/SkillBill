@@ -1,10 +1,6 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTargetSource
-import skillbill.infrastructure.skills.nativeagent.composition.displayPath
 import skillbill.infrastructure.skills.nativeagent.composition.invalidCompositionInput
-import skillbill.infrastructure.skills.nativeagent.composition.platformPackRoot
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPointerSpec
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files

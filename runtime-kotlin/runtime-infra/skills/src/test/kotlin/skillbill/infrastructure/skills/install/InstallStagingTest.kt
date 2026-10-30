@@ -2,13 +2,13 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.error.core.InvalidInstallStagingError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.skills.install.identity.isContentManagedSkill
 import skillbill.infrastructure.skills.install.plan.InstallContext
 import skillbill.infrastructure.skills.install.plan.installSkill
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
-import skillbill.infrastructure.skills.install.staging.content.computeInstallContentHash
-import skillbill.infrastructure.skills.install.staging.content.isContentManagedSkill
+import skillbill.infrastructure.skills.install.staging.computeInstallContentHash
 import skillbill.infrastructure.skills.install.staging.generatedSupportPointersFor
 import skillbill.infrastructure.skills.install.staging.installedSkillStagingDir
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot

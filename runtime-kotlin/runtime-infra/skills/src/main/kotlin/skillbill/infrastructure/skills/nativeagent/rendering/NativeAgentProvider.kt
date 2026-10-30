@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
+import skillbill.infrastructure.skills.nativeagent.composition.YAML_DOUBLE_QUOTE_ESCAPES
 import skillbill.infrastructure.skills.nativeagent.composition.declaresReadOnlyToolset
 import skillbill.infrastructure.skills.nativeagent.support.NativeAgentObservedPath
 import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
@@ -175,15 +176,6 @@ private fun cursorCapabilityFields(agent: NativeAgentSource): List<String> =
 private val YAML_RESERVED_LEADING_CHARS: Set<Char> =
   setOf('-', '?', ':', ',', '[', ']', '{', '}', '#', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`')
 private val YAML_RESERVED_INLINE_CHARS: Set<Char> = setOf('\n', '\r', '\t')
-
-internal val YAML_DOUBLE_QUOTE_ESCAPES: Map<Char, String> =
-  mapOf(
-    '\\' to "\\\\",
-    '"' to "\\\"",
-    '\n' to "\\n",
-    '\r' to "\\r",
-    '\t' to "\\t",
-  )
 
 private fun yamlScalar(value: String): String =
   if (yamlNeedsQuoting(value)) {

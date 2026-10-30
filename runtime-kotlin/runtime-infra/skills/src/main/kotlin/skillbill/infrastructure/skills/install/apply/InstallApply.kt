@@ -4,6 +4,8 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
+import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
+import skillbill.infrastructure.skills.install.symlink.windowsSymlinkGuidance
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.FAILURE
 import skillbill.install.model.InstallAppliedSkill

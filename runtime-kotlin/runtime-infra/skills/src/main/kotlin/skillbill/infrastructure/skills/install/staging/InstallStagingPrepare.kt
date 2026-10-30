@@ -3,13 +3,11 @@ package skillbill.infrastructure.skills.install.staging
 import skillbill.infrastructure.skills.agentaddon.AgentAddonPointer
 import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
 import skillbill.infrastructure.skills.install.identity.SkillContentIdentity
+import skillbill.infrastructure.skills.install.identity.agentAddonPointersForSkill
+import skillbill.infrastructure.skills.install.identity.authoredStagingNames
 import skillbill.infrastructure.skills.install.identity.routeInstalledSkillBody
 import skillbill.infrastructure.skills.install.identity.suppliedSkillContentIdentity
-import skillbill.infrastructure.skills.install.staging.content.InstallContentHashInputs
-import skillbill.infrastructure.skills.install.staging.content.agentAddonPointersForSkill
-import skillbill.infrastructure.skills.install.staging.content.authoredStagingNames
-import skillbill.infrastructure.skills.install.staging.content.computeInstallContentHash
-import skillbill.infrastructure.skills.install.staging.content.validateAgentAddonPointerNamespace
+import skillbill.infrastructure.skills.install.identity.validateAgentAddonPointerNamespace
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.resolveTarget
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext

@@ -26,9 +26,16 @@ object PrincipleEnforcementInventory {
   )
 
   private val EXACT_PACKAGE_SCC_MODULES =
-    setOf("runtime-domain", "runtime-contracts", "runtime-cli", "runtime-engine", "runtime-infra:sqlite")
+    setOf(
+      "runtime-domain",
+      "runtime-contracts",
+      "runtime-cli",
+      "runtime-engine",
+      "runtime-infra:skills",
+      "runtime-infra:sqlite",
+    )
 
-  private val BASELINE_FREE_PACKAGE_CYCLE_MODULES = setOf("runtime-infra:sqlite")
+  private val BASELINE_FREE_PACKAGE_CYCLE_MODULES = setOf("runtime-infra:skills", "runtime-infra:sqlite")
 
   val moduleArchitectureScanCases: List<ModuleArchitectureScanCase> =
     RuntimeModuleCatalog.declaredGradleModules

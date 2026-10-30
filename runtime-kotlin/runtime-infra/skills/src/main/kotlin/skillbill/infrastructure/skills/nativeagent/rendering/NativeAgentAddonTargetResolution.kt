@@ -1,10 +1,6 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 
 import skillbill.error.shellcontent.missingContentFile
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTargetSource
-import skillbill.infrastructure.skills.nativeagent.composition.displayPath
-import skillbill.infrastructure.skills.nativeagent.composition.platformPackRoot
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentAddonSelectionPolicy
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentGovernedAddonActivation
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentGovernedAddonSelection

@@ -5,7 +5,7 @@ import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
-import skillbill.infrastructure.skills.install.staging.content.computeInstallContentHash
+import skillbill.infrastructure.skills.install.staging.computeInstallContentHash
 import skillbill.infrastructure.skills.install.staging.generatedSupportPointersFor
 import skillbill.install.model.InstallAgentSelection
 import skillbill.install.model.InstallAgentSelectionMode

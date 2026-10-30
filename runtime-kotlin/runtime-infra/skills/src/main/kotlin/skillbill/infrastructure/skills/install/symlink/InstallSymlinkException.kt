@@ -1,4 +1,4 @@
-package skillbill.infrastructure.skills.install.apply
+package skillbill.infrastructure.skills.install.symlink
 
 import skillbill.error.core.SkillBillRuntimeException
 import java.nio.file.Path

@@ -1,5 +1,6 @@
-package skillbill.infrastructure.skills.nativeagent.composition
+package skillbill.infrastructure.skills.nativeagent.rendering
 
+import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPack
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPackLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack

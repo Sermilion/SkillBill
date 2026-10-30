@@ -1,17 +1,17 @@
-package skillbill.infrastructure.skills.install.staging.content
+package skillbill.infrastructure.skills.install.identity
 
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.error.shellcontent.agentAddonPointerCollision
 import skillbill.infrastructure.skills.agentaddon.AgentAddonDeliveryResolver
 import skillbill.infrastructure.skills.agentaddon.AgentAddonPointer
 import skillbill.infrastructure.skills.agentaddon.portableFileName
-import skillbill.infrastructure.skills.install.staging.AUTHORED_SKILL_CONTENT_FILENAME
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 
 private const val INSTALL_SLUG_MAX_CHARS = 32
+internal const val AUTHORED_SKILL_CONTENT_FILENAME = "content.md"
 
 internal fun isContentManagedSkill(sourceSkillDir: Path): Boolean {
   val contentMd = sourceSkillDir.resolve(AUTHORED_SKILL_CONTENT_FILENAME)

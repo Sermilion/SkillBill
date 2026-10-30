@@ -2,7 +2,6 @@
 package skillbill.infrastructure.skills.scaffold.manifest
 
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
-import skillbill.infrastructure.skills.scaffold.runtime.service.areaFocus
 import java.nio.file.Path
 
 internal fun appendCodeReviewArea(

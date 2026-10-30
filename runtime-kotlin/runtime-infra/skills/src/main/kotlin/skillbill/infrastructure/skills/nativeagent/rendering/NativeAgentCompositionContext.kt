@@ -1,4 +1,4 @@
-package skillbill.infrastructure.skills.nativeagent.composition
+package skillbill.infrastructure.skills.nativeagent.rendering
 
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPackLoader
 import java.nio.file.Path

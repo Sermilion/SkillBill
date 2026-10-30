@@ -2,6 +2,9 @@ package skillbill.infrastructure.skills.install.apply
 
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
+import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
+import skillbill.infrastructure.skills.install.symlink.createNewSymlinkWithGuidance
+import skillbill.infrastructure.skills.install.symlink.createReplacementSymlinkWithGuidance
 import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallAgentSkillLinkOutcome
 import skillbill.install.model.InstallAgentTarget

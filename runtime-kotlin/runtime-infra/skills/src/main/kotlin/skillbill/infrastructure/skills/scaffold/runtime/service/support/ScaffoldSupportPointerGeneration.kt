@@ -1,10 +1,12 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service.support
 
+import skillbill.error.shellcontent.missingSupportingFileTargetError
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.FEATURE_TASK_ADDON_CONSUMER
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.SKILL_CLASSES_DIR
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.discoverSkillClasses
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.resolveSkillClass
 import skillbill.infrastructure.skills.scaffold.platformpack.selectedPlatformManifests
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.PointerSpec
 import java.nio.file.Files
@@ -30,6 +32,20 @@ private fun featureAddonPointersForManifest(manifest: PlatformManifest): List<Po
     .flatMap { usage -> usage.addons.flatMap { addon -> listOf(addon.entrypoint) + addon.companionPointers } }
     .mapNotNull(pointersByName::get)
 }
+
+internal fun requireSupportingFileTarget(
+  skillName: String,
+  fileName: String,
+  repoRoot: Path,
+  selectedPlatformManifests: List<PlatformManifest> = emptyList(),
+): Path =
+  supportingFileTargets(repoRoot)[fileName]
+    ?: featureAddonPointerSpecsFor(skillName, selectedPlatformManifests)
+      .firstOrNull { spec -> spec.name == fileName }
+      ?.let { spec -> repoRoot.toAbsolutePath().normalize().resolve(spec.target).normalize() }
+    ?: throw missingSupportingFileTargetError(
+      "Runtime supporting file '$fileName' is not registered for '$skillName'.",
+    )
 
 internal fun requiredSupportingFilesForSkill(
   skillName: String,

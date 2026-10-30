@@ -1,13 +1,12 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionContext
+import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.discoverRepoNativeAgentSourceEntries
 import skillbill.infrastructure.skills.nativeagent.validation.validateRepoNativeAgents
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.SKILL_CLASSES_DIR
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.discoverSkillClasses
 import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.PlatformPackSubstanceAudit
 import skillbill.infrastructure.skills.scaffold.pointer.validateGeneratedArtifactGuard
-import skillbill.infrastructure.skills.scaffold.validation.shape.validateGovernedSkillDrift
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
 

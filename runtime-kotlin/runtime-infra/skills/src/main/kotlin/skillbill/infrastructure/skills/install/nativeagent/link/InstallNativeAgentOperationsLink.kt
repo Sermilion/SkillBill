@@ -7,11 +7,12 @@ import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
 import skillbill.infrastructure.skills.install.nativeagent.parseEmbeddedLogicalName
-import skillbill.infrastructure.skills.nativeagent.composition.nativeAgentCompositionRepoRoot
+import skillbill.infrastructure.skills.install.nativeagent.uninstallNativeAgentFiles
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderOverrides
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.nativeagent.rendering.nativeAgentCompositionRepoRoot
 import skillbill.infrastructure.skills.nativeagent.validation.validateNativeAgentArtifactsForInstall
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.SupportedAgent

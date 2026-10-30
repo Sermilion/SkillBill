@@ -1,4 +1,4 @@
-package skillbill.infrastructure.skills.install.apply
+package skillbill.infrastructure.skills.install.symlink
 
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
@@ -23,6 +23,13 @@ internal fun createNewSymlinkWithGuidance(
 ) {
   createManagedSymlinkWithGuidance(linkPath, linkTarget, replaceExisting = false)
 }
+
+internal fun resolveSymlinkTarget(linkPath: Path): Path? =
+  runCatching {
+    val rawTarget = Files.readSymbolicLink(linkPath)
+    val resolvedTarget = if (rawTarget.isAbsolute) rawTarget else linkPath.parent.resolve(rawTarget)
+    resolvedTarget.toAbsolutePath().normalize()
+  }.getOrNull()
 
 private fun createManagedSymlinkWithGuidance(
   linkPath: Path,

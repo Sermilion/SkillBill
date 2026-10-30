@@ -7,7 +7,8 @@ import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkO
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkRequest
 import skillbill.infrastructure.skills.install.nativeagent.link.effectivePackRootsForInstall
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
+import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader

@@ -2,6 +2,8 @@ package skillbill.infrastructure.skills.install.apply
 
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
+import skillbill.infrastructure.skills.install.symlink.createNewSymlinkWithGuidance
+import skillbill.infrastructure.skills.install.symlink.createReplacementSymlinkWithGuidance
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.assertExternalPlatformPackDeclaredReads
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.assertExternalPlatformPackTreeReads
 import skillbill.install.model.InstallAppliedSkill

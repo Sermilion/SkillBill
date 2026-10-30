@@ -1,12 +1,8 @@
-package skillbill.infrastructure.skills.install.staging.content
+package skillbill.infrastructure.skills.install.staging
 
 import skillbill.infrastructure.contracts.newSha256Digest
 import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.skills.agentaddon.AgentAddonPointer
-import skillbill.infrastructure.skills.install.staging.GeneratedSupportPointer
-import skillbill.infrastructure.skills.install.staging.InternalSidecarTarget
-import skillbill.infrastructure.skills.install.staging.applicablePointers
-import skillbill.infrastructure.skills.install.staging.invalidInstallStaging
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.PointerSpec

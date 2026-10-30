@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionContext
+import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentCompositionContext
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.install.model.AgentTarget
 import java.nio.file.Path

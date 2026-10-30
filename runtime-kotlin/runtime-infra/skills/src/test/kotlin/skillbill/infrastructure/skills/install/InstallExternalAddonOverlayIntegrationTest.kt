@@ -2,8 +2,8 @@
 package skillbill.infrastructure.skills.install
 
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
+import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
-import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.scaffold.overlayPort
 import skillbill.install.model.ExternalAddonSource
