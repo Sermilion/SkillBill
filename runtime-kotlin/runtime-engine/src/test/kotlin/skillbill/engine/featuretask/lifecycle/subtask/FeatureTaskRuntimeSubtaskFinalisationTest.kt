@@ -159,19 +159,21 @@ class FeatureTaskRuntimeSubtaskFinalisationTest {
   }
 
   @Test
-  fun `a subtask that never checkpointed and left no changes blocks naming the missing no-change claim`() {
+  fun `a subtask that never checkpointed and left no changes continues with the current head`() {
     val repo = repoWithRemote()
     val baseSha = git(repo.root, "rev-parse", "HEAD")
 
-    val blocked =
-      assertIs<FeatureTaskRuntimeSubtaskFinalisationBlocked>(
+    val finalised =
+      assertIs<FeatureTaskRuntimeSubtaskFinalised>(
         finalise(repo, durableCommitSha = null, paths = emptyList()),
       )
 
-    assertContains(blocked.reason, NOTHING_TO_COMMIT_REASON)
-    assertTrue(!blocked.reason.contains("empty sha"), "an empty diff must not be reported as an empty sha")
+    assertEquals(baseSha, finalised.commitSha)
+    assertEquals(emptyList<String>(), finalised.stagedPaths)
     assertEquals(baseSha, git(repo.root, "rev-parse", "HEAD"))
-    assertEquals(emptyList<String>(), recordedCommits)
+    assertEquals(baseSha, git(repo.remote, "rev-parse", branch))
+    assertEquals(listOf(baseSha), recordedCommits)
+    assertTrue(records.any { it.contains(NOTHING_TO_COMMIT_NOTE) })
   }
 
   @Test

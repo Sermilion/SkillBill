@@ -118,7 +118,8 @@ fun FeatureTaskRuntimeSubtaskFinalisation.commitAndPush(
   val commitSha =
     commit.value.orEmpty().trim().takeIf(String::isNotBlank)
       ?: return if (stageable.isEmpty()) {
-        blocked(NOTHING_TO_COMMIT_REASON)
+        record(NOTHING_TO_COMMIT_NOTE)
+        publishUnchangedHead(request)
       } else {
         blocked(restoring("the finalisation commit returned an empty sha", stageable, restoreState))
       }
@@ -203,11 +204,8 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.publishUnchangedHead(
   )
 }
 
-internal const val NOTHING_TO_COMMIT_REASON: String =
-  "the subtask left no repository changes to commit: implement changed nothing and returned no `no_change` " +
-    "claim. If the repository already satisfies the spec, " +
-    "close the issue as already satisfied; otherwise rerun the subtask so implement makes the change or " +
-    "returns a `no_change` claim"
+internal const val NOTHING_TO_COMMIT_NOTE: String =
+  "subtask finalisation found no repository changes to commit; continuing with the current head"
 
 fun FeatureTaskRuntimeSubtaskFinalisation.blocked(reason: String) =
   FeatureTaskRuntimeSubtaskFinalisationBlocked(
