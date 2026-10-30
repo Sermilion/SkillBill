@@ -2,6 +2,7 @@
 Areas: runtime-infra/sqlite, runtime-contracts, runtime-ports, desktop-tray
 - Migration 87 adds activity and specs signals, bounded changed-work history and a stored generation. Heartbeats and journal inserts avoid board revisions; the tray observes revision changes.
 - The reusable read pool verifies reused connections against file identity and generation. Release closes idle connections and closes borrowed connections on return; strict readIfPresent and lenient read retain their contracts.
+- The test helper revertDesktopChangeSignals in DatabaseMigrationsTestSupport drops the desktop change triggers and the migration 87 ledger row, so tests that fake legacy stores with DROP COLUMN can run. reusable
 - Signal consumers resync on generation change, missing changed-id data, overflow or a revision gap. Later migrations must reinstall affected update triggers after changing signalled table columns.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented

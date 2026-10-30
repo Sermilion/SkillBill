@@ -1,3 +1,8 @@
+## [2026-10-30] Keep activity writes off board topics
+Context: Worktree journal writes and lease heartbeats bumped goals and phases, so the board re-read on every probe and heartbeat.
+Decision: Journal inserts and lease updates that touch only heartbeat_at or expires_at bump only activity. Journal UPDATE and DELETE triggers are dropped. Lease identity changes still bump goals and phases.
+Reason: Pruning old journal rows does not change the latest tick readers show, and heartbeats do not change board structure.
+
 ## [2026-10-30] Reinstall desktop change triggers after schema changes
 Context: Migration 87 builds update trigger column comparisons from the table schema at migration time.
 Decision: Later migrations adding or dropping columns on signalled tables reinstall their desktop change triggers around the alteration.

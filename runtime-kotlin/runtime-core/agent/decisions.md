@@ -1,3 +1,8 @@
+## [2026-10-30] Keep RuntimeComponent database accessors port-typed
+Context: Binding DatabaseSessionFactory and DatabaseReadConnections to one SQLite factory exposed the concrete type on RuntimeComponent's public ABI, which ImplementationOwnershipArchitectureTest forbids.
+Decision: sqliteDatabaseSessionFactory is internal. databaseSession and databaseReadConnections are public port-typed accessors backed by the same factory instance.
+Reason: Hosts release pooled reads through the port, and the concrete factory stays an infra type.
+
 ## [2026-10-01] Extend the existing composition guard for test placement
 Context: SKILL-372 moved composition tests back into application and review packages while architecture checks stayed green.
 Decision: Add the placement check to RuntimeCompositionGuardArchitectureTest, using a reusable ArchitectureScanSupport scanner and an enforcement-inventory registration. Require a nonempty repository scan and exercise synthetic acceptance and rejection through that scanner.
