@@ -11,11 +11,14 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.rememberWindowState
 import dev.skillbill.desktop.app.command.CommandMenu
 import dev.skillbill.desktop.app.di.WindowComponent
@@ -35,6 +38,7 @@ import kotlinx.coroutines.cancel
 import java.awt.Dimension
 
 private val MIN_WINDOW_SIZE = Dimension(560, 420)
+private const val MIN_MAIN_WINDOW_DENSITY = 1.75f
 
 /** The main window: the shell frame, the routes, the command menu, the shortcut sheet and the toasts, all on [window]'s graph. */
 @Composable
@@ -52,7 +56,7 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
     onCloseRequest = onCloseRequest,
     visible = visible,
     title = "Skill Bill",
-    state = rememberWindowState(size = DpSize(1280.dp, 820.dp)),
+    state = rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1280.dp, 820.dp)),
     onPreviewKeyEvent = { event ->
       val press = event.toKeyPress()
       val treeKey = when (press?.key) {
@@ -66,6 +70,7 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
     },
   ) {
     val awtWindow = this.window
+    val systemDensity = LocalDensity.current
     SideEffect { awtWindow.minimumSize = MIN_WINDOW_SIZE }
     LaunchedEffect(visible, focusRequest) {
       if (visible) {
@@ -76,21 +81,23 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
         awtWindow.requestFocus()
       }
     }
-    SkillBillTheme(reducedMotion) {
-      val focusManager = LocalFocusManager.current
-      SideEffect { keyboard.clearFocus = { focusManager.clearFocus() } }
-      CompositionLocalProvider(LocalShellInput provides window.input) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-          val narrow = maxWidth < NARROW_WIDTH
-          val drawerMode = maxWidth < DRAWER_WIDTH
-          SideEffect { keyboard.drawerMode = drawerMode }
-          val panes = window.panes
-          val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !narrow, drawerMode = drawerMode)
-          CompositionLocalProvider(LocalShellLayout provides layout) {
-            ShellContent(window, drawerMode)
-            CommandMenu(window)
-            if (panes.shortcutsOpen) ShortcutSheet { panes.shortcutsOpen = false }
-            ToastStack(window.toasts.host)
+    CompositionLocalProvider(LocalDensity provides Density(maxOf(systemDensity.density, MIN_MAIN_WINDOW_DENSITY), systemDensity.fontScale)) {
+      SkillBillTheme(reducedMotion) {
+        val focusManager = LocalFocusManager.current
+        SideEffect { keyboard.clearFocus = { focusManager.clearFocus() } }
+        CompositionLocalProvider(LocalShellInput provides window.input) {
+          BoxWithConstraints(Modifier.fillMaxSize()) {
+            val narrow = maxWidth < NARROW_WIDTH
+            val drawerMode = maxWidth < DRAWER_WIDTH
+            SideEffect { keyboard.drawerMode = drawerMode }
+            val panes = window.panes
+            val layout = ShellLayout(showDetailsPane = panes.detailsPaneOpen && !panes.specsOpen && !narrow, drawerMode = drawerMode)
+            CompositionLocalProvider(LocalShellLayout provides layout) {
+              ShellContent(window, drawerMode)
+              CommandMenu(window)
+              if (panes.shortcutsOpen) ShortcutSheet { panes.shortcutsOpen = false }
+              ToastStack(window.toasts.host)
+            }
           }
         }
       }

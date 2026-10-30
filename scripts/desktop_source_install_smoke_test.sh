@@ -11,7 +11,7 @@ RUNTIME_KOTLIN_DIR="$task_dir/checkout/runtime-kotlin"
 INSTALL_SOURCE="source"
 DESKTOP_APP_INSTALL_RESULT=""
 BUILT_DESKTOP_APP_SOURCE=""
-mkdir -p "$RUNTIME_KOTLIN_DIR" "$task_dir/checkout/desktop-tray" "$task_dir/bin"
+mkdir -p "$RUNTIME_KOTLIN_DIR" "$task_dir/checkout/desktop" "$task_dir/bin"
 RUNTIME_LAUNCHER_BIN_DIR="$task_dir/bin"
 info() { printf '%s\n' "$*"; }
 warn() { printf '%s\n' "$*" >&2; }
@@ -26,7 +26,7 @@ desktop_app_legacy_target_path() { printf '%s/SkillBill.app' "$2"; }
 install_desktop_app_launcher() { ln -sf "$3" "$task_dir/bin/skillbill-desktop"; }
 launch_desktop_app() { printf '%s\n' "$3" >> "$task_dir/launched"; }
 
-cat > "$task_dir/checkout/desktop-tray/gradlew" <<'BUILD'
+cat > "$task_dir/checkout/desktop/gradlew" <<'BUILD'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$#" -eq 4 ]]
@@ -36,11 +36,11 @@ set -euo pipefail
 if [[ -f fail-build ]]; then
   exit 23
 fi
-mkdir -p 'composeApp/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS'
-printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'composeApp/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
-chmod +x 'composeApp/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
+mkdir -p 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS'
+printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
+chmod +x 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
 BUILD
-chmod +x "$task_dir/checkout/desktop-tray/gradlew"
+chmod +x "$task_dir/checkout/desktop/gradlew"
 
 install_selected_desktop_app
 app="$task_dir/install/Skill Bill.app/Contents/MacOS/Skill Bill"
@@ -79,7 +79,7 @@ fi
 kill -0 "$unrelated_app"
 [[ "$(wc -l < "$task_dir/launched")" -eq 2 ]]
 
-touch "$task_dir/checkout/desktop-tray/fail-build"
+touch "$task_dir/checkout/desktop/fail-build"
 if install_selected_desktop_app; then
   err 'Installer accepted a failed desktop source build.'
   exit 1

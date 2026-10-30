@@ -24,7 +24,7 @@ archive plus its `.sha256` sidecar to the GitHub Release for that tag:
 
 - self-contained runtime images for **CLI** and **MCP**
   (`runtime-cli-<version>-<os>-<arch>.zip`, `runtime-mcp-<version>-<os>-<arch>.zip`)
-- the desktop tray app distribution
+- the desktop app distribution built from `desktop/`
   (`skill-bill-desktop-<version>-<os>-<arch>.tar.gz`)
 
 The `<os>-<arch>` token is the canonical set `macos-arm64` / `windows-x64` /
@@ -44,9 +44,10 @@ After each runtime release publishes, the workflow deletes assets from every
 older runtime release, including prereleases. Their release pages and notes stay
 available. Only the newest
 published runtime release keeps downloads. Pushes to `main` build and check the
-tray app on Linux, macOS, and Windows. Pull requests that touch `desktop-tray` or `runtime-kotlin`
-run the cross-platform build and publish a downloadable snapshot; cleanup keeps
-the newest successful complete snapshot set.
+desktop app on Linux, macOS, and Windows. Pull requests that touch `desktop/`
+or `runtime-kotlin` run the cross-platform build and publish a downloadable
+snapshot. The older `desktop-tray/` app remains in the repository as a behavior
+reference and keeps its own CI checks.
 
 The installer installs the desktop app automatically. Local checkouts build it
 from source. Standalone installers download the matching host archive from the

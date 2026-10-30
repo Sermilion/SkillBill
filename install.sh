@@ -697,9 +697,9 @@ print_install_plan() {
   info "Agent symlinks: links Skill Bill skills into your selected agents' skill/command directories."
   info "Runtime: installs the Kotlin runtime under $RUNTIME_INSTALL_ROOT"
   if [[ "$INSTALL_SOURCE" == "source" ]]; then
-    info "Desktop tray app: build and install from this checkout."
+    info "Desktop app: build and install from this checkout."
   else
-    info "Desktop tray app: download and install the matching release build."
+    info "Desktop app: download and install the matching release build."
   fi
   info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "MCP registration: registers the skill-bill MCP server with your selected agents."
@@ -1921,7 +1921,7 @@ launch_desktop_app() {
 }
 
 build_source_desktop_app() {
-  local os="$1" desktop_dir="$RUNTIME_KOTLIN_DIR/../desktop-tray"
+  local os="$1" desktop_dir="$RUNTIME_KOTLIN_DIR/../desktop"
   if [[ ! -x "$desktop_dir/gradlew" ]]; then
     warn "Desktop app source is missing from this checkout: $desktop_dir"
     DESKTOP_APP_INSTALL_RESULT="source missing"
@@ -1931,7 +1931,7 @@ build_source_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="build JVM unavailable"
     return 1
   fi
-  info "Building desktop tray app from source."
+  info "Building desktop app from source."
   # --no-daemon still starts a single-use daemon. Keep it outside the shared
   # registry so another checkout's gradlew --stop cannot cancel this build.
   if ! (cd "$desktop_dir" || exit 1
@@ -1941,7 +1941,7 @@ build_source_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="build failed"
     return 1
   fi
-  BUILT_DESKTOP_APP_SOURCE="$(desktop_app_target_path "$os" "$desktop_dir/composeApp/build/compose/binaries/main/app")"
+  BUILT_DESKTOP_APP_SOURCE="$(desktop_app_target_path "$os" "$desktop_dir/app/build/compose/binaries/main/app")"
 }
 
 install_selected_desktop_app() {
@@ -1960,7 +1960,7 @@ stage_selected_desktop_app() {
     app_source="$BUILT_DESKTOP_APP_SOURCE"
   else
     if ! token="$(host_token)"; then
-      err "No desktop tray release target is supported for this host."
+      err "No desktop app release target is supported for this host."
       DESKTOP_APP_INSTALL_RESULT="not available for $os"
       return 1
     fi
@@ -1970,7 +1970,7 @@ stage_selected_desktop_app() {
       return 1
     fi
     if [[ -z "$RESOLVED_DESKTOP_APP_ASSET" ]]; then
-      err "The selected release has no required desktop tray build for $token."
+      err "The selected release has no required desktop app build for $token."
       DESKTOP_APP_INSTALL_RESULT="not available for $token"
       return 1
     fi
@@ -1978,13 +1978,13 @@ stage_selected_desktop_app() {
     init_prebuilt_work_dir
     work_dir="$(prebuilt_work_dir)"
     if [[ -z "$work_dir" ]]; then
-      err "Could not create a work directory for the desktop tray download."
+      err "Could not create a work directory for the desktop app download."
       DESKTOP_APP_INSTALL_RESULT="download failed"
       return 1
     fi
-    info "Fetching desktop tray app for $token."
+    info "Fetching desktop app for $token."
     if ! archive="$(fetch_release_asset "$RESOLVED_DESKTOP_APP_ASSET")" || ! verify_sha256 "$archive"; then
-      warn "Could not download and verify the desktop tray app; keeping the existing app install."
+      warn "Could not download and verify the desktop app; keeping the existing app install."
       DESKTOP_APP_INSTALL_RESULT="download failed"
       return 1
     fi
@@ -2014,7 +2014,7 @@ stage_selected_desktop_app() {
       esac
     done < <(tar -tzf "$archive")
     if ! tar -xzf "$archive" -C "$extract_dir"; then
-      err "Could not extract the desktop tray archive."
+      err "Could not extract the desktop app archive."
       DESKTOP_APP_INSTALL_RESULT="extract failed"
       return 1
     fi
@@ -2065,7 +2065,7 @@ activate_staged_desktop_app() {
   backup_app="$install_root/.Skill Bill.previous.$$"
   rm -rf "$staged_app" "$backup_app"
   if ! cp -R "$app_source" "$staged_app"; then
-    err "Could not stage the desktop tray app under $install_root."
+    err "Could not stage the desktop app under $install_root."
     DESKTOP_APP_INSTALL_RESULT="install failed"
     return 1
   fi
@@ -2080,7 +2080,7 @@ activate_staged_desktop_app() {
   if ! mv "$staged_app" "$app_target"; then
     [[ ! -e "$backup_app" ]] || mv "$backup_app" "$app_target"
     rm -rf "$staged_app"
-    err "Could not install the desktop tray app under $app_target."
+    err "Could not install the desktop app under $app_target."
     DESKTOP_APP_INSTALL_RESULT="install failed"
     return 1
   fi
@@ -2094,15 +2094,15 @@ activate_staged_desktop_app() {
   if [[ "$legacy_target" != "$app_target" && -d "$legacy_target" ]]; then
     rm -rf "$legacy_target"
   fi
-  ok "Desktop tray app installed at $app_target"
+  ok "Desktop app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
   if [[ ${#running_pids[@]} -gt 0 ]]; then
     stop_desktop_app "${running_pids[@]}"
     rm -rf "$backup_app"
     if launch_desktop_app "$os" "$app_target" "$executable"; then
-      ok "Restarted the running desktop tray app."
+      ok "Restarted the running desktop app."
     else
-      err "Stopped the previous desktop tray app but could not start the new one; open it from $app_target."
+      err "Stopped the previous desktop app but could not start the new one; open it from $app_target."
       DESKTOP_APP_INSTALL_RESULT="restart failed"
       return 1
     fi

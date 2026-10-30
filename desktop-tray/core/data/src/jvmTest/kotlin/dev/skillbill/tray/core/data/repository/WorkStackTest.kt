@@ -600,9 +600,9 @@ class WorkStackTest {
         assertIs<Outcome.Failure>(source.detail(first.items.first().identity, detailCursor))
         assertIs<Outcome.Failure>(source.board(WorkSection.PHASES, Retention.DAY, cursor))
         establishTemporarySchemaReadiness("desktop-replacement").use { replacement ->
-          source.selectDatabase(null)
           replacement.connection.close()
           fixture.connection.close()
+          source.selectDatabase(fixture.tempDir.resolve("detached.db").toString())
           java.nio.file.Files.move(replacement.dbPath, fixture.dbPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
           source.selectDatabase(fixture.dbPath.toString())
           val fresh = value(source.board(WorkSection.PHASES, Retention.DAY))

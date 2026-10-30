@@ -32,6 +32,7 @@ import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.Pager
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
@@ -93,9 +94,10 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
           val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
           RunActions(view, agentChoices, state.controls.agentMenuOpen, recoverFocus, onAction)
         }
-        item(key = "reason") { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
-        incident(state, view, onAction)
-        document(state, onAction)
+        if (item.kind != WorkKind.Phase) {
+          item(key = "reason") { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
+          document(state, view, onAction)
+        }
       }
       DetailsPaneSlot { DetailsPane(state) }
     }
@@ -129,7 +131,7 @@ private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, o
 }
 
 /** The sections in HANDOFF 9.2 order; placeholders hold their place until the first read lands. */
-private fun LazyListScope.document(state: DetailUiState, onAction: (DetailAction) -> Unit) {
+private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -140,6 +142,7 @@ private fun LazyListScope.document(state: DetailUiState, onAction: (DetailAction
     is SectionsUi.Loaded -> {
       val detail = sections.detail
       item(key = "metrics") { DetailMetrics(item, detail) }
+      incident(state, view, onAction)
       subtaskSection(item, detail, state, onAction)
       pipelineSection(item, detail)
       dependencySection(detail, state, onAction)

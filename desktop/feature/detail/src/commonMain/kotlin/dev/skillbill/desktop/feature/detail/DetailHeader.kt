@@ -26,9 +26,14 @@ import dev.skillbill.desktop.core.ui.status.statusKind
 internal fun DetailHeader(item: WorkItem, sectionsStale: Boolean, onRevealFolder: () -> Unit, onOpenBranch: () -> Unit) {
   val colors = SkillBillTheme.colors
   val status = statusKind(item.lifecycle, item.planningPrepared, stalledSince = null)
+  val title = when (item.kind) {
+    WorkKind.Goal -> item.title
+    WorkKind.Phase -> item.control.phaseId ?: item.stepLabel
+    WorkKind.Operation, null -> item.title
+  }
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     DocHeader(
-      title = item.title,
+      title = title,
       eyebrow = {
         SbLabel(status.label, SbLabelStyle.Tint(statusColor(status)))
         if (item.stalledSince != null) SbLabel("Stalled", SbLabelStyle.Tint(colors.stBlocked))

@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
@@ -47,6 +48,7 @@ fun PropertyRow(
   onClick: (() -> Unit)? = null,
   tooltip: String? = null,
   shortcut: String? = null,
+  labelWidth: Dp = propertyLabelWidth,
   value: @Composable RowScope.() -> Unit,
 ) {
   val colors = SkillBillTheme.colors
@@ -57,7 +59,7 @@ fun PropertyRow(
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   val textColor = if (hovered) colors.fg else colors.fg2
   Row(modifier.fillMaxWidth().heightIn(min = 30.dp), verticalAlignment = Alignment.CenterVertically) {
-    BasicText(label, Modifier.width(propertyLabelWidth), style = type.tSm.copy(color = colors.fgMuted), maxLines = 1)
+    BasicText(label, Modifier.width(labelWidth), style = type.tSm.copy(color = colors.fgMuted), maxLines = 2)
     val cell: @Composable () -> Unit = {
       Row(
         Modifier.offset(x = -propertyValueInset).heightIn(min = 28.dp).background(fill, shape)

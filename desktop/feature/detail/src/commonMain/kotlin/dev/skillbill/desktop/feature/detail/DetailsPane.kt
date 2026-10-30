@@ -35,16 +35,16 @@ internal fun DetailsPane(state: DetailUiState) {
   )
   PaneSection(title = "Execution", separated = false) {
     PropertyList {
-      ids.forEach { (label, value) -> PropertyRow(label) { PaneValue(value) } }
+      ids.forEach { (label, value) -> PropertyRow(label, labelWidth = 72.dp) { PaneValue(value) } }
       if (agent != null) {
-        PropertyRow("Agent") {
+        PropertyRow("Agent", labelWidth = 72.dp) {
           Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(agent, small = true)
             PaneValue(agent)
           }
         }
       }
-      facts.forEach { (label, value) -> PropertyRow(label) { PaneValue(value) } }
+      facts.forEach { (label, value) -> PropertyRow(label, labelWidth = 72.dp) { PaneValue(value) } }
     }
   }
   val attempts = detail?.attempts ?: return
@@ -57,6 +57,6 @@ internal fun DetailsPane(state: DetailUiState) {
   )
   if (runs.isEmpty()) return
   PaneSection(title = "Runs and fixes") {
-    PropertyList { runs.forEach { (label, value) -> PropertyRow(label) { PaneValue(value) } } }
+    PropertyList { runs.forEach { (label, value) -> PropertyRow(label, labelWidth = 72.dp) { PaneValue(value) } } }
   }
 }

@@ -34,7 +34,7 @@ class ReleaseArtifactLicenseVerifierTest {
   @Test
   fun `desktop release archive verifies when checksum tool defaults to binary records`() {
     val fixture = Files.createTempDirectory("skillbill-desktop-release")
-    val app = fixture.resolve("desktop-tray/composeApp/build/compose/binaries/main/app/Skill Bill")
+    val app = fixture.resolve("desktop/app/build/compose/binaries/main/app/Skill Bill")
     Files.createDirectories(app)
     Files.write(app.resolve("Skill Bill.exe"), byteArrayOf(0, 10, 13, -1))
     Files.write(fixture.resolve("LICENSE"), rootLicenseBytes)
@@ -56,7 +56,7 @@ class ReleaseArtifactLicenseVerifierTest {
     val workflow = YAMLMapper().readTree(Files.readString(repoRoot.resolve(".github/workflows/release.yml")))
     val bundle =
       workflow.path("jobs").path("build").path("steps")
-        .single { it.path("name").asText() == "Bundle desktop tray archive" }
+        .single { it.path("name").asText() == "Bundle desktop app archive" }
         .path("run").asText()
     val builder = ProcessBuilder("bash", "-c", bundle).directory(fixture.toFile()).redirectErrorStream(true)
     builder.environment()["PATH"] = bin.toString() + File.pathSeparator + builder.environment()["PATH"].orEmpty()

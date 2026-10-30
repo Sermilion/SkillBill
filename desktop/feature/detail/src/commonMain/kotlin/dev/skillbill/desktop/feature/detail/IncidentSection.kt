@@ -1,16 +1,26 @@
 package dev.skillbill.desktop.feature.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -24,6 +34,8 @@ import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 
@@ -84,12 +96,31 @@ internal fun IncidentSection(
       }
       ReportRow(incident)
     }
-    if (history.isNotEmpty()) {
-      BasicText("History", style = type.tSmMedium.copy(color = colors.fgMuted))
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        history.forEach { past ->
-          BasicText("${past.progress.label()} · ${past.cause ?: past.summary} · ${past.observedAt}", style = type.tSm.copy(color = colors.fgMuted))
-        }
+    if (history.isNotEmpty()) IncidentHistory(history)
+  }
+}
+
+@Composable
+private fun IncidentHistory(history: List<Incident>) {
+  val expanded = remember(history) { mutableStateOf(false) }
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  Row(
+    Modifier.fillMaxWidth()
+      .clickable(role = Role.Button) { expanded.value = !expanded.value }
+      .semantics { stateDescription = if (expanded.value) "Expanded" else "Collapsed" }
+      .padding(vertical = 4.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    BasicText("History", Modifier.semantics { heading() }, style = type.tSmMedium.copy(color = colors.fgMuted))
+    BasicText(history.size.toString(), Modifier.padding(start = 6.dp), style = type.tSm.copy(color = colors.fgFaint))
+    Spacer(Modifier.weight(1f))
+    SbIcon(if (expanded.value) LucideIcons.chevronDown else LucideIcons.chevronRight, SbIconSize.Xs)
+  }
+  if (expanded.value) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      history.forEach { past ->
+        BasicText("${past.progress.label()} · ${past.cause ?: past.summary} · ${past.observedAt}", style = type.tSm.copy(color = colors.fgMuted))
       }
     }
   }

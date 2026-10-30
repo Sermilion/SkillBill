@@ -9,8 +9,8 @@ internal object InstallerDesktopFixtures {
   val buildIdentityPrintf = "printf '${FIXTURE_BUILD_IDENTITY.replace("\n", "\\n")}'"
 
   fun seedSource(repoRoot: Path) {
-    val desktopRoot = repoRoot.resolve("desktop-tray")
-    seedDistribution(desktopRoot.resolve("composeApp/build/compose/binaries/main/app"))
+    val desktopRoot = repoRoot.resolve("desktop")
+    seedDistribution(desktopRoot.resolve("app/build/compose/binaries/main/app"))
     val gradlew = desktopRoot.resolve("gradlew")
     Files.writeString(gradlew, "#!/usr/bin/env bash\n[[ \"${'$'}*\" == '--no-daemon -q createDistributable' ]]\n")
     gradlew.toFile().setExecutable(true)

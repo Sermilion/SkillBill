@@ -715,7 +715,7 @@ internal object InstallerShellFixtures {
   }
 
   fun seedFakeDesktopGradlew(repoRoot: Path) {
-    val gradlew = repoRoot.resolve("desktop-tray/gradlew")
+    val gradlew = repoRoot.resolve("desktop/gradlew")
     Files.createDirectories(gradlew.parent)
     Files.writeString(
       gradlew,
@@ -723,7 +723,7 @@ internal object InstallerShellFixtures {
       |#!/usr/bin/env bash
       |set -euo pipefail
       |root="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
-      |app_root="${'$'}root/composeApp/build/compose/binaries/main/app"
+      |app_root="${'$'}root/app/build/compose/binaries/main/app"
       |case "${'$'}(uname -s)" in
       |  Darwin*)
       |    app="${'$'}app_root/Skill Bill.app/Contents/MacOS/Skill Bill"

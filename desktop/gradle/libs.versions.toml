@@ -9,7 +9,7 @@ junit = "5.12.2"
 ksp = "2.3.12"
 kotlin-inject = "0.9.0"
 anvil = "0.1.7"
-lifecycle = "2.10.0"
+lifecycle = "2.11.0"
 navigation3 = "1.1.0-alpha03"
 # JetBrains publishes only the Compose UI; the runtime is Google's multiplatform artifact, at the version navigation3-ui requires.
 navigation3-runtime = "1.1.0-alpha04"

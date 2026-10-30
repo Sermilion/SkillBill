@@ -31,7 +31,7 @@ internal data class NativeAgentHomeTarget(
 
 internal data class NativeAgentObservedPath(
   val path: Path,
-  val fileKey: Any,
+  val fileIdentity: Any,
   val isDirectory: Boolean,
   val followLinks: Boolean,
 )
@@ -259,7 +259,7 @@ internal fun agentDirectoryEntries(
   if (!attributes.isDirectory) {
     throw agentDiscoveryFailed(operation, path.toString(), NotDirectoryException(path.toString()))
   }
-  val initialObservation = observedPath(path, attributes, operation, followLinks)
+  val initialObservation = observedPath(path, attributes, followLinks)
   val entries =
     try {
       Files.newDirectoryStream(path).use { stream ->
@@ -292,7 +292,7 @@ private fun discoveredProfiles(
     throw agentDiscoveryFailed("list $provider profiles", home.toString(), NotDirectoryException(home.toString()))
   }
   val operation = "list $provider profiles"
-  val homeObservation = observedPath(home, homeAttributes, operation, followLinks = true)
+  val homeObservation = observedPath(home, homeAttributes, followLinks = true)
   val profiles =
     try {
       Files.newDirectoryStream(home).use { entries ->
@@ -304,7 +304,7 @@ private fun discoveredProfiles(
             val profileOperation = "inspect $provider profile"
             val attributes = agentObservedProfileAttributes(profile, profileOperation)
             if (attributes?.isDirectory != true) return@mapNotNull null
-            val profileObservation = observedPath(profile, attributes, profileOperation, followLinks = true)
+            val profileObservation = observedPath(profile, attributes, followLinks = true)
             val marked =
               markers.map { marker ->
                 agentPathExists(profile.resolve(marker), "inspect $provider profile marker")
@@ -335,24 +335,19 @@ private fun observeAgentPath(
   followLinks: Boolean = true,
 ): NativeAgentObservedPath? {
   val attributes = readAgentAttributes(path, operation, followLinks) ?: return null
-  return observedPath(path, attributes, operation, followLinks)
+  return observedPath(path, attributes, followLinks)
 }
 
 private fun observedPath(
   path: Path,
   attributes: BasicFileAttributes,
-  operation: String,
   followLinks: Boolean,
 ): NativeAgentObservedPath {
-  val fileKey =
-    attributes.fileKey()
-      ?: throwDiscoveryFailure(
-        operation,
-        path,
-        IOException("filesystem did not provide a file key for the observed path"),
-      )
-  return NativeAgentObservedPath(path.toAbsolutePath().normalize(), fileKey, attributes.isDirectory, followLinks)
+  val fileIdentity = agentFileIdentity(attributes)
+  return NativeAgentObservedPath(path.toAbsolutePath().normalize(), fileIdentity, attributes.isDirectory, followLinks)
 }
+
+internal fun agentFileIdentity(attributes: BasicFileAttributes): Any = attributes.fileKey() ?: attributes.creationTime()
 
 internal fun verifyObservedPath(
   observed: NativeAgentObservedPath,
@@ -362,8 +357,8 @@ internal fun verifyObservedPath(
   if (attributes.isDirectory != observed.isDirectory) {
     throwDiscoveryFailure(operation, observed.path, IOException("observed path type changed during discovery"))
   }
-  val current = observedPath(observed.path, attributes, operation, observed.followLinks)
-  if (current.fileKey != observed.fileKey) {
+  val current = observedPath(observed.path, attributes, observed.followLinks)
+  if (current.fileIdentity != observed.fileIdentity) {
     throwDiscoveryFailure(operation, observed.path, IOException("observed path identity changed during discovery"))
   }
 }
