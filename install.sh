@@ -697,9 +697,9 @@ print_install_plan() {
   info "Agent symlinks: links Skill Bill skills into your selected agents' skill/command directories."
   info "Runtime: installs the Kotlin runtime under $RUNTIME_INSTALL_ROOT"
   if [[ "$INSTALL_SOURCE" == "source" ]]; then
-    info "Desktop tray app: build and install from this checkout."
+    info "Desktop app: build and install from this checkout."
   else
-    info "Desktop tray app: download and install the matching release build."
+    info "Desktop app: download and install the matching release build."
   fi
   info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "MCP registration: registers the skill-bill MCP server with your selected agents."
@@ -708,26 +708,21 @@ print_install_plan() {
   echo ""
 }
 
-# One-time migration: older installs kept config.json inside the wiped
-# ~/.skill-bill/. Move it to the durable XDG location (~/.config/skill-bill/,
-# outside the wipe zone) BEFORE the pre-install uninstall so user settings —
-# external_addon_sources, telemetry choices, install_id — survive every install.
-# Skipped when the user pins a config path via SKILL_BILL_CONFIG_PATH, or when
-# the durable copy already exists (never clobber it).
+# One-time migration runs through the staged runtime so both candidate files
+# share the runtime's config lock before cleanup can remove the legacy state.
 migrate_legacy_config_to_durable_path() {
-  if [[ -n "${SKILL_BILL_CONFIG_PATH:-}" ]]; then
-    return 0
+  local staged_cli="${STAGED_RUNTIME_ROOT:-}/runtime-cli.tmp/bin/runtime-cli"
+  if [[ -z "${STAGED_RUNTIME_ROOT:-}" || ! -x "$staged_cli" ]]; then
+    err "Installation stopped: the staged runtime cannot run the locked config migration. No config was moved."
+    return 1
   fi
-  local legacy="$SKILL_BILL_STATE_DIR/config.json"
-  local durable="$HOME/.config/skill-bill/config.json"
-  if [[ -f "$legacy" && ! -f "$durable" ]]; then
-    mkdir -p "$(dirname "$durable")"
-    if mv "$legacy" "$durable"; then
-      info "Migrated Skill Bill config to durable location: $durable"
-    else
-      warn "Could not migrate config to $durable; leaving it at $legacy."
-    fi
+  local output
+  if ! output="$("$staged_cli" --home "$HOME" install migrate-legacy-config 2>&1)"; then
+    err "Installation stopped: the staged runtime could not migrate machine config. No cleanup ran."
+    [[ -z "$output" ]] || err "$output"
+    return 1
   fi
+  [[ -z "$output" ]] || info "$output"
 }
 
 # >>> retired IDE plugin cleanup (keep identical in install.sh and uninstall.sh)
@@ -914,7 +909,10 @@ run_pre_install_uninstall() {
   # This flag limits the wipe to regenerated install output (runtime/,
   # installed-skills/, the native link inventory). Explicit uninstall still
   # clears everything except databases and backups.
-  SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 SKILL_BILL_PRESERVE_DESKTOP_APP=1 bash "$uninstall_script"
+  SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 \
+    SKILL_BILL_PRESERVE_DESKTOP_APP=1 \
+    SKILL_BILL_STAGED_RUNTIME_CLI="$1/runtime-cli.tmp/bin/runtime-cli" \
+    bash "$uninstall_script"
 }
 
 locate_packaged_runtime_bin() {
@@ -1083,7 +1081,7 @@ report_unstaged_desktop_app() {
 activate_staged_runtime_pair() {
   local candidate_root="$1"
   local cli_target="$candidate_root/runtime-cli" mcp_target="$candidate_root/runtime-mcp"
-  if ! clean_install_state_if_requested || ! run_pre_install_uninstall; then
+  if ! clean_install_state_if_requested || ! run_pre_install_uninstall "$candidate_root"; then
     rm -rf "$candidate_root"
     return 1
   fi
@@ -1923,7 +1921,7 @@ launch_desktop_app() {
 }
 
 build_source_desktop_app() {
-  local os="$1" desktop_dir="$RUNTIME_KOTLIN_DIR/../desktop-tray"
+  local os="$1" desktop_dir="$RUNTIME_KOTLIN_DIR/../desktop"
   if [[ ! -x "$desktop_dir/gradlew" ]]; then
     warn "Desktop app source is missing from this checkout: $desktop_dir"
     DESKTOP_APP_INSTALL_RESULT="source missing"
@@ -1933,7 +1931,7 @@ build_source_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="build JVM unavailable"
     return 1
   fi
-  info "Building desktop tray app from source."
+  info "Building desktop app from source."
   # --no-daemon still starts a single-use daemon. Keep it outside the shared
   # registry so another checkout's gradlew --stop cannot cancel this build.
   if ! (cd "$desktop_dir" || exit 1
@@ -1943,7 +1941,7 @@ build_source_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="build failed"
     return 1
   fi
-  BUILT_DESKTOP_APP_SOURCE="$(desktop_app_target_path "$os" "$desktop_dir/composeApp/build/compose/binaries/main/app")"
+  BUILT_DESKTOP_APP_SOURCE="$(desktop_app_target_path "$os" "$desktop_dir/app/build/compose/binaries/main/app")"
 }
 
 install_selected_desktop_app() {
@@ -1962,7 +1960,7 @@ stage_selected_desktop_app() {
     app_source="$BUILT_DESKTOP_APP_SOURCE"
   else
     if ! token="$(host_token)"; then
-      err "No desktop tray release target is supported for this host."
+      err "No desktop app release target is supported for this host."
       DESKTOP_APP_INSTALL_RESULT="not available for $os"
       return 1
     fi
@@ -1972,7 +1970,7 @@ stage_selected_desktop_app() {
       return 1
     fi
     if [[ -z "$RESOLVED_DESKTOP_APP_ASSET" ]]; then
-      err "The selected release has no required desktop tray build for $token."
+      err "The selected release has no required desktop app build for $token."
       DESKTOP_APP_INSTALL_RESULT="not available for $token"
       return 1
     fi
@@ -1980,13 +1978,13 @@ stage_selected_desktop_app() {
     init_prebuilt_work_dir
     work_dir="$(prebuilt_work_dir)"
     if [[ -z "$work_dir" ]]; then
-      err "Could not create a work directory for the desktop tray download."
+      err "Could not create a work directory for the desktop app download."
       DESKTOP_APP_INSTALL_RESULT="download failed"
       return 1
     fi
-    info "Fetching desktop tray app for $token."
+    info "Fetching desktop app for $token."
     if ! archive="$(fetch_release_asset "$RESOLVED_DESKTOP_APP_ASSET")" || ! verify_sha256 "$archive"; then
-      warn "Could not download and verify the desktop tray app; keeping the existing app install."
+      warn "Could not download and verify the desktop app; keeping the existing app install."
       DESKTOP_APP_INSTALL_RESULT="download failed"
       return 1
     fi
@@ -2016,7 +2014,7 @@ stage_selected_desktop_app() {
       esac
     done < <(tar -tzf "$archive")
     if ! tar -xzf "$archive" -C "$extract_dir"; then
-      err "Could not extract the desktop tray archive."
+      err "Could not extract the desktop app archive."
       DESKTOP_APP_INSTALL_RESULT="extract failed"
       return 1
     fi
@@ -2067,7 +2065,7 @@ activate_staged_desktop_app() {
   backup_app="$install_root/.Skill Bill.previous.$$"
   rm -rf "$staged_app" "$backup_app"
   if ! cp -R "$app_source" "$staged_app"; then
-    err "Could not stage the desktop tray app under $install_root."
+    err "Could not stage the desktop app under $install_root."
     DESKTOP_APP_INSTALL_RESULT="install failed"
     return 1
   fi
@@ -2082,7 +2080,7 @@ activate_staged_desktop_app() {
   if ! mv "$staged_app" "$app_target"; then
     [[ ! -e "$backup_app" ]] || mv "$backup_app" "$app_target"
     rm -rf "$staged_app"
-    err "Could not install the desktop tray app under $app_target."
+    err "Could not install the desktop app under $app_target."
     DESKTOP_APP_INSTALL_RESULT="install failed"
     return 1
   fi
@@ -2096,15 +2094,15 @@ activate_staged_desktop_app() {
   if [[ "$legacy_target" != "$app_target" && -d "$legacy_target" ]]; then
     rm -rf "$legacy_target"
   fi
-  ok "Desktop tray app installed at $app_target"
+  ok "Desktop app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
   if [[ ${#running_pids[@]} -gt 0 ]]; then
     stop_desktop_app "${running_pids[@]}"
     rm -rf "$backup_app"
     if launch_desktop_app "$os" "$app_target" "$executable"; then
-      ok "Restarted the running desktop tray app."
+      ok "Restarted the running desktop app."
     else
-      err "Stopped the previous desktop tray app but could not start the new one; open it from $app_target."
+      err "Stopped the previous desktop app but could not start the new one; open it from $app_target."
       DESKTOP_APP_INSTALL_RESULT="restart failed"
       return 1
     fi
@@ -2635,7 +2633,6 @@ run_full_install() {
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     replay_last_install_selection
   fi
-  migrate_legacy_config_to_durable_path
   cleanup_retired_ide_plugins
   # A dirty tree has no exact source identity, so both builds of this run share
   # one run id and only match each other.
@@ -2652,6 +2649,10 @@ run_full_install() {
     discard_staged_runtime
     return 1
   fi
+  migrate_legacy_config_to_durable_path || {
+    discard_staged_runtime
+    return 1
+  }
   if [[ -n "$STAGED_RUNTIME_ROOT" ]]; then
     activate_staged_runtime_pair "$STAGED_RUNTIME_ROOT" || return 1
     STAGED_RUNTIME_ROOT=""

@@ -14,4 +14,20 @@ interface UninstallPathsPort {
   fun deleteIfExists(path: Path): Boolean
 
   fun removeTree(path: Path): List<Path>
+
+  fun <T> withConfigTransaction(
+    userHome: Path,
+    environment: Map<String, String>,
+    action: () -> T,
+  ): T
+
+  fun configLockFilePaths(
+    userHome: Path,
+    environment: Map<String, String>,
+  ): List<Path>
+
+  fun removeTreeExcept(
+    path: Path,
+    retainedPaths: Collection<Path>,
+  ): List<Path>
 }

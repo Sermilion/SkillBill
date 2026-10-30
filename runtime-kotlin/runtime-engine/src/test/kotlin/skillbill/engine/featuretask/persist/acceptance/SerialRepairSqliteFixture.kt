@@ -7,6 +7,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
+import skillbill.engine.featuretask.lifecycle.core.absentDatabaseCheckpoint
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEvidence
@@ -173,6 +174,7 @@ internal class SerialRepairSqliteFixture(
       clock,
       execution.admission,
       NoopRuntimeDiagnostics,
+      absentDatabaseCheckpoint,
     )
 
   init {

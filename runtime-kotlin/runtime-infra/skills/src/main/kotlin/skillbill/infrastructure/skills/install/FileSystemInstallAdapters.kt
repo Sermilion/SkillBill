@@ -40,6 +40,7 @@ import skillbill.ports.install.link.InstallSkillLinkPort
 import skillbill.ports.install.link.model.InstallSkillLinkRequest
 import skillbill.ports.install.link.model.InstallSkillLinkResult
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationResult
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
@@ -342,21 +343,25 @@ class FileSystemInstallMcpRegistration(
   override fun registerMcp(request: InstallMcpRegistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
       outcome =
-        McpRegistrationOperations.register(
+        McpRegistrationOperations.registerWithProfileEnvironment(
           request.agent,
           request.runtimeMcpBin,
           request.home,
-          environment = resolveInstallEnvironment(emptyMap(), hostPlatform),
+          request.profileEnvironment
+            ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
+            ?: InstallMcpProfileEnvironment(),
         ),
     )
 
   override fun unregisterMcp(request: InstallMcpUnregistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
       outcome =
-        McpRegistrationOperations.unregister(
+        McpRegistrationOperations.unregisterWithProfileEnvironment(
           request.agent,
           request.home,
-          environment = resolveInstallEnvironment(emptyMap(), hostPlatform),
+          request.profileEnvironment
+            ?: InstallMcpProfileEnvironment.from(resolveInstallEnvironment(emptyMap(), hostPlatform))
+            ?: InstallMcpProfileEnvironment(),
         ),
     )
 }

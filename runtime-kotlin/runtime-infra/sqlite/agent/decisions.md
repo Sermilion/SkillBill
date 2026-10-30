@@ -1,3 +1,23 @@
+## [2026-10-30] Keep activity writes off board topics
+Context: Worktree journal writes and lease heartbeats bumped goals and phases, so the board re-read on every probe and heartbeat.
+Decision: Journal inserts and lease updates that touch only heartbeat_at or expires_at bump only activity. Journal UPDATE and DELETE triggers are dropped. Lease identity changes still bump goals and phases.
+Reason: Pruning old journal rows does not change the latest tick readers show, and heartbeats do not change board structure.
+
+## [2026-10-30] Reinstall desktop change triggers after schema changes
+Context: Migration 87 builds update trigger column comparisons from the table schema at migration time.
+Decision: Later migrations adding or dropping columns on signalled tables reinstall their desktop change triggers around the alteration.
+Reason: New columns otherwise cannot trigger a revision, and SQLite refuses to drop columns named by existing triggers.
+
+## [2026-10-30] Invalidate pooled reads without closing borrowed connections
+Context: A release or changed store identity must invalidate pooled connections while a transaction may be using one.
+Decision: Advance an epoch and close idle connections immediately; close borrowed connections on return. Compare identity and generation when reusing a lease, not on its first verified open.
+Reason: Closing a borrowed connection aborts its read. A fresh open is already verified, and checking its absent generation would cause repeated reopen attempts.
+
+## [2026-10-30] Preserve strict and lenient read contracts with pooling
+Context: read initializes missing or schemaless stores and permits compatible fallback, while readIfPresent rejects missing or incompatible stores.
+Decision: The pooled read path falls back to the existing per-call path for missing or incompatible schema; readIfPresent remains strict.
+Reason: Sharing one strict opening path would change existing initialization and read behavior.
+
 # SQLite boundary decisions
 
 ## [2026-10-21] Retain unrestorable historical review ledger orphans

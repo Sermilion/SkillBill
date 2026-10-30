@@ -1,5 +1,6 @@
 package skillbill.ports.db
 
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.filesystem.model.DatabaseFileObservation
@@ -7,6 +8,12 @@ import skillbill.ports.persistence.UnitOfWork
 import java.nio.file.Path
 
 interface DatabaseSessionFactory {
+  /**
+   * Acquires the shared lock for the selected database path. Purge and any supported operation that replaces
+   * the selected database file must hold this lock for the full operation.
+   */
+  fun acquireDatabasePathProtection(): DatabasePathProtectionResult
+
   fun resolveDbPath(): Path
 
   fun databaseExists(): Boolean

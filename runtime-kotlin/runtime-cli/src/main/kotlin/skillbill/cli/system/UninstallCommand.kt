@@ -3,6 +3,7 @@ package skillbill.cli.system
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.uninstall.SkillBillUninstallService
 import skillbill.application.uninstall.model.UninstallPlan
 import skillbill.application.uninstall.model.UninstallRequest
@@ -20,6 +21,7 @@ class UninstallCommand(
   private val state: CliRunState,
   private val inputs: CliRunInputs,
   private val uninstallService: SkillBillUninstallService,
+  private val runtimeConfigEditService: RuntimeConfigEditService,
 ) : DocumentedCliCommand("uninstall", "Uninstall Skill Bill while preserving databases and backups.") {
   private val yes by option("--yes", "-y", help = "Skip the interactive confirmation prompt.")
     .flag(default = false)
@@ -50,6 +52,7 @@ class UninstallCommand(
         home = inputs.userHome,
         environment = inputs.environment,
         desktopAppDir = desktopAppDir,
+        stateRoot = runtimeConfigEditService.stateDir(),
       )
     val plan = uninstallService.plan(request)
     if (!dryRun && !yes && !confirmed(plan)) {

@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningLogRequest
 import skillbill.engine.goalrunner.status.completed
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.persistence.UnitOfWork
@@ -150,6 +151,11 @@ private class StubOutcomeStore(private val events: List<GoalProgressEvent>) :
 }
 
 private object UnreadableDatabase : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 

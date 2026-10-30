@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
+import skillbill.contracts.persistence.WorkBoardReadModelKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
@@ -48,6 +49,117 @@ private val DIAGNOSIS_TABLES =
 
 class DatabaseMigrationsTest {
   @Test
+  fun `work board read model migration creates indexed tables in the incomplete state`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-work-board-read-model").resolve("runtime.db")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(
+        0,
+        scalarInt(connection, "SELECT ${WorkBoardReadModelKeys.COMPLETE} FROM ${WorkBoardReadModelKeys.STATE_TABLE}"),
+      )
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertTrue(tableExists(connection, WorkBoardReadModelKeys.ITEMS_TABLE))
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master WHERE type = 'index' " +
+            "AND name = '${WorkBoardReadModelKeys.DISPLAY_INDEX}'",
+        ),
+      )
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM sqlite_master WHERE type = 'index' " +
+            "AND name = '${WorkBoardReadModelKeys.FINISHED_INDEX}'",
+        ),
+      )
+    }
+  }
+
+  @Test
+  fun `work board read model migration upgrades the previous schema and preserves work`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-work-board-read-model-upgrade").resolve("runtime.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feature_task_workflows (workflow_id, mode, contract_version) " +
+            "VALUES ('wftr-existing', 'prose', '1.0')",
+        )
+        statement.execute("DROP TABLE ${WorkBoardReadModelKeys.ITEMS_TABLE}")
+        statement.execute("DROP TABLE ${WorkBoardReadModelKeys.STATE_TABLE}")
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 88")
+        statement.execute("PRAGMA user_version = 87")
+      }
+    }
+
+    DatabaseRuntime.migrateExistingDatabase(dbPath, SqliteTestDiagnostics)
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-existing'"),
+      )
+      assertEquals(
+        0,
+        scalarInt(connection, "SELECT ${WorkBoardReadModelKeys.COMPLETE} FROM ${WorkBoardReadModelKeys.STATE_TABLE}"),
+      )
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertTrue(tableExists(connection, WorkBoardReadModelKeys.ITEMS_TABLE))
+    }
+  }
+
+  @Test
+  fun `latest worktree journal migration prunes old ticks per workflow and preserves other records`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-worktree-journal-upgrade").resolve("upgrade.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO feature_task_workflows (workflow_id, mode, contract_version) " +
+            "VALUES ('wftr-preserved', 'prose', '1.0')",
+        )
+        statement.executeUpdate(
+          "INSERT INTO worktree_edit_journal " +
+            "(workflow_id, phase_id, recorded_at, path, lines_added, lines_removed, source) VALUES " +
+            "('wfl-a', 'implement', '2026-10-28T10:00:00Z', 'old-a.kt', 1, 0, 'worktree_probe'), " +
+            "('wfl-a', 'implement', '2026-10-28T10:00:01Z', 'new-a.kt', 2, 0, 'worktree_probe'), " +
+            "('wfl-b', 'review', '2026-10-28T10:00:00Z', 'old-b.kt', 3, 0, 'worktree_probe'), " +
+            "('wfl-b', 'review', '2026-10-28T10:00:02Z', 'new-b.kt', 4, 0, 'worktree_probe')",
+        )
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 90")
+        statement.execute("PRAGMA user_version = 89")
+      }
+    }
+
+    DatabaseRuntime.migrateExistingDatabase(dbPath, SqliteTestDiagnostics)
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM schema_migrations WHERE version = 90"))
+      assertEquals(2, scalarInt(connection, "SELECT count(*) FROM worktree_edit_journal"))
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-a' AND path = 'new-a.kt'",
+        ),
+      )
+      assertEquals(
+        1,
+        scalarInt(
+          connection,
+          "SELECT count(*) FROM worktree_edit_journal WHERE workflow_id = 'wfl-b' AND path = 'new-b.kt'",
+        ),
+      )
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM feature_task_workflows WHERE workflow_id = 'wftr-preserved'"),
+      )
+    }
+  }
+
+  @Test
   fun `product report migration preserves incidents and starts with empty report tables`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-product-reports-upgrade").resolve("upgrade.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
@@ -61,9 +173,11 @@ class DatabaseMigrationsTest {
         )
         statement.execute("DROP TABLE block_incident_report_links")
         statement.execute("DROP TABLE block_incident_reports")
+        revertDesktopChangeSignals(connection)
         listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
           statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
         }
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 80")
         statement.execute("PRAGMA user_version = 79")
         statement.executeUpdate(
@@ -112,6 +226,7 @@ class DatabaseMigrationsTest {
           ).use { rows -> generateSequence { if (rows.next()) rows.getString(1) else null }.toList() }
         blockIncidentTables.forEach { table -> statement.execute("DROP TABLE $table") }
         statement.execute("DROP TABLE feature_task_runtime_worker_generations")
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 66")
         statement.execute("PRAGMA user_version = 65")
       }
@@ -174,6 +289,7 @@ class DatabaseMigrationsTest {
         statement.execute("DROP TABLE IF EXISTS feature_task_runtime_worker_generations")
         statement.execute("DROP TABLE block_incident_report_links")
         statement.execute("DROP TABLE block_incident_reports")
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 77")
         statement.execute("PRAGMA user_version = 76")
       }
@@ -220,9 +336,11 @@ class DatabaseMigrationsTest {
         statement.execute("DROP TABLE feature_task_runtime_worker_generations")
         statement.execute("DROP TABLE block_incident_report_links")
         statement.execute("DROP TABLE block_incident_reports")
+        revertDesktopChangeSignals(connection)
         listOf("model_id", "phase_strategy_id", "provider_id", "reproduction_steps").forEach { column ->
           statement.execute("ALTER TABLE block_incident_diagnoses DROP COLUMN $column")
         }
+        revertWorkBoardReadModel(connection)
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version >= 78")
         statement.execute("PRAGMA user_version = 77")
       }
@@ -329,6 +447,45 @@ class DatabaseMigrationsTest {
           }
         }
       }
+    }
+  }
+
+  @Test
+  fun `desktop change signal migration upgrades version 86 and keeps existing revisions`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-desktop-v86").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-desktop-change-signals'")
+        statement.execute("DROP TABLE desktop_change_items")
+        statement.execute("DROP TABLE desktop_signal_generation")
+        statement.executeUpdate("DELETE FROM desktop_change_revisions WHERE topic = 'specs'")
+        statement.execute("DROP TRIGGER desktop_change_worktree_edit_journal_insert")
+        statement.execute(
+          "CREATE TRIGGER desktop_change_worktree_edit_journal_insert AFTER INSERT ON worktree_edit_journal BEGIN " +
+            "UPDATE desktop_change_revisions SET revision = revision + 1 WHERE topic IN ('goals', 'phases'); END",
+        )
+        statement.executeUpdate("UPDATE desktop_change_revisions SET revision = 7 WHERE topic IN ('goals', 'phases')")
+        statement.execute("PRAGMA user_version = 86")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DesktopReadSchema.VERSION, scalarInt(connection, "PRAGMA user_version"))
+      assertEquals(7, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
+      assertEquals(7, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'phases'"))
+      assertEquals(0, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'specs'"))
+      assertEquals(1, scalarInt(connection, "SELECT count(*) FROM desktop_signal_generation"))
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          "INSERT INTO worktree_edit_journal (workflow_id, recorded_at, path, lines_added, lines_removed, source) " +
+            "VALUES ('wftr-journal', '2026-10-28T00:00:00Z', 'a.kt', 1, 0, 'worktree_probe')",
+        )
+      }
+      assertEquals(7, scalarInt(connection, "SELECT revision FROM desktop_change_revisions WHERE topic = 'goals'"))
+      assertEquals(
+        1,
+        scalarInt(connection, "SELECT count(*) FROM desktop_change_items WHERE work_id = 'wftr-journal'"),
+      )
     }
   }
 
@@ -482,6 +639,7 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
+        revertDesktopChangeSignals(connection)
         goalTables.forEach { table -> statement.executeUpdate("ALTER TABLE $table DROP COLUMN no_change_reason") }
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'add-goal-no-change-reason'")
         statement.executeUpdate(goalRunSessionInsert("wfl-kept"))
@@ -517,6 +675,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-monitor-target'")
+        revertDesktopChangeSignals(connection)
         targetColumns.forEach { column ->
           statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN $column")
         }
@@ -562,6 +721,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-phase-launch-scope'")
+        revertDesktopChangeSignals(connection)
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN launch_scope")
         statement.executeUpdate(
           "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
@@ -599,6 +759,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-launch-agent-environment'")
+        revertDesktopChangeSignals(connection)
         statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN agent_environment_json")
         statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN agent_environment_json")
         statement.executeUpdate(
@@ -989,11 +1150,12 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use {
         it.executeUpdate("DELETE FROM schema_migrations WHERE name = 'ensure-schema-columns-and-heals'")
+        revertDesktopChangeSignals(connection)
         it.executeUpdate("ALTER TABLE feature_task_workflows DROP COLUMN interruption_reason")
       }
       assertFalse("interruption_reason" in tableColumns(connection, "feature_task_workflows"))
       assertFalse(versionIsPrimaryKey(connection), "The ledger must already be name-keyed for this to gate.")
-      assertEquals(DatabaseMigrations.migrations.size - 1, migrationRows(connection).size)
+      assertEquals(DatabaseMigrations.migrations.size - 3, migrationRows(connection).size)
       connection.createStatement().use {
         it.executeUpdate(
           """
@@ -2319,4 +2481,11 @@ private val expectedMigrationDefinitions =
     84 to "record-qa-failure-kind",
     85 to "record-goal-subtask-trace-probe-counts",
     86 to "record-goal-assessment-counts",
+    87 to "separate-desktop-change-signals",
+    88 to "add-work-board-read-model",
+    89 to "refresh-work-board-dependencies",
+    90 to "prune-worktree-edit-journal-to-latest-tick",
+    91 to "correct-worktree-edit-journal-prune-chronological-order",
+    92 to "rebuild-work-board-executing-agent",
+    93 to "rebuild-work-board-titles",
   )

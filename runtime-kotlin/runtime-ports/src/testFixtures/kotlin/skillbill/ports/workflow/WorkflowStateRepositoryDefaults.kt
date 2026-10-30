@@ -25,6 +25,8 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 
 abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
+  open override fun hasActiveFeatureTaskRuntimeWorkerLeases(): Boolean = false
+
   open override fun readGoalStatusSnapshot(workflowId: String): WorkflowStateSnapshot? =
     get(WorkflowFamily.TASK_RUNTIME, workflowId)
 

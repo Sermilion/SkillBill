@@ -18,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -97,9 +98,9 @@ class GoalRunnerStatusProjectionDegradationTest {
 
           override fun latestTick(workflowId: String): WorktreeEditTick? = error("journal unavailable")
 
-          override fun trimToCap(
+          override fun deleteTicksBefore(
             workflowId: String,
-            maxRows: Int,
+            recordedAt: Instant,
           ): Int = error("unused")
         },
       )
@@ -292,15 +293,18 @@ private class InMemoryStatusWorktreeEditJournalRepository : WorktreeEditJournalR
 
   override fun latestTick(workflowId: String): WorktreeEditTick? = latest[workflowId]
 
-  override fun trimToCap(
+  override fun deleteTicksBefore(
     workflowId: String,
-    maxRows: Int,
+    recordedAt: Instant,
   ): Int = 0
 }
 
 private class StatusJournalDatabaseSessionFactory(
   private val journal: WorktreeEditJournalRepository,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   private val dbPath = Path.of("/fake/goal-status-worktree-edit.db")
 
   override fun resolveDbPath(): Path = dbPath

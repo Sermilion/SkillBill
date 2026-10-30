@@ -223,7 +223,10 @@ stay readable. Previously recorded operator decisions retain their behavior.
 ## Model selection at launch
 
 Resume uses the recorded per-step assignment. A later alias, remap, or default
-does not reselect an accepted attempt. Alias `opus` qualifies only when the
+does not reselect an accepted attempt. Final quality resumes with its admitted
+inputs and plans, including when the caller changes the launch agent or uses a
+different intake reference for the same goal. Child selection checks still apply.
+Alias `opus` qualifies only when the
 inherited process environment pins `ANTHROPIC_DEFAULT_OPUS_MODEL` to
 `claude-opus-5-5` or `anthropic.claude-opus-5-5`. `commit_push` stays the
 runtime commit strategy and launches no agent. Details:

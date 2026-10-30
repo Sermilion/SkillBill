@@ -1,5 +1,4 @@
 package skillbill.infrastructure.skills.install.nativeagent.inventory
-
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
@@ -8,12 +7,16 @@ import skillbill.error.shellcontent.invalidNativeAgentLinkInventorySchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.NativeAgentLinkInventorySchemaPaths
+import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import java.io.IOException
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.BasicFileAttributes
 
 data class NativeAgentLinkInventoryEntry(
   val logicalName: String,
@@ -53,6 +56,7 @@ object NativeAgentLinkInventory {
 
   internal fun reconcile(request: NativeAgentLinkInventoryReconcileRequest) {
     val path = NativeAgentLinkInventoryPaths.inventoryPath(request.home)
+    val environment = request.environment
     Files.createDirectories(requireNotNull(path.parent))
     FileChannel.open(
       lockPath(path),
@@ -68,6 +72,7 @@ object NativeAgentLinkInventory {
             desired = request.desired,
             managedRoots = request.managedRoots,
             sourceRoot = request.sourceRoot,
+            environment = environment,
             mapper = mapper,
             schema = schema,
             beforeMutation = request.beforeMutation,
@@ -82,11 +87,18 @@ object NativeAgentLinkInventory {
     home: Path,
     managedRoots: List<Path>,
     sourceRoot: Path? = null,
+  ): List<NativeAgentLinkInventoryEntry> = read(home, managedRoots, sourceRoot, resolveEnvironmentMap(emptyMap()))
+
+  fun read(
+    home: Path,
+    managedRoots: List<Path>,
+    sourceRoot: Path? = null,
+    environment: Map<String, String>,
   ): List<NativeAgentLinkInventoryEntry> {
     val path = NativeAgentLinkInventoryPaths.inventoryPath(home)
-    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+    if (!inventoryPathExists(path)) {
       return sourceRoot?.let {
-        NativeAgentLinkInventoryBootstrap.bootstrap(home, managedRoots, it).retain
+        NativeAgentLinkInventoryBootstrap.bootstrap(home, managedRoots, it, environment).retain
       }.orEmpty()
     }
     if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
@@ -94,8 +106,32 @@ object NativeAgentLinkInventory {
         "Invalid native-agent link inventory '$path': inventory must be a regular file. Delete it and reinstall.",
       )
     }
-    return NativeAgentLinkInventoryDecode.decode(path, home, managedRoots, mapper, schema)
+    return NativeAgentLinkInventoryDecode.decode(
+      path,
+      home,
+      managedRoots,
+      environment,
+      InventoryValidation(mapper, schema),
+    )
   }
+
+  internal fun inventoryPathExists(path: Path): Boolean =
+    try {
+      Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+      true
+    } catch (_: NoSuchFileException) {
+      false
+    } catch (error: IOException) {
+      throw invalidNativeAgentLinkInventorySchema(
+        "Native-agent link inventory '$path' cannot be inspected.",
+        error,
+      )
+    } catch (error: SecurityException) {
+      throw invalidNativeAgentLinkInventorySchema(
+        "Native-agent link inventory '$path' cannot be inspected.",
+        error,
+      )
+    }
 
   private fun lockPath(inventoryPath: Path): Path = inventoryPath.resolveSibling("${inventoryPath.fileName}.lock")
 }

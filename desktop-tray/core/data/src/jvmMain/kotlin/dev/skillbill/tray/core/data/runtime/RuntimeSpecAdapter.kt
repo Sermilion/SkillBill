@@ -3,8 +3,10 @@ package dev.skillbill.tray.core.data.runtime
 import dev.skillbill.tray.core.common.di.DatabaseSessionScope
 import dev.skillbill.tray.core.data.port.ControlRefusal
 import dev.skillbill.tray.core.data.port.ControlResult
+import dev.skillbill.tray.core.data.session.DatabaseIdentityCapture
 import dev.skillbill.tray.core.data.port.RuntimeSpecGateway
 import dev.skillbill.tray.core.data.port.SpecPurgeOutcome
+import dev.skillbill.tray.core.data.session.SessionDatabaseIdentity
 import dev.skillbill.tray.core.domain.model.SpecBundleControl
 import dev.skillbill.tray.core.domain.model.SpecCounts
 import dev.skillbill.tray.core.domain.model.SpecFileKind
@@ -27,6 +29,7 @@ import skillbill.engine.specbrowser.model.SpecBrowserStatus
 import skillbill.engine.specbrowser.model.SpecBrowserStatusGroup
 import skillbill.engine.specbrowser.model.SpecBundleRunState
 import skillbill.engine.work.control.model.WorkControlResult
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import java.nio.file.InvalidPathException
@@ -37,7 +40,10 @@ import skillbill.engine.specbrowser.model.SpecBundleControl as RuntimeSpecBundle
 @Inject
 @SingleIn(DatabaseSessionScope::class)
 @ContributesBinding(DatabaseSessionScope::class)
-class RuntimeSpecAdapter(private val runtime: RuntimeComponent) : RuntimeSpecGateway {
+class RuntimeSpecAdapter(
+  private val runtime: RuntimeComponent,
+  private val selectedDatabaseIdentity: SessionDatabaseIdentity,
+) : RuntimeSpecGateway {
   override fun databasePath(): String? = try {
     runtime.databaseSession.resolveDbPath().toString()
   } catch (_: InvalidPathException) {
@@ -64,7 +70,14 @@ class RuntimeSpecAdapter(private val runtime: RuntimeComponent) : RuntimeSpecGat
     }
 
   override fun purgeGoal(repoRoot: String, issueKey: String): SpecPurgeOutcome {
-    val result = runtime.goalRunnerStatusService.purge(GoalRunnerPurgeRequest(issueKey, Path.of(repoRoot)))
+    val observation = when (val capture = selectedDatabaseIdentity.capture) {
+      is DatabaseIdentityCapture.Captured -> capture.identity
+      is DatabaseIdentityCapture.Unavailable -> return SpecPurgeOutcome(capture.reason, emptyList())
+    }
+    val result = runtime.goalRunnerStatusService.purge(
+      GoalRunnerPurgeRequest(issueKey, Path.of(repoRoot)),
+      DatabaseFileObservation(Path.of(observation.path), observation.fileKey),
+    )
     return SpecPurgeOutcome(result.refusalReason, result.leftovers)
   }
 }

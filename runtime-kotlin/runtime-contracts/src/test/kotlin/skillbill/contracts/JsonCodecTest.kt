@@ -12,6 +12,21 @@ import kotlin.test.assertNull
 
 class JsonCodecTest {
   @Test
+  fun `duplicate key scan reports the first repeated key path at any depth`() {
+    assertNull(JsonCodec.duplicateObjectKeyPath("""{"a":{"b":1},"c":[{"b":2},{"b":3}],"d":"a"}"""))
+    assertEquals("owner", JsonCodec.duplicateObjectKeyPath("""{"owner":"first","owner":"second"}"""))
+    assertEquals(
+      "custom.owner",
+      JsonCodec.duplicateObjectKeyPath("""{"custom":{"owner":"first","owner":"second"}}"""),
+    )
+    assertEquals(
+      "list[1].k",
+      JsonCodec.duplicateObjectKeyPath("""{"list":[{"k":1},{"k":1,"\u006b":2}]}"""),
+    )
+    assertNull(JsonCodec.duplicateObjectKeyPath("""{"k":"x\"k\":1","j":{"k":1}}"""))
+  }
+
+  @Test
   fun `strict array parse accepts whitespace formatted empty arrays`() {
     assertEquals(emptyList(), JsonCodec.parseJsonArrayStrict("[]"))
     assertEquals(emptyList(), JsonCodec.parseJsonArrayStrict("[ ]"))

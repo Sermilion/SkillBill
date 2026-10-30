@@ -9,6 +9,7 @@ import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.infrastructure.host.blockincident.FileBlockIncidentSpool
 import skillbill.infrastructure.http.HttpTelemetryClient
 import skillbill.ports.blockincident.BlockIncidentSpool
+import skillbill.ports.config.MachineConfigMigrationPort
 import skillbill.ports.telemetry.transport.TelemetryClient
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
@@ -20,6 +21,9 @@ internal interface RuntimeTelemetryProvides {
 
   @Provides
   fun telemetryConfigStore(store: FileTelemetryConfigStore): TelemetryConfigStore = store
+
+  @Provides
+  fun machineConfigMigration(store: FileTelemetryConfigStore): MachineConfigMigrationPort = store
 
   @Provides
   fun telemetrySettingsProvider(provider: DefaultTelemetrySettingsProvider): TelemetrySettingsProvider = provider

@@ -1,8 +1,10 @@
 package skillbill.engine.worktreeedit
 
+import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
@@ -29,6 +31,7 @@ import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WorktreeEditJournalWriterTest {
@@ -84,14 +87,80 @@ class WorktreeEditJournalWriterTest {
   }
 
   @Test
-  fun `cap truncation emits diagnostics and store failures stay inside the observer`() {
+  fun `a clean probe clears the previous tick before identical edits return`() {
     val clock = Clock.fixed(Instant.parse("2026-09-18T12:00:00Z"), ZoneOffset.UTC)
-    val repoRoot = Path.of("/tmp/worktree-edit-journal-cap")
+    val repository = InMemoryWorktreeEditJournalRepository()
     val git =
       ScriptedWorkflowGitOperations(
         WorkflowWorktreeNumstatResult(
           status = WorkflowGitOperationStatus.OK,
+          files = listOf(GoalObservabilityFileDiffStat("src/A.kt", insertions = 2, deletions = 1)),
+        ),
+      )
+    val observer =
+      WorktreeEditJournalWriter(
+        JournalDatabaseSessionFactory(repository),
+        clock,
+        NoopJournalDiagnostics,
+        git,
+      ).observer(Path.of("/tmp/worktree-edit-journal-clean"), { "wfl-clean" }, { "implement" })
+
+    observer.observe()
+    git.result = WorkflowWorktreeNumstatResult(status = WorkflowGitOperationStatus.OK, files = emptyList())
+    observer.observe()
+    assertNull(repository.latestTick("wfl-clean"))
+
+    git.result =
+      WorkflowWorktreeNumstatResult(
+        status = WorkflowGitOperationStatus.OK,
+        files = listOf(GoalObservabilityFileDiffStat("src/A.kt", insertions = 2, deletions = 1)),
+      )
+    observer.observe()
+
+    assertEquals(2, repository.appends.size)
+    assertEquals(listOf(GoalObservabilityFileDiffStat("src/A.kt", 2, 1)), repository.latestTick("wfl-clean")?.entries)
+  }
+
+  @Test
+  fun `cap truncation emits diagnostics and store failures stay inside the observer`() {
+    val clock = Clock.fixed(Instant.parse("2026-09-18T12:00:00Z"), ZoneOffset.UTC)
+    val repoRoot = Path.of("/tmp/worktree-edit-journal-cap")
+    val retentionDiagnostics = RecordingJournalDiagnostics()
+    val retentionRepository =
+      object : WorktreeEditJournalRepository {
+        override fun append(
+          workflowId: String,
+          tick: WorktreeEditTick,
+        ) = Unit
+
+        override fun latestTick(workflowId: String): WorktreeEditTick? = null
+
+        override fun deleteTicksBefore(
+          workflowId: String,
+          recordedAt: Instant,
+        ): Int = 3
+      }
+    WorktreeEditJournalWriter(
+      JournalDatabaseSessionFactory(retentionRepository),
+      clock,
+      retentionDiagnostics,
+      ScriptedWorkflowGitOperations(
+        WorkflowWorktreeNumstatResult(
+          status = WorkflowGitOperationStatus.OK,
           files = listOf(GoalObservabilityFileDiffStat("src/A.kt", insertions = 1, deletions = 0)),
+        ),
+      ),
+    ).observer(repoRoot, { "wfl-retention" }, { "implement" }).observe()
+    assertTrue(retentionDiagnostics.warnings.isEmpty())
+
+    val git =
+      ScriptedWorkflowGitOperations(
+        WorkflowWorktreeNumstatResult(
+          status = WorkflowGitOperationStatus.OK,
+          files =
+            List(WorktreeEditJournalPayloadKeys.MAX_ROWS_PER_WORKFLOW + 1) { index ->
+              GoalObservabilityFileDiffStat("src/$index.kt", insertions = 1, deletions = 0)
+            },
         ),
       )
 
@@ -105,9 +174,9 @@ class WorktreeEditJournalWriterTest {
 
         override fun latestTick(workflowId: String): WorktreeEditTick? = null
 
-        override fun trimToCap(
+        override fun deleteTicksBefore(
           workflowId: String,
-          maxRows: Int,
+          recordedAt: Instant,
         ): Int = 3
       }
     WorktreeEditJournalWriter(
@@ -131,9 +200,9 @@ class WorktreeEditJournalWriterTest {
 
         override fun latestTick(workflowId: String): WorktreeEditTick? = null
 
-        override fun trimToCap(
+        override fun deleteTicksBefore(
           workflowId: String,
-          maxRows: Int,
+          recordedAt: Instant,
         ): Int = 0
       }
     WorktreeEditJournalWriter(
@@ -195,16 +264,24 @@ private class InMemoryWorktreeEditJournalRepository : WorktreeEditJournalReposit
 
   override fun latestTick(workflowId: String): WorktreeEditTick? = latest[workflowId]
 
-  override fun trimToCap(
+  override fun deleteTicksBefore(
     workflowId: String,
-    maxRows: Int,
-  ): Int = 0
+    recordedAt: Instant,
+  ): Int {
+    val latestTick = latest[workflowId] ?: return 0
+    if (!latestTick.recordedAt.isBefore(recordedAt)) return 0
+    latest.remove(workflowId)
+    return 1
+  }
 }
 
 private class JournalDatabaseSessionFactory(
   private val journal: WorktreeEditJournalRepository,
   private val busyWrites: Int = 0,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
@@ -227,7 +304,7 @@ private class JournalDatabaseSessionFactory(
     return block(unit())
   }
 
-  override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unit())
+  override fun <T> transaction(block: (UnitOfWork) -> T): T = selfManagedWrite(block)
 
   private fun unit(): UnitOfWork =
     object : UnitOfWorkDefaults() {

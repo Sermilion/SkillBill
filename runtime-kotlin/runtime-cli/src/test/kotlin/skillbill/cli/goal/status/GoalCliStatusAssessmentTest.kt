@@ -111,6 +111,7 @@ class GoalCliStatusAssessmentTest {
           updatedAt = Instant.EPOCH,
           freshness = IdeStatusFreshness.FRESH,
           summary = "No work.",
+          title = "SKILL-1",
         ),
       recoveryWorkId = "goal-1",
       repositoryRoot = "/repo",

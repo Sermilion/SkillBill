@@ -285,8 +285,10 @@ internal fun isEmptyDirectory(path: Path): Boolean = Files.list(path).use { !it.
 internal fun unlinkProviderAgents(
   provider: NativeAgentProvider,
   request: NativeAgentLinkRequest,
+  agentDirs: List<Path>? = null,
 ): List<Path> {
   val resolvedHome = request.home ?: resolveUserHome(null)
+  val resolvedAgentDirs = agentDirs ?: provider.homeAgentDirs(resolvedHome, request.environment)
   val compositionContext = installNativeAgentCompositionContext()
   val generated =
     NativeAgentOperations.renderInstallArtifacts(
@@ -326,6 +328,6 @@ internal fun unlinkProviderAgents(
       }
   return uninstallNativeAgentFiles(
     (generated.generatedFiles + legacyGenerated?.generatedFiles.orEmpty()).distinct(),
-    provider.homeAgentDirs(resolvedHome),
+    resolvedAgentDirs,
   )
 }

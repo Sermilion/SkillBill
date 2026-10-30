@@ -5,6 +5,7 @@ import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -246,6 +247,9 @@ private class LedgerOnlySessionFactory(
   private val findings: UnaddressedFindingsRepository,
   private val workflowStateRepository: WorkflowStateRepository? = null,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 

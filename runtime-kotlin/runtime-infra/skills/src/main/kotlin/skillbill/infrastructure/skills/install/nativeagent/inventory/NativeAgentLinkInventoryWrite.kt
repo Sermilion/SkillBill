@@ -43,7 +43,12 @@ internal object NativeAgentLinkInventoryWrite {
     if (schemaErrors.isNotEmpty()) {
       invalidWrite(request.path, schemaErrors.joinToString("; ") { it.message })
     }
-    NativeAgentLinkInventoryDecode.validateSemanticEntries(request.entries, request.home, request.managedRoots)
+    NativeAgentLinkInventoryDecode.validateSemanticEntries(
+      request.entries,
+      request.home,
+      request.managedRoots,
+      request.environment,
+    )
     val temporary = Files.createTempFile(request.path.parent, "${request.path.fileName}.", ".tmp")
     request.afterTemporaryCreation(temporary)
     var initiatingFailure: Throwable? = null

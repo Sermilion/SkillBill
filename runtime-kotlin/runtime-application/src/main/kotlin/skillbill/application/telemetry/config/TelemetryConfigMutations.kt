@@ -1,9 +1,9 @@
 package skillbill.application.telemetry.config
 
+import skillbill.application.telemetry.model.TelemetrySnapshotPriorLevel
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
-import skillbill.ports.telemetry.transport.writeTelemetryLevel
 import skillbill.telemetry.model.TelemetrySettings
 import skillbill.telemetry.telemetryLevels
 
@@ -17,16 +17,11 @@ object TelemetryConfigMutations {
     require(level in telemetryLevels) {
       "Telemetry level must be one of: ${telemetryLevels.joinToString(", ")}."
     }
-    val currentLevel = settingsProvider.load(materialize = false).level
-    return if (level == "off") {
-      disableTelemetry(configStore, settingsProvider, outbox)
-    } else {
-      enableTelemetry(
-        configStore = configStore,
-        settingsProvider = settingsProvider,
-        level = level,
-        outbox = outbox.takeIf { clearsPendingOutbox(currentLevel, level) },
-      )
+    return configStore.withConfigTransaction {
+      val currentLevel = settingsProvider.load(materialize = false).level
+      configStore.mutateTelemetryLevelAtomically(level)
+      val clearedEvents = if (clearsPendingOutbox(currentLevel, level)) outbox?.clear().orEmpty() else 0
+      settingsProvider.load(materialize = false) to clearedEvents
     }
   }
 
@@ -47,31 +42,22 @@ object TelemetryConfigMutations {
 internal fun clearsPendingOutbox(
   currentLevel: String,
   newLevel: String,
+): Boolean = clearsPendingOutbox(TelemetrySnapshotPriorLevel.Known(currentLevel), newLevel)
+
+internal fun clearsPendingOutbox(
+  currentLevel: TelemetrySnapshotPriorLevel,
+  newLevel: String,
 ): Boolean {
   if (newLevel == "off") return true
-  val current = telemetryLevels.indexOf(currentLevel).takeIf { it >= 0 } ?: telemetryLevels.lastIndex
+  val current =
+    when (currentLevel) {
+      is TelemetrySnapshotPriorLevel.Known ->
+        telemetryLevels.indexOf(currentLevel.level).takeIf {
+          it >= 0
+        } ?: telemetryLevels.lastIndex
+      TelemetrySnapshotPriorLevel.Unavailable -> telemetryLevels.lastIndex
+    }
   return telemetryLevels.indexOf(newLevel) < current
-}
-
-private fun enableTelemetry(
-  configStore: TelemetryConfigStore,
-  settingsProvider: TelemetrySettingsProvider,
-  level: String,
-  outbox: TelemetryOutboxRepository?,
-): Pair<TelemetrySettings, Int> {
-  configStore.writeTelemetryLevel(level)
-  val clearedEvents = outbox?.clear().orEmpty()
-  return settingsProvider.load(materialize = true) to clearedEvents
-}
-
-private fun disableTelemetry(
-  configStore: TelemetryConfigStore,
-  settingsProvider: TelemetrySettingsProvider,
-  outbox: TelemetryOutboxRepository?,
-): Pair<TelemetrySettings, Int> {
-  configStore.writeTelemetryLevel("off")
-  val clearedEvents = outbox?.clear().orEmpty()
-  return settingsProvider.load(materialize = false) to clearedEvents
 }
 
 private fun Int?.orEmpty(): Int = this ?: 0

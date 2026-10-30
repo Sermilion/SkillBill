@@ -3,6 +3,7 @@ package skillbill.application
 import skillbill.application.work.WorkListService
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -152,6 +153,9 @@ private class WorkListDatabase(
   private val workflows: WorkflowStateRepository,
   private val work: List<WorkItem>,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 

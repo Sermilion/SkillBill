@@ -131,14 +131,14 @@ fun workStack(
     val selection = DatabaseSelection().also { it.choose(path) }
     val runtime = object : RuntimeSessionProviders {}.runtimeComponent(selection, host, FakeSettingsRepository(SettingsState.Ready(AppSettings())))
     val gateway = CountingGateway(RuntimeWorkAdapter(runtime), readWork, ownerRegistrations, scriptedControl, afterSnapshot)
-    val session = DatabaseSession(gateway, store, signals, classifier, generations, dispatchers, diagnostics)
+    val session = DatabaseSession(gateway, store, signals, classifier, generations, dispatchers, diagnostics, dev.skillbill.tray.core.data.session.SessionDatabaseIdentity())
     SessionParts(
       session,
       RoomWorkBoardRepository(session, dispatchers, clock, monotonicClock, diagnostics),
       RoomWorkDetailRepository(session, dispatchers, clock),
       RuntimeWorkControlRepository(session, diagnostics),
       RuntimeSpecBrowserRepository(
-        RuntimeSpecAdapter(runtime), NioSpecDirectoryChanges(diagnostics), signals, dispatchers, diagnostics,
+        RuntimeSpecAdapter(runtime, session.selectedDatabaseIdentity), NioSpecDirectoryChanges(diagnostics), signals, dispatchers, diagnostics,
       ),
       RuntimeAgentHomeRepository(RuntimeAgentHomeAdapter(runtime, host), dispatchers),
     )

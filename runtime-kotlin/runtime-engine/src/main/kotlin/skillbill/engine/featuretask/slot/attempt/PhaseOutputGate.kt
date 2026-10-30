@@ -472,7 +472,8 @@ object PhaseOutputGate {
     val repositoryFingerprint = args.repositoryFingerprint
     val run = capture.run
     val blockedDisposition = args.blockedDisposition
-    terminalBlockedReasonFrom(run.phaseId, outputMap, blockedDisposition)?.let { reason ->
+    terminalBlockedReasonFrom(run.phaseId, outputMap, blockedDisposition)?.let { blockedReason ->
+      val correction = args.blockedRetryCorrection
       return FeatureTaskRuntimeRunLoopOutputVerification.terminalOutputAttempt(
         progress,
         loopTransitions,
@@ -480,12 +481,13 @@ object PhaseOutputGate {
         TerminalOutputAttemptArgs(
           run = run,
           iteration = capture.iteration,
-          reason = reason,
+          reason = correction?.let { "$blockedReason $it" } ?: blockedReason,
           normalizedOutput = attested,
           repairEvidence = repairEvidence,
           observability = observability,
           fileManifest = capture.fileManifest,
           session = session,
+          forcedDisposition = FeatureTaskRuntimeFailureDisposition.RETRYABLE.takeIf { correction != null },
         ),
         blockedDisposition,
       )
@@ -548,6 +550,7 @@ object PhaseOutputGate {
         observability = observability,
         repositoryFingerprint = args.repositoryFingerprint,
         blockedDisposition = args.stepHooks.blockedOutputDisposition,
+        blockedRetryCorrection = args.stepHooks.blockedOutputRetryCorrection(args.attested.envelopeWireMap()),
       ),
     ) ?: settleValidatedOutputAfterPause(args)
   }

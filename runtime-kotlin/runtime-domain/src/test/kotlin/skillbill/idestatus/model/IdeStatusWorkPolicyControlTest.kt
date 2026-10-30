@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class IdeStatusWorkPolicyControlTest {
   @Test
-  fun `a pending pause keeps stop available but refuses a second pause`() {
+  fun `a pending pause prevents another pause request`() {
     val pending = IdeStatusPolicy.work(goalFacts(pauseRequested = true))
     assertTrue(pending.controlEligible)
     assertFalse(pending.pauseEligible)

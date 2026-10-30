@@ -4,6 +4,7 @@ import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.work.model.WorkStoreObservation
 import java.time.Instant
+import java.util.Locale
 
 internal data class WorkBoardPagePosition(
   val observedAt: Instant,
@@ -23,7 +24,7 @@ internal fun workBoardPagePosition(
       request.observedAt ?: now,
       null,
     )
-  val decoded = decodeWorkPageCursor(cursor, request.finishedWithin.wireValue)
+  val decoded = decodeWorkPageCursor(cursor, requestScope(request))
   return WorkBoardPagePosition(decoded.observedAt, decoded.position, decoded.observation)
 }
 
@@ -32,4 +33,9 @@ internal fun workBoardNextCursor(
   observedAt: Instant,
   afterKey: String,
   observation: WorkStoreObservation? = null,
-): String = encodeWorkPageCursor(request.finishedWithin.wireValue, observedAt, afterKey, observation)
+): String = encodeWorkPageCursor(requestScope(request), observedAt, afterKey, observation)
+
+private fun requestScope(request: WorkBoardRequest): String =
+  request.filter?.trim()?.lowercase(Locale.ROOT)?.takeIf(String::isNotEmpty)?.let { filter ->
+    "${request.finishedWithin.wireValue}\n$filter"
+  } ?: request.finishedWithin.wireValue

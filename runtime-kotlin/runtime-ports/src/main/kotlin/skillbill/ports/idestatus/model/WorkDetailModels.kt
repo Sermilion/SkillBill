@@ -27,6 +27,7 @@ data class WorkDetailRequest(
   val startOffset: Int = 0,
   val list: WorkDetailList? = null,
   val anchor: String? = null,
+  val includeExtendedLists: Boolean = true,
 ) {
   init {
     require(id.isNotBlank()) { "id is required." }
@@ -102,6 +103,7 @@ data class WorkDetailPhase(
   val continuationKind: String?,
   val launchedModel: String?,
   val effort: String?,
+  val briefingText: String? = null,
 )
 
 data class WorkExecutionInstance(

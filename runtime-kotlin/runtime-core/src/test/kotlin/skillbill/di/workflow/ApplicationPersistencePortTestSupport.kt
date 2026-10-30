@@ -46,7 +46,9 @@ import skillbill.learnings.model.RejectedLearningSourceOutcome
 import skillbill.learnings.model.UpdateLearningRequest
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
+import skillbill.ports.config.model.ConfigDocumentReplaceResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -65,7 +67,10 @@ import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.review.repository.ReviewRunCompletenessRepository
 import skillbill.ports.review.repository.UnavailableReviewRunCompletenessRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
+import skillbill.ports.telemetry.model.TelemetryConfigLevelWriteResult
 import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryConfigSnapshotRead
+import skillbill.ports.telemetry.model.TelemetryConfigWriteRequest
 import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
@@ -243,6 +248,9 @@ internal class FakeDatabaseSessionFactory(
   private val workflows: WorkflowStateRepository = NoopWorkflowStateRepository,
   private val lifecycleTelemetry: LifecycleTelemetryRepository = noopPort(LifecycleTelemetryRepository::class.java),
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   val calls = mutableListOf<String>()
   private val dbPath = Path.of("/fake/metrics.db")
 
@@ -790,11 +798,23 @@ internal object FakeTelemetryConfigStore : TelemetryConfigStore {
 
   override fun configPath(): Path = Path.of("/fake/config.json")
 
+  override fun configCandidatePaths(): List<Path> = listOf(configPath())
+
+  override fun <T> withConfigTransaction(action: () -> T): T = action()
+
+  override fun newInstallIdCandidate(): String = "fake-install-id"
+
   override fun read(): TelemetryConfigRead = TelemetryConfigRead.Absent
+
+  override fun readSnapshot(): TelemetryConfigSnapshotRead = TelemetryConfigSnapshotRead.Absent(configPath())
 
   override fun ensure(): TelemetryConfigDocument = TelemetryConfigDocument(TelemetryOpenDocument.from(emptyMap()))
 
-  override fun write(document: TelemetryConfigDocument) = Unit
+  override fun write(request: TelemetryConfigWriteRequest): ConfigDocumentReplaceResult =
+    ConfigDocumentReplaceResult.ChangedOnDisk(configPath())
+
+  override fun mutateTelemetryLevelAtomically(level: String): TelemetryConfigLevelWriteResult =
+    TelemetryConfigLevelWriteResult(false, "off")
 }
 
 internal class FakeTelemetryClient : TelemetryClient {

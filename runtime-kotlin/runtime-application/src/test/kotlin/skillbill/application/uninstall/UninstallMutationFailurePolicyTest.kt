@@ -110,6 +110,17 @@ private class RecordingDiagnostics : RuntimeDiagnostics {
 private class ThrowingUninstallPathsPort(
   private val failingOperation: String,
 ) : UninstallPathsPort {
+  override fun <T> withConfigTransaction(
+    userHome: Path,
+    environment: Map<String, String>,
+    action: () -> T,
+  ): T = action()
+
+  override fun configLockFilePaths(
+    userHome: Path,
+    environment: Map<String, String>,
+  ): List<Path> = emptyList()
+
   override fun listImmediateDirectoryNames(root: Path): List<String> = emptyList()
 
   override fun exists(path: Path): Boolean = true
@@ -123,6 +134,11 @@ private class ThrowingUninstallPathsPort(
 
   override fun removeTree(path: Path): List<Path> =
     if (failingOperation == "removeTree") throw IOException("directory not empty") else emptyList()
+
+  override fun removeTreeExcept(
+    path: Path,
+    retainedPaths: Collection<Path>,
+  ): List<Path> = removeTree(path)
 }
 
 private object ThrowingMcpRegistrationPort : InstallMcpRegistrationPort {

@@ -31,33 +31,33 @@ class FileExternalAgentAddonSourceConfigStore : ExternalAgentAddonSourceConfigPo
   ): ExternalAgentAddonSource? {
     val map =
       entry as? Map<*, *>
-        ?: invalidConfig(configPath, "$CONFIG_KEY[$index]", "must be a mapping")
-    val kind = (map["kind"] as? String)?.trim()
-    if (kind == null && map.containsKey("platform")) return null
+        ?: invalidConfig(configPath, "${ExternalAddonConfigKeys.SOURCES}[$index]", "must be a mapping")
+    val kind = (map[ExternalAddonConfigKeys.KIND] as? String)?.trim()
+    if (kind == null && map.containsKey(ExternalAddonConfigKeys.PLATFORM)) return null
     if (kind == SkillKind.PLATFORM_PACK.wireValue) return null
     if (kind != SkillKind.AGENT_ADDON.wireValue) {
       invalidConfig(
         configPath,
-        "$CONFIG_KEY[$index].kind",
+        "${ExternalAddonConfigKeys.SOURCES}[$index].${ExternalAddonConfigKeys.KIND}",
         "must be 'agent-addon' for agent add-on sources",
       )
     }
     val rawPath =
-      (map["path"] as? String)?.takeIf(String::isNotBlank)
-        ?: invalidConfig(configPath, "$CONFIG_KEY[$index].path", "must be a non-empty string")
+      (map[ExternalAddonConfigKeys.PATH] as? String)?.takeIf(String::isNotBlank)
+        ?: invalidConfig(
+          configPath,
+          "${ExternalAddonConfigKeys.SOURCES}[$index].${ExternalAddonConfigKeys.PATH}",
+          "must be a non-empty string",
+        )
     val resolvedPath = resolveSourcePath(userHome, rawPath)
     if (!Files.isDirectory(resolvedPath)) {
       invalidConfig(
         configPath,
-        "$CONFIG_KEY[$index].path",
+        "${ExternalAddonConfigKeys.SOURCES}[$index].${ExternalAddonConfigKeys.PATH}",
         "'$rawPath' does not exist or is not a directory",
       )
     }
     return ExternalAgentAddonSource(resolvedPath.toFileLocation())
-  }
-
-  private companion object {
-    const val CONFIG_KEY = "external_addon_sources"
   }
 }
 

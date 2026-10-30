@@ -1,6 +1,7 @@
 package skillbill.ports.idestatus
 
 import skillbill.idestatus.model.WorktreeEditTick
+import java.time.Instant
 
 interface WorktreeEditJournalRepository {
   fun append(
@@ -10,9 +11,9 @@ interface WorktreeEditJournalRepository {
 
   fun latestTick(workflowId: String): WorktreeEditTick?
 
-  /** Drops whole oldest ticks by recorded_at until rows <= [maxRows]; returns deleted row count. */
-  fun trimToCap(
+  /** Deletes this workflow's ticks older than [recordedAt]; returns the deleted row count. */
+  fun deleteTicksBefore(
     workflowId: String,
-    maxRows: Int,
+    recordedAt: Instant,
   ): Int
 }

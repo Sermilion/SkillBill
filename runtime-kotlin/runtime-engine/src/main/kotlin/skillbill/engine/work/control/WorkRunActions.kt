@@ -177,7 +177,7 @@ class WorkRunActions(
     val liveWorker = worker != null && supervisor.inspect(worker) != FeatureTaskRuntimeProcessInspection.NotRunning
     val completed = snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL
     val canceled = snapshot.lifecycleState == IdeStatusLifecycleState.CANCELED
-    val agent = phase?.launchAgentId ?: recordedAgent(item, unit)
+    val agent = launchAgent(item, phase, unit)
     val supported = arguments(item, phase, unit, agent ?: SupportedAgent.supportedIds.first()) != null
     val live =
       snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE || liveWorker ||
@@ -196,6 +196,14 @@ class WorkRunActions(
       },
     )
   }
+
+  private fun launchAgent(
+    item: WorkDetailItem,
+    phase: StandalonePhaseStatusRecord?,
+    unit: UnitOfWork,
+  ): String? =
+    phase?.launchAgentId
+      ?: recordedLaunchAgent(item.goalStatus?.currentChildWorkflowId ?: item.snapshot.workflowId, unit)
 
   private fun launchLabel(
     canceled: Boolean,
@@ -334,22 +342,27 @@ class WorkRunActions(
     phase?.agentEnvironment
       ?: item.snapshot.workflowId?.let(unit.standalonePhaseStatuses::latestWorkflowExecution)?.agentEnvironment
       ?: emptyMap()
+}
 
-  private fun recordedAgent(
-    item: WorkDetailItem,
-    unit: UnitOfWork,
-  ): String? {
-    val workflowId = item.goalStatus?.currentChildWorkflowId ?: item.snapshot.workflowId ?: return null
-    val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return null
-    val plan =
-      JsonCodec.anyToStringAnyMap(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(workflow.artifacts),
-      )
-    val assignments = plan?.get(FeatureTaskRuntimeExecutionPlanKeys.STEP_LAUNCH_ASSIGNMENTS) as? List<*> ?: return null
-    val records = assignments.mapNotNull(JsonCodec::anyToStringAnyMap)
-    val current = records.firstOrNull { it[FeatureTaskRuntimeExecutionPlanKeys.STEP_ID] == workflow.currentStepId }
-    return (current ?: records.firstOrNull())?.get(FeatureTaskRuntimeExecutionPlanKeys.AGENT_ID) as? String
-  }
+internal fun standaloneLaunchAgent(
+  record: StandalonePhaseStatusRecord,
+  unit: UnitOfWork,
+): String? =
+  (record.launchAgentId ?: recordedLaunchAgent(record.workflowId, unit))?.takeIf { it in SupportedAgent.supportedIds }
+
+private fun recordedLaunchAgent(
+  workflowId: String?,
+  unit: UnitOfWork,
+): String? {
+  val workflow = workflowId?.let { unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, it) } ?: return null
+  val plan =
+    JsonCodec.anyToStringAnyMap(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(workflow.artifacts),
+    )
+  val assignments = plan?.get(FeatureTaskRuntimeExecutionPlanKeys.STEP_LAUNCH_ASSIGNMENTS) as? List<*> ?: return null
+  val records = assignments.mapNotNull(JsonCodec::anyToStringAnyMap)
+  val current = records.firstOrNull { it[FeatureTaskRuntimeExecutionPlanKeys.STEP_ID] == workflow.currentStepId }
+  return (current ?: records.firstOrNull())?.get(FeatureTaskRuntimeExecutionPlanKeys.AGENT_ID) as? String
 }
 
 internal fun goalStartRefusal(result: GoalPreflightResult): String? {

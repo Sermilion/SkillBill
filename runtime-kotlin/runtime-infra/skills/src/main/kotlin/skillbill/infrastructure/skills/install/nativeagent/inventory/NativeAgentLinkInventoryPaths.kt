@@ -1,9 +1,9 @@
 package skillbill.infrastructure.skills.install.nativeagent.inventory
 
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.nativeagent.support.agentDirectoryEntries
+import skillbill.infrastructure.skills.nativeagent.support.agentObservedAttributes
 import skillbill.install.model.SupportedAgent
-import java.nio.file.Files
-import java.nio.file.LinkOption
 import java.nio.file.Path
 
 internal object NativeAgentLinkInventoryLimits {
@@ -40,15 +40,18 @@ internal object NativeAgentLinkInventoryPaths {
     parent: Path,
     prefix: String = "",
   ): List<Path> {
-    if (!Files.isDirectory(parent, LinkOption.NOFOLLOW_LINKS)) return emptyList()
-    return Files.list(parent).use { children ->
-      children.filter { child ->
-        Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS) &&
-          child.fileName.toString().removePrefix(prefix).let { leaf ->
-            child.fileName.toString().startsWith(prefix) &&
-              NativeAgentLinkInventoryLimits.CACHE_GENERATION.matches(leaf)
-          }
-      }.map { it.toAbsolutePath().normalize() }.toList()
+    val candidates =
+      agentDirectoryEntries(
+        parent,
+        "list native-agent cache generations",
+        followLinks = false,
+      ).filter { child ->
+        child.fileName.toString().startsWith(prefix) &&
+          NativeAgentLinkInventoryLimits.CACHE_GENERATION.matches(child.fileName.toString().removePrefix(prefix))
+      }
+    return candidates.mapNotNull { child ->
+      val attributes = agentObservedAttributes(child, "inspect native-agent cache generation", followLinks = false)
+      if (attributes.isDirectory) child.toAbsolutePath().normalize() else null
     }
   }
 }

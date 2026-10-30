@@ -3,11 +3,13 @@ package skillbill.engine.featuretask.lifecycle.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.runtime.RuntimeSingleton
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
+import skillbill.engine.diagnostics.truncateWalBestEffort
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.ports.db.DatabaseCheckpoint
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -37,6 +39,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
   private val clock: Clock,
   private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
   private val diagnostics: RuntimeDiagnostics,
+  private val checkpoint: DatabaseCheckpoint,
 ) {
   fun <T> runOwned(
     workflowId: String,
@@ -64,9 +67,17 @@ class FeatureTaskRuntimeWorkerCoordinator(
       } finally {
         writer.close()
         heartbeats.stop()
-        database.transaction {
-          it.workflowStates.releaseFeatureTaskRuntimeWorker(workflowId, ownership.ownerToken, ownership.generation)
-        }
+        val releasedAndIdle =
+          database.transaction {
+            val released =
+              it.workflowStates.releaseFeatureTaskRuntimeWorker(
+                workflowId,
+                ownership.ownerToken,
+                ownership.generation,
+              )
+            released && !it.workflowStates.hasActiveFeatureTaskRuntimeWorkerLeases()
+          }
+        if (releasedAndIdle) checkpoint.truncateWalBestEffort(diagnostics, "worker_lease_idle")
       }
 
     heartbeats.fencingLostReason()?.let { reason ->

@@ -2,6 +2,7 @@ package skillbill.infrastructure.host
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
+import skillbill.infrastructure.host.system.FileConfigDocumentLocks
 import skillbill.model.EnvironmentContext
 import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
@@ -18,16 +19,35 @@ import kotlin.test.assertTrue
 
 class FileTelemetryConfigStoreTest {
   @Test
+  fun `config with a repeated key is unreadable and ensure leaves it untouched`(
+    @TempDir tempDir: Path,
+  ) {
+    val path = tempDir.resolve("config.json")
+    val text = "{\"custom\":{\"owner\":\"first\",\"owner\":\"second\"},\"telemetry\":{\"level\":\"off\"}}\n"
+    Files.writeString(path, text)
+
+    val read = assertIs<TelemetryConfigRead.Malformed>(readTelemetryConfigFileRead(path))
+    assertEquals(
+      "Telemetry config at '${FileConfigDocumentLocks.canonicalPath(path)}' repeats the key 'custom.owner'. " +
+        "Remove the duplicate; saving would keep only one of the values.",
+      read.reason,
+    )
+    assertFailsWith<IllegalArgumentException> { ensureTelemetryConfigFile(path) }
+    assertEquals(text, Files.readString(path))
+  }
+
+  @Test
   fun `config reads distinguish absence malformed text and non-object roots while edge reads keep throwing`(
     @TempDir tempDir: Path,
   ) {
     val path = tempDir.resolve("config.json")
+    val canonicalPath = FileConfigDocumentLocks.canonicalPath(path)
 
     assertEquals(TelemetryConfigRead.Absent, readTelemetryConfigFileRead(path))
 
     Files.writeString(path, "{not json")
     val malformedText = assertIs<TelemetryConfigRead.Malformed>(readTelemetryConfigFileRead(path))
-    assertEquals("Telemetry config at '$path' is not valid JSON.", malformedText.reason)
+    assertEquals("Telemetry config at '$canonicalPath' is not valid JSON.", malformedText.reason)
     assertEquals(
       malformedText.reason,
       assertFailsWith<IllegalArgumentException> { readTelemetryConfigFile(path) }.message,
@@ -39,7 +59,7 @@ class FileTelemetryConfigStoreTest {
 
     Files.writeString(path, "[]")
     val nonObject = assertIs<TelemetryConfigRead.Malformed>(readTelemetryConfigFileRead(path))
-    assertEquals("Telemetry config at '$path' is not valid JSON.", nonObject.reason)
+    assertEquals("Telemetry config at '$canonicalPath' is not valid JSON.", nonObject.reason)
 
     Files.writeString(path, "{}")
     val present = assertIs<TelemetryConfigRead.Present>(readTelemetryConfigFileRead(path))
@@ -81,7 +101,7 @@ class FileTelemetryConfigStoreTest {
     val resolved = resolveTelemetryConfigPath(emptyMap(), tempDir)
 
     assertEquals(
-      tempDir.resolve(".config/skill-bill/config.json").toAbsolutePath().normalize(),
+      FileConfigDocumentLocks.canonicalPath(tempDir.resolve(".config/skill-bill/config.json")),
       resolved,
     )
   }
@@ -96,7 +116,7 @@ class FileTelemetryConfigStoreTest {
     Files.createDirectories(tempDir.resolve(".skill-bill"))
     Files.writeString(tempDir.resolve(".skill-bill/config.json"), "{}\n")
 
-    assertEquals(durable.toAbsolutePath().normalize(), resolveTelemetryConfigPath(emptyMap(), tempDir))
+    assertEquals(FileConfigDocumentLocks.canonicalPath(durable), resolveTelemetryConfigPath(emptyMap(), tempDir))
   }
 
   @Test
@@ -107,7 +127,7 @@ class FileTelemetryConfigStoreTest {
     Files.createDirectories(legacy.parent)
     Files.writeString(legacy, "{}\n")
 
-    assertEquals(legacy.toAbsolutePath().normalize(), resolveTelemetryConfigPath(emptyMap(), tempDir))
+    assertEquals(FileConfigDocumentLocks.canonicalPath(legacy), resolveTelemetryConfigPath(emptyMap(), tempDir))
   }
 
   @Test
@@ -117,7 +137,7 @@ class FileTelemetryConfigStoreTest {
     val resolved = resolveTelemetryConfigPath(mapOf("XDG_CONFIG_HOME" to "/some/global/xdg"), tempDir)
 
     assertEquals(
-      tempDir.resolve(".config/skill-bill/config.json").toAbsolutePath().normalize(),
+      FileConfigDocumentLocks.canonicalPath(tempDir.resolve(".config/skill-bill/config.json")),
       resolved,
     )
   }
@@ -131,7 +151,7 @@ class FileTelemetryConfigStoreTest {
     val pinned = tempDir.resolve("pinned/config.json")
 
     assertEquals(
-      pinned.toAbsolutePath().normalize(),
+      FileConfigDocumentLocks.canonicalPath(pinned),
       resolveTelemetryConfigPath(mapOf(CONFIG_ENVIRONMENT_KEY to pinned.toString()), tempDir),
     )
   }

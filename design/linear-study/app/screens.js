@@ -53,21 +53,22 @@
     if (!inc || inc.recovery !== 'available' || st.recovered.has(it.id)) return false;
     return (inc.prerequisites || []).every((p) => st.prereqs.has(it.id + ':' + p.id));
   }
+  /* A failed detail refresh keeps the older data on screen and turns every control off until a refresh succeeds. */
   function runActions(st, it) {
-    const ro = it.runOptions || {};
+    const ro = it.refreshFailed ? {} : (it.runOptions || {});
     const agent = st.chosenAgent[it.id] || ro.agentId;
     const out = [];
     if (it.kind === 'goal') {
-      out.push(S.Button({ label: it.pauseRequested ? 'Pause requested' : 'Pause after subtask', icon: 'pause', act: 'pause-soft', arg: it.id, disabled: !pauseEligible(it), kbd: pauseEligible(it) ? 'P' : null }));
-      out.push(S.Button({ label: 'Pause', icon: 'stop', variant: 'danger', act: 'pause-now', arg: it.id, disabled: !controllable(it), kbd: controllable(it) ? '⇧ P' : null, tip: 'Stops the goal runner now' }));
+      out.push(S.Button({ label: it.pauseRequested ? 'Pause requested' : 'Pause after subtask', icon: 'pause', act: 'pause-soft', arg: it.id, disabled: it.refreshFailed || !pauseEligible(it), kbd: !it.refreshFailed && pauseEligible(it) ? 'P' : null }));
+      out.push(S.Button({ label: 'Pause', icon: 'stop', variant: 'danger', act: 'pause-now', arg: it.id, disabled: it.refreshFailed || !controllable(it), kbd: !it.refreshFailed && controllable(it) ? '⇧ P' : null, tip: 'Stops the goal runner now' }));
     }
     if (resumable(it)) {
-      out.push(S.Button({ label: ro.launchLabel || 'Resume', icon: 'play', variant: ro.canLaunch ? 'primary' : 'secondary', act: 'launch', arg: it.id, disabled: !ro.canLaunch, kbd: ro.canLaunch ? 'R' : null }));
+      out.push(S.Button({ label: (it.runOptions || {}).launchLabel || 'Resume', icon: 'play', variant: ro.canLaunch ? 'primary' : 'secondary', act: 'launch', arg: it.id, disabled: !ro.canLaunch, kbd: ro.canLaunch ? 'R' : null }));
       out.push(S.Button({ label: agent ? `Agent: ${agent}` : 'Choose agent', icon: 'bot', act: 'agent-menu', arg: it.id, disabled: !ro.canLaunch }));
     }
     out.push(S.Button({ label: 'Cancel', icon: 'x', variant: 'danger', act: 'cancel', arg: it.id, disabled: !ro.canCancel }));
-    if (it.incident && it.incident.recovery === 'available' && !st.recovered.has(it.id)) out.push(S.Button({ label: 'Recover', icon: 'refresh', act: 'recover', arg: it.id, disabled: !recoveryOffered(st, it), tip: recoveryOffered(st, it) ? null : 'Confirm the prerequisites first' }));
-    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}</div>`;
+    if (it.incident && it.incident.recovery === 'available' && !st.recovered.has(it.id)) out.push(S.Button({ label: 'Recover', icon: 'refresh', act: 'recover', arg: it.id, disabled: it.refreshFailed || !recoveryOffered(st, it), tip: recoveryOffered(st, it) ? null : 'Confirm the prerequisites first' }));
+    return `<div class="l-col g-2"><div class="l-row g-2 l-wrap">${out.join('')}</div>${ro.canLaunch && resumable(it) ? `<span class="t-faint" style="font-size:var(--t-xs)">Starts the installed agent harness</span>` : ''}${it.refreshFailed ? S.Hint({ tone: 'warn', text: 'Refresh the detail before using run controls.' }) : ''}</div>`;
   }
 
   /* ---------- shell ---------- */
@@ -160,6 +161,21 @@
   }
 
   /* ---------- Detail (feature/detail) ---------- */
+  /* Every detail section can collapse. A toggle is stored per section key, so it holds while paging between items;
+   * untoggled sections start from `def` (Subtasks start collapsed past 10 subtasks; Evidence starts collapsed). */
+  const isCollapsed = (st, key, def) => (key in st.secCollapse ? st.secCollapse[key] : !!def);
+  const secBlock = (st, key, o, def) => S.Section(Object.assign({}, o, { collapsed: isCollapsed(st, key, def), toggle: 'sec-collapse', arg: `${key}|${def ? 1 : 0}` }));
+  /* Spec bundle order: decomposition-manifest.yaml, spec.md, then every other file by name with digit runs read as numbers. */
+  const fileName = (p) => p.split('/').pop();
+  const fileRank = (n) => (n.startsWith('decomposition') ? 0 : n === 'spec.md' ? 1 : 2);
+  const natural = (a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
+  /* Goal assessment order: Default keeps the runtime's order; Priority and Status sort stably, each breaking ties by the other. */
+  const SEV_RANK = ['blocker', 'critical', 'high', 'major', 'medium', 'minor', 'low', 'nit', 'info'];
+  const sevRank = (f) => { const i = SEV_RANK.indexOf(String(f.severity).toLowerCase()); return i < 0 ? SEV_RANK.length : i; };
+  const stateRank = (f) => ({ OPEN: 0, REFUTED: 1, FIXED: 2 }[f.state] ?? 0);
+  const assessOrder = (findings, order) => order === 'priority' ? findings.slice().sort((a, b) => sevRank(a) - sevRank(b) || stateRank(a) - stateRank(b))
+    : order === 'status' ? findings.slice().sort((a, b) => stateRank(a) - stateRank(b) || sevRank(a) - sevRank(b)) : findings;
+  const bundleOrder = (files) => files.slice().sort((a, b) => fileRank(fileName(a)) - fileRank(fileName(b)) || natural(fileName(a), fileName(b)));
   function pipelineSteps(it) {
     const p = it.pipeline;
     return D.PHASE_ORDER.map((id) => {
@@ -174,29 +190,175 @@
     const tone = inc.recovery === 'available' ? 'info' : 'warn';
     const recovered = st.recovered.has(it.id);
     const body = [
-      `<div class="l-col g-1"><span><span class="t-faint">Cause:</span> ${esc(inc.cause)}</span><span><span class="t-faint">Next:</span> ${esc(inc.nextAction)}</span><span class="t-faint" style="font-size:var(--t-xs)">certainty ${esc(inc.certainty)}${inc.unavailableReason ? ' · recovery unavailable: ' + esc(inc.unavailableReason.toLowerCase().replace(/_/g, ' ')) : ''}</span></div>`,
+      `<div class="l-col g-1">${S.ExpandableText({ html: `<span class="t-faint">Cause:</span> ${esc(inc.cause)}` })}${S.ExpandableText({ html: `<span class="t-faint">Next:</span> ${esc(inc.nextAction)}` })}<span class="t-faint" style="font-size:var(--t-xs)">certainty ${esc(inc.certainty)}${inc.unavailableReason ? ' · recovery unavailable: ' + esc(inc.unavailableReason.toLowerCase().replace(/_/g, ' ')) : ''}</span></div>`,
       inc.prerequisites && !recovered ? `<div class="l-col g-2" style="margin-top:8px">${S.Checklist({ act: 'prereq', items: inc.prerequisites.map((p) => ({ id: it.id + ':' + p.id, text: p.text, checked: st.prereqs.has(it.id + ':' + p.id) })) })}</div>` : '',
     ].join('');
-    const decision = inc.unavailableReason === 'OPERATOR_DECISION' ? operatorDecision(st, it) : '';
-    const evidence = S.Box(inc.evidence.map((e) => S.FindingRow({ ref: e.ref, title: e.summary, meta: esc(e.kind) })));
-    return S.Section({ title: 'Incident', end: [S.Label({ text: recovered ? 'Recovering' : inc.heading, color: recovered ? 'var(--st-active)' : tone === 'info' ? 'var(--st-planning)' : 'var(--st-blocked)', dot: true })], body:
+    const decision = it.awaitsDecision ? operatorDecision(st, it) : '';
+    const evOpen = !isCollapsed(st, 'incident-evidence', true);
+    const evidence = inc.evidence.length ? `<div class="l-col g-2">${S.EvidenceToggle({ label: 'Evidence', count: inc.evidence.length, open: evOpen, act: 'sec-collapse', arg: 'incident-evidence|1' })}${evOpen ? S.Box(inc.evidence.map((e) => S.EvidenceRow(e))) : ''}</div>` : '';
+    return secBlock(st, 'incident', { title: 'Incident', end: [S.Label({ text: recovered ? 'Recovering' : inc.heading, color: recovered ? 'var(--st-active)' : tone === 'info' ? 'var(--st-planning)' : 'var(--st-blocked)', dot: true })], body:
       S.Callout({ tone: recovered ? 'info' : tone, title: recovered ? 'Recovering' : inc.heading, body }) +
       decision +
-      `<div class="l-col g-2"><span class="t-faint" style="font-size:var(--t-xs)">Evidence</span>${evidence}</div>` +
+      evidence +
       `<div class="l-row g-2 l-wrap t-muted" style="font-size:var(--t-sm)"><span>Report: ${esc(inc.report)}</span>${/issue #/.test(inc.report) ? S.Button({ label: 'Open issue', icon: 'external', size: 'sm', variant: 'ghost', act: 'toast', arg: 'Opened the issue in your browser' }) : ''}</div>` });
   }
+  /* A decision awaited with no incident gets its own section where the incident would be. */
+  function decisionPanel(st, it) {
+    if (it.incident) return incidentPanel(st, it);
+    return it.awaitsDecision ? S.Section({ title: 'Operator decision', body: operatorDecision(st, it) }) : '';
+  }
+  /* ---------- Subtask index and inspector ---------- */
+  /* Selection key per goal: the subtask id as a string, or 'finish' for the Goal finish row. The default is the blocked
+   * subtask, else the current one, else the first. A choice is kept per item while paging. */
+  const pad = (n) => String(n).padStart(2, '0');
+  const isFinished = (it) => it.lifecycle === 'terminal' || it.section === 'history' || it.section === 'finished';
+  const hasSubtasks = (it) => it.kind === 'goal' && !it.planning && (it.subtasks || []).length > 0;
+  const subKeys = (it) => (hasSubtasks(it) ? it.subtasks.map((s) => String(s.id)).concat('finish') : []);
+  function defaultSub(it) {
+    const blocked = it.subtasks.find((s) => s.status === 'blocked');
+    if (blocked) return String(blocked.id);
+    const cur = !isFinished(it) && it.subtasks.find((s) => s.id === it.current);
+    return String((cur || it.subtasks[0]).id);
+  }
+  function selectedSub(st, it) {
+    if (!hasSubtasks(it)) return null;
+    const k = st.subSel[it.id];
+    return k && subKeys(it).includes(k) ? k : defaultSub(it);
+  }
+  /* The details pane shows unless it is toggled off, the Specs pane is open, or the window is narrower than 1080px.
+   * Where it does not show, the inspector opens inside the selected row instead. */
+  const paneShown = (st) => st.propsOpen && !st.specsOpen && !st.narrow;
+  const specArg = (it, s) => `${it.id}/${s.spec}`;
+  const subChip = (it, d) => {
+    const t = it.subtasks.find((x) => x.id === d.id);
+    return { num: pad(d.id), optional: d.optional, lead: S.StatusIcon(SUB_STATE[t.status], 0.5), act: 'sub-select', arg: `${it.id}|${d.id}`, tip: `Subtask ${pad(d.id)}: ${t.title}${d.optional ? ' (optional)' : ''}` };
+  };
+  function subtaskInspector(it, s, inline) {
+    const neededBy = it.subtasks.filter((x) => x.deps.some((d) => d.id === s.id)).map((x) => ({ id: x.id, optional: x.deps.find((d) => d.id === s.id).optional }));
+    return S.SubtaskInspector({
+      title: inline ? null : s.title, blocked: s.blocked, commit: s.commit,
+      spec: s.spec, specAct: 'open-file', specArg: specArg(it, s),
+      deps: s.deps.map((d) => subChip(it, d)), neededBy: neededBy.map((d) => subChip(it, d)),
+      validation: s.validation, reviews: s.reviews, audit: s.audit,
+    });
+  }
+  /* Goal finish: pr, monitor, monitor_fix with their states, then one-line pointers to Goal QA and Goal assessment. */
+  const FINISH_WORD = { done: 'Done', pending: 'Pending', active: 'Running', failed: 'Failed' };
+  function finishInspector(it) {
+    const state = (id) => (it.finishDone ? 'done' : 'pending');
+    const rows = D.GOAL_FINISH.map((id) => ({ label: id, mono: true, value: `${S.StatusIcon(state(id), 0.5)}<span>${FINISH_WORD[state(id)]}</span>` }));
+    if (it.goalQa) { const q = it.goalQa, fixed = q.findings.filter((f) => f[2]).length; rows.push({ label: 'Goal QA', value: `<span>${esc(q.outcome)} · ${fixed} of ${q.findings.length} fixed</span>`, act: 'anchor', arg: 'sec-goal-qa', tip: 'Show Goal QA' }); }
+    if (it.assessment) { const a = it.assessment; rows.push({ label: 'Assessment', value: `<span>${a.state === 'COMPLETED' ? 'Completed' : 'Running'} · round ${a.round} · ${a.findings.length} findings</span>`, act: 'anchor', arg: 'sec-goal-assessment', tip: 'Show Goal assessment' }); }
+    return `<div class="sb-insp">${S.PropertyList(rows)}</div>`;
+  }
+  function subtaskSection(st, it, inline) {
+    const sel = selectedSub(st, it);
+    const open = st.subOpen[it.id] !== false;
+    const finished = isFinished(it);
+    const rows = it.subtasks.map((s) => {
+      const key = String(s.id);
+      const current = !finished && s.id === it.current;
+      const meta = [s.commit ? S.ShortId({ value: s.commit, label: 'commit' }) : '', current && it.live ? subClock(it) : '', s.status === 'completed_no_change' ? S.Label({ text: 'no change', dot: false }) : ''];
+      return S.SubtaskRow({ num: pad(s.id), state: SUB_STATE[s.status], frac: 0.5, title: s.title, current, selected: key === sel, meta, act: 'sub-select', arg: `${it.id}|${key}`, body: inline && key === sel ? subtaskInspector(it, s, true) : '', expanded: open });
+    });
+    rows.push(S.SubtaskRow({ num: '··', state: it.finishDone ? 'done' : 'pending', title: 'Goal finish', selected: sel === 'finish', meta: [], act: 'sub-select', arg: `${it.id}|finish`, body: S.PhasePipeline(D.GOAL_FINISH.map((id) => ({ label: id, state: it.finishDone ? 'done' : '', goal: true }))) + (inline && sel === 'finish' ? finishInspector(it) : ''), expanded: open }));
+    return secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.done}/${it.total}`, end: [S.ProgressRing(it.done, it.total, { text: false })], body: S.SubtaskList({ label: `Subtasks of ${it.id}`, rows }) }, it.subtasks.length > 10);
+  }
+  function inspectorPane(st, it) {
+    const sel = selectedSub(st, it);
+    if (sel === 'finish') return S.PaneSection({ title: 'Goal finish', status: { state: it.finishDone ? 'done' : 'pending' }, body: finishInspector(it) });
+    const s = it.subtasks.find((x) => String(x.id) === sel);
+    return S.PaneSection({ title: `Subtask ${pad(s.id)}`, status: { state: SUB_STATE[s.status], frac: 0.5 }, body: subtaskInspector(it, s, false) });
+  }
+  /* Spec files: the goal-level files only (subtask specs open from the inspector), manifest, spec.md, then by name. */
+  function specFilesPane(it) {
+    const subSpecs = new Set((it.subtasks || []).map((s) => s.spec));
+    const files = bundleOrder((it.specBundle || []).filter((f) => !subSpecs.has(fileName(f)) && !/^spec_subtask_/.test(fileName(f))));
+    if (!files.length) return '';
+    return S.PaneSection({ title: 'Spec files', body: files.map((f) => S.TreeRow({ level: 0, file: true, lead: S.Icon(f.endsWith('.yaml') ? 'file' : 'fileText', 'sm'), title: fileName(f), meta: [], act: 'open-file', arg: `${it.id}/${f}`, rowIdx: -1 })).join('') });
+  }
+
+  /* ---------- Details pane: Execution, Runs and fixes ---------- */
+  const sum = (m) => Object.values(m || {}).reduce((a, b) => a + b, 0);
+  function breakdownRow(st, it, label, key, map) {
+    const total = sum(map);
+    if (!total) return null;
+    const rows = Object.entries(map);
+    return { label, value: `<span>${total}</span>`, sub: rows.length > 1 || rows[0][0] ? S.Breakdown({ rows, open: st.bdOpen.has(`${it.id}:${key}`), act: 'bd-toggle', arg: `${it.id}:${key}` }) : '' };
+  }
+  function executionPane(it) {
+    return S.PaneSection({ title: 'Execution', body: S.PropertyList([
+      it.workflow ? { label: 'Workflow', value: S.ShortId({ value: it.workflow, label: 'workflow id' }) } : null,
+      it.invocation ? { label: 'Invocation', value: S.ShortId({ value: it.invocation, label: 'invocation id' }) } : null,
+      it.agent ? { label: 'Agent', value: `${S.Avatar({ name: it.agent, initials: agentOf(it.agent).initials, color: agentOf(it.agent).color, size: 'sm' })}<span>${esc(it.agent)}</span>` } : null,
+      it.model ? { label: 'Model', value: `<span>${esc(it.model)}${it.effort ? ' · ' + esc(it.effort) : ''}</span>` } : null,
+      it.liveness ? { label: 'Liveness', value: `<span>${esc(it.liveness)}</span>` } : null,
+      it.started && it.started !== '—' ? { label: 'Started', value: `<span>${esc(it.started)}</span>` } : null,
+      { label: 'Updated', value: `<span>${esc(it.updated)}</span>` },
+    ]) });
+  }
+  function runsPane(st, it) {
+    const a = it.attempts;
+    if (!a) return '';
+    const rows = [
+      breakdownRow(st, it, 'Runs', 'runs', a.phaseRuns),
+      breakdownRow(st, it, 'Fixes', 'fixes', a.fixIterations),
+      breakdownRow(st, it, 'Relaunches', 'relaunches', a.relaunches),
+      a.findings ? { label: 'Findings', value: `<span>${a.findings}</span>`, tip: 'Findings in scope' } : null,
+      a.kills ? { label: 'Kills', value: `<span>${a.kills}</span>`, tip: 'Supervisor kills' } : null,
+    ].filter(Boolean);
+    return rows.length ? S.PaneSection({ title: 'Runs and fixes', body: S.PropertyList(rows) }) : '';
+  }
+
+  /* ---------- Activity: one feed from the recorded facts, oldest first ---------- */
+  /* Sources (DetailModels): executionHistory (lifecycleState, startedAt, finishedAt, result), the item's startedAt and
+   * finishedAt when no execution is listed, the last worktree edit, the latest event (phase, worker role, summary) and the
+   * last agent activity label. Nothing else is drawn. */
+  const EXEC_STATE = { completed: 'done', failed: 'failed', interrupted: 'paused', paused: 'paused', blocked: 'blocked', canceled: 'canceled', active: 'active' };
+  function activityEntries(it) {
+    const out = [];
+    const avatar = () => (it.agent ? S.Avatar({ name: it.agent, initials: agentOf(it.agent).initials, color: agentOf(it.agent).color, size: 'sm' }) : S.StatusIcon(iconState(it), frac(it)));
+    const self = it.kind === 'goal' ? 'Goal' : rowKey(it);
+    if ((it.executions || []).length) {
+      it.executions.forEach((e, i) => {
+        const who = it.executions.length > 1 ? `Run ${i + 1}` : (it.kind === 'goal' ? 'Goal run' : self);
+        out.push({ lead: S.StatusIcon('active', 0.12), actor: who, action: 'started', ago: e.startAgo, tip: `${who} started ${e.start} · ${e.inv}` });
+        if (e.end) out.push({ lead: S.StatusIcon(EXEC_STATE[e.life] || 'pending', 1), actor: who, action: e.life, object: e.result, mono: true, ago: e.endAgo, tip: `${who} ${e.life} ${e.end}${e.result ? ' · ' + e.result : ''} · ${e.inv}` });
+      });
+    } else if (it.startedAgo != null) {
+      out.push({ lead: S.StatusIcon('active', 0.12), actor: self, action: 'started', ago: it.startedAgo, tip: `${self} started ${it.started}` });
+      if (it.finishedAgo != null) out.push({ lead: statusIcon(it), actor: self, action: LIFE[it.lifecycle][0].toLowerCase(), ago: it.finishedAgo, tip: `${self} ${LIFE[it.lifecycle][0].toLowerCase()} ${it.finishedAt || ''}` });
+    }
+    const l = it.latest || {};
+    if (l.edit) out.push({ lead: avatar(), actor: it.agent || 'Agent', action: 'edited', object: `${l.edit.path} +${l.edit.ins} −${l.edit.del}`, mono: true, ago: l.edit.ago });
+    if (l.event) out.push({ lead: statusIcon(it), actor: `${l.event.phase} · ${l.event.role}`, action: l.event.summary || '', ago: l.event.ago });
+    if (l.activity) out.push({ lead: avatar(), actor: it.agent || 'Agent', action: l.activity.label, ago: l.activity.ago });
+    if (!out.length && !isFinished(it) && it.summary) out.push({ lead: statusIcon(it), actor: self, action: it.summary, ago: null });
+    return out.sort((a, b) => (b.ago == null ? -1 : b.ago) - (a.ago == null ? -1 : a.ago));
+  }
+  const FEED_MAX = 8;
+  function activitySection(st, it) {
+    const all = activityEntries(it);
+    if (!all.length) return '';
+    const showAll = st.feedAll.has(it.id);
+    const hidden = showAll ? 0 : Math.max(0, all.length - FEED_MAX);
+    return secBlock(st, 'activity', { title: 'Activity', count: all.length, body: S.ActivityFeed({ entries: all.slice(hidden), hidden, act: 'feed-all', arg: it.id }) });
+  }
+
   function detail(st) {
     const it = lookup(st.detailId) || D.items[2];
     const r = repoOf(it.repo);
     const goal = it.kind === 'goal';
-    const finished = it.lifecycle === 'terminal' || it.section === 'history' || it.section === 'finished';
+    const finished = isFinished(it);
     const liveList = D.items.filter((x) => x.section !== 'finished');
     const idx = liveList.indexOf(it);
     const sec = SECTIONS.find((s) => s[0] === it.section);
+    const pane = paneShown(st);
+    const subs = hasSubtasks(it);
 
     const location = `<div class="l-row g-1 l-wrap">${S.Button({ label: r.path, icon: 'folder', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.path}` })}${it.branch ? S.Button({ label: it.branch, icon: 'branch', size: 'sm', variant: 'ghost', act: 'toast', arg: `Opened ${r.web}/tree/${it.branch}` }) : `<span class="t-faint" style="font-size:var(--t-sm)">no branch</span>`}</div>`;
     const metrics = S.MetricStrip([
-      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning', note: `wave ${esc(it.wave)}` } : finished ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono" style="font-size:var(--t-md)">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
+      goal ? (it.planning ? { label: 'Goal stage', value: 'Planning' } : finished ? { label: 'Subtasks', value: `${it.done || 0}`, unit: `/ ${it.total || 0}`, note: 'complete' } : { label: 'Subtask', value: `${it.current}`, unit: `/ ${it.total}`, note: `${it.done} complete · ${it.total - it.done - 1} pending` }) : { label: 'Step', value: `<span class="mono" style="font-size:var(--t-md)">${esc(it.step)}</span>`, note: it.exec ? esc(it.exec) : '&nbsp;' },
       goal ? { label: 'Phase', value: esc(it.planning ? 'plan' : it.step), note: it.planning ? `${it.planned}/${it.total} plans saved` : esc(it.exec || ' ') } : null,
       finished ? { label: 'Total run time', value: S.fmtDur(it.goalMs), note: `finished ${esc(it.finishedAt || '')}` } : { label: goal ? 'Goal active' : it.kind === 'operation' ? 'Operation elapsed' : 'Phase elapsed', value: clock(it), note: it.live ? 'ticking' : 'last known duration' },
       goal && it.subMs != null && !finished ? { label: 'Subtask active', value: subClock(it), note: it.live ? 'ticking' : 'last known duration' } : null,
@@ -204,66 +366,43 @@
 
     const parts = [];
     parts.push(S.DocHeader({
-      eyebrow: [lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), S.Label({ text: it.fresh ? 'fresh' : 'stale', color: it.fresh ? 'var(--st-done)' : 'var(--fg-faint)' })],
+      eyebrow: [lifeLabel(it), it.stalled ? S.Label({ text: 'Stalled', color: 'var(--st-blocked)', tint: true, dot: false }) : '', S.IdTag(rowKey(it)), it.issue && !goal ? S.IdTag(it.issue) : '', S.Label({ text: kindWord(it), dot: false }), S.Label({ text: it.fresh && !it.refreshFailed ? 'fresh' : 'stale', color: it.fresh && !it.refreshFailed ? 'var(--st-done)' : 'var(--fg-faint)' })],
       title: it.title, sub: location, actions: [runActions(st, it)],
     }));
     if (it.pauseRequested) parts.push(S.Hint({ tone: 'info', icon: 'pause', text: 'Pause recorded. The goal pauses at its next checkpoint.' }));
-    if (it.reason) parts.push(S.ReasonBlock({ label: 'Run reason', text: it.reason, color: LIFE[it.lifecycle][1] }));
-    parts.push(incidentPanel(st, it));
+    if (it.reason) parts.push(S.ReasonBlock({ label: 'Run reason', text: it.reason, color: LIFE[it.lifecycle][1], open: st.reasonOpen.has(it.id), act: 'reason-toggle', arg: it.id }));
+    parts.push(decisionPanel(st, it));
     parts.push(metrics);
-    if (goal && (it.subtasks || []).length) {
-      const subs = it.subtasks.map(([name, status, sha, blocked], i) => {
-        const current = !finished && i + 1 === it.current;
-        const meta = [sha ? `<span class="mono t-faint" style="font-size:var(--t-2xs)">${esc(sha)}</span>` : '', current && it.live ? subClock(it) : '', status === 'completed_no_change' ? S.Label({ text: 'no change', dot: false }) : ''];
-        const body = blocked ? S.Hint({ tone: 'warn', text: blocked }) : '';
-        return S.SubtaskRow({ num: String(i + 1).padStart(2, '0'), state: SUB_STATE[status], frac: 0.5, title: name, current, meta, body });
-      });
-      subs.push(S.SubtaskRow({ num: '··', state: it.finishDone ? 'done' : 'pending', title: 'Goal finish', meta: [], body: S.PhasePipeline(D.GOAL_FINISH.map((id) => ({ label: id, state: it.finishDone ? 'done' : '', goal: true }))) }));
-      parts.push(S.Section({ title: 'Subtasks', count: `${it.done}/${it.total}`, end: [S.ProgressRing(it.done, it.total, { text: false })], body: S.Box(subs) }));
-    }
-    if (goal && it.planning) parts.push(S.Section({ title: 'Subtasks', count: `${it.planned}/${it.total} plans saved`, body: S.Hint({ text: `Planning wave ${it.wave}. Subtasks appear here once their plans are saved.` }) }));
-    if (goal && it.pipeline && !it.planning) parts.push(S.Section({ title: 'Phase pipeline', body: S.PhasePipeline(pipelineSteps(it)) }));
-    if (!goal && (it.steps || []).length > 1) parts.push(S.Section({ title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
-    if (it.dependencies) parts.push(S.Section({ title: 'Dependencies', body: S.Box(it.dependencies.map(([a, b, opt]) => S.FindingRow({ title: `Subtask ${a} waits on subtask ${b}`, meta: opt ? 'optional' : 'required' }))) }));
-    if (it.latest) parts.push(S.Section({ title: it.kind === 'operation' ? 'Operation activity' : goal ? 'Goal activity' : 'Phase activity', body: S.PropertyList([
-      it.latest.activity ? { label: 'Agent activity', value: `<span>${esc(it.latest.activity)} <span class="t-faint">· ${esc(it.latest.activityAgo)} ago</span></span>` } : null,
-      it.latest.edit ? { label: 'Last edit', value: `<span class="mono">${esc(it.latest.edit)}</span><span class="t-faint">· ${esc(it.latest.editAgo)} ago</span>` } : null,
-      it.latest.event ? { label: 'Event', value: esc(it.latest.event) } : null,
-    ]) }));
-    if (!it.latest && !finished && it.summary) parts.push(S.Section({ title: it.kind === 'operation' ? 'Operation activity' : 'Phase activity', body: S.PropertyList([{ label: 'Event', value: esc(it.summary) }]) }));
-    if (it.validation) parts.push(S.Section({ title: 'Validation', body: S.Box(it.validation.map(([n, ok, checks]) => S.FindingRow({ ref: `Subtask ${n}`, title: `${ok ? 'passed' : 'failed'} · ${checks} checks`, state: ok ? 'passed' : 'failed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' }))) }));
-    if (it.phaseResults) {
+    if (subs) parts.push(subtaskSection(st, it, !pane));
+    if (goal && it.planning) parts.push(secBlock(st, 'subtasks', { title: 'Subtasks', count: `${it.planned}/${it.total} plans saved`, body: S.Hint({ text: 'Subtasks appear here once their plans are saved.' }) }));
+    if (goal && it.pipeline && !it.planning) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(pipelineSteps(it)) }));
+    if (!goal && (it.steps || []).length > 1) parts.push(secBlock(st, 'pipeline', { title: 'Phase pipeline', body: S.PhasePipeline(it.steps.map(([label, state]) => ({ label, state, count: state === 'now' ? it.exec : null }))) }));
+    parts.push(activitySection(st, it));
+    /* Standalone phases and operations keep their own validation, phase results and spec bundle in the document. */
+    if (!goal && it.validation) parts.push(secBlock(st, 'validation', { title: 'Validation', body: S.Box(it.validation.map(([n, ok, checks]) => S.FindingRow({ ref: `Subtask ${n}`, title: `${ok ? 'passed' : 'failed'} · ${checks} checks`, state: ok ? 'passed' : 'failed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' }))) }));
+    if (!goal && it.phaseResults) {
       const pr = it.phaseResults;
       const passes = pr.passes.map((p) => `<div class="l-col g-2"><div class="l-row g-2" style="font-size:var(--t-sm)"><b style="font-weight:500">Review pass ${p.n}</b><span class="t-muted">${esc(p.verdict)}</span><span class="t-faint">· ${p.open} unresolved</span></div>${p.findings.length ? S.Box(p.findings.map(([sev, text, where]) => S.FindingRow({ severity: sev, title: text, meta: `<span class="mono">${esc(where)}</span>` }))) : ''}</div>`).join('');
-      parts.push(S.Section({ title: 'Phase results', count: `subtask ${pr.subtask}`, body: `<div class="l-col g-4">${passes}${pr.audit ? `<div class="l-row g-2" style="font-size:var(--t-sm)"><b style="font-weight:500">Audit</b><span class="t-muted">${esc(pr.audit.verdict)}</span><span class="t-faint">· ${esc(pr.audit.summary)}</span></div>` : ''}</div>` }));
+      parts.push(secBlock(st, 'phase-results', { title: 'Phase results', body: `<div class="l-col g-4">${passes}${pr.audit ? `<div class="l-row g-2" style="font-size:var(--t-sm)"><b style="font-weight:500">Audit</b><span class="t-muted">${esc(pr.audit.verdict)}</span>${S.ExpandableText({ text: `· ${pr.audit.summary}`, cls: 't-faint' })}</div>` : ''}</div>` }));
     }
     if (it.goalQa) {
       const q = it.goalQa, fixed = q.findings.filter((f) => f[2]).length;
-      parts.push(S.Section({ title: 'Goal QA', count: q.outcome, body: `<div class="l-col g-2"><span class="t-muted" style="font-size:var(--t-sm)">${fixed === q.findings.length ? `QA found ${q.findings.length} findings; all fixed after ${q.fixAttempts} fix attempt${q.fixAttempts === 1 ? '' : 's'}.` : `QA could not fix ${q.findings.length - fixed} findings. Review them yourself.`}</span>${S.Box(q.findings.map(([id, title, ok]) => S.FindingRow({ ref: id, title, state: ok ? 'Fixed' : 'Not fixed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' })))}</div>` }));
+      parts.push(secBlock(st, 'goal-qa', { id: 'sec-goal-qa', title: 'Goal QA', count: q.outcome, body: `<div class="l-col g-2"><span class="t-muted" style="font-size:var(--t-sm)">${fixed === q.findings.length ? `QA found ${q.findings.length} findings; all fixed after ${q.fixAttempts} fix attempt${q.fixAttempts === 1 ? '' : 's'}.` : `QA could not fix ${q.findings.length - fixed} findings. Review them yourself.`}</span>${S.Box(q.findings.map(([id, title, ok]) => S.FindingRow({ ref: id, title, state: ok ? 'Fixed' : 'Not fixed', stateColor: ok ? 'var(--st-done)' : 'var(--st-failed)' })))}</div>` }));
     }
     if (it.assessment) {
       const a = it.assessment;
-      parts.push(S.Section({ title: 'Goal assessment', count: `${a.state === 'COMPLETED' ? 'Completed' : 'Running'} · round ${a.round}`, body: S.Box(a.findings.map((f) => S.FindingRow({ severity: f.severity, ref: f.ref, title: f.scenario, meta: `<span class="mono">${esc(f.path)}:${f.line}</span> · ${esc(f.verification.toLowerCase())}`, state: f.state === 'FIXED' ? 'Fixed' : f.state === 'REFUTED' ? 'Refuted' : 'Open', stateColor: f.state === 'FIXED' ? 'var(--st-done)' : 'var(--fg-faint)' }))) }));
+      parts.push(secBlock(st, 'goal-assessment', { id: 'sec-goal-assessment', title: 'Goal assessment', count: `${a.state === 'COMPLETED' ? 'Completed' : 'Running'} · round ${a.round}`, end: a.findings.length > 1 ? [S.Segmented({ act: 'assess-order', value: st.assessOrder || 'default', items: [{ id: 'default', label: 'Default' }, { id: 'priority', label: 'Priority' }, { id: 'status', label: 'Status' }] })] : [], body: S.Box(assessOrder(a.findings, st.assessOrder).map((f) => S.FindingRow({ severity: f.severity, ref: f.ref, title: f.scenario, meta: `<span class="mono">${esc(f.path)}:${f.line}</span> · ${esc(f.verification.toLowerCase())}`, state: f.state === 'FIXED' ? 'Fixed' : f.state === 'REFUTED' ? 'Refuted' : 'Open', stateColor: f.state === 'FIXED' ? 'var(--st-done)' : 'var(--fg-faint)' }))) }));
     }
-    if (it.qaReport) parts.push(S.ReasonBlock({ label: 'QA report', text: it.qaReport, color: 'var(--st-done)' }));
-    if (it.executions) parts.push(S.Section({ title: 'History', count: `${it.executions.length} run${it.executions.length === 1 ? '' : 's'}`, body: S.Box(it.executions.map(([inv, life, start, end, result]) => S.FindingRow({ ref: inv, title: `${life} · ${start} → ${end}`, meta: esc(result) }))) }));
-    if (it.specBundle) parts.push(S.Section({ title: 'Spec bundle', body: S.Box(it.specBundle.map((f) => S.TreeRow({ level: 0, file: true, lead: S.Icon(f.endsWith('.yaml') ? 'file' : 'fileText', 'sm'), title: f, meta: [], act: 'open-file', arg: f, rowIdx: -1 }))) }));
+    if (it.qaReport) parts.push(S.ReasonBlock({ label: 'QA report', text: it.qaReport, color: 'var(--st-done)', open: st.reasonOpen.has(it.id + ':qa'), act: 'reason-toggle', arg: it.id + ':qa' }));
+    if (!goal && it.specBundle) parts.push(secBlock(st, 'spec-bundle', { title: 'Spec bundle', body: S.Box(bundleOrder(it.specBundle).map((f) => S.TreeRow({ level: 0, file: true, lead: S.Icon(f.endsWith('.yaml') ? 'file' : 'fileText', 'sm'), title: fileName(f), meta: [], act: 'open-file', arg: f, rowIdx: -1 }))) }));
 
-    const props = S.PaneSection({ title: 'Execution', body: S.PropertyList([
-      it.workflow ? { label: 'Workflow', value: `<span class="mono trunc">${esc(it.workflow)}</span>` } : null,
-      it.invocation ? { label: 'Invocation', value: `<span class="mono trunc">${esc(it.invocation)}</span>` } : null,
-      it.agent ? { label: 'Agent', value: `${agentAvatar(it)}<span>${esc(it.agent)}</span>` } : null,
-      it.model ? { label: 'Model', value: `<span class="mono trunc">${esc(it.model)}${it.effort ? ' · ' + esc(it.effort) : ''}</span>` } : null,
-      it.liveness ? { label: 'Liveness', value: esc(it.liveness) } : null,
-      { label: 'Started', value: esc(it.started) },
-      { label: 'Last update', value: `<span class="tnum">${esc(it.updated)}</span>` },
-    ]) }) + (it.attempts ? S.PaneSection({ title: 'Runs and fixes', body: S.PropertyList(Object.entries(it.attempts).map(([k, v]) => ({ label: k, value: `<span class="mono">${esc(v)}</span>` }))) }) : '');
+    const props = executionPane(it) + runsPane(st, it) + (subs ? inspectorPane(st, it) : '') + (goal ? specFilesPane(it) : '');
 
     const header = S.ViewHeader({
       crumbs: [{ label: 'Work', act: 'nav', arg: 'work' }, sec ? { label: sec[1], act: 'section', arg: sec[0] } : { label: 'History', act: 'nav', arg: 'history' }, { label: rowKey(it) }],
-      actions: [idx >= 0 ? S.Pager({ index: idx, total: liveList.length }) : '', ...paneToggles(st), S.IconButton({ icon: 'panelRight', label: 'Toggle details', kbd: '⌘ I', act: 'toggle-props', on: st.propsOpen })],
+      actions: [idx >= 0 ? S.Pager({ index: idx, total: liveList.length }) : '', it.refreshFailed ? S.StaleIndicator() : '', ...paneToggles(st), S.IconButton({ icon: 'panelRight', label: 'Toggle details', kbd: '⌘ I', act: 'toggle-props', on: st.propsOpen })],
     });
-    const body = `<div class="sb-split"><div class="sb-scroll" data-scroll="detail"><div class="sb-doc">${parts.join('')}</div></div>${st.propsOpen && !st.specsOpen ? `<aside class="sb-pane">${props}</aside>` : ''}</div>`;
+    const body = `<div class="sb-split"><div class="sb-scroll" data-scroll="detail"><div class="sb-doc">${parts.join('')}</div></div>${pane ? `<aside class="sb-pane${subs ? ' sb-pane--wide' : ''}" aria-label="Details">${props}</aside>` : ''}</div>`;
     return workArea(st, header, body);
   }
 
@@ -419,6 +558,14 @@
     };
     return head + tabs + S.SettingsGroup({ title: 'Tiers', rows: [tierRow('reasoning'), tierRow('implementation')] }) + D.PHASE_GROUPS.map(([label, list]) => S.SettingsGroup({ title: label, rows: list.map(phaseRow) })).join('');
   }
+  /* Budget rows and per-phase compaction overrides open the same inline editor as the model rows (.sb-cfg-ed). */
+  const fmtCount = (n) => Number(n).toLocaleString('en-US');
+  function fieldEditor(st, fields, removeLabel) {
+    const d = st.draft;
+    const err = d.error ? S.Hint({ tone: 'error', text: d.error }) : '';
+    return `${fields.map(([key, label]) => `<div style="width:140px">${S.Field({ for: 'ed-' + key, label, control: S.Input({ id: 'ed-' + key, value: d[key], mono: true, input: 'ed-field', error: !!d.error }) })}</div>`).join('')}${err}
+      <div class="l-row g-2 l-wrap">${S.Button({ label: 'Save', variant: 'primary', act: 'ed-save', kbd: '⌘ ↵' })}${S.Button({ label: 'Cancel', variant: 'ghost', act: 'ed-cancel' })}<span class="l-grow"></span>${removeLabel ? S.Button({ label: removeLabel, variant: 'ghost', icon: 'trash', act: 'ed-remove' }) : ''}</div>`;
+  }
   function setCompaction(st) {
     const c = st.compaction;
     const trigger = Math.floor(c.window / 100) * c.pct;
@@ -429,7 +576,9 @@
         S.SettingRow({ label: 'Context window', desc: 'window_tokens · default 400,000', control: `<div style="width:140px">${S.Input({ id: 'cmp-window', value: c.window.toLocaleString('en-US'), mono: true, input: 'cmp-window' })}</div>` }),
         S.SettingRow({ stack: true, label: `Compact at ${c.pct}%`, desc: `trigger_pct · default 70 · compacts at ${trigger.toLocaleString('en-US')} tokens`, control: `<input type="range" class="sb-range" id="cmp-pct" min="1" max="100" step="1" value="${c.pct}" data-input="cmp-pct" aria-label="Compact at percent">${tooLow ? S.Hint({ tone: 'error', text: 'The trigger must be at least 200,000 tokens.' }) : ''}` }),
       ] }) +
-      S.SettingsGroup({ title: 'Per-phase overrides', end: [S.Button({ label: 'Add phase override', icon: 'plus', size: 'sm', act: 'toast', arg: 'Pick a phase to override' })], rows: [S.SettingRow({ stack: true, control: S.Hint({ text: 'compaction.phases is empty, so every phase uses the setting above.' }) })] });
+      S.SettingsGroup({ title: 'Per-phase overrides', end: [S.Button({ label: 'Add phase override', icon: 'plus', size: 'sm', act: 'toast', arg: 'Pick a phase to override' })], rows: Object.keys(c.phases).length
+        ? Object.entries(c.phases).map(([id, o]) => { const k = 'cmpphase:' + id; return S.ConfigRow({ label: id, desc: `compaction.phases.${id}`, value: `${fmtCount(o.window)} tokens · ${o.pct}%`, override: true, open: st.cfgOpen === k, act: 'cfg-open', arg: k, tags: [], editor: st.cfgOpen === k ? fieldEditor(st, [['window', 'Context window'], ['pct', 'Trigger percent']], 'Remove override') : '' }); })
+        : [S.SettingRow({ stack: true, control: S.Hint({ text: 'compaction.phases is empty, so every phase uses the setting above.' }) })] });
   }
   function setProject(st) {
     const project = D.projects[0];
@@ -445,7 +594,15 @@
         S.SettingRow({ labelHtml: '<span class="mono">.skill-bill/phases/review.md</span>', label: 'review.md', desc: '1.2 KiB of 16 KiB · read at launch for the review phase', control: S.Button({ label: 'Open', icon: 'external', size: 'sm', act: 'open-file', arg: '.skill-bill/phases/review.md' }) }),
         S.SettingRow({ stack: true, control: S.Hint({ text: 'Add <span class="mono">&lt;phase-id&gt;.md</span> to <span class="mono">.skill-bill/phases/</span> in the repository. Files are committed, so the team shares them.' }) }),
       ] }) +
-      S.SettingsGroup({ title: 'Review context budget', end: [S.Label({ text: '1 changed', color: 'var(--accent)' })], rows: D.BUDGET.map(([key, label, value, def]) => S.SettingRow({ label, desc: `${key}${value !== def ? ` · default ${def}` : ''}`, control: `<span class="mono ${value !== def ? 't-fg' : 't-faint'}" style="font-size:var(--t-sm)">${esc(value)}</span>` })), foot: 'Byte limits must be positive.' });
+      budgetGroup(st);
+  }
+  const budgetText = (key, n) => (key.endsWith('_bytes') ? (n % 1048576 === 0 ? `${n / 1048576} MiB` : n % 1024 === 0 ? `${n / 1024} KiB` : `${fmtCount(n)} B`) : fmtCount(n));
+  function budgetGroup(st) {
+    const changed = st.budget.filter(([, , v, def]) => v !== def).length;
+    return S.SettingsGroup({ title: 'Review context budget', end: changed ? [S.Label({ text: `${changed} changed`, color: 'var(--accent)' })] : null, rows: st.budget.map(([key, label, value, def]) => {
+      const k = 'budget:' + key;
+      return S.ConfigRow({ label, desc: `${key}${value !== def ? ` · default ${budgetText(key, def)}` : ''}`, value: budgetText(key, value), override: value !== def, open: st.cfgOpen === k, act: 'cfg-open', arg: k, tags: [], editor: st.cfgOpen === k ? fieldEditor(st, [['value', label]]) : '' });
+    }), foot: 'Byte limits must be positive.' });
   }
   function setTelemetry(st) {
     const agent = (n, installed) => S.SettingRow({ labelHtml: `<span class="l-row g-2">${S.Avatar({ name: n, initials: agentOf(n).initials, color: agentOf(n).color })}<span>${n}</span></span>`, label: n, desc: agentOf(n).modelCapable ? null : 'Cannot take a model or effort setting', control: S.Label({ text: installed ? 'detected' : 'not detected', color: installed ? 'var(--st-done)' : 'var(--fg-faint)' }) });
@@ -466,7 +623,7 @@
   }
 
   window.Screens = {
-    app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy,
+    app, work, detail, history, settingsPage, specsPane, terminal, tierOf, lookup, itemBy, subKeys, selectedSub, paneShown,
     statusIcon, stepText, clock, rowKey, repoOf, agentOf, LIFE, SECTIONS, resumable, controllable, pauseEligible, recoveryOffered,
     get rows() { return rows; },
   };

@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.runloop.durable.LEGACY_QUALITY_GATE_SELECTIO
 import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
@@ -57,6 +58,13 @@ class FeatureTaskRuntimeStatusService(
     val workflowCurrentStepId = recorder.phaseQuery.currentStepId(request.workflowId)
     return buildStatusProjection(request, records, decomposeTerminal, ledger, workflowCurrentStepId)
   }
+
+  fun phaseBriefingTexts(workflowId: String): Map<String, String> =
+    try {
+      recorder.loadPhaseBriefings(workflowId)?.mapValues { it.value.briefingText }.orEmpty()
+    } catch (_: SkillBillRuntimeException) {
+      emptyMap()
+    }
 
   fun phasePage(
     workflowId: String,

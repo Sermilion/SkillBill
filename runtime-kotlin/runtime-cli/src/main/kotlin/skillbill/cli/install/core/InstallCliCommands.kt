@@ -5,8 +5,10 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.install.InstallService
 import skillbill.application.scaffold.InstallAgentService
+import skillbill.application.uninstall.SkillBillUninstallService
 import skillbill.cli.install.apply.InstallRequestCommand
 import skillbill.cli.install.apply.installApplyPayload
 import skillbill.cli.install.apply.installPlanPayload
@@ -275,4 +277,50 @@ class InstallReplayLastSelectionCommand(
       append(if (mcpRegistrationChoice.register) "register" else "skip")
       append('\n')
     }
+}
+
+@Inject
+class InstallMigrateLegacyMachineConfigCommand(
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+  private val runtimeConfigEditService: RuntimeConfigEditService,
+) : DocumentedCliCommand(
+    "migrate-legacy-config",
+    "Move the legacy machine config to its durable path under the shared config lock.",
+  ) {
+  override fun run() {
+    if (state.refuseInstallMutationDuringGoalContinuation(inputs, "migrate-legacy-config")) return
+    val migrated = runtimeConfigEditService.migrateLegacyMachineConfig()
+    state.completeText(
+      if (migrated) "Migrated legacy machine config.\n" else "No legacy machine config migration was needed.\n",
+      emptyMap(),
+    )
+  }
+}
+
+@Inject
+class InstallClearStateCommand(
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+  private val uninstallService: SkillBillUninstallService,
+  private val runtimeConfigEditService: RuntimeConfigEditService,
+) : DocumentedCliCommand(
+    "clear-state",
+    "Clear install state while holding the shared machine config lock and preserving its lock files.",
+  ) {
+  override fun run() {
+    if (state.refuseInstallMutationDuringGoalContinuation(inputs, "clear-state")) return
+    val result =
+      uninstallService.clearInstallState(
+        runtimeConfigEditService.stateDir(),
+        inputs.userHome,
+        inputs.environment,
+        inputs.environment["SKILL_BILL_PRESERVE_SOURCE_ON_WIPE"] == "1",
+      )
+    state.completeText(
+      "Cleared ${result.removed.size} install state entries.\n" + result.warnings.joinToString(separator = "\n"),
+      emptyMap(),
+      exitCode = result.exitCode,
+    )
+  }
 }

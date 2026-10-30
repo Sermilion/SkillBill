@@ -2,6 +2,7 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.continuation.isRuntimeAgentId
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeOperatorDecisionPause
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.qa.capability.QaCapabilityResolution
@@ -14,6 +15,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
+import skillbill.engine.work.control.standaloneLaunchAgent
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -64,6 +66,7 @@ internal data class IdeStatusProjectionContext(
 internal data class IdeStatusProjection(
   val snapshot: IdeStatusSnapshot,
   val exactPauseReason: String?,
+  val executingAgentId: String? = null,
 )
 
 private data class GoalPauseReasonProjection(
@@ -151,6 +154,7 @@ class IdeStatusProjector(
       return IdeStatusProjection(
         projectStandalonePhase(context, record),
         resolveExecutionReason(record, context.unitOfWork).text,
+        standaloneLaunchAgent(record, context.unitOfWork),
       )
     }
     val projection =
@@ -238,7 +242,17 @@ class IdeStatusProjector(
             standalonePhaseStateSummary(record.phaseId, lifecycle, record.lifecycleState, record.qaOutcome),
             record.monitorTargetDetail(),
           ).joinToString(" "),
+      title = IdeStatusTitles.standalonePhase(record, seededPlanFeatureName(record, context)),
     )
+  }
+
+  private fun seededPlanFeatureName(
+    record: StandalonePhaseStatusRecord,
+    context: IdeStatusProjectionContext,
+  ): String? {
+    val issueKey = record.issueKey?.takeIf(String::isNotBlank) ?: return null
+    if (record.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN || record.planReport != null) return null
+    return planReports.seededFeatureName(issueKey, context.repoRoot)
   }
 
   private fun goalBackedRuntimeSnapshot(
@@ -269,7 +283,7 @@ class IdeStatusProjector(
     if (!goalShowsOpenCiMonitor(projection, preliminaryLifecycle) && !liveFinalization) {
       return null
     }
-    return assembleGoalStatusSnapshot(goalCandidate, context, issueKey, projection)
+    return assembleGoalStatusSnapshot(goalCandidate, context, issueKey, projection, manifestState.manifest.featureName)
   }
 
   private fun projectGoal(
@@ -288,7 +302,8 @@ class IdeStatusProjector(
           includeCompletedSubtaskValidation = false,
         ),
       )
-    return assembleGoalStatusSnapshot(candidate, context, issueKey, projection)
+    val featureName = manifestStore.loadDurableByIssueKey(issueKey, context.repoRoot)?.manifest?.featureName
+    return assembleGoalStatusSnapshot(candidate, context, issueKey, projection, featureName)
   }
 
   private fun assembleGoalStatusSnapshot(
@@ -296,6 +311,7 @@ class IdeStatusProjector(
     context: IdeStatusProjectionContext,
     issueKey: String,
     projection: GoalRunnerStatusProjection?,
+    featureName: String?,
   ): IdeStatusProjection {
     val completionRecorded = projection?.admittedParentComplete() == true
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
@@ -361,8 +377,9 @@ class IdeStatusProjector(
           planningStep?.takeIf { lifecycle != IdeStatusLifecycleState.PAUSED }
             ?.let { goalPlanningSummary(issueKey, it) }
             ?: goalSnapshotSummary(issueKey, lifecycle, step.label, projection, childContext),
+        title = IdeStatusTitles.goal(featureName, issueKey),
       )
-    return IdeStatusProjection(snapshot, pauseReason.exactText)
+    return IdeStatusProjection(snapshot, pauseReason.exactText, projection?.activeAgent?.takeIf(String::isNotBlank))
   }
 
   private fun goalSnapshotSummary(
@@ -573,8 +590,13 @@ class IdeStatusProjector(
             candidate.lifecycleState,
             stepLabel,
           ),
+        title = IdeStatusTitles.workflow(WorkflowFamily.TASK_RUNTIME, candidate.issueKey, context.branchCorrelation),
       )
-    return IdeStatusProjection(snapshot, status.operatorDecisionPause?.reason)
+    val executingAgentId =
+      status.phases.firstOrNull { it.status.workflowStepStatus() == WorkflowStepStatus.RUNNING }
+        ?.resolvedAgentId?.takeIf(String::isRuntimeAgentId)
+        ?: status.finalizingAgentId?.takeIf(String::isRuntimeAgentId)
+    return IdeStatusProjection(snapshot, status.operatorDecisionPause?.reason, executingAgentId)
   }
 
   private fun projectWorkflowFamily(
@@ -643,8 +665,24 @@ class IdeStatusProjector(
       updatedAt = updatedAt,
       freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
       summary = summary,
+      title = workflowTitle(candidate, context, family),
     )
   }
+
+  private fun workflowTitle(
+    candidate: IdeStatusCandidate,
+    context: IdeStatusProjectionContext,
+    family: WorkflowFamily,
+  ): String =
+    if (family == WorkflowFamily.TASK_RUNTIME) {
+      candidate.issueKey
+        ?.let { manifestStore.loadDurableByIssueKey(it, context.repoRoot) }
+        ?.takeIf { it.parentWorkflowId == candidate.workflowId }
+        ?.manifest?.featureName?.takeIf(String::isNotBlank)
+        ?: IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
+    } else {
+      IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
+    }
 
   private fun incompatible(
     candidate: IdeStatusCandidate,

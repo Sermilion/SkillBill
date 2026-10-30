@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.plan
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -31,6 +32,25 @@ class StandalonePlanReportBuilder(
     repoRoot: Path,
   ): StandalonePlanReport? =
     manifestStore.readByIssueKeyIfPresent(issueKey, repoRoot)?.manifest?.let { report(it, repoRoot) }
+
+  fun seededFeatureName(
+    issueKey: String,
+    repoRoot: Path,
+  ): String? {
+    val specsRoot = projectStore.resolve(repoRoot).specsRoot
+    val bundles =
+      try {
+        fileStore.listDirectChildDirectories(specsRoot)
+      } catch (error: IOException) {
+        return unlisted(specsRoot, error)
+      } catch (error: UncheckedIOException) {
+        return unlisted(specsRoot, error)
+      }
+    return bundles
+      .map { issueAndFeature(it.fileName.toString()) }
+      .singleOrNull { (key, _) -> key.equals(issueKey, ignoreCase = true) }
+      ?.second
+  }
 
   fun report(
     manifest: DecompositionManifest,
@@ -70,6 +90,19 @@ class StandalonePlanReportBuilder(
     } catch (error: UncheckedIOException) {
       unreadable(bundleDirectory, error)
     }
+
+  private fun unlisted(
+    specsRoot: Path,
+    error: Exception,
+  ): String? {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=plan_seeded_feature_name value_expected=$specsRoot listable value_used=null " +
+        "cause=${error::class.simpleName}",
+      error,
+    )
+    return null
+  }
 
   private fun unreadable(
     bundleDirectory: Path,

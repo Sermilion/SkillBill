@@ -15,6 +15,12 @@ class RuntimeComponentScopedIdentityTest {
     assertSame(first, second)
   }
 
+  @Test
+  fun `read connection release targets the factory that serves reads`() {
+    val component = runtimeComponent(Files.createTempDirectory("skillbill-read-connections"))
+    assertSame<Any>(component.databaseSession, component.databaseReadConnections)
+  }
+
   private fun runtimeComponent(userHome: Path): RuntimeComponent =
     RuntimeComponent::class.create(
       RuntimeContext(

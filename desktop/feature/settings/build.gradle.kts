@@ -1,0 +1,20 @@
+plugins {
+  id("skillbill.desktop.feature")
+}
+
+kotlin {
+  sourceSets.commonMain.dependencies {
+    implementation(projects.core.common)
+    implementation(projects.core.domain)
+    implementation(projects.core.designsystem)
+    implementation(projects.core.ui)
+  }
+  sourceSets.jvmTest.dependencies {
+    implementation(projects.feature.config)
+    implementation(projects.core.testing)
+    implementation(libs.compose.ui.test)
+    implementation(libs.kotlinx.coroutines.test)
+    implementation(libs.kotlin.test)
+    implementation(libs.junit.jupiter)
+  }
+}

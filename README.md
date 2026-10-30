@@ -39,7 +39,7 @@ It works with Claude Code, Codex, and Cursor. You install one skill, `/skill-bil
 curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh | bash
 ```
 
-The installer asks which agents to set up and which telemetry level to use. It downloads a self-contained runtime (no JDK or Gradle needed), installs every platform pack and the matched desktop app, links `/skill-bill` into your agents, and registers the MCP server. The desktop starts only when the installed runtime has the same build identity.
+The installer asks which agents to set up and which telemetry level to use. It downloads a self-contained runtime (no JDK or Gradle needed), installs every platform pack and the matched desktop app from `desktop/`, links `/skill-bill` into your agents, and registers the MCP server. The desktop starts only when the installed runtime has the same build identity.
 
 **2. Check the install.**
 

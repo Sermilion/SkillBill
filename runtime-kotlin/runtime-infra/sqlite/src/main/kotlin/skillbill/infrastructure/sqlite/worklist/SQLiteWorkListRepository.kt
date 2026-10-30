@@ -9,6 +9,7 @@ import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
+import skillbill.ports.work.model.WorkBoardAffectedCandidates
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
 import skillbill.ports.work.model.WorkGoalDependencyAnchor
@@ -37,6 +38,12 @@ internal class SQLiteWorkListRepository(
 ) : WorkListRepository {
   override fun boardCandidates(query: WorkBoardCandidateQuery): List<WorkBoardCandidateRow> =
     readWorkBoardCandidates(connection, query)
+
+  override fun boardCandidatesAffectedBy(
+    keys: Set<String>,
+    finishedFrom: Instant,
+    observedAt: Instant,
+  ): WorkBoardAffectedCandidates = readWorkBoardAffectedCandidates(connection, keys, finishedFrom, observedAt)
 
   override fun goalSubtaskPage(
     workflowId: String,

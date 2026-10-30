@@ -10,6 +10,7 @@ import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunTarget
+import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
 import skillbill.ports.work.model.WorkRecoveryPreviewResult
@@ -88,8 +89,13 @@ class WorkControlRecovery(
     confirmedPrerequisites: Set<BlockIncidentPrerequisiteKind>,
   ): WorkRecoveryPreviewResult {
     val basis =
-      recovery.requestBasis(incidentToken)
-        ?: return WorkRecoveryPreviewResult.Rejected(WorkControlRejection.NOT_FOUND.name.lowercase())
+      when (val fenced = recovery.requestBasis(incidentToken, target.databaseFileObservation)) {
+        FencedTransactionResult.ChangedTarget ->
+          return WorkRecoveryPreviewResult.Rejected(WorkControlRejection.CHANGED_TARGET.name.lowercase())
+        is FencedTransactionResult.Committed ->
+          fenced.value
+            ?: return WorkRecoveryPreviewResult.Rejected(WorkControlRejection.NOT_FOUND.name.lowercase())
+      }
     val result =
       recovery.preview(request(target, incidentToken, basis.incidentRevision, basis.action, confirmedPrerequisites))
     return when (result) {
@@ -110,8 +116,12 @@ class WorkControlRecovery(
     agentId: String?,
   ): WorkControlResult {
     val basis =
-      recovery.requestBasis(incidentToken)
-        ?: return WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
+      when (val fenced = recovery.requestBasis(incidentToken, target.databaseFileObservation)) {
+        FencedTransactionResult.ChangedTarget -> return WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+        is FencedTransactionResult.Committed ->
+          fenced.value
+            ?: return WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
+      }
     val result =
       recovery.apply(request(target, incidentToken, incidentRevision, basis.action, confirmedPrerequisites))
     return when (result) {
@@ -174,17 +184,26 @@ class WorkControlRecovery(
   ): WorkControlResult {
     val id = attempt.targetInvocationId ?: attempt.targetWorkflowId
     val item =
-      status.detail(WorkDetailRequest(id)).item
-        ?: return WorkControlResult.Rejected(WorkControlRejection.UNKNOWN_TARGET)
+      when (
+        val result =
+          recovery.fencedRead(requested.databaseFileObservation) {
+            status.detail(WorkDetailRequest(id)).item
+          }
+      ) {
+        FencedTransactionResult.ChangedTarget -> return WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+        is FencedTransactionResult.Committed ->
+          result.value
+            ?: return WorkControlResult.Rejected(WorkControlRejection.UNKNOWN_TARGET)
+      }
     val root = Path.of(item.repositoryRoot).toAbsolutePath().normalize()
-    if (item.snapshot.repositoryIdentity != requested.repositoryIdentity ||
-      root != requested.repositoryRoot.toAbsolutePath().normalize()
-    ) {
-      return WorkControlResult.Rejected(WorkControlRejection.UNKNOWN_TARGET)
-    }
-    if (item.databaseFileObservation != requested.databaseFileObservation) {
-      return WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
-    }
+    val rejection =
+      when {
+        item.snapshot.repositoryIdentity != requested.repositoryIdentity ||
+          root != requested.repositoryRoot.toAbsolutePath().normalize() -> WorkControlRejection.UNKNOWN_TARGET
+        item.databaseFileObservation != requested.databaseFileObservation -> WorkControlRejection.CHANGED_TARGET
+        else -> null
+      }
+    if (rejection != null) return WorkControlResult.Rejected(rejection)
     val resumed =
       WorkRunTarget(
         id,

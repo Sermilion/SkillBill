@@ -5,20 +5,12 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.LinkOption
 import java.nio.file.Path
 
 internal fun reconcileNativeAgentLinkInventoryLocked(request: NativeAgentLinkInventoryLockedReconcileRequest) {
   val trustedRoots = NativeAgentLinkInventoryPaths.canonicalManagedCacheRoots(request.home, request.managedRoots)
   val previous =
-    loadPreviousNativeAgentLinkInventory(
-      request.path,
-      request.home,
-      trustedRoots,
-      request.sourceRoot,
-      request.beforeMutation,
-    )
+    loadPreviousNativeAgentLinkInventory(request, trustedRoots)
   val desiredPaths = request.desired.map { it.installedPath.normalize() }.toSet()
   previous.filter { it.provider == request.provider && it.installedPath.normalize() !in desiredPaths }
     .forEach { stale ->
@@ -26,7 +18,7 @@ internal fun reconcileNativeAgentLinkInventoryLocked(request: NativeAgentLinkInv
     }
   val retained =
     previous.filter { it.provider != request.provider }.filter { entry ->
-      if (NativeAgentLinkInventoryDecode.isSemanticallyValid(entry, request.home, trustedRoots)) {
+      if (NativeAgentLinkInventoryDecode.isSemanticallyValid(entry, request.home, trustedRoots, request.environment)) {
         true
       } else {
         NativeAgentLinkInventoryBootstrap.removeIfStillManaged(
@@ -45,6 +37,7 @@ internal fun reconcileNativeAgentLinkInventoryLocked(request: NativeAgentLinkInv
         entries = (retained + request.desired).sortedWith(compareBy({ it.provider }, { it.installedPath.toString() })),
         home = request.home,
         managedRoots = trustedRoots,
+        environment = request.environment,
         mapper = request.mapper,
         schema = request.schema,
         beforeMutation = request.beforeMutation,
@@ -67,18 +60,21 @@ private fun reconcileError(
   InvalidNativeAgentLinkInventoryReconcileError(path = path.toString(), reason = reason, cause = cause)
 
 private fun loadPreviousNativeAgentLinkInventory(
-  path: Path,
-  home: Path,
+  request: NativeAgentLinkInventoryLockedReconcileRequest,
   trustedRoots: List<Path>,
-  sourceRoot: Path,
-  beforeMutation: (Path) -> Unit,
 ): List<NativeAgentLinkInventoryEntry> =
-  if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-    NativeAgentLinkInventory.read(home, trustedRoots, sourceRoot)
+  if (NativeAgentLinkInventory.inventoryPathExists(request.path)) {
+    NativeAgentLinkInventory.read(request.home, trustedRoots, request.sourceRoot, request.environment)
   } else {
-    val bootstrap = NativeAgentLinkInventoryBootstrap.bootstrap(home, trustedRoots, sourceRoot)
+    val bootstrap =
+      NativeAgentLinkInventoryBootstrap.bootstrap(
+        request.home,
+        trustedRoots,
+        request.sourceRoot,
+        request.environment,
+      )
     bootstrap.remove.forEach { remove ->
-      NativeAgentLinkInventoryBootstrap.removeIfStillManaged(remove, home, trustedRoots, beforeMutation)
+      NativeAgentLinkInventoryBootstrap.removeIfStillManaged(remove, request.home, trustedRoots, request.beforeMutation)
     }
     bootstrap.retain
   }

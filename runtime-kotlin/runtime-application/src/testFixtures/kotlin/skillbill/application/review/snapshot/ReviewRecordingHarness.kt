@@ -38,6 +38,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -498,6 +499,11 @@ private fun recordingDatabase(
       }
     } as UnitOfWork
   return object : DatabaseSessionFactory {
+    override fun acquireDatabasePathProtection() =
+      DatabasePathProtectionResult.Unavailable(
+        "Database path protection is not available.",
+      )
+
     override fun resolveDbPath() = unitOfWork.dbPath
 
     override fun databaseExists() = true

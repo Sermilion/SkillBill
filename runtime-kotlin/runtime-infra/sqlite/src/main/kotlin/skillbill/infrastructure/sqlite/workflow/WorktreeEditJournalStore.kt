@@ -3,11 +3,11 @@ package skillbill.infrastructure.sqlite.workflow
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.core.ops.parseWorktreeEditJournalInstant
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
 import java.sql.Connection
 import java.time.Instant
-import java.time.format.DateTimeParseException
 
 internal class WorktreeEditJournalStore(
   private val connection: Connection,
@@ -20,14 +20,7 @@ internal class WorktreeEditJournalStore(
     if (tick.entries.isEmpty()) return
     val latest = latestTick(workflowId)
     if (latest != null && tick.recordedAt.isBefore(latest.recordedAt)) return
-    if (latest != null && tick.recordedAt == latest.recordedAt) {
-      connection.prepareStatement(
-        "DELETE FROM worktree_edit_journal WHERE workflow_id = ? AND recorded_at = ?",
-      ).use { statement ->
-        statement.bindAll(workflowId, tick.recordedAt.toString())
-        statement.executeUpdate()
-      }
-    }
+    deleteInstants(workflowId) { existing -> existing == tick.recordedAt }
     connection.prepareStatement(
       """
       INSERT INTO worktree_edit_journal (
@@ -53,23 +46,24 @@ internal class WorktreeEditJournalStore(
 
   override fun latestTick(workflowId: String): WorktreeEditTick? {
     if (workflowId.isBlank()) return null
+    val latestInstant = latestInstant(workflowId) ?: return null
     return connection.prepareStatement(
       """
       SELECT phase_id, recorded_at, path, lines_added, lines_removed, source
       FROM worktree_edit_journal
       WHERE workflow_id = ?
-        AND recorded_at = (SELECT MAX(recorded_at) FROM worktree_edit_journal WHERE workflow_id = ?)
       ORDER BY id
       """.trimIndent(),
     ).use { statement ->
-      statement.bindAll(workflowId, workflowId)
+      statement.bindAll(workflowId)
       statement.executeQuery().use { resultSet ->
         var tick: WorktreeEditTick? = null
         val entries = mutableListOf<GoalObservabilityFileDiffStat>()
         while (resultSet.next()) {
-          val recordedAt = parseInstant(resultSet.getString("recorded_at"))
-          val source = recordedAt?.let { WorktreeEditSource.fromWire(resultSet.getString("source")) }
-          if (recordedAt != null && source != null) {
+          val recordedAt = parseWorktreeEditJournalInstant(resultSet.getString("recorded_at"))
+          if (recordedAt != latestInstant) continue
+          val source = WorktreeEditSource.fromWire(resultSet.getString("source"))
+          if (source != null) {
             if (tick == null) {
               tick =
                 WorktreeEditTick(
@@ -92,65 +86,54 @@ internal class WorktreeEditJournalStore(
     }
   }
 
-  override fun trimToCap(
+  override fun deleteTicksBefore(
     workflowId: String,
-    maxRows: Int,
+    recordedAt: Instant,
   ): Int {
-    if (workflowId.isBlank() || maxRows < 0) return 0
-    var deleted = 0
-    while (true) {
-      val oldest = nextTrimTarget(workflowId, maxRows) ?: break
-      deleted +=
-        connection.prepareStatement(
-          "DELETE FROM worktree_edit_journal WHERE workflow_id = ? AND recorded_at = ?",
-        ).use { statement ->
-          statement.bindAll(workflowId, oldest)
-          statement.executeUpdate()
+    if (workflowId.isBlank()) return 0
+    return deleteInstants(workflowId) { existing -> existing.isBefore(recordedAt) }
+  }
+
+  private fun latestInstant(workflowId: String): Instant? =
+    connection.prepareStatement(
+      "SELECT DISTINCT recorded_at FROM worktree_edit_journal WHERE workflow_id = ?",
+    ).use { statement ->
+      statement.bindAll(workflowId)
+      statement.executeQuery().use { resultSet ->
+        var latest: Instant? = null
+        while (resultSet.next()) {
+          val candidate = parseWorktreeEditJournalInstant(resultSet.getString("recorded_at"))
+          if (latest == null || candidate.isAfter(latest)) latest = candidate
         }
+        latest
+      }
     }
-    return deleted
-  }
 
-  private fun nextTrimTarget(
+  private fun deleteInstants(
     workflowId: String,
-    maxRows: Int,
-  ): String? {
-    if (rowCount(workflowId) <= maxRows) return null
-    val oldest = oldestRecordedAt(workflowId) ?: return null
-    val newest = newestRecordedAt(workflowId) ?: return null
-    return oldest.takeUnless { it == newest }
-  }
-
-  private fun rowCount(workflowId: String): Int =
-    connection.prepareStatement(
-      "SELECT COUNT(*) FROM worktree_edit_journal WHERE workflow_id = ?",
-    ).use { statement ->
-      statement.bindAll(workflowId)
-      statement.executeQuery().use { resultSet -> if (resultSet.next()) resultSet.getInt(1) else 0 }
-    }
-
-  private fun oldestRecordedAt(workflowId: String): String? =
-    connection.prepareStatement(
-      "SELECT MIN(recorded_at) FROM worktree_edit_journal WHERE workflow_id = ?",
-    ).use { statement ->
-      statement.bindAll(workflowId)
-      statement.executeQuery().use { resultSet -> if (resultSet.next()) resultSet.getString(1) else null }
-    }
-
-  private fun newestRecordedAt(workflowId: String): String? =
-    connection.prepareStatement(
-      "SELECT MAX(recorded_at) FROM worktree_edit_journal WHERE workflow_id = ?",
-    ).use { statement ->
-      statement.bindAll(workflowId)
-      statement.executeQuery().use { resultSet -> if (resultSet.next()) resultSet.getString(1) else null }
-    }
-
-  private fun parseInstant(raw: String?): Instant? {
-    if (raw.isNullOrBlank()) return null
-    return try {
-      Instant.parse(raw)
-    } catch (_: DateTimeParseException) {
-      null
+    shouldDelete: (Instant) -> Boolean,
+  ): Int {
+    val timestamps =
+      connection.prepareStatement(
+        "SELECT DISTINCT recorded_at FROM worktree_edit_journal WHERE workflow_id = ?",
+      ).use { statement ->
+        statement.bindAll(workflowId)
+        statement.executeQuery().use { resultSet ->
+          buildList {
+            while (resultSet.next()) {
+              val raw = resultSet.getString("recorded_at")
+              if (shouldDelete(parseWorktreeEditJournalInstant(raw))) add(raw)
+            }
+          }
+        }
+      }
+    return timestamps.sumOf { timestamp ->
+      connection.prepareStatement(
+        "DELETE FROM worktree_edit_journal WHERE workflow_id = ? AND recorded_at = ?",
+      ).use { statement ->
+        statement.bindAll(workflowId, timestamp)
+        statement.executeUpdate()
+      }
     }
   }
 }

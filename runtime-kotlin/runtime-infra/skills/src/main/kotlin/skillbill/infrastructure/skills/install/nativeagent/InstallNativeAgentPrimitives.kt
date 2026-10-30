@@ -1,6 +1,5 @@
 package skillbill.infrastructure.skills.install.nativeagent
 
-import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.link.uninstallNativeAgentFiles
 import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentFilesByDir
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
@@ -21,13 +20,12 @@ internal fun discoverCodexAgentTomls(
 
 internal fun uninstallCodexAgentTomls(
   platformPacksRoot: Path,
-  home: Path? = null,
-  skillsRoot: Path? = null,
-  selectedPlatforms: List<String>? = null,
+  skillsRoot: Path?,
+  selectedPlatforms: List<String>?,
+  agentDirs: List<Path>,
 ): List<Path> {
-  val resolvedHome = home ?: resolveUserHome(null)
   return uninstallNativeAgentFiles(
     discoverCodexAgentTomls(platformPacksRoot, skillsRoot, selectedPlatforms),
-    NativeAgentProvider.Codex.homeAgentDirs(resolvedHome),
+    agentDirs,
   )
 }

@@ -74,11 +74,11 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install Linux tray build dependencies
+      - name: Install Linux desktop build dependencies
         if: matrix.host_token == 'linux-x64'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential pkg-config libsystemd-dev
+          sudo apt-get install --yes build-essential pkg-config libsystemd-dev xvfb xauth
 
       # Derive RELEASE_VERSION from the pushed tag (v0.2.0 → 0.2.0) or the
       # staging_version input (workflow_dispatch). Gradle reads this env var in
@@ -111,11 +111,11 @@ jobs:
           cd runtime-kotlin
           ./gradlew --no-configuration-cache :runtime-cli:runtimeZip :runtime-mcp:runtimeZip
 
-      - name: Build desktop tray distribution
+      - name: Build desktop distribution
         shell: bash
         env:
           SKILL_BILL_INSTALL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-        run: (cd desktop-tray && ./gradlew clean check createDistributable --no-build-cache --no-configuration-cache)
+        run: (cd desktop && ./gradlew clean check createDistributable --no-build-cache --no-configuration-cache)
 
       # The installer refuses a runtime and desktop pair whose build identity
       # records differ, so a release must never publish one.
@@ -129,7 +129,7 @@ jobs:
           while IFS= read -r -d '' found_record; do
             desktop_record="$found_record"
             desktop_record_count=$((desktop_record_count + 1))
-          done < <(find desktop-tray/composeApp/build/compose/binaries/main/app \
+          done < <(find desktop/app/build/compose/binaries/main/app \
             -name build-identity.properties -type f -print0)
           if [[ "$desktop_record_count" -ne 1 ]]; then
             echo "Expected one desktop build identity record, found $desktop_record_count." >&2
@@ -146,13 +146,13 @@ jobs:
           tar -czf "$archive" LICENSE skills/ platform-packs/ orchestration/ uninstall.sh
           sha256sum "$archive" > "${archive}.sha256"
 
-      - name: Bundle desktop tray archive
+      - name: Bundle desktop app archive
         shell: bash
         env:
           HOST_TOKEN: ${{ matrix.host_token }}
         run: |
           set -euo pipefail
-          app_dir="desktop-tray/composeApp/build/compose/binaries/main/app"
+          app_dir="desktop/app/build/compose/binaries/main/app"
           [[ -d "$app_dir" ]] || { echo "Missing desktop distribution: $app_dir." >&2; exit 1; }
           stage_dir="$(mktemp -d)"
           trap 'rm -rf "$stage_dir"' EXIT

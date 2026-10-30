@@ -258,6 +258,15 @@ highest applied migration version in the same transaction that records ledger ro
 and `DatabaseMigrations.apply`; column ensure, diagnostic-evidence heal, work-list
 heal, and one-time legacy goal-runner and telemetry repairs are named ledger migrations.
 
+`GoalRunner.recordGoalCompletion` truncates the WAL after its control-state commit for
+both terminal success outcomes, `Completed` and `CompletedNoChange`. The owned worker
+release truncates it after a successful fenced release commits when no `active` or
+`takeover_reserved` lease remains. Both calls run outside transactions and are best
+effort, so ordinary checkpoint failures do not change the caller's result. A blocked
+checkpoint returns `Busy`, records a diagnostic, and gets another attempt at the next
+boundary. No timer runs checkpoints. `journal_mode` and `wal_autocheckpoint` stay
+unchanged. `worktree_edit_journal` retains only each workflow's latest tick.
+
 `DatabaseWriteReadinessGate` compares the `DatabaseIdentity` snapshot already read
 for each cache decision (`DatabaseIdentity.matches`) instead of rereading the file
 through `matchesFile`. Unreadable database files raise a `DatabaseFailureCode.ACCESS` failure for `READ` from
@@ -265,6 +274,11 @@ identity read and do not trigger migrate-on-access re-establishment. The synchro
 initialization path still performs a second identity observation after acquiring the lock.
 `DatabaseWriteReadinessTest` exercises the gate through `sqliteSessionFactoryForTests`
 and recording diagnostics instead of production-only counters.
+
+`work_board_read_model_state.complete = 0` marks an unbuilt board read model. Migration 89 resets
+that flag once because older change journals did not retain removed grouping and association
+facts. The first write transaction after upgrade rebuilds all board rows and sets `complete = 1`.
+That rebuild is the read model's initialization boundary. Later writes refresh only changed work ids.
 
 `:runtime-infra:sqlite` `testFixtures` own cross-module database evidence:
 `establishTemporarySchemaReadiness` returns a temp directory, database path, and
@@ -365,6 +379,8 @@ Packaged CLI and MCP candidates check their own bundled schema pins through a da
 Child creation hydrates the shared preplan and child's plan as completed dependencies with goal-planning provenance. They add no child execution duration, tokens, or agent attribution. A retired standalone feature-task workflow keeps its recorded preplan and plan phases, readable and abandonable, and is never resumed.
 
 Runtime worker ownership is mutable state kept separately from immutable execution identity. A worker lease records a random owner token, monotonic fencing generation, host and boot identity, PID plus process-birth evidence, heartbeat/expiry, and the incomplete phase attempt. Every heartbeat, phase write, takeover reservation, transfer, and release must match both token and generation. Process liveness is exact only when host, boot, PID, and birth evidence agree; unverifiable or mismatched ownership must fail loudly instead of terminating a process or creating a replacement workflow. Confirmed takeover first reserves ownership with compare-and-set, then requests graceful shutdown and escalates only if the same process identity remains live.
+
+The worker release is the idle checkpoint boundary: after the fenced release commits, it checkpoints only when no active or takeover-reserved lease remains.
 
 A non-terminal row orphaned by a killed child process self-heals: when its worker lease has expired and the injected supervisor confirms the process dead (only `NotRunning`; a live process, an active lease, or ambiguous evidence is left untouched), the row transitions to the resumable `pending` state at its existing step and the lease is released under owner-token/generation fencing. The pass runs unconditionally at runner startup and in the goal parent's child-supervision seam, before the resume point is resolved, and is idempotent and concurrent-safe through the lease machinery. Manual lease clearing and out-of-band row deletion remain the corruption fallback only.
 
@@ -713,8 +729,10 @@ generation before the goal body runs. Shutdown-hook registration failure stops
 the heartbeat and releases the lease before surfacing the registration error.
 
 Teardown runs in order: unregister the shutdown hook, stop the heartbeat, release
-the execution lease. Each step uses `runCatching` so a secondary failure does
-not skip later cleanup. A goal-body or cancellation failure remains primary;
+the parent execution lease. The worker-lease idle checkpoint boundary belongs to
+`FeatureTaskRuntimeWorkerCoordinator` and is documented in DB-first feature-task
+continuation. Each step uses `runCatching` so a secondary failure does not skip later
+cleanup. A goal-body or cancellation failure remains primary;
 secondary teardown failures attach as suppressed exceptions. A body that
 completed normally still fails the run when required teardown fails.
 

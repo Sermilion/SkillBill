@@ -1,0 +1,21 @@
+platform: "kotlin"
+contract_version: "1.8"
+routing_signals:
+  strong: [".kotlin", "*.kotlin"]
+  tie_breakers:
+    - "Prefer kotlin when kotlin source signals dominate the changed product surface."
+    - "Do not prefer kotlin when an adjacent pack's declared signals dominate."
+    - "Exclude generated and vendored files from dominance scoring."
+declared_code_review_areas: [architecture]
+declared_files:
+  baseline: "code-review/bill-kotlin-code-review/content.md"
+  areas:
+    architecture: "code-review/bill-kotlin-code-review-architecture/content.md"
+area_metadata:
+  architecture:
+    focus: "kotlin architecture boundary APIs and failure modes"
+display_name: "kotlin"
+declared_quality_check_file: "quality-check/bill-kotlin-code-check/content.md"
+pointers:
+  code-review/bill-kotlin-code-review: []
+  code-review/bill-kotlin-code-review-architecture: []

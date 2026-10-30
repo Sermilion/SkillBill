@@ -22,6 +22,7 @@ class RuntimeWorkMapperStallTest {
     updatedAt = now.minusSeconds(10),
     freshness = IdeStatusFreshness.FRESH,
     summary = "Goal SKILL-1 is active on QA.",
+    title = "SKILL-1",
     issueKey = "SKILL-1",
     workflowId = "goal-1",
     workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,

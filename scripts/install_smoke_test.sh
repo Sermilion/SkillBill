@@ -186,6 +186,17 @@ case "$cmd" in
   "install detect-agents")
     ;;
 
+  "install clear-state")
+    state_root="${SKILL_BILL_STATE_DIR:-${home_dir:-$HOME}/.skill-bill}"
+    entries=(runtime installed-skills)
+    if [[ "${SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" != 1 ]]; then
+      entries+=(skills platform-packs orchestration agent-addons baseline-manifest.json .stale-cache)
+    fi
+    for entry in "${entries[@]}"; do
+      rm -rf "$state_root/$entry"
+    done
+    ;;
+
   *)
     ;;
 esac

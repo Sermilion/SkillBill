@@ -7,9 +7,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldPlan
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldRuntimeContext
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldTransaction
 import skillbill.install.model.ExternalPlatformPackSource
-import skillbill.model.toPath
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackRootRequest
-import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceConfigRequest
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceRegistrationRequest
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceUnregisterRequest
 import skillbill.ports.install.platformpack.model.PlatformPackCatalogRequest
@@ -48,27 +46,21 @@ internal fun registerPlannedExternalPlatformPack(
         ),
     ),
   )
-  val before =
-    store.readExternalPlatformPackSources(
-      ExternalPlatformPackSourceConfigRequest(userHome = runtime.userHome, environment = runtime.environment),
-    ).sources
   val source = ExternalPlatformPackSource(normalizedRoot.toFileLocation())
-  store.registerExternalPlatformPackSource(
-    ExternalPlatformPackSourceRegistrationRequest(
-      userHome = runtime.userHome,
-      environment = runtime.environment,
-      source = source,
-    ),
-  )
-  val alreadyPresent =
-    before.any { existing ->
-      existing.path.toPath().toAbsolutePath().normalize() == normalizedRoot
-    }
-  if (!alreadyPresent) {
+  val registration =
+    store.registerExternalPlatformPackSource(
+      ExternalPlatformPackSourceRegistrationRequest(
+        userHome = runtime.userHome,
+        environment = runtime.environment,
+        source = source,
+      ),
+    )
+  if (registration.inserted) {
     txn.registeredExternalPackRoot = normalizedRoot
     txn.externalPackConfigHome = runtime.userHome
     txn.externalPackConfigEnvironment = runtime.environment
     txn.packSourceConfig = store
+    txn.externalPackPreviousFieldState = registration.previousFieldState
   }
 }
 
@@ -86,6 +78,7 @@ internal fun rollbackRegisteredExternalPlatformPack(
           userHome = home,
           environment = txn.externalPackConfigEnvironment,
           source = ExternalPlatformPackSource(root.toFileLocation()),
+          restoreEmptyFieldState = txn.externalPackPreviousFieldState,
         ),
       )
     }.exceptionOrNull() ?: return

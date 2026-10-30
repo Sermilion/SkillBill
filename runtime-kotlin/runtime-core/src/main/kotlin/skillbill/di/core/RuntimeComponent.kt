@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Component
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.agentrun.AgentRunService
 import skillbill.application.config.ConfigResolutionService
+import skillbill.application.config.RuntimeConfigEditService
 import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.application.install.InstallService
@@ -72,6 +73,7 @@ import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.specbrowser.SpecBrowserService
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.WorkBoardReadModelProjection
 import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
@@ -79,6 +81,7 @@ import skillbill.infrastructure.host.blockincident.FileProductReportDeliveryOwne
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.host.process.EnvironmentGhProductIssueCredential
 import skillbill.infrastructure.host.projectstore.ProjectStoreResolver
+import skillbill.infrastructure.host.system.FileConfigDocumentFiles
 import skillbill.infrastructure.host.system.FileSystemProjectConfigFile
 import skillbill.infrastructure.host.system.PackagedRuntimeBuildIdentity
 import skillbill.infrastructure.host.system.ProcessFileEditorLauncher
@@ -97,12 +100,16 @@ import skillbill.ports.blockincident.ProductIssueCredentialPort
 import skillbill.ports.blockincident.ProductIssueTrackerPort
 import skillbill.ports.blockincident.ProductReportDeliveryOwnershipPort
 import skillbill.ports.concurrency.InterruptSignalPort
+import skillbill.ports.config.ConfigDocumentFiles
 import skillbill.ports.config.ProjectConfigFilePort
+import skillbill.ports.db.DatabaseCheckpoint
+import skillbill.ports.db.DatabaseReadConnections
 import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.editor.FileEditorLauncherPort
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
@@ -232,16 +239,19 @@ abstract class RuntimeComponent(
   fun projectConfigFilePort(adapter: FileSystemProjectConfigFile): ProjectConfigFilePort = adapter
 
   @Provides
+  fun configDocumentFiles(adapter: FileConfigDocumentFiles): ConfigDocumentFiles = adapter
+
+  @Provides
   fun fileEditorLauncherPort(adapter: ProcessFileEditorLauncher): FileEditorLauncherPort = adapter
 
   @Provides @RuntimeSingleton
-  fun databaseSessionFactory(
+  internal fun sqliteDatabaseSessionFactory(
     context: EnvironmentContext,
     clock: Clock,
     diagnostics: RuntimeDiagnostics,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
     blockIncidentContractValidator: BlockIncidentContractValidator,
-  ): DatabaseSessionFactory =
+  ): SQLiteDatabaseSessionFactory =
     SQLiteDatabaseSessionFactory(
       context,
       clock,
@@ -249,7 +259,22 @@ abstract class RuntimeComponent(
       workflowSnapshotValidator,
       runtimeVersion().value,
       blockIncidentContractValidator,
+      lazy { boardReadModelProjector() },
     )
+
+  @Provides @RuntimeSingleton
+  fun workBoardReadModelProjector(impl: WorkBoardReadModelProjection): WorkBoardReadModelProjector = impl
+
+  internal abstract fun boardReadModelProjector(): WorkBoardReadModelProjector
+
+  @Provides
+  fun databaseSessionFactory(factory: SQLiteDatabaseSessionFactory): DatabaseSessionFactory = factory
+
+  @Provides
+  fun databaseCheckpoint(factory: SQLiteDatabaseSessionFactory): DatabaseCheckpoint = factory
+
+  @Provides
+  fun databaseReadConnections(factory: SQLiteDatabaseSessionFactory): DatabaseReadConnections = factory
 
   @Provides
   fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter
@@ -286,6 +311,7 @@ abstract class RuntimeComponent(
   abstract val operationExecutor: OperationExecutor
   abstract val operationRegistry: OperationRegistry
   abstract val configResolutionService: ConfigResolutionService
+  abstract val runtimeConfigEditService: RuntimeConfigEditService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService
   abstract val externalAddonOverlayService: ExternalAddonOverlayService
@@ -334,5 +360,6 @@ abstract class RuntimeComponent(
 
   abstract val ideStatusService: IdeStatusService
   abstract val databaseSession: DatabaseSessionFactory
+  abstract val databaseReadConnections: DatabaseReadConnections
   abstract val databaseSchema: DatabaseSchemaPort
 }

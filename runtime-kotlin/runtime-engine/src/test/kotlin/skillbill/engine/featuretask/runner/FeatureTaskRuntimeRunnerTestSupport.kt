@@ -126,6 +126,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
@@ -2166,6 +2167,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
   private val lifecycle: LifecycleTelemetryRepository = RecordingLifecycleTelemetryRepository(),
   private val knownIssue: Boolean = true,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   private val dbPath = Path.of("/fake/metrics.db")
   val activityStamps = linkedMapOf<String, AgentActivityStamp>()
   private val activityStampRepository =
@@ -2394,6 +2398,8 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
   private val workerOwnership = mutableMapOf<String, FeatureTaskRuntimeWorkerOwnership>()
   private val workerGenerations = mutableMapOf<String, FeatureTaskRuntimeWorkerGenerationObservation>()
   private val goalChildWorkflowIds = mutableMapOf<String, List<String>>()
+
+  override fun hasActiveFeatureTaskRuntimeWorkerLeases(): Boolean = synchronized(this) { workerOwnership.isNotEmpty() }
 
   fun seedGoalChildWorkflowIds(
     parentWorkflowId: String,

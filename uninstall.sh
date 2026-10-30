@@ -364,13 +364,19 @@ build_kotlin_runtime_distribution() {
 }
 
 run_runtime_cli() {
-  local runtime_cli="$RUNTIME_CLI_BIN"
+  local runtime_cli="${SKILL_BILL_STAGED_RUNTIME_CLI:-$RUNTIME_CLI_BIN}"
+  if [[ -n "${SKILL_BILL_STAGED_RUNTIME_CLI:-}" && ! -x "$runtime_cli" ]]; then
+    return 1
+  fi
   if [[ ! -x "$runtime_cli" && -x "$RUNTIME_CLI_BUILD_BIN" ]]; then
     runtime_cli="$RUNTIME_CLI_BUILD_BIN"
   fi
   # No runnable runtime CLI means nothing was ever installed via it; callers treat
   # empty output as "nothing to remove", so no-op instead of aborting under set -e.
-  if [[ ! -x "$RUNTIME_CLI_BIN" && ! -x "$RUNTIME_CLI_BUILD_BIN" ]]; then
+  if [[ -z "${SKILL_BILL_STAGED_RUNTIME_CLI:-}" && ! -x "$RUNTIME_CLI_BIN" && ! -x "$RUNTIME_CLI_BUILD_BIN" ]]; then
+    if [[ "${1:-}" == "install" && "${2:-}" == "clear-state" ]]; then
+      return 1
+    fi
     return 0
   fi
   "$runtime_cli" --home "$HOME" "$@"
@@ -933,47 +939,13 @@ remove_install_state() {
   if [[ ! -d "$SKILL_BILL_STATE_DIR" ]]; then
     return 0
   fi
-  # Reinstall clears only what the installer regenerates. Everything else under
-  # the state dir (QA workspaces and receipts, device leases, desktop settings,
-  # copied-in source) is runtime or user state the app still needs afterwards.
-  if [[ "${SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" == "1" ]]; then
-    info "Clearing regenerated install output for reinstall (preserving runtime and user state)."
-    local generated
-    for generated in \
-      "runtime" \
-      "installed-skills" \
-      ".candidate-source" \
-      "native-agent-link-inventory.json" \
-      "native-agent-link-inventory.json.lock"; do
-      rm -rf "${SKILL_BILL_STATE_DIR:?}/$generated"
-    done
-    ok "  cleared regenerated install output under $SKILL_BILL_STATE_DIR"
-    return 0
+  local output
+  if ! output="$(run_runtime_cli install clear-state 2>&1)"; then
+    err "Could not clear install state through a runtime that holds the config lock. State was left in place."
+    [[ -z "$output" ]] || err "$output"
+    return 1
   fi
-
-  info "Clearing skill-bill runtime/install state (preserving databases, backups and projects)."
-
-  local preserved=("backups" "projects")
-  local is_preserved entry name keep
-  for entry in "$SKILL_BILL_STATE_DIR"/* "$SKILL_BILL_STATE_DIR"/.[!.]* "$SKILL_BILL_STATE_DIR"/..?*; do
-    [[ -e "$entry" || -L "$entry" ]] || continue
-    name="$(basename "$entry")"
-    if [[ "$name" == *.db || "$name" == *.db-wal || "$name" == *.db-shm || "$name" == *.db-journal ]]; then
-      continue
-    fi
-    is_preserved=0
-    for keep in "${preserved[@]}"; do
-      if [[ "$name" == "$keep" ]]; then
-        is_preserved=1
-        break
-      fi
-    done
-    if [[ "$is_preserved" -eq 1 ]]; then
-      continue
-    fi
-    rm -rf "$entry"
-  done
-  ok "  cleared runtime/install state under $SKILL_BILL_STATE_DIR (databases, backups and projects preserved)"
+  [[ -z "$output" ]] || info "$output"
 }
 
 remove_install_state

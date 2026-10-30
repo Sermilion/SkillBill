@@ -9,25 +9,33 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.skills.install.nativeagent.parseEmbeddedLogicalName
+import skillbill.infrastructure.skills.nativeagent.support.agentObservedAttributes
+import skillbill.infrastructure.skills.nativeagent.support.rethrowAgentOperationInterruption
 import skillbill.install.model.SupportedAgent
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
+import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
+import java.nio.file.NotLinkException
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.coroutines.cancellation.CancellationException
+
+internal data class InventoryValidation(val mapper: ObjectMapper, val schema: JsonSchema)
 
 internal object NativeAgentLinkInventoryDecode {
   fun decode(
     path: Path,
     home: Path,
     managedRoots: List<Path>,
-    mapper: ObjectMapper,
-    schema: JsonSchema,
+    environment: Map<String, String>,
+    validation: InventoryValidation,
   ): List<NativeAgentLinkInventoryEntry> =
     try {
-      val root = readValidatedRoot(path, mapper, schema)
+      val root = readValidatedRoot(path, validation.mapper, validation.schema)
       val entries = decodeEntries(root, path)
-      validateDecodedEntries(entries, home, managedRoots, path)
+      validateDecodedEntries(entries, home, managedRoots, environment, path)
       entries
     } catch (error: CancellationException) {
       rethrow(error)
@@ -42,29 +50,184 @@ internal object NativeAgentLinkInventoryDecode {
     entries: List<NativeAgentLinkInventoryEntry>,
     home: Path,
     managedRoots: List<Path>,
+    environment: Map<String, String>,
   ) {
-    validateDecodedEntries(entries, home, managedRoots, Path.of("<semantic>"))
+    validateDecodedEntries(entries, home, managedRoots, environment, Path.of("<semantic>"))
   }
 
   fun isSemanticallyValid(
     entry: NativeAgentLinkInventoryEntry,
     home: Path,
     managedRoots: List<Path>,
+    environment: Map<String, String>,
+  ): Boolean = inspectSemanticEntry(entry, home, managedRoots, environment, requireObserved = false)
+
+  fun isBootstrapSemanticallyValid(
+    entry: NativeAgentLinkInventoryEntry,
+    home: Path,
+    managedRoots: List<Path>,
+    environment: Map<String, String>,
+  ): Boolean = inspectSemanticEntry(entry, home, managedRoots, environment, requireObserved = true)
+
+  private fun inspectSemanticEntry(
+    entry: NativeAgentLinkInventoryEntry,
+    home: Path,
+    managedRoots: List<Path>,
+    environment: Map<String, String>,
+    requireObserved: Boolean,
   ): Boolean {
-    return runCatching {
-      val provider = NativeAgentLinkInventoryPaths.provider(entry.provider)
-      val raw = Files.readSymbolicLink(entry.installedPath)
-      val resolved = entry.installedPath.parent.resolve(raw).toAbsolutePath().normalize()
-      entry.installedPath.fileName.toString() == provider.fileName(entry.logicalName) &&
-        Files.isSymbolicLink(entry.installedPath) &&
-        resolved == entry.cacheTargetPath &&
-        isCanonicalNativeAgentArtifactTarget(home, provider, entry.logicalName, resolved, managedRoots) &&
-        Files.isRegularFile(resolved) &&
-        Files.isReadable(resolved) &&
-        parseEmbeddedLogicalName(resolved, SupportedAgent.fromWire(entry.provider)) == entry.logicalName &&
-        sha256Hex(Files.readAllBytes(resolved)) == entry.contentDigest
-    }.getOrDefault(false)
+    val provider = NativeAgentLinkInventoryPaths.provider(entry.provider)
+    val allowedDirs = provider.homeAgentDirs(home, environment).map { it.toAbsolutePath().normalize() }.toSet()
+    val resolved = resolveSemanticTarget(entry.installedPath, provider.name, requireObserved) ?: return false
+    val digest = readSemanticDigest(resolved, requireObserved) ?: return false
+    val embeddedName = readEmbeddedName(resolved, entry.provider)
+    return entry.installedPath.fileName.toString() == provider.fileName(entry.logicalName) &&
+      entry.installedPath.parent in allowedDirs &&
+      resolved == entry.cacheTargetPath &&
+      isCanonicalNativeAgentArtifactTarget(home, provider, entry.logicalName, resolved, managedRoots) &&
+      embeddedName == entry.logicalName &&
+      digest == entry.contentDigest
   }
+
+  private fun resolveSemanticTarget(
+    installedPath: Path,
+    providerName: String,
+    requireObserved: Boolean,
+  ): Path? {
+    val linkAttributes =
+      readSemanticAttributes(
+        installedPath,
+        followLinks = false,
+        requireObserved = requireObserved,
+        operation = "inspect managed $providerName agent link",
+      ) ?: return null
+    if (!linkAttributes.isSymbolicLink) {
+      if (requireObserved) {
+        invalidSemanticState(installedPath, "managed link is no longer symbolic")
+      }
+      return null
+    }
+    val resolved = semanticLinkPath(installedPath, requireObserved) ?: return null
+    return verifiedSemanticTarget(resolved, requireObserved)
+  }
+
+  private fun semanticLinkPath(
+    installedPath: Path,
+    requireObserved: Boolean,
+  ): Path? {
+    val raw = readSemanticLinkTarget(installedPath, requireObserved) ?: return null
+    val parent = installedPath.parent ?: return null
+    return parent.resolve(raw).toAbsolutePath().normalize()
+  }
+
+  private fun verifiedSemanticTarget(
+    resolved: Path,
+    requireObserved: Boolean,
+  ): Path? {
+    val attributes =
+      readSemanticAttributes(
+        resolved,
+        requireObserved = requireObserved,
+        operation = "inspect linked native-agent artifact",
+      ) ?: return null
+    if (!attributes.isRegularFile) {
+      if (requireObserved) invalidSemanticState(resolved, "linked artifact is no longer a regular file")
+      return null
+    }
+    return resolved
+  }
+
+  private fun readEmbeddedName(
+    path: Path,
+    provider: String,
+  ): String? =
+    try {
+      parseEmbeddedLogicalName(path, SupportedAgent.fromWire(provider))
+    } catch (error: IOException) {
+      rethrowAgentOperationInterruption(error)
+      throw semanticReadFailure(path, "linked artifact cannot be read", error)
+    } catch (error: SecurityException) {
+      throw semanticReadFailure(path, "linked artifact cannot be read", error)
+    }
+
+  private fun invalidSemanticState(
+    path: Path,
+    reason: String,
+  ): Nothing = throw semanticReadFailure(path, reason)
+
+  private fun readSemanticAttributes(
+    path: Path,
+    followLinks: Boolean = true,
+    requireObserved: Boolean = false,
+    operation: String = "inspect native-agent inventory path",
+  ): BasicFileAttributes? {
+    if (requireObserved) return agentObservedAttributes(path, operation, followLinks)
+    try {
+      return if (followLinks) {
+        Files.readAttributes(path, BasicFileAttributes::class.java)
+      } else {
+        Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+      }
+    } catch (error: NoSuchFileException) {
+      rethrowAgentOperationInterruption(error)
+      return null
+    } catch (error: IOException) {
+      rethrowAgentOperationInterruption(error)
+      throw semanticReadFailure(path, "path cannot be inspected", error)
+    } catch (error: SecurityException) {
+      throw semanticReadFailure(path, "path cannot be inspected", error)
+    }
+  }
+
+  private fun readSemanticLinkTarget(
+    path: Path,
+    requireObserved: Boolean,
+  ): Path? =
+    try {
+      Files.readSymbolicLink(path)
+    } catch (error: NoSuchFileException) {
+      rethrowAgentOperationInterruption(error)
+      if (requireObserved) {
+        throw semanticReadFailure(path, "managed link disappeared after inspection", error)
+      }
+      null
+    } catch (error: NotLinkException) {
+      rethrowAgentOperationInterruption(error)
+      if (requireObserved) {
+        throw semanticReadFailure(path, "managed link changed after inspection", error)
+      }
+      null
+    } catch (error: IOException) {
+      rethrowAgentOperationInterruption(error)
+      throw semanticReadFailure(path, "managed link target cannot be read", error)
+    } catch (error: SecurityException) {
+      throw semanticReadFailure(path, "managed link target cannot be read", error)
+    }
+
+  private fun readSemanticDigest(
+    path: Path,
+    requireObserved: Boolean,
+  ): String? =
+    try {
+      sha256Hex(Files.readAllBytes(path))
+    } catch (error: NoSuchFileException) {
+      rethrowAgentOperationInterruption(error)
+      if (requireObserved) {
+        throw semanticReadFailure(path, "linked artifact disappeared after inspection", error)
+      }
+      null
+    } catch (error: IOException) {
+      rethrowAgentOperationInterruption(error)
+      throw semanticReadFailure(path, "linked artifact cannot be hashed", error)
+    } catch (error: SecurityException) {
+      throw semanticReadFailure(path, "linked artifact cannot be hashed", error)
+    }
+
+  private fun semanticReadFailure(
+    path: Path,
+    reason: String,
+    cause: Throwable? = null,
+  ): InvalidNativeAgentLinkInventoryDecodeError = decodeError(path, reason, cause)
 
   private fun readValidatedRoot(
     path: Path,
@@ -102,10 +265,11 @@ internal object NativeAgentLinkInventoryDecode {
     entries: List<NativeAgentLinkInventoryEntry>,
     home: Path,
     managedRoots: List<Path>,
+    environment: Map<String, String>,
     path: Path,
   ) {
     validateUniqueEntries(entries, path)
-    entries.forEach { entry -> validateDecodedEntry(entry, home, managedRoots, path) }
+    entries.forEach { entry -> validateDecodedEntry(entry, home, managedRoots, environment, path) }
   }
 
   private fun decodePath(
@@ -137,11 +301,12 @@ internal object NativeAgentLinkInventoryDecode {
     entry: NativeAgentLinkInventoryEntry,
     home: Path,
     managedRoots: List<Path>,
+    environment: Map<String, String>,
     path: Path,
   ) {
     validateEntryShape(entry, path)
     val provider = NativeAgentLinkInventoryPaths.provider(entry.provider)
-    val allowedDirs = provider.homeAgentDirs(home).map { it.toAbsolutePath().normalize() }
+    val allowedDirs = provider.homeAgentDirs(home, environment).map { it.toAbsolutePath().normalize() }
     if (entry.installedPath.parent !in allowedDirs) {
       invalid(path, "installed_path is outside provider directory")
     }

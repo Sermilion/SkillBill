@@ -349,6 +349,7 @@ class IdeStatusSchemaValidatorTest {
         updatedAt = Instant.parse("2026-10-22T12:00:00Z"),
         freshness = IdeStatusFreshness.FRESH,
         summary = "Repairing an acceptance criterion.",
+        title = "SKILL-1",
         currentPhaseExecution =
           IdeStatusCurrentPhaseExecution(
             phaseId = "audit_plan_fix",
@@ -380,6 +381,7 @@ class IdeStatusSchemaValidatorTest {
         updatedAt = Instant.parse("2026-10-24T12:00:00Z"),
         freshness = IdeStatusFreshness.FRESH,
         summary = "QA could not complete.",
+        title = "SKILL-1",
       )
     val absent = IdeStatusSchemaValidator.wireMap(base)
     assertFalse("workflow_qa_outcome" in absent)

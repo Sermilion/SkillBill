@@ -123,6 +123,7 @@ object IdeStatusProblemSnapshots {
       updatedAt = parts.observedAt,
       freshness = parts.freshness,
       summary = parts.content.summary,
+      title = parts.workflowId ?: parts.content.stepLabel,
       problem = IdeStatusProblem(code = parts.content.code, message = parts.content.message),
     )
 

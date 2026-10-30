@@ -9,6 +9,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.plan.StandalonePlanReportBuilder
 import skillbill.engine.work.IdeStatusProjector
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.WorkBoardItemProjection
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -203,31 +204,38 @@ private class SnapshotFixture(
           callbacks = OptionalCallbacks(),
         ),
       )
+    val projector =
+      IdeStatusProjector(
+        workflowSnapshotValidator = NoopSnapshotValidator,
+        goalRunnerStatusService = component.goalRunnerStatusService,
+        featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
+        manifestStore = EmptyManifestStore,
+        diagnostics = NoopRuntimeDiagnostics,
+        qaCapabilities = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
+        planReports =
+          StandalonePlanReportBuilder(
+            EmptyManifestStore,
+            TestDecompositionManifestStore,
+            FixedProjectStorePort(home.resolve("project-store")),
+            NoopRuntimeDiagnostics,
+          ),
+      )
     return IdeStatusService(
       database = database,
-      projector =
-        IdeStatusProjector(
-          workflowSnapshotValidator = NoopSnapshotValidator,
-          goalRunnerStatusService = component.goalRunnerStatusService,
-          featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
-          manifestStore = EmptyManifestStore,
-          diagnostics = NoopRuntimeDiagnostics,
-          qaCapabilities = QaCapabilityResolver(RecordingWorkflowGitOperations()) { emptyList() },
-          planReports =
-            StandalonePlanReportBuilder(
-              EmptyManifestStore,
-              TestDecompositionManifestStore,
-              FixedProjectStorePort(home.resolve("project-store")),
-              NoopRuntimeDiagnostics,
-            ),
-        ),
+      projector = projector,
       ideStatusValidator = NoopIdeStatusValidator,
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },
       clock = Clock.fixed(observedAt, ZoneOffset.UTC),
       repositoryEnclosingRootPort = CanonicalRepositoryRoot,
       featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
       goalRunnerStatusService = component.goalRunnerStatusService,
-      workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+      workBoardItemProjection =
+        WorkBoardItemProjection(
+          projector,
+          NoopIdeStatusValidator,
+          NoopFeatureTaskRuntimeWorkerSupervisor,
+          NoopRuntimeDiagnostics,
+        ),
       diagnostics = NoopRuntimeDiagnostics,
       incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, Clock.fixed(observedAt, ZoneOffset.UTC)),
     )

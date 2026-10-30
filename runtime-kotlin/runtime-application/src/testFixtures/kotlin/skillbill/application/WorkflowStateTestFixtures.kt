@@ -3,8 +3,10 @@ package skillbill.application
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
@@ -62,6 +64,9 @@ class FakeDatabaseSessionFactory(
     EmptyGoalRunnerControlRepository,
   private val workList: WorkListRepository = EmptyWorkListRepository,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection(): DatabasePathProtectionResult =
+    DatabasePathProtectionResult.Acquired(AutoCloseable { })
+
   override fun resolveDbPath(): Path = fakeDbPath
 
   override fun databaseExists(): Boolean = true
@@ -78,6 +83,7 @@ class FakeDatabaseSessionFactory(
   private fun unit(): UnitOfWork =
     object : UnitOfWorkDefaults() {
       override val dbPath: Path = fakeDbPath
+      override val databaseFileObservation = DatabaseFileObservation(fakeDbPath.toAbsolutePath().normalize(), "fake")
       override val workflowStates: WorkflowStateRepository = this@FakeDatabaseSessionFactory.workflowStates
       override val learnings: LearningRepository
         get() = error("LearningRepository is not exercised in WorkflowServiceTest.")

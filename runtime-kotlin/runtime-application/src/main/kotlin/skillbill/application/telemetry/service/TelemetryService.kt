@@ -1,8 +1,13 @@
 package skillbill.application.telemetry.service
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.config.RuntimeConfigEditService
+import skillbill.application.config.model.ConfigDocumentRead
+import skillbill.application.config.model.ConfigWriteResult
+import skillbill.application.telemetry.config.clearsPendingOutbox
 import skillbill.application.telemetry.model.TelemetryMutationResult
 import skillbill.application.telemetry.model.TelemetryOutboxStatusSnapshot
+import skillbill.application.telemetry.model.TelemetrySnapshotPriorLevel
 import skillbill.application.telemetry.model.TelemetryStatusResult
 import skillbill.application.telemetry.model.TelemetrySyncPayload
 import skillbill.application.telemetry.settings.loadTelemetrySettings
@@ -13,6 +18,7 @@ import skillbill.application.telemetry.sync.TelemetrySyncRuntime
 import skillbill.application.telemetry.sync.syncResult
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.ports.concurrency.InterruptSignalPort
+import skillbill.ports.config.model.ConfigFingerprint
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.model.TELEMETRY_DELIVERY_ATTEMPT_BUDGET
@@ -21,6 +27,7 @@ import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
 import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetryClient
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
@@ -31,6 +38,7 @@ import skillbill.telemetry.model.TelemetryRemoteStatsResult
 import skillbill.telemetry.model.TelemetrySettings
 import skillbill.telemetry.model.TelemetrySyncStatus
 import skillbill.telemetry.targetsHostedRelayWithReservedTestIdentity
+import java.nio.file.Path
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -162,6 +170,73 @@ class TelemetryService(
     val clearedEvents = result.clearedEvents
     return telemetryMutationResult(settings, clearedEvents)
   }
+
+  fun setLevel(
+    level: String,
+    expected: ConfigFingerprint?,
+    config: RuntimeConfigEditService,
+  ): ConfigWriteResult {
+    val document = config.readMachineConfig()
+    configReadFailure(document, expected)?.let { return it }
+    val path =
+      when (document) {
+        is ConfigDocumentRead.Present -> document.path
+        is ConfigDocumentRead.Absent -> document.path
+        is ConfigDocumentRead.Unreadable -> document.path
+      }
+    val currentLevel =
+      when (val current = settingsProvider.loadOrUnavailable(materialize = false)) {
+        is TelemetrySettingsLoad.Loaded -> current.settings.level
+        is TelemetrySettingsLoad.Unavailable -> return ConfigWriteResult.Unreadable(path, current.reason)
+      }
+    val result = config.writeTelemetryLevel(level, expected)
+    if (result !is ConfigWriteResult.Written) return result
+    val clearOutbox = clearsPendingOutbox(currentLevel, level) && database.databaseExists()
+    if (clearOutbox) database.transaction { unitOfWork -> unitOfWork.telemetryOutbox.clear() }
+    return result
+  }
+
+  fun setLevelFromSnapshot(
+    level: String,
+    observedPath: Path,
+    expected: ConfigFingerprint?,
+    previousLevel: String,
+    config: RuntimeConfigEditService,
+  ): ConfigWriteResult =
+    setLevelFromSnapshot(
+      level,
+      observedPath,
+      expected,
+      TelemetrySnapshotPriorLevel.Known(previousLevel),
+      config,
+    )
+
+  fun setLevelFromSnapshot(
+    level: String,
+    observedPath: Path,
+    expected: ConfigFingerprint?,
+    previousLevel: TelemetrySnapshotPriorLevel,
+    config: RuntimeConfigEditService,
+  ): ConfigWriteResult {
+    val result = config.writeTelemetryLevelFromSnapshot(observedPath, level, expected)
+    if (result !is ConfigWriteResult.Written) return result
+    if (clearsPendingOutbox(previousLevel, level) && database.databaseExists()) {
+      database.transaction { unitOfWork -> unitOfWork.telemetryOutbox.clear() }
+    }
+    return result
+  }
+
+  private fun configReadFailure(
+    document: ConfigDocumentRead<*>,
+    expected: ConfigFingerprint?,
+  ): ConfigWriteResult? =
+    when (document) {
+      is ConfigDocumentRead.Present ->
+        if (document.fingerprint != expected) ConfigWriteResult.ChangedOnDisk(document.path) else null
+      is ConfigDocumentRead.Absent ->
+        if (expected != null) ConfigWriteResult.ChangedOnDisk(document.path) else null
+      is ConfigDocumentRead.Unreadable -> ConfigWriteResult.Unreadable(document.path, document.reason, document.keyPath)
+    }
 
   fun capabilities(): TelemetryProxyCapabilities =
     telemetryClient.fetchProxyCapabilities(

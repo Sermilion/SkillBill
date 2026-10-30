@@ -38,6 +38,7 @@ data class WorkBoardRequest(
   val observedAt: Instant? = null,
   val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
   val cursor: String? = null,
+  val filter: String? = null,
 )
 
 enum class WorkLiveSection { NEEDS_YOU, GOALS, PHASES, OPERATIONS }
@@ -62,6 +63,7 @@ data class WorkBoardItem(
   val recentlyFinishedPhase: Boolean = false,
   val doneWithinDay: Boolean = false,
   val membershipDeadline: Instant? = null,
+  val executingAgentId: String? = null,
 )
 
 data class WorkBoardDiagnostic(

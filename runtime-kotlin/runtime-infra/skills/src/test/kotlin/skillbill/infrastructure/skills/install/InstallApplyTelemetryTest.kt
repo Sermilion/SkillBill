@@ -76,7 +76,7 @@ class InstallApplyTelemetryTest : InstallApplyTestSupport() {
       configPath,
       """
       |{"install_id":"existing","external_addon_sources":["/tmp/addons"],
-      |"execution_matrix":{"default":"claude"},
+      |"execution_matrix":{"phase_tiers":{"review":"reasoning"},"agents":{}},
       |"telemetry":{"level":"anonymous","proxy_url":"https://example.invalid","batch_size":10}}
       |
       """.trimMargin(),
@@ -100,7 +100,7 @@ class InstallApplyTelemetryTest : InstallApplyTestSupport() {
     assertContains(persisted, "\"level\":\"off\"")
     assertContains(persisted, "\"install_id\":\"existing\"")
     assertContains(persisted, "/tmp/addons")
-    assertContains(persisted, "\"default\":\"claude\"")
+    assertContains(persisted, "\"phase_tiers\":{\"review\":\"reasoning\"},\"agents\":{}")
   }
 
   @Test

@@ -1,5 +1,6 @@
 package dev.skillbill.tray.core.data.port
 
+import dev.skillbill.tray.core.data.session.DatabaseIdentityCapture
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.Retention
@@ -108,6 +109,8 @@ class InvalidDatabasePathException(cause: Throwable?) : RuntimeException("The da
  * an outdated store is a typed incompatible-database failure.
  */
 interface RuntimeWorkGateway {
+  fun close()
+
   /** The resolved database file; throws [InvalidDatabasePathException] when the selection is not a valid path. */
   fun databasePath(): String
 
@@ -118,6 +121,8 @@ interface RuntimeWorkGateway {
   fun upgradeExistingStore()
 
   fun observation(): StoreObservation
+
+  fun captureDatabaseIdentity(): DatabaseIdentityCapture
 
   /** Runs [read] in one snapshot of the existing store; a missing store is a typed failure. */
   fun <T : Any> existingSnapshot(read: SnapshotReads.() -> T): T

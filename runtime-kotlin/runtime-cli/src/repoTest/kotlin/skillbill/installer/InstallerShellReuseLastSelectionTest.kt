@@ -213,6 +213,9 @@ class InstallerShellReuseLastSelectionTest {
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "apply" ]]; then
     |  exit 0
     |fi
+    |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "migrate-legacy-config" ]]; then
+    |  exit 0
+    |fi
     |if [[ "${'$'}{1:-}" == "install" && "${'$'}{2:-}" == "reconcile" ]]; then
     |  printf 'reconcile_summary: applied=false baseline_refreshed=false installed_count=0 pruned_count=0\n'
     |  exit 0

@@ -2,18 +2,20 @@ package skillbill.telemetry
 
 import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.telemetry.model.TelemetryOpenDocument
+import java.net.URI
+import java.net.URISyntaxException
 
 fun defaultLocalTelemetryConfig(installId: String): TelemetryConfigDocument =
   TelemetryConfigDocument(
     payload =
       TelemetryOpenDocument.from(
         mapOf(
-          "install_id" to installId,
-          "telemetry" to
+          TelemetryConfigFileKeys.INSTALL_ID to installId,
+          TelemetryConfigFileKeys.TELEMETRY to
             mapOf(
-              "level" to "anonymous",
-              "proxy_url" to "",
-              "batch_size" to DEFAULT_TELEMETRY_BATCH_SIZE,
+              TelemetryConfigFileKeys.LEVEL to "anonymous",
+              TelemetryConfigFileKeys.PROXY_URL to "",
+              TelemetryConfigFileKeys.BATCH_SIZE to DEFAULT_TELEMETRY_BATCH_SIZE,
             ),
         ),
       ),
@@ -24,11 +26,18 @@ fun TelemetryConfigDocument.withTelemetryLevel(
   configPath: String,
 ): TelemetryConfigDocument {
   val updatedPayload = payload.toMutableMap()
+  val telemetryRaw = updatedPayload[TelemetryConfigFileKeys.TELEMETRY]
   val telemetry =
-    when (val telemetryRaw = updatedPayload["telemetry"]) {
-      null -> mutableMapOf<String, Any?>()
-      is Map<*, *> ->
-        telemetryRaw.entries
+    when {
+      !updatedPayload.containsKey(TelemetryConfigFileKeys.TELEMETRY) -> mutableMapOf<String, Any?>()
+      telemetryRaw == null ->
+        throw IllegalArgumentException(
+          "Telemetry config at '$configPath' has 'telemetry: null'. Replace it with an object before setting " +
+            "'${TelemetryConfigFileKeys.TELEMETRY}.${TelemetryConfigFileKeys.LEVEL}'.",
+        )
+      telemetryRaw is Map<*, *> ->
+        telemetryRaw
+          .entries
           .filter { it.key is String }
           .associate { it.key as String to it.value }
           .toMutableMap()
@@ -36,9 +45,9 @@ fun TelemetryConfigDocument.withTelemetryLevel(
         "Telemetry config at '$configPath' must contain a 'telemetry' object.",
       )
     }
-  telemetry["level"] = level
-  telemetry.remove("enabled")
-  updatedPayload["telemetry"] = telemetry
+  telemetry.remove(TelemetryConfigFileKeys.ENABLED)
+  telemetry[TelemetryConfigFileKeys.LEVEL] = level
+  updatedPayload[TelemetryConfigFileKeys.TELEMETRY] = telemetry
   return TelemetryConfigDocument(TelemetryOpenDocument.from(updatedPayload))
 }
 
@@ -68,6 +77,18 @@ fun positiveTelemetryIntError(
   rawValue: String,
   name: String,
 ): String = if (rawValue.toIntOrNull() == null) "$name must be an integer." else "$name must be greater than zero."
+
+fun telemetryProxyUrlError(value: String): String? =
+  try {
+    val uri = URI(value.trim())
+    if (uri.isAbsolute && uri.scheme.lowercase() in setOf("http", "https") && uri.host != null) {
+      null
+    } else {
+      "must be an absolute http or https URL with a host."
+    }
+  } catch (_: URISyntaxException) {
+    "must be an absolute http or https URL with a host."
+  }
 
 fun parseTelemetryLevelValue(
   rawValue: String,

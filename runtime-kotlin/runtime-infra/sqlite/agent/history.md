@@ -1,3 +1,12 @@
+## [2026-10-30] SKILL-447 desktop signals and read sessions
+Areas: runtime-infra/sqlite, runtime-contracts, runtime-ports, desktop-tray
+- Migration 87 adds activity and specs signals, bounded changed-work history and a stored generation. Heartbeats and journal inserts avoid board revisions; the tray observes revision changes.
+- The reusable read pool verifies reused connections against file identity and generation. Release closes idle connections and closes borrowed connections on return; strict readIfPresent and lenient read retain their contracts.
+- The test helper revertDesktopChangeSignals in DatabaseMigrationsTestSupport drops the desktop change triggers and the migration 87 ledger row, so tests that fake legacy stores with DROP COLUMN can run. reusable
+- Signal consumers resync on generation change, missing changed-id data, overflow or a revision gap. Later migrations must reinstall affected update triggers after changing signalled table columns.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-25] SKILL-442 subtask 8: trace, probe, and assessment telemetry
 Areas: runtime-infra/sqlite (migrations 85-86, goal telemetry save/payloads, goal-stats); runtime-engine goalrunner telemetry and persist/assessment; runtime-domain and runtime-application telemetry and stats models; telemetry-event-schema.yaml; DesktopReadSchema; docs/review-telemetry.md
 - Goal-subtask-finished events carry 8 optional counters (interaction scenarios traced/broken/repaired/unknown, test probes killed/survived/repaired/not_run); goal-finished events carry 7 goal_assessment counters plus a nullable exit-reason enum. Telemetry schema stays 1.13.0 (unreleased bump already on branch); fields are optional so legacy payloads validate.

@@ -174,7 +174,9 @@ internal class WorkflowServiceBlockedPhaseRetry(
             unitOfWork.dbPath.toString(),
           ),
         )
-    return if (blockedRecord.status.workflowStepStatus() != WorkflowStepStatus.BLOCKED && auditState == null) {
+    return if (blockedRecord.status.workflowStepStatus() != WorkflowStepStatus.BLOCKED &&
+      (auditState == null || blockedRecord.status.workflowStepStatus() == WorkflowStepStatus.PENDING)
+    ) {
       BlockedPhaseRetryPersistence.error(
         WorkflowUpdateResult.Error(
           request.workflowId,

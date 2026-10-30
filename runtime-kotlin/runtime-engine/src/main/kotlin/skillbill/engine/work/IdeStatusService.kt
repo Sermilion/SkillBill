@@ -10,7 +10,6 @@ import skillbill.engine.work.control.workDisplayGroup
 import skillbill.engine.work.control.workDisplayPriority
 import skillbill.engine.work.control.workLiveSection
 import skillbill.engine.work.control.workPauseEligible
-import skillbill.engine.work.control.workPolicy
 import skillbill.engine.work.control.workRequiresAttention
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusQueryWork
@@ -18,14 +17,12 @@ import skillbill.engine.work.model.IdeStatusQueryWorkReport
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
-import skillbill.engine.work.observation.workerOwnership
 import skillbill.engine.work.pagination.AggregateSkipDiagnostics
-import skillbill.engine.work.pagination.CANDIDATE_ROW_LOOKUPS
 import skillbill.engine.work.pagination.GoalPageRead
-import skillbill.engine.work.pagination.IDE_STATUS_STATUS_SEAM
 import skillbill.engine.work.pagination.ProjectedDetailItem
 import skillbill.engine.work.pagination.RuntimePhasePageRead
 import skillbill.engine.work.pagination.STATUS_READ_ATTEMPTS
+import skillbill.engine.work.pagination.WorkBoardPagePosition
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.engine.work.pagination.detailNextAnchors
@@ -33,38 +30,28 @@ import skillbill.engine.work.pagination.emit
 import skillbill.engine.work.pagination.goalSubtaskPageLimit
 import skillbill.engine.work.pagination.includesDetailList
 import skillbill.engine.work.pagination.invalidWorkPaginationRequest
-import skillbill.engine.work.pagination.readStatusStandaloneRecords
-import skillbill.engine.work.pagination.readStatusWorkItems
 import skillbill.engine.work.pagination.skipIncompatibleBoardItem
 import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
 import skillbill.engine.work.pagination.workDetailPagedResult
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
-import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
-import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
-import skillbill.idestatus.model.IdeStatusPolicy
-import skillbill.idestatus.model.IdeStatusRepositoryIdentityFamily
-import skillbill.idestatus.model.IdeStatusRepositoryIdentityPolicy
-import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
-import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.IdeStatusValidator
-import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
-import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkBoardCompletionSource
 import skillbill.ports.idestatus.model.WorkBoardDiagnostic
-import skillbill.ports.idestatus.model.WorkBoardDiagnosticReason
 import skillbill.ports.idestatus.model.WorkBoardItem
+import skillbill.ports.idestatus.model.WorkBoardReadModelKey
+import skillbill.ports.idestatus.model.WorkBoardReadModelPage
+import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkBoardResult
 import skillbill.ports.idestatus.model.WorkDetailItem
@@ -78,38 +65,34 @@ import skillbill.ports.idestatus.model.WorkDetailRuntimeStatus
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.WorkListRepository
-import skillbill.ports.work.model.IssueRepositoryIdentityLookup
+import skillbill.ports.work.model.WORK_BOARD_CANDIDATE_BATCH_SIZE
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
-import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.DecompositionStatus
-import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
-import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import skillbill.workflow.time.parsePersistedInstantOrNull
-import java.nio.file.InvalidPathException
-import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.util.Locale
 
 @Inject
 class IdeStatusService(
   private val database: DatabaseSessionFactory,
   private val projector: IdeStatusProjector,
+  private val workBoardItemProjection: WorkBoardItemProjection,
   private val ideStatusValidator: IdeStatusValidator,
   private val branchSource: CheckedOutBranchSource,
   private val clock: Clock,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
   private val goalRunnerStatusService: GoalRunnerStatusService,
-  private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
   private val incidentProjectionBuilder: WorkIncidentProjectionBuilder,
 ) {
@@ -190,7 +173,13 @@ class IdeStatusService(
     val before = unitOfWork.workList.observation().also { queryWork.statement(1) }
     val candidates =
       scopeToBranch(
-        collectCandidates(unitOfWork, repository, currentBranch, observedAt, CandidateRead(queryWork = queryWork)),
+        workBoardItemProjection.collectCandidates(
+          unitOfWork,
+          repository,
+          currentBranch,
+          observedAt,
+          CandidateRead(queryWork = queryWork),
+        ),
         currentBranch,
       )
     if (unitOfWork.workList.observation().also { queryWork.statement(1) } != before) return null
@@ -229,96 +218,9 @@ class IdeStatusService(
       )
     }
     return database.read { unitOfWork ->
-      val observation = unitOfWork.workList.observation()
-      if (request.cursor != null && position.observation != observation) {
-        invalidWorkPaginationRequest("Work changed. Refresh the board.")
-      }
-      val finishedFrom = observedAt.minus(request.finishedWithin.duration)
-      val diagnostics = mutableListOf<WorkBoardDiagnostic>()
-      val skipDiagnostics = AggregateSkipDiagnostics()
-      val items = mutableListOf<WorkBoardItem>()
-      var afterKey = position.afterKey
-      var exhausted = false
-      var examined = 0
-      val budget = request.pageSize * BOARD_CANDIDATE_BATCH_BUDGET
-      while (items.size < request.pageSize && examined < budget && !exhausted) {
-        val batchSize = minOf(request.pageSize, budget - examined)
-        val rows =
-          unitOfWork.workList.boardCandidates(
-            WorkBoardCandidateQuery(finishedFrom, observedAt, afterKey, batchSize + 1),
-          )
-        var consumed = 0
-        for (row in rows.take(batchSize)) {
-          consumed++
-          examined++
-          afterKey = row.key
-          unitOfWork.projectBoardCandidate(
-            row.id,
-            observedAt,
-            finishedFrom,
-            diagnostics,
-            skipDiagnostics,
-          )?.let(items::add)
-          if (items.size == request.pageSize) break
-        }
-        exhausted = consumed == rows.size
-      }
-      val nextCursor =
-        afterKey?.takeIf { !exhausted }?.let {
-          workBoardNextCursor(request, observedAt, it, observation)
-        }
-      WorkBoardResult(
-        observedAt,
-        request.finishedWithin,
-        items,
-        diagnostics,
-        pageSize = request.pageSize,
-        nextCursor = nextCursor,
-        observation = observation,
-        candidatesExamined = examined,
-      )
+      WorkBoardReadModelRead.read(workBoardItemProjection, unitOfWork, request, position)
     }
   }
-
-  private fun UnitOfWork.projectBoardCandidate(
-    id: String,
-    observedAt: Instant,
-    finishedFrom: Instant,
-    diagnostics: MutableList<WorkBoardDiagnostic>,
-    skipDiagnostics: AggregateSkipDiagnostics,
-  ): WorkBoardItem? =
-    try {
-      val found = detailMatch(id, this) as? WorkDetailMatch.Found ?: return null
-      val identity = found.standalone?.repositoryIdentity ?: found.work?.repositoryIdentity
-      val root = identity?.let(::decodeRepositoryRoot)
-      if (identity == null || root == null) {
-        diagnostics += repositoryIdentityDiagnostic(identity, workflowId = id)
-        return null
-      }
-      val work = listOfNotNull(found.work)
-      val candidates =
-        collectCandidates(
-          this,
-          IdeStatusRepositoryResolution.Ok(identity, root),
-          null,
-          observedAt,
-          CandidateRead(
-            ResolvedWorkCandidates(work, listOfNotNull(found.standalone)),
-            skipDiagnostics = skipDiagnostics,
-          ),
-        )
-      candidates.singleOrNull()?.let { candidate ->
-        projectRetainedBoardItem(
-          candidate,
-          IdeStatusProjectionContext(this, identity, null, observedAt, root),
-          work,
-          finishedFrom,
-          diagnostics,
-        )
-      }
-    } catch (error: SkillBillRuntimeException) {
-      skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this@IdeStatusService.diagnostics, id)
-    }
 
   fun projectBoardSelection(
     ids: List<String>,
@@ -331,18 +233,18 @@ class IdeStatusService(
       val skipDiagnostics = AggregateSkipDiagnostics()
       val items =
         ids.distinct().mapNotNull { id ->
-          val found = selectedMatch(id, unitOfWork)
+          val found = workBoardItemProjection.selectedMatch(id, unitOfWork)
           val work = found.work
           val standalone = found.standalone
           val identity = standalone?.repositoryIdentity ?: work?.repositoryIdentity
-          val root = identity?.let(::decodeRepositoryRoot)
+          val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
           if (identity == null || root == null) {
-            diagnostics += repositoryIdentityDiagnostic(identity, workflowId = id)
+            diagnostics += workBoardItemProjection.repositoryIdentityDiagnostic(identity, workflowId = id)
             return@mapNotNull null
           }
           val candidates =
             try {
-              collectCandidates(
+              workBoardItemProjection.collectCandidates(
                 unitOfWork,
                 IdeStatusRepositoryResolution.Ok(identity, root),
                 null,
@@ -366,7 +268,7 @@ class IdeStatusService(
               ?: throw invalidWorkListRowError("Selected work candidate cannot be projected.")
           val context = IdeStatusProjectionContext(unitOfWork, identity, candidate.branchCorrelation, observedAt, root)
           try {
-            projectBoardItem(candidate, context, listOfNotNull(work))
+            workBoardItemProjection.projectBoardItem(candidate, context, listOfNotNull(work))
           } catch (error: SkillBillRuntimeException) {
             skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
           }
@@ -380,95 +282,6 @@ class IdeStatusService(
         observation = unitOfWork.workList.observation(),
       )
     }
-  }
-
-  private fun selectedMatch(
-    id: String,
-    unitOfWork: UnitOfWork,
-  ): WorkDetailMatch.Found =
-    detailMatch(id, unitOfWork) as? WorkDetailMatch.Found
-      ?: throw invalidWorkListRowError("Selected work candidate is unavailable or ambiguous.")
-
-  private fun projectRetainedBoardItem(
-    candidate: IdeStatusCandidate,
-    context: IdeStatusProjectionContext,
-    work: List<ResolvedWorkItem>,
-    finishedFrom: Instant,
-    diagnostics: MutableList<WorkBoardDiagnostic>,
-  ): WorkBoardItem? {
-    val item = projectBoardItem(candidate, context, work)
-    if (item.finishedAt == null && !isFinished(item.snapshot)) return item
-    val finishedAt = item.finishedAt
-    if (finishedAt == null) {
-      diagnostics +=
-        WorkBoardDiagnostic(
-          WorkBoardDiagnosticReason.MISSING_COMPLETION_TIME,
-          context.repositoryIdentity,
-          workflowId = candidate.workflowId.takeIf { candidate.standaloneStatus == null },
-          invocationId = candidate.standaloneStatus?.invocationId,
-        )
-      return null
-    }
-    return item.takeIf { finishedAt >= finishedFrom && finishedAt <= context.observedAt }
-  }
-
-  private fun resolvedWorkItems(
-    items: List<WorkItem>,
-    unitOfWork: UnitOfWork,
-  ): List<ResolvedWorkItem> =
-    items.map { item ->
-      val execution = unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId)
-      ResolvedWorkItem(item, repositoryIdentityFor(item, unitOfWork, execution), execution)
-    }
-
-  private fun projectBoardItem(
-    candidate: IdeStatusCandidate,
-    context: IdeStatusProjectionContext,
-    work: List<ResolvedWorkItem>,
-  ): WorkBoardItem {
-    val projection = projector.project(candidate, context.copy(branchCorrelation = candidate.branchCorrelation))
-    val snapshot = projection.snapshot
-    ideStatusValidator.validate(snapshot, "work-board:${candidate.workflowId}")
-    val completion =
-      if (isFinished(snapshot)) {
-        completionEvidence(
-          candidate.standaloneStatus,
-          work.firstOrNull { it.item.workflowId == candidate.workflowId }?.item,
-          context.unitOfWork,
-        )
-      } else {
-        null to null
-      }
-    val superseded = supersededPhase(candidate.standaloneStatus, context.unitOfWork, context.observedAt)
-    val finishedAt = completion.first ?: candidate.standaloneStatus?.updatedAt?.takeIf { superseded }
-    val windowed =
-      workPolicy(
-        snapshot,
-        finishedAt,
-        context.observedAt,
-        successfulGoalCompletion = completion.second == WorkBoardCompletionSource.GOAL_COMPLETION,
-      )
-    return WorkBoardItem(
-      snapshot,
-      context.repoRoot.toString(),
-      finishedAt,
-      completion.second,
-      context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
-      context.unitOfWork.workList.observation(),
-      snapshot.updatedAt.plus(IdeStatusFreshnessClassifier.FRESH_WINDOW).plusNanos(1),
-      workLiveSection(snapshot, finishedAt).takeUnless { superseded },
-      workControlEligible(snapshot) && !superseded,
-      workRequiresAttention(snapshot) && !superseded,
-      workDisplayGroup(snapshot, completion.first),
-      workDisplayPriority(snapshot, completion.first),
-      projection.exactPauseReason,
-      context.unitOfWork.databaseFileObservation,
-      workPauseEligible(snapshot) && !superseded,
-      running = windowed.running && !superseded,
-      recentlyFinishedPhase = windowed.recentlyFinishedPhase,
-      doneWithinDay = windowed.doneWithinDay,
-      membershipDeadline = windowed.membershipDeadline,
-    )
   }
 
   fun detail(request: WorkDetailRequest): WorkDetailResult {
@@ -486,7 +299,7 @@ class IdeStatusService(
         ) {
           invalidWorkPaginationRequest("Work changed. Refresh the detail.")
         }
-        val match = detailMatch(request.id, unitOfWork)
+        val match = workBoardItemProjection.detailMatch(request.id, unitOfWork)
         if (match is WorkDetailMatch.Problem) {
           return@read WorkDetailResult(observedAt, problem = match.problem)
         }
@@ -494,7 +307,7 @@ class IdeStatusService(
         val resolved = found.work
         val standalone = found.standalone
         val identity = standalone?.repositoryIdentity ?: resolved?.repositoryIdentity
-        val root = identity?.let(::decodeRepositoryRoot)
+        val root = identity?.let(workBoardItemProjection::decodeRepositoryRoot)
         if (identity == null || root == null) {
           return@read detailProblem(
             observedAt,
@@ -503,7 +316,7 @@ class IdeStatusService(
           )
         }
         val candidates =
-          collectCandidates(
+          workBoardItemProjection.collectCandidates(
             unitOfWork,
             IdeStatusRepositoryResolution.Ok(identity, root),
             null,
@@ -529,36 +342,6 @@ class IdeStatusService(
     return workDetailPagedResult(result, request, position, nextAnchors)
   }
 
-  private fun detailMatch(
-    id: String,
-    unitOfWork: UnitOfWork,
-  ): WorkDetailMatch {
-    val exactStandalone = unitOfWork.standalonePhaseStatuses.readByInvocation(id)
-    val matches = canonicalDetailMatches(unitOfWork.workList.findByWorkflowId(id))
-    if (exactStandalone == null && matches.isEmpty()) {
-      return WorkDetailMatch.Problem(
-        WorkDetailProblem(WorkDetailProblemCode.UNKNOWN_WORK_ITEM, "No work item has id '$id'."),
-      )
-    }
-    val resolved = resolvedWorkItems(matches, unitOfWork).singleOrNull()
-    val merged =
-      exactStandalone != null && resolved != null &&
-        exactStandalone.workflowId == resolved.item.workflowId &&
-        exactStandalone.repositoryIdentity == resolved.repositoryIdentity
-    val matchCount = matches.size + if (exactStandalone != null && !merged) 1 else 0
-    if (matchCount > 1) {
-      return WorkDetailMatch.Problem(
-        WorkDetailProblem(WorkDetailProblemCode.AMBIGUOUS_WORK_ITEM, "More than one work item has id '$id'."),
-      )
-    }
-    val associated =
-      resolved?.let { work ->
-        unitOfWork.standalonePhaseStatuses.latestStandaloneExecution(work.item.workflowId)
-          ?.takeIf { it.repositoryIdentity == work.repositoryIdentity }
-      }
-    return WorkDetailMatch.Found(resolved, exactStandalone ?: associated)
-  }
-
   private fun detailProblem(
     observedAt: Instant,
     code: WorkDetailProblemCode,
@@ -578,8 +361,7 @@ class IdeStatusService(
     val incidentSet = detailIncidents(candidate, context, snapshot)
     ideStatusValidator.validate(snapshot, "work-detail:${candidate.workflowId}")
     val standalone = candidate.standaloneStatus
-    val completion =
-      if (isFinished(snapshot)) completionEvidence(standalone, item, context.unitOfWork) else null to null
+    val completion = detailCompletion(snapshot, standalone, item, context.unitOfWork)
     val goal = item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_GOAL }
     val goalRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = false)
     val validationRead = detailGoalPage(goal, context.unitOfWork.workList, request, position, completedOnly = true)
@@ -640,6 +422,18 @@ class IdeStatusService(
       detailNextAnchors(shownHistory, goalRead, validationRead, dependencies, runtimeRead),
     )
   }
+
+  private fun detailCompletion(
+    snapshot: IdeStatusSnapshot,
+    standalone: StandalonePhaseStatusRecord?,
+    item: WorkItem?,
+    unitOfWork: UnitOfWork,
+  ): Pair<Instant?, WorkBoardCompletionSource?> =
+    if (workBoardItemProjection.isFinished(snapshot)) {
+      workBoardItemProjection.completionEvidence(standalone, item, unitOfWork)
+    } else {
+      null to null
+    }
 
   private fun detailExecutionHistory(
     candidate: IdeStatusCandidate,
@@ -766,6 +560,8 @@ class IdeStatusService(
     return featureTaskRuntimeStatusService.phasePage(workflowId, after, limit, position.offset)?.let { page ->
       if (after != null && after !in page.phaseIds) invalidWorkPaginationRequest("Unknown phase anchor.")
       val status = page.status
+      val briefings =
+        if (status.phases.isEmpty()) emptyMap() else featureTaskRuntimeStatusService.phaseBriefingTexts(workflowId)
       RuntimePhasePageRead(
         WorkDetailRuntimeStatus(
           phases =
@@ -773,6 +569,7 @@ class IdeStatusService(
               WorkDetailPhase(
                 phase.phaseId, phase.status, phase.attemptCount, phase.resolvedAgentId, phase.finished,
                 phase.executionOrigin, phase.continuationKind, phase.launchedModel, phase.launchedEffort,
+                briefings[phase.phaseId],
               )
             },
           currentPhase = status.currentPhaseId,
@@ -784,132 +581,6 @@ class IdeStatusService(
         ),
         page.hasMore,
       )
-    }
-  }
-
-  private fun isFinished(snapshot: IdeStatusSnapshot): Boolean =
-    snapshot.lifecycleState in setOf(IdeStatusLifecycleState.TERMINAL, IdeStatusLifecycleState.CANCELED) ||
-      snapshot.lifecycleState == IdeStatusLifecycleState.FAILED
-
-  private fun repositoryIdentityFor(
-    item: WorkItem,
-    unitOfWork: UnitOfWork,
-    registration: IdeStatusWorkflowExecution? =
-      unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId),
-  ): String? {
-    val family =
-      when (item.workflowKind) {
-        WorkItemKind.FEATURE_TASK_PROSE, WorkItemKind.FEATURE_TASK_RUNTIME -> IdeStatusRepositoryIdentityFamily.TASK
-        WorkItemKind.FEATURE_GOAL -> IdeStatusRepositoryIdentityFamily.GOAL
-        WorkItemKind.FEATURE_VERIFY -> IdeStatusRepositoryIdentityFamily.VERIFY
-      }
-    val evidence =
-      buildMap {
-        put(IdeStatusRepositoryIdentitySource.WORKFLOW_REGISTRATION, registration?.repositoryIdentity)
-        when (family) {
-          IdeStatusRepositoryIdentityFamily.TASK -> {
-            put(
-              IdeStatusRepositoryIdentitySource.EXECUTION_IDENTITY,
-              unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(item.workflowId)?.repositoryIdentity,
-            )
-            put(
-              IdeStatusRepositoryIdentitySource.STANDALONE_REGISTRATION,
-              unitOfWork.standalonePhaseStatuses.latestStandaloneExecution(item.workflowId)?.repositoryIdentity,
-            )
-          }
-          IdeStatusRepositoryIdentityFamily.GOAL -> {
-            put(
-              IdeStatusRepositoryIdentitySource.CONTROL,
-              unitOfWork.goalRunnerControls.controlState(item.workflowId).repositoryIdentity,
-            )
-            put(
-              IdeStatusRepositoryIdentitySource.GOAL_CHILDREN,
-              goalChildRepositoryIdentity(item.workflowId, unitOfWork),
-            )
-          }
-          IdeStatusRepositoryIdentityFamily.VERIFY ->
-            put(IdeStatusRepositoryIdentitySource.ISSUE_UNIQUE, verifyIssueRepositoryIdentity(item, unitOfWork))
-        }
-      }
-    return IdeStatusRepositoryIdentityPolicy.resolve(family, evidence)
-  }
-
-  private fun goalChildRepositoryIdentity(
-    workflowId: String,
-    unitOfWork: UnitOfWork,
-  ): String? =
-    when (val lookup = unitOfWork.workList.repositoryIdentityForGoalChildren(workflowId)) {
-      is IssueRepositoryIdentityLookup.Unique -> lookup.repositoryIdentity
-      else -> null
-    }
-
-  private fun verifyIssueRepositoryIdentity(
-    item: WorkItem,
-    unitOfWork: UnitOfWork,
-  ): String? {
-    val issueKey = item.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) ?: return null
-    return when (val lookup = unitOfWork.workList.repositoryIdentityForIssue(issueKey, item.workflowId)) {
-      IssueRepositoryIdentityLookup.Missing -> null
-      is IssueRepositoryIdentityLookup.Unique -> lookup.repositoryIdentity
-      is IssueRepositoryIdentityLookup.Ambiguous -> null
-    }
-  }
-
-  private fun canonicalDetailMatches(matches: List<WorkItem>): List<WorkItem> {
-    if (matches.size != 2) return matches
-    val goal = matches.singleOrNull { it.workflowKind == WorkItemKind.FEATURE_GOAL } ?: return matches
-    val runtime = matches.singleOrNull { it.workflowKind == WorkItemKind.FEATURE_TASK_RUNTIME } ?: return matches
-    val goalIssue = goal.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
-    val runtimeIssue = runtime.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
-    return if (goalIssue != null && goalIssue == runtimeIssue) listOf(goal) else matches
-  }
-
-  private fun repositoryIdentityDiagnostic(
-    identity: String?,
-    workflowId: String? = null,
-    invocationId: String? = null,
-  ): WorkBoardDiagnostic =
-    WorkBoardDiagnostic(
-      reason =
-        if (identity.isNullOrBlank()) {
-          WorkBoardDiagnosticReason.MISSING_REPOSITORY_IDENTITY
-        } else {
-          WorkBoardDiagnosticReason.INVALID_REPOSITORY_IDENTITY
-        },
-      repositoryIdentity = identity,
-      workflowId = workflowId,
-      invocationId = invocationId,
-    )
-
-  private fun completionEvidence(
-    standalone: StandalonePhaseStatusRecord?,
-    item: WorkItem?,
-    unitOfWork: UnitOfWork,
-  ): Pair<Instant?, WorkBoardCompletionSource?> {
-    standalone?.finishedAt?.let { return it to WorkBoardCompletionSource.STANDALONE_FINISHED_AT }
-    item ?: return null to null
-    return if (item.workflowKind == WorkItemKind.FEATURE_GOAL) {
-      val completedAt = unitOfWork.goalRunnerControls.controlState(item.workflowId).goalCompletedAt
-      if (completedAt != null) {
-        val instant =
-          parsePersistedInstantOrNull(completedAt)
-            ?: throw invalidWorkflowStateSchemaError(
-              "Goal runner control state has an invalid goal_completed_at timestamp.",
-            )
-        instant to WorkBoardCompletionSource.GOAL_COMPLETION
-      } else {
-        item.stateEnteredAt to
-          if (item.stateEnteredAtEstimated) {
-            WorkBoardCompletionSource.ESTIMATED_GOAL_STATE_ENTRY
-          } else {
-            WorkBoardCompletionSource.GOAL_STATE_ENTRY
-          }
-      }
-    } else {
-      val family =
-        if (item.workflowKind == WorkItemKind.FEATURE_VERIFY) WorkflowFamily.VERIFY else WorkflowFamily.TASK_RUNTIME
-      unitOfWork.workflowStates.get(family, item.workflowId)?.finishedAt
-        ?.let { it to WorkBoardCompletionSource.WORKFLOW_COMPLETION } ?: (null to null)
     }
   }
 
@@ -946,200 +617,6 @@ class IdeStatusService(
     return candidates.filter { candidate -> IdeStatusBranchScope.matchesCandidate(candidate, branch) }
   }
 
-  private fun collectCandidates(
-    unitOfWork: UnitOfWork,
-    repository: IdeStatusRepositoryResolution.Ok,
-    branch: String?,
-    observedAt: Instant,
-    read: CandidateRead = CandidateRead(),
-  ): List<IdeStatusCandidate> {
-    val resolved = read.resolved
-    val queryWork = read.queryWork
-    val work = resolved?.work?.map { it.item } ?: readStatusWorkItems(unitOfWork, queryWork)
-    val issueKeysWithGoals =
-      work
-        .filter { it.workflowKind == WorkItemKind.FEATURE_GOAL }
-        .mapNotNull { it.issueKey?.uppercase() }
-        .toSet()
-    val workflowCandidates =
-      work.mapNotNull { item ->
-        queryWork?.statement()
-        if (isExcludedGoalChild(routeScopeFor(item, unitOfWork), item.issueKey, issueKeysWithGoals)) {
-          null
-        } else {
-          if (resolved == null) repeat(CANDIDATE_ROW_LOOKUPS) { queryWork?.statement() }
-          toCandidateOrSkip(item, unitOfWork, repository, branch, read)
-        }
-      }
-    val standaloneRecords =
-      resolved?.standalone
-        ?: readStatusStandaloneRecords(unitOfWork, repository, branch, observedAt, queryWork)
-    val standaloneCandidates =
-      latestPhaseExecutions(standaloneRecords).map { stored ->
-        val record = projectStandaloneLease(stored, observedAt)
-        val lifecycle = IdeStatusPolicy.standaloneLifecycle(record.lifecycleState)
-        IdeStatusCandidate(
-          workflowId = record.workflowId ?: "standalone:${record.executionId}",
-          workflowFamily = IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
-          issueKey = record.issueKey,
-          currentState = record.lifecycleState,
-          lifecycleState = lifecycle,
-          selectionTier = IdeStatusSelectionPolicy.selectionTier(lifecycle),
-          updatedAt = record.updatedAt,
-          startedAt = record.startedAt,
-          isGoalAuthoritative = false,
-          execution =
-            IdeStatusExecutionIdentity(
-              scope = IdeStatusExecutionScope.STANDALONE_PHASE,
-              executionId = record.executionId,
-              statusStoreId = record.statusStoreId,
-              runSequence = record.runSequence,
-              statusRevision = record.statusRevision,
-              invocationId = record.invocationId,
-              phaseId = record.phaseId,
-              launchScope = record.launchScope,
-            ),
-          branchCorrelation = record.branchCorrelation,
-          standaloneStatus = record,
-        )
-      }.orEmpty()
-    val standaloneWorkflowIds = standaloneRecords.mapNotNull { it.workflowId }.toSet()
-    return workflowCandidates.filterNot { it.workflowId in standaloneWorkflowIds } + standaloneCandidates
-  }
-
-  private fun toCandidateOrSkip(
-    item: WorkItem,
-    unitOfWork: UnitOfWork,
-    repository: IdeStatusRepositoryResolution.Ok,
-    branch: String?,
-    read: CandidateRead,
-  ): IdeStatusCandidate? =
-    try {
-      toCandidate(
-        item,
-        unitOfWork,
-        repository,
-        branch,
-        read.resolved?.work?.firstOrNull { it.item.workflowId == item.workflowId },
-      )
-    } catch (error: SkillBillRuntimeException) {
-      if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
-      read.skipDiagnostics.emit(diagnostics, IDE_STATUS_STATUS_SEAM, item.workflowId, null, error)
-      null
-    }
-
-  private fun projectStandaloneLease(
-    record: StandalonePhaseStatusRecord,
-    observedAt: Instant,
-  ): StandalonePhaseStatusRecord {
-    if (IdeStatusPolicy.standaloneLifecycle(record.lifecycleState) != IdeStatusLifecycleState.ACTIVE) {
-      return record
-    }
-    val ownerGone =
-      record.workerOwnership()?.let { owner ->
-        when (workerSupervisor.inspect(owner)) {
-          FeatureTaskRuntimeProcessInspection.NotRunning,
-          FeatureTaskRuntimeProcessInspection.ForeignHost,
-          FeatureTaskRuntimeProcessInspection.PidReused,
-          -> true
-          FeatureTaskRuntimeProcessInspection.ExactLive,
-          is FeatureTaskRuntimeProcessInspection.Unsupported,
-          -> false
-        }
-      } == true
-    if (record.leaseExpiresAt.isAfter(observedAt) && !ownerGone) return record
-    return record.copy(
-      lifecycleState = "paused",
-      currentStep = "runner_interrupted",
-      currentActivity = null,
-      activeDurationAsOf = null,
-    )
-  }
-
-  private fun toCandidate(
-    item: WorkItem,
-    unitOfWork: UnitOfWork,
-    repository: IdeStatusRepositoryResolution.Ok,
-    branch: String?,
-    resolved: ResolvedWorkItem? = null,
-  ): IdeStatusCandidate? {
-    val repositoryIdentity = repository.identity
-    val repositoryCorrelation = IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity)
-    val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork)
-    val family = item.workflowKind.toIdeFamily()
-    val lifecycle =
-      family?.let { candidateFamily ->
-        if (
-          if (resolved != null) {
-            resolved.repositoryIdentity != repositoryIdentity
-          } else {
-            repositoryCorrelation.matches(item, candidateFamily) != true
-          }
-        ) {
-          null
-        } else {
-          livenessAnchors.lifecycle(item, candidateFamily)
-        }
-      }
-    if (family == null || lifecycle == null) return null
-    val workflowExecution =
-      if (resolved != null) {
-        resolved.workflowExecution
-      } else {
-        unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId)
-      }
-    val branchCorrelation =
-      projector.goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repository.repoRoot)
-    val execution =
-      workflowExecution
-        ?.takeIf {
-          family != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
-            branch == null ||
-            branchCorrelation == branch ||
-            branchCorrelation == "HEAD"
-        }
-        ?.let { record ->
-          IdeStatusExecutionIdentity(
-            scope = IdeStatusExecutionScope.WORKFLOW,
-            executionId = record.executionId,
-            statusStoreId = record.statusStoreId,
-            runSequence = record.runSequence,
-            statusRevision = record.statusRevision,
-          )
-        }
-    return IdeStatusCandidate(
-      workflowId = item.workflowId,
-      workflowFamily = family,
-      issueKey = item.issueKey,
-      currentState = item.currentState,
-      lifecycleState = lifecycle,
-      selectionTier = IdeStatusSelectionPolicy.selectionTier(lifecycle),
-      updatedAt = livenessAnchors.authoritativeUpdatedAt(item, family) ?: item.stateEnteredAt,
-      startedAt = item.startedAt,
-      isGoalAuthoritative = family == IdeStatusWorkflowFamily.FEATURE_GOAL,
-      execution = execution,
-      branchCorrelation = branchCorrelation,
-    )
-  }
-
-  private fun routeScopeFor(
-    item: WorkItem,
-    unitOfWork: UnitOfWork,
-  ): FeatureTaskRouteScope? =
-    when (item.workflowKind) {
-      WorkItemKind.FEATURE_TASK_PROSE, WorkItemKind.FEATURE_TASK_RUNTIME ->
-        unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(item.workflowId)?.routeScope
-      WorkItemKind.FEATURE_VERIFY,
-      WorkItemKind.FEATURE_GOAL,
-      -> null
-    }
-
-  private fun isExcludedGoalChild(
-    routeScope: FeatureTaskRouteScope?,
-    issueKey: String?,
-    issueKeysWithGoals: Set<String>,
-  ): Boolean = routeScope == FeatureTaskRouteScope.GOAL_CHILD && issueKey?.uppercase() in issueKeysWithGoals
-
   private fun emit(
     snapshot: IdeStatusSnapshot,
     queryWork: IdeStatusQueryWork? = null,
@@ -1153,40 +630,6 @@ class IdeStatusService(
   }
 }
 
-private fun decodeRepositoryRoot(identity: String): Path? =
-  try {
-    val prefix = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX
-    if (!identity.startsWith(prefix)) return null
-    Path.of(identity.removePrefix(prefix)).takeIf { it.isAbsolute }
-  } catch (_: InvalidPathException) {
-    null
-  }
-
-private data class ResolvedWorkItem(
-  val item: WorkItem,
-  val repositoryIdentity: String?,
-  val workflowExecution: IdeStatusWorkflowExecution?,
-)
-
-private data class CandidateRead(
-  val resolved: ResolvedWorkCandidates? = null,
-  val queryWork: IdeStatusQueryWork? = null,
-  val skipDiagnostics: AggregateSkipDiagnostics = AggregateSkipDiagnostics(),
-)
-
-private data class ResolvedWorkCandidates(
-  val work: List<ResolvedWorkItem>,
-  val standalone: List<StandalonePhaseStatusRecord>,
-)
-
-private sealed interface WorkDetailMatch {
-  data class Found(val work: ResolvedWorkItem?, val standalone: StandalonePhaseStatusRecord?) : WorkDetailMatch
-
-  data class Problem(val problem: WorkDetailProblem) : WorkDetailMatch
-}
-
-private const val BOARD_CANDIDATE_BATCH_BUDGET = 4
-
 internal val GOAL_FINISH_PIPELINE =
   listOf(
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA,
@@ -1196,3 +639,248 @@ internal val GOAL_FINISH_PIPELINE =
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
   )
+
+internal object WorkBoardReadModelRead {
+  fun read(
+    projection: WorkBoardItemProjection,
+    unitOfWork: UnitOfWork,
+    request: WorkBoardRequest,
+    position: WorkBoardPagePosition,
+  ): WorkBoardResult {
+    val observedAt = position.observedAt
+    val observation = unitOfWork.workList.observation()
+    if (request.cursor != null && position.observation != observation) {
+      invalidWorkPaginationRequest("Work changed. Refresh the board.")
+    }
+    val after = position.afterKey?.let(::decodePosition)
+    val finishedFrom = observedAt.minus(request.finishedWithin.duration)
+    val filter = normalizeFilter(request.filter)
+    val diagnostics = mutableListOf<WorkBoardDiagnostic>()
+    val scanRequest = ScanRequest(observedAt, finishedFrom, filter, diagnostics)
+    val result =
+      if (unitOfWork.workBoardReadModel.isComplete()) {
+        readIndexed(projection, unitOfWork, request.pageSize, after, scanRequest)
+      } else {
+        val scanned = scanCandidates(projection, unitOfWork, scanRequest)
+        val ordered = scanned.items.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
+        val eligible = ordered.filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
+        BoardPage(eligible.take(request.pageSize), eligible.size > request.pageSize, scanned.examined)
+      }
+    val page = result.items
+    val hasNext = result.hasNext
+    val examined = result.examined
+    val nextCursor =
+      page.lastOrNull()?.takeIf { hasNext }?.let {
+        workBoardNextCursor(request, observedAt, encodePosition(it.position), observation)
+      }
+    return WorkBoardResult(
+      observedAt = observedAt,
+      finishedWithin = request.finishedWithin,
+      items =
+        page.map {
+          it.item.copy(observation = observation, databaseFileObservation = unitOfWork.databaseFileObservation)
+        },
+      diagnostics = diagnostics,
+      pageSize = request.pageSize,
+      nextCursor = nextCursor,
+      observation = observation,
+      candidatesExamined = examined,
+    )
+  }
+
+  private fun readIndexed(
+    projection: WorkBoardItemProjection,
+    unitOfWork: UnitOfWork,
+    pageSize: Int,
+    after: ProjectedBoardPosition?,
+    request: ScanRequest,
+  ): BoardPage {
+    val indexed = mutableListOf<ProjectedBoardItem>()
+    var indexedAfter =
+      after?.let {
+        WorkBoardReadModelKey(it.displayPriority, formatReadModelInstant(it.updatedAt), it.workId)
+      }
+    var examined = 0
+    var moreRows = true
+    var hasNext = false
+    while (moreRows && indexed.size <= pageSize) {
+      val limit = pageSize + 1 - indexed.size
+      val entries =
+        unitOfWork.workBoardReadModel.page(
+          WorkBoardReadModelPageQuery(request.finishedFrom, request.filter, indexedAfter, limit),
+        ).entries
+      examined += entries.size
+      moreRows = entries.size == limit
+      entries.mapNotNull { entry -> indexedItem(projection, unitOfWork, entry, request) }
+        .filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
+        .let(indexed::addAll)
+      indexedAfter = entries.lastOrNull()?.key ?: break
+      hasNext = indexed.size > pageSize
+    }
+    val ordered = indexed.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
+    return BoardPage(ordered.take(pageSize), hasNext, examined)
+  }
+
+  private fun indexedItem(
+    projection: WorkBoardItemProjection,
+    unitOfWork: UnitOfWork,
+    entry: WorkBoardReadModelPage.Entry,
+    request: ScanRequest,
+  ): ProjectedBoardItem? {
+    val row = (entry as? WorkBoardReadModelPage.Entry.Decoded)?.row
+    val needsProjection =
+      row == null || row.reprojectAt?.let { !it.isAfter(request.observedAt) } == true ||
+        row.membershipDeadline?.let { !it.isAfter(request.observedAt) } == true
+    val item =
+      if (needsProjection) {
+        projection.projectBoardCandidate(
+          unitOfWork,
+          entry.workId,
+          BoardProjectionWindow(request.observedAt, request.finishedFrom),
+          request.diagnostics,
+          AggregateSkipDiagnostics(),
+        )
+      } else {
+        row.item
+      } ?: return null
+    val projectedId = projection.boardId(item)
+    if (projectedId == null || projectedId != entry.workId || '\n' in projectedId) {
+      invalidWorkPaginationRequest("Work changed. Refresh the board.")
+    }
+    if (item.finishedAt?.isAfter(
+        request.observedAt,
+      ) == true || !projection.matchesFilter(item, request.filter)
+    ) {
+      return null
+    }
+    return ProjectedBoardItem(
+      item,
+      projectedId,
+      ProjectedBoardPosition(item.displayPriority, item.snapshot.updatedAt, entry.workId),
+    )
+  }
+
+  private data class BoardPage(val items: List<ProjectedBoardItem>, val hasNext: Boolean, val examined: Int)
+
+  private fun scanCandidates(
+    projection: WorkBoardItemProjection,
+    unitOfWork: UnitOfWork,
+    request: ScanRequest,
+  ): BoardScanResult {
+    val observedAt = request.observedAt
+    val finishedFrom = request.finishedFrom
+    val filter = request.filter
+    val diagnostics = request.diagnostics
+    val skipDiagnostics = AggregateSkipDiagnostics()
+    val projected = mutableListOf<ProjectedBoardItem>()
+    val seenIds = mutableSetOf<String>()
+    var candidateCursor: String? = null
+    var examined = 0
+
+    while (true) {
+      val rows =
+        unitOfWork.workList.boardCandidates(
+          WorkBoardCandidateQuery(
+            finishedFrom = finishedFrom,
+            observedAt = observedAt,
+            afterKey = candidateCursor,
+            limit = WORK_BOARD_CANDIDATE_BATCH_SIZE,
+          ),
+        )
+      if (rows.isEmpty()) break
+      candidateCursor = rows.last().key
+      for (row in rows) {
+        if (seenIds.add(row.id)) {
+          examined++
+          val item =
+            projection.projectBoardCandidate(
+              unitOfWork,
+              row.id,
+              BoardProjectionWindow(observedAt, finishedFrom),
+              diagnostics,
+              skipDiagnostics,
+            )
+          if (item != null) {
+            val projectedId = projection.boardId(item)
+            if (projectedId == null || projectedId != row.id || '\n' in projectedId) {
+              invalidWorkPaginationRequest("Work changed. Refresh the board.")
+            }
+            if (item.finishedAt?.isAfter(observedAt) != true && projection.matchesFilter(item, filter)) {
+              projected += ProjectedBoardItem(item, projectedId)
+            }
+          }
+        }
+      }
+    }
+
+    return BoardScanResult(projected, examined)
+  }
+
+  private data class BoardScanResult(val items: List<ProjectedBoardItem>, val examined: Int)
+
+  private data class ScanRequest(
+    val observedAt: Instant,
+    val finishedFrom: Instant,
+    val filter: String?,
+    val diagnostics: MutableList<WorkBoardDiagnostic>,
+  )
+
+  private fun normalizeFilter(value: String?): String? =
+    value?.trim()?.lowercase(Locale.ROOT)?.takeIf(String::isNotEmpty)
+
+  private fun encodePosition(position: ProjectedBoardPosition): String =
+    listOf(
+      PROJECTED_CURSOR_PREFIX.trimEnd('\n'),
+      position.displayPriority.toString(),
+      formatReadModelInstant(position.updatedAt),
+      position.workId,
+    )
+      .joinToString("\n")
+
+  private fun decodePosition(value: String): ProjectedBoardPosition {
+    val parts = value.split('\n', limit = POSITION_FIELD_COUNT)
+    if (!validPositionFields(parts)) {
+      invalidWorkPaginationRequest("Work changed. Refresh the board.")
+    }
+    val priority = parts[1].toIntOrNull() ?: invalidWorkPaginationRequest("Work changed. Refresh the board.")
+    if (priority.toString() != parts[1]) invalidWorkPaginationRequest("Work changed. Refresh the board.")
+    val updatedAt =
+      try {
+        Instant.parse(parts[2]).takeIf { it.toString() == parts[2] || formatReadModelInstant(it) == parts[2] }
+          ?: invalidWorkPaginationRequest("Work changed. Refresh the board.")
+      } catch (_: DateTimeParseException) {
+        invalidWorkPaginationRequest("Work changed. Refresh the board.")
+      }
+    return ProjectedBoardPosition(priority, updatedAt, parts[POSITION_WORK_ID_INDEX])
+  }
+
+  private fun validPositionFields(parts: List<String>): Boolean =
+    parts.size == POSITION_FIELD_COUNT && parts[0] == PROJECTED_CURSOR_PREFIX.trimEnd('\n') &&
+      validPositionWorkId(parts[POSITION_WORK_ID_INDEX])
+
+  private fun validPositionWorkId(id: String): Boolean = id.isNotBlank() && '\n' !in id
+
+  private fun formatReadModelInstant(value: Instant): String = READ_MODEL_INSTANT_FORMATTER.format(value)
+
+  private data class ProjectedBoardItem(
+    val item: WorkBoardItem,
+    val workId: String,
+    private val indexedPosition: ProjectedBoardPosition? = null,
+  ) {
+    val position: ProjectedBoardPosition
+      get() = indexedPosition ?: ProjectedBoardPosition(item.displayPriority, item.snapshot.updatedAt, workId)
+  }
+
+  private data class ProjectedBoardPosition(val displayPriority: Int, val updatedAt: Instant, val workId: String)
+
+  private val PROJECTED_ORDER =
+    compareBy<ProjectedBoardPosition> { it.displayPriority }
+      .thenByDescending { it.updatedAt }
+      .thenBy { it.workId }
+
+  private const val PROJECTED_CURSOR_PREFIX = "p\n"
+  private const val POSITION_FIELD_COUNT = 4
+  private const val POSITION_WORK_ID_INDEX = 3
+  private val READ_MODEL_INSTANT_FORMATTER =
+    DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSS'Z'").withZone(ZoneOffset.UTC)
+}

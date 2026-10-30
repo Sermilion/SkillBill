@@ -76,6 +76,13 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
     get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
 
   /**
+   * The correction a blocked terminal output of this step retries with inside the retryable-failure budget, or null
+   * when the block settles.
+   */
+  val blockedOutputRetryCorrection: (FeatureTaskRuntimeWorkflowArtifactMap) -> String?
+    get() = { null }
+
+  /**
    * The outcome [outputText] of [run] settles to before the shared output gate decodes it, or null when the shared
    * gate decodes it. A runtime-owned step settles its triage and repair sessions here.
    */

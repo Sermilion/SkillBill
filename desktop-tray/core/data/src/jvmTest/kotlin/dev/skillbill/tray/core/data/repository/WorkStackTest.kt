@@ -407,10 +407,11 @@ class WorkStackTest {
             process.processBirthToken, now, now.plusSeconds(3600))))
         unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "live", now.minusSeconds(3600), "live-branch"))
         repeat(5000) { index ->
-          val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "done-$index", now.minusSeconds(30), "branch-$index"))
+          val finishedAt = if (index < 4992) now.minusSeconds(21601) else now.minusSeconds(1)
+          val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "done-$index", finishedAt.minusSeconds(30), "branch-$index"))
           unit.standalonePhaseStatuses.update(StandalonePhaseStatusUpdate(record.executionId, record.statusRevision,
             record.leaseOwner, record.leaseGeneration, "terminal", "review", null, now.minusSeconds(1),
-            finishedAt = now.minusSeconds(1), terminalResult = "completed"))
+            finishedAt = finishedAt, terminalResult = "completed"))
         }
       }
       val runtime = RuntimeComponent::class.create(RuntimeContext(
@@ -492,7 +493,9 @@ class WorkStackTest {
         assertIs<Outcome.Failure>(source.pause(target))
         val current = value(source.board(WorkSection.GOALS, Retention.SIX_HOURS)).items.single()
         assertEquals(Outcome.Value(ControlConfirmation.INTENT_RECORDED), source.pause(current))
-        assertIs<Outcome.Failure>(source.pause(current))
+        val stalePause = assertIs<Outcome.Failure>(source.pause(current))
+        assertEquals(ProblemCode.STALE_TARGET, stalePause.problem.code)
+        assertEquals(StorageFailure.STALE_QUERY, stalePause.problem.storageFailure)
         assertIs<Outcome.Failure>(source.stop(current))
         assertFalse(factory.read { it.goalRunnerControls.controlState("older-goal").goalCompletedAt != null })
         val history = value(source.board(WorkSection.HISTORY, Retention.DAY, filter = "branch-4999"))
@@ -599,10 +602,11 @@ class WorkStackTest {
         assertIs<Outcome.Failure>(source.detail(first.items.first().identity, detailCursor))
         assertIs<Outcome.Failure>(source.board(WorkSection.PHASES, Retention.DAY, cursor))
         establishTemporarySchemaReadiness("desktop-replacement").use { replacement ->
-          source.selectDatabase(null)
           replacement.connection.close()
           fixture.connection.close()
-          java.nio.file.Files.move(replacement.dbPath, fixture.dbPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+          source.selectDatabase(fixture.tempDir.resolve("detached.db").toString())
+          java.nio.file.Files.move(fixture.dbPath, fixture.tempDir.resolve("previous.db"))
+          java.nio.file.Files.move(replacement.dbPath, fixture.dbPath)
           source.selectDatabase(fixture.dbPath.toString())
           val fresh = value(source.board(WorkSection.PHASES, Retention.DAY))
           assertTrue(fresh.items.isEmpty())

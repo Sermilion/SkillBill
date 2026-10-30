@@ -2,7 +2,9 @@ package skillbill.application.telemetry.service
 
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.ports.concurrency.InterruptSignalPort
+import skillbill.ports.config.model.ConfigDocumentReplaceResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -13,7 +15,10 @@ import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
+import skillbill.ports.telemetry.model.TelemetryConfigLevelWriteResult
 import skillbill.ports.telemetry.model.TelemetryConfigRead
+import skillbill.ports.telemetry.model.TelemetryConfigSnapshotRead
+import skillbill.ports.telemetry.model.TelemetryConfigWriteRequest
 import skillbill.ports.telemetry.model.TelemetryCorrelationStatus
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
@@ -271,7 +276,15 @@ private class DiagnosticTelemetryConfigStore : TelemetryConfigStore {
 
   override fun configPath(): Path = Path.of("/fake/config.json")
 
+  override fun configCandidatePaths(): List<Path> = listOf(configPath())
+
+  override fun <T> withConfigTransaction(action: () -> T): T = action()
+
+  override fun newInstallIdCandidate(): String = "install"
+
   override fun read(): TelemetryConfigRead = TelemetryConfigRead.Absent
+
+  override fun readSnapshot(): TelemetryConfigSnapshotRead = TelemetryConfigSnapshotRead.Absent(configPath())
 
   override fun ensure(): TelemetryConfigDocument =
     TelemetryConfigDocument(
@@ -283,7 +296,11 @@ private class DiagnosticTelemetryConfigStore : TelemetryConfigStore {
       ),
     )
 
-  override fun write(document: TelemetryConfigDocument) = Unit
+  override fun write(request: TelemetryConfigWriteRequest): ConfigDocumentReplaceResult =
+    ConfigDocumentReplaceResult.ChangedOnDisk(configPath())
+
+  override fun mutateTelemetryLevelAtomically(level: String): TelemetryConfigLevelWriteResult =
+    TelemetryConfigLevelWriteResult(false, "off")
 }
 
 private class PendingOutbox(
@@ -348,6 +365,9 @@ private class DiagnosticDatabaseSessionFactory(
   private val outbox: TelemetryOutboxRepository,
   private val reconciliationFailure: Throwable? = null,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 

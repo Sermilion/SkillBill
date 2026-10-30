@@ -36,4 +36,4 @@ The top bar switches between three views:
 
 ## Status
 
-Design reference only. Nothing here ships. The Compose implementation lives in `desktop-tray`, and the config write path belongs in `runtime-kotlin`; both are described in the handoff.
+Design reference only. Nothing here ships. The Compose implementation built to this design lives in `desktop/`, and the prototype describes that app as built (see the revision note in the handoff). `desktop-tray` stays the behavior reference, and the config write path belongs in `runtime-kotlin`.

@@ -61,6 +61,7 @@ internal fun linkProviderAgentsBody(args: NativeAgentLinkProviderBodyArgs): Nati
       desired = desired,
       managedRoots = managedRoots,
       sourceRoot = args.validationRoot,
+      environment = args.request.environment,
       beforeMutation = args.journal::beforeMutation,
       afterTemporaryCreation = args.journal::afterTemporaryCreation,
     ),

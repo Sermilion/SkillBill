@@ -82,6 +82,12 @@ internal object DatabaseSchema {
       "idx_standalone_phase_status_correlation",
       "idx_standalone_phase_status_retention",
       "idx_ide_status_workflow_execution_lookup",
+      "desktop_phase_board_group",
+      "desktop_goal_issue_identity",
+      "desktop_execution_identity_issue",
+      "desktop_verify_issue_identity",
+      "desktop_standalone_workflow_identity",
+      "desktop_execution_invocation_identity",
     )
 
   fun createBaseSchema(connection: Connection) {

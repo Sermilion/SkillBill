@@ -249,5 +249,6 @@ class IdeStatusModelsTest {
       updatedAt = Instant.parse("2026-08-06T10:00:00Z"),
       freshness = IdeStatusFreshness.FRESH,
       summary = "Goal SKILL-165 is planning subtasks (2/5 planned).",
+      title = "SKILL-1",
     )
 }

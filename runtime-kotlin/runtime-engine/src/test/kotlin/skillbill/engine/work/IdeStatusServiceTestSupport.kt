@@ -55,6 +55,7 @@ import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
@@ -344,6 +345,8 @@ internal fun ideStatusService(
           NoopRuntimeDiagnostics,
         ),
     )
+  val boardProjection = testBoardProjection(projector)
+  (database as? BoardProjectionCapture)?.accept(boardProjection)
   return IdeStatusService(
     database = database,
     projector = projector,
@@ -353,11 +356,18 @@ internal fun ideStatusService(
     repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
-    workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+    workBoardItemProjection = boardProjection,
     diagnostics = NoopRuntimeDiagnostics,
     incidentProjectionBuilder = testWorkIncidentProjectionBuilder(database, ideStatusClock),
   )
 }
+
+internal interface BoardProjectionCapture {
+  fun accept(projection: WorkBoardItemProjection)
+}
+
+private fun testBoardProjection(projector: IdeStatusProjector): WorkBoardItemProjection =
+  WorkBoardItemProjection(projector, EmitShapeValidator, NoopFeatureTaskRuntimeWorkerSupervisor, NoopRuntimeDiagnostics)
 
 internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =
   runCatching { Files.readString(repoRoot.resolve(".git").resolve("HEAD")) }.getOrNull()
@@ -547,6 +557,9 @@ internal class TrackingDatabase(
   internal val goalPage: WorkGoalSubtaskPage? = null,
   internal val qaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository(),
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   var readCalls: Int = 0
     internal set
   var writeCalls: Int = 0

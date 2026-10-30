@@ -215,7 +215,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     val observability = args.observability
     val fileManifest = args.fileManifest
     val disposition =
-      FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(
+      args.forcedDisposition ?: FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(
         outputMap,
         blockedDisposition,
       )

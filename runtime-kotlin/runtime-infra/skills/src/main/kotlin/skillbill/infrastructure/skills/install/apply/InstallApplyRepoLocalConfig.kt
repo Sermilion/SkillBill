@@ -2,25 +2,33 @@ package skillbill.infrastructure.skills.install.apply
 
 import skillbill.config.model.RepoLocalConfigKey
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.infrastructure.host.system.FileConfigDocumentLocks
+import skillbill.infrastructure.host.system.configDocumentIoException
+import skillbill.infrastructure.skills.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
 import skillbill.model.toPath
 import skillbill.ports.projectstore.ProjectStorePort
+import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 
 internal fun applyRepoLocalConfigScaffold(
   plan: InstallPlan,
   projectStore: ProjectStorePort,
   warnings: MutableList<InstallApplyIssue>,
+  failures: MutableList<InstallApplyIssue>,
 ) {
   val repoRoot = plan.request.repoRoot.toPath().toAbsolutePath().normalize()
-  scaffoldStep(InstallApplyIssueKind.REPO_LOCAL_CONFIG_SCAFFOLD_FAILED, warnings) {
+  scaffoldStep(InstallApplyIssueKind.REPO_LOCAL_CONFIG_SCAFFOLD_FAILED, warnings, failures) {
     writeDefaultConfigIfAbsent(projectStore.resolve(repoRoot).configPath, legacyConfigPath(repoRoot))
   }
-  scaffoldStep(InstallApplyIssueKind.REPO_LOCAL_CONFIG_SCAFFOLD_FAILED, warnings) {
+  scaffoldStep(InstallApplyIssueKind.REPO_LOCAL_CONFIG_SCAFFOLD_FAILED, warnings, failures) {
     appendGitignoreEntryIfAbsent(repoRoot)
   }
 }
@@ -28,16 +36,18 @@ internal fun applyRepoLocalConfigScaffold(
 private inline fun scaffoldStep(
   kind: InstallApplyIssueKind,
   warnings: MutableList<InstallApplyIssue>,
+  failures: MutableList<InstallApplyIssue>,
   step: () -> Path,
 ) {
   runCatching { step() }.onFailure { error ->
-    warnings.add(
+    error.rethrowIfCooperativeCancellationOrInterruption()
+    val issue =
       InstallApplyIssue(
         kind = kind,
         message = error.message.orEmpty(),
         causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
-      ),
-    )
+      )
+    if (error is SkillBillRuntimeException) failures.add(issue) else warnings.add(issue)
   }
 }
 
@@ -45,13 +55,37 @@ private fun writeDefaultConfigIfAbsent(
   configPath: Path,
   legacyConfigPath: Path,
 ): Path {
-  if (Files.exists(configPath) || Files.isRegularFile(legacyConfigPath)) {
-    return configPath
+  return FileConfigDocumentLocks.withLocks(listOf(configPath, legacyConfigPath)) {
+    val actualConfigPath = FileConfigDocumentLocks.lockedPath(configPath)
+    val actualLegacyConfigPath = FileConfigDocumentLocks.lockedPath(legacyConfigPath)
+    try {
+      if (configPathAttributes(
+          actualConfigPath,
+        ) != null || configPathAttributes(actualLegacyConfigPath)?.isRegularFile == true
+      ) {
+        return@withLocks actualConfigPath
+      }
+      Files.createDirectories(actualConfigPath.parent)
+      Files.writeString(actualConfigPath, defaultConfigContent())
+      actualConfigPath
+    } catch (error: IOException) {
+      throw configDocumentIoException(actualConfigPath, "initialize", error)
+    } catch (error: SecurityException) {
+      throw configDocumentIoException(actualConfigPath, "initialize", error)
+    }
   }
-  Files.createDirectories(configPath.parent)
-  Files.writeString(configPath, defaultConfigContent())
-  return configPath
 }
+
+private fun configPathAttributes(path: Path): BasicFileAttributes? =
+  try {
+    Files.readAttributes(path, BasicFileAttributes::class.java)
+  } catch (_: NoSuchFileException) {
+    null
+  } catch (error: IOException) {
+    throw configDocumentIoException(path, "inspect", error)
+  } catch (error: SecurityException) {
+    throw configDocumentIoException(path, "inspect", error)
+  }
 
 private fun legacyConfigPath(repoRoot: Path): Path =
   repoRoot.resolve(LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY).resolve(REPO_LOCAL_CONFIG_FILE_NAME)

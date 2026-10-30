@@ -1,3 +1,13 @@
+## [2026-10-30] SKILL-447 desktop runtime services
+Areas: runtime-engine, runtime-ports, runtime-contracts, runtime-infra, runtime-application, runtime-core, desktop-tray
+- Added bounded change signals and session-scoped pooled reads, a persisted board projection, typed controls, lifecycle checkpoints and latest-tick journal retention.
+- Board pages project and filter before sorting and paging. The cursor fixes observation time and filter scope; external process liveness can still change between pages.
+- RuntimeConfigEditService provides reusable validated config reads and snapshot-aware writes. Shared locks coordinate cooperating writers; YAML rewrites discard comments and reads expose that fact.
+- Goal purge protects the database path through discovery and external effects. Migration 92 rebuilds board rows with executing-agent data and migration 93 with item titles; DesktopReadSchema is 93.
+- UnitOfWork retains a Kotlin typealias after its move, but its underlying JVM type name changed for binary-linked consumers.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-25] SKILL-442 subtask 7: goal assessment PR, status and desktop surfaces
 Areas: runtime-engine (goalrunner execution/support, status, work IdeStatusProjector/Service); runtime-domain (goalrunner status models); runtime-cli (goal status, work detail mapping); runtime-contracts (work-detail version); orchestration/contracts work-detail schema; desktop-tray (domain, data mapper, feature/detail)
 - MEDIUM feature. The PR body gains a `## Goal Assessment` block from the stored assessment record via `GoalAssessmentPullRequestText` (reusable renderer), placed before the interaction trace section so the not-traced lines survive. Absent, skipped-no-changes and corrupt records each render one explicit line.

@@ -8,6 +8,7 @@ import skillbill.model.toPath
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceConfigRequest
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceRegistrationRequest
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceUnregisterRequest
+import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourcesFieldState
 import skillbill.ports.repository.toFileLocation
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 import java.nio.file.Files
@@ -251,6 +252,55 @@ class FileExternalPlatformPackSourceConfigStoreTest {
     assertFailsWith<ExternalPlatformPackConfigError> {
       store.readExternalPlatformPackSources(request(home, configPath(home)))
     }
+  }
+
+  @Test
+  fun `rollback unregister restores an explicit null sources field`(
+    @TempDir home: Path,
+  ) {
+    val packDir = Files.createDirectories(home.resolve("packs/kotlin"))
+    Files.createDirectories(home.resolve(".skill-bill"))
+    Files.writeString(configPath(home), "{\"install_id\":\"stable-id\",\"external_platform_pack_sources\":null}\n")
+    val source = ExternalPlatformPackSource(packDir.toFileLocation())
+
+    val registration = store.registerExternalPlatformPackSource(registrationRequest(home, configPath(home), source))
+    assertEquals(ExternalPlatformPackSourcesFieldState.NULL, registration.previousFieldState)
+    store.unregisterExternalPlatformPackSource(
+      ExternalPlatformPackSourceUnregisterRequest(
+        userHome = home,
+        environment = mapOf(CONFIG_ENVIRONMENT_KEY to configPath(home).toString()),
+        source = source,
+        restoreEmptyFieldState = registration.previousFieldState,
+      ),
+    )
+
+    val payload = JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(Files.readString(configPath(home))))!!
+    assertTrue(payload.containsKey(ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES))
+    assertEquals(null, payload[ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES])
+    assertEquals("stable-id", payload["install_id"])
+  }
+
+  @Test
+  fun `rollback unregister removes a sources field that was absent`(
+    @TempDir home: Path,
+  ) {
+    val packDir = Files.createDirectories(home.resolve("packs/kotlin"))
+    writeConfig(home, mapOf("install_id" to "stable-id"))
+    val source = ExternalPlatformPackSource(packDir.toFileLocation())
+
+    val registration = store.registerExternalPlatformPackSource(registrationRequest(home, configPath(home), source))
+    assertEquals(ExternalPlatformPackSourcesFieldState.ABSENT, registration.previousFieldState)
+    store.unregisterExternalPlatformPackSource(
+      ExternalPlatformPackSourceUnregisterRequest(
+        userHome = home,
+        environment = mapOf(CONFIG_ENVIRONMENT_KEY to configPath(home).toString()),
+        source = source,
+        restoreEmptyFieldState = registration.previousFieldState,
+      ),
+    )
+
+    val payload = JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(Files.readString(configPath(home))))!!
+    assertEquals(mapOf<String, Any?>("install_id" to "stable-id"), payload)
   }
 
   private fun configPath(home: Path): Path = home.resolve(".skill-bill").resolve("config.json")

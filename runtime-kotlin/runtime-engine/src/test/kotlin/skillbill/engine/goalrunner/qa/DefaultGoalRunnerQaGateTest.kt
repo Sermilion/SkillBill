@@ -20,6 +20,9 @@ import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
+import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
+import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
+import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaFailureKind
@@ -47,6 +50,41 @@ class DefaultGoalRunnerQaGateTest {
   @TempDir lateinit var home: Path
 
   private val clock = Clock.systemUTC()
+
+  @Test
+  fun `resuming settled quality keeps admitted inputs across launch changes`() {
+    val admissions = mutableListOf<GoalQualityExecutionInputs>()
+    val outcomes =
+      object : QaGateOutcomeStore() {
+        override fun admitGoalQualityExecution(
+          parentWorkflowId: String,
+          baselineContentFingerprint: String,
+          governingInputs: GoalQualityExecutionInputs,
+          executionPlans: GoalQualityExecutionPlans,
+        ): GoalQualityExecutionRecord {
+          admissions += governingInputs
+          return super.admitGoalQualityExecution(
+            parentWorkflowId,
+            baselineContentFingerprint,
+            governingInputs,
+            executionPlans,
+          )
+        }
+      }
+    val git = RecordingWorkflowGitOperations().apply { repositoryFingerprintValue = TREE_IDENTITY }
+    val gate = gate(git, outcomes)
+    val original = request().copy(intake = "SKILL-431")
+
+    val first = gate.run(state(), original)
+    val accepted = assertNotNull(outcomes.goalQualityExecution("goal-parent"))
+    val sameAgent = gate.run(state(), original.copy(intake = "parent-spec.md"))
+    val resumed = gate.run(state(), original.copy(invokedAgentId = "codex"))
+
+    assertEquals(listOf(admissions.first(), admissions.first(), admissions.first()), admissions)
+    assertEquals(first, sameAgent)
+    assertEquals(first, resumed)
+    assertEquals(accepted, outcomes.goalQualityExecution("goal-parent"))
+  }
 
   @Test
   fun `all children with QA plans and recorded outcomes skip goal QA`() {
@@ -219,7 +257,7 @@ class DefaultGoalRunnerQaGateTest {
     ) = Unit
   }
 
-  private class QaGateOutcomeStore(
+  private open class QaGateOutcomeStore(
     private val childPlan: Boolean = false,
     private val childOutcome: GoalSubtaskQaSummary = GoalSubtaskQaSummary.NotRecorded,
     private val parentOutcome: FeatureTaskQaOutcome? = null,

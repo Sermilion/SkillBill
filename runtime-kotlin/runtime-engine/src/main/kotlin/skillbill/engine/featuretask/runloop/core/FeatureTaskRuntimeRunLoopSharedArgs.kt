@@ -56,6 +56,7 @@ internal data class TerminalOutputAttemptArgs(
   val observability: FeatureTaskRuntimeRunObservability,
   val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   val session: FeatureTaskRuntimeRunSessionObservations,
+  val forcedDisposition: FeatureTaskRuntimeFailureDisposition? = null,
 )
 
 internal data class UnattributableRecordRejectionArgs(
@@ -249,6 +250,7 @@ internal data class SettleValidatedOutputPauseArgs(
   val observability: FeatureTaskRuntimeRunObservability,
   val repositoryFingerprint: String?,
   val blockedDisposition: FeatureTaskRuntimeFailureDisposition,
+  val blockedRetryCorrection: String? = null,
 )
 
 internal data class ReconstructFixLoopBudgetBasesArgs(

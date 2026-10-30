@@ -1,6 +1,7 @@
 package skillbill.application.review.snapshot
 
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
@@ -56,6 +57,11 @@ class ReviewSnapshotPruneServiceTest {
   }
 
   private object StubSessionFactory : DatabaseSessionFactory {
+    override fun acquireDatabasePathProtection() =
+      DatabasePathProtectionResult.Unavailable(
+        "Database path protection is not available.",
+      )
+
     override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
       OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 

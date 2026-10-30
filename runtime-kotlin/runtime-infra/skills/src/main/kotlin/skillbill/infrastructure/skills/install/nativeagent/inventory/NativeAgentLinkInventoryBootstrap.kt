@@ -3,9 +3,16 @@ package skillbill.infrastructure.skills.install.nativeagent.inventory
 import skillbill.error.core.InvalidNativeAgentLinkInventoryDecodeError
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.nativeagent.support.agentDirectoryEntries
+import skillbill.infrastructure.skills.nativeagent.support.agentObservedAttributes
+import skillbill.infrastructure.skills.nativeagent.support.agentPathIsSymbolicLink
+import skillbill.infrastructure.skills.nativeagent.support.rethrowAgentOperationInterruption
+import skillbill.infrastructure.skills.nativeagent.support.verifyObservedDirectory
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 
 internal object NativeAgentLinkInventoryBootstrap {
   data class BootstrapPlan(
@@ -31,10 +38,11 @@ internal object NativeAgentLinkInventoryBootstrap {
     home: Path,
     managedRoots: List<Path>,
     sourceRoot: Path,
+    environment: Map<String, String>,
   ): BootstrapPlan {
     val results =
       NativeAgentProvider.entries.map { provider ->
-        bootstrapProvider(provider, home, managedRoots, sourceRoot)
+        bootstrapProvider(provider, home, managedRoots, sourceRoot, environment)
       }
     return BootstrapPlan(
       retain = results.flatMap { it.retain },
@@ -47,18 +55,27 @@ internal object NativeAgentLinkInventoryBootstrap {
     home: Path,
     managedRoots: List<Path>,
     sourceRoot: Path,
+    environment: Map<String, String>,
   ): ProviderBootstrapResult {
     val retain = mutableListOf<NativeAgentLinkInventoryEntry>()
     val remove = mutableListOf<NativeAgentLinkInventoryEntry>()
     val sourceRootPath = sourceRoot.toAbsolutePath().normalize()
     val context = LinkInspectionContext(provider, home, managedRoots, sourceRootPath, retain, remove)
-    provider.homeAgentDirs(home)
-      .filter(Files::isDirectory)
-      .forEach { directory ->
-        Files.list(directory).use { paths ->
-          paths.filter(Files::isSymbolicLink).forEach { link ->
-            inspectLink(link, context)
-          }
+    provider.inventoryHomeAgentDirs(home, environment)
+      .forEach { target ->
+        target.observedParent?.let { parent ->
+          verifyObservedDirectory(parent, "inspect ${provider.name} native-agent profile root")
+        }
+        val operation = "inspect ${provider.name} native-agent link"
+        val links =
+          agentDirectoryEntries(target.path, "list ${provider.name} native-agent directory")
+            .mapNotNull { link ->
+              val attributes = agentObservedAttributes(link, operation, followLinks = false)
+              if (attributes.isSymbolicLink) link else null
+            }
+        links.forEach { link -> inspectLink(link, context, environment) }
+        target.observedParent?.let { parent ->
+          verifyObservedDirectory(parent, "inspect ${provider.name} native-agent profile root")
         }
       }
     return ProviderBootstrapResult(retain, remove)
@@ -67,6 +84,7 @@ internal object NativeAgentLinkInventoryBootstrap {
   private fun inspectLink(
     link: Path,
     context: LinkInspectionContext,
+    environment: Map<String, String>,
   ) {
     val raw = readManagedLinkTarget(link)
     val resolved = link.parent.resolve(raw).toAbsolutePath().normalize()
@@ -110,7 +128,14 @@ internal object NativeAgentLinkInventoryBootstrap {
         contentDigest = digest,
         sourceRoot = context.sourceRoot,
       )
-    if (NativeAgentLinkInventoryDecode.isSemanticallyValid(entry, context.home, context.managedRoots)) {
+    if (
+      NativeAgentLinkInventoryDecode.isBootstrapSemanticallyValid(
+        entry,
+        context.home,
+        context.managedRoots,
+        environment,
+      )
+    ) {
       context.retain += entry
     } else {
       context.remove += entry
@@ -121,6 +146,13 @@ internal object NativeAgentLinkInventoryBootstrap {
     return try {
       Files.readSymbolicLink(link)
     } catch (error: IOException) {
+      rethrowAgentOperationInterruption(error)
+      throw InvalidNativeAgentLinkInventoryDecodeError(
+        path = link.toString(),
+        reason = "managed link target could not be read",
+        cause = error,
+      )
+    } catch (error: SecurityException) {
       throw InvalidNativeAgentLinkInventoryDecodeError(
         path = link.toString(),
         reason = "managed link target could not be read",
@@ -129,20 +161,58 @@ internal object NativeAgentLinkInventoryBootstrap {
     }
   }
 
+  private fun bootstrapAttributes(resolved: Path): BasicFileAttributes? =
+    try {
+      Files.readAttributes(resolved, BasicFileAttributes::class.java)
+    } catch (error: NoSuchFileException) {
+      rethrowAgentOperationInterruption(error)
+      null
+    } catch (error: IOException) {
+      rethrowAgentOperationInterruption(error)
+      throw InvalidNativeAgentLinkInventoryDecodeError(
+        path = resolved.toString(),
+        reason = "linked artifact cannot be inspected",
+        cause = error,
+      )
+    } catch (error: SecurityException) {
+      throw InvalidNativeAgentLinkInventoryDecodeError(
+        path = resolved.toString(),
+        reason = "linked artifact cannot be inspected",
+        cause = error,
+      )
+    }
+
   private fun digestForBootstrapEntry(resolved: Path): String? {
-    if (!Files.isRegularFile(resolved) || !Files.isReadable(resolved)) {
+    val attributes = bootstrapAttributes(resolved) ?: return null
+    if (!attributes.isRegularFile) {
       return null
     }
     return try {
       sha256Hex(Files.readAllBytes(resolved))
-    } catch (error: IOException) {
+    } catch (error: NoSuchFileException) {
+      rethrowAgentOperationInterruption(error)
       throw InvalidNativeAgentLinkInventoryDecodeError(
         path = resolved.toString(),
-        reason = "linked artifact is not hashable: ${error.message.orEmpty()}",
+        reason = "linked artifact disappeared after inspection",
         cause = error,
       )
+    } catch (error: IOException) {
+      rethrowAgentOperationInterruption(error)
+      failUnhashableArtifact(resolved, error)
+    } catch (error: SecurityException) {
+      failUnhashableArtifact(resolved, error)
     }
   }
+
+  private fun failUnhashableArtifact(
+    path: Path,
+    error: Exception,
+  ): Nothing =
+    throw InvalidNativeAgentLinkInventoryDecodeError(
+      path = path.toString(),
+      reason = "linked artifact is not hashable: ${error.message.orEmpty()}",
+      cause = error,
+    )
 
   fun removeIfStillManaged(
     entry: NativeAgentLinkInventoryEntry,
@@ -153,7 +223,7 @@ internal object NativeAgentLinkInventoryBootstrap {
     val link = entry.installedPath
     val provider = NativeAgentLinkInventoryPaths.provider(entry.provider)
     if (link.fileName.toString() != provider.fileName(entry.logicalName)) return
-    if (!Files.isSymbolicLink(link)) return
+    if (!agentPathIsSymbolicLink(link, "inspect managed ${provider.name} agent link")) return
     val rawTarget = readManagedLinkTarget(link)
     val resolved = (link.parent ?: link.toAbsolutePath().parent).resolve(rawTarget).toAbsolutePath().normalize()
     if (isCanonicalNativeAgentArtifactTarget(home, provider, entry.logicalName, resolved, managedRoots)) {

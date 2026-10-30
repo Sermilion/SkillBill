@@ -18,8 +18,12 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaCriteriaSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaFindingsSummary
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordFeatureTaskQaOutcomes
@@ -50,6 +54,7 @@ import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
+import skillbill.infrastructure.sqlite.core.schema.separateDesktopChangeSignals
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
@@ -885,4 +890,39 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 86,
       name = "record-goal-assessment-counts",
       operation = ::recordGoalAssessmentCounts,
+    ) +
+    DatabaseMigration(
+      version = 87,
+      name = "separate-desktop-change-signals",
+      operation = ::separateDesktopChangeSignals,
+    ) +
+    DatabaseMigration(
+      version = 88,
+      name = "add-work-board-read-model",
+      operation = WorkBoardReadModelMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 89,
+      name = "refresh-work-board-dependencies",
+      operation = WorkBoardReadModelDependencyMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 90,
+      name = "prune-worktree-edit-journal-to-latest-tick",
+      operation = ::pruneWorktreeEditJournalToLatestTick,
+    ) +
+    DatabaseMigration(
+      version = 91,
+      name = "correct-worktree-edit-journal-prune-chronological-order",
+      operation = ::pruneWorktreeEditJournalToLatestTick,
+    ) +
+    DatabaseMigration(
+      version = 92,
+      name = "rebuild-work-board-executing-agent",
+      operation = WorkBoardReadModelRebuildMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 93,
+      name = "rebuild-work-board-titles",
+      operation = WorkBoardReadModelRebuildMigration::apply,
     )

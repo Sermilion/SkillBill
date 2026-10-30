@@ -15,6 +15,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.UnavailableRejectedOutputDiagnosticRepository
@@ -241,6 +242,11 @@ class EvidenceBlockIncidentInvestigatorTest {
     )
 
   private class FakeDatabase(private val outputs: RejectedOutputDiagnosticRepository) : DatabaseSessionFactory {
+    override fun acquireDatabasePathProtection() =
+      DatabasePathProtectionResult.Unavailable(
+        "Database path protection is not available.",
+      )
+
     override fun resolveDbPath(): Path = Path.of("/tmp/block-incidents.db")
 
     override fun databaseExists(): Boolean = true

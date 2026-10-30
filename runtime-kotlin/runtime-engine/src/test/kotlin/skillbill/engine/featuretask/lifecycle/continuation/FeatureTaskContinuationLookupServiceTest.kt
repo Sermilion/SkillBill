@@ -16,6 +16,7 @@ import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
+import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
@@ -44,6 +45,9 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
@@ -60,6 +64,51 @@ private val DECOMPOSITION_RUNTIME_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()
 
 class FeatureTaskContinuationLookupServiceTest {
+  @Test
+  fun `operator retry makes a blocked plan claimable exactly once`() {
+    val fixture = fixture()
+    val opened = fixture.open(REPOSITORY_A, definition = SkeletonDefinition.PLAN)
+    val record =
+      FeatureTaskRuntimePhaseRecord(
+        phaseId = "plan",
+        status = WorkflowStepStatus.BLOCKED,
+        attemptCount = 1,
+        startedAt = Instant.EPOCH,
+        resolvedAgentId = "codex",
+        blockedReason = "Connection decision required",
+      )
+    fixture.service.update(
+      WorkflowFamilyKind.TASK_RUNTIME,
+      WorkflowUpdateRequest(
+        workflowId = opened.workflowId,
+        workflowStatus = WorkflowStatus.BLOCKED.wireValue,
+        currentStepId = record.phaseId,
+        artifactsPatch =
+          WorkflowArtifactPatch.from(
+            mapOf(
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+                mapOf(record.phaseId to record.asWorkflowArtifactEntry()),
+              ),
+            ),
+          ),
+      ),
+    )
+
+    assertIs<WorkflowUpdateResult.Ok>(
+      fixture.service.retryBlockedFeatureTaskRuntimePhase(opened.workflowId, "plan", "Use provider configuration"),
+    )
+
+    val candidate =
+      assertIs<FeatureTaskContinuationLookupResult.Resumable>(
+        fixture.lookup.lookupPlan("SKILL-120", REPOSITORY_A, opened.workflowId),
+      ).candidate
+    assertNotNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN).inputs))
+    assertNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN).inputs))
+    assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
+      fixture.lookup.lookupPlan("SKILL-120", REPOSITORY_A, opened.workflowId),
+    )
+  }
+
   @Test
   fun `lookup returns no match without mutating workflow state`() {
     val fixture = fixture()
@@ -576,11 +625,12 @@ class FeatureTaskContinuationLookupServiceTest {
     fun open(
       repositoryIdentity: String,
       routeScope: FeatureTaskRouteScope = FeatureTaskRouteScope.STANDALONE,
+      definition: SkeletonDefinition = SkeletonDefinition.STANDALONE,
     ): WorkflowOpenResult.Ok =
       assertIs(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
-            executionPlan = testExecutionPlan(),
+            executionPlan = testExecutionPlan(definition),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = repositoryIdentity,

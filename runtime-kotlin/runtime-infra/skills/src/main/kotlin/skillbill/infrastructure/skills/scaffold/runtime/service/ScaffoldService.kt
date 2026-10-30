@@ -8,6 +8,7 @@ import skillbill.infrastructure.skills.scaffold.payload.detectKind
 import skillbill.infrastructure.skills.scaffold.payload.validatePayloadVersion
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.ports.install.platformpack.ExternalPlatformPackSourceConfigPort
+import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourcesFieldState
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.system.HostPlatformPort
 import skillbill.scaffold.model.CodeReviewBaselineLayer
@@ -31,6 +32,7 @@ internal data class ScaffoldTransaction(
   var externalPackConfigHome: Path? = null,
   var externalPackConfigEnvironment: Map<String, String> = emptyMap(),
   var packSourceConfig: ExternalPlatformPackSourceConfigPort? = null,
+  var externalPackPreviousFieldState: ExternalPlatformPackSourcesFieldState? = null,
 )
 
 internal data class ScaffoldPlan(
@@ -145,29 +147,40 @@ internal fun runScaffold(
 ): ScaffoldResult {
   val txn = ScaffoldTransaction()
   var committed = false
-  return Closeable {
-    if (!committed) {
-      rollback(txn, adapters)
-    }
-  }.use {
-    val execution =
-      executeScaffold(
-        txn,
-        plan,
-        repoRoot,
-        adapters,
-        runtime,
+  val execute = {
+    Closeable {
+      if (!committed) {
+        rollback(txn, adapters)
+      }
+    }.use {
+      val execution =
+        executeScaffold(
+          txn,
+          plan,
+          repoRoot,
+          adapters,
+          runtime,
+        )
+      committed = true
+      ScaffoldResult(
+        kind = plan.kind,
+        skillName = plan.skillName,
+        skillPath = plan.skillPath.toFileLocation(),
+        createdFiles = execution.createdFiles.map { entry -> entry.toFileLocation() },
+        manifestEdits = execution.manifestEdits.map { entry -> entry.toFileLocation() },
+        symlinks = execution.symlinks.map { entry -> entry.toFileLocation() },
+        installTargets = execution.installTargets.map { entry -> entry.toFileLocation() },
+        notes = plan.notes + execution.notes,
       )
-    committed = true
-    ScaffoldResult(
-      kind = plan.kind,
-      skillName = plan.skillName,
-      skillPath = plan.skillPath.toFileLocation(),
-      createdFiles = execution.createdFiles.map { entry -> entry.toFileLocation() },
-      manifestEdits = execution.manifestEdits.map { entry -> entry.toFileLocation() },
-      symlinks = execution.symlinks.map { entry -> entry.toFileLocation() },
-      installTargets = execution.installTargets.map { entry -> entry.toFileLocation() },
-      notes = plan.notes + execution.notes,
-    )
+    }
+  }
+  val registerExternalPack =
+    plan.externalPackRegistrationMode == PACK_REGISTRATION_CREATE ||
+      plan.externalPackRegistrationMode == PACK_REGISTRATION_REGISTER
+  val store = runtime.packSourceConfig
+  return if (registerExternalPack && store != null) {
+    store.withConfigTransaction(runtime.userHome, runtime.environment, execute)
+  } else {
+    execute()
   }
 }

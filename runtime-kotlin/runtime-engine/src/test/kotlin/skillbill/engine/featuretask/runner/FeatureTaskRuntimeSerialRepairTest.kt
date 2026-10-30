@@ -8,6 +8,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
+import skillbill.engine.featuretask.lifecycle.core.absentDatabaseCheckpoint
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
@@ -880,6 +881,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         testHarnessClock,
         admission.admission,
         NoopRuntimeDiagnostics,
+        absentDatabaseCheckpoint,
       )
     val inputs =
       admission.creationResolver().resolveInputs(

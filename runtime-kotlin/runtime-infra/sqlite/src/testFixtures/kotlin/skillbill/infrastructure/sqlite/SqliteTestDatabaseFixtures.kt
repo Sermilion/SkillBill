@@ -13,6 +13,7 @@ import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.idestatus.WorkBoardReadModelProjector
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -102,6 +103,7 @@ fun sqliteSessionFactoryForTests(
   environment: Map<String, String>,
   clock: Clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
   diagnostics: RuntimeDiagnostics = SqliteTestDiagnostics,
+  boardReadModelProjector: WorkBoardReadModelProjector = TestWorkBoardReadModelProjector,
 ): SQLiteDatabaseSessionFactory =
   sqliteDatabaseSessionFactory(
     userHome = userHome,
@@ -109,6 +111,7 @@ fun sqliteSessionFactoryForTests(
     environment = environment,
     clock = clock,
     diagnostics = diagnostics,
+    boardReadModelProjector = boardReadModelProjector,
   )
 
 data class MaintenanceWorkflowSnapshot(

@@ -2,12 +2,20 @@ package skillbill.infrastructure.skills.nativeagent.rendering
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.declaresReadOnlyToolset
+import skillbill.infrastructure.skills.nativeagent.support.NativeAgentObservedPath
+import skillbill.infrastructure.skills.nativeagent.support.agentPathExists
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.codexAgentsTargets
 import skillbill.infrastructure.skills.nativeagent.support.detectCodexAgentsTargets
+import skillbill.infrastructure.skills.nativeagent.support.discoverClaudeConfigRoots
+import skillbill.infrastructure.skills.nativeagent.support.discoverCodexConfigRoots
 import skillbill.install.model.SupportedAgent
-import java.nio.file.Files
 import java.nio.file.Path
+
+internal data class NativeAgentInventoryAgentDirectory(
+  val path: Path,
+  val observedParent: NativeAgentObservedPath?,
+)
 
 enum class NativeAgentProvider {
   Claude {
@@ -66,6 +74,31 @@ enum class NativeAgentProvider {
     environment: Map<String, String> = emptyMap(),
   ): List<Path>
 
+  internal fun inventoryHomeAgentDirs(
+    home: Path,
+    environment: Map<String, String>,
+  ): List<NativeAgentInventoryAgentDirectory> =
+    when (this) {
+      Claude -> {
+        val roots = discoverClaudeConfigRoots(home, resolveEnvironmentMap(environment))
+        roots.paths.map { root ->
+          NativeAgentInventoryAgentDirectory(root.resolve("agents"), roots.observedRoots[root])
+        }
+      }
+      Codex -> {
+        val roots = discoverCodexConfigRoots(home, resolveEnvironmentMap(environment))
+        val profileDirectories =
+          roots.paths.map { root ->
+            NativeAgentInventoryAgentDirectory(root.resolve("agents"), roots.observedRoots[root])
+          }
+        (profileDirectories + NativeAgentInventoryAgentDirectory(home.resolve(".agents/agents"), null))
+          .distinctBy { directory -> directory.path.toAbsolutePath().normalize() }
+      }
+      Junie,
+      Cursor,
+      -> homeAgentDirs(home, environment).map { path -> NativeAgentInventoryAgentDirectory(path, null) }
+    }
+
   fun fileName(logicalName: String): String = "$logicalName.$extension"
 
   fun activeHomeAgentDirs(
@@ -77,10 +110,15 @@ enum class NativeAgentProvider {
       Codex -> detectCodexAgentsTargets(home, resolveEnvironmentMap(environment)).map { it.path }
       Junie,
       Cursor,
-      ->
-        homeAgentDirs(home, environment)
-          .takeIf { Files.exists(home.resolve(requireNotNull(supportedAgent.simpleHomeDirectory))) }
-          .orEmpty()
+      -> {
+        val targets = homeAgentDirs(home, environment)
+        val root = home.resolve(requireNotNull(supportedAgent.simpleHomeDirectory))
+        val present =
+          targets.plusElement(root).map { path ->
+            agentPathExists(path, "inspect ${supportedAgent.wireValue} native-agent directory")
+          }.any { exists -> exists }
+        if (present) targets else emptyList()
+      }
     }.map { it.toAbsolutePath().normalize() }
 
   fun cacheArtifactPath(

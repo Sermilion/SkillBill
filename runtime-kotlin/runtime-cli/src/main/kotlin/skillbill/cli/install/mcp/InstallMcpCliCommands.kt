@@ -14,6 +14,7 @@ import skillbill.install.model.McpProfileOutcome
 import skillbill.install.model.McpRegistrationFailureCode
 import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
+import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
 import java.nio.file.Path
@@ -37,6 +38,8 @@ class InstallRegisterMcpCommand(
           agent = agent,
           runtimeMcpBin = Path.of(runtimeMcpBin),
           home = inputs.userHome,
+          profileEnvironment =
+            InstallMcpProfileEnvironment.from(inputs.environment) ?: InstallMcpProfileEnvironment(),
         ),
       ).outcome
     val result =
@@ -65,6 +68,8 @@ class InstallUnregisterMcpCommand(
         InstallMcpUnregistrationRequest(
           agent = agent,
           home = inputs.userHome,
+          profileEnvironment =
+            InstallMcpProfileEnvironment.from(inputs.environment) ?: InstallMcpProfileEnvironment(),
         ),
       ).outcome
     val result =

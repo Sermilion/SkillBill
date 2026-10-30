@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.core.migration.area
 
 import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
+import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import java.sql.Connection
 
@@ -208,4 +209,15 @@ internal fun Connection.optionalRepairEvidenceColumn(table: String): String {
       statement.executeQuery().use { rows -> rows.next() }
     }
   return if (hasRepairEvidence) ",\n                repair_evidence_json TEXT" else ""
+}
+
+internal object GoalNoChangeReasonMigration {
+  fun apply(connection: Connection) {
+    TABLES
+      .filter { table -> DatabaseColumnMigrations.tableExists(connection, table) }
+      .forEach { table -> DatabaseColumnMigrations.ensureColumn(connection, table, COLUMN, "TEXT") }
+  }
+
+  private val TABLES = listOf("goal_run_sessions", "goal_issue_progress")
+  private const val COLUMN = "no_change_reason"
 }

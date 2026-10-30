@@ -95,9 +95,15 @@ class GoalRunnerStatusService(
 
   fun reset(request: GoalRunnerResetRequest): GoalRunnerResetResult? = resetReplanCoordinator.reset(request)
 
-  fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult =
+  fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult = purge(request, null)
+
+  fun purge(
+    request: GoalRunnerPurgeRequest,
+    expectedObservation: DatabaseFileObservation?,
+  ): GoalRunnerPurgeResult =
     purgeCoordinator.purge(
       request.copy(repoRoot = request.repoRoot ?: repositoryRoot.path),
+      expectedObservation,
     )
 
   fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? = resetReplanCoordinator.replan(request)

@@ -75,6 +75,17 @@ class GoalIntakePreparationTest {
   }
 
   @Test
+  fun `plan intake names the bundle from the first clause of a long first line`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-long-line")
+    val intake =
+      "SKILL-79 Linear progress sync through MCP: let a goal run link to a Linear issue and keep one comment updated."
+
+    val seed = intakePlanSpec("SKILL-79", intake, repoRoot)
+
+    assertEquals(specsRoot.resolve("SKILL-79-linear-progress-sync-through-mcp/spec.md"), seed.specPath)
+  }
+
+  @Test
   fun `a planned spec path is computed without writing and refuses intake without requirements`() {
     val repoRoot = Files.createTempDirectory("skillbill-plan-intake-planned")
 

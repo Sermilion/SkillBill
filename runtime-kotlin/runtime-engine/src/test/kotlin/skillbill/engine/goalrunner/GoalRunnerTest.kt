@@ -129,6 +129,7 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -6351,6 +6352,9 @@ private class GoalStatusPhaseLedgerHarness {
 private class GoalStatusSeedableDatabase(
   private val repository: GoalStatusSeedableWorkflowStateRepository,
 ) : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable("Protection is not provided by this test double.")
+
   override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
     OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
@@ -6477,6 +6481,11 @@ private object GoalTestNoopSnapshotValidator : WorkflowSnapshotValidator {
 }
 
 private object GoalTestEmptyDatabase : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
+
   private val dbPath = Path.of("/fake/goal-test-metrics.db")
 
   override fun resolveDbPath(): Path = dbPath
@@ -6511,6 +6520,11 @@ private object GoalTestEmptyDatabase : DatabaseSessionFactory {
 }
 
 private class GoalTestPlanningDatabase : DatabaseSessionFactory {
+  override fun acquireDatabasePathProtection() =
+    DatabasePathProtectionResult.Unavailable(
+      "Database path protection is not available.",
+    )
+
   private val dbPath = Path.of("/fake/goal-test-planning.db")
   val deletedParentGoalIds = mutableListOf<String>()
   val deletedChildWorkflowParentIds = mutableListOf<String>()
