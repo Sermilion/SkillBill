@@ -83,8 +83,6 @@ internal interface PhaseStatusCapability {
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution?
-
-  fun reportedGate(stepId: String): PhaseReportedGate? = null
 }
 
 /** A strategy whose steps own acceptance-criterion repair accounting. */

@@ -1,15 +1,18 @@
 package skillbill.engine.featuretask.slot.preplan
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.slot.PhaseBlockedOutputRetryHooks
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
-internal object PreplanTrackerBlockHooks : PhaseStepHooks<PhaseAcceptedStepExecution> {
-  override val blockedOutputRetryCorrection: (FeatureTaskRuntimeWorkflowArtifactMap) -> String? =
-    { outputMap -> TRACKER_BLOCK_CORRECTION.takeIf { blocksOnTrackerData(outputMap) } }
+internal object PreplanTrackerBlockHooks :
+  PhaseStepHooks<PhaseAcceptedStepExecution>,
+  PhaseBlockedOutputRetryHooks {
+  override fun blockedOutputRetryCorrection(outputMap: FeatureTaskRuntimeWorkflowArtifactMap): String? =
+    TRACKER_BLOCK_CORRECTION.takeIf { blocksOnTrackerData(outputMap) }
 
   internal fun blocksOnTrackerData(outputMap: FeatureTaskRuntimeWorkflowArtifactMap): Boolean {
     if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.BLOCKED) {

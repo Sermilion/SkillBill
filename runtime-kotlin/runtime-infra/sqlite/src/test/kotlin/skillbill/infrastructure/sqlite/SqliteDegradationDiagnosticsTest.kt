@@ -84,6 +84,8 @@ class SqliteDegradationDiagnosticsTest {
   private class RecordingDiagnostics : RuntimeDiagnostics {
     val warnings = CopyOnWriteArrayList<String>()
 
+    override fun info(message: String) = Unit
+
     override fun warning(
       message: String,
       error: Throwable?,

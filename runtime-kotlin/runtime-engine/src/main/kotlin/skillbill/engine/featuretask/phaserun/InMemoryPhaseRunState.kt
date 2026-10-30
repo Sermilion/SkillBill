@@ -28,10 +28,12 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
+import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.missingValidationGate
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.boundedIdeStatusActivity
@@ -102,6 +104,10 @@ internal class InMemoryPhaseRunState(
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
   override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
+
+  override val launchPromptContext: String = ""
+
+  override fun fanOut(stepId: String): PhaseRunFanOut = throw PhaseRunFanOutUnsupportedError(stepId)
 
   override fun bindings(run: PhaseRun): PhaseBindingFactory {
     require(run.request === facts)

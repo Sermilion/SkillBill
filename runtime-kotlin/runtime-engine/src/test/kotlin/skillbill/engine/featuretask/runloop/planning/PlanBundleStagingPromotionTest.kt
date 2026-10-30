@@ -254,6 +254,8 @@ private class RecordingStagingDiagnostics : RuntimeDiagnostics {
   val warnings = mutableListOf<String>()
   val errors = mutableListOf<Throwable>()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

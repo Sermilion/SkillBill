@@ -87,6 +87,8 @@ class ProjectStoreCatalogTest {
         override fun lineage(repoRoot: Path): RepositoryLineage? = null
       },
       object : RuntimeDiagnostics {
+        override fun info(message: String) = Unit
+
         override fun warning(
           message: String,
           error: Throwable?,

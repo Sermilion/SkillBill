@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseAfterCompletionHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
@@ -153,7 +154,9 @@ class PlanFanOutStrategy private constructor(
     }
   }
 
-  private object PlanSubtasksStepHooks : PhaseStepHooks<PhasePlanningAgentStepBinding> {
+  private object PlanSubtasksStepHooks :
+    PhaseStepHooks<PhasePlanningAgentStepBinding>,
+    PhaseAfterCompletionHooks {
     override val contextKind = PhaseStepHookContextKind.PLANNING
 
     override fun afterCompletion(

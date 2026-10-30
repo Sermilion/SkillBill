@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseCompletedRoundHooks
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
@@ -20,6 +21,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
+import skillbill.engine.featuretask.slot.state.PhasePlanResume
 import skillbill.engine.featuretask.slot.state.PhasePlanningAgentStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -72,7 +74,9 @@ class AgentPlanStrategy :
     return PhaseStepDescriptor(PhaseBindingFamily.PlanningAgent, PlanStepHooks) { run, state -> runPlan(run, state) }
   }
 
-  internal object PlanStepHooks : PhaseStepHooks<PhasePlanningAgentStepBinding> {
+  internal object PlanStepHooks :
+    PhaseStepHooks<PhasePlanningAgentStepBinding>,
+    PhaseCompletedRoundHooks {
     override val contextKind = PhaseStepHookContextKind.PLANNING
 
     override fun settleCompletedRound(
@@ -91,7 +95,7 @@ class AgentPlanStrategy :
       (context as PhasePlanningOutputContext).withAuthoredParentSpecPath(attested)
   }
 
-  internal object PlanResumeRules : PhaseResumeRules {
+  internal object PlanResumeRules : PhasePlanResume {
     override val buffersIncompleteOutput: Boolean = false
 
     override fun persistedBlockResume(
@@ -103,7 +107,7 @@ class AgentPlanStrategy :
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN !in completedStepIds
   }
 
-  internal object PlanSubtasksResumeRules : PhaseResumeRules {
+  internal object PlanSubtasksResumeRules : PhasePlanResume {
     override val buffersIncompleteOutput: Boolean = false
 
     override fun persistedBlockResume(

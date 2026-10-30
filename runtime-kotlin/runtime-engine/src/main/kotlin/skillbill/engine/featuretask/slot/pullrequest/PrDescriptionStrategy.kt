@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
@@ -52,7 +53,9 @@ class PrDescriptionStrategy(
   private val templates = ConcurrentHashMap<Path, PullRequestTemplate>()
 
   private val measuredHooks =
-    object : PhaseStepHooks<PhasePullRequestStepBinding> {
+    object :
+      PhaseStepHooks<PhasePullRequestStepBinding>,
+      PhaseBeforeLaunchHooks<PhasePullRequestStepBinding> {
       override val contextKind = PhaseStepHookContextKind.PULL_REQUEST
 
       override fun beforeAgentLaunch(

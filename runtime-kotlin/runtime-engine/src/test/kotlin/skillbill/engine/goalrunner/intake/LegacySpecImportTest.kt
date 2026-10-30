@@ -148,6 +148,8 @@ class LegacySpecImportTest {
 }
 
 private object SilentDiagnostics : RuntimeDiagnostics {
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

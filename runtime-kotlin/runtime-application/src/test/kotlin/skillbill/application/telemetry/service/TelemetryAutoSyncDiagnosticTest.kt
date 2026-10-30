@@ -205,6 +205,8 @@ class TelemetryAutoSyncDiagnosticTest {
 private class RecordingDiagnostics : RuntimeDiagnostics {
   val warnings = mutableListOf<Pair<String, Throwable?>>()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

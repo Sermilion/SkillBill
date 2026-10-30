@@ -32,6 +32,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.model.GoalRunnerRestoredChildReference
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskUnknownScenarios
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -52,8 +53,14 @@ import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.history.GoalChildHistoryDraft
 import skillbill.goalrunner.model.history.GoalChildHistoryDraftSaveResult
+import skillbill.goalrunner.model.history.GoalFinalRepairContext
 import skillbill.goalrunner.model.history.GoalFinalRepairOutput
 import skillbill.goalrunner.model.history.GoalHistoryCompletion
+import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
+import skillbill.goalrunner.model.quality.GoalQualityExecutionInputs
+import skillbill.goalrunner.model.quality.GoalQualityExecutionPlans
+import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
+import skillbill.goalrunner.model.quality.GoalQualityPhaseProgress
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
@@ -883,6 +890,61 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   ): Boolean = true
 
   override fun hasQaComposedPlan(workflowId: String): Boolean = false
+
+  override fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? = null
+
+  override fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion? = null
+
+  override fun goalHistoryWriterEntries(
+    parentWorkflowId: String,
+    expectedSelection: List<Pair<Int, String?>>,
+  ): List<GoalHistoryWriterEntry> = emptyList()
+
+  override fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference> =
+    emptyMap()
+
+  override fun restoredGoalChildWorkflowId(
+    parentWorkflowId: String,
+    subtaskId: Int,
+  ): String? = null
+
+  override fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord? = null
+
+  override fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean = false
+
+  override fun resolvedGoalQualityChildIds(
+    parentWorkflowId: String,
+    expectedSelection: List<Pair<Int, String?>>,
+  ): List<String> = emptyList()
+
+  override fun admitGoalQualityExecution(
+    parentWorkflowId: String,
+    baselineContentFingerprint: String,
+    governingInputs: GoalQualityExecutionInputs,
+    executionPlans: GoalQualityExecutionPlans,
+  ): GoalQualityExecutionRecord = error("EmptyOutcomeStore does not persist goal quality execution.")
+
+  override fun transitionGoalQualityExecution(
+    parentWorkflowId: String,
+    expectedInvocationId: String,
+    expected: GoalQualityExecutionRecord,
+    next: GoalQualityExecutionRecord,
+  ): Boolean = false
+
+  override fun goalQualityPhaseProgress(
+    parentWorkflowId: String,
+    invocationId: String,
+    definitionId: String,
+    acceptedPlan: String,
+  ): GoalQualityPhaseProgress = error("EmptyOutcomeStore does not persist goal quality phase progress.")
+
+  override fun persistGoalQualityPhaseProgress(
+    parentWorkflowId: String,
+    invocationId: String,
+    definitionId: String,
+    acceptedPlan: String,
+    progress: GoalQualityPhaseProgress,
+  ): Boolean = false
 
   override fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome? = null
 

@@ -2,10 +2,12 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeScopedReviewBaseline
+import skillbill.engine.featuretask.slot.PhaseEntryBlockRules
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.engine.featuretask.slot.PhaseEntrySettlementRules
+import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopContext
-import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseStepLoopRules
+import skillbill.engine.featuretask.slot.PhaseReentryStateRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
@@ -14,7 +16,11 @@ import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object InlineReviewLoopRules : PhaseLoopRules, PhaseStepLoopRules<PhaseReviewStepBinding> {
+internal object InlineReviewLoopRules :
+  PhaseInFlightReentryRules,
+  PhaseReentryStateRules<PhaseReviewStepBinding>,
+  PhaseEntryBlockRules<PhaseReviewStepBinding>,
+  PhaseEntrySettlementRules<PhaseReviewStepBinding> {
   private const val REVIEW = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
   private const val REVIEW_FIX_LOOP = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID
 

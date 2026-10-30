@@ -6,12 +6,19 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 /**
  * The state-free run-loop decisions a strategy owns over the loops and re-entries of its slot. The run loop asks the
  * strategy selected for the step, or for the destination step of the loop, so it names no step or loop of that slot
- * itself. Each decision defaults to the neutral answer, so a strategy overrides only the decisions its slot owns.
+ * itself. A strategy declares only the decisions its slot owns, each as a capability next to this interface, and the
+ * run loop reads the neutral answer for every capability the strategy does not declare.
  */
-internal interface PhaseLoopRules {
-  /** Whether a [loopId] re-entry its destination step left in flight resumes at that destination. */
-  fun resumesInFlightReentry(loopId: String): Boolean = false
+internal interface PhaseLoopRules
 
+/** A slot whose loop re-entries can be left in flight and resumed at their destination step. */
+internal interface PhaseInFlightReentryRules : PhaseLoopRules {
+  /** Whether a [loopId] re-entry its destination step left in flight resumes at that destination. */
+  fun resumesInFlightReentry(loopId: String): Boolean
+}
+
+/** A slot that commits a checkpoint before the run advances forward out of one of its steps. */
+internal interface PhaseForwardCheckpointRules : PhaseLoopRules {
   /**
    * The checkpoint the run loop tries to commit before advancing forward from [stepId] to [destinationStepId], or
    * null. A failed forward checkpoint is a warning; the run still advances.
@@ -19,8 +26,11 @@ internal interface PhaseLoopRules {
   fun forwardCheckpoint(
     stepId: String,
     destinationStepId: String,
-  ): PhaseForwardCheckpoint? = null
+  ): PhaseForwardCheckpoint?
+}
 
+/** A slot that owns containment of a failure escaping its steps. */
+internal interface PhaseFailureClaimRules : PhaseLoopRules {
   /**
    * Whether this slot owns containment of a failure escaping [stepId]. It reads no step binding, so the run loop
    * can still tell a slot's failure from another phase's when building that binding is what failed.
@@ -28,53 +38,73 @@ internal interface PhaseLoopRules {
   fun claimsFailure(
     stepId: String,
     context: PhaseLoopContext,
-  ): Boolean = false
+  ): Boolean
 }
 
 /**
  * The run-loop decisions a step descriptor owns over the durable state of its slot. They read the accepted binding
  * of type [B] that the descriptor's family constructs, so a decision reaches only the capabilities of that family.
- * Each decision defaults to the neutral answer, so a descriptor overrides only the decisions its slot owns.
+ * A descriptor declares only the decisions its slot owns, each as a capability next to this interface, and the run
+ * loop reads the neutral answer for every capability the descriptor does not declare.
  */
 internal interface PhaseStepLoopRules<in B : PhaseAcceptedStepExecution> {
+  /** The verdict the run loop routes on after [stepId] completed with [verdict]. */
+  fun routedVerdict(
+    stepId: String,
+    verdict: FeatureTaskRuntimeVerdict,
+    state: B,
+  ): FeatureTaskRuntimeVerdict = verdict
+}
+
+/** A slot that reopens, invalidates, discards and checkpoints the durable state of its loop re-entries. */
+internal interface PhaseReentryStateRules<in B : PhaseAcceptedStepExecution> : PhaseStepLoopRules<B> {
   /** Reopens settled steps whose judged repository delta changed since they settled, before the run loop starts. */
   fun reopenStaleSettledSteps(
     context: PhaseLoopContext,
     state: B,
-  ) = Unit
+  )
 
   /** Invalidates the durable step evidence the run state marked stale, before the first step dispatches. */
   fun invalidateStaleEvidence(
     context: PhaseLoopContext,
     state: B,
-  ) = Unit
+  )
 
   /** Whether a resumed in-flight re-entry of [loopId] is stale and must be discarded instead of resumed. */
   fun discardsResumedReentry(
     loopId: String,
     state: B,
-  ): Boolean = false
+  ): Boolean
 
   /** The repository checkpoint the destination step of a [loopId] re-entry launches against, or null. */
   fun reentryCheckpoint(
     loopId: String,
     state: B,
-  ): String? = null
+  ): String?
+}
 
+/** A slot that refuses entry into some of its steps. */
+internal interface PhaseEntryBlockRules<in B : PhaseAcceptedStepExecution> : PhaseStepLoopRules<B> {
   /** Why [stepId] cannot be entered, or null when it can. */
   fun entryBlockReason(
     stepId: String,
     context: PhaseLoopContext,
     state: B,
-  ): String? = null
+  ): String?
+}
 
+/** A slot that settles some of its steps from durable state without launching them. */
+internal interface PhaseEntrySettlementRules<in B : PhaseAcceptedStepExecution> : PhaseStepLoopRules<B> {
   /** Settles [stepId] from durable state without launching it, or null when the step launches. */
   fun settleWithoutLaunch(
     stepId: String,
     context: PhaseLoopContext,
     state: B,
-  ): PhaseEntrySettlement? = null
+  ): PhaseEntrySettlement?
+}
 
+/** A slot that contains its own failures and settles another slot's steps across a declared cross-slot edge. */
+internal interface PhaseSlotContainmentRules<in B : PhaseAcceptedStepExecution> : PhaseStepLoopRules<B> {
   /**
    * The verdict this slot settles another slot's [stepId] with before it launches, so a declared cross-slot edge
    * routes the run away from it, or null when [stepId] launches as usual.
@@ -83,14 +113,7 @@ internal interface PhaseStepLoopRules<in B : PhaseAcceptedStepExecution> {
     stepId: String,
     context: PhaseLoopContext,
     state: B,
-  ): FeatureTaskRuntimeVerdict? = null
-
-  /** The verdict the run loop routes on after [stepId] completed with [verdict]. */
-  fun routedVerdict(
-    stepId: String,
-    verdict: FeatureTaskRuntimeVerdict,
-    state: B,
-  ): FeatureTaskRuntimeVerdict = verdict
+  ): FeatureTaskRuntimeVerdict?
 
   /** Notes that the [loopId] re-entry cap of [cap] is exhausted and the run advances past it instead of blocking. */
   fun onLoopCapExhausted(
@@ -98,7 +121,7 @@ internal interface PhaseStepLoopRules<in B : PhaseAcceptedStepExecution> {
     cap: Int,
     context: PhaseLoopContext,
     state: B,
-  ) = Unit
+  )
 
   /**
    * The completed output this slot continues [stepId] with when [error] escapes its dispatch, so the slot's failure
@@ -109,8 +132,67 @@ internal interface PhaseStepLoopRules<in B : PhaseAcceptedStepExecution> {
     error: Exception,
     context: PhaseLoopContext,
     state: B,
-  ): PhaseFailureContinuationOutput? = null
+  ): PhaseFailureContinuationOutput?
 }
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.reopenStaleSettledSteps(
+  context: PhaseLoopContext,
+  state: B,
+) {
+  (this as? PhaseReentryStateRules<B>)?.reopenStaleSettledSteps(context, state)
+}
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.invalidateStaleEvidence(
+  context: PhaseLoopContext,
+  state: B,
+) {
+  (this as? PhaseReentryStateRules<B>)?.invalidateStaleEvidence(context, state)
+}
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.discardsResumedReentry(
+  loopId: String,
+  state: B,
+): Boolean = (this as? PhaseReentryStateRules<B>)?.discardsResumedReentry(loopId, state) ?: false
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.reentryCheckpoint(
+  loopId: String,
+  state: B,
+): String? = (this as? PhaseReentryStateRules<B>)?.reentryCheckpoint(loopId, state)
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.entryBlockReason(
+  stepId: String,
+  context: PhaseLoopContext,
+  state: B,
+): String? = (this as? PhaseEntryBlockRules<B>)?.entryBlockReason(stepId, context, state)
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.settleWithoutLaunch(
+  stepId: String,
+  context: PhaseLoopContext,
+  state: B,
+): PhaseEntrySettlement? = (this as? PhaseEntrySettlementRules<B>)?.settleWithoutLaunch(stepId, context, state)
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.crossSlotSettlement(
+  stepId: String,
+  context: PhaseLoopContext,
+  state: B,
+): FeatureTaskRuntimeVerdict? = (this as? PhaseSlotContainmentRules<B>)?.crossSlotSettlement(stepId, context, state)
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.onLoopCapExhausted(
+  loopId: String,
+  cap: Int,
+  context: PhaseLoopContext,
+  state: B,
+) {
+  (this as? PhaseSlotContainmentRules<B>)?.onLoopCapExhausted(loopId, cap, context, state)
+}
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLoopRules<B>.containFailure(
+  stepId: String,
+  error: Exception,
+  context: PhaseLoopContext,
+  state: B,
+): PhaseFailureContinuationOutput? =
+  (this as? PhaseSlotContainmentRules<B>)?.containFailure(stepId, error, context, state)
 
 /**
  * [PhaseStepLoopRules] correlated with the one binding they read. It is built inside a descriptor capture, so the

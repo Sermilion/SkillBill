@@ -103,6 +103,7 @@ interface GoalRunnerWorkflowOutcomeStore :
   GoalRunnerWorkflowProgressStore,
   GoalRunnerWorkflowLedgerWriteStore,
   GoalRunnerGoalChildHistoryDraftStore,
+  GoalRunnerRestoredChildStore,
   GoalRunnerAssessmentRecordStore,
   GoalRunnerWorkflowOutcomeMutationStore {
   fun hasQaComposedPlan(workflowId: String): Boolean
@@ -119,7 +120,7 @@ interface GoalRunnerWorkflowOutcomeStore :
     warning: String?,
   ): Boolean
 
-  fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext? = null
+  fun goalFinalRepairContext(parentWorkflowId: String): GoalFinalRepairContext?
 
   fun saveGoalHistoryCompletion(
     parentWorkflowId: String,
@@ -127,12 +128,12 @@ interface GoalRunnerWorkflowOutcomeStore :
     completion: GoalHistoryCompletion,
   ): Boolean
 
-  fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion? = null
+  fun goalHistoryCompletion(parentWorkflowId: String): GoalHistoryCompletion?
 
   fun goalHistoryWriterEntries(
     parentWorkflowId: String,
     expectedSelection: List<Pair<Int, String?>>,
-  ): List<GoalHistoryWriterEntry> = emptyList()
+  ): List<GoalHistoryWriterEntry>
 
   fun recordedGoalQaOutcome(parentWorkflowId: String): FeatureTaskQaOutcome?
 
@@ -215,20 +216,22 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
   ): Boolean
 }
 
-interface GoalRunnerGoalChildHistoryDraftStore : GoalChildHistoryDraftWriter {
-  fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference> = emptyMap()
+interface GoalRunnerRestoredChildStore {
+  fun restoredGoalChildReferences(parentWorkflowId: String): Map<Int, GoalRunnerRestoredChildReference>
 
   fun restoredGoalChildWorkflowId(
     parentWorkflowId: String,
     subtaskId: Int,
-  ): String? = null
+  ): String?
 
   fun restoredGoalChildWorkflowId(
     unitOfWork: UnitOfWork,
     parentWorkflowId: String,
     subtaskId: Int,
   ): String? = restoredGoalChildWorkflowId(parentWorkflowId, subtaskId)
+}
 
+interface GoalRunnerGoalChildHistoryDraftStore : GoalChildHistoryDraftWriter {
   fun goalChildHistoryDrafts(parentWorkflowId: String): List<GoalChildHistoryDraft>
 
   fun hasRequiredGoalChildHistoryDraft(
@@ -274,42 +277,40 @@ interface GoalRunnerWorkflowLedgerWriteStore {
 }
 
 interface GoalRunnerQualityExecutionStore {
-  fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord? = null
+  fun goalQualityExecution(parentWorkflowId: String): GoalQualityExecutionRecord?
 
   /**
    * Records the operator's choice to discard ambiguous historical quality state. The parent's
    * quality record becomes clean and unstarted, so the next goal run admits a fresh quality
    * execution with new cycles. Returns false when the parent holds no historical ambiguity.
    */
-  fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean = false
+  fun chooseFreshGoalQualityExecution(parentWorkflowId: String): Boolean
 
   fun resolvedGoalQualityChildIds(
     parentWorkflowId: String,
     expectedSelection: List<Pair<Int, String?>>,
-  ): List<String> = emptyList()
+  ): List<String>
 
   fun admitGoalQualityExecution(
     parentWorkflowId: String,
     baselineContentFingerprint: String,
     governingInputs: GoalQualityExecutionInputs,
     executionPlans: GoalQualityExecutionPlans,
-  ): GoalQualityExecutionRecord =
-    throw UnsupportedOperationException("Goal quality execution persistence is unavailable.")
+  ): GoalQualityExecutionRecord
 
   fun transitionGoalQualityExecution(
     parentWorkflowId: String,
     expectedInvocationId: String,
     expected: GoalQualityExecutionRecord,
     next: GoalQualityExecutionRecord,
-  ): Boolean = false
+  ): Boolean
 
   fun goalQualityPhaseProgress(
     parentWorkflowId: String,
     invocationId: String,
     definitionId: String,
     acceptedPlan: String,
-  ): GoalQualityPhaseProgress =
-    throw UnsupportedOperationException("Goal quality phase progress persistence is unavailable.")
+  ): GoalQualityPhaseProgress
 
   fun persistGoalQualityPhaseProgress(
     parentWorkflowId: String,
@@ -317,5 +318,5 @@ interface GoalRunnerQualityExecutionStore {
     definitionId: String,
     acceptedPlan: String,
     progress: GoalQualityPhaseProgress,
-  ): Boolean = false
+  ): Boolean
 }

@@ -7,6 +7,8 @@ import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHoo
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.slot.PhaseAfterCompletionHooks
+import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
@@ -29,7 +31,8 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
     val state = context.state
     val resumes =
       (context.runState.strategyFor(edge.destinationPhaseId) as? PhaseLoopCapability)
-        ?.loopRules?.resumesInFlightReentry(edge.loopId) == true
+        ?.loopRules.let { it as? PhaseInFlightReentryRules }
+        ?.resumesInFlightReentry(edge.loopId) == true
     if (!resumes || state.loop(edge.loopId).liveClaimed || state.phase(edge.destinationPhaseId).completed) {
       return null
     }
@@ -259,15 +262,11 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
   internal fun afterCompletion(
     context: FeatureTaskRuntimeRunLoopContext,
     output: FeatureTaskRuntimePhaseOutput,
-  ): String? =
-    context.runState
-      .strategyFor(
-        output.phaseId,
-      ).stepHooks(output.phaseId)
-      .afterCompletion(
-        context.traversalHookContext(output, context.runState.strategyFor(output.phaseId).stepHooks(output.phaseId)),
-        output,
-      )
+  ): String? {
+    val hooks = context.runState.strategyFor(output.phaseId).stepHooks(output.phaseId)
+    val traversal = context.traversalHookContext(output, hooks)
+    return (hooks as? PhaseAfterCompletionHooks)?.afterCompletion(traversal, output)
+  }
 
   internal fun establishBranchIfNeeded(
     context: FeatureTaskRuntimeRunLoopContext,

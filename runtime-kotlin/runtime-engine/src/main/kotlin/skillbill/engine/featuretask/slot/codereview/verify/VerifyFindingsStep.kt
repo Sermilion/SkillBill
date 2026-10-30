@@ -1,10 +1,14 @@
 package skillbill.engine.featuretask.slot.codereview.verify
 
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseAcceptedOutputRecordingHooks
+import skillbill.engine.featuretask.slot.PhaseCompletionRejectionHooks
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.PhaseUpstreamFailureContinuationHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
@@ -13,7 +17,12 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
-internal class VerifyFindingsStep : PhaseStepHooks<PhaseVerifyFindingsStepBinding> {
+internal class VerifyFindingsStep :
+  PhaseStepHooks<PhaseVerifyFindingsStepBinding>,
+  PhaseUpstreamFailureContinuationHooks,
+  PhaseLaunchPromptHooks<PhaseVerifyFindingsStepBinding>,
+  PhaseCompletionRejectionHooks<PhaseVerifyFindingsStepBinding>,
+  PhaseAcceptedOutputRecordingHooks<PhaseVerifyFindingsStepBinding> {
   override val contextKind = PhaseStepHookContextKind.FINDING_VERIFICATION
   val policy =
     PhaseStepPolicy(

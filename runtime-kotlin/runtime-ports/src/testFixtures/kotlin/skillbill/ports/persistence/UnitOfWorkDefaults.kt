@@ -14,6 +14,7 @@ import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.UnavailableFeatureTaskPhaseSettlementRepository
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.UnavailableUnaddressedFindingsRepository
 import skillbill.ports.idestatus.AgentActivityStampRepository
@@ -41,6 +42,7 @@ import skillbill.ports.persistence.model.GoalPurgeTarget
 import java.time.Instant
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
+  open override val databaseFileObservation: DatabaseFileObservation? = null
   open override val workBoardReadModel: WorkBoardReadModelRepository = EmptyBoardReadModel()
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository
   open override val agentActivityStamps: AgentActivityStampRepository = EmptyAgentActivityStampRepository

@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseBoundLoopRules
 import skillbill.engine.featuretask.slot.PhaseBoundStepHooks
+import skillbill.engine.featuretask.slot.PhaseFailureClaimRules
 import skillbill.engine.featuretask.slot.PhaseFailureContinuation
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
@@ -24,6 +25,7 @@ import skillbill.engine.featuretask.slot.PhaseStepCapture
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepFailure
 import skillbill.engine.featuretask.slot.PhaseStepFailureSource
+import skillbill.engine.featuretask.slot.PhaseUpstreamFailureContinuationHooks
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.decomposition.model.SpecSource
@@ -150,7 +152,8 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       launchAssignment = FeatureTaskRuntimeResumeLaunchAssignment.recordedForAgent(recorded, resolvedAgentId),
       reentry = reentry,
       failureContinuationOutput =
-        context.runState.strategyFor(phaseId).stepHooks(phaseId).failureContinuationOutput(context.state.outputs()),
+        (context.runState.strategyFor(phaseId).stepHooks(phaseId) as? PhaseUpstreamFailureContinuationHooks)
+          ?.failureContinuationOutput(context.state.outputs()),
     )
   }
 
@@ -203,6 +206,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   ): Boolean =
     (context.runState.strategyFor(phaseId) as? PhaseLoopCapability)
       ?.loopRules
+      .let { it as? PhaseFailureClaimRules }
       ?.claimsFailure(phaseId, context.phaseLoopContext()) == true
 
   internal fun forEachSlotRules(

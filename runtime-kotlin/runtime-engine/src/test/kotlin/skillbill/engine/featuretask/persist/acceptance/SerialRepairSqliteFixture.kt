@@ -143,6 +143,8 @@ internal class SerialRepairSqliteFixture(
   val warnings = mutableListOf<String>()
   internal val diagnostics =
     object : RuntimeDiagnostics {
+      override fun info(message: String) = Unit
+
       override fun warning(
         message: String,
         error: Throwable?,

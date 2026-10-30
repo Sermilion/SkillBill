@@ -8,7 +8,9 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.MonitorRepairCapability
+import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
@@ -71,7 +73,10 @@ class StandaloneMonitorStrategy(
   }
 
   private val repairHooks =
-    object : PhaseStepHooks<PhaseStandaloneMonitorStepBinding> {
+    object :
+      PhaseStepHooks<PhaseStandaloneMonitorStepBinding>,
+      PhaseLaunchPromptHooks<PhaseStandaloneMonitorStepBinding>,
+      PhaseBeforeLaunchHooks<PhaseStandaloneMonitorStepBinding> {
       override fun launchPromptSupplement(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,

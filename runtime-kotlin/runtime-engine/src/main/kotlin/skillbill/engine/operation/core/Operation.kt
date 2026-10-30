@@ -5,28 +5,26 @@ import java.nio.file.Path
 /**
  * One runtime operation: a non-feature-task command with its own wire id.
  *
- * The executor runs [pre], then [run], then [post]. Pre and post are in-process. Run is a sequence of steps; an
- * agent step runs only through [OperationContext.steps], which launches through the generic `PhaseRunner` under a
- * step name local to the operation, never a skeleton step id. Run never opens a feature-task workflow and never
- * launches an agent any other way.
+ * The executor runs [OperationPrecheck.pre] when the operation declares it, then [run]. Pre is in-process. Run is a
+ * sequence of steps; an agent step runs only through [OperationContext.steps], which launches through the generic
+ * `PhaseRunner` under a step name local to the operation, never a skeleton step id. Run never opens a feature-task
+ * workflow and never launches an agent any other way.
  *
  * Wire ids: `update-check` and `release` (SKILL-382 subtask 1). Subtasks 2-4 add the checklist, `pr-review-fix`,
  * and `verify` operations to the same registry.
- *
- * [pre] returns an [OperationRefusal]. A blocked refusal is reported as blocked with nothing changed; a usage refusal
- * is reported as a usage error. `null` means proceed.
  */
 interface Operation {
   val id: String
 
-  fun pre(context: OperationContext): OperationRefusal? = null
-
   fun run(context: OperationContext): OperationRunResult
+}
 
-  fun post(
-    context: OperationContext,
-    outcome: OperationOutcome,
-  ) = Unit
+/**
+ * An operation that refuses before it runs. [pre] returns an [OperationRefusal]. A blocked refusal is reported as
+ * blocked with nothing changed; a usage refusal is reported as a usage error. `null` means proceed.
+ */
+interface OperationPrecheck {
+  fun pre(context: OperationContext): OperationRefusal?
 }
 
 /**
@@ -37,19 +35,21 @@ interface ConfirmableOperation : Operation {
   /** Operation-owned anchors as they stand now; confirm refuses a proposal once any of them moved. */
   fun currentAnchors(context: OperationContext): CurrentOperationAnchors
 
-  /**
-   * Checks the confirm invocation against the stored proposal before the token is consumed; returns a refusal to
-   * reject it with the token still valid.
-   */
-  fun admit(
-    context: OperationContext,
-    proposal: ConfirmedOperationProposal,
-  ): OperationRefusal? = null
-
   fun execute(
     context: OperationContext,
     proposal: ConfirmedOperationProposal,
   ): OperationOutcome
+}
+
+/**
+ * A [ConfirmableOperation] that checks the confirm invocation against the stored proposal before the token is
+ * consumed; [admit] returns a refusal to reject it with the token still valid.
+ */
+interface ConfirmAdmission {
+  fun admit(
+    context: OperationContext,
+    proposal: ConfirmedOperationProposal,
+  ): OperationRefusal?
 }
 
 /** The operation-owned anchors read for a confirm check, or the refusal that explains why they could not be read. */

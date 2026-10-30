@@ -8,6 +8,9 @@ import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseCompletedRoundHooks
+import skillbill.engine.featuretask.slot.PhaseCompletionRejectionHooks
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
@@ -25,7 +28,11 @@ import skillbill.workflow.taskruntime.model.audit.awaitsAuditClarification
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
-internal object AcceptanceAuditRound : PhaseStepHooks<PhaseQaStepBinding> {
+internal object AcceptanceAuditRound :
+  PhaseStepHooks<PhaseQaStepBinding>,
+  PhaseLaunchPromptHooks<PhaseQaStepBinding>,
+  PhaseCompletionRejectionHooks<PhaseQaStepBinding>,
+  PhaseCompletedRoundHooks {
   override val contextKind = PhaseStepHookContextKind.AUDIT
 
   override fun launchPromptSupplement(

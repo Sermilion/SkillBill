@@ -23,10 +23,10 @@ import kotlin.time.Duration
  * only the durable entry consumes.
  */
 interface FeatureTaskRuntimeRunFacts {
-  val admittedExecution: AdmittedFeatureTaskRuntimeExecution? get() = null
+  val admittedExecution: AdmittedFeatureTaskRuntimeExecution?
 
   /** The caller's explicit in-memory QA selection; null when the caller supplies none. */
-  val qaSelection: FeatureTaskRuntimeQaSelection? get() = null
+  val qaSelection: FeatureTaskRuntimeQaSelection?
 
   /** The issue the run works on. */
   val issueKey: String
@@ -65,7 +65,7 @@ interface FeatureTaskRuntimeRunFacts {
   val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?
 
   /** The parent goal receiving activity from a planning run, without goal-child execution policy. */
-  val activityParentWorkflowId: String? get() = null
+  val activityParentWorkflowId: String?
 
   /** The agent add-ons selected for the run. */
   val agentAddonSelection: HydratedAgentAddonSelection
@@ -77,34 +77,34 @@ interface FeatureTaskRuntimeRunFacts {
   val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration?
 
   /** The skeleton a phase run drives; null lets the run derive the standalone or goal-child skeleton. */
-  val skeletonDefinition: SkeletonDefinition? get() = null
+  val skeletonDefinition: SkeletonDefinition?
 
   /** The caller-supplied review target and review identity of a phase run; null for a full run. */
-  val reviewInvocation: ReviewInvocation? get() = null
+  val reviewInvocation: ReviewInvocation?
 
   /** The operator instructions a phase run adds to its step prompts; null for a full run. */
-  val phaseInstructions: PhaseInstructions? get() = null
+  val phaseInstructions: PhaseInstructions?
 
   /** The hash of an operator-authored `spec.md` the plan must leave untouched; null when the plan may rewrite it. */
-  val protectedSpecSha256: String? get() = null
+  val protectedSpecSha256: String?
 
   /** The operator's plan intake text the `intake` step resolves the parent spec from; null when none was supplied. */
-  val planIntake: String? get() = null
+  val planIntake: String?
 
   /** Whether this pass ends once the `intake` step settles, before run invariants can be read from the spec. */
-  val stopAfterIntake: Boolean get() = false
+  val stopAfterIntake: Boolean
 
   /** The pinned pull request target and owned worktree of a prepared standalone monitor; null for every other run. */
-  val monitorExecution: MonitorExecutionContext? get() = null
+  val monitorExecution: MonitorExecutionContext?
 
   /** The workspace, expected identity, and pack guidance of a standalone QA run; null for every other run. */
-  val qaExecution: QaExecutionContext? get() = null
+  val qaExecution: QaExecutionContext?
 
-  val goalHistoryWriterInput: GoalHistoryWriterInput? get() = null
+  val goalHistoryWriterInput: GoalHistoryWriterInput?
 
-  val goalQualityAutomaticRecovery: Boolean get() = false
+  val goalQualityAutomaticRecovery: Boolean
 
-  val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? get() = null
+  val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan?
 
   val qaOutcomeWorkflowId: String get() = workflowId
 }

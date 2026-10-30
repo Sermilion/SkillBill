@@ -8,6 +8,7 @@ import skillbill.engine.operation.core.ConfirmedOperationProposal
 import skillbill.engine.operation.core.CurrentOperationAnchors
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationPrecheck
 import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
@@ -18,7 +19,8 @@ import skillbill.engine.operation.core.proposeFromStep
 class FeatureGuardCleanupOperation(
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
   private val modelAssignmentSource: () -> FeatureTaskRuntimeModelAssignment,
-) : ConfirmableOperation {
+) : ConfirmableOperation,
+  OperationPrecheck {
   constructor(
     runPhase: (PhaseRunRequest) -> PhaseRunResult,
     modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),

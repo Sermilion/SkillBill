@@ -53,13 +53,12 @@ class OperationExecutor(
         steps = steps,
       )
     val outcome =
-      operation.pre(context)
+      (operation as? OperationPrecheck)?.pre(context)
         ?: if (token != null && operation is ConfirmableOperation) {
           gate.confirm(operation, context, token)
         } else {
           proceed(operation, context)
         }
-    if (outcome !is OperationOutcome.Usage) operation.post(context, outcome)
     return OperationResult(invocationId, outcome)
   }
 

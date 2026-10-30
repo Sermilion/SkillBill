@@ -18,9 +18,9 @@ import skillbill.engine.featuretask.runner.runnerHarness
 import skillbill.engine.featuretask.runner.satisfiedAuditLauncher
 import skillbill.engine.featuretask.runner.serializeTokenData
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseAuditLedgerResume
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
-import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.goalrunner.status.completed
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
@@ -446,7 +446,11 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val resumed = mutableListOf<String>()
     val blockEvidence = mutableListOf<String>()
     val rules =
-      object : PhaseResumeRules {
+      object : PhaseAuditLedgerResume {
+        override val invalidatesLaterStepsWhileIncomplete: Boolean = false
+
+        override fun withholdsDurableOutput(record: FeatureTaskRuntimePhaseRecord): Boolean = false
+
         override fun resumedRecord(
           record: FeatureTaskRuntimePhaseRecord,
           stripped: FeatureTaskRuntimePhaseRecord,

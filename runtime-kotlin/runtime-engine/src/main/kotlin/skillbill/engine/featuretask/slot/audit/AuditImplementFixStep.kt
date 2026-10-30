@@ -3,6 +3,8 @@ package skillbill.engine.featuretask.slot.audit
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseAcceptanceRepairHooks
+import skillbill.engine.featuretask.slot.PhaseCompletedRoundHooks
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
@@ -12,7 +14,10 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object AuditImplementFixStep : PhaseStepHooks<PhaseAcceptedStepExecution> {
+internal object AuditImplementFixStep :
+  PhaseStepHooks<PhaseAcceptedStepExecution>,
+  PhaseAcceptanceRepairHooks,
+  PhaseCompletedRoundHooks {
   override val serialAcceptanceRepairStep: Boolean = true
 
   override val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode =

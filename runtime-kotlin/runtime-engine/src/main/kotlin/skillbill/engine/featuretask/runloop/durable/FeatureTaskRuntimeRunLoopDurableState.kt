@@ -94,6 +94,23 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 
   override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
 
+  override val launchPromptContext: String = ""
+
+  override fun qualityGateAbsent(stepName: String) = Unit
+
+  override fun qualityCheckStarted(
+    stepName: String,
+    detectedStack: String,
+    initialFailureCount: Int,
+  ) = Unit
+
+  override fun qualityCheckFinished(
+    stepName: String,
+    finalFailureCount: Int,
+    failingCheckNames: List<String>,
+    iterations: Int,
+  ) = Unit
+
   override fun recordReviewRun(
     reviewRunId: String,
     result: ParallelCodeReviewResult,

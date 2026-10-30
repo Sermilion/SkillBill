@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
-import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -19,6 +18,7 @@ import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStar
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeNonBlockingFailure
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.PhaseFailureContinuationRequest
+import skillbill.engine.featuretask.slot.serialAcceptanceRepairStep
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -96,7 +96,6 @@ internal object PhaseAttemptSteps {
         continuationSegmentCount,
         nonOutputAttempts.size,
       )
-    stepHooks(run).onLaunch(run, launchHookContext(run, stepHooks(run)))
     observability.started(
       run.phaseId,
       agentId,

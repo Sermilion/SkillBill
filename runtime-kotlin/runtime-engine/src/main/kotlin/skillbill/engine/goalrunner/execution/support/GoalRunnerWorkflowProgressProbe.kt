@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.execution.support
 
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
+import skillbill.ports.agentrun.model.AgentRunProgressLabelProbe
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 
@@ -13,7 +14,8 @@ fun progressProbe(
 class GoalRunnerWorkflowProgressProbe(
   private val reader: GoalRunnerTickProgressReader,
   private val subtaskId: Int,
-) : AgentRunProgressProbe {
+) : AgentRunProgressProbe,
+  AgentRunProgressLabelProbe {
   override fun progressToken(): String? =
     reader.progressState()
       ?.let { progress ->

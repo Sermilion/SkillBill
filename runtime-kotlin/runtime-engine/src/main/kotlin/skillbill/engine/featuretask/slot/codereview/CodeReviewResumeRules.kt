@@ -1,9 +1,9 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
-import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseReviewPassResume
 
-internal object CodeReviewResumeRules : PhaseResumeRules {
+internal object CodeReviewResumeRules : PhaseReviewPassResume {
   override val tracksReviewPasses: Boolean = true
 
   override fun persistedBlockResume(

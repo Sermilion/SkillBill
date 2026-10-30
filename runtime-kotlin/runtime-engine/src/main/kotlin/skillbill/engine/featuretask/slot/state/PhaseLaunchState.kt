@@ -18,7 +18,7 @@ interface PhaseLaunchState {
   val launchOutputSink: AgentRunOutputSink get() = AgentRunOutputSink.NONE
 
   /** The prompt section appended to every launch of this state; a fan-out unit names the work it owns here. */
-  val launchPromptContext: String get() = ""
+  val launchPromptContext: String
 
   /**
    * Prepares [input] for launch once the runner has captured the before-state. Returns the input to launch, or

@@ -5,7 +5,6 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
-import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStatusCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
@@ -90,9 +89,6 @@ private object AgentValidateCapabilities : PhaseResumeCapability, PhaseStatusCap
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? = gateCurrentExecution(stepId, context)
-
-  override fun reportedGate(stepId: String): PhaseReportedGate? =
-    PhaseReportedGate.VALIDATION.takeIf { stepId in AGENT_VALIDATE_POLICIES }
 }
 
 private val AGENT_VALIDATE_FAMILY = PhaseBindingFamily.QualityGate(PhaseQualityGateOperation.AgentValidation)

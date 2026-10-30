@@ -289,6 +289,8 @@ class FeatureTaskRuntimeRepositoryCheckpointResolutionTest {
             ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
         },
         object : RuntimeDiagnostics {
+          override fun info(message: String) = Unit
+
           override fun warning(
             message: String,
             error: Throwable?,
@@ -308,6 +310,8 @@ class FeatureTaskRuntimeRepositoryCheckpointResolutionTest {
 
   private class CapturingDiagnostics : RuntimeDiagnostics {
     val warnings = mutableListOf<String>()
+
+    override fun info(message: String) = Unit
 
     override fun warning(
       message: String,

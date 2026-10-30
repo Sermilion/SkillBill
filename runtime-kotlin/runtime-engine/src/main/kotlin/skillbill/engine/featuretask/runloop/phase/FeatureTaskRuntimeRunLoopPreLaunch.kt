@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.missingUpstream
+import skillbill.engine.featuretask.slot.PhaseLaunchReconciliationHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -29,7 +30,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
     observability: FeatureTaskRuntimeRunObservability,
   ): PhaseOutcome? {
     val hooks = context.strategyFor(run.phaseId).stepHooks(run.phaseId)
-    hooks.reconcileBeforeLaunch(run, context.launchHookContext(run, hooks))
+    (hooks as? PhaseLaunchReconciliationHooks)?.reconcileBeforeLaunch(run, context.launchHookContext(run, hooks))
     state.phase(run.phaseId).blockedReason?.let { reason ->
       FeatureTaskRuntimeNonBlockingFailure.settle(
         context.recorder,

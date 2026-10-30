@@ -6,6 +6,7 @@ import skillbill.ports.agentrun.model.AgentRunDeclaredProgressProbe
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.ports.agentrun.model.AgentRunProgressLabelProbe
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import java.util.concurrent.CancellationException
@@ -142,7 +143,7 @@ internal fun AgentRunProgressProbe.readProgressToken(recorder: ProcessRunDegrada
   readProbe(recorder, "progress_token") { progressToken() }
 
 internal fun AgentRunProgressProbe.readProgressLabel(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
-  readProbe(recorder, "progress_label") { progressLabel() }
+  readProbe(recorder, "progress_label") { (this as? AgentRunProgressLabelProbe)?.progressLabel() }
 
 internal fun AgentRunActivityProbe.readActivityToken(recorder: ProcessRunDegradationRecorder): ProbeRead<String> =
   readProbe(recorder, "activity_token") { activityToken() }

@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
-import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
 import skillbill.engine.featuretask.slot.PhaseStatusCapability
 import skillbill.engine.featuretask.slot.PhaseStepDescriptor
@@ -21,6 +20,7 @@ import skillbill.engine.featuretask.slot.qualitygate.buildGateTriagePhaseTask
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
 import skillbill.engine.featuretask.slot.qualitygate.gateRepairNoOutputSchemaDirective
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedBuildPhaseTask
+import skillbill.engine.featuretask.slot.state.PhaseCompletedReceiptResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -96,9 +96,6 @@ private object PackBuildCapabilities : PhaseResumeCapability, PhaseStatusCapabil
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? = gateCurrentExecution(stepId, context)
-
-  override fun reportedGate(stepId: String): PhaseReportedGate? =
-    PhaseReportedGate.BUILD.takeIf { stepId in PACK_BUILD_POLICIES }
 }
 
 private val PACK_BUILD_FAMILY =
@@ -107,6 +104,6 @@ private val PACK_BUILD_FAMILY =
 private const val QUALITY_CHECK_DIRECTIVE_RESOURCE =
   "/skillbill/engine/featuretask/slot/qualitygate/packbuild/quality-check-directive.md"
 
-private object BuildReceiptResumeRules : PhaseResumeRules {
+private object BuildReceiptResumeRules : PhaseCompletedReceiptResume {
   override val requiresValidCompletedOutput = true
 }

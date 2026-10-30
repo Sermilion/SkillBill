@@ -7,6 +7,8 @@ internal class RecordingAgentAddonDiagnostics : RuntimeDiagnostics {
 
   val migrationRecords: List<String> get() = warnings.filter { it.contains("record_kind=migration") }
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

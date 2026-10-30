@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.slot.PhaseBindingFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
-import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
@@ -75,10 +74,10 @@ internal interface PhaseRunState :
   var commitPushManifestCompletion: CommitPushManifestCompletion?
 
   /**
-   * The units the fan-out step [stepId] runs. Only a state that keeps fan-out units supports it; the default fails
-   * with a typed error.
+   * The units the fan-out step [stepId] runs. Only a state that keeps fan-out units supports it; the others fail with
+   * a typed error.
    */
-  fun fanOut(stepId: String): PhaseRunFanOut = throw PhaseRunFanOutUnsupportedError(stepId)
+  fun fanOut(stepId: String): PhaseRunFanOut
 
   /** The strategy selected for [stepId] in this run. */
   fun strategyFor(stepId: String): PhaseStrategy
@@ -96,7 +95,7 @@ internal interface PhaseRunState :
   /** The steps of the definition no strategy selected for this run owns. */
   fun unselectedStepIds(): Set<String>
 
-  fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? = null
+  fun stepLaunchAssignment(stepId: String): StepLaunchAssignment?
 
   /** The factory that builds the state [run] reads and writes for one call of its step. */
   fun bindings(run: PhaseRun): PhaseBindingFactory
@@ -106,14 +105,14 @@ internal interface PhaseRunState :
 
   /**
    * Records the review run [reviewRunId] and its [result] where the state keeps review history, emitting the pass's
-   * stage telemetry only when [laneTelemetryRecorded] says the review strategy did not already record it. The default
-   * is a no-op for states whose review history is recorded by another owner.
+   * stage telemetry only when [laneTelemetryRecorded] says the review strategy did not already record it. A state whose
+   * review history is recorded by another owner records nothing.
    */
   fun recordReviewRun(
     reviewRunId: String,
     result: ParallelCodeReviewResult,
     laneTelemetryRecorded: Boolean,
-  ) = Unit
+  )
 
   /**
    * The target every review pass of the run reviews: [resolve] runs on the first pass and a state that pins the
@@ -127,7 +126,7 @@ internal interface PhaseQualityGateReporting {
   /**
    * Reports an optional gate absence. Required pack gates block before this hook.
    */
-  fun qualityGateAbsent(stepName: String) = Unit
+  fun qualityGateAbsent(stepName: String)
 
   /**
    * Reports that the quality-check gate of [stepName] started on the [detectedStack] pack, whose first gate run found
@@ -137,7 +136,7 @@ internal interface PhaseQualityGateReporting {
     stepName: String,
     detectedStack: String,
     initialFailureCount: Int,
-  ) = Unit
+  )
 
   /**
    * Reports that the quality-check gate of [stepName] finished after [iterations] gate runs, whose last run found
@@ -148,5 +147,5 @@ internal interface PhaseQualityGateReporting {
     finalFailureCount: Int,
     failingCheckNames: List<String>,
     iterations: Int,
-  ) = Unit
+  )
 }

@@ -9,18 +9,19 @@ import skillbill.engine.featuretask.qa.report.QaVerdict
 import skillbill.engine.featuretask.qa.report.hasQaOutput
 import skillbill.engine.featuretask.qa.report.qaVerdictOf
 import skillbill.engine.featuretask.runloop.core.containableOrThrow
+import skillbill.engine.featuretask.slot.PhaseFailureClaimRules
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhaseLoopContext
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseStepLoopRules
+import skillbill.engine.featuretask.slot.PhaseSlotContainmentRules
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal class QaLoopRules(
   private val outcomes: FeatureTaskQaOutcomeRecorder,
-) : PhaseStepLoopRules<PhaseQaStepBinding> {
+) : PhaseSlotContainmentRules<PhaseQaStepBinding> {
   private val containment = QaFailureContainment(outcomes)
 
   override fun containFailure(
@@ -108,7 +109,7 @@ internal class QaLoopRules(
   }
 }
 
-internal object QaLoopCapability : PhaseLoopCapability, PhaseLoopRules {
+internal object QaLoopCapability : PhaseLoopCapability, PhaseFailureClaimRules {
   override val loopRules: PhaseLoopRules get() = this
 
   override fun claimsFailure(

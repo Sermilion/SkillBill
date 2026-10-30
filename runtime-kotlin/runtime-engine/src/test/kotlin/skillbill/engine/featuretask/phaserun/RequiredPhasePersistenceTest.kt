@@ -149,6 +149,8 @@ class RequiredPhasePersistenceTest {
       val warnedCauses = mutableListOf<Throwable?>()
       val diagnostics =
         object : RuntimeDiagnostics {
+          override fun info(message: String) = Unit
+
           override fun warning(
             message: String,
             error: Throwable?,

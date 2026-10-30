@@ -2,7 +2,8 @@ package skillbill.engine.featuretask.slot.audit
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseAuditLedgerResume
+import skillbill.engine.featuretask.slot.state.PhaseResumedCompletionInvalidation
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
 import skillbill.engine.featuretask.slot.state.recordEnvelope
 import skillbill.workflow.model.WorkflowStepStatus
@@ -11,7 +12,7 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
-internal object AcceptanceAuditResumeRules : PhaseResumeRules {
+internal object AcceptanceAuditResumeRules : PhaseAuditLedgerResume, PhaseResumedCompletionInvalidation {
   override val invalidatesLaterStepsWhileIncomplete: Boolean = true
 
   override fun resumedRecord(

@@ -6,10 +6,11 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.lifecycle.checkpoint.auditReviewCheckpointWarning
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.engine.featuretask.slot.PhaseEntrySettlementRules
 import skillbill.engine.featuretask.slot.PhaseForwardCheckpoint
+import skillbill.engine.featuretask.slot.PhaseForwardCheckpointRules
+import skillbill.engine.featuretask.slot.PhaseInFlightReentryRules
 import skillbill.engine.featuretask.slot.PhaseLoopContext
-import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseStepLoopRules
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeOperatorRetry
 import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
@@ -19,7 +20,10 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object AcceptanceAuditLoopRules : PhaseLoopRules, PhaseStepLoopRules<PhaseQaStepBinding> {
+internal object AcceptanceAuditLoopRules :
+  PhaseInFlightReentryRules,
+  PhaseForwardCheckpointRules,
+  PhaseEntrySettlementRules<PhaseQaStepBinding> {
   override fun resumesInFlightReentry(loopId: String): Boolean =
     loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID
 

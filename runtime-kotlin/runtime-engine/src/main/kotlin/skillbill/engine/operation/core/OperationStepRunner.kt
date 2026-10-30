@@ -187,6 +187,8 @@ private fun readOnlyViolation(stepName: String): String =
   "Operation step '$stepName' is read-only but changed the worktree."
 
 private object OperationPhaseLaunchState : PhaseLaunchState {
+  override val launchPromptContext: String = ""
+
   override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget? = null
 
   override fun launchObservation(stepName: String): PhaseLaunchObservation =

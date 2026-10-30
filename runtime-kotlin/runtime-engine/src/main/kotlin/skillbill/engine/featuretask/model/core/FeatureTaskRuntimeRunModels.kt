@@ -7,7 +7,11 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.config.model.CompactionSettings
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
+import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
+import skillbill.goalrunner.model.history.GoalHistoryWriterInput
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -19,6 +23,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -49,6 +54,15 @@ data class FeatureTaskRuntimeRunRequest(
   val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
   override val activityParentWorkflowId: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
+  override val qaSelection: FeatureTaskRuntimeQaSelection? = null
+  override val reviewInvocation: ReviewInvocation? = null
+  override val phaseInstructions: PhaseInstructions? = null
+  override val monitorExecution: MonitorExecutionContext? = null
+  override val qaExecution: QaExecutionContext? = null
+  override val goalHistoryWriterInput: GoalHistoryWriterInput? = null
+  override val goalQualityAutomaticRecovery: Boolean = false
+  override val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan? = null
+
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }
     require(workflowId.isNotBlank()) { "FeatureTaskRuntimeRunRequest.workflowId is required." }

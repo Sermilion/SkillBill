@@ -47,26 +47,6 @@ import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
   val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
 
-  val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode? get() = null
-
-  /** Whether the accepted step owns one serial acceptance-repair mutation attempt. */
-  val serialAcceptanceRepairStep: Boolean get() = false
-
-  /** The reason the strategy cannot proceed with an agent launch after briefing persistence, or null when it can. */
-  fun beforeAgentLaunch(
-    run: PhaseRun,
-    context: PhaseAttemptLaunchHookContext,
-    state: B,
-  ): String? = null
-
-  /** Whether the output gate fingerprints the repository when this step completes. */
-  val fingerprintsCompletedRepository: Boolean
-    get() = false
-
-  /** Whether completed output of this step must carry the projections its immediate consumers read. */
-  val checksImmediateConsumerProjection: Boolean
-    get() = false
-
   /** The rule a [completionRejection] of this step is recorded under in the durable block reason. */
   val completionRejectionRule: String
     get() = PhaseStepOutputCheck.OUTPUT_VERIFICATION_RULE
@@ -74,23 +54,6 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
   /** The failure disposition a blocked terminal output of this step gets when it names none. */
   val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
     get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
-
-  /**
-   * The correction a blocked terminal output of this step retries with inside the retryable-failure budget, or null
-   * when the block settles.
-   */
-  val blockedOutputRetryCorrection: (FeatureTaskRuntimeWorkflowArtifactMap) -> String?
-    get() = { null }
-
-  /**
-   * The outcome [outputText] of [run] settles to before the shared output gate decodes it, or null when the shared
-   * gate decodes it. A runtime-owned step settles its triage and repair sessions here.
-   */
-  fun earlyOutput(
-    run: PhaseRun,
-    iteration: Int,
-    outputText: String,
-  ): PhaseOutcome? = null
 
   /** Checks validated [outputMap] of [run] before the shared output checks run. */
   fun checkValidatedOutput(
@@ -100,14 +63,6 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
-  /** The reason completed [outputMap] of [run] cannot settle, or null when it can. */
-  fun completionRejection(
-    run: PhaseRun,
-    context: PhaseStepOutputContext,
-    state: B,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): String? = null
-
   /** Settles the step records that completed [outputMap] of [run] carries, once every completion check passed. */
   fun settleCompletedOutput(
     run: PhaseRun,
@@ -115,17 +70,6 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
     state: B,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
-
-  /**
-   * The attempt result completed [outputMap] of [capture] settles to once the step's records are settled: a block or
-   * an in-phase retry, or null when the output goes on to acceptance.
-   */
-  fun settleCompletedRound(
-    context: PhaseStepOutputContext,
-    capture: ValidatedOutputCapture,
-    attested: NormalizedFeatureTaskRuntimePhaseOutput,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): AttemptResult? = null
 
   /**
    * The form of completed [attested] output of [capture] the output gate accepts, given its validated [outputMap]. A
@@ -145,14 +89,103 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): NormalizedFeatureTaskRuntimePhaseOutput = output
 
+  companion object {
+    val None: PhaseStepHooks<PhaseAcceptedStepExecution> = object : PhaseStepHooks<PhaseAcceptedStepExecution> {}
+  }
+}
+
+/** A step that owns one serial acceptance-repair mutation attempt and rejects an unfinished agent completion. */
+internal interface PhaseAcceptanceRepairHooks {
+  /** Whether the accepted step owns one serial acceptance-repair mutation attempt. */
+  val serialAcceptanceRepairStep: Boolean
+
+  /** The failure code an agent completion that left the step unfinished is rejected with. */
+  val unfinishedAgentCompletionRejection: FeatureTaskRuntimeFailureCode
+}
+
+/** A step whose agent launch can be refused after briefing persistence. */
+internal interface PhaseBeforeLaunchHooks<in B : PhaseAcceptedStepExecution> : PhaseStepHooks<B> {
+  /** The reason the strategy cannot proceed with an agent launch after briefing persistence, or null when it can. */
+  fun beforeAgentLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    state: B,
+  ): String?
+}
+
+/** A step whose output gate fingerprints the repository when the step completes. */
+internal interface PhaseRepositoryFingerprintHooks {
+  val fingerprintsCompletedRepository: Boolean
+}
+
+/** A step whose completed output must carry the projections its immediate consumers read. */
+internal interface PhaseConsumerProjectionHooks {
+  val checksImmediateConsumerProjection: Boolean
+}
+
+/** A runtime-owned step that carries the pack build command and settles its triage and repair sessions itself. */
+internal interface PhaseRuntimeOwnedStepHooks {
+  /** Whether the launch prompt of this step carries the build command the validation gate declares. */
+  val carriesPackBuildCommand: Boolean
+
+  /**
+   * The outcome [outputText] of [run] settles to before the shared output gate decodes it, or null when the shared
+   * gate decodes it.
+   */
+  fun earlyOutput(
+    run: PhaseRun,
+    iteration: Int,
+    outputText: String,
+  ): PhaseOutcome?
+}
+
+/** A step whose blocked terminal output retries with a correction inside the retryable-failure budget. */
+internal interface PhaseBlockedOutputRetryHooks {
+  /**
+   * The correction a blocked terminal [outputMap] of this step retries with inside the retryable-failure budget, or
+   * null when the block settles.
+   */
+  fun blockedOutputRetryCorrection(outputMap: FeatureTaskRuntimeWorkflowArtifactMap): String?
+}
+
+/** A step that rejects completed output the shared output checks accept. */
+internal interface PhaseCompletionRejectionHooks<in B : PhaseAcceptedStepExecution> : PhaseStepHooks<B> {
+  /** The reason completed [outputMap] of [run] cannot settle, or null when it can. */
+  fun completionRejection(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    state: B,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String?
+}
+
+/** A step that settles its round after its records are settled. */
+internal interface PhaseCompletedRoundHooks {
+  /**
+   * The attempt result completed [outputMap] of [capture] settles to once the step's records are settled: a block or
+   * an in-phase retry, or null when the output goes on to acceptance.
+   */
+  fun settleCompletedRound(
+    context: PhaseStepOutputContext,
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): AttemptResult?
+}
+
+/** A step that records evidence from its accepted output before the completed step is persisted. */
+internal interface PhaseAcceptedOutputRecordingHooks<in B : PhaseAcceptedStepExecution> : PhaseStepHooks<B> {
   /** Records step evidence from accepted [outputMap] of [run] before the completed step is persisted. */
   fun recordAcceptedOutput(
     run: PhaseRun,
     context: PhaseStepOutputContext,
     state: B,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ) = Unit
+  )
+}
 
+/** A step that decides, once recorded completed, what its completed output means for the rest of the run. */
+internal interface PhaseAfterCompletionHooks {
   /**
    * Settles what completed [output] of this step decides for the rest of the run, once the step is recorded
    * completed: the blocked reason that stops the run, or null when the run continues.
@@ -160,39 +193,11 @@ internal interface PhaseStepHooks<in B : PhaseAcceptedStepExecution> : PhaseStep
   fun afterCompletion(
     context: PhaseAttemptTraversalHookContext,
     output: FeatureTaskRuntimePhaseOutput,
-  ): String? = null
-
-  companion object {
-    val None: PhaseStepHooks<PhaseAcceptedStepExecution> = object : PhaseStepHooks<PhaseAcceptedStepExecution> {}
-  }
+  ): String?
 }
 
 /** The launch behaviour one strategy step adds to the shared launch preparation and pre-launch checks. */
 internal interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
-  /** The completed output this step continues with when it stops for any reason, from [upstream] alone. */
-  fun failureContinuationOutput(upstream: List<FeatureTaskRuntimePhaseOutput>): PhaseFailureContinuationOutput? = null
-
-  /**
-   * The completed output this step continues with when [failure] stops [run], read through the active step [state], or
-   * null when the stop keeps its block or pause behaviour.
-   */
-  fun failureContinuationOutput(
-    run: PhaseRun,
-    failure: PhaseStepFailure,
-    state: B,
-  ): PhaseFailureContinuationOutput? = null
-
-  /** Whether the launch prompt of this step carries the build command the validation gate declares. */
-  val carriesPackBuildCommand: Boolean
-    get() = false
-
-  /** The prompt sections appended after the composed launch prompt of [run]. */
-  fun launchPromptSupplement(
-    run: PhaseRun,
-    context: PhaseAttemptLaunchHookContext,
-    state: B,
-  ): String = ""
-
   /** The repository checkpoint the launch handoff of [run] expects, given the [current] checkpoint fingerprint. */
   fun expectedLaunchCheckpoint(
     run: PhaseRun,
@@ -210,21 +215,6 @@ internal interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
       executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
     )
 
-  /** The recorded finding verdicts the launch handoff of this step carries. */
-  fun handoffFindingVerdicts(state: B): List<ReviewFindingVerdict> = emptyList()
-
-  /** Resets the step state a launch of [run] must not carry over from a prior process. */
-  fun onLaunch(
-    run: PhaseRun,
-    context: PhaseAttemptLaunchHookContext,
-  ) = Unit
-
-  /** Reconciles the durable state [run] reads before the shared pre-launch checks decide whether it can launch. */
-  fun reconcileBeforeLaunch(
-    run: PhaseRun,
-    context: PhaseAttemptLaunchHookContext,
-  ) = Unit
-
   /**
    * Whether attempt [iteration] of [run] launches, once its required start is acknowledged and before launch
    * preparation composes its prompt. A step that owns durable turn accounting reserves the turn here.
@@ -235,14 +225,135 @@ internal interface PhaseStepLaunchHooks<in B : PhaseAcceptedStepExecution> {
     state: B,
     iteration: Int,
   ): PhaseLaunchAdmission = PhaseLaunchAdmission.Launch
+}
 
+/** A step that appends prompt sections after the composed launch prompt. */
+internal interface PhaseLaunchPromptHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
+  /** The prompt sections appended after the composed launch prompt of [run]. */
+  fun launchPromptSupplement(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    state: B,
+  ): String
+}
+
+/** A step whose launch handoff carries recorded finding verdicts. */
+internal interface PhaseFindingVerdictHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
+  /** The recorded finding verdicts the launch handoff of this step carries. */
+  fun handoffFindingVerdicts(state: B): List<ReviewFindingVerdict>
+}
+
+/** A step that continues with a completed output when a stop of [run] would otherwise block or pause it. */
+internal interface PhaseFailureContinuationHooks<in B : PhaseAcceptedStepExecution> : PhaseStepLaunchHooks<B> {
+  /**
+   * The completed output this step continues with when [failure] stops [run], read through the active step [state], or
+   * null when the stop keeps its block or pause behaviour.
+   */
+  fun failureContinuationOutput(
+    run: PhaseRun,
+    failure: PhaseStepFailure,
+    state: B,
+  ): PhaseFailureContinuationOutput?
+}
+
+/** A step that continues with a completed output computed from its upstream outputs alone, whatever stopped it. */
+internal interface PhaseUpstreamFailureContinuationHooks {
+  /** The completed output this step continues with when it stops for any reason, from [upstream] alone. */
+  fun failureContinuationOutput(upstream: List<FeatureTaskRuntimePhaseOutput>): PhaseFailureContinuationOutput?
+}
+
+/** A step that reconciles the durable state [run] reads before the shared pre-launch checks. */
+internal interface PhaseLaunchReconciliationHooks {
+  /** Reconciles the durable state [run] reads before the shared pre-launch checks decide whether it can launch. */
+  fun reconcileBeforeLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+  )
+}
+
+/** A step that launches an implementation turn. */
+internal interface PhaseImplementationTurnHooks {
   /** The implementation turn admitted attempt [iteration] of [run] launches, or null when it launches no turn. */
   fun implementationTurn(
     run: PhaseRun,
     context: PhaseAttemptLaunchHookContext,
     iteration: Int,
-  ): FeatureTaskRuntimeImplementationTurn? = null
+  ): FeatureTaskRuntimeImplementationTurn?
 }
+
+internal val PhaseStepHooks<*>.serialAcceptanceRepairStep: Boolean
+  get() = (this as? PhaseAcceptanceRepairHooks)?.serialAcceptanceRepairStep ?: false
+
+internal val PhaseStepHooks<*>.fingerprintsCompletedRepository: Boolean
+  get() = (this as? PhaseRepositoryFingerprintHooks)?.fingerprintsCompletedRepository ?: false
+
+internal val PhaseStepHooks<*>.checksImmediateConsumerProjection: Boolean
+  get() = (this as? PhaseConsumerProjectionHooks)?.checksImmediateConsumerProjection ?: false
+
+internal val PhaseStepLaunchHooks<*>.carriesPackBuildCommand: Boolean
+  get() = (this as? PhaseRuntimeOwnedStepHooks)?.carriesPackBuildCommand ?: false
+
+internal fun PhaseStepHooks<*>.earlyOutput(
+  run: PhaseRun,
+  iteration: Int,
+  outputText: String,
+): PhaseOutcome? = (this as? PhaseRuntimeOwnedStepHooks)?.earlyOutput(run, iteration, outputText)
+
+internal fun PhaseStepHooks<*>.blockedOutputRetryCorrection(outputMap: FeatureTaskRuntimeWorkflowArtifactMap): String? =
+  (this as? PhaseBlockedOutputRetryHooks)?.blockedOutputRetryCorrection(outputMap)
+
+internal fun PhaseStepHooks<*>.settleCompletedRound(
+  context: PhaseStepOutputContext,
+  capture: ValidatedOutputCapture,
+  attested: NormalizedFeatureTaskRuntimePhaseOutput,
+  outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+): AttemptResult? = (this as? PhaseCompletedRoundHooks)?.settleCompletedRound(context, capture, attested, outputMap)
+
+internal fun PhaseStepLaunchHooks<*>.implementationTurn(
+  run: PhaseRun,
+  context: PhaseAttemptLaunchHookContext,
+  iteration: Int,
+): FeatureTaskRuntimeImplementationTurn? =
+  (this as? PhaseImplementationTurnHooks)?.implementationTurn(run, context, iteration)
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepHooks<B>.beforeAgentLaunch(
+  run: PhaseRun,
+  context: PhaseAttemptLaunchHookContext,
+  state: B,
+): String? = (this as? PhaseBeforeLaunchHooks<B>)?.beforeAgentLaunch(run, context, state)
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepHooks<B>.completionRejection(
+  run: PhaseRun,
+  context: PhaseStepOutputContext,
+  state: B,
+  outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+): String? = (this as? PhaseCompletionRejectionHooks<B>)?.completionRejection(run, context, state, outputMap)
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepHooks<B>.recordAcceptedOutput(
+  run: PhaseRun,
+  context: PhaseStepOutputContext,
+  state: B,
+  outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+) {
+  (this as? PhaseAcceptedOutputRecordingHooks<B>)?.recordAcceptedOutput(run, context, state, outputMap)
+}
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLaunchHooks<B>.launchPromptSupplement(
+  run: PhaseRun,
+  context: PhaseAttemptLaunchHookContext,
+  state: B,
+): String = (this as? PhaseLaunchPromptHooks<B>)?.launchPromptSupplement(run, context, state) ?: ""
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLaunchHooks<B>.handoffFindingVerdicts(
+  state: B,
+): List<ReviewFindingVerdict> = (this as? PhaseFindingVerdictHooks<B>)?.handoffFindingVerdicts(state).orEmpty()
+
+internal fun <B : PhaseAcceptedStepExecution> PhaseStepLaunchHooks<B>.failureContinuationOutput(
+  run: PhaseRun,
+  failure: PhaseStepFailure,
+  state: B,
+): PhaseFailureContinuationOutput? =
+  (this as? PhaseFailureContinuationHooks<B>)?.failureContinuationOutput(run, failure, state)
 
 /** What a step decides about one attempt before launch preparation. */
 internal sealed interface PhaseLaunchAdmission {

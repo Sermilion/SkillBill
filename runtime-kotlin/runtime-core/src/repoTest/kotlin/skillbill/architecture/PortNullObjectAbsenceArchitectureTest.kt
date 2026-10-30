@@ -4,6 +4,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 object PortNullObjectCensus {
   private val declaration =
@@ -14,6 +15,8 @@ object PortNullObjectCensus {
   private val companionNullObjectVal = Regex("""^\s*val\s+(NONE|IDLE|NOOP|DISABLED)\s*:""")
 
   val COMPANION_VAL_MODULES: List<String> = listOf("runtime-kotlin/runtime-ports", "runtime-kotlin/runtime-engine")
+
+  fun interfaceNullObjectBodiesIn(source: String): List<String> = InterfaceNullObjectBodyScanner.scan(source)
 
   fun namesIn(source: String): Set<String> = declaration.findAll(source).map { it.groupValues[1] }.toSet()
 
@@ -105,6 +108,68 @@ class PortNullObjectAbsenceArchitectureTest {
     assertEquals(
       emptySet(),
       PortNullObjectCensus.namesIn("  enum class Unavailable : ReviewCheckpointFileIdentity"),
+    )
+  }
+
+  @Test
+  fun `no ports or engine interface member has a null-object default body`() {
+    val reports =
+      PortNullObjectCensus.COMPANION_VAL_MODULES.flatMap { module ->
+        val sourceFiles = kotlinFilesUnderWithArchitectureAsserts(runtimeRoot.resolve("$module/src/main"))
+        assertTrue(sourceFiles.isNotEmpty(), "$module must contribute scanned main source files.")
+        sourceFiles.flatMap { path ->
+          PortNullObjectCensus.interfaceNullObjectBodiesIn(Files.readString(path))
+            .map { report -> "${runtimeRoot.relativize(path)}: $report" }
+        }
+      }.sorted()
+
+    assertEquals(
+      emptyList(),
+      reports,
+      "An interface member body that only returns null, a literal, an empty collection, Unit or a throw lets a " +
+        "fake or a new implementation silently report nothing. Declare the member without a body, split the " +
+        "interface so only the implementations that need it carry it, and implement it explicitly.",
+    )
+  }
+
+  @Test
+  fun `the interface census reports null, throw and getter bodies but not forwarding or default parameters`() {
+    val source =
+      """
+      interface Sample {
+        fun a(): String? = null
+
+        fun wrapped(
+          id: String,
+        ): Boolean =
+          throw IllegalStateException("x")
+
+        val b: Int get() = 0
+
+        fun c(u: Int): String? = a()
+
+        fun d(x: String? = null): Int
+
+        fun e(): Int {
+          return 1
+        }
+
+        fun f(): List<String> {
+        }
+
+        fun g(): Int = compute { 0 }
+      }
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "Sample.a (NULL)",
+        "Sample.wrapped (THROW)",
+        "Sample.b (LITERAL)",
+        "Sample.e (LITERAL)",
+        "Sample.f (UNIT_OR_EMPTY_BLOCK)",
+      ),
+      PortNullObjectCensus.interfaceNullObjectBodiesIn(source),
     )
   }
 

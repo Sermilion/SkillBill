@@ -80,13 +80,13 @@ sealed interface ValidationGateCycleTerminalOutcome {
   ) : ValidationGateCycleTerminalOutcome
 }
 
-fun interface ValidationGateProgressStore {
+interface ValidationGateProgressStore {
   fun persist(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   )
 
-  fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = null
+  fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress?
 }
 
 data class ValidationGateProgressWrite(

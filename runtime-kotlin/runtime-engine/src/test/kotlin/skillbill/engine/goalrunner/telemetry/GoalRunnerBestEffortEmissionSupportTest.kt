@@ -20,6 +20,8 @@ class GoalRunnerBestEffortEmissionSupportTest {
     val records = mutableListOf<String>()
     val diagnostics =
       object : RuntimeDiagnostics {
+        override fun info(message: String) = Unit
+
         override fun warning(
           message: String,
           error: Throwable?,

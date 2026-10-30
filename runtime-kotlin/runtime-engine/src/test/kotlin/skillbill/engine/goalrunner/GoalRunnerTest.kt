@@ -5664,6 +5664,8 @@ internal class RecordingOutcomeStore : TestGoalQualityOutcomeStore(settled = tru
 private class ThrowingDiagnostics : RuntimeDiagnostics {
   val warningMessages: MutableList<String> = mutableListOf()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

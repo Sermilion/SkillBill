@@ -9,6 +9,8 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
+import skillbill.engine.featuretask.slot.PhaseCompletedRoundHooks
+import skillbill.engine.featuretask.slot.PhaseImplementationTurnHooks
 import skillbill.engine.featuretask.slot.PhaseLaunchAdmission
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -36,7 +38,10 @@ import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeLaunch
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal object ImplementationCriterionHooks : PhaseStepHooks<PhaseAcceptedStepExecution> {
+internal object ImplementationCriterionHooks :
+  PhaseStepHooks<PhaseAcceptedStepExecution>,
+  PhaseImplementationTurnHooks,
+  PhaseCompletedRoundHooks {
   override val contextKind: PhaseStepHookContextKind = PhaseStepHookContextKind.IMPLEMENTATION
 
   private const val CHECK_VERDICT_REJECTION: String =

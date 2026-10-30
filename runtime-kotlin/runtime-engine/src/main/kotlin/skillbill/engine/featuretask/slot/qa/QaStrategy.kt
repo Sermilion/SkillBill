@@ -25,8 +25,11 @@ import skillbill.engine.featuretask.qa.report.qaVerdictOf
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseBeforeLaunchHooks
 import skillbill.engine.featuretask.slot.PhaseBindingFamily
+import skillbill.engine.featuretask.slot.PhaseFailureContinuationHooks
 import skillbill.engine.featuretask.slot.PhaseFailureContinuationOutput
+import skillbill.engine.featuretask.slot.PhaseLaunchPromptHooks
 import skillbill.engine.featuretask.slot.PhaseLoopCapability
 import skillbill.engine.featuretask.slot.PhasePreparedRunCapability
 import skillbill.engine.featuretask.slot.PhaseResumeCapability
@@ -186,7 +189,11 @@ class QaStrategy(
   private val repairHooks = QaRepairHooks(execution, outcomes, reports, stops)
 
   private val hooks =
-    object : PhaseStepHooks<PhaseQaStepBinding> {
+    object :
+      PhaseStepHooks<PhaseQaStepBinding>,
+      PhaseFailureContinuationHooks<PhaseQaStepBinding>,
+      PhaseLaunchPromptHooks<PhaseQaStepBinding>,
+      PhaseBeforeLaunchHooks<PhaseQaStepBinding> {
       override fun failureContinuationOutput(
         run: PhaseRun,
         failure: PhaseStepFailure,

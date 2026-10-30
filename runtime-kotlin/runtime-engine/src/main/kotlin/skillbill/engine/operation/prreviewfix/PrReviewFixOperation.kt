@@ -3,12 +3,14 @@ package skillbill.engine.operation.prreviewfix
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.operation.core.ConfirmAdmission
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
 import skillbill.engine.operation.core.CurrentOperationAnchors
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationPrecheck
 import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
@@ -30,7 +32,9 @@ class PrReviewFixOperation(
   private val gitOperations: WorkflowGitOperations,
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
   private val modelAssignmentSource: () -> FeatureTaskRuntimeModelAssignment,
-) : ConfirmableOperation {
+) : ConfirmableOperation,
+  OperationPrecheck,
+  ConfirmAdmission {
   constructor(
     reviewThreads: PullRequestReviewThreadOperations,
     gitOperations: WorkflowGitOperations,

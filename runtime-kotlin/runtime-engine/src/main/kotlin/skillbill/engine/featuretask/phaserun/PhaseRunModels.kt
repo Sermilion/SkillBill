@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.PhaseInstructions
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.review.ReviewInvocation
@@ -137,6 +138,11 @@ internal data class InMemoryPhaseRunFacts(
   override val workflowId: String = "",
   override val monitorExecution: MonitorExecutionContext? = null,
 ) : FeatureTaskRuntimeRunFacts {
+  override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null
+  override val activityParentWorkflowId: String? = null
+  override val protectedSpecSha256: String? = null
+  override val planIntake: String? = null
+  override val stopAfterIntake: Boolean = false
   override val issueKey: String = intake.issueKey
   override val qaSelection: FeatureTaskRuntimeQaSelection? = request.qaSelection
   override val runInvariants: FeatureTaskRuntimeRunInvariants =

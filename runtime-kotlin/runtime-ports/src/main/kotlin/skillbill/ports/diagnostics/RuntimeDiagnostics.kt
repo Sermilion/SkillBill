@@ -11,6 +11,5 @@ interface RuntimeDiagnostics {
     error: Throwable? = null,
   )
 
-  fun info(message: String) {
-  }
+  fun info(message: String)
 }

@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknow
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
+import skillbill.engine.featuretask.slot.PhaseAcceptanceRepairHooks
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
@@ -43,7 +44,13 @@ class FeatureTaskPhaseSettlementService(
     val refusal =
       strategies.strategies.asSequence()
         .filter { request.phaseId in it.steps }
-        .mapNotNull { it.stepHooks(request.phaseId).unfinishedAgentCompletionRejection }
+        .mapNotNull {
+          (
+            it.stepHooks(
+              request.phaseId,
+            ) as? PhaseAcceptanceRepairHooks
+          )?.unfinishedAgentCompletionRejection
+        }
         .firstOrNull()
     if (refusal != null &&
       (

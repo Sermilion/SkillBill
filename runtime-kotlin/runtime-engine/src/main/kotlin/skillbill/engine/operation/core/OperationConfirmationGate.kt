@@ -43,7 +43,7 @@ class OperationConfirmationGate(
     val proposal = proposals.find(token) ?: return unknownToken(token)
     val confirmed = ConfirmedOperationProposal(token, proposal.proposalValue, proposal.anchors.operationValues)
     return refusal(operation, context, proposal)
-      ?: operation.admit(context, confirmed)
+      ?: (operation as? ConfirmAdmission)?.admit(context, confirmed)
       ?: consumeAndExecute(operation, context, confirmed)
   }
 

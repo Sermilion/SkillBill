@@ -6,6 +6,7 @@ import skillbill.engine.operation.core.ConfirmedOperationProposal
 import skillbill.engine.operation.core.CurrentOperationAnchors
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationPrecheck
 import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
@@ -19,7 +20,8 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 class ReleaseOperation(
   private val gitOperations: WorkflowGitOperations,
   private val buildGate: ReleaseBuildGate,
-) : ConfirmableOperation {
+) : ConfirmableOperation,
+  OperationPrecheck {
   override val id: String = "release"
 
   override fun pre(context: OperationContext): OperationRefusal? {

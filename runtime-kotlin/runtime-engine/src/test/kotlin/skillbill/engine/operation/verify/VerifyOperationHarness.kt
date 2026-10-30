@@ -109,6 +109,8 @@ internal class VerifyOperationHarness : AutoCloseable {
     }
   private val recordingDiagnostics =
     object : RuntimeDiagnostics {
+      override fun info(message: String) = Unit
+
       override fun warning(
         message: String,
         error: Throwable?,

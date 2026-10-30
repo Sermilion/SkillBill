@@ -21,6 +21,8 @@ private class RecordingDiagnostics : RuntimeDiagnostics {
   val warnings = CopyOnWriteArrayList<String>()
   val errors = CopyOnWriteArrayList<String>()
 
+  override fun info(message: String) = Unit
+
   override fun warning(
     message: String,
     error: Throwable?,

@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.qa.execution.WorktreeBaseline
 import skillbill.engine.featuretask.qa.execution.worktreeBaseline
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationPrecheck
 import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
@@ -57,7 +58,8 @@ class VerifyOperation(
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val branchSource: CheckedOutBranchSource,
   qaStep: VerifyQaStep,
-) : SelfConfirmingOperation {
+) : SelfConfirmingOperation,
+  OperationPrecheck {
   override val id: String = "verify"
 
   private val store = VerifyWorkflowStore(workflows)
