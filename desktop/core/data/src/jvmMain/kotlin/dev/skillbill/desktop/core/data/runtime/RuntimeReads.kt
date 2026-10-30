@@ -37,14 +37,7 @@ class RuntimeReads(
     if (!scope.isActive) throw SessionClosedException()
     val start = if (switch.enabled) TimeSource.Monotonic.markNow() else null
     try {
-      val call = scope.async(dispatcher.dispatcher) { block(runtime) }
-      try {
-        return call.await()
-      } catch (failure: CancellationException) {
-        withContext(NonCancellable) { call.join() }
-        if (currentCoroutineContext().isActive) throw SessionClosedException(failure)
-        throw failure
-      }
+      return runSessionOwnedCall(scope, dispatcher.dispatcher) { block(runtime) }
     } finally {
       if (start != null) {
         val elapsed = start.elapsedNow().inWholeMilliseconds
@@ -52,5 +45,20 @@ class RuntimeReads(
         System.err.println("skill-bill-desktop $kind $name ${elapsed}ms")
       }
     }
+  }
+}
+
+internal suspend fun <T> runSessionOwnedCall(
+  scope: kotlinx.coroutines.CoroutineScope,
+  dispatcher: kotlinx.coroutines.CoroutineDispatcher,
+  block: () -> T,
+): T {
+  val call = scope.async(dispatcher) { block() }
+  try {
+    return call.await()
+  } catch (failure: CancellationException) {
+    withContext(NonCancellable) { call.join() }
+    if (currentCoroutineContext().isActive) throw SessionClosedException(failure)
+    throw failure
   }
 }

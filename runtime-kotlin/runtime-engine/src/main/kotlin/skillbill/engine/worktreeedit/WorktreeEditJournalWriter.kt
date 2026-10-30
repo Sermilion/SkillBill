@@ -71,7 +71,14 @@ class WorktreeEditJournalWriter(
     val entries = measured.files.filterNot(::isRuntimePrivatePath)
     val maxRows = WorktreeEditJournalPayloadKeys.MAX_ROWS_PER_WORKFLOW
     val persistEntries = entries.take(maxRows)
-    if (persistEntries.isEmpty()) return
+    if (persistEntries.isEmpty()) {
+      database.transaction { unitOfWork ->
+        unitOfWork.worktreeEditJournal.latestTick(workflowId)?.recordedAt?.plusNanos(1)?.let { cutoff ->
+          unitOfWork.worktreeEditJournal.deleteTicksBefore(workflowId, cutoff)
+        }
+      }
+      return
+    }
     val measuredEntries = persistEntries.map { Triple(it.path, it.insertions, it.deletions) }
     val phaseId = runCatching { resolvePhaseId() }.getOrElseUnlessCooperative { null }
     val truncatedRows = entries.size - persistEntries.size

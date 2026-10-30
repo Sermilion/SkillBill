@@ -3,6 +3,8 @@ package dev.skillbill.desktop.feature.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.skillbill.desktop.core.domain.model.BoardState
+import dev.skillbill.desktop.core.domain.model.liveRows
+import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
@@ -53,6 +55,7 @@ class DetailViewModel(
   private val specs: SpecRepository,
   private val webPages: RepositoryWebPages,
   private val selection: SelectionHolder,
+  private val subtaskSelections: SubtaskSelections,
   private val clock: Clock,
   workControls: WorkControlRepository,
   toasts: ToastQueue,
@@ -64,6 +67,8 @@ class DetailViewModel(
       itemResolved = false,
       stale = false,
       renderedAt = clock.now(),
+      subtaskChoice = subtaskSelections.get(item.id),
+      focusSubtaskList = subtaskSelections.takeListFocus(),
     ),
   )
   val state: StateFlow<DetailUiState> = mutableState.asStateFlow()
@@ -72,6 +77,7 @@ class DetailViewModel(
   val effects: Flow<DetailEffect> = effectChannel.receiveAsFlow()
 
   private var observation: Job? = null
+  private var latestBoardRow = item
 
   private val controls = DetailControls(viewModelScope, workControls, toasts) { mutableState.value }
 
@@ -79,15 +85,26 @@ class DetailViewModel(
     selection.select(null)
     controls.state.onEach { controls -> mutableState.update { it.copy(controls = controls) } }.launchIn(viewModelScope)
     observe()
-    board.observe(ShellBoard.query).onEach { board -> mutableState.update { it.copy(boardPosition = boardPosition(board, it.header.id)) } }
+    board.observe(ShellBoard.query).onEach { boardState ->
+      val row = (boardState as? BoardState.Loaded)?.items?.firstOrNull { it.id == item.id }
+      if (row != null) latestBoardRow = row
+      mutableState.update { state ->
+        val header = row?.let(state.header::withBoardVerdicts) ?: state.header
+        state.copy(header = header, boardPosition = boardPosition(boardState, state.header.id))
+      }
+    }
       .launchIn(viewModelScope)
   }
 
-  /** Opens the next or previous board item; returns false when there is none, so the key goes unhandled. */
-  fun step(next: Boolean): Boolean {
+  /**
+   * Opens the next or previous board item; returns false when there is none, so the key goes unhandled. [keepListFocus] (J or K
+   * pressed in the focused Subtasks list) hands that focus to the next detail's list.
+   */
+  fun step(next: Boolean, keepListFocus: Boolean = false): Boolean {
     if (!state.value.itemResolved) return false
     val position = state.value.boardPosition
     val target = (if (next) position?.next else position?.previous) ?: return false
+    if (keepListFocus) subtaskSelections.carryListFocus()
     effectChannel.trySend(DetailEffect.OpenItem(target))
     return true
   }
@@ -115,7 +132,43 @@ class DetailViewModel(
       }
       is DetailAction.OpenSpecFile -> open(FILE_NOT_OPENED) { specs.openFile(action.path) }
       is DetailAction.Navigate -> effectChannel.trySend(DetailEffect.OpenRoute(action.route))
+      is DetailAction.SelectSubtask -> selectSubtask(action.key, action.inline)
+      is DetailAction.MoveSubtaskSelection -> moveSubtaskSelection(action.delta)
+      DetailAction.OpenSelectedSubtaskSpec -> openSelectedSubtaskSpec()
+      DetailAction.SubtaskListFocused -> if (state.value.focusSubtaskList) mutableState.update { it.copy(focusSubtaskList = false) }
     }
+  }
+
+  private fun loadedDetail() = (state.value.sections as? SectionsUi.Loaded)?.detail
+
+  private fun effectiveSubtask(): SubtaskKey? = loadedDetail()?.let { selectedSubtask(state.value.header, it, state.value.subtaskChoice.key) }
+
+  private fun chooseSubtask(choice: SubtaskChoice) {
+    subtaskSelections.set(item.id, choice)
+    mutableState.update { it.copy(subtaskChoice = choice) }
+  }
+
+  /** Inline, selecting the selected row again folds or unfolds its inspector; any other selection opens it. */
+  private fun selectSubtask(key: SubtaskKey, inline: Boolean) {
+    // A chip can name a dependency the index does not list; selecting it would store a choice that falls back to the default.
+    val detail = loadedDetail() ?: return
+    if (key !in subtaskKeys(state.value.header, detail)) return
+    val choice = state.value.subtaskChoice
+    if (inline && key == effectiveSubtask()) chooseSubtask(choice.copy(key = key, expanded = !choice.expanded)) else chooseSubtask(SubtaskChoice(key, expanded = true))
+  }
+
+  private fun moveSubtaskSelection(delta: Int) {
+    val detail = loadedDetail() ?: return
+    val keys = subtaskKeys(state.value.header, detail)
+    if (keys.isEmpty()) return
+    val index = keys.indexOf(effectiveSubtask()).coerceAtLeast(0)
+    chooseSubtask(SubtaskChoice(keys[(index + delta).coerceIn(0, keys.lastIndex)], expanded = true))
+  }
+
+  private fun openSelectedSubtaskSpec() {
+    val detail = loadedDetail() ?: return
+    val key = effectiveSubtask() as? SubtaskKey.Subtask ?: return
+    subtaskSpecPath(detail, key.id)?.let { onAction(DetailAction.OpenSpecFile(it)) }
   }
 
   private fun observe() {
@@ -126,7 +179,8 @@ class DetailViewModel(
   private fun show(read: DetailState) {
     val resolved = read.sections is DetailSections.Loaded &&
       (session.state.value as? DatabaseSessionState.Open)?.sessionId == read.header.control.sessionId
-    if (resolved) selection.select(read.header)
+    val header = read.header.withBoardVerdicts(latestBoardRow)
+    if (resolved) selection.select(header)
     mutableState.update { current ->
       val sections = when (val sections = read.sections) {
         // A detail that has shown its sections never returns to placeholders.
@@ -136,7 +190,7 @@ class DetailViewModel(
         is DetailSections.Failed -> SectionsUi.Failed(sections.problem)
       }
       val stale = (read.sections as? DetailSections.Loaded)?.stale ?: (current.stale && sections is SectionsUi.Loaded)
-      current.copy(header = read.header, sections = sections, itemResolved = current.itemResolved || resolved, stale = stale, renderedAt = clock.now())
+      current.copy(header = header, sections = sections, itemResolved = current.itemResolved || resolved, stale = stale, renderedAt = clock.now())
     }
   }
 
@@ -164,9 +218,20 @@ class DetailViewModel(
   }
 }
 
-/** The item's place in the shell board's order, which only flattens the runtime's sections; null when the board does not show it. */
+private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
+  running = row.running,
+  recentlyFinishedPhase = row.recentlyFinishedPhase,
+  doneWithinDay = row.doneWithinDay,
+)
+
+/**
+ * The item's place in the board order the pager walks: the live rows, the same rows Work lists and counts, or the Finished today
+ * rows for a finished item. Null when the board does not show the item.
+ */
 internal fun boardPosition(board: BoardState, id: String): BoardPosition? {
-  val rows = (board as? BoardState.Loaded)?.sections?.flatMap { it.items } ?: return null
+  val loaded = board as? BoardState.Loaded ?: return null
+  val live = loaded.liveRows()
+  val rows = if (live.any { it.id == id }) live else loaded.sections.firstOrNull { it.kind == BoardSectionKind.Finished }?.items.orEmpty()
   val index = rows.indexOfFirst { it.id == id }
   if (index < 0) return null
   return BoardPosition(index, rows.size, rows.getOrNull(index - 1), rows.getOrNull(index + 1))

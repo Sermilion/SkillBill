@@ -21,6 +21,9 @@ import dev.skillbill.desktop.core.designsystem.detail.TerminalTabChrome
 import dev.skillbill.desktop.core.ui.input.ShellEdit
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 import javax.swing.SwingUtilities
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.remember
+import java.awt.GraphicsEnvironment
 
 // From components.css: the pane never takes more than 70 % of the work column, so the main panel keeps its space.
 private const val MAX_COLUMN_SHARE = 0.7f
@@ -65,10 +68,16 @@ fun TerminalPane(workspace: TerminalWorkspace, modifier: Modifier = Modifier) {
 @Composable
 private fun TerminalSurface(workspace: TerminalWorkspace, tab: TerminalTabUi) {
   val colors = SkillBillTheme.colors
+  // Content dp per Swing unit: the window's content density over the scale AWT already applies to Swing.
+  val density = LocalDensity.current.density
+  val swingScale = remember(density) {
+    val awt = GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX
+    density / awt.toFloat().coerceAtLeast(1f)
+  }
   val font by produceState(workspace.loadedFont) { value = workspace.font() }
   val start by produceState<TerminalStart?>(null, font) {
     val loaded = font ?: return@produceState
-    value = workspace.session(tab.id).open(workspace.launch(tab), TerminalSettings(colors, loaded))
+    value = workspace.session(tab.id).open(workspace.launch(tab), TerminalSettings(colors, loaded, swingScale))
   }
   when (val current = start) {
     // SwingPanel calls its factory once, so another session's widget needs a new panel.

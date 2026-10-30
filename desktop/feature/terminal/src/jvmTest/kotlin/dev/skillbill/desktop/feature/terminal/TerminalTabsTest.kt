@@ -46,5 +46,12 @@ class TerminalTabsTest {
     assertEquals("skill-bill", name)
   }
 
+  @Test
+  fun `a Windows checkout path uses its final directory name`() {
+    val name = terminalProjectName("C:\\work\\project\\src", "C:\\Users\\me", { it == "C:\\work\\project\\.git" }) { null }
+
+    assertEquals("project", name)
+  }
+
   private fun labels(state: TerminalTabsState): List<String> = terminalTabLabels(state.tabs).let { map -> state.tabs.map { map.getValue(it.id) } }
 }

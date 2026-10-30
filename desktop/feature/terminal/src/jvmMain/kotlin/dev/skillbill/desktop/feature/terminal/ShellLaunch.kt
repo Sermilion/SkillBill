@@ -32,24 +32,36 @@ fun tabName(directory: Path, userHome: Path): String =
  * folder. A directory outside any checkout is named after itself, and the home directory is `~`.
  */
 fun terminalProjectName(path: String, userHome: String, isDirectory: (String) -> Boolean, readGitFile: (String) -> String?): String {
-  if (path.trimEnd('/') == userHome.trimEnd('/')) return "~"
-  var directory = path.trimEnd('/')
+  if (trimSeparators(path) == trimSeparators(userHome)) return "~"
+  var directory = trimSeparators(path)
   while (directory.isNotEmpty()) {
-    val git = "$directory/.git"
+    val git = childPath(directory, ".git")
     if (isDirectory(git)) return lastSegment(directory)
     val pointer = readGitFile(git)
     if (pointer != null) return worktreeMainCheckout(pointer) ?: lastSegment(directory)
-    directory = directory.substringBeforeLast('/', "")
+    directory = parentPath(directory)
   }
   return lastSegment(path)
 }
 
 private const val WORKTREES_MARKER = "/.git/worktrees/"
 
-private fun worktreeMainCheckout(pointer: String): String? {
-  val gitDir = pointer.lineSequence().firstOrNull { it.startsWith("gitdir:") }?.removePrefix("gitdir:")?.trim() ?: return null
-  val marker = gitDir.indexOf(WORKTREES_MARKER)
-  return if (marker > 0) lastSegment(gitDir.substring(0, marker)) else null
+private fun trimSeparators(path: String): String = path.trimEnd('/', '\\')
+
+private fun childPath(parent: String, child: String): String =
+  parent + (if ('\\' in parent && '/' !in parent) '\\' else '/') + child
+
+private fun parentPath(path: String): String {
+  val separator = maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  return if (separator < 0) "" else path.substring(0, separator)
 }
 
-private fun lastSegment(path: String): String = path.trimEnd('/').substringAfterLast('/').ifEmpty { "/" }
+private fun worktreeMainCheckout(pointer: String): String? {
+  val gitDir = pointer.lineSequence().firstOrNull { it.startsWith("gitdir:") }?.removePrefix("gitdir:")?.trim() ?: return null
+  val normalized = gitDir.replace('\\', '/')
+  val marker = normalized.indexOf(WORKTREES_MARKER)
+  return if (marker > 0) lastSegment(normalized.substring(0, marker)) else null
+}
+
+private fun lastSegment(path: String): String =
+  trimSeparators(path).substringAfterLast('/').substringAfterLast('\\').ifEmpty { "/" }

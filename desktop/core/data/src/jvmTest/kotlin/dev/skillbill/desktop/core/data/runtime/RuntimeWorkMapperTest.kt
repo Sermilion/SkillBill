@@ -23,6 +23,14 @@ class RuntimeWorkMapperTest {
     assertEquals("wf-2", board(workflowId = "wf-2", workflow).toWorkItem(1L).id)
   }
 
+  @Test
+  fun `a row is titled by the runtime title and keeps the summary as its summary`() {
+    val item = board(workflowId = "wf-1", IdeStatusExecutionIdentity(IdeStatusExecutionScope.WORKFLOW, "e", "s", "1", "1"))
+      .toWorkItem(1L)
+
+    assertEquals("plan SKILL-452" to "Canceled by you.", item.title to item.summary)
+  }
+
   private fun board(workflowId: String, execution: IdeStatusExecutionIdentity) = WorkBoardItem(
     snapshot = IdeStatusSnapshot(
       repositoryIdentity = "repo",
@@ -30,7 +38,8 @@ class RuntimeWorkMapperTest {
       currentStep = IdeStatusStep("implement", "Implement"),
       updatedAt = Instant.EPOCH,
       freshness = IdeStatusFreshness.FRESH,
-      summary = "Work",
+      summary = "Canceled by you.",
+      title = "plan SKILL-452",
       workflowId = workflowId,
       execution = execution,
     ),

@@ -141,7 +141,8 @@ private class PopoverPositionProvider(private val offset: IntOffset, private val
   override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
     val left = if (layoutDirection == LayoutDirection.Ltr) anchorBounds.left else anchorBounds.right - popupContentSize.width
     val below = anchorBounds.bottom + gap + offset.y
-    val top = if (below + popupContentSize.height <= windowSize.height - margin) below else anchorBounds.top - popupContentSize.height - gap - offset.y
+    // placePopover flips to `top - height - 8`: the anchor's top edge, 8px clear, without the downward gap or offset.
+    val top = if (below + popupContentSize.height <= windowSize.height - margin) below else anchorBounds.top - popupContentSize.height - margin
     return IntOffset((left + offset.x).coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)), top.coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin)))
   }
 }

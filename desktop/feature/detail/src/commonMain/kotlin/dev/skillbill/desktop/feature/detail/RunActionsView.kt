@@ -12,7 +12,6 @@ import dev.skillbill.desktop.core.domain.model.WorkKind
 internal const val REFRESH_BEFORE_CONTROLS = "Refresh the detail before using run controls."
 internal const val WORKING = "Working…"
 
-private val RECOVER_SHOWN = setOf(IncidentProgress.RecoveryAvailable, IncidentProgress.NeedsPrerequisites, IncidentProgress.Recovering)
 private val RECOVER_ALLOWED = setOf(IncidentProgress.RecoveryAvailable, IncidentProgress.NeedsPrerequisites)
 
 internal data class ControlButton(val label: String, val enabled: Boolean, val tooltip: String? = null)
@@ -30,7 +29,7 @@ internal data class RunActionsView(
   val launch: ControlButton?,
   val agent: ControlButton?,
   val agentId: String?,
-  val cancel: ControlButton,
+  val cancel: ControlButton?,
   val recover: ControlButton?,
   val unavailableReason: String?,
   val launchNote: Boolean,
@@ -59,7 +58,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     label(InFlightControl.PauseAfterSubtask, if (item.pauseRequested) "Pause requested" else "Pause after subtask"),
     ready && item.pauseEligible && !item.pauseRequested,
   ).takeIf { goal }
-  val pauseNow = ControlButton(label(InFlightControl.PauseNow, "Pause"), ready && item.pauseEligible, "Stops the goal runner now").takeIf { goal }
+  val pauseNow = ControlButton(label(InFlightControl.PauseNow, "Pause"), ready && item.controlEligible, "Stops the goal runner now").takeIf { goal }
 
   val resumable = options != null && item.lifecycle != Lifecycle.Active && item.lifecycle != Lifecycle.Terminal
   val launchable = ready && options?.canLaunch == true && (item.issueKey ?: item.id) !in controls.reservations
@@ -70,7 +69,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
   val confirmed = confirmedPrerequisites(state, incident)
   val allConfirmed = incident != null && incident.prerequisites.all { prerequisiteOf(it.kind) in confirmed }
   val progress = incident?.progress
-  val recovering = progress == IncidentProgress.Recovering || controls.inFlight == InFlightControl.Recover
+  val recovering = controls.inFlight == InFlightControl.Recover
   val previewing = controls.inFlight == InFlightControl.RecoveryPreview
   val recover = ControlButton(
     label = when {
@@ -80,7 +79,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     },
     enabled = ready && progress in RECOVER_ALLOWED && allConfirmed,
     tooltip = "Confirm the prerequisites first".takeIf { !allConfirmed },
-  ).takeIf { progress in RECOVER_SHOWN || recovering || previewing }
+  ).takeIf { progress in RECOVER_ALLOWED || recovering || previewing }
 
   val checklist = incident?.takeIf { it.progress in RECOVER_ALLOWED && it.prerequisites.isNotEmpty() }?.prerequisites
     ?.map { ChecklistItem(id = it.kind, text = it.instruction, checked = prerequisiteOf(it.kind) in confirmed) }
@@ -96,7 +95,7 @@ internal fun runActionsView(state: DetailUiState): RunActionsView {
     launch = launch,
     agent = agent,
     agentId = agentId,
-    cancel = ControlButton(label(InFlightControl.Cancel, "Cancel"), ready && options?.canCancel == true),
+    cancel = ControlButton(label(InFlightControl.Cancel, "Cancel"), ready && options?.canCancel == true).takeIf { item.lifecycle != Lifecycle.Terminal && item.lifecycle != Lifecycle.Canceled },
     recover = recover,
     unavailableReason = options?.unavailableReason,
     launchNote = launch != null && options?.canLaunch == true,

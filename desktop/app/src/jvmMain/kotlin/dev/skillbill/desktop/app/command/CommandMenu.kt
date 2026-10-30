@@ -36,7 +36,7 @@ fun CommandMenu(window: WindowComponent) {
   }
   val groups = remember(commands, sections) {
     sections.zip(commands) { section, byId ->
-      CommandGroup(section.head, byId.map { (id, it) -> CommandItem(id, it.item.label, it.item.icon, it.item.shortcut, it.item.danger, it.item.enabled) })
+      CommandGroup(section.head, byId.map { (id, it) -> it.item.withId(id) })
     }
   }
   CommandPalette(
@@ -57,3 +57,7 @@ fun CommandMenu(window: WindowComponent) {
 /** The key the item's rows show, as the prototype's `rowKey`: the issue key for goals, else the phase or operation id. */
 internal fun rowKey(item: WorkItem): String =
   if (item.kind == WorkKind.Goal) item.issueKey ?: item.id else item.control.phaseId ?: item.issueKey ?: item.id
+
+/** The same command under the menu's index-qualified id, keeping its lead, display text and end. */
+private fun CommandItem.withId(id: String) =
+  CommandItem(id, label, icon, shortcut, danger, enabled, lead = lead, displayKey = displayKey, displayTitle = displayTitle, end = end)

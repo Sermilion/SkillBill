@@ -71,19 +71,20 @@ private fun PipelineStepChip(step: PipelineStep) {
   val (fg, bg) = when (step.state) {
     PipelineStepState.Pending -> colors.fgFaint to colors.bgHover
     PipelineStepState.Done -> colors.fgMuted to colors.bgHover
-    PipelineStepState.Current -> colors.accentText to colors.accentTint
+    PipelineStepState.Current -> colors.stActive to colors.stActive.copy(alpha = 0.12f)
     PipelineStepState.Waiting -> colors.stBlocked to colors.stBlocked.copy(alpha = 0.10f)
     PipelineStepState.Failed -> colors.stFailed to colors.stFailed.copy(alpha = 0.10f)
   }
-  // `.sb-step.goal` is a transparent chip with an inset 1px `--border` ring; `.now` adds an accent ring at 35%.
+  // `.sb-step.goal` is a transparent chip with an inset 1px `--border` ring; `.now` fills with `--st-active` and rings it at 35%, goal or not.
+  val current = step.state == PipelineStepState.Current
   val outline = when {
+    current -> Modifier.border(1.dp, colors.stActive.copy(alpha = 0.35f), shape)
     step.goal -> Modifier.border(1.dp, colors.border, shape)
-    step.state == PipelineStepState.Current -> Modifier.border(1.dp, colors.accent.copy(alpha = 0.35f), shape)
     else -> Modifier
   }
   val text = if (step.count != null) "${step.label} · ${step.count}" else step.label
   Row(
-    Modifier.height(stepHeight).background(if (step.goal) Color.Transparent else bg, shape).then(outline)
+    Modifier.height(stepHeight).background(if (step.goal && !current) Color.Transparent else bg, shape).then(outline)
       .clearAndSetSemantics { contentDescription = listOfNotNull(step.label, step.count, step.state.name.lowercase()).joinToString(", ") }
       .padding(horizontal = 7.dp),
     horizontalArrangement = Arrangement.spacedBy(4.dp),

@@ -15,7 +15,6 @@ import dev.skillbill.desktop.core.designsystem.navigation.SidebarSection
 import dev.skillbill.desktop.core.designsystem.navigation.WorkspaceSwitcher
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
-import dev.skillbill.desktop.core.domain.model.BoardCounts
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.ui.navigation.AppRoute
 import dev.skillbill.desktop.core.ui.navigation.DetailRoute
@@ -26,13 +25,14 @@ import dev.skillbill.desktop.core.ui.navigation.SidebarContribution
 import dev.skillbill.desktop.core.ui.navigation.WorkRoute
 
 /**
- * The app sidebar. [counts] are the shared board's runtime counts, hidden while the board is not loaded; Work counts the live
- * items the runtime lists (goals, standalone phases and operations).
+ * The app sidebar. [sectionSizes] are the shared board's section sizes, hidden while the board is not loaded. Each Board item
+ * counts the rows its section lists, so it matches that section's group header: a blocked phase sits under Needs you only, not
+ * also under Standalone phases. Work counts every live row once (every section but Finished today).
  */
 @Composable
 fun ShellSidebar(
   topRoute: AppRoute,
-  counts: BoardCounts?,
+  sectionSizes: Map<BoardSectionKind, Int>?,
   specsOpen: Boolean,
   terminalOpen: Boolean,
   contributions: List<SidebarContribution>,
@@ -60,7 +60,7 @@ fun ShellSidebar(
       "Work",
       { onNavigate(WorkRoute(null)) },
       icon = LucideIcons.target,
-      count = counts?.let { it.goals + it.livePhases + it.liveOperations },
+      count = sectionSizes?.filterKeys { it != BoardSectionKind.Finished }?.values?.sum(),
       // The prototype keeps Work highlighted while a detail is open.
       on = topRoute == WorkRoute(null) || topRoute is DetailRoute,
       tooltip = "Work",
@@ -74,8 +74,8 @@ fun ShellSidebar(
           sectionLabel(kind),
           { onNavigate(WorkRoute(kind)) },
           lead = { StatusIcon(sectionLead(kind), 0.5f) },
-          count = if (needsYou) null else counts?.let { sectionCount(kind, it) },
-          attention = if (needsYou) counts?.needsYou else null,
+          count = if (needsYou) null else sectionSizes?.get(kind),
+          attention = if (needsYou) sectionSizes?.get(kind) else null,
           on = topRoute == WorkRoute(kind),
         )
       }
@@ -89,12 +89,4 @@ internal fun sectionLead(kind: BoardSectionKind): StatusKind = when (kind) {
   BoardSectionKind.NeedsYou -> StatusKind.Blocked
   BoardSectionKind.Finished -> StatusKind.Completed
   BoardSectionKind.Goals, BoardSectionKind.Phases, BoardSectionKind.Operations -> StatusKind.Active
-}
-
-private fun sectionCount(kind: BoardSectionKind, counts: BoardCounts): Int = when (kind) {
-  BoardSectionKind.NeedsYou -> counts.needsYou
-  BoardSectionKind.Goals -> counts.goals
-  BoardSectionKind.Phases -> counts.livePhases
-  BoardSectionKind.Operations -> counts.liveOperations
-  BoardSectionKind.Finished -> counts.doneWithinDay
 }

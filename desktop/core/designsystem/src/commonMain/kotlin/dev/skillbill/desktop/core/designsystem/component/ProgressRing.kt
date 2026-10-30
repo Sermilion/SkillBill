@@ -31,7 +31,12 @@ fun ProgressRing(done: Int, total: Int, tone: ProgressRingTone = ProgressRingTon
   val content: @Composable () -> Unit = { Row(Modifier.semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
     Canvas(Modifier.size(14.dp)) {
       drawCircle(trackColor, radius = 5.5.dp.toPx(), style = Stroke(width = 2.dp.toPx()))
-      drawArc(arcColor, -90f, 360f * fraction, false, topLeft = Offset(1.5.dp.toPx(), 1.5.dp.toPx()), size = Size(11.dp.toPx(), 11.dp.toPx()), style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+      if (fraction > 0f) {
+        drawArc(arcColor, -90f, 360f * fraction, false, topLeft = Offset(1.5.dp.toPx(), 1.5.dp.toPx()), size = Size(11.dp.toPx(), 11.dp.toPx()), style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+      } else {
+        // A zero-length dash keeps its round cap in SVG, so 0/n still shows a dot at the top of the ring.
+        drawCircle(arcColor, radius = 1.dp.toPx(), center = Offset(size.width / 2, 1.5.dp.toPx()))
+      }
     }
     if (showText) BasicText("$done/$total", style = SkillBillTheme.type.tSmMedium.tabular().copy(color = SkillBillTheme.colors.fgMuted, lineHeight = 1.em), maxLines = 1, softWrap = false)
   } }

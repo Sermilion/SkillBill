@@ -437,6 +437,11 @@ class SpecsPaneModel(
 
   private fun click(path: String) {
     val node = findNode(roots(), path) ?: return
+    // main.js `spec-click`: every tree click drops an open Cancel confirmation, including a click on the same bundle.
+    if (cancelConfirmationFor != null || local.value.toolbar.confirmingCancel) {
+      cancelConfirmationFor = null
+      setToolbar { copy(confirmingCancel = false) }
+    }
     selectPath(path)
     when (node) {
       is SpecNode.Folder, is SpecNode.Bundle -> treePresentation.setExpansion(path, !treePresentation.isExpanded(path))

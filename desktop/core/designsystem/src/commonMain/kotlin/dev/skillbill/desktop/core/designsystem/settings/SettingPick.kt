@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -30,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
@@ -52,12 +53,14 @@ fun SettingPick(
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   val interaction = remember { MutableInteractionSource() }
   val hovered = enabled && interaction.collectIsHoveredAsState().value
-  val fill = rememberHoverColor(hovered, Color.Transparent, colors.bgHover).value
+  // `.sb-pick` declares no transition, so hover switches instantly.
+  val fill = if (hovered) colors.bgHover else Color.Transparent
   val fg = if (hovered) colors.fg else colors.fg2
   val style = type.tSmMedium.let { if (mono) it.copy(fontFamily = type.mono.fontFamily) else it }.copy(color = fg)
   Row(
     modifier.height(24.dp).alpha(if (enabled) 1f else .45f).background(fill, shape).border(1.dp, colors.border, shape)
       .hoverable(interaction)
+      .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
       .clickable(interaction, indication = null, enabled = enabled, onClick = onClick)
       .sbFocusRing(interaction, shape)
       .semantics {

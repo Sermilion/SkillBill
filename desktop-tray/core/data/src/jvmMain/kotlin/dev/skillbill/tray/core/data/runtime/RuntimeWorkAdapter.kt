@@ -63,6 +63,8 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
   @Volatile
   private var resolvedPath: Path? = null
 
+  override fun close() = runtime.databaseReadConnections.release()
+
   override fun databasePath(): String = try {
     runtime.databaseSession.resolveDbPath().also { resolvedPath = it }.toString()
   } catch (failure: InvalidPathException) {

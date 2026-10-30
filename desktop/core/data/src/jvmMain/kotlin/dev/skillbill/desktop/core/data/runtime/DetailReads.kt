@@ -5,6 +5,7 @@ import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailSections
+import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.ReadProblem
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
@@ -18,6 +19,8 @@ import skillbill.ports.idestatus.model.WorkDetailResult
 internal sealed interface DetailRead {
   data class Loaded(val header: WorkItem, val sections: DetailSections.Loaded) : DetailRead
 
+  data class Activity(val header: WorkItem, val latestActivity: LatestActivity) : DetailRead
+
   data object Gone : DetailRead
 
   data class Failed(val problem: ReadProblem) : DetailRead
@@ -30,6 +33,9 @@ internal interface DetailReads {
 
   /** [first] plus, per list the user paged past its head, that list re-read from its head at its loaded size. */
   suspend fun refresh(id: String, extended: Map<DetailList, Int>): DetailRead
+
+  /** The header and activity projection without run options or extended lists. */
+  suspend fun activity(id: String): DetailRead
 
   /** One page of [list] after [cursor]. */
   suspend fun list(id: String, list: DetailList, cursor: String?): DetailRead
@@ -67,6 +73,14 @@ internal class RuntimeDetailReads(
       }
       loaded.copy(sections = sections)
     }
+  }
+
+  override suspend fun activity(id: String): DetailRead = read("detail_activity") { component ->
+    val result = component.ideStatusService.detail(WorkDetailRequest(id, includeExtendedLists = false))
+    result.toRead(component, options = null, sessionId = sessionId)
+      .let { read ->
+        if (read is DetailRead.Loaded) DetailRead.Activity(read.header, read.sections.detail.latestActivity) else read
+      }
   }
 
   override suspend fun list(id: String, list: DetailList, cursor: String?): DetailRead = read("detail_list") { component ->

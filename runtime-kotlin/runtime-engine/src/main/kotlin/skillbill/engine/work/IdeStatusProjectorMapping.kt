@@ -16,9 +16,11 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentSubtask
 import skillbill.ports.idestatus.model.IdeStatusPlanning
 import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
@@ -309,3 +311,43 @@ internal fun WorkItemKind.toIdeFamily(): IdeStatusWorkflowFamily? =
     WorkItemKind.FEATURE_VERIFY -> IdeStatusWorkflowFamily.FEATURE_VERIFY
     WorkItemKind.FEATURE_GOAL -> IdeStatusWorkflowFamily.FEATURE_GOAL
   }
+
+internal object IdeStatusTitles {
+  fun goal(
+    featureName: String?,
+    issueKey: String,
+  ): String = featureName.nonBlank() ?: issueKey
+
+  fun standalonePhase(record: StandalonePhaseStatusRecord): String =
+    record.planReport?.featureName.nonBlank()
+      ?: idWithTarget(
+        record.phaseId,
+        record.issueKey.nonBlank()
+          ?: record.monitorTarget?.pullRequestKey?.let { "#${it.substringAfterLast('#')}" }
+          ?: branchTarget(record.branchCorrelation),
+      )
+
+  fun workflow(
+    family: WorkflowFamily,
+    issueKey: String?,
+    branch: String?,
+  ): String {
+    val id =
+      when (family) {
+        WorkflowFamily.VERIFY -> "verify"
+        WorkflowFamily.TASK_RUNTIME -> "feature-task"
+      }
+    return idWithTarget(id, issueKey.nonBlank() ?: branchTarget(branch))
+  }
+
+  private fun idWithTarget(
+    id: String,
+    target: String?,
+  ): String = target?.let { "$id $it" } ?: id
+
+  private fun branchTarget(branch: String?): String? = branch.nonBlank()?.takeUnless { it == DETACHED_HEAD }
+
+  private fun String?.nonBlank(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+
+  private const val DETACHED_HEAD = "HEAD"
+}

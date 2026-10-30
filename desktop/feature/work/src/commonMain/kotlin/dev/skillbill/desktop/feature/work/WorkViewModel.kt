@@ -56,7 +56,14 @@ class WorkViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     mutableState.map { it.filter }.distinctUntilChanged()
       .flatMapLatest { filter -> board.observe(workQuery(filter)) }
-      .onEach { board -> mutableState.update { it.copy(board = board, renderedAt = clock.now()) } }
+      .onEach { board ->
+        if (board is BoardState.Loaded) {
+          selection.item.value?.let { selected ->
+            selection.select(board.items.firstOrNull { it.id == selected.id })
+          }
+        }
+        mutableState.update { it.copy(board = board, renderedAt = clock.now()) }
+      }
       .launchIn(viewModelScope)
     controls.reservations.onEach { reserved -> mutableState.update { it.copy(reserved = reserved) } }.launchIn(viewModelScope)
   }

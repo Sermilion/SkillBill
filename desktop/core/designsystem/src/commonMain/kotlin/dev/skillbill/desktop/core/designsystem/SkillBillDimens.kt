@@ -28,6 +28,11 @@ object SkillBillSize {
   val header = 44.dp
   val sidebar = 236.dp
   val detailsPane = 272.dp
+  val detailsPaneWide = 380.dp
+  val propertyLabel = 80.dp
+  val propertyRow = 28.dp
+  val breakdownRow = 22.dp
+  val activityRow = 28.dp
   val specsPane = 400.dp
   val terminalDefault = 200.dp
   val terminalMin = 120.dp

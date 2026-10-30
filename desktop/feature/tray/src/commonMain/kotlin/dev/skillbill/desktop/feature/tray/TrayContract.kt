@@ -12,6 +12,12 @@ sealed interface TrayBoard {
   data object Failed : TrayBoard
   data class Loaded(
     val counts: BoardCounts,
+    /** Rows in the Goal runs, Standalone phases and Operations sections: what is running. */
+    val running: Int,
+    /** Rows in the Needs you section. */
+    val needsYou: Int,
+    /** Rows in the Finished today section. */
+    val finishedToday: Int,
     val goals: List<WorkItem>,
     val livePhases: List<WorkItem>,
     val finishedPhases: List<WorkItem>,

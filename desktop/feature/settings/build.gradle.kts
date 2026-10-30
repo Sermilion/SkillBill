@@ -10,6 +10,7 @@ kotlin {
     implementation(projects.core.ui)
   }
   sourceSets.jvmTest.dependencies {
+    implementation(projects.feature.config)
     implementation(projects.core.testing)
     implementation(libs.compose.ui.test)
     implementation(libs.kotlinx.coroutines.test)

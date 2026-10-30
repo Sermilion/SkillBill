@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -101,8 +103,8 @@ internal fun HistoryScreen(state: HistoryUiState, filterFocus: FocusRequester, h
     )
     Box(Modifier.weight(1f)) {
       when (val board = state.board) {
-        BoardState.Loading -> Centered { EmptyState("Loading your work", LucideIcons.inbox) }
-        is BoardState.Failed -> Centered { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
+        BoardState.Loading -> ScrollBody { EmptyState("Loading your work", LucideIcons.inbox) }
+        is BoardState.Failed -> ScrollBody { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
         is BoardState.Loaded -> HistoryBody(state, board, narrow, onAction)
       }
     }
@@ -115,7 +117,7 @@ private fun HistoryBody(state: HistoryUiState, board: BoardState.Loaded, narrow:
   val rows = state.rows
   if (rows.isEmpty()) {
     LaunchedEffect(board.nextCursor) { if (board.nextCursor != null) onAction(HistoryAction.LoadMore) }
-    Centered {
+    ScrollBody {
       if (state.filter.isNotBlank()) EmptyState("No matching work", LucideIcons.history)
       else EmptyState("No finished work", LucideIcons.history, body = "Nothing finished within $retention.")
     }
@@ -163,7 +165,11 @@ private fun HistoryRow(item: WorkItem, focused: Boolean, state: HistoryUiState, 
   )
 }
 
+/**
+ * The body's `.sb-scroll` is a block box, so `.sb-empty`'s `flex: 1` and centering never apply there: the state sits at the top,
+ * its own 48 dp padding down. Inside a vertical scroll the state's fillMaxSize takes its content height.
+ */
 @Composable
-private fun Centered(content: @Composable () -> Unit) {
-  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+private fun ScrollBody(content: @Composable () -> Unit) {
+  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { content() }
 }

@@ -23,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
@@ -34,7 +36,6 @@ import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
@@ -59,7 +60,9 @@ fun ViewHeader(
 ) {
   val colors = SkillBillTheme.colors
   Row(
-    modifier.fillMaxWidth().height(SkillBillSize.header).hairline(Edge.Bottom, colors.borderSubtle).padding(start = 16.dp, end = 10.dp),
+    modifier.fillMaxWidth().height(SkillBillSize.header).hairline(Edge.Bottom, colors.borderSubtle)
+      // The 1px bottom border takes its share of the 44 px, so the content centers in the 43 px above it.
+      .padding(start = 16.dp, end = 10.dp, bottom = 1.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -96,11 +99,12 @@ private fun RowScope.CrumbItem(crumb: Crumb, last: Boolean) {
   val shape = RoundedCornerShape(SkillBillRadius.xs)
   val onClick = crumb.onClick
   val active = hovered && onClick != null
-  val fill = rememberHoverColor(active, Color.Transparent, colors.bgHover).value
+  // `.sb-crumbs > button` declares no transition: the hover fill switches instantly.
+  val fill = if (active) colors.bgHover else Color.Transparent
   Row(
     // Bleeds the 6 dp hover padding into the gaps so the label lines up with the header edge and the chevrons.
     Modifier.negativeHorizontalMargin(6.dp).background(fill, shape)
-      .then(if (onClick != null) Modifier.hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onClick) else Modifier)
+      .then(if (onClick != null) Modifier.hoverable(interaction).pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null, role = Role.Button, onClick = onClick) else Modifier)
       .padding(horizontal = 6.dp, vertical = 4.dp),
     horizontalArrangement = Arrangement.spacedBy(6.dp),
     verticalAlignment = Alignment.CenterVertically,

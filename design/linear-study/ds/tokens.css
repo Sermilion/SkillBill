@@ -38,7 +38,7 @@
   --accent-ring: rgba(233, 168, 28, 0.5);
 
   /* Lifecycle states (semantic, separate from the accent) */
-  --st-active: #E9A81C;
+  --st-active: #3FB950;
   --st-planning: #6FA8DC;
   --st-blocked: #E2703C;
   --st-failed: #F0555B;
@@ -97,4 +97,6 @@
   --header-h: 44px;
   --sidebar-w: 236px;
   --props-w: 272px;
+  --props-w-wide: 380px;
+  --prop-label-w: 80px;
 }

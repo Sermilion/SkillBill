@@ -31,6 +31,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.common.Outcome
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Avatar
@@ -912,9 +915,20 @@ internal fun ConfigPage(
       cancelEditor(key)
       return
     }
-    if (page == "project" && current?.hasComments == true && !ledger.confirmed(path) && !confirmed) {
-      commentConfirmation = CommentConfirmation(path, project?.projectId, projectSelectionRevision, key, current.fingerprint, submitted)
-      warning = true
+    if (requestCommentConfirmation(
+        session,
+        page,
+        current?.hasComments == true,
+        ledger,
+        path,
+        confirmed,
+        project?.projectId,
+        projectSelectionRevision,
+        key,
+        current?.fingerprint,
+        submitted,
+      )
+    ) {
       return
     }
     if (confirmed) {
@@ -1114,19 +1128,19 @@ internal fun ConfigPage(
     buildAnnotatedString {
       when (page) {
         "models" -> {
-          append("Each phase runs on its tier's model unless the agent has an override for that phase. Saved as ")
+          append("Each phase runs on its tier’s model unless the agent has an override for that phase. Saved as ")
           withStyle(monoSpan) { append("execution_matrix") }
           append(" in ")
           withStyle(monoSpan) { append(displayPath(path.ifBlank { "config.json" })) }
           append(".")
         }
         "compaction" -> {
-          append("Compacts an agent's context before it fills. Saved as ")
+          append("Compacts an agent’s context before it fills. Saved as ")
           withStyle(monoSpan) { append("compaction") }
           append(" in ${fileName.ifBlank { "config.json" }}.")
         }
         "project" -> {
-          append("Settings in the project store's ")
+          append("Settings in the project store’s ")
           withStyle(monoSpan) { append("config.yaml") }
           val store = projectStorePath ?: path
           if (store.isNotBlank()) {
@@ -1207,8 +1221,11 @@ internal fun ConfigPage(
           rowHint?.let { Hint(it, FeedbackTone.Error) }
           if (conflicted) {
             Callout(FeedbackTone.Warn, title = "$fileName changed on disk", body = "Another program saved this file after you opened it. Nothing was saved.", actions = {
-              SbButton("Reload", { scope.launch { reload(false, row.key) } }, enabled = resolutionActionsEnabled)
-              SbButton("Keep editing", { scope.launch { reload(true, row.key) } }, enabled = resolutionActionsEnabled)
+              ConfigConflictActions(
+                enabled = resolutionActionsEnabled,
+                onReload = { scope.launch { reload(false, row.key) } },
+                onKeepEditing = { scope.launch { reload(true, row.key) } },
+              )
             })
           }
         }
@@ -1218,15 +1235,11 @@ internal fun ConfigPage(
 
   when (page) {
     "models" -> {
-      Segmented(defaults.agents.map { item ->
-        SegmentedOption(item.id, item.id, enabled = modelAgentSelectable(item) && !changedOnDisk && !saving && !anyResolutionBusy && commentConfirmation == null, tooltip = if (item.modelCapable) null else "${item.id} cannot honor a model or effort directive")
-      }, agent, onSelect = { selected ->
-        if (!changedOnDisk && !saving && !sessions.hasConflictResolution() && !sessions.hasWriteInFlight() && commentConfirmation == null && defaults.agents.any { it.id == selected && modelAgentSelectable(it) }) {
-          if (selected != agent) {
-            sessions.selectedAgent.value = selected
-          }
-        }
-      })
+      ModelAgentTabs(
+        agents = defaults.agents,
+        selected = agent,
+        enabled = !changedOnDisk && !saving && !sessions.hasConflictResolution() && !sessions.hasWriteInFlight() && commentConfirmation == null,
+      ) { sessions.selectedAgent.value = it }
       val current = machine?.executionMatrix ?: ExecutionMatrixConfig(emptyMap(), emptyMap(), emptyMap())
       val resolved = matrix?.agents?.get(agent)
       fun editModelDraft(row: ConfigEdit, field: String, input: Map<String, String>) {
@@ -1438,21 +1451,23 @@ internal fun ConfigPage(
               label = "Compact at $pct%",
               description = "trigger_pct · default ${defaults.compaction.triggerPct} · compacts at ${formatCount(trigger)} tokens",
               control = {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                  SettingRange(
-                    pct,
-                    { inlineEdit(row, ConfigFileKeys.TRIGGER_PCT, it.toString(), commit = false) },
-                    "Compact at percent",
-                    Modifier.fillMaxWidth(),
-                    min = 1,
-                    max = 100,
-                    enabled = inlineEnabled(row),
-                    onValueChangeFinished = { inlineCommit(row) },
-                  )
-                  if (!unavailableDocument && trigger < MIN_COMPACTION_TRIGGER_TOKENS) {
-                    Hint("The trigger must be at least 200,000 tokens.", FeedbackTone.Error)
-                  }
-                }
+                RangeHintRow(
+                  range = {
+                    SettingRange(
+                      pct,
+                      { inlineEdit(row, ConfigFileKeys.TRIGGER_PCT, it.toString(), commit = false) },
+                      "Compact at percent",
+                      Modifier.fillMaxWidth(),
+                      min = 1,
+                      max = 100,
+                      enabled = inlineEnabled(row),
+                      onValueChangeFinished = { inlineCommit(row) },
+                    )
+                  },
+                  hint = if (!unavailableDocument && trigger < MIN_COMPACTION_TRIGGER_TOKENS) {
+                    { Hint("The trigger must be at least 200,000 tokens.", FeedbackTone.Error) }
+                  } else null,
+                )
               },
             )
           })
@@ -1598,6 +1613,8 @@ internal fun ConfigPage(
           }
           SettingRow(
             label = item.id,
+            // The name is a `<span>` inside `.sb-sr-tx`, so it takes that rule's 12px fg-muted text.
+            labelStyle = type.tSmMedium.copy(color = colors.fgMuted, lineHeight = 1.45.em),
             labelLead = { Avatar(item.id) },
             description = if (item.modelCapable) null else "Cannot take a model or effort setting",
             control = {
@@ -1615,7 +1632,8 @@ internal fun ConfigPage(
         {
           SettingRow(
             label = displayPath(file),
-            labelStyle = type.monoSm.copy(color = colors.fg, fontWeight = FontWeight.Medium),
+            // `.sb-sr-tx span` styles the mono span: 12px, fg-muted, inside the 13px/1.5 `<b>` line box.
+            labelStyle = type.monoSm.copy(color = colors.fgMuted, fontWeight = FontWeight.Medium, lineHeight = type.tBaseMedium.lineHeight),
             control = { SbButton("Open", { scope.launch { openFile(file) } }, size = SbControlSize.Small, icon = LucideIcons.external) },
           )
         }
@@ -1633,13 +1651,13 @@ internal fun ConfigPage(
             if (projectMenuOpen) {
               ShellLayer { projectMenuOpen = false }
               SbPopover(true, { projectMenuOpen = false }) {
-                SbMenu(projects.map { item ->
+                SbMenu(listOf(SbMenuEntry.Head("Choose project")) + projects.map { item ->
                   SbMenuEntry.Item(item.displayName, {
                     projectMenuOpen = false
                     if (!(changedOnDisk || saving || sessions.hasConflictResolution() || sessions.hasWriteInFlight() || commentConfirmation != null)) {
                       sessions.selectProject(item)
                     }
-                  }, checked = project?.projectId == item.projectId)
+                  }, lead = { RepoIcon(item.displayName) }, checked = project?.projectId == item.projectId)
                 })
               }
             }
@@ -1751,7 +1769,7 @@ internal fun ConfigPage(
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                   SbField(
                     "Gradle wrapper",
-                    help = "validation_gate.gradle_wrapper. Repo-relative, no \".\" or \"..\" segments. Leave empty to use the repository's ./gradlew.",
+                    help = "validation_gate.gradle_wrapper. Repo-relative, no “.” or “..” segments. Leave empty to use the repository’s ./gradlew.",
                   ) {
                     InlineConfigInput(
                       wrapper,
@@ -1764,7 +1782,7 @@ internal fun ConfigPage(
                       enabled = inlineEnabled(row),
                     )
                   }
-                  if (invalid) Hint("Use a repo-relative path without \".\" or \"..\" segments.", FeedbackTone.Error)
+                  if (invalid) Hint("Use a repo-relative path without “.” or “..” segments.", FeedbackTone.Error)
                 }
               })
             })
@@ -1784,7 +1802,8 @@ internal fun ConfigPage(
             add {
               SettingRow(
                 label = ".skill-bill/phases/${file.phaseId}.md",
-                labelStyle = type.mono.copy(color = colors.fg, fontWeight = FontWeight.Medium),
+                // `.sb-sr-tx span` also styles this mono span: 12px, fg-muted, in the 13px/1.5 `<b>` line box.
+                labelStyle = type.monoSm.copy(color = colors.fgMuted, fontWeight = FontWeight.Medium, lineHeight = type.tBaseMedium.lineHeight),
                 description = sizeDescription,
                 control = {
                   SbButton(
@@ -1924,8 +1943,11 @@ internal fun ConfigPage(
   }
   conflictedRows.filter { it in openRows && it !in renderedRows }.forEach { missingRowKey ->
     Callout(FeedbackTone.Warn, title = "${path.substringAfterLast('/')} changed on disk", body = readProblem ?: "$missingRowKey is not present in the freshly read configuration.", actions = {
-      SbButton("Reload", { scope.launch { reload(false, missingRowKey) } }, enabled = resolutionActionsEnabled)
-      SbButton("Keep editing", { scope.launch { reload(true, missingRowKey) } }, enabled = resolutionActionsEnabled)
+      ConfigConflictActions(
+        enabled = resolutionActionsEnabled,
+        onReload = { scope.launch { reload(false, missingRowKey) } },
+        onKeepEditing = { scope.launch { reload(true, missingRowKey) } },
+      )
     })
   }
   if (currentRow != null) {
@@ -2014,7 +2036,7 @@ private fun renderEditor(
       }
     }
     if (row.key == ConfigFileKeys.GRADLE_WRAPPER && gradleWrapperInvalid(draft[ConfigFileKeys.GRADLE_WRAPPER].orEmpty())) {
-      Hint("Use a repo-relative path without \".\" or \"..\" segments.", FeedbackTone.Error)
+      Hint("Use a repo-relative path without “.” or “..” segments.", FeedbackTone.Error)
     }
     hint?.let { Hint(it, FeedbackTone.Error) }
     if (changed) Callout(FeedbackTone.Warn, title = "$fileName changed on disk", body = "Another program saved this file after you opened it. Nothing was saved.", actions = {
@@ -2072,7 +2094,7 @@ private fun ConfigEditorField(
     ConfigFileKeys.MODEL -> if (blankModel) "A model is required. To drop an override, use Reset to tier." else "Passed to the agent as typed."
     ConfigFileKeys.EFFORT -> "Optional."
     ConfigFileKeys.TIER -> "Saved under execution_matrix.phase_tiers. It applies to every agent."
-    ConfigFileKeys.GRADLE_WRAPPER -> "validation_gate.gradle_wrapper. Repo-relative, no \".\" or \"..\" segments. Leave empty to use the repository's ./gradlew."
+    ConfigFileKeys.GRADLE_WRAPPER -> "validation_gate.gradle_wrapper. Repo-relative, no “.” or “..” segments. Leave empty to use the repository’s ./gradlew."
     else -> null
   }
   val inputModifier = when (field) {
@@ -2100,6 +2122,36 @@ private fun ConfigEditorField(
         enabled = enabled,
       )
       else -> Segmented(options.map { (id, text) -> SegmentedOption(id, text, enabled = enabled) }, value, onSelect = { change(field, draft + (field to it)) })
+    }
+  }
+}
+
+/**
+ * `.sb-sr-ctl` is a flex row with an 8px gap, so the hint sits beside the range, not under it. The range is
+ * `width: 100%`; when the hint appears both shrink in proportion to their base widths, as CSS `flex-shrink: 1` does.
+ */
+@Composable
+private fun RangeHintRow(range: @Composable () -> Unit, hint: (@Composable () -> Unit)?) {
+  if (hint == null) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { range() }
+    return
+  }
+  Layout(contents = listOf(range, hint), modifier = Modifier.fillMaxWidth()) { (rangeMeasurables, hintMeasurables), constraints ->
+    val gap = 8.dp.roundToPx()
+    val available = constraints.maxWidth
+    val hintMeasurable = hintMeasurables.first()
+    val hintBase = hintMeasurable.maxIntrinsicWidth(constraints.maxHeight)
+    val hintMin = hintMeasurable.minIntrinsicWidth(constraints.maxHeight)
+    val overflow = gap + hintBase
+    val hintWidth = (hintBase - overflow.toLong() * hintBase / (available + hintBase).coerceAtLeast(1)).toInt()
+      .coerceIn(hintMin.coerceAtMost(available), available)
+    val rangeWidth = (available - gap - hintWidth).coerceAtLeast(0)
+    val hintPlaceable = hintMeasurable.measure(Constraints.fixedWidth(hintWidth))
+    val rangePlaceable = rangeMeasurables.first().measure(Constraints.fixedWidth(rangeWidth))
+    val height = maxOf(hintPlaceable.height, rangePlaceable.height)
+    layout(available, height) {
+      rangePlaceable.placeRelative(0, (height - rangePlaceable.height) / 2)
+      hintPlaceable.placeRelative(rangeWidth + gap, (height - hintPlaceable.height) / 2)
     }
   }
 }
@@ -2394,3 +2446,70 @@ private fun configPathObservationAllowed(
 private fun normalizedConfigPath(path: String): String = Path.of(path).toAbsolutePath().normalize().toString()
 
 internal fun modelAgentSelectable(agent: dev.skillbill.desktop.core.domain.model.ConfigAgent): Boolean = agent.modelCapable
+
+internal fun modelAgentSelection(
+  current: String,
+  proposed: String,
+  agents: List<dev.skillbill.desktop.core.domain.model.ConfigAgent>,
+  enabled: Boolean,
+): String? = proposed.takeIf { enabled && it != current && agents.any { agent -> agent.id == proposed && modelAgentSelectable(agent) } }
+
+@Composable
+internal fun ModelAgentTabs(
+  agents: List<dev.skillbill.desktop.core.domain.model.ConfigAgent>,
+  selected: String,
+  enabled: Boolean,
+  onSelect: (String) -> Unit,
+) {
+  Segmented(
+    agents.map { agent ->
+      SegmentedOption(
+        agent.id,
+        agent.id,
+        enabled = enabled && modelAgentSelectable(agent),
+        tooltip = if (agent.modelCapable) null else "${agent.id} cannot honor a model or effort directive",
+      )
+    },
+    selected,
+    onSelect = { proposed ->
+      modelAgentSelection(selected, proposed, agents, enabled)?.let(onSelect)
+    },
+  )
+}
+
+@Composable
+internal fun ConfigConflictActions(
+  enabled: Boolean,
+  onReload: () -> Unit,
+  onKeepEditing: () -> Unit,
+) {
+  SbButton("Reload", onReload, enabled = enabled)
+  SbButton("Keep editing", onKeepEditing, enabled = enabled)
+}
+
+internal fun requiresCommentConfirmation(
+  page: String,
+  hasComments: Boolean,
+  ledger: CommentWarningLedger,
+  path: String,
+  confirmed: Boolean,
+): Boolean = page == "project" && hasComments && !ledger.confirmed(path) && !confirmed
+
+internal fun requestCommentConfirmation(
+  session: ConfigPageSession,
+  page: String,
+  hasComments: Boolean,
+  ledger: CommentWarningLedger,
+  path: String,
+  confirmed: Boolean,
+  projectId: String?,
+  selectionRevision: Int,
+  rowKey: String,
+  fingerprint: ConfigFingerprint?,
+  draft: Map<String, String>,
+): Boolean {
+  if (!requiresCommentConfirmation(page, hasComments, ledger, path, confirmed)) return false
+  session.commentConfirmation.value = CommentConfirmation(path, projectId, selectionRevision, rowKey, fingerprint, draft)
+  session.warning.value = true
+  return true
+}

@@ -76,6 +76,7 @@ class IdeStatusTimestampTest {
       updatedAt = updatedAt,
       freshness = IdeStatusFreshness.FRESH,
       summary = "Goal SKILL-148 is active on Implement.",
+      title = "SKILL-1",
       contractVersion = IDE_STATUS_CONTRACT_VERSION,
     )
 }

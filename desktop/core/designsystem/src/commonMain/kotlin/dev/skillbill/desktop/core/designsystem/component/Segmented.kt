@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 import dev.skillbill.desktop.core.designsystem.tabular
@@ -61,6 +62,7 @@ fun <T> Segmented(options: List<SegmentedOption<T>>, selected: T, modifier: Modi
           .then(if (isSelected) Modifier.border(1.dp, colors.borderStrong, RoundedCornerShape(SkillBillRadius.xs)) else Modifier)
           .hoverable(source)
           .clickable(source, null, enabled = option.enabled, onClick = { onSelect(option.value) })
+          .handCursor(option.enabled)
           .sbFocusRing(source, RoundedCornerShape(SkillBillRadius.xs))
           .semantics {
             role = Role.Tab
@@ -95,7 +97,7 @@ fun <T> ViewTabs(tabs: List<ViewTab<T>>, selected: T, onSelect: (T) -> Unit) {
       Row(
         Modifier.height(TAB_HEIGHT).background(background, RoundedCornerShape(SkillBillRadius.sm))
           .border(1.dp, if (active) colors.border else Color.Transparent, RoundedCornerShape(SkillBillRadius.sm))
-          .hoverable(source).clickable(source, null) { onSelect(tab.value) }
+          .hoverable(source).clickable(source, null) { onSelect(tab.value) }.handCursor()
           .sbFocusRing(source, RoundedCornerShape(SkillBillRadius.sm))
           .semantics { role = Role.Tab; this.selected = active; if (tab.attention) stateDescription = "Needs attention"; contentDescription = tab.label }
           // 9px padding inside the 1px border every tab keeps.

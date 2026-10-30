@@ -9,7 +9,7 @@ private const val HOVER_ITEMS_PER_CATEGORY = 4
 fun TrayUiState.trayHover(): String {
   val board = board as? TrayBoard.Loaded ?: return "Loading your work…"
   return buildString {
-    append("<p><font color=\"#3FB950\">${board.counts.running} running</font> · <font color=\"#E2703C\">${board.counts.needsYou} need you</font></p>")
+    append("<p><font color=\"#3FB950\">${board.running} running</font> · <font color=\"#E2703C\">${board.needsYou} need you</font></p>")
     if (stale) append("<p>Showing stale work data</p>")
     appendCategory("GOALS", board.goals)
     append("<hr/>")

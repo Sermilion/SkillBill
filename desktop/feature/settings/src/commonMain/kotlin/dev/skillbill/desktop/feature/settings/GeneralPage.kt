@@ -38,7 +38,7 @@ import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 
 @Composable
 fun GeneralPage(state: SettingsUiState, sessionState: DatabaseSessionState, onAction: (SettingsAction) -> Unit) {
-  SettingsHeader("General", body = "Where the app reads Skill Bill's work, which Claude account runs use, and how long finished work stays listed.")
+  SettingsHeader("General", body = "Where the app reads Skill Bill’s work, which Claude account runs use, and how long finished work stays listed.")
   SettingsGroup(
     title = "Database",
     rows = listOf {

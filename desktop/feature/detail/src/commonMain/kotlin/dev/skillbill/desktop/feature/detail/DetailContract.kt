@@ -22,7 +22,23 @@ data class DetailUiState(
   val listLoads: Map<DetailList, ListLoad> = emptyMap(),
   val boardPosition: BoardPosition? = null,
   val controls: ControlsUiState = ControlsUiState(),
+  val subtaskChoice: SubtaskChoice = SubtaskChoice(),
+  /** The previous detail was left by J or K while its Subtasks list had focus, so this one's list takes focus once it shows. */
+  val focusSubtaskList: Boolean = false,
 )
+
+/** A row of the Subtasks index: one subtask by its runtime id, or the final Goal finish row. */
+sealed interface SubtaskKey {
+  data class Subtask(val id: Int) : SubtaskKey
+
+  data object GoalFinish : SubtaskKey
+}
+
+/**
+ * The reader's subtask selection for one item, UI state only. A null [key] means the default selection; [expanded] folds the
+ * inline inspector that the selected row shows while the details pane is hidden.
+ */
+data class SubtaskChoice(val key: SubtaskKey? = null, val expanded: Boolean = true)
 
 sealed interface SectionsUi {
   data object Pending : SectionsUi
@@ -63,6 +79,18 @@ sealed interface DetailAction {
   data object OpenBranch : DetailAction
   data class OpenSpecFile(val path: String) : DetailAction
   data class Navigate(val route: AppRoute) : DetailAction
+
+  /** Selects [key]; with [inline] (the details pane hidden) selecting the selected row again folds or unfolds it. */
+  data class SelectSubtask(val key: SubtaskKey, val inline: Boolean = false) : DetailAction
+
+  /** ↑ or ↓ in the focused Subtasks index. */
+  data class MoveSubtaskSelection(val delta: Int) : DetailAction
+
+  /** Enter in the focused Subtasks index: opens the selected subtask's spec file; Goal finish has none. */
+  data object OpenSelectedSubtaskSpec : DetailAction
+
+  /** The Subtasks index took focus, which spends [DetailUiState.focusSubtaskList]. */
+  data object SubtaskListFocused : DetailAction
 }
 
 sealed interface DetailEffect {

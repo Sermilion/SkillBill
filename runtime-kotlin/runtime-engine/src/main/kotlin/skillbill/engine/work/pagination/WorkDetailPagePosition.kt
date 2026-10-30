@@ -118,7 +118,8 @@ internal fun workDetailCursorSelector(
   list: WorkDetailList?,
 ): String = list?.let { "$id|${it.name}" } ?: id
 
-internal fun WorkDetailRequest.includesDetailList(selected: WorkDetailList): Boolean = list == null || list == selected
+internal fun WorkDetailRequest.includesDetailList(selected: WorkDetailList): Boolean =
+  includeExtendedLists && (list == null || list == selected)
 
 internal fun workDetailPagedResult(
   result: WorkDetailResult,

@@ -109,6 +109,8 @@ class InvalidDatabasePathException(cause: Throwable?) : RuntimeException("The da
  * an outdated store is a typed incompatible-database failure.
  */
 interface RuntimeWorkGateway {
+  fun close()
+
   /** The resolved database file; throws [InvalidDatabasePathException] when the selection is not a valid path. */
   fun databasePath(): String
 

@@ -166,6 +166,7 @@ internal object WorkBoardReadModelPayloadCodec {
       WorkBoardReadModelPayloadKeys.UPDATED_AT to WorkBoardReadModelTime.format(snapshot.updatedAt),
       WorkBoardReadModelPayloadKeys.FRESHNESS to snapshot.freshness.wireValue,
       WorkBoardReadModelPayloadKeys.SUMMARY to snapshot.summary,
+      WorkBoardReadModelPayloadKeys.TITLE to snapshot.title,
       WorkBoardReadModelPayloadKeys.ISSUE_KEY to snapshot.issueKey,
       WorkBoardReadModelPayloadKeys.WORKFLOW_ID to snapshot.workflowId,
       WorkBoardReadModelPayloadKeys.WORKFLOW_FAMILY to snapshot.workflowFamily?.wireValue,
@@ -309,6 +310,7 @@ internal object WorkBoardReadModelPayloadCodec {
           IdeStatusFreshness.entries,
         ) { it.wireValue },
       summary = fields.text(WorkBoardReadModelPayloadKeys.SUMMARY),
+      title = fields.text(WorkBoardReadModelPayloadKeys.TITLE),
       issueKey = fields.nullableText(WorkBoardReadModelPayloadKeys.ISSUE_KEY),
       workflowId = fields.nullableText(WorkBoardReadModelPayloadKeys.WORKFLOW_ID),
       workflowFamily =

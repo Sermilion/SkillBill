@@ -65,19 +65,21 @@ fun TrayPopover(
       // `.sb-tray` is border-box: its sections sit inside the 1px border, which Modifier.border does not inset.
       .padding(1.dp),
   ) {
+    // Each section's 1px border adds to its padding (CSS border-box), so a drawn hairline gets 1 dp more padding on its edge.
     Row(
-      Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 10.dp),
+      Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 11.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       BrandMark(18.dp)
-      BasicText("Skill Bill", style = type.tBase.copy(color = colors.fg, fontWeight = FontWeight.SemiBold))
+      // `.sb-tray-hd` is 600 13px on a 1.0 line.
+      BasicText("Skill Bill", style = type.tBase.copy(color = colors.fg, fontWeight = FontWeight.SemiBold, lineHeight = 13.sp), maxLines = 1)
       if (headerEnd != null) {
         Spacer(Modifier.weight(1f))
         CompositionLocalProvider(LocalContentColor provides colors.fgFaint) { headerEnd() }
       }
     }
-    Row(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 12.dp, vertical = 10.dp)) {
+    Row(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 11.dp)) {
       stats.forEach { stat ->
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
           // `.sb-tray-stats b` is 600 at the lg size on a 1.0 line; the label is regular weight.
@@ -86,11 +88,11 @@ fun TrayPopover(
         }
       }
     }
-    Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(horizontal = 10.dp, vertical = 8.dp)) { tabs() }
+    Box(Modifier.fillMaxWidth().hairline(Edge.Bottom, colors.borderSubtle).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 9.dp)) { tabs() }
     // The body takes its content's height, scrolling only once the popover reaches the window's height.
     Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(4.dp), content = rows)
     Row(
-      Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+      Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(start = 10.dp, end = 6.dp, top = 7.dp, bottom = 6.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
       content = footer,

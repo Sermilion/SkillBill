@@ -113,6 +113,7 @@ private fun RunState(state: SpecRunState) {
     SpecRunState.Paused, SpecRunState.Blocked -> colors.stBlocked
     else -> colors.fgFaint
   }
-  val label = state.name.replace(Regex("([a-z])([A-Z])")) { "${it.groupValues[1]} ${it.groupValues[2]}" }.lowercase()
+  // screens.js prints the run state with `_` as a space; the runtime's pause request is the prototype's `pausing`.
+  val label = if (state == SpecRunState.PauseRequested) "pausing" else state.name.replace(Regex("([a-z])([A-Z])")) { "${it.groupValues[1]} ${it.groupValues[2]}" }.lowercase()
   SbLabel(label, SbLabelStyle.Dot(dot))
 }

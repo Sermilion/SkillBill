@@ -19,6 +19,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -32,7 +34,6 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbTooltip
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
 import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.tabular
@@ -55,12 +56,17 @@ fun SidebarItem(
   val interaction = remember { MutableInteractionSource() }
   val hovered = interaction.collectIsHoveredAsState().value
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  val fill = rememberHoverColor(hovered, if (on) colors.bgActive else Color.Transparent, if (on) colors.bgActive else colors.bgHover).value
+  // `.sb-nav` declares no transition: the hover fill switches instantly.
+  val fill = when {
+    on -> colors.bgActive
+    hovered -> colors.bgHover
+    else -> Color.Transparent
+  }
   val textColor = if (on || hovered) colors.fg else colors.fg2
   val item: @Composable () -> Unit = {
     Row(
       modifier.fillMaxWidth().height(28.dp).background(fill, shape)
-        .hoverable(interaction).clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
+        .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
         .sbFocusRing(interaction, shape).semantics { selected = on }.padding(horizontal = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(9.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -83,7 +89,8 @@ fun SidebarItem(
           )
         }
       } else if (count != null) {
-        BasicText(count.toString(), style = type.tSm.tabular().copy(color = colors.fgFaint))
+        // `.sb-nav .n` inherits the item's 500 weight.
+        BasicText(count.toString(), style = type.tSmMedium.tabular().copy(color = colors.fgFaint), maxLines = 1)
       }
     }
   }

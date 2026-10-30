@@ -34,7 +34,8 @@ fun GroupHeader(
   val type = SkillBillTheme.type
   Row(
     modifier.fillMaxWidth().height(SkillBillSize.row).background(colors.bgRaised).hairline(Edge.Bottom, colors.borderSubtle)
-      .padding(start = 20.dp, end = 12.dp),
+      // The 1px bottom border takes its share of the 36 px, so the content centers in the 35 px above it.
+      .padding(start = 20.dp, end = 12.dp, bottom = 1.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

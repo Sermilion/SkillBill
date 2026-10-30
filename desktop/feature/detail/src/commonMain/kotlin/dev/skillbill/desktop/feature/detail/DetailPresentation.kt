@@ -13,7 +13,6 @@ import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.PlanRunReport
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
-import kotlin.time.Duration
 import kotlin.time.Instant
 
 /** "d MMM HH:mm"-style formatting in the system time zone. */
@@ -73,15 +72,6 @@ internal fun lifecycleColor(lifecycle: Lifecycle): Color {
   }
 }
 
-/** `desktop-tray`'s age: "2h 5m", "4m 10s" or "12s". */
-internal fun age(duration: Duration): String = (if (duration.isNegative()) Duration.ZERO else duration).toComponents { hours, minutes, seconds, _ ->
-  when {
-    hours > 0 -> "${hours}h ${minutes}m"
-    minutes > 0 -> "${minutes}m ${seconds}s"
-    else -> "${seconds}s"
-  }
-}
-
 /** When the run finished, or null while it is live; a finished run shows its total time. */
 internal fun finishedAt(item: WorkItem): Instant? = item.finishedAt?.takeIf { item.lifecycle != Lifecycle.Active && item.liveSection == null }
 
@@ -132,9 +122,6 @@ internal fun goalFinishSteps(item: WorkItem, detail: Detail): List<PipelineStep>
   }
 }
 
-internal fun planSummary(report: PlanRunReport): String =
-  if (report.subtasks.size == 1) "Planned 1 subtask." else "Planned ${report.subtasks.size} subtasks."
-
 /** screens.js Goal QA: "QA found 3 findings; all fixed after 2 fix attempts." or "QA could not fix 1 finding. Review them yourself." */
 internal fun qaFindingsSummary(total: Int, notFixed: Int, attempts: Int): String {
   val after = when (attempts) { 0 -> ""; 1 -> " after 1 fix attempt"; else -> " after $attempts fix attempts" }
@@ -159,5 +146,31 @@ internal fun specBundlePaths(report: PlanRunReport): List<String> =
   report.bundleFiles.ifEmpty { listOf(report.parentSpecPath) + report.subtasks.map { it.specPath } }
     .filter { it.isNotBlank() }
     .distinct()
+    .sortedWith(compareBy<String> { specFileRank(fileName(it)) }.then { a, b -> naturalCompare(fileName(a), fileName(b)) })
+
+/** The decomposition manifest first, then spec.md, then every other file by name. */
+private fun specFileRank(name: String): Int = when {
+  name.startsWith("decomposition") -> 0
+  name == "spec.md" -> 1
+  else -> 2
+}
+
+/** Name order that reads digit runs as numbers, so spec_subtask_2 sorts before spec_subtask_10. */
+internal fun naturalCompare(a: String, b: String): Int {
+  val chunk = Regex("\\d+|\\D+")
+  val left = chunk.findAll(a.lowercase()).map { it.value }.toList()
+  val right = chunk.findAll(b.lowercase()).map { it.value }.toList()
+  for (i in 0 until minOf(left.size, right.size)) {
+    val x = left[i]
+    val y = right[i]
+    val result = if (x[0].isDigit() && y[0].isDigit()) {
+      compareValuesBy(x, y, { it.trimStart('0').length }, { it.trimStart('0') })
+    } else {
+      x.compareTo(y)
+    }
+    if (result != 0) return result
+  }
+  return left.size.compareTo(right.size)
+}
 
 internal fun fileName(path: String): String = path.substringAfterLast('/').substringAfterLast('\\')

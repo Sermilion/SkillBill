@@ -34,7 +34,7 @@ data class WorkUiState(
 
   fun canPauseAfterSubtask(item: WorkItem): Boolean = item.kind == WorkKind.Goal && item.pauseEligible && !item.pauseRequested
 
-  fun canPauseNow(item: WorkItem): Boolean = item.kind == WorkKind.Goal && item.pauseEligible
+  fun canPauseNow(item: WorkItem): Boolean = item.kind == WorkKind.Goal && item.controlEligible
 
   /** False until the row's run options arrive and while a launch reservation holds the item. */
   fun canLaunch(item: WorkItem): Boolean = runOptions[item.id]?.canLaunch == true && !isReserved(item)

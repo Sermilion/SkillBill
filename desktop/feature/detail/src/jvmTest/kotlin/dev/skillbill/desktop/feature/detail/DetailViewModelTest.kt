@@ -19,6 +19,7 @@ import dev.skillbill.desktop.core.domain.session.DatabaseSessionController
 import dev.skillbill.desktop.core.domain.session.DatabaseSessionState
 import dev.skillbill.desktop.core.testing.FakeWorkBoardRepository
 import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
+import dev.skillbill.desktop.core.testing.loadedBoard
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
@@ -36,6 +37,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -53,7 +55,8 @@ class DetailViewModelTest {
     override fun reopen() = Unit
   }
 
-  private fun viewModel() = DetailViewModel(item, session, details, FakeWorkBoardRepository(), NoSpecs, NoWebPages, SelectionHolder(), clock, FakeWorkControlRepository(), ToastQueue())
+  private fun viewModel(board: FakeWorkBoardRepository = FakeWorkBoardRepository()) =
+    DetailViewModel(item, session, details, board, NoSpecs, NoWebPages, SelectionHolder(), SubtaskSelections(session), clock, FakeWorkControlRepository(), ToastQueue())
 
   @Test
   fun `the first state holds the row's header before the repository emits`() = runTest {
@@ -86,6 +89,25 @@ class DetailViewModelTest {
       Triple("SKILL-1", DetailList.Subtasks, "a2"),
     )
     assertEquals(expected, details.loads.toList())
+  }
+
+  @Test
+  fun `latest board running verdict survives a later detail refresh`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val board = FakeWorkBoardRepository()
+    val viewModel = viewModel(board)
+    advanceUntilIdle()
+    details.flow.emit(DetailState(item.copy(running = false), DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+
+    board.state.value = loadedBoard(items = listOf(item.copy(running = true)))
+    advanceUntilIdle()
+    assertTrue(viewModel.state.value.header.running)
+
+    details.flow.emit(DetailState(item.copy(running = false), DetailSections.Loaded(emptyDetail, null, emptyMap(), emptySet(), stale = false)))
+    advanceUntilIdle()
+
+    assertTrue(viewModel.state.value.header.running)
   }
 
   private fun loaded(anchor: String) = DetailState(

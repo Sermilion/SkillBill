@@ -18,6 +18,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +50,7 @@ fun SidebarSection(
     Row(
       Modifier.padding(top = 12.dp).fillMaxWidth().height(28.dp)
         .hoverable(interaction)
-        .then(if (collapsible) Modifier.clickable(interaction, indication = null, role = Role.Button, onClick = onToggle).expandSemantics(expanded) else Modifier)
+        .then(if (collapsible) Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null, role = Role.Button, onClick = onToggle).expandSemantics(expanded) else Modifier)
         .padding(horizontal = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(4.dp),
       verticalAlignment = Alignment.CenterVertically,

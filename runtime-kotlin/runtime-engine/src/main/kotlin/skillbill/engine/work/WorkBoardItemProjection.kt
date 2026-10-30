@@ -560,6 +560,7 @@ class WorkBoardItemProjection(
     listOfNotNull(
       boardId(item),
       item.snapshot.issueKey,
+      item.snapshot.title,
       item.snapshot.summary,
       Path.of(item.repositoryRoot).fileName?.toString(),
     ).joinToString("\n").lowercase(Locale.ROOT)

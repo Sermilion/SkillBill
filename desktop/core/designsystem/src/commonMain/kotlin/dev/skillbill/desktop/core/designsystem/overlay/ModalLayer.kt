@@ -48,7 +48,7 @@ internal fun ModalLayer(onDismiss: () -> Unit, topFraction: Float, content: @Com
       ) {
         Box(
           Modifier.align(Alignment.TopCenter).padding(top = maxHeight * topFraction)
-            .animateEnterExit(enter = slideInVertically(menuSpec()) { -liftPx } + scaleIn(menuSpec(), initialScale = .98f))
+            .animateEnterExit(enter = fadeIn(menuSpec()) + slideInVertically(menuSpec()) { -liftPx } + scaleIn(menuSpec(), initialScale = .98f))
             .clickable(remember { MutableInteractionSource() }, indication = null) {},
         ) { content() }
       }

@@ -20,6 +20,7 @@ import dev.skillbill.desktop.core.testing.FakeWorkControlRepository
 import dev.skillbill.desktop.core.testing.workItem
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
 import dev.skillbill.desktop.core.ui.selection.SelectionHolder
+import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -33,9 +34,29 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpecsPaneModelTest {
+  @Test
+  fun `newly composed unfocused row cannot clear another row's tree focus`() {
+    assertFalse(shouldClearSpecsTreeFocus("bundle/subtask-1.md", "bundle/subtask-2.md", hasFocus = false))
+    assertTrue(shouldClearSpecsTreeFocus("bundle/subtask-2.md", "bundle/subtask-2.md", hasFocus = false))
+    assertFalse(shouldClearSpecsTreeFocus("bundle/subtask-2.md", "bundle/subtask-2.md", hasFocus = true))
+  }
+
+  @Test
+  fun `picked specs project sends its checkout to the terminal pane`() {
+    val selections = mutableListOf<Path?>()
+
+    notifySpecsProjectSelection(listOf(project), project.projectId) { selections += it }
+    notifySpecsProjectSelection(listOf(project.copy(repoRoot = null)), project.projectId) { selections += it }
+    notifySpecsProjectSelection(listOf(project), "other-project") { selections += it }
+
+    assertEquals(listOf(Path.of("/repo"), null), selections)
+  }
+
   private val project = SpecProject("p1", "Project", "/repo/.skill-bill/specs", "/repo")
   private val goal = workItem("SKILL-1")
   private val specs = FakeSpecs()

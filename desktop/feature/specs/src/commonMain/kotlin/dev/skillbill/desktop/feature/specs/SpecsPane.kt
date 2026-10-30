@@ -20,12 +20,17 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -95,9 +100,10 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
       SbIconButton(LucideIcons.x, CLOSE_SPECS, onClose, size = SbControlSize.Small)
     },
   ) {
-    SpecRunToolbar(state, onAction, Modifier.fillMaxWidth().rule(bottom = true, colors.borderSubtle).padding(horizontal = 16.dp, vertical = 12.dp))
+    // Each section's 1 px CSS border takes layout space, so the padding on the bordered edge is one more than the CSS value.
+    SpecRunToolbar(state, onAction, Modifier.fillMaxWidth().rule(bottom = true, colors.borderSubtle).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 13.dp))
     Column(
-      Modifier.fillMaxWidth().rule(bottom = true, colors.borderSubtle).padding(horizontal = 16.dp, vertical = 10.dp),
+      Modifier.fillMaxWidth().rule(bottom = true, colors.borderSubtle).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 11.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       SbInput(state.filterText, { onAction(SpecsAction.FilterChanged(it)) }, Modifier.fillMaxWidth().gatesShortcutsWhileFocused(), placeholder = FILTER_HINT, leadingIcon = LucideIcons.search)
@@ -116,22 +122,27 @@ internal fun SpecsPane(state: SpecsUiState, onAction: (SpecsAction) -> Unit, onC
     }
     Box(Modifier.fillMaxWidth().weight(1f)) {
       when (val tree = state.tree) {
-        is SpecTreeState.Unavailable -> EmptyState(SPECS_UNAVAILABLE, icon = LucideIcons.alert, body = readProblemText(tree.problem), actions = {
-          SbButton("Retry", { onAction(SpecsAction.Retry) })
-        })
-        SpecTreeState.NoCheckout -> EmptyState(NO_CHECKOUT, icon = LucideIcons.folder)
-        is SpecTreeState.NoSpecs -> EmptyState(NO_SPECS, icon = LucideIcons.fileText, body = noSpecsBody())
+        // `.sb-scroll` is a block box, so `.sb-empty` sits at the top (48 down from its own padding), not centered.
+        is SpecTreeState.Unavailable -> TopEmpty {
+          EmptyState(SPECS_UNAVAILABLE, icon = LucideIcons.alert, body = readProblemText(tree.problem), actions = {
+            SbButton("Retry", { onAction(SpecsAction.Retry) })
+          })
+        }
+        SpecTreeState.NoCheckout -> TopEmpty { EmptyState(NO_CHECKOUT, icon = LucideIcons.folder) }
+        is SpecTreeState.NoSpecs -> TopEmpty { EmptyState(NO_SPECS, icon = LucideIcons.fileText, body = noSpecsBody()) }
         SpecTreeState.Loading -> Unit
         is SpecTreeState.Loaded -> if (state.rows.isEmpty() && state.filtersActive) {
-          EmptyState(NO_MATCH, icon = LucideIcons.search, body = NO_MATCH_BODY, actions = {
-            SbButton("Clear filters", { onAction(SpecsAction.ClearFilters) })
-          })
+          TopEmpty {
+            EmptyState(NO_MATCH, icon = LucideIcons.search, body = NO_MATCH_BODY, actions = {
+              SbButton("Clear filters", { onAction(SpecsAction.ClearFilters) })
+            })
+          }
         } else SpecsTree(state, onAction, Modifier.fillMaxWidth())
       }
     }
     state.storePath?.let { path ->
       Row(
-        Modifier.fillMaxWidth().rule(bottom = false, colors.borderSubtle).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().rule(bottom = false, colors.borderSubtle).padding(start = 16.dp, end = 8.dp, top = 9.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -157,6 +168,7 @@ private fun ProjectPicker(name: String?, onClick: () -> Unit) {
     Modifier.height(24.dp).background(fill, shape).border(1.dp, colors.border, shape)
       .hoverable(interaction)
       .clickable(interaction, indication = null, onClick = onClick)
+      .pointerHoverIcon(PointerIcon.Hand)
       .sbFocusRing(interaction, shape)
       .semantics {
         role = Role.Button
@@ -189,4 +201,10 @@ private fun noSpecsBody(): AnnotatedString {
     append(NO_SPECS_BODY)
     if (start >= 0) addStyle(SpanStyle(fontFamily = SkillBillTheme.type.mono.fontFamily), start, start + command.length)
   }
+}
+
+/** A scroll column with unbounded height, so [EmptyState]'s fill takes its content height and stays at the top. */
+@Composable
+private fun TopEmpty(content: @Composable () -> Unit) {
+  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { content() }
 }

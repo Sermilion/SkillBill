@@ -5,6 +5,7 @@ plugins {
 
 kotlin {
   sourceSets.jvmTest.dependencies {
+    implementation(libs.compose.ui.test)
     implementation(libs.kotlinx.coroutines.test)
   }
 

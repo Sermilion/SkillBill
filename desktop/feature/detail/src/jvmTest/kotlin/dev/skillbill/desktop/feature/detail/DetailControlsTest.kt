@@ -25,6 +25,20 @@ import kotlin.test.assertTrue
 
 class DetailControlsTest {
   @Test
+  fun `a pending pause keeps immediate pause available and disables another pause request`() {
+    val item = workItem("SKILL-1", lifecycle = Lifecycle.Active).copy(
+      pauseRequested = true,
+      controlEligible = true,
+      pauseEligible = false,
+    )
+
+    val actions = runActionsView(loadedState(item, incident = null))
+
+    assertTrue(actions.pauseNow?.enabled == true)
+    assertFalse(actions.pauseAfter?.enabled == true)
+  }
+
+  @Test
   fun `Recover enables only once every listed prerequisite is confirmed on a fresh detail`() {
     val incident = incident(IncidentProgress.NeedsPrerequisites, "credentials_configured", "configuration_fixed")
     val base = loadedState(workItem("SKILL-1", lifecycle = Lifecycle.Blocked), incident)
@@ -60,7 +74,7 @@ class DetailControlsTest {
     assertEquals(listOf<Pair<OperatorDecision, String?>>(OperatorDecision.RETRY_FIX to "Fix the null check"), repository.decisions)
 
     val recorded = decisionDraft(state.copy(controls = controls.state.value)).recorded!!
-    assertEquals("Decision recorded for subtask 3: retry fix. Resume the goal to apply it.", recordedText(recorded))
+    assertEquals("Decision recorded for subtask 8: retry fix. Resume the goal to apply it.", recordedText(recorded))
   }
 
   private fun loadedState(item: WorkItem, incident: Incident?) = DetailUiState(
@@ -77,7 +91,7 @@ class DetailControlsTest {
 
     override suspend fun recordOperatorDecision(item: WorkItem, decision: OperatorDecision, instructions: String?): DecisionOutcome {
       decisions += decision to instructions
-      return DecisionOutcome.Recorded(3, decision)
+      return DecisionOutcome.Recorded(checkNotNull(item.currentSubtaskId).toInt(), decision)
     }
 
     override suspend fun pauseAfterSubtask(item: WorkItem): ControlOutcome = error("unused")

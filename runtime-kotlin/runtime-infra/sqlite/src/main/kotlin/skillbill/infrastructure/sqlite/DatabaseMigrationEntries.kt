@@ -18,9 +18,9 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
-import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelAgentMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelDependencyMigration
 import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelMigration
+import skillbill.infrastructure.sqlite.core.migration.area.WorkBoardReadModelRebuildMigration
 import skillbill.infrastructure.sqlite.core.migration.area.blockincident.blockIncidentMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.pruneWorktreeEditJournalToLatestTick
@@ -919,5 +919,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
     DatabaseMigration(
       version = 92,
       name = "rebuild-work-board-executing-agent",
-      operation = WorkBoardReadModelAgentMigration::apply,
+      operation = WorkBoardReadModelRebuildMigration::apply,
+    ) +
+    DatabaseMigration(
+      version = 93,
+      name = "rebuild-work-board-titles",
+      operation = WorkBoardReadModelRebuildMigration::apply,
     )

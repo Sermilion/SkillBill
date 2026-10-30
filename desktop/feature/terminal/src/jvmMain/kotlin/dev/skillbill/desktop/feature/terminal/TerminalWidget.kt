@@ -20,8 +20,15 @@ private const val TERMINAL_FONT_SIZE = 12f
 
 private const val TERMINAL_LINE_SPACING = 1.2f
 
-/** The design system's inset palette for the terminal: `bgInset` behind `fg2`, the selection `accentFg` on `accent`. */
-class TerminalSettings(private val colors: SkillBillColors, private val font: Font) : DefaultSettingsProvider() {
+/**
+ * The design system's inset palette for the terminal: `bgInset` behind `fg2`, the selection `accentFg` on `accent`.
+ * [scale] converts the design's px into Swing units: Swing draws at the screen's own scale while the Compose content renders
+ * at the app's content density, so without it the terminal text would come out smaller than the text around it.
+ */
+class TerminalSettings(private val colors: SkillBillColors, font: Font, scale: Float = 1f) : DefaultSettingsProvider() {
+  private val fontSize = TERMINAL_FONT_SIZE * scale
+  private val font = font.deriveFont(fontSize)
+
   override fun getDefaultForeground(): TerminalColor = colors.fg2.terminalColor()
 
   override fun getDefaultBackground(): TerminalColor = colors.bgInset.terminalColor()
@@ -36,7 +43,7 @@ class TerminalSettings(private val colors: SkillBillColors, private val font: Fo
 
   override fun getTerminalFont(): Font = font
 
-  override fun getTerminalFontSize(): Float = TERMINAL_FONT_SIZE
+  override fun getTerminalFontSize(): Float = fontSize
 
   // `.sb-term-out` sets line-height 1.6. JediTerm multiplies the font's own height (about 1.32 em for JetBrains Mono), so
   // 1.2 lands near 19 px rows at 12 px.

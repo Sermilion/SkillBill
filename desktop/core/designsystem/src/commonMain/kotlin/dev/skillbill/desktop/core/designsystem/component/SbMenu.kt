@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
@@ -58,7 +59,7 @@ fun SbMenuItem(item: SbMenuEntry.Item, highlighted: Boolean = false) {
   val shape = RoundedCornerShape(SkillBillRadius.sm)
   Row(
     Modifier.fillMaxWidth().height(30.dp).background(if (active) colors.bgActive else androidx.compose.ui.graphics.Color.Transparent, shape)
-      .alpha(if (item.enabled) 1f else .4f).hoverable(interaction).clickable(interaction, null, enabled = item.enabled, onClick = item.onClick)
+      .alpha(if (item.enabled) 1f else .4f).hoverable(interaction).clickable(interaction, null, enabled = item.enabled, onClick = item.onClick).handCursor(item.enabled)
       .sbFocusRing(interaction, shape)
       .semantics { role = Role.Button; contentDescription = item.label; if (!item.enabled) disabled(); if (item.checked) selected = true }
       .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -92,7 +93,8 @@ fun SbMenu(entries: List<SbMenuEntry>, searchHint: String? = null) {
         Modifier.fillMaxWidth().height(32.dp).drawBehind {
           val y = size.height - dividerStrokePx / 2
           drawLine(dividerColor, Offset(0f, y), Offset(size.width, y), dividerStrokePx)
-        }.padding(horizontal = 8.dp),
+        // border-box height: the 1px border-bottom comes out of the 32px, so content centers in 31px.
+        }.padding(start = 8.dp, end = 8.dp, bottom = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {

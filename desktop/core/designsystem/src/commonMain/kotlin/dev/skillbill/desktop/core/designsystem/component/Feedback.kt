@@ -71,14 +71,16 @@ fun Callout(tone: FeedbackTone = FeedbackTone.Info, title: String? = null, body:
   Callout(tone, title, AnnotatedString(body), icon, actions, modifier)
 
 @Composable
-fun Hint(text: AnnotatedString, tone: FeedbackTone = FeedbackTone.Neutral, icon: ImageVector? = null) {
+fun Hint(text: AnnotatedString, tone: FeedbackTone = FeedbackTone.Neutral, icon: ImageVector? = null, fold: Boolean = false) {
   val color = tone.color()
   // `.sb-hint` aligns to the top and wraps; the 14px icon drops 1px to meet the first line.
   Row(Modifier.semantics { if (tone == FeedbackTone.Error || tone == FeedbackTone.Warn) liveRegion = LiveRegionMode.Polite }, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
     androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides color) { SbIcon(icon ?: tone.icon(), SbIconSize.Sm, modifier = Modifier.padding(top = 1.dp)) }
-    BasicText(text, Modifier.weight(1f, fill = false), style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted, lineHeight = 1.45.em))
+    val style = SkillBillTheme.type.tSm.copy(color = SkillBillTheme.colors.fgMuted, lineHeight = 1.45.em)
+    // [fold]: runtime text such as a block reason can run to many lines, so past three it folds behind Show more.
+    if (fold) ExpandableText(text, style, Modifier.weight(1f, fill = false)) else BasicText(text, Modifier.weight(1f, fill = false), style = style)
   }
 }
 
 @Composable
-fun Hint(text: String, tone: FeedbackTone = FeedbackTone.Neutral, icon: ImageVector? = null) = Hint(AnnotatedString(text), tone, icon)
+fun Hint(text: String, tone: FeedbackTone = FeedbackTone.Neutral, icon: ImageVector? = null, fold: Boolean = false) = Hint(AnnotatedString(text), tone, icon, fold)

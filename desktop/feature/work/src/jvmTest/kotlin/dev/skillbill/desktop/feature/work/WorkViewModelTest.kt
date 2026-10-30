@@ -51,4 +51,28 @@ class WorkViewModelTest {
     val expected = controlFeedback(ControlAction.PauseAfterSubtask, ControlOutcome.IntentRecorded, FeedbackSubject("SKILL-2", null, null))
     assertEquals(WorkEffect.ShowToast(expected), viewModel.effects.first())
   }
+
+  @Test
+  fun `a selected row follows refreshed policy and clears when the row leaves the board`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val original = workItem("SKILL-1")
+    val board = FakeWorkBoardRepository(loadedBoard(mapOf(BoardSectionKind.Goals to listOf(original))))
+    val selection = SelectionHolder()
+    val viewModel = WorkViewModel(
+      board, FakeWorkDetailRepository(), FakeWorkControlRepository(ControlOutcome.IntentRecorded), selection,
+      object : Clock { override fun now() = Instant.fromEpochMilliseconds(0) },
+    )
+    advanceUntilIdle()
+    viewModel.onAction(WorkAction.Focus(original))
+    advanceUntilIdle()
+
+    val refreshed = original.copy(pauseEligible = false)
+    board.state.value = loadedBoard(mapOf(BoardSectionKind.Goals to listOf(refreshed)))
+    advanceUntilIdle()
+    assertEquals(refreshed, selection.item.value)
+
+    board.state.value = loadedBoard()
+    advanceUntilIdle()
+    assertEquals(null, selection.item.value)
+  }
 }

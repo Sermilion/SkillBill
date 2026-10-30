@@ -10,7 +10,7 @@ import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.DetailListOutcome
 import dev.skillbill.desktop.core.domain.model.DetailSections
 import dev.skillbill.desktop.core.domain.model.DetailState
-import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.domain.model.LatestActivity
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import kotlinx.coroutines.CancellationException
@@ -27,8 +27,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -86,9 +86,11 @@ class DetailObservations internal constructor(
     val ids = setOfNotNull(item.id, item.control.workflowId, item.control.invocationId)
     var applied = appliedAtLoad
     return signals
-      .filter { snapshot -> needsRefresh(snapshot, applied, ids).also { applied = snapshot } }
+      .mapNotNull { snapshot -> refreshKind(snapshot, applied, ids).also { applied = snapshot } }
       .conflate()
-      .mapLatest { reads.refresh(item.id, extended[item.id].orEmpty()) }
+      .mapLatest { kind ->
+        if (kind == DetailRefreshKind.ACTIVITY) reads.activity(item.id) else reads.refresh(item.id, extended[item.id].orEmpty())
+      }
   }
 
   suspend fun loadList(id: String, list: DetailList, cursor: String?): DetailListOutcome {
@@ -96,6 +98,7 @@ class DetailObservations internal constructor(
     return when (val read = reads.list(id, list, cursor)) {
       is DetailRead.Failed -> DetailListOutcome.Failed(read.problem)
       DetailRead.Gone -> DetailListOutcome.End
+      is DetailRead.Activity -> DetailListOutcome.End
       is DetailRead.Loaded -> {
         val next = read.sections.listCursors[list]
         val updated = observers.mapNotNull { live ->
@@ -149,22 +152,34 @@ class DetailObservations internal constructor(
  * Subtask 1's change test, per `goals`, `phases` and `activity` topic that moved past [applied]: a resynchronize, an
  * unlisted or overflowed topic, a base above the applied revision, or an id of this item listed means a refresh.
  */
-private fun needsRefresh(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: Set<String>): Boolean {
-  if (snapshot.resyncEpoch != applied.resyncEpoch || snapshot.generation != applied.generation) return true
-  return DETAIL_TOPICS.any { topic ->
-    val revision = snapshot.revisions[topic] ?: return@any false
-    val last = applied.revisions[topic] ?: return@any true
-    revision > last && when (val changed = snapshot.changed[topic] ?: ChangedIds.All) {
+private enum class DetailRefreshKind { ACTIVITY, FULL }
+
+private fun refreshKind(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: Set<String>): DetailRefreshKind? {
+  if (snapshot.resyncEpoch != applied.resyncEpoch || snapshot.generation != applied.generation) return DetailRefreshKind.FULL
+  var activityChanged = false
+  for (topic in DETAIL_TOPICS) {
+    val revision = snapshot.revisions[topic] ?: continue
+    val last = applied.revisions[topic] ?: return DetailRefreshKind.FULL
+    if (revision <= last) continue
+    val changedThisItem = when (val changed = snapshot.changed[topic] ?: ChangedIds.All) {
       ChangedIds.All -> true
       is ChangedIds.Ids -> changed.base > last || changed.ids.any { it in ids }
     }
+    if (changedThisItem) {
+      if (topic == DesktopReadSchema.ACTIVITY_TOPIC) activityChanged = true else return DetailRefreshKind.FULL
+    }
   }
+  return if (activityChanged) DetailRefreshKind.ACTIVITY else null
 }
+
+private fun needsRefresh(snapshot: SignalSnapshot, applied: SignalSnapshot, ids: Set<String>): Boolean =
+  refreshKind(snapshot, applied, ids) != null
 
 private fun DetailRead.runOptions(): RunOptions? = (this as? DetailRead.Loaded)?.sections?.runOptions
 
 private fun DetailRead.toState(row: WorkItem): DetailState = when (this) {
   is DetailRead.Loaded -> DetailState(header.withBoardVerdicts(row), sections)
+  is DetailRead.Activity -> DetailState(header.withBoardVerdicts(row), DetailSections.Pending)
   DetailRead.Gone -> DetailState(row, DetailSections.Gone)
   is DetailRead.Failed -> DetailState(row, DetailSections.Failed(problem))
 }
@@ -172,6 +187,13 @@ private fun DetailRead.toState(row: WorkItem): DetailState = when (this) {
 /** A refresh replaces the sections; a failed one keeps the loaded sections marked stale. */
 private fun DetailState.refreshedBy(read: DetailRead): DetailState = when (read) {
   is DetailRead.Loaded -> DetailState(read.header.withBoardVerdicts(header), read.sections)
+  is DetailRead.Activity -> when (val current = sections) {
+    is DetailSections.Loaded -> copy(
+      header = read.header.withBoardVerdicts(header),
+      sections = current.copy(detail = current.detail.copy(latestActivity = read.latestActivity)),
+    )
+    else -> copy(header = read.header.withBoardVerdicts(header))
+  }
   DetailRead.Gone -> copy(sections = DetailSections.Gone)
   is DetailRead.Failed -> when (val current = sections) {
     is DetailSections.Loaded -> copy(sections = current.copy(stale = true))
@@ -181,7 +203,7 @@ private fun DetailState.refreshedBy(read: DetailRead): DetailState = when (read)
 
 /** The detail read carries no running or membership verdicts, so the loaded header keeps the ones the board row had. */
 private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
-  running = lifecycle == Lifecycle.Active,
+  running = row.running,
   recentlyFinishedPhase = row.recentlyFinishedPhase,
   doneWithinDay = row.doneWithinDay,
   membershipDeadline = row.membershipDeadline,
@@ -189,6 +211,7 @@ private fun WorkItem.withBoardVerdicts(row: WorkItem): WorkItem = copy(
 
 private fun DetailRead.detailIds(id: String): Set<String> = when (this) {
   is DetailRead.Loaded -> setOfNotNull(id, header.control.workflowId, header.control.invocationId)
+  is DetailRead.Activity -> setOfNotNull(id, header.control.workflowId, header.control.invocationId)
   DetailRead.Gone, is DetailRead.Failed -> setOf(id)
 }
 

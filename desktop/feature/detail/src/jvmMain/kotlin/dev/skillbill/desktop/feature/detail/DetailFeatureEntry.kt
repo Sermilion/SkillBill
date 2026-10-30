@@ -10,6 +10,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.feedback.ToastQueue
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ScreenKey
 import dev.skillbill.desktop.core.ui.input.ScreenKeyHandler
 import dev.skillbill.desktop.core.ui.navigation.AppNavigator
@@ -61,10 +62,11 @@ class DetailFeatureEntry(
       }
     }
     val state by viewModel.state.collectAsState()
+    val shellInput = LocalShellInput.current
     ScreenKeyHandler { key ->
       when (key) {
-        ScreenKey.Next -> viewModel.step(next = true)
-        ScreenKey.Previous -> viewModel.step(next = false)
+        ScreenKey.Next -> viewModel.step(next = true, keepListFocus = shellInput.subtaskListFocused)
+        ScreenKey.Previous -> viewModel.step(next = false, keepListFocus = shellInput.subtaskListFocused)
         else -> viewModel.onKey(key)
       }
     }

@@ -242,6 +242,7 @@ class IdeStatusProjector(
             standalonePhaseStateSummary(record.phaseId, lifecycle, record.lifecycleState, record.qaOutcome),
             record.monitorTargetDetail(),
           ).joinToString(" "),
+      title = IdeStatusTitles.standalonePhase(record),
     )
   }
 
@@ -273,7 +274,7 @@ class IdeStatusProjector(
     if (!goalShowsOpenCiMonitor(projection, preliminaryLifecycle) && !liveFinalization) {
       return null
     }
-    return assembleGoalStatusSnapshot(goalCandidate, context, issueKey, projection)
+    return assembleGoalStatusSnapshot(goalCandidate, context, issueKey, projection, manifestState.manifest.featureName)
   }
 
   private fun projectGoal(
@@ -292,7 +293,8 @@ class IdeStatusProjector(
           includeCompletedSubtaskValidation = false,
         ),
       )
-    return assembleGoalStatusSnapshot(candidate, context, issueKey, projection)
+    val featureName = manifestStore.loadDurableByIssueKey(issueKey, context.repoRoot)?.manifest?.featureName
+    return assembleGoalStatusSnapshot(candidate, context, issueKey, projection, featureName)
   }
 
   private fun assembleGoalStatusSnapshot(
@@ -300,6 +302,7 @@ class IdeStatusProjector(
     context: IdeStatusProjectionContext,
     issueKey: String,
     projection: GoalRunnerStatusProjection?,
+    featureName: String?,
   ): IdeStatusProjection {
     val completionRecorded = projection?.admittedParentComplete() == true
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
@@ -365,6 +368,7 @@ class IdeStatusProjector(
           planningStep?.takeIf { lifecycle != IdeStatusLifecycleState.PAUSED }
             ?.let { goalPlanningSummary(issueKey, it) }
             ?: goalSnapshotSummary(issueKey, lifecycle, step.label, projection, childContext),
+        title = IdeStatusTitles.goal(featureName, issueKey),
       )
     return IdeStatusProjection(snapshot, pauseReason.exactText, projection?.activeAgent?.takeIf(String::isNotBlank))
   }
@@ -577,6 +581,7 @@ class IdeStatusProjector(
             candidate.lifecycleState,
             stepLabel,
           ),
+        title = IdeStatusTitles.workflow(WorkflowFamily.TASK_RUNTIME, candidate.issueKey, context.branchCorrelation),
       )
     val executingAgentId =
       status.phases.firstOrNull { it.status.workflowStepStatus() == WorkflowStepStatus.RUNNING }
@@ -651,6 +656,16 @@ class IdeStatusProjector(
       updatedAt = updatedAt,
       freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
       summary = summary,
+      title =
+        if (family == WorkflowFamily.TASK_RUNTIME) {
+          candidate.issueKey
+            ?.let { manifestStore.loadDurableByIssueKey(it, context.repoRoot) }
+            ?.takeIf { it.parentWorkflowId == candidate.workflowId }
+            ?.manifest?.featureName?.takeIf(String::isNotBlank)
+            ?: IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
+        } else {
+          IdeStatusTitles.workflow(family, candidate.issueKey, context.branchCorrelation)
+        },
     )
   }
 

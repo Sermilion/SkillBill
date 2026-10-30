@@ -34,13 +34,8 @@ internal fun DetailHeader(
   actions: (@Composable () -> Unit)? = null,
 ) {
   val colors = SkillBillTheme.colors
-  val title = when (item.kind) {
-    WorkKind.Goal -> item.title
-    WorkKind.Phase -> item.control.phaseId ?: item.stepLabel
-    WorkKind.Operation, null -> item.title
-  }
   DocHeader(
-    title = title,
+    title = item.title,
     eyebrow = {
       SbLabel(lifecycleLabel(item.lifecycle), SbLabelStyle.Tint(lifecycleColor(item.lifecycle)))
       if (item.stalledSince != null) SbLabel("Stalled", SbLabelStyle.Tint(colors.stBlocked))

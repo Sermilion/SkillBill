@@ -32,7 +32,7 @@ fun SbField(label: String, help: String? = null, error: String? = null, content:
     BasicText(label, style = SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg2, lineHeight = 1.2.em))
     content(scope)
     (error ?: help)?.let { text ->
-      BasicText(text, Modifier.semantics { if (error != null) liveRegion = LiveRegionMode.Polite }, style = SkillBillTheme.type.tXs.copy(color = if (error != null) SkillBillTheme.colors.stFailed else SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em))
+      BasicText(text, Modifier.semantics { if (error != null) liveRegion = LiveRegionMode.Polite }, style = SkillBillTheme.type.tXs.copy(color = if (error != null) SkillBillTheme.colors.stFailed else SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em), softWrap = true)
     }
   }
 }

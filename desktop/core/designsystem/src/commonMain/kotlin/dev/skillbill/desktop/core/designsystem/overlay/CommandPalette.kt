@@ -66,6 +66,7 @@ import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.component.Kbd
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.hairline
@@ -162,7 +163,8 @@ fun CommandPalette(
       }
       CommandList(groups, highlight, onRun, onHover = { highlight = it })
       Row(
-        Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(horizontal = 14.dp, vertical = 8.dp),
+        // The 1px border-top takes layout space above the 8px padding; hairline only draws.
+        Modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -207,7 +209,8 @@ fun CommandList(groups: List<CommandGroup>, highlight: Int, onRun: (String) -> U
     else state.scrollToItem(target, -(end - (shown.firstOrNull { it.index == target } ?: shown.last()).size))
   }
   Box(
-    modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).pointerInput(Unit) {
+    // border-top sits above the list padding and counts toward max-height (border-box).
+    modifier.fillMaxWidth().hairline(Edge.Top, colors.borderSubtle).padding(top = 1.dp).pointerInput(Unit) {
       awaitPointerEventScope {
         while (true) {
           val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -221,7 +224,7 @@ fun CommandList(groups: List<CommandGroup>, highlight: Int, onRun: (String) -> U
       BasicText("No commands match", Modifier.align(Alignment.Center).padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp).padding(horizontal = 16.dp, vertical = 28.dp), style = SkillBillTheme.type.tBase.copy(color = colors.fgFaint))
       return@Box
     }
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = maxHeight), state = state, contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp)) {
+    LazyColumn(Modifier.fillMaxWidth().heightIn(max = (maxHeight - 1.dp).coerceAtLeast(0.dp)), state = state, contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp)) {
       var flatIndex = 0
       visible.forEachIndexed { groupIndex, group ->
         item(key = "head:$groupIndex") {
@@ -244,13 +247,13 @@ private fun CommandRow(item: CommandItem, highlighted: Boolean, onRun: () -> Uni
   val hovered = interaction.collectIsHoveredAsState().value && item.enabled
   LaunchedEffect(hovered, pointerLive) { if (hovered && pointerLive) onHover() }
   val shape = RoundedCornerShape(SkillBillRadius.sm)
-  // `.sb-menu-item` declares no transition.
-  val fill = if (highlighted && item.enabled) colors.bgActive else Color.Transparent
-  val fg = when { item.danger -> colors.stFailed; highlighted && item.enabled -> colors.fg; else -> colors.fg2 }
+  // `.sb-menu-item` declares no transition. Arrow keys can land `.hl` on a disabled command, which keeps the fill under its 40% opacity.
+  val fill = if (highlighted) colors.bgActive else Color.Transparent
+  val fg = when { item.danger -> colors.stFailed; highlighted -> colors.fg; else -> colors.fg2 }
   val iconColor = if (item.danger) colors.stFailed else colors.fgMuted
   Row(
     Modifier.fillMaxWidth().height(40.dp).background(fill, shape).hoverable(interaction)
-      .then(if (item.enabled) Modifier.clickable(interaction, indication = null, role = Role.Button, onClick = onRun) else Modifier.alpha(0.4f))
+      .then(if (item.enabled) Modifier.clickable(interaction, indication = null, role = Role.Button, onClick = onRun).handCursor() else Modifier.alpha(0.4f))
       .semantics(mergeDescendants = true) { selected = highlighted }
       .padding(horizontal = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp),

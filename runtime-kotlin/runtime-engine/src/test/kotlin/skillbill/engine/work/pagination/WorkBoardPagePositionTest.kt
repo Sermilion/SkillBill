@@ -3,13 +3,26 @@ package skillbill.engine.work.pagination
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.idestatus.model.WorkBoardRequest
 import skillbill.ports.idestatus.model.WorkBoardWindow
+import skillbill.ports.idestatus.model.WorkDetailList
+import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkStoreObservation
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class WorkBoardPagePositionTest {
+  @Test
+  fun `activity-only detail requests omit every extended list`() {
+    val full = WorkDetailRequest("work-1")
+    val activity = WorkDetailRequest("work-1", includeExtendedLists = false)
+
+    assertTrue(WorkDetailList.entries.all { full.includesDetailList(it) })
+    assertFalse(WorkDetailList.entries.any { activity.includesDetailList(it) })
+  }
+
   @Test
   fun `filtered cursor scope uses normalized filter text`() {
     val observedAt = Instant.parse("2026-10-28T12:00:00Z")

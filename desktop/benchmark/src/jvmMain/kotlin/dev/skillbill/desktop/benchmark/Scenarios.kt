@@ -53,7 +53,7 @@ fun runScenarios(database: String, home: String, bursts: Int, samples: Int): Sce
     val namespace = java.util.UUID.randomUUID().toString()
     val writer = runtimeWriter(Path.of(database), root)
     var live = registerLive(writer, maxOf(12, samples), root, namespace)
-    val query = BoardQuery(HistoryWindow.Day, "SKILL-BENCH-${namespace.take(8)}", maxOf(50, samples))
+    val query = BoardQuery(HistoryWindow.Day, "", maxOf(50, samples))
     val sampleIds = live.take(samples).mapTo(HashSet()) { it.record.invocationId }
     val loaded = withTimeout(30.seconds) {
       app.workBoardRepository.observe(query).first { state ->
@@ -117,7 +117,9 @@ fun runScenarios(database: String, home: String, bursts: Int, samples: Int): Sce
       boardObservations.awaitLiveCandidate(candidate)
       val beforeEmissions = emissions.get()
       val beforeReads = diagnostics.snapshot().size
+      val burstStartedAtNanos = System.nanoTime()
       val updated = replayActivity(writer, live)
+      boardObservations.awaitEmissionAfter(burstStartedAtNanos)
       burstBoardEmissions += emissions.get() - beforeEmissions
       burstRuntimeReads += diagnostics.snapshot().size - beforeReads
       val lifecycle = commitLifecycle(writer, updated, root, namespace)
@@ -157,6 +159,14 @@ private class BoardObservationCursor(private val events: Channel<BoardEmission>)
         val observation = latest ?: receive()
         if (observation.showsLive(candidateId)) return@withTimeout
         receive()
+      }
+    }
+  }
+
+  suspend fun awaitEmissionAfter(startedAtNanos: Long) {
+    withTimeout(30.seconds) {
+      while (true) {
+        if (receive().atNanos >= startedAtNanos) return@withTimeout
       }
     }
   }

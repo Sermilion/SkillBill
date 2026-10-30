@@ -64,6 +64,7 @@ class WorkPayloadSchemaValidatorTest {
         updatedAt = Instant.EPOCH,
         freshness = IdeStatusFreshness.FRESH,
         summary = "No work.",
+        title = "SKILL-1",
       )
     val payload =
       JsonCodec.mapToJsonString(
@@ -131,6 +132,7 @@ class WorkPayloadSchemaValidatorTest {
         updatedAt = Instant.EPOCH,
         freshness = IdeStatusFreshness.FRESH,
         summary = "No work.",
+        title = "SKILL-1",
       )
     return JsonCodec.mapToJsonString(
       mapOf(

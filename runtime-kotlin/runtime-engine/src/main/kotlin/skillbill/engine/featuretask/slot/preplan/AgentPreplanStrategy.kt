@@ -84,10 +84,12 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "feature, a shared client, a platform wrapper, or a dependency coordinate unless the plan needs that " +
         "fact to specify this task. Follow a wrapper when required information, setup or lifecycle authority " +
         "must pass through it; a forwarding signature alone does not prove that transport. Otherwise a " +
-        "wrapper that only forwards a call you have already read is not a new question. When the intake " +
-        "names a tracker issue and does not already carry its comments, fetch the " +
-        "issue and its comments together: request every tool schema you need in one round, then make every " +
-        "tracker call in the next, alongside your first code lookups. Do not fetch the tracker again after " +
+        "wrapper that only forwards a call you have already read is not a new question. Supplied requirements " +
+        "are authoritative and need no tracker lookup, even when the intake includes an issue key; a locally " +
+        "allocated issue key is identity only. Only when the intake is an unresolved tracker reference without " +
+        "requirements, and does not already carry its comments, fetch the issue and its comments together: " +
+        "request every tool schema you need in one round, then make every tracker call in the next, alongside " +
+        "your first code lookups. Do not fetch the tracker again after " +
         "that. Each tool round resends this whole conversation, so issue every lookup you can name " +
         "now in one round, and start a new round only for a lookup that depends on what the last round " +
         "returned. Batching never adds a lookup: each lookup in a round must still answer an open question. " +

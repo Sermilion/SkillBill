@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
@@ -84,6 +85,7 @@ fun SbButton(
         else Modifier.border(BUTTON_BORDER, borderColor, shape))
         .hoverable(interaction)
         .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
+        .handCursor(enabled)
         .sbFocusRing(interaction, shape)
         .semantics {
           role = Role.Button

@@ -39,6 +39,7 @@ import dev.skillbill.desktop.core.domain.model.ValidationGateRun
 import dev.skillbill.desktop.core.domain.model.ValidationResult
 import dev.skillbill.desktop.core.domain.model.WorkDependency
 import dev.skillbill.desktop.core.domain.model.WorkItem
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkPhase
 import dev.skillbill.desktop.core.domain.model.WorkQaOutcome
 import dev.skillbill.desktop.core.domain.model.WorkSubtask
@@ -66,15 +67,17 @@ import skillbill.goalrunner.assessment.model.GoalAssessmentVerification as Runti
 import java.time.Instant as JavaInstant
 
 /**
- * The detail header: the row's fields plus the feature title, the executing agent (the goal's active agent, or the run
+ * The detail header: the row's fields plus, for a goal, the manifest's feature title, the executing agent (the goal's active agent, or the run
  * options' agent for a standalone phase) and, for anything but a standalone phase, the checked-out branch.
  */
 internal fun WorkDetailItem.toHeader(options: WorkRunOptions?, branches: CheckedOutBranchSource, sessionId: Long): WorkItem {
   val item = toWorkItem(sessionId)
   val standalone = snapshot.execution?.scope == IdeStatusExecutionScope.STANDALONE_PHASE
   val branch = if (standalone) item.branch else branches.checkedOutBranch(Path.of(repositoryRoot)) ?: item.branch
+  val planFeature = executionHistory.firstOrNull { it.invocationId == snapshot.execution?.invocationId }?.planReport?.featureName
   return item.copy(
-    title = goalManifest?.featureName ?: item.title,
+    title = goalManifest?.featureName?.takeIf { item.kind == WorkKind.Goal && it.isNotBlank() }?.let(::displayTitle)
+      ?: planFeature?.takeIf { standalone && it.isNotBlank() }?.let(::displayTitle) ?: item.title,
     agentId = goalStatus?.activeAgent ?: options?.agentId?.takeIf { standalone },
     branch = branch,
   )
@@ -117,7 +120,7 @@ internal fun WorkDetailItem.toDetail(observedAt: JavaInstant): Detail {
     qaOutcome = snapshot.workflowQaOutcome?.toDomain(),
     stepPipeline = stepPipeline,
     goalFinishPipeline = goalFinishPipeline,
-    currentPhase = runtimeStatus?.currentPhase ?: goal?.currentStep,
+    currentPhase = runtimeStatus?.currentPhase ?: goal?.currentStep ?: snapshot.currentStep.id,
     completeCount = goal?.completeCount ?: runtimeStatus?.completeCount ?: 0,
     pendingCount = goal?.pendingCount ?: runtimeStatus?.pendingCount ?: 0,
     blockedCount = goal?.blockedCount ?: runtimeStatus?.blockedCount ?: 0,

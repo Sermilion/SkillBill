@@ -174,6 +174,15 @@
 
   /* ---------- IdTag, Label, Avatar ---------- */
   function IdTag(key) { track('IdTag'); return `<span class="sb-id">${esc(key)}</span>`; }
+  /* Machine ids (workflow, invocation, commit, evidence reference): first 8 characters plus an ellipsis, or whole when that
+   * saves nothing; full value in the tooltip and on the copy button. `shown` is the part to shorten when a prefix repeats the row. */
+  const shortId = (id, keep) => { const k = keep || 8; const s = String(id); return s.length > k + 1 ? s.slice(0, k) + '…' : s; };
+  function ShortId(o) {
+    track('ShortId');
+    return `<span class="sb-sid"><span class="sb-sid-tx"${tipAttrs(o.value)}>${esc(shortId(o.shown != null ? o.shown : o.value))}</span>${IconButton({ icon: 'copy', label: `Copy ${o.label || 'id'}`, act: 'copy', arg: o.value, size: 'sm' })}</span>`;
+  }
+  /* Shown in the view header when the last refresh failed and the screen keeps its older data. */
+  function StaleIndicator() { track('StaleIndicator'); return `<span class="sb-stale"${tipAttrs('Showing stale work data')}>Stale</span>`; }
   function Label(o) {
     track('Label');
     const style = o.color ? ` style="--c:${o.color}"` : '';
@@ -233,9 +242,22 @@
   }
 
   /* ---------- Property list (sidebar of a detail view) ---------- */
+  /* One 28px line per property: a label column sized to the longest label (--prop-label-w, ellipsis as a fallback) and a
+   * one-line value. `mono` sets the label in mono for phase names. `sub` goes under the value (a Breakdown). Rows whose
+   * value is null, empty or zero are left out by the caller, never drawn blank. */
   function PropertyList(rows) {
     track('PropertyList');
-    return `<dl class="sb-props">${join(rows.map((r) => r && `<div class="sb-prop"><dt>${esc(r.label)}</dt><dd class="${r.act ? 'is-btn' : ''}"${act(r.act, r.arg)}${tipAttrs(r.tip, r.kbd)}>${r.value}</dd></div>`))}</dl>`;
+    return `<dl class="sb-props">${join(rows.map((r) => r && `<div class="sb-prop"><dt class="${r.mono ? 'mono' : ''}" title="${esc(r.label)}">${esc(r.label)}</dt><dd class="${r.act ? 'is-btn' : ''}"${act(r.act, r.arg)}${tipAttrs(r.tip, r.kbd)}>${r.value}</dd>${r.sub ? `<div class="sb-prop-sub">${r.sub}</div>` : ''}</div>`))}</dl>`;
+  }
+  /* A count broken down by key (phase runs per phase, relaunch causes): one 22px row per key, the key in mono 11.5 faint,
+   * the count right-aligned and tabular, largest first. At most `max` rows (default 4), then a "+N more" ghost toggle. */
+  function Breakdown(o) {
+    track('Breakdown');
+    const max = o.max || 4;
+    const rows = o.rows.filter((r) => r[1] > 0).sort((a, b) => b[1] - a[1]);
+    const shown = o.open ? rows : rows.slice(0, max);
+    const more = rows.length > max ? `<button type="button" class="sb-bd-more"${act(o.act, o.arg)} aria-expanded="${!!o.open}">${o.open ? 'Show less' : `+${rows.length - max} more`}</button>` : '';
+    return `<div class="sb-bd">${shown.map(([k, n]) => `<div class="sb-bd-row"><span class="mono" title="${esc(k)}">${esc(k)}</span><b>${n}</b></div>`).join('')}${more}</div>`;
   }
 
   /* ---------- Menu ---------- */
@@ -312,7 +334,7 @@
   function Hint(o) {
     track('Hint');
     const [c, ic] = TONES[o.tone || 'neutral'];
-    return `<div class="sb-hint" style="--c:${c}">${Icon(o.icon || ic)}<span>${o.html || esc(o.text)}</span></div>`;
+    return `<div class="sb-hint" style="--c:${c}">${Icon(o.icon || ic)}${o.fold ? ExpandableText({ text: o.text, html: o.html }) : `<span>${o.html || esc(o.text)}</span>`}</div>`;
   }
 
   /* ---------- Empty state ---------- */
@@ -379,26 +401,68 @@
     track('DocHeader');
     return `<div class="sb-doc-hd">${o.eyebrow ? `<div class="l-row g-2 l-wrap">${join(o.eyebrow)}</div>` : ''}<h1 class="sb-doc-ti">${esc(o.title)}</h1>${o.sub ? `<div class="sb-doc-sub">${o.sub}</div>` : ''}${o.actions ? `<div class="l-row g-2 l-wrap">${join(o.actions)}</div>` : ''}</div>`;
   }
+  /* With `toggle` (an action) the title, count and a faint chevron form one button that collapses the body; the end slot stays. */
   function Section(o) {
     track('Section');
-    return `<section class="sb-sec"><div class="sb-sec-hd">${o.lead || ''}<span>${esc(o.title)}</span>${o.count != null ? `<span class="n">${o.count}</span>` : ''}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>${o.body}</section>`;
+    const id = o.id ? ` id="${esc(o.id)}"` : '';
+    const head = `<span>${esc(o.title)}</span>${o.count != null ? `<span class="n">${o.count}</span>` : ''}`;
+    const title = o.toggle
+      ? `<button type="button" class="sb-sec-tg" aria-expanded="${!o.collapsed}"${act(o.toggle, o.arg)}>${head}${Icon(o.collapsed ? 'chevronRight' : 'chevronDown')}</button>`
+      : head;
+    return `<section class="sb-sec"${id}><div class="sb-sec-hd">${o.lead || ''}${title}${o.end ? `<span class="end">${join(o.end)}</span>` : ''}</div>${o.collapsed ? '' : o.body}</section>`;
   }
   function Box(children) { track('Box'); return `<div class="sb-box">${join(children)}</div>`; }
   function MetricStrip(items) {
     track('MetricStrip');
     return `<div class="sb-metrics">${items.filter(Boolean).map((m) => `<div class="sb-metric"><span>${esc(m.label)}</span><b>${m.value}${m.unit ? `<small>${esc(m.unit)}</small>` : ''}</b>${m.note ? `<em>${m.note}</em>` : ''}</div>`).join('')}</div>`;
   }
+  /* One line of the Subtasks index. `selected` (the inspector's subject) wins over `current` (the running subtask's tint).
+   * `act`/`arg` select it. `body` renders under the line only when `expanded`: the inline inspector in narrow windows. */
   function SubtaskRow(o) {
     track('SubtaskRow');
-    return `<div class="${cx('sb-sub', o.current && 'is-current', o.state === 'pending' && 'is-pending')}"><div class="sb-sub-row">${IdTag(o.num)}${StatusIcon(o.state, o.frac)}<b>${esc(o.title)}</b>${join(o.meta)}</div>${o.body ? `<div class="sb-sub-body">${o.body}</div>` : ''}</div>`;
+    const open = o.body && o.expanded !== false;
+    return `<div class="${cx('sb-sub', o.current && 'is-current', o.selected && 'is-selected', o.state === 'pending' && 'is-pending', o.act && 'is-btn')}" role="option" aria-selected="${!!o.selected}"${o.act ? ` aria-expanded="${!!open}"` : ''}><div class="sb-sub-row"${act(o.act, o.arg)}>${IdTag(o.num)}${StatusIcon(o.state, o.frac)}<b>${esc(o.title)}</b>${join(o.meta)}</div>${open ? `<div class="sb-sub-body">${o.body}</div>` : ''}</div>`;
+  }
+  /* The Subtasks index: a Box that takes keyboard focus (↑/↓ select, Enter opens the spec file). */
+  function SubtaskList(o) {
+    track('SubtaskList');
+    return `<div class="sb-box sb-sublist" tabindex="0" role="listbox" aria-label="${esc(o.label || 'Subtasks')}" data-zone="subtasks">${join(o.rows)}</div>`;
+  }
+  /* A subtask reference ("02") as a button that selects that subtask; an optional edge reads "02 optional". */
+  function SubtaskChip(o) {
+    track('SubtaskChip');
+    return `<button type="button" class="${cx('sb-chip', o.optional && 'is-optional')}"${act(o.act, o.arg)}${tipAttrs(o.tip)}>${o.lead || ''}<span class="mono">${esc(o.num)}</span>${o.optional ? '<em>optional</em>' : ''}</button>`;
+  }
+  /* File paths in compact finding rows: the last two segments after "…/" once the path passes 28 characters. */
+  const shortPath = (p) => { const s = String(p); if (s.length <= 28) return s; const seg = s.split('/'); return seg.length > 2 ? '…/' + seg.slice(-2).join('/') : '…' + s.slice(-27); };
+  /* The selected subtask: title (omitted inline, where the row shows it), block reason, properties, then Review. */
+  const VERB = { done: 'Done', no_change: 'No change', active: 'In progress', blocked: 'Blocked', pending: 'Pending', skipped: 'Skipped', paused: 'Paused', failed: 'Failed' };
+  const STATE_COLOR = (s) => `var(--st-${(STATES[s] || STATES.pending).tone})`;
+  function SubtaskInspector(o) {
+    track('SubtaskInspector');
+    const chips = (list) => `<span class="sb-chips">${list.map((c) => SubtaskChip(c)).join('')}</span>`;
+    const props = PropertyList([
+      o.commit ? { label: 'Commit', value: ShortId({ value: o.commit, label: 'commit' }) } : null,
+      o.spec ? { label: 'Spec file', value: `${Icon('fileText', 'sm')}<span class="trunc">${esc(o.spec)}</span>`, act: o.specAct, arg: o.specArg, tip: 'Open the spec file', kbd: '↵' } : null,
+      o.deps && o.deps.length ? { label: 'Depends on', value: chips(o.deps) } : null,
+      o.neededBy && o.neededBy.length ? { label: 'Needed by', value: chips(o.neededBy) } : null,
+      o.validation ? { label: 'Validation', value: `<i class="sb-dot" style="--c:${o.validation.passed ? 'var(--st-done)' : 'var(--st-failed)'}"></i><span class="tnum">${o.validation.passed ? 'passed' : 'failed'} · ${o.validation.checks} checks</span>` } : null,
+    ]);
+    const passes = (o.reviews || []).map((p) => `<div class="sb-insp-pass"><div class="sb-insp-line"><b>Pass ${p.n}</b><span>· ${esc(p.verdict)}</span><span class="tnum">· ${p.open} unresolved</span></div>${p.findings.length ? `<div class="sb-insp-finds">${p.findings.map(([sev, text, where]) => FindingRow({ compact: true, severity: sev, title: text, meta: `<span class="mono" title="${esc(where)}">${esc(shortPath(where))}</span>` })).join('')}</div>` : ''}</div>`).join('');
+    const review = `<div class="sb-insp-sec"><div class="sb-insp-hd">Review</div>${passes || '<span class="sb-insp-none">No review yet</span>'}${o.audit ? `<div class="sb-insp-line"><b>Audit</b><span>· ${esc(o.audit.verdict)}</span></div>${o.audit.summary ? ExpandableText({ text: o.audit.summary, cls: 'sb-insp-note' }) : ''}` : ''}</div>`;
+    return `<div class="sb-insp">${o.title ? `<div class="sb-insp-ti">${esc(o.title)}</div>` : ''}${o.blocked ? Hint({ tone: 'warn', text: o.blocked, fold: true }) : ''}${props}${review}</div>`;
   }
   function PhasePipeline(steps) {
     track('PhasePipeline');
     return `<div class="sb-pipe">${steps.map((s, i) => (i && !s.goalStart ? '<span class="sb-pipe-sep"></span>' : (s.goalStart ? '<span style="width:10px"></span>' : '')) + `<span class="${cx('sb-step', s.state, s.goal && 'goal')}"${tipAttrs(s.tip)}>${s.state === 'done' ? Icon('check') : ''}${esc(s.label)}${s.count ? ` · ${esc(s.count)}` : ''}</span>`).join('')}</div>`;
   }
+  /* Titled group in the details pane: 11.5px faint title. With `status` ({ state }) the title leads with that StatusIcon
+   * and ends with the state's word in its color ("Blocked"); `end` is a free end slot. */
   function PaneSection(o) {
     track('PaneSection');
-    return `<div class="sb-pane-sec">${o.title ? `<div class="sb-pane-ti"><span>${esc(o.title)}</span>${o.end || ''}</div>` : ''}${o.body}</div>`;
+    const lead = o.status ? StatusIcon(o.status.state, o.status.frac) : '';
+    const end = o.status ? `<span class="sb-pane-st" style="--c:${STATE_COLOR(o.status.state)}">${esc(o.status.label || VERB[o.status.state] || o.status.state)}</span>` : (o.end || '');
+    return `<section class="sb-pane-sec">${o.title ? `<div class="sb-pane-ti">${lead}<span>${esc(o.title)}</span>${end ? `<span class="end">${end}</span>` : ''}</div>` : ''}${o.body}</section>`;
   }
 
   /* ---------- Spec tree ---------- */
@@ -423,9 +487,15 @@
     const r = tier === 'reasoning';
     return `<span class="${cx('sb-tier', r ? 'r' : 'i')}"${tipAttrs(r ? 'Reasoning tier' : 'Implementation tier')}>${r ? 'R' : 'I'}</span>`;
   }
+  /* Without `label` it is the model-matrix row (phase column, tier, value). With `label` it reads like a SettingRow: label and
+   * description on the left, the mono value on the right. Either way a click expands `editor` in place under the row. */
   function ConfigRow(o) {
     track('ConfigRow');
-    return `<div class="${cx('sb-cfg', o.open && 'open', o.override && 'is-override')}"${act(o.act, o.arg)}><span class="ph">${esc(o.phase)}</span>${o.tier ? TierBadge(o.tier) : ''}<span class="val">${esc(o.value)}</span>${join(o.tags)}${Icon(o.open ? 'chevronUp' : 'pencil', 'sm')}</div>${o.editor ? `<div class="sb-cfg-ed">${o.editor}</div>` : ''}`;
+    const end = `${join(o.tags)}${Icon(o.open ? 'chevronUp' : 'pencil', 'sm')}`;
+    const row = o.label
+      ? `<div class="${cx('sb-cfg', 'sb-cfg--set', o.open && 'open', o.override && 'is-override')}"${act(o.act, o.arg)}><div class="sb-sr-tx"><b>${esc(o.label)}</b>${o.desc ? `<span>${o.desc}</span>` : ''}</div><span class="val">${esc(o.value)}</span>${end}</div>`
+      : `<div class="${cx('sb-cfg', o.open && 'open', o.override && 'is-override')}"${act(o.act, o.arg)}><span class="ph">${esc(o.phase)}</span>${o.tier ? TierBadge(o.tier) : ''}<span class="val">${esc(o.value)}</span>${end}</div>`;
+    return row + (o.editor ? `<div class="sb-cfg-ed">${o.editor}</div>` : '');
   }
 
   /* ---------- Side pane (Specs) ---------- */
@@ -434,10 +504,25 @@
     return `<aside class="sb-sidepane" aria-label="${esc(o.title)}"><div class="sb-sidepane-hd"><b>${esc(o.title)}</b>${o.head || ''}<span class="l-grow"></span>${join(o.actions)}</div>${o.body}</aside>`;
   }
 
+  /* ---------- Expandable text: long runtime text folded to three lines ---------- */
+  /* Folds to `lines` (default 3) with an ellipsis. Show more (a small ghost button) appears 2px under the text only when it
+   * overflows (main.js fitReasons checks after each render); open, it reads Show less. With `act`/`arg` the caller keeps `open`
+   * in its state; without, the toggle flips the fold in place (main.js 'fold-toggle') and a re-render folds it again.
+   * `cls` styles the text element; `html` replaces `text` for markup the caller already escaped. */
+  function foldButton(open, a, arg) {
+    return Button({ label: open ? 'Show less' : 'Show more', icon: open ? 'chevronUp' : 'chevronDown', variant: 'ghost', size: 'sm', act: a || 'fold-toggle', arg });
+  }
+  function ExpandableText(o) {
+    track('ExpandableText');
+    const lines = o.lines && o.lines !== 3 ? ` style="--fold:${o.lines}"` : '';
+    return `<div class="sb-fold"><p class="${cx('sb-fold-tx', o.cls, !o.open && 'is-folded')}"${o.open ? '' : ' data-fold'}${lines}>${o.html != null ? o.html : esc(o.text)}</p><div class="sb-fold-more"${o.open ? '' : ' hidden'}>${foldButton(!!o.open, o.act, o.arg)}</div></div>`;
+  }
+
   /* ---------- Reason block: long runtime text with copy ---------- */
+  /* An ExpandableText under a label and Copy reason. `act`/`arg` toggle `open`. */
   function ReasonBlock(o) {
     track('ReasonBlock');
-    return `<div class="sb-reason" style="--c:${o.color || 'var(--fg-faint)'}"><div class="sb-reason-hd"><span>${esc(o.label)}</span>${IconButton({ icon: 'copy', label: 'Copy reason', act: 'copy', arg: o.text, size: 'sm' })}</div><p>${esc(o.text)}</p></div>`;
+    return `<div class="sb-reason" style="--c:${o.color || 'var(--fg-faint)'}"><div class="sb-reason-hd"><span>${esc(o.label)}</span>${IconButton({ icon: 'copy', label: 'Copy reason', act: 'copy', arg: o.text, size: 'sm' })}</div>${ExpandableText({ text: o.text, cls: 'sb-reason-tx', open: o.open, act: o.act, arg: o.arg })}</div>`;
   }
 
   /* ---------- Checklist: prerequisites the operator confirms ---------- */
@@ -450,7 +535,41 @@
   const SEVERITY = { Blocker: 'var(--st-failed)', Major: 'var(--st-blocked)', Minor: 'var(--fg-faint)', High: 'var(--st-failed)', Medium: 'var(--st-blocked)', Low: 'var(--fg-faint)' };
   function FindingRow(o) {
     track('FindingRow');
-    return `<div class="sb-finding">${o.severity ? `<span class="sb-finding-sev" style="--c:${SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.ref ? IdTag(o.ref) : ''}<div class="sb-finding-tx"><b>${esc(o.title)}</b>${o.meta ? `<span>${o.meta}</span>` : ''}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}</div>`;
+    return `<div class="${cx('sb-finding', o.compact && 'sb-finding--compact')}">${o.severity ? `<span class="sb-finding-sev" style="--c:${SEVERITY[o.severity] || 'var(--fg-faint)'}">${esc(o.severity)}</span>` : ''}${o.refHtml || (o.ref ? IdTag(o.ref) : '')}<div class="sb-finding-tx">${ExpandableText({ text: o.title, cls: 'sb-finding-ti' })}${o.meta ? (o.compact ? `<span>${o.meta}</span>` : ExpandableText({ html: o.meta, cls: 'sb-finding-mt' })) : ''}</div>${o.state ? Label({ text: o.state, color: o.stateColor || 'var(--fg-faint)', dot: true }) : ''}</div>`;
+  }
+
+  /* ---------- Activity feed: one line per recorded event, oldest first, icons joined by a connector ---------- */
+  /* entries: { lead (16px Avatar or StatusIcon), actor, action, object, mono (object is a path or phase), tip, ago }.
+   * `hidden` earlier entries collapse behind a "Show N earlier" ghost toggle at the top (`act`/`arg`). */
+  function fmtAgo(sec) {
+    if (sec == null) return '';
+    const s = Math.max(0, Math.round(sec));
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  }
+  function ActivityFeed(o) {
+    track('ActivityFeed');
+    const more = o.hidden ? `<button type="button" class="sb-feed-more"${act(o.act, o.arg)}>${Icon('chevronUp', 'sm')}Show ${o.hidden} earlier</button>` : '';
+    const rows = o.entries.map((e) => {
+      const text = [e.actor ? `<b>${esc(e.actor)}</b>` : '', e.action ? `<span>${esc(e.action)}</span>` : '', e.object ? `<b class="${e.mono ? 'mono' : ''}">${esc(e.object)}</b>` : ''].filter(Boolean).join(' ');
+      const full = [e.actor, e.action, e.object].filter(Boolean).join(' ');
+      return `<li class="sb-feed-row"><span class="sb-feed-ic">${e.lead}</span><span class="sb-feed-tx" title="${esc(e.tip || full)}">${text}</span><span class="sb-feed-at tnum">· ${esc(fmtAgo(e.ago))}</span></li>`;
+    }).join('');
+    return `<div class="sb-feed">${more}<ol>${rows}</ol></div>`;
+  }
+
+  /* ---------- Incident evidence: stacked so a long reference never squeezes the summary ---------- */
+  function EvidenceRow(o) {
+    track('EvidenceRow');
+    const shown = String(o.ref).startsWith(o.kind + ':') ? String(o.ref).slice(o.kind.length + 1) : o.ref;
+    return `<div class="sb-evi">${ShortId({ value: o.ref, shown, label: 'reference' })}${ExpandableText({ text: o.summary, cls: 'sb-evi-tx' })}<span class="sb-evi-kind">${esc(o.kind)}</span></div>`;
+  }
+  /* The faint caption as a toggle: "Evidence · N" and a chevron. */
+  function EvidenceToggle(o) {
+    track('EvidenceToggle');
+    return `<button type="button" class="sb-disc" aria-expanded="${!!o.open}"${act(o.act, o.arg)}>${esc(o.label)} · ${o.count}${Icon(o.open ? 'chevronDown' : 'chevronRight')}</button>`;
   }
 
   /* ---------- Terminal pane ---------- */
@@ -470,14 +589,14 @@
   }
 
   window.SB = {
-    esc, cx, join, fmtDur, track, inScope, usage, STATES, ICONS: Object.keys(P),
-    Icon, BrandMark, StatusIcon, Kbd, Button, IconButton, Tooltip, IdTag, Label, Avatar,
+    esc, cx, join, fmtDur, fmtAgo, shortId, shortPath, SUB_VERB: VERB, track, inScope, usage, STATES, ICONS: Object.keys(P),
+    Icon, BrandMark, StatusIcon, Kbd, Button, IconButton, Tooltip, IdTag, ShortId, StaleIndicator, Label, Avatar,
     ProgressRing, Clock, Segmented, ViewTabs, Toggle, Checkbox, Input, Field,
     PropertyList, MenuItem, Menu, Popover, CommandPalette, CommandList, Dialog, Ledger, ShortcutGrid,
     Toast, ToastStack, Callout, Hint, EmptyState, SidebarItem, SidebarSection, RepoIcon, Sidebar, WorkspaceSwitcher,
-    ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, Checklist, FindingRow, TerminalPane,
-    DocHeader, Section, Box, MetricStrip, SubtaskRow, PhasePipeline,
-    PaneSection, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
+    ViewHeader, Pager, GroupHeader, ListRow, SidePane, ReasonBlock, ExpandableText, foldButton, Checklist, FindingRow, EvidenceRow, EvidenceToggle, TerminalPane,
+    DocHeader, Section, Box, MetricStrip, SubtaskRow, SubtaskList, SubtaskChip, SubtaskInspector, PhasePipeline,
+    PaneSection, Breakdown, ActivityFeed, TreeRow, SettingsHeader, SettingsGroup, SettingRow, TierBadge,
     ConfigRow, TrayPopover,
   };
 })();

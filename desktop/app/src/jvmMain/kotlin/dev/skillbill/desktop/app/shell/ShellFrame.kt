@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.app.shell
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,13 +15,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.layeredShadow
+import dev.skillbill.desktop.core.designsystem.menuSpec
 
 private val PANEL_INSET = 8.dp
+private const val DRAWER_HIDDEN_SHIFT = 1.05f
 
 /**
  * The window frame: the sidebar on `bgFrame` and one content panel inset 8 dp with a 12 dp radius and a hairline border. In
@@ -52,13 +56,18 @@ fun ShellFrame(
         Box(Modifier.weight(1f).fillMaxHeight().then(panel)) { content() }
       }
     }
-    if (sidebar != null && drawerMode && drawerOpen) {
+    // `.sb-side` slides between translateX(-105%) and none over --dur, so it stays drawn while it slides out.
+    val shown = animateFloatAsState(if (drawerMode && drawerOpen) 1f else 0f, menuSpec(), label = "drawer-slide").value
+    if (sidebar != null && drawerMode && (drawerOpen || shown > 0f)) {
       // The prototype's drawer has no scrim, only the modal shadow; the transparent layer catches the outside click.
-      Box(
+      if (drawerOpen) Box(
         Modifier.fillMaxSize()
           .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismissDrawer),
       )
-      Box(Modifier.fillMaxHeight().layeredShadow(SkillBillTheme.shadows.modal, RectangleShape).background(colors.bgFrame)) { sidebar() }
+      Box(
+        Modifier.fillMaxHeight().graphicsLayer { translationX = -(1f - shown) * size.width * DRAWER_HIDDEN_SHIFT }
+          .layeredShadow(SkillBillTheme.shadows.modal, RectangleShape).background(colors.bgFrame),
+      ) { sidebar() }
     }
   }
 }

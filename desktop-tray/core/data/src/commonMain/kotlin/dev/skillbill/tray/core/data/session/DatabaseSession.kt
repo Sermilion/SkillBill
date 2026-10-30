@@ -466,6 +466,7 @@ class DatabaseSession(
       try {
         lifecycle.withLock { retire(announce = true) }
       } finally {
+        gateway.close()
         selectedDatabaseIdentity.clear()
         sessionScope.coroutineContext.job.cancelAndJoin()
         closeCompletion.complete(Unit)

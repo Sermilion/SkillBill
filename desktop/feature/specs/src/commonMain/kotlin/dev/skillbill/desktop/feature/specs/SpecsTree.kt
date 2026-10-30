@@ -39,6 +39,9 @@ import dev.skillbill.desktop.core.ui.input.LocalShellInput
 import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlinx.coroutines.launch
 
+internal fun shouldClearSpecsTreeFocus(focusedPath: String?, rowPath: String, hasFocus: Boolean): Boolean =
+  !hasFocus && focusedPath == rowPath
+
 @Composable
 internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, modifier: Modifier = Modifier) {
   val shellInput = LocalShellInput.current
@@ -107,7 +110,7 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
           if (it.hasFocus) {
             shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, true)
             if (it.isFocused) focusedPath = row.node.path
-          } else if (focusedPath == row.node.path) {
+          } else if (shouldClearSpecsTreeFocus(focusedPath, row.node.path, it.hasFocus)) {
             focusedPath = null
             shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, false)
           }

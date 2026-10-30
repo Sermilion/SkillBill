@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -16,7 +18,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -104,8 +105,8 @@ internal fun WorkScreen(state: WorkUiState, filterFocus: FocusRequester, host: W
     )
     Box(Modifier.weight(1f)) {
       when (val board = state.board) {
-        BoardState.Loading -> Centered { EmptyState("Loading your work", LucideIcons.inbox) }
-        is BoardState.Failed -> Centered { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
+        BoardState.Loading -> ScrollBody { EmptyState("Loading your work", LucideIcons.inbox) }
+        is BoardState.Failed -> ScrollBody { EmptyState(readProblemText(board.problem), LucideIcons.alert) }
         is BoardState.Loaded -> WorkBody(state, board, host, narrow, onAction)
       }
     }
@@ -123,7 +124,7 @@ private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScr
   // A chosen section keeps its header and shows its own "No matching work" note, as the prototype's `work()` does.
   if (filtering && state.section == null && sections.all { it.items.isEmpty() }) {
     LaunchedEffect(board.nextCursor) { if (board.nextCursor != null) onAction(WorkAction.LoadMore) }
-    Centered {
+    ScrollBody {
       EmptyState("No matching work", LucideIcons.search, body = "Nothing on the board matches the filter.") {
         SbButton("Clear filter", { onAction(WorkAction.ClearFilter) })
       }
@@ -161,7 +162,11 @@ private fun WorkBody(state: WorkUiState, board: BoardState.Loaded, host: WorkScr
   }
 }
 
+/**
+ * The body's `.sb-scroll` is a block box, so `.sb-empty`'s `flex: 1` and centering never apply there: the state sits at the top,
+ * its own 48 dp padding down. Inside a vertical scroll the state's fillMaxSize takes its content height.
+ */
 @Composable
-private fun Centered(content: @Composable () -> Unit) {
-  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+private fun ScrollBody(content: @Composable () -> Unit) {
+  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { content() }
 }

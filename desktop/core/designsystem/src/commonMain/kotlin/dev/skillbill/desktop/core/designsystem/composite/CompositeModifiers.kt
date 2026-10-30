@@ -1,19 +1,18 @@
 package dev.skillbill.desktop.core.designsystem.composite
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.hoverSpec
 
 internal enum class Edge { Top, Bottom, Start, End }
 
@@ -42,17 +41,7 @@ internal fun Modifier.focusBar(visible: Boolean): Modifier {
   }
 }
 
-@Composable
-internal fun Modifier.rowFill(hovered: Boolean, focused: Boolean, selected: Boolean): Modifier {
-  val colors = SkillBillTheme.colors
-  val target = when {
-    selected -> colors.bgSelected
-    focused -> colors.bgActive
-    hovered -> colors.bgHover
-    else -> Color.Transparent
-  }
-  val fill = animateColorAsState(target, hoverSpec(), label = "composite-row-fill").value
-  return background(fill)
-}
+/** `cursor: pointer` on an enabled control; a disabled one keeps the default arrow. */
+internal fun Modifier.handCursor(enabled: Boolean = true): Modifier = if (enabled) pointerHoverIcon(PointerIcon.Hand) else this
 
 internal fun Modifier.expandSemantics(expanded: Boolean) = semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }

@@ -1,6 +1,5 @@
 package dev.skillbill.desktop.core.designsystem.status
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -18,13 +17,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillColors
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
-import dev.skillbill.desktop.core.designsystem.menuSpec
 import kotlin.math.PI
 
 @Composable
 fun StatusIcon(kind: StatusKind, progress: Float?, large: Boolean = false, modifier: Modifier = Modifier) {
   val colors = SkillBillTheme.colors
-  val fraction = animateFloatAsState((progress ?: 0.5f).coerceIn(0.12f, 1f), menuSpec(), label = "status-progress").value
+  // The SVG re-renders with the new dash length; `.sb-status` declares no transition.
+  val fraction = (progress ?: 0.5f).coerceIn(0.12f, 1f)
   Canvas(modifier.size(if (large) 16.dp else 14.dp).semantics { contentDescription = kind.label }) {
     scale(size.width / 14f, pivot = Offset.Zero) {
       val center = Offset(7f, 7f)
@@ -82,6 +81,10 @@ fun StatusIcon(kind: StatusKind, progress: Float?, large: Boolean = false, modif
     }
   }
 }
+
+/** The state color [StatusIcon] draws [kind] in, for a state word next to the icon. */
+@Composable
+fun statusColor(kind: StatusKind): Color = kind.color(SkillBillTheme.colors)
 
 private fun StatusKind.color(colors: SkillBillColors): Color = when (this) {
   StatusKind.Active -> colors.stActive

@@ -12,17 +12,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
+import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
@@ -30,6 +34,7 @@ import dev.skillbill.desktop.core.designsystem.component.Hint
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
 import dev.skillbill.desktop.core.designsystem.detail.DocBlockGap
+import dev.skillbill.desktop.core.designsystem.detail.rememberSectionCollapse
 import dev.skillbill.desktop.core.designsystem.detail.Section
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
@@ -37,6 +42,8 @@ import dev.skillbill.desktop.core.designsystem.navigation.Pager
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind
 import dev.skillbill.desktop.core.domain.model.DetailList
+import dev.skillbill.desktop.core.domain.model.Lifecycle
+import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
@@ -79,6 +86,9 @@ private fun sectionRoute(section: WorkLiveSection?): AppRoute = when (section) {
 
 @Composable
 internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction: (DetailAction) -> Unit) {
+  // Collapsed sections stay collapsed while the reader pages between items.
+  val collapse = rememberSectionCollapse()
+  val assessmentOrder = remember { mutableStateOf(AssessmentOrder.Default) }
   if (!state.itemResolved) {
     when (val sections = state.sections) {
       SectionsUi.Pending -> EmptyState("Checking this work item in the current database")
@@ -93,6 +103,11 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
   val item = state.header
   val view = runActionsView(state)
   val recoverFocus = remember { FocusRequester() }
+  val listState = rememberLazyListState()
+  val documentIndex = remember { DocumentIndex() }
+  val scope = rememberCoroutineScope()
+  // The Goal finish pointers scroll the document to their section's header.
+  val jump: (String) -> Unit = { key -> documentIndex.indexOf(key)?.let { index -> scope.launch { listState.animateScrollToItem(index) } } }
   Column(Modifier.fillMaxSize()) {
     ViewHeader(
       crumbs = listOf(
@@ -121,9 +136,11 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         val side = maxOf(inset, (maxWidth - (DOC_MAX_WIDTH - inset * 2)) / 2)
         LazyColumn(
           Modifier.fillMaxSize(),
+          state = listState,
           contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 20.dp else 32.dp, bottom = if (narrow) 48.dp else 64.dp),
         ) {
-          item(key = "header") {
+          val sections = DetailSections(this, collapse, assessmentOrder)
+          sections.item(key = "header") {
             DetailHeader(item, state.stale, { onAction(DetailAction.RevealFolder) }, { onAction(DetailAction.OpenBranch) }) {
               if (state.sections != SectionsUi.Gone) {
                 val agentChoices = (state.sections as? SectionsUi.Loaded)?.runOptions?.agentChoices.orEmpty()
@@ -132,16 +149,18 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
             }
           }
           // HANDOFF 9.2 item 5: the pause notice is its own block under the header.
-          if (view.pausePending) item(key = "pause-notice") {
+          if (view.pausePending) sections.item(key = "pause-notice") {
             Column(Modifier.padding(top = DocBlockGap)) { Hint("Pause recorded. The goal pauses at its next checkpoint.", FeedbackTone.Info, LucideIcons.pause) }
           }
-          if (item.reason != null) item(key = "reason") {
+          if (item.reason != null && item.lifecycle != Lifecycle.Terminal) sections.item(key = "reason") {
             Column(Modifier.padding(top = DocBlockGap)) { DetailReason(item) { onAction(DetailAction.Copy(it)) } }
           }
-          document(state, view, onAction)
+          sections.document(state, view, onAction, jump)
+          documentIndex.replace(sections.keyPositions.toMap())
         }
       }
-      DetailsPaneSlot { DetailsPane(state) }
+      val wide = (state.sections as? SectionsUi.Loaded)?.detail?.let { hasSubtaskIndex(item, it) } == true
+      DetailsPaneSlot(if (wide) SkillBillSize.detailsPaneWide else SkillBillSize.detailsPane) { DetailsPane(state, onAction, jump) }
     }
   }
   state.controls.recoveryDialog?.let { preview ->
@@ -151,12 +170,13 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
       returnFocusTo = recoverFocus,
       onApply = { onAction(ControlsAction.ApplyRecovery) },
       onDismiss = { onAction(ControlsAction.DismissRecovery) },
+      onCopy = { onAction(DetailAction.Copy(it)) },
     )
   }
 }
 
 /** HANDOFF 9.2 item 7, with the operator decision inside it; a decision with no incident gets its own section. */
-private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+private fun DetailSections.incident(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
   val detail = (state.sections as? SectionsUi.Loaded)?.detail
   val incident = detail?.incident
   val decision: @Composable () -> Unit = {
@@ -164,8 +184,9 @@ private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, o
       OperatorDecisionBlock(it, view.recordEnabled, view.usable && state.controls.inFlight == null, state.controls.inFlight == InFlightControl.Decision, onAction)
     }
   }
+  val sectionCollapse = collapse
   if (incident != null) item(key = "incident") {
-    IncidentSection(incident, view, decision, onAction, Modifier.padding(top = DocBlockGap))
+    IncidentSection(incident, view, decision, onAction, sectionCollapse, { onAction(DetailAction.Copy(it)) }, Modifier.padding(top = DocBlockGap))
   }
   if (incident == null && view.decision != null && state.sections != SectionsUi.Gone) item(key = "decision") {
     Section(title = "Operator decision", Modifier.padding(top = DocBlockGap)) { decision() }
@@ -173,7 +194,7 @@ private fun LazyListScope.incident(state: DetailUiState, view: RunActionsView, o
 }
 
 /** The sections in HANDOFF 9.2 order; placeholders hold their place until the first read lands. */
-private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit) {
+private fun DetailSections.document(state: DetailUiState, view: RunActionsView, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
   val item = state.header
   when (val sections = state.sections) {
     SectionsUi.Pending -> {
@@ -188,19 +209,18 @@ private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, o
       item(key = "metrics") {
         Column(Modifier.padding(top = DocBlockGap)) { DetailMetrics(item, detail) }
       }
-      subtaskSection(item, detail, state, onAction)
+      subtaskSection(item, detail, state, onAction, onJump)
       pipelineSection(item, detail)
-      dependencySection(detail, state, onAction)
-      activitySection(item.kind, detail, state.renderedAt)
-      validationSection(detail)
-      phaseResultsSection(detail)
-      pageFooter(DetailList.Validation, state, onAction)
+      activitySection(item, detail, state, onAction)
       goalQaSection(detail)
       goalAssessmentSection(detail)
       qaReportSection(item, detail, onAction)
-      planReportSection(item, detail)
-      historySection(detail, state, onAction)
-      specBundleSection(detail, onAction)
+      // Standalone phases and operations keep their dependencies, validation, phase results and spec bundle in the document.
+      dependencySection(item, detail, state, onAction)
+      validationSection(item, detail)
+      phaseResultsSection(item, detail)
+      if (item.kind != WorkKind.Goal) pageFooter(DetailList.Validation, state, onAction)
+      specBundleSection(item, detail, onAction)
     }
     SectionsUi.Gone -> item(key = "problem") {
       EmptyState("This work item is no longer in the database") {
@@ -215,7 +235,7 @@ private fun LazyListScope.document(state: DetailUiState, view: RunActionsView, o
   }
 }
 
-private fun LazyListScope.placeholder(key: String, height: Dp) {
+private fun DetailSections.placeholder(key: String, height: Dp) {
   item(key = key) {
     val shape = RoundedCornerShape(SkillBillRadius.md)
     Box(Modifier.padding(top = DocBlockGap).fillMaxWidth().heightIn(min = height).border(1.dp, SkillBillTheme.colors.borderSubtle, shape).padding(12.dp), contentAlignment = Alignment.TopStart) {

@@ -27,6 +27,7 @@ data class WorkDetailRequest(
   val startOffset: Int = 0,
   val list: WorkDetailList? = null,
   val anchor: String? = null,
+  val includeExtendedLists: Boolean = true,
 ) {
   init {
     require(id.isNotBlank()) { "id is required." }

@@ -6,6 +6,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.EmptyState
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
@@ -51,7 +57,7 @@ fun ProblemStatePanel(problem: ShellProblem, onRefresh: () -> Unit = {}, onRetry
       is ShellProblem.RuntimeUnavailable -> EmptyState(
         "Skill Bill runtime unavailable",
         LucideIcons.warn,
-        body = runtimeUnavailableBody(problem.problem),
+        body = runtimeUnavailableBody(problem.problem, SkillBillTheme.type.mono.fontFamily),
       ) { SbButton("Retry", onRetry, variant = SbButtonVariant.Primary) }
       ShellProblem.Opening -> EmptyState("Opening your database", LucideIcons.refresh, body = "Skill Bill is switching to the selected database.")
       is ShellProblem.SessionFailed -> EmptyState(LOAD_FAILED, LucideIcons.alert, body = storageFailureText(problem.failure), actions = loadActions)
@@ -66,7 +72,8 @@ private fun boardFailureBody(problem: ReadProblem): String = when (problem) {
   is ReadProblem.Runtime -> "Check the database path in Settings, then try refreshing.\n${problem.message}"
 }
 
-private fun runtimeUnavailableBody(problem: RuntimeBuildProblem): String {
+/** The reinstall command is set in the mono face, as the prototype's `<span class="mono">` in this state's body. */
+private fun runtimeUnavailableBody(problem: RuntimeBuildProblem, mono: FontFamily?): AnnotatedString {
   val reason = when (problem) {
     is RuntimeBuildProblem.NotInstalled -> "Skill Bill runtime not installed."
     is RuntimeBuildProblem.Mismatched -> "The installed Skill Bill runtime is not the build this app was packaged with."
@@ -77,5 +84,9 @@ private fun runtimeUnavailableBody(problem: RuntimeBuildProblem): String {
     is RuntimeBuildProblem.Unreadable -> problem.installedIdentity?.let { "\nInstalled $it." }.orEmpty()
     is RuntimeBuildProblem.NotInstalled -> ""
   }
-  return "$reason Install a matched runtime and desktop pair with ${problem.reinstallCommand}, then retry.$identities"
+  return buildAnnotatedString {
+    append("$reason Install a matched runtime and desktop pair with ")
+    withStyle(SpanStyle(fontFamily = mono)) { append(problem.reinstallCommand) }
+    append(", then retry.$identities")
+  }
 }

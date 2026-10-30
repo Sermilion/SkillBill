@@ -7,15 +7,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -27,11 +34,13 @@ import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbClock
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
-import dev.skillbill.desktop.core.designsystem.component.SbTooltip
 import dev.skillbill.desktop.core.designsystem.detail.sbBoxSegment
 import dev.skillbill.desktop.core.designsystem.detail.PhasePipeline
-import dev.skillbill.desktop.core.designsystem.detail.section
+import dev.skillbill.desktop.core.designsystem.list.SubtaskList
 import dev.skillbill.desktop.core.designsystem.list.SubtaskRow
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.input.ShellInput
+import dev.skillbill.desktop.core.ui.shell.LocalShellLayout
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.DetailList
@@ -40,6 +49,7 @@ import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
 import dev.skillbill.desktop.core.ui.status.statusKind
 import dev.skillbill.desktop.core.ui.status.subtaskStatusKind
+import dev.skillbill.desktop.core.designsystem.component.ShortId
 
 /**
  * The next page of [list], after that list's last loaded row. A `LazyColumn` composes this item only near the viewport, so the
@@ -50,17 +60,25 @@ internal fun LazyListScope.pageFooter(list: DetailList, state: DetailUiState, on
   val loaded = state.sections as? SectionsUi.Loaded ?: return
   if (list !in loaded.moreLists) return
   item(key = "more-${list.name}") {
-    val anchor = loaded.listAnchors[list]
-    val load = state.listLoads[list]
     val frame = if (inBox) Modifier.fillMaxWidth().sbBoxSegment(1, 3).bottomRule(SkillBillTheme.colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp) else Modifier
-    Column(frame.padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      if (load is ListLoad.Failed) {
-        Hint(readProblemText(load.problem), FeedbackTone.Warn)
-        SbButton("Retry page", { onAction(DetailAction.LoadMore(list)) }, size = SbControlSize.Small)
-      } else {
-        LaunchedEffect(list, anchor) { onAction(DetailAction.LoadMore(list)) }
-        Hint("Loading more")
-      }
+    PageFooter(list, state, onAction, frame)
+  }
+}
+
+/** The page request and its state for [list]: "Loading more" while it reads, or the problem and Retry page. */
+@Composable
+private fun PageFooter(list: DetailList, state: DetailUiState, onAction: (DetailAction) -> Unit, modifier: Modifier = Modifier) {
+  val loaded = state.sections as? SectionsUi.Loaded ?: return
+  if (list !in loaded.moreLists) return
+  val anchor = loaded.listAnchors[list]
+  val load = state.listLoads[list]
+  Column(modifier.padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    if (load is ListLoad.Failed) {
+      Hint(readProblemText(load.problem), FeedbackTone.Warn)
+      SbButton("Retry page", { onAction(DetailAction.LoadMore(list)) }, size = SbControlSize.Small)
+    } else {
+      LaunchedEffect(list, anchor) { onAction(DetailAction.LoadMore(list)) }
+      Hint("Loading more")
     }
   }
 }
@@ -83,14 +101,22 @@ internal fun BoxedFindingRow(
   meta: String? = null,
   state: String? = null,
   stateColor: Color? = null,
+  refContent: (@Composable () -> Unit)? = null,
 ) {
   Box(Modifier.fillMaxWidth().sbBoxSegment(index, count)) {
-    FindingRow(title, severity, ref, location, meta, state, stateColor, showDivider = index > 0)
+    FindingRow(title, severity, ref, location, meta, state, stateColor, showDivider = index > 0, refContent = refContent)
   }
 }
 
-/** HANDOFF 9.2 item 9: the subtasks in one box, then the Goal finish row. Goals only. */
-internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
+/** Subtask lists longer than this start collapsed. */
+private const val LONG_SUBTASK_LIST = 10
+
+/**
+ * HANDOFF 9.2 item 9: the Subtasks index, one focusable box with the subtasks and a final Goal finish row. A row selects its
+ * subtask for the inspector; while the details pane is hidden the selected row opens the inspector in place. The dependency and
+ * validation lists the inspector reads page in behind it. Goals only.
+ */
+internal fun DetailSections.subtaskSection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
   if (item.kind != WorkKind.Goal) return
   if (item.statusKind() == StatusKind.Planning) {
     val plans = item.planningProgress
@@ -103,59 +129,120 @@ internal fun LazyListScope.subtaskSection(item: WorkItem, detail: Detail, state:
     }
     return
   }
-  val finished = finishedAt(item) != null
-  val count = detail.subtasks.size + 1
+  // screens.js `hasSubtasks`: a goal past planning with no subtasks has no Subtasks section, unless its first page is still to come.
+  val loaded = state.sections as? SectionsUi.Loaded
+  if (detail.subtasks.isEmpty() && loaded?.moreLists?.contains(DetailList.Subtasks) != true) return
   val progress = item.progress
   section(
     "subtasks", "Subtasks",
     count = progress?.let { "${it.done}/${it.total}" } ?: detail.subtasks.size.toString(),
     actions = if (progress == null) null else { { ProgressRing(progress.done, progress.total, showText = false) } },
+    // A long goal starts folded so the sections below stay in reach; the header count and ring still show progress.
+    collapsedByDefault = detail.subtasks.size > LONG_SUBTASK_LIST,
   ) {
-    itemsIndexed(detail.subtasks, key = { _, subtask -> "subtask-${subtask.id}" }) { index, subtask ->
-      val colors = SkillBillTheme.colors
-      val current = !finished && subtask.id.toString() == item.currentSubtaskId
-      val status = subtaskStatusKind(subtask.status)
-      val reason = subtask.blockedReason
-      SubtaskRow(
-        number = subtask.id.toString().padStart(2, '0'),
-        status = status,
-        progress = null,
-        title = subtask.name,
-        modifier = Modifier.sbBoxSegment(index, count),
-        current = current,
-        meta = {
-          // `.mono.t-faint` at `--t-2xs`: plain text, not a pill.
-          subtask.commitSha?.let { sha ->
-            SbTooltip(sha) { BasicText(sha.take(7), style = SkillBillTheme.type.t2xs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal), maxLines = 1) }
-          }
-          // The design ticks the current subtask's clock only while the run is live.
-          if (current && item.running) {
-            CompositionLocalProvider(LocalContentColor provides colors.fg) {
-              SbClock(detail.subtaskActiveDurationMs, detail.subtaskActiveDurationAsOf, live = true, showSeconds = true, style = SkillBillTheme.type.tBase)
+    item(key = "subtask-index") { SubtaskIndex(item, detail, state, onAction, onJump) }
+  }
+}
+
+@Composable
+private fun SubtaskIndex(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit, onJump: (String) -> Unit) {
+  val colors = SkillBillTheme.colors
+  val shellInput = LocalShellInput.current
+  DisposableEffect(shellInput) { onDispose { shellInput.setFocusSource(ShellInput.SUBTASK_LIST_SOURCE, false) } }
+  val inline = !LocalShellLayout.current.showDetailsPane
+  val selected = selectedSubtask(item, detail, state.subtaskChoice.key)
+  val expanded = inline && state.subtaskChoice.expanded
+  val current = currentSubtask(item, detail)
+  // main.js `revealSub()`: after the reader moves the selection (click, chip, ↑/↓) the selected row scrolls into view, nearest
+  // edge. Only the reader's choice triggers it: the selection a goal opens with, and a default that moves on a refresh (the
+  // blocked or current subtask changed), do not scroll the document.
+  val reveal = remember(item.id) { mutableMapOf<SubtaskKey, BringIntoViewRequester>() }
+  var revealed by remember(item.id) { mutableStateOf(state.subtaskChoice) }
+  LaunchedEffect(state.subtaskChoice) {
+    if (state.subtaskChoice == revealed) return@LaunchedEffect
+    revealed = state.subtaskChoice
+    withFrameNanos { }
+    selectedSubtask(item, detail, state.subtaskChoice.key)?.let { reveal[it] }?.bringIntoView()
+  }
+  fun revealModifier(key: SubtaskKey) = Modifier.bringIntoViewRequester(reveal.getOrPut(key) { BringIntoViewRequester() })
+  Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    SubtaskList(
+      label = "Subtasks of ${rowKey(item)}",
+      onMove = { onAction(DetailAction.MoveSubtaskSelection(it)) },
+      onOpen = { onAction(DetailAction.OpenSelectedSubtaskSpec) },
+      onFocusChange = { focused ->
+        shellInput.setFocusSource(ShellInput.SUBTASK_LIST_SOURCE, focused)
+        if (focused && state.focusSubtaskList) onAction(DetailAction.SubtaskListFocused)
+      },
+      requestFocus = state.focusSubtaskList,
+    ) {
+      detail.subtasks.forEach { subtask ->
+        val key = SubtaskKey.Subtask(subtask.id)
+        val isCurrent = subtask.id == current?.id
+        val status = subtaskStatusKind(subtask.status)
+        val isSelected = key == selected
+        SubtaskRow(
+          modifier = revealModifier(key),
+          number = subtaskNumber(subtask.id),
+          status = status,
+          progress = null,
+          title = subtask.name,
+          current = isCurrent,
+          selected = isSelected,
+          onClick = { onAction(DetailAction.SelectSubtask(key, inline)) },
+          meta = {
+            subtask.commitSha?.let { sha -> ShortId(sha, { onAction(DetailAction.Copy(it)) }, label = "commit") }
+            // The design ticks the current subtask's clock only while the run is live.
+            if (isCurrent && item.running) {
+              CompositionLocalProvider(LocalContentColor provides colors.fg) {
+                SbClock(detail.subtaskActiveDurationMs, detail.subtaskActiveDurationAsOf, live = true, showSeconds = true, style = SkillBillTheme.type.tBase)
+              }
             }
-          }
-          if (status == StatusKind.CompletedNoChange) SbLabel("no change")
-        },
-        body = if (reason == null) null else { { Hint(reason, FeedbackTone.Warn) } },
-      )
-    }
-    pageFooter(DetailList.Subtasks, state, onAction, inBox = true)
-    item(key = "goal-finish") {
+            if (status == StatusKind.CompletedNoChange) SbLabel("no change")
+          },
+          body = if (isSelected && expanded) { { SubtaskInspector(detail, subtask, inline = true, onAction) } } else null,
+        )
+      }
+      PageFooter(DetailList.Subtasks, state, onAction, Modifier.fillMaxWidth().bottomRule(colors.borderSubtle).padding(start = 12.dp, end = 12.dp, bottom = 1.dp))
       SubtaskRow(
+        modifier = revealModifier(SubtaskKey.GoalFinish),
         number = "··",
-        status = if (finished) StatusKind.Completed else StatusKind.Pending,
+        status = goalFinishStatus(item),
         progress = null,
         title = "Goal finish",
-        modifier = Modifier.sbBoxSegment(count - 1, count),
+        selected = selected == SubtaskKey.GoalFinish,
+        onClick = { onAction(DetailAction.SelectSubtask(SubtaskKey.GoalFinish, inline)) },
         divider = false,
-        body = { PhasePipeline(goalFinishSteps(item, detail)) },
+        // The finish steps (pr, monitor, monitor_fix) always show as chips under the row, as the prototype's Goal finish row does;
+        // the inline inspector adds below them when the pane is hidden.
+        body = {
+          PhasePipeline(goalFinishSteps(item, detail))
+          if (selected == SubtaskKey.GoalFinish && expanded) GoalFinishInspector(item, detail, onJump)
+        },
       )
+    }
+    BackgroundPages(state, onAction)
+  }
+}
+
+/** The dependency and validation pages the inspector reads load as soon as the index shows; only a failure draws anything. */
+@Composable
+private fun BackgroundPages(state: DetailUiState, onAction: (DetailAction) -> Unit) {
+  val loaded = state.sections as? SectionsUi.Loaded ?: return
+  listOf(DetailList.Dependencies, DetailList.Validation).filter { it in loaded.moreLists }.forEach { list ->
+    val anchor = loaded.listAnchors[list]
+    when (val load = state.listLoads[list]) {
+      is ListLoad.Failed -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Hint(readProblemText(load.problem), FeedbackTone.Warn)
+        SbButton("Retry page", { onAction(DetailAction.LoadMore(list)) }, size = SbControlSize.Small)
+      }
+      else -> LaunchedEffect(list, anchor) { onAction(DetailAction.LoadMore(list)) }
     }
   }
 }
 
 /** HANDOFF 9.2 item 10, per screens.js: goals past planning, and any other run with more than one step. */
-internal fun LazyListScope.pipelineSection(item: WorkItem, detail: Detail) {
+internal fun DetailSections.pipelineSection(item: WorkItem, detail: Detail) {
   val show = when (item.kind) {
     WorkKind.Goal -> item.statusKind() != StatusKind.Planning
     WorkKind.Operation, WorkKind.Phase, null -> detail.stepPipeline.size > 1
@@ -166,9 +253,9 @@ internal fun LazyListScope.pipelineSection(item: WorkItem, detail: Detail) {
   }
 }
 
-/** HANDOFF 9.2 item 11: one boxed row per edge; the design's header carries no count. */
-internal fun LazyListScope.dependencySection(detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
-  if (detail.dependencies.isEmpty()) return
+/** Standalone phases and operations: one boxed row per edge; goals show their edges in the subtask inspector. */
+internal fun DetailSections.dependencySection(item: WorkItem, detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
+  if (item.kind == WorkKind.Goal || detail.dependencies.isEmpty()) return
   val count = detail.dependencies.size
   section("dependencies", "Dependencies") {
     itemsIndexed(detail.dependencies, key = { index, dependency -> "dependency-${dependency.subtaskId}-${dependency.dependency.subtaskId}-$index" }) { index, entry ->

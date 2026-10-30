@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.LocalContentColor
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
@@ -49,6 +50,7 @@ fun SbIconButton(
         .then(if (boxed) Modifier.border(1.dp, colors.border, shape) else Modifier)
         .hoverable(interaction)
         .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
+        .handCursor(enabled)
         .sbFocusRing(interaction, shape)
         .semantics {
           contentDescription = label

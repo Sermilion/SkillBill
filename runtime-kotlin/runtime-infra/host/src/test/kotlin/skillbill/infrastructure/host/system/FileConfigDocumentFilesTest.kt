@@ -130,7 +130,7 @@ class FileConfigDocumentFilesTest {
       }
     val read = assertIs<ConfigDocumentFileRead.Present>(adapter.read(fallback!!, ConfigDocumentFormat.YAML))
 
-    assertEquals(legacy.toAbsolutePath().normalize(), read.path)
+    assertEquals(FileConfigDocumentLocks.canonicalPath(legacy), read.path)
     assertEquals("local", read.tree.value("spec_type"))
     assertEquals(false, Files.exists(store))
   }

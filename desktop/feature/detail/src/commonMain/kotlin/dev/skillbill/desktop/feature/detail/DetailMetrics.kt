@@ -3,7 +3,6 @@ package dev.skillbill.desktop.feature.detail
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbClock
@@ -12,11 +11,19 @@ import dev.skillbill.desktop.core.designsystem.detail.MetricStrip
 import dev.skillbill.desktop.core.designsystem.detail.metricValueStyle
 import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.Detail
+import dev.skillbill.desktop.core.domain.model.Lifecycle
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.model.WorkKind
 import dev.skillbill.desktop.core.ui.status.statusKind
 
 private fun activeNote(running: Boolean) = if (running) "ticking" else "last known duration"
+
+/** A finished standalone run has no current step; it shows how the run ended instead. */
+internal fun terminalStepLabel(item: WorkItem, detail: Detail): String =
+  when (val result = currentExecution(item, detail)?.result) {
+    null, "completed" -> "Complete"
+    else -> result.replaceFirstChar(Char::uppercase)
+  }
 
 /** HANDOFF 9.2 item 8, as screens.js `detail()` builds the strip: operations and phases get Step and the elapsed clock. */
 @Composable
@@ -29,11 +36,12 @@ internal fun DetailMetrics(item: WorkItem, detail: Detail) {
   val cells = buildList {
     add(
       when {
+        !goal && item.lifecycle == Lifecycle.Terminal -> MetricCell("Step", terminalStepLabel(item, detail), note = " ")
         // A standalone run's step is a phase id: mono at `--t-md`, and the note line always holds its place.
         !goal -> MetricCell("Step", note = item.phaseExecutionLabel ?: " ") {
           BasicText(
             item.stepLabel,
-            style = valueStyle.copy(fontFamily = SkillBillTheme.type.mono.fontFamily, fontSize = 14.sp, letterSpacing = 0.em, fontWeight = FontWeight.Medium),
+            style = valueStyle.copy(fontFamily = SkillBillTheme.type.mono.fontFamily, fontSize = 14.sp, letterSpacing = (-0.16).sp, fontWeight = FontWeight.Medium),
             maxLines = 1,
           )
         }
@@ -50,7 +58,7 @@ internal fun DetailMetrics(item: WorkItem, detail: Detail) {
         val plans = item.planningProgress
         add(MetricCell("Phase", "plan", note = plans?.let { "${it.done}/${it.total} plans saved" }))
       } else {
-        add(MetricCell("Phase", detail.currentPhase ?: item.stepLabel, note = item.phaseExecutionLabel))
+        add(MetricCell("Phase", detail.currentPhase ?: item.stepLabel, note = item.phaseExecutionLabel ?: " "))
       }
     }
     if (finished != null) {

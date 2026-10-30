@@ -48,6 +48,7 @@ object WorkBoardReadModelPayloadKeys {
   const val UPDATED_AT = "updated_at"
   const val FRESHNESS = "freshness"
   const val SUMMARY = "summary"
+  const val TITLE = "title"
   const val ISSUE_KEY = "issue_key"
   const val WORKFLOW_ID = "workflow_id"
   const val WORKFLOW_FAMILY = "workflow_family"

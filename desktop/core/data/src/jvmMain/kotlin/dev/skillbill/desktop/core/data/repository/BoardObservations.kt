@@ -152,7 +152,10 @@ class BoardObservations internal constructor(
       },
       appends.map { Event.Append(it) },
     ).onEach { event ->
-      if (event is Event.Read && event.result is Outcome.Success) deadline.value = nextDeadline(event.result.value)
+      when (event) {
+        is Event.Read -> if (event.result is Outcome.Success) deadline.value = nextDeadline(event.result.value)
+        is Event.Append -> deadline.value = listOfNotNull(deadline.value, nextDeadline(event.page)).minOrNull()
+      }
     }.runningFold<Event, BoardState>(BoardState.Loading, ::fold)
       .distinctUntilChanged()
       .stateIn(scope, SharingStarted.WhileSubscribed(SHARE_TIMEOUT_MS), BoardState.Loading)

@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.handCursor
 import dev.skillbill.desktop.core.designsystem.menuSpec
 
 private val TOGGLE_WIDTH = 28.dp
@@ -44,6 +45,7 @@ fun SbToggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String
   Box(modifier.size(TOGGLE_WIDTH, TOGGLE_HEIGHT).alpha(if (enabled) 1f else .45f)
     .background(track, shape)
     .toggleable(value = checked, enabled = enabled, role = Role.Switch, interactionSource = interaction, indication = null, onValueChange = onCheckedChange)
+    .handCursor(enabled)
     .semantics { contentDescription = label }
     .sbFocusRing(interaction, shape), contentAlignment = Alignment.CenterStart) {
     Box(Modifier.offset(x = x).size(TOGGLE_KNOB).background(if (checked) colors.accentFg else colors.fg, CircleShape))
@@ -60,6 +62,7 @@ fun SbCheckbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: Stri
       .background(if (checked) colors.accent else androidx.compose.ui.graphics.Color.Transparent, shape)
       .border(1.dp, if (checked) colors.accent else colors.borderStrong, shape)
       .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, interactionSource = interaction, indication = null, onValueChange = onCheckedChange)
+      .handCursor(enabled)
       .sbFocusRing(interaction, shape)
       .semantics { contentDescription = label },
     contentAlignment = Alignment.Center,

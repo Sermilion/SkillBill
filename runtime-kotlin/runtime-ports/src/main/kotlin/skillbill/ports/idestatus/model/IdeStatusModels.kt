@@ -187,6 +187,7 @@ data class IdeStatusSnapshot(
   val updatedAt: Instant,
   val freshness: IdeStatusFreshness,
   val summary: String,
+  val title: String,
   val issueKey: String? = null,
   val workflowId: String? = null,
   val workflowFamily: IdeStatusWorkflowFamily? = null,
@@ -214,6 +215,7 @@ data class IdeStatusSnapshot(
   init {
     require(repositoryIdentity.isNotBlank()) { "repositoryIdentity must not be blank." }
     require(summary.isNotBlank()) { "summary must not be blank." }
+    require(title.isNotBlank()) { "title must not be blank." }
     require(currentStep.id.isNotBlank() && currentStep.label.isNotBlank()) {
       "currentStep id/label must not be blank."
     }

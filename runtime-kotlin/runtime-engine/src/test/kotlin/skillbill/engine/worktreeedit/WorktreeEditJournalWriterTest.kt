@@ -31,6 +31,7 @@ import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WorktreeEditJournalWriterTest {
@@ -83,6 +84,41 @@ class WorktreeEditJournalWriterTest {
       listOf(GoalObservabilityFileDiffStat("src/B.kt", insertions = 3, deletions = 0)),
       repository.appends.last().tick.entries,
     )
+  }
+
+  @Test
+  fun `a clean probe clears the previous tick before identical edits return`() {
+    val clock = Clock.fixed(Instant.parse("2026-09-18T12:00:00Z"), ZoneOffset.UTC)
+    val repository = InMemoryWorktreeEditJournalRepository()
+    val git =
+      ScriptedWorkflowGitOperations(
+        WorkflowWorktreeNumstatResult(
+          status = WorkflowGitOperationStatus.OK,
+          files = listOf(GoalObservabilityFileDiffStat("src/A.kt", insertions = 2, deletions = 1)),
+        ),
+      )
+    val observer =
+      WorktreeEditJournalWriter(
+        JournalDatabaseSessionFactory(repository),
+        clock,
+        NoopJournalDiagnostics,
+        git,
+      ).observer(Path.of("/tmp/worktree-edit-journal-clean"), { "wfl-clean" }, { "implement" })
+
+    observer.observe()
+    git.result = WorkflowWorktreeNumstatResult(status = WorkflowGitOperationStatus.OK, files = emptyList())
+    observer.observe()
+    assertNull(repository.latestTick("wfl-clean"))
+
+    git.result =
+      WorkflowWorktreeNumstatResult(
+        status = WorkflowGitOperationStatus.OK,
+        files = listOf(GoalObservabilityFileDiffStat("src/A.kt", insertions = 2, deletions = 1)),
+      )
+    observer.observe()
+
+    assertEquals(2, repository.appends.size)
+    assertEquals(listOf(GoalObservabilityFileDiffStat("src/A.kt", 2, 1)), repository.latestTick("wfl-clean")?.entries)
   }
 
   @Test
@@ -231,7 +267,12 @@ private class InMemoryWorktreeEditJournalRepository : WorktreeEditJournalReposit
   override fun deleteTicksBefore(
     workflowId: String,
     recordedAt: Instant,
-  ): Int = 0
+  ): Int {
+    val latestTick = latest[workflowId] ?: return 0
+    if (!latestTick.recordedAt.isBefore(recordedAt)) return 0
+    latest.remove(workflowId)
+    return 1
+  }
 }
 
 private class JournalDatabaseSessionFactory(

@@ -47,16 +47,17 @@ fun TrayPopoverContent(
   val loaded = state.board as? TrayBoard.Loaded
   TrayPopover(
     stats = loaded?.let { listOf(
-      PopoverStat(it.counts.running.toString(), "Running", PopoverTone.Accent),
-      PopoverStat(it.counts.needsYou.toString(), "Needs you", PopoverTone.Attention),
-      PopoverStat(it.counts.doneWithinDay.toString(), "Done 24h", PopoverTone.Neutral),
+      // The same section sizes the sidebar and Work show, so the numbers agree everywhere.
+      PopoverStat(it.running.toString(), "Running", PopoverTone.Accent),
+      PopoverStat(it.needsYou.toString(), "Needs you", PopoverTone.Attention),
+      PopoverStat(it.finishedToday.toString(), "Finished today", PopoverTone.Neutral),
     ) } ?: emptyList(),
     tabs = {
       ViewTabs(
         tabs = listOf(
-          ViewTab(TrayTab.Goals, "Goals", count = loaded?.counts?.goals ?: 0, attention = loaded?.attention(TrayTab.Goals) == true),
-          ViewTab(TrayTab.Phases, "Phases", count = loaded?.counts?.livePhases ?: 0, attention = loaded?.attention(TrayTab.Phases) == true),
-          ViewTab(TrayTab.Operations, "Operations", count = loaded?.counts?.liveOperations ?: 0, attention = loaded?.attention(TrayTab.Operations) == true),
+          ViewTab(TrayTab.Goals, "Goals", count = loaded?.goals?.size ?: 0, attention = loaded?.attention(TrayTab.Goals) == true),
+          ViewTab(TrayTab.Phases, "Phases", count = loaded?.livePhases?.size ?: 0, attention = loaded?.attention(TrayTab.Phases) == true),
+          ViewTab(TrayTab.Operations, "Operations", count = loaded?.liveOperations?.size ?: 0, attention = loaded?.attention(TrayTab.Operations) == true),
         ),
         selected = state.tab,
         onSelect = { onAction(TrayAction.ChooseTab(it)) },

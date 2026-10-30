@@ -19,6 +19,12 @@ internal object PolicyRules {
   /** Sort calls a file may make, each with a written reason; deadline patterns still run on every file. */
   private val allowedSorts = mapOf(
     "app/src/jvmMain/kotlin/dev/skillbill/desktop/app/DesktopLauncher.kt" to ("sorted" to "Orders the image's jar files for a stable classpath; no work items."),
+    "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/AssessmentOrder.kt" to
+      ("sortedWith" to "Orders one goal's assessment findings by severity or status when the reader asks; no work items."),
+    "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/DetailPresentation.kt" to
+      ("sortedWith" to "Orders a spec bundle's file names for display (manifest, spec.md, then by name); no work items."),
+    "feature/detail/src/commonMain/kotlin/dev/skillbill/desktop/feature/detail/ActivitySection.kt" to
+      ("sortedBy" to "Orders one item's recorded activity facts and its executions oldest first for the feed; no work items."),
   )
 
   fun isScanned(project: String): Boolean = project == ":app" || project == ":core:ui" || project.startsWith(":feature:")

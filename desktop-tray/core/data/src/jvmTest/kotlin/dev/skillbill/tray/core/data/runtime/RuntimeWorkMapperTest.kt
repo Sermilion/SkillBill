@@ -115,6 +115,7 @@ class RuntimeWorkMapperTest {
     updatedAt = Instant.parse("2026-10-22T12:00:00Z"),
     freshness = IdeStatusFreshness.FRESH,
     summary = "Goal assessment is active.",
+    title = "SKILL-1",
   )
 
   private fun detail(assessment: GoalRunnerAssessmentResult?) = WorkDetailItem(

@@ -11,6 +11,15 @@ enum class BoardSectionKind { NeedsYou, Goals, Phases, Operations, Finished }
 /** One header's items in the order the runtime returned them. */
 data class BoardSection(val kind: BoardSectionKind, val items: List<WorkItem>)
 
+/**
+ * How many rows the board lists under [kind]. Every count the app shows for a board section reads this, so the sidebar, the
+ * group headers, the tray and the pager always agree with the rows on screen.
+ */
+fun BoardState.Loaded.sectionSize(kind: BoardSectionKind): Int = sections.firstOrNull { it.kind == kind }?.items?.size ?: 0
+
+/** The rows of every live section (all but Finished today), in board order: what Work lists and counts. */
+fun BoardState.Loaded.liveRows(): List<WorkItem> = sections.filter { it.kind != BoardSectionKind.Finished }.flatMap { it.items }
+
 /** Aggregate status of a board, decided by the runtime. */
 enum class TrayStatus { Failed, NeedsYou, Running, Idle }
 

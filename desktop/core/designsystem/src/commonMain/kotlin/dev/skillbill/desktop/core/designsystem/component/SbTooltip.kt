@@ -54,11 +54,16 @@ fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () ->
   var pointerPressed by remember { mutableStateOf(false) }
   val pressedKeys = remember { mutableStateMapOf<Key, Boolean>() }
   val pressed = pointerPressed || pressedKeys.isNotEmpty()
+  // Focus a click gave counts as pointer focus, which shows no tooltip (as `:focus-visible` shows no ring), and a click hides
+  // the hover tooltip until the pointer leaves, as a browser's does.
+  var pointerFocus by remember { mutableStateOf(false) }
+  var clickedSinceEnter by remember { mutableStateOf(false) }
+  LaunchedEffect(hovered) { if (!hovered) clickedSinceEnter = false }
   var visible by remember { mutableStateOf(false) }
   val density = androidx.compose.ui.platform.LocalDensity.current
-  LaunchedEffect(hovered, focused, pressed) {
+  LaunchedEffect(hovered, focused, pressed, pointerFocus, clickedSinceEnter) {
     visible = false
-    if ((hovered || focused) && !pressed) {
+    if (((hovered && !clickedSinceEnter) || (focused && !pointerFocus)) && !pressed) {
       delay(TOOLTIP_DELAY_MS)
       visible = true
     }
@@ -67,7 +72,10 @@ fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () ->
     Modifier.hoverable(source)
       .onFocusChanged {
         focused = it.hasFocus
-        if (!focused) pressedKeys.clear()
+        if (!focused) {
+          pressedKeys.clear()
+          pointerFocus = false
+        }
       }
       .onPreviewKeyEvent { event ->
         if (event.key == Key.Spacebar || event.key == Key.Enter) {
@@ -83,6 +91,10 @@ fun SbTooltip(text: String, shortcut: String? = null, content: @Composable () ->
           awaitPointerEventScope {
             while (true) {
               pointerPressed = awaitPointerEvent(PointerEventPass.Initial).buttons.areAnyPressed
+              if (pointerPressed) {
+                pointerFocus = true
+                clickedSinceEnter = true
+              }
             }
           }
         } finally {

@@ -3,7 +3,7 @@ Areas: runtime-engine, runtime-ports, runtime-contracts, runtime-infra, runtime-
 - Added bounded change signals and session-scoped pooled reads, a persisted board projection, typed controls, lifecycle checkpoints and latest-tick journal retention.
 - Board pages project and filter before sorting and paging. The cursor fixes observation time and filter scope; external process liveness can still change between pages.
 - RuntimeConfigEditService provides reusable validated config reads and snapshot-aware writes. Shared locks coordinate cooperating writers; YAML rewrites discard comments and reads expose that fact.
-- Goal purge protects the database path through discovery and external effects. Migration 92 rebuilds board rows with executing-agent data; DesktopReadSchema is 92.
+- Goal purge protects the database path through discovery and external effects. Migration 92 rebuilds board rows with executing-agent data and migration 93 with item titles; DesktopReadSchema is 93.
 - UnitOfWork retains a Kotlin typealias after its move, but its underlying JVM type name changed for binary-linked consumers.
 Feature flag: N/A
 Acceptance criteria: 5/5 implemented

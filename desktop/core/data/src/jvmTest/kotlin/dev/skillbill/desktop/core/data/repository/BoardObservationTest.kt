@@ -82,6 +82,26 @@ class BoardObservationTest {
     assertEquals(2, reads.pageReads)
   }
 
+  @Test
+  fun `an appended page can move the next re-query earlier`() = runTest {
+    val firstDeadline = Instant.fromEpochMilliseconds(currentTime) + 10.minutes
+    val appendedDeadline = Instant.fromEpochMilliseconds(currentTime) + 2.minutes
+    val (_, reads, board) = fixture(listOf(workItem("first", membershipDeadline = firstDeadline)))
+    reads.nextCursor = "next"
+    reads.appendedPage = BoardPage(
+      listOf(workItem("later", membershipDeadline = appendedDeadline)), null, Instant.fromEpochMilliseconds(currentTime),
+    )
+    backgroundScope.launch { board.observe(QUERY).collect {} }
+    runCurrent()
+
+    assertEquals(dev.skillbill.desktop.core.domain.model.LoadMoreOutcome.Appended, board.loadMore(QUERY, "next"))
+    runCurrent()
+    advanceTimeBy(2.minutes + 1.milliseconds)
+    runCurrent()
+
+    assertEquals(3, reads.pageReads)
+  }
+
   private fun TestScope.fixture(
     items: List<WorkItem> = listOf(workItem("goal")),
   ): Triple<MutableStateFlow<SignalSnapshot>, FakeBoardReads, BoardObservations> {
@@ -96,6 +116,8 @@ class BoardObservationTest {
   private class FakeBoardReads(private val items: List<WorkItem>, private val clock: Clock) : BoardReads {
     var pageReads = 0
     var completeReads = 0
+    var nextCursor: String? = null
+    var appendedPage: BoardPage? = null
 
     override suspend fun complete(query: BoardQuery): Outcome<BoardPage, Nothing> {
       completeReads++
@@ -104,10 +126,13 @@ class BoardObservationTest {
 
     override suspend fun pages(query: BoardQuery, pageCount: Int): Outcome<BoardPage, Nothing> {
       pageReads++
-      return Outcome.Success(BoardPage(items.take(query.pageSize), nextCursor = null, observedAt = clock.now()))
+      return Outcome.Success(BoardPage(items.take(query.pageSize), nextCursor = nextCursor, observedAt = clock.now()))
     }
 
-    override suspend fun page(query: BoardQuery, cursor: String) = pages(query, 1)
+    override suspend fun page(query: BoardQuery, cursor: String): Outcome<BoardPage, Nothing> {
+      pageReads++
+      return Outcome.Success(checkNotNull(appendedPage))
+    }
 
     override fun counts(items: List<WorkItem>) = BoardCounts(TrayStatus.Idle, 0, 0, 0, 0, 0, 0, 0, 0)
   }

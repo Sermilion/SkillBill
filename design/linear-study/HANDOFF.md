@@ -8,6 +8,8 @@ This document and the prototype next to it are everything needed to plan and bui
 
 Written 2026-10-27 against `main` at `1ef0c125b`.
 
+Revised 2026-10-30 to match the Compose app in `desktop/`: collapsible detail sections, stacked and collapsible incident evidence, a folding run reason, spec bundle file order, ShortId for machine ids, the operator decision section without an incident, the refresh hint and stale indicator, editable review budget and compaction override rows, the purge dialog's safe default, menu focus and command menu hover, the main window's opening size, and corrections to the operations metrics, goal-wide pipeline steps and planning wave text. Later the same day: the goal's Subtasks list became a selectable index and the details pane became an inspector for the selected subtask (dependencies, validation, review passes and audit moved there from the document; the pane widens to 380 px), the details pane properties were redesigned (one-line values, short labels, breakdowns instead of joined strings), and the activity and History sections merged into one Activity feed. The inspector has no Status row, because its title row already shows the subtask's icon and state word. Goal assessment findings can be ordered by priority or status.
+
 ---
 
 ## 1. Outcome
@@ -302,7 +304,7 @@ Digits that line up use tabular figures.
 
 - Space: 4 px grid (4, 8, 12, 16, 20, 24, 32, 40).
 - Radius: 4 (kbd, steps), 6 (buttons, inputs, rows, tabs), 8 (menus, boxes, toasts), 12 (panel, dialogs, tray), full (labels, avatars).
-- Sizes: row 36, compact row 32, header 44, sidebar 236, details pane 272, Specs pane 400, terminal default 200 (min 120, max 600 in the prototype; desktop allows 120–1200).
+- Sizes: row 36, compact row 32, header 44, sidebar 236, details pane 272 (`--props-w`), or 380 while it holds the subtask inspector (`--props-w-wide`), property row 28 with an 80 px label column (`--prop-label-w`), breakdown row 22, activity row 28, Specs pane 400, terminal default 200 (min 120, max 600 in the prototype; desktop allows 120–1200).
 - Motion: 90 ms for hover, 160 ms for menus and toggles, easing `cubic-bezier(0.25,0.46,0.45,0.94)`. Respect reduced motion.
 
 ### 6.4 Status vocabulary
@@ -351,17 +353,23 @@ Every screen is built from these. Dimensions are in `ds/components.css`; inputs 
 | Toggle | 28×16 switch. |
 | Checkbox | 14 px; prerequisite confirmation. |
 | Input, Field | 30 px input with optional leading icon; mono variant; error state. Field adds label and help. |
-| IdTag | Muted issue key, phase or operation id. |
+| IdTag | Muted issue key, phase or operation id, always shown in full. |
+| ShortId | Machine ids: workflow ids, invocation ids, commit shas, evidence references. Shows the first 8 characters plus "…" (the whole id when that saves nothing) in faint 10.5 px mono, the full value in a tooltip, then a small copy button labelled "Copy `<what>`" ("Copy workflow id", "Copy invocation id", "Copy commit", "Copy reference"). Evidence references drop their leading `<kind>:` prefix before shortening, since the kind shows below. Used in the details pane (Workflow, Invocation, the inspector's Commit), subtask commits in the Subtasks index, evidence rows and the recovery dialog's Workflow. Activity entries keep the invocation id in their tooltip only. |
+| StaleIndicator | "Stale" in 12 px `fg-muted` with the tooltip "Showing stale work data"; in the view header after a refresh failed. |
 | Label | 22 px pill: colored dot, tinted (lifecycle), mono (runtime ids). |
 | Avatar | 18 px agent initials: Cl, Cx, Cu, Ju. |
 | RepoIcon | 16 px rounded square with the repository initial. |
 | ProgressRing | 14 px ring with `n/m`; green when complete; blue for plans saved. |
 | Clock | Live duration (section 5.3, rule 10). |
 | MetricStrip | Equal cells: label, value, note. |
-| PropertyList | 92 px label column, value cell that highlights when it is actionable. |
-| PhasePipeline | 20 px mono steps joined by 6 px lines; done (check), current (accent), waiting (orange), failed (red), goal-wide (dashed outline). |
-| ReasonBlock | Full durable reason, mono, left rule in the lifecycle color, Copy button. |
-| FindingRow | Severity (uppercase mono, colored), ref, text, location, state label. |
+| PropertyList | Details pane properties. 28 px rows. Label column 80 px (`--prop-label-w`), sized to fit the longest label in the pane, 12 px `fg-muted`, one line with an ellipsis as the fallback; phase-name labels (Goal finish steps) in 11.5 px mono. 12 px gap, then the value cell: 24 px high, 6 px side padding pulled 6 px left so text aligns, one line, 12 px sans `fg-2`, tabular digits, never wraps (ellipsis). Mono only inside ShortId. An actionable value highlights `bg-hover` and shows a tooltip. Rows with a null, empty or zero value are left out; nothing draws "0" or a blank. An optional Breakdown sits under the value in the value column, 4 px bottom padding. |
+| Breakdown | A total split by key under a property (Runs, Fixes, Relaunches). 22 px rows: key in 11.5 px mono `fg-faint` on the left (ellipsis), count right-aligned in 12 px `fg-muted` tabular, sorted largest first, zero counts dropped. At most 4 rows, then a ghost toggle "+N more" (11.5 px `fg-faint`, 22 px, `bg-hover` on hover) that reads "Show less" when open. Rows rather than chips: chips wrap at 272 px, rows never do. |
+| PhasePipeline | 20 px mono steps joined by 6 px lines; done (check), current (accent), waiting (orange), failed (red), goal-wide (solid 1 px `border` outline). |
+| ReasonBlock | Durable reason, mono, left rule in the lifecycle color, Copy button. The text is an ExpandableText (12 px mono `fg-2`, line height 1.55). |
+| ExpandableText | Long runtime text folded to 3 lines with an ellipsis: block reasons (the subtask inspector's warn Hint, inline too), finding text and meta (FindingRow, compact titles), evidence summaries, the incident's Cause and Next lines, the audit summary, ReasonBlock (run reason, QA report). A small ghost "Show more" button (chevronDown) sits 2 px under the text only when it overflows; open it reads "Show less" (chevronUp). Short text adds no toggle and no gap. The open state resets when the text changes. Desktop `ExpandableText.kt`, one implementation that ReasonBlock uses. |
+| FindingRow | Severity (uppercase mono, colored), ref, text, location, state label. Not used for evidence. Text and meta fold past 3 lines (ExpandableText). Compact variant in the subtask inspector: no divider, 5 px vertical padding, 8 px gap, 52 px severity column, text 12 px `fg-2` (wraps, folds past 3 lines), location below in 11.5 px mono `fg-faint` on one line, shortened to "…/" plus the last two path segments past 28 characters, the full path in a tooltip. |
+| EvidenceToggle | The incident's "Evidence · N" caption as a button: 11.5 px faint text and a 12 px chevron (right when collapsed, down when open), `fg-muted` on hover. |
+| EvidenceRow | One evidence record, stacked: the reference as a ShortId on its own line, the summary below at full width (12 px `fg-2`, line height 1.45), then the kind (11.5 px faint). Rows sit in a Box with dividers, padding 9 px 12 px. |
 | Checklist | Checkbox rows for prerequisites. |
 | Menu, MenuItem, Popover | 30 px items with icon or lead, check, shortcut; heads and separators; click-outside and Esc close. |
 | CommandPalette, CommandList | 640 px modal at 14% from top; context label, input, grouped results, footer hints. |
@@ -373,23 +381,29 @@ Every screen is built from these. Dimensions are in `ds/components.css`; inputs 
 | Sidebar, SidebarItem, SidebarSection, WorkspaceSwitcher | Navigation (section 8). |
 | ViewHeader, Pager | 44 px header: breadcrumbs, middle slot (filter or tabs), actions; Pager for previous and next. |
 | GroupHeader, ListRow | Sticky 36 px group header; 36 px row (32 compact) with id, status, title, summary, meta, time; focus bar on the left. |
-| SubtaskRow, TreeRow | Subtask with optional body; tree row with 18 px indent per level. |
-| DocHeader, Section, Box, PaneSection | Detail building blocks. |
+| SubtaskList | The Subtasks index: a Box (hairline border, 8 px radius) that takes keyboard focus, role listbox. Focus ring only for keyboard focus (2 px `accent-ring`). |
+| SubtaskRow | One index line, min 36 px, 12 px side padding, 10 px gaps: number (20 px), StatusIcon, title (13 px/500, ellipsis; pending rows 400 `fg-muted`), commit ShortId, live subtask clock, "no change" label. The whole line selects it. Selected: `bg-active` plus a 2 px `accent` bar on the left edge, full row height. Current (the running subtask) keeps the `bg-selected` tint while not selected. Hover `bg-hover` when not selected. Body (the inline inspector, narrow windows only) under the line: padding 4 px 16 px 16 px 62 px. Rows no longer show the block reason; the inspector does. The Goal finish row keeps its pr, monitor and monitor_fix chips (PhasePipeline, goal-wide steps) in its body, and the inspector lists the same steps. |
+| SubtaskChip | A dependency edge: 20 px button, 1 px `border`, 4 px radius, 6 px padding, 4 px gap; a 14 px StatusIcon of that subtask, then its number in 11.5 px mono. Optional edges have a dashed border and the word "optional" in 11.5 px `fg-faint`. Hover `bg-hover` and `border-strong`. Click selects that subtask. Tooltip "Subtask 02: `<title>`" (plus "(optional)"). |
+| SubtaskInspector | The selected subtask, section 9.2. 10 px between blocks: title 13 px/500 `fg`, line height 1.4, wraps; block reason as a warn Hint folded past 3 lines (ExpandableText); PropertyList with Commit, Spec file, Depends on, Needed by, Validation (no Status row, since the title row shows the state); then Review (6 px above): a 24 px "Review" caption (11.5 px/500 `fg-faint`), one block per pass with a 22 px line "Pass N · verdict · k unresolved" (Pass N in 12 px/500 `fg-2`, the rest `fg-muted`, tabular) and its compact FindingRows, 6 px between passes; then "Audit · verdict" and its summary in 12 px `fg-muted`, wrapping. "No review yet" in 12 px `fg-faint` when there are no passes. Inline (narrow windows) it drops the title, which the row already shows. |
+| ActivityFeed | The detail's Activity. One 28 px line per entry, oldest first, the latest at the bottom: a 16 px icon (agent Avatar small, or a StatusIcon) on a 1 px `border-subtle` connector that runs through the icon column (from the first icon's center to the last's; the icon sits on a `bg-panel` disc), 10 px gap, then "actor action object" in 13 px: actor and object `fg-2`/500, the verb `fg-muted`/400, paths and runtime codes in 12 px mono `fg-2`. Then "· 4m ago" in 12 px `fg-faint`, kept visible while the text truncates with an ellipsis; the tooltip holds the full text. Past 8 entries the earlier ones fold behind a ghost toggle on top: chevronUp and "Show N earlier", 24 px, 12 px `fg-faint`. |
+| TreeRow | Tree row with 18 px indent per level. In a PaneSection (Spec files) it is 28 px, pulled 8 px out on both sides with a 6 px radius, no caret column. |
+| PaneSection | A details pane group. Title row 24 px, 11.5 px/500 `fg-faint`, 6 px gap, 2 px above the body. With a status it leads with that 14 px StatusIcon and ends with the state's word in the state color, 11.5 px/500 ("Blocked", "Done", "In progress", "Pending", "No change"). Sections stack 24 px apart with no dividers. |
+| DocHeader, Section, Box | Detail building blocks. A detail Section header can collapse its body: the title, count and a 12 px faint chevron (chevronDown open, chevronRight collapsed, `fg-muted` on hover) form one button; actions in the end slot stay put. A collapsed section shows only its header, with no 10 px body gap. |
 | SidePane | 400 px right pane with its own 44 px header. |
 | TerminalPane | Bottom pane: grip, tab strip, actions, output. |
-| SettingsHeader, SettingsGroup, SettingRow, TierBadge, ConfigRow | Settings and config. |
+| SettingsHeader, SettingsGroup, SettingRow, TierBadge, ConfigRow | Settings and config. ConfigRow is any value edited through the inline editor (`.sb-cfg-ed`): the model-matrix layout for tiers and phases, or with a label the setting-row layout (label and key on the left, mono value on the right) for review context budget and per-phase compaction overrides. |
 | TrayPopover | 360 px popover: brand, stats, tabs, rows, footer. |
 
 ---
 
 ## 8. Shell and layout
 
-- **Window:** frame color `bg-frame`; sidebar on the left; the content panel inset 8 px with a 12 px radius and a hairline border.
+- **Window:** frame color `bg-frame`; sidebar on the left; the content panel inset 8 px with a 12 px radius and a hairline border. The main window opens unmaximized and centered, sized to show the sidebar, the document column and the details pane comfortably: 1400×900 content dp, capped at 90% of the usable screen.
 - **Sidebar (236 px):** brand row with the command menu button; Work (count of live items) and History; a collapsible Board section listing Needs you (amber attention badge), Goal runs, Standalone phases, Operations and Finished today, each with its count; at the bottom Specs and Terminal (toggles, highlighted when open), Settings and Keyboard shortcuts.
 - **Work area:** the view header and body on the left, the optional Specs pane on the right (it never changes what the main panel shows), the optional terminal docked at the bottom of the main column.
-- **Details pane (272 px)** on the right of a detail view, hidden while the Specs pane is open.
+- **Details pane** on the right of a detail view: 272 px, or 380 px while it holds the subtask inspector (every goal with subtasks, since one is always selected). One scroll, padding 16 px 20 px 32 px, sections 24 px apart. Hidden while the Specs pane is open, when toggled off (⌘I) and below 1080 px; then the inspector opens inside the selected subtask row instead.
 - **Settings** replaces the sidebar with its own navigation and a Back to app button.
-- **Narrow windows:** below 1080 px the details pane folds away; below 760 px the sidebar becomes a drawer and the Specs pane covers the panel.
+- **Narrow windows:** below 1080 px the details pane folds away and the subtask inspector opens in place in the selected row; below 760 px the sidebar becomes a drawer and the Specs pane covers the panel.
 
 ---
 
@@ -408,31 +422,45 @@ Copy in quotes is the app's own wording, taken from `desktop-tray` unless marked
 
 Top to bottom:
 
-1. Chips: lifecycle (tinted), "Stalled", id, issue key for phases and operations, kind ("goal", "phase", "operation"), "fresh" or "stale".
-2. Title (`featureTitle` or summary).
+1. Chips: lifecycle (tinted), "Stalled", id, issue key for phases and operations, kind ("goal", "phase", "operation"), "fresh" or "stale" ("stale" also after a failed refresh).
+2. Title: the runtime's title (`featureTitle`, else summary). The titles in `app/data.js` are examples.
 3. Repository location: folder (opens the checkout) and branch (opens the branch on its web host; desktop `RepositoryWebLinks.kt`), or "no branch".
-4. Run actions: "Pause after subtask" (or "Pause requested", disabled), "Pause" (danger; stops the runner now), and when the item is resumable the launch button with the runtime's label ("Resume", "Run again", "Start") plus "Agent: `<id>`" / "Choose agent", then "Cancel", then "Recover" when recovery is offered. Under them, "Starts the installed agent harness" when a launch is possible.
+4. Run actions: "Pause after subtask" (or "Pause requested", disabled), "Pause" (danger; stops the runner now), and when the item is resumable the launch button with the runtime's label ("Resume", "Run again", "Start") plus "Agent: `<id>`" / "Choose agent", then "Cancel", then "Recover" when recovery is offered. Under them, "Starts the installed agent harness" when a launch is possible. When a refresh failed, every control is disabled and a warning hint reads "Refresh the detail before using run controls." The view header then shows the stale indicator ("Stale", tooltip "Showing stale work data") after the pager, and the screen keeps its last data.
 5. "Pause recorded. The goal pauses at its next checkpoint." while a pause is pending.
-6. Run reason (ReasonBlock, "Copy reason").
-7. Incident (when present): status ("Needs your action", "Diagnosis ready", "Investigating block", "Investigation queued", "Partial diagnosis", "Diagnosis unavailable", "Recovery available", "Recovering", "Recovery failed", "Resumed"), cause, next action, certainty; prerequisite checkboxes (Recover is enabled once all are confirmed); operator decision when the runtime says recovery needs an operator decision (section 9.2.1); evidence rows; report status with "Open issue" when submitted.
-8. Metrics: Subtask n/m ("x complete · y pending") or Goal stage ("Planning", "Goal finish"); Phase with execution label ("pass 2", "gate run 2") or "n/m plans saved"; Goal active (or "Total run time … finished `<time>`" when finished; "Phase elapsed" or "Operation elapsed" for those kinds); Subtask active ("ticking" or "last known duration").
-9. Subtasks with status, commit sha, current-subtask timer, block reason; a final Goal finish row with pr, monitor, monitor_fix.
-10. Phase pipeline (goals; standalone phases with more than one step). Operations show no pipeline, metrics or subtask timers.
-11. Dependencies ("Subtask 3 waits on subtask 2", required or optional).
-12. Goal activity / Phase activity / Operation activity: Agent activity, Last edit, Event.
-13. Validation per subtask: passed or failed, check count.
-14. Phase results: review passes (verdict, unresolved count, findings with severity and location) and the audit conclusion.
-15. Goal QA: "QA found n findings; all fixed …" or "QA could not fix n findings. Review them yourself.", findings marked Fixed or Not fixed.
-16. Goal assessment: "Completed · round n" or "Running · round n", findings with severity, ref, path and line, scenario, verification, state.
-17. QA report (standalone QA) and plan report (standalone plan: "Planned n subtasks.").
-18. History: executions with invocation, state, times and result.
-19. Spec bundle: files; clicking opens the file in its default app.
+6. Run reason (ReasonBlock, "Copy reason"), folded to 3 lines with "Show more" when it overflows.
+7. Incident (when present, collapsible): status ("Needs your action", "Diagnosis ready", "Investigating block", "Investigation queued", "Partial diagnosis", "Diagnosis unavailable", "Recovery available", "Recovering", "Recovery failed", "Resumed"), cause, next action, certainty; prerequisite checkboxes (Recover is enabled once all are confirmed); operator decision when a decision is awaited (section 9.2.1); evidence behind an "Evidence · N" toggle, collapsed by default, with EvidenceRow rows; report status with "Open issue" when submitted. When a decision is awaited and there is no incident, an "Operator decision" section holds the decision block in this position instead.
+8. Metrics: Subtask n/m ("x complete · y pending") or Goal stage ("Planning", "Goal finish"; planning shows no wave note, because the desktop domain model has no planning wave); Phase with execution label ("pass 2", "gate run 2") or "n/m plans saved"; Goal active (or "Total run time … finished `<time>`" when finished; "Phase elapsed" or "Operation elapsed" for those kinds); Subtask active ("ticking" or "last known duration").
+9. Subtasks: an index of the goal's subtasks, then a final Goal finish row. Each row shows number, status, title, commit sha (ShortId), the current-subtask timer and "no change"; no block reason and no body, except the Goal finish row, which keeps its pr, monitor and monitor_fix chips under the title. Rows are selectable (section 7, SubtaskRow): clicking a row selects it, and the Goal finish row is selectable too. When a goal opens, the selection is the blocked subtask, else the current subtask, else the first. The selection is kept per item while paging (J/K, pager) and while Subtasks is collapsed. With more than 10 subtasks the section starts collapsed; its header count and progress ring still show progress. While planning, the section reads "n/m plans saved" and "Subtasks appear here once their plans are saved." with no "Planning wave N." text and nothing is selectable.
+10. Phase pipeline (goals past planning; standalone phases and operations with more than one step). Operations show the Step metric and elapsed time, a pipeline only with more than one step, and no subtask timers.
+11. Activity: one feed that replaces the former activity section ("Goal activity", "Phase activity", "Operation activity") and the History section. Entries come only from recorded facts, oldest first:
+    - per execution in `executionHistory`: "Run N started" at `startedAt`, and when `finishedAt` is set "Run N `<lifecycleState>` `<result>`" with a StatusIcon for that state (completed, failed, interrupted and paused, blocked, canceled). With one execution the actor is "Goal run" for a goal, else the phase or operation id. The invocation id is in the tooltip only;
+    - with no execution listed, "`<id>` started" from the item's `startedAt` and "`<id>` completed / failed / canceled" from `finishedAt`;
+    - the last worktree edit: "`<agent>` edited `<path>` +i −d" at its `recordedAt`;
+    - the latest event: "`<phase>` · `<worker role>` `<summary>`" at its `at`;
+    - the last agent activity: "`<agent>` `<lastAgentActivityLabel>`" at `lastAgentActivityAt`.
+    Times read relative ("12s ago", "4m ago", "3h ago", "2d ago"). Only the latest 8 show; "Show N earlier" reveals the rest for that item.
+12. Goal QA: "QA found n findings; all fixed …" or "QA could not fix n findings. Review them yourself.", findings marked Fixed or Not fixed.
+13. Goal assessment: "Completed · round n" or "Running · round n", findings with severity, ref, path and line, scenario, verification, state. With two or more findings the header's end slot has a Segmented order: Default (the runtime's order), Priority (blocker, critical, high, major, medium, minor, low, nit, info, then anything else; ties by status) and Status (open, refuted, fixed; ties by priority). Sorts are stable, and the choice holds while paging.
+14. QA report (standalone QA) and plan report (standalone plan: "Planned n subtasks.").
+15. Standalone phases and operations only: their own Validation, Phase results and Spec bundle sections when the runtime returns them, as before (bundle order: `decomposition-manifest.yaml`, `spec.md`, then every other file by name with digit runs compared as numbers). For goals these moved to the details pane.
 
-Details pane: Execution (Workflow, Invocation, Agent, Model, Liveness, Started, Last update) and Runs and fixes (Phase runs, Fix iterations, Findings in scope, Relaunch causes, Supervisor kills).
+Every section header from item 7 down can collapse its body (section 7, Section). Collapse state is kept per section while paging between items (J/K, pager); untoggled sections start from their default (Subtasks collapsed past 10 subtasks, Evidence collapsed).
+
+Details pane, top to bottom in one scroll:
+
+- **Execution:** Workflow and Invocation (ShortId), Agent (small Avatar and name), Model ("claude-opus-5-5 · high" in sans), Liveness, Started, Updated. Rows without a value are left out.
+- **Runs and fixes:** Runs (total of `phaseAttempts`), Fixes (total of `fixIterations`) and Relaunches (total of `reAttemptCauses`), each with a Breakdown by phase or cause under it; Findings (`findingsInScope`, tooltip "Findings in scope") and Kills (`supervisorKills`, tooltip "Supervisor kills"). Zero or empty rows are left out; the section is left out when every row is.
+- **Subtask inspector** (goals with subtasks), a PaneSection titled "Subtask 03" with the subtask's StatusIcon and status word. Inside (section 7, SubtaskInspector): the title; the block reason when blocked; Commit (ShortId with copy); Spec file (the file name with a fileText icon, the whole value a button that opens the file, tooltip "Open the spec file" with ↵); Depends on (SubtaskChips from `WorkSubtask.dependencies`, optional ones marked); Needed by (the reverse edges, same chips); Validation ("passed · 12 checks" or "failed · 3 checks" after a 6 px dot in `st-done` or `st-failed`, from `SubtaskValidation`); then Review, one block per `ReviewPass` ("Pass N · verdict · k unresolved" and its findings as compact FindingRows), then the audit (`PhaseConclusion` verdict and summary) when present. A chip selects that subtask, in the index too.
+- **Goal finish**, instead, when the Goal finish row is selected: a PaneSection "Goal finish" with its status, and a PropertyList of pr, monitor and monitor_fix (labels in mono) with their states ("Done", "Running", "Pending", "Failed"), then one line each for Goal QA ("passed · 2 of 2 fixed") and Assessment ("Completed · round 1 · 2 findings") when the goal has them. Those two rows are buttons that scroll the document to the full sections; the inspector does not repeat their findings.
+- **Spec files:** the goal-level files of `goalSpecBundle` (`decomposition-manifest.yaml`, `spec.md`, `traceability.md`, whichever exist; subtask specs open from the inspector), in that order and then by name, as 28 px file rows that open the file.
+
+Phases and operations keep the 272 px pane with Execution and Runs and fixes.
+
+Narrow windows and the Specs pane: whenever the details pane is not shown (below 1080 px, while the Specs pane is open, or toggled off with ⌘I), the selected subtask row expands in place with the same inspector content minus the title (the Goal finish row shows its steps and pointers). Only the selected row is expanded. Clicking the selected row again folds it; selecting another row expands that one.
 
 #### 9.2.1 Operator decision (new in the app)
 
-Shown inside the incident section when recovery is unavailable because it needs an operator decision. A segmented choice of Retry fix, Accept and advance, Abandon subtask; Retry fix requires instructions ("What should the agent change?"); "Record decision" calls `goalOperatorDecisionService.record`. Afterwards: "Decision recorded … Resume the goal to apply it." (new copy). The decision takes effect when the goal resumes.
+Shown when the runtime says the goal awaits an operator decision: inside the incident section, or in its own "Operator decision" section when there is no incident. A segmented choice of Retry fix, Accept and advance, Abandon subtask; Retry fix requires instructions ("What should the agent change?"); "Record decision" calls `goalOperatorDecisionService.record`. Afterwards: "Decision recorded … Resume the goal to apply it." (new copy). The decision takes effect when the goal resumes.
 
 ### 9.3 History
 
@@ -452,7 +480,7 @@ Header: tabs All, Goals, Phases, Operations and a filter. One group "Finished wi
 - Tree: bundles with status and progress; expanded bundles list spec.md, subtask specs with status, traceability.md and decomposition-manifest.yaml; a `done` folder with its count. Clicking a folder or bundle selects and toggles it; clicking a file selects and opens it.
 - Footer: the store path and Reveal.
 - States: "No specs yet" ("Plan a feature with /skill-bill phase:plan and its bundle shows up here."), "No specs match" with Clear filters, "Specs unavailable" with Retry, "This project has no checkout on this machine."
-- Purge dialog: "Purge `<KEY>`?", Deleted (goal and subtask run history, run evidence and task tracking, checkpoint refs, subtask progress back to not started) and Kept (every spec file in the folder, your branch and its commits, open pull requests), "This can't be undone …", "Keep run history" and "Purge `<KEY>`".
+- Purge dialog: "Purge `<KEY>`?", Deleted (goal and subtask run history, run evidence and task tracking, checkpoint refs, subtask progress back to not started) and Kept (every spec file in the folder, your branch and its commits, open pull requests), "This can't be undone …", "Keep run history" and "Purge `<KEY>`". Initial focus and Enter go to "Keep run history", the safe action.
 - Speed: build the tree from `specBrowserService.snapshot` once per project, refresh it on spec-directory changes (desktop `NioSpecDirectoryChanges`) and on the specs-related signal, and fetch `control` for the selected bundle in the background; selection itself must not wait on it.
 
 ### 9.5 Terminal pane
@@ -475,8 +503,8 @@ Header: tabs All, Goals, Phases, Operations and a filter. One group "Finished wi
 Each row shows its config key and default. Saving shows "Saved to config.json" (new copy).
 
 - **Models:** agent tabs claude, codex, cursor; junie disabled ("junie cannot honor a model or effort directive"). Tiers Reasoning and Implementation. Phase groups with each phase's tier badge (R or I), resolved model and effort, and an "override" tag. Default phase tiers are `DEFAULT_PHASE_TIERS` in `ExecutionMatrixModels.kt`. Editing a row expands it in place: Tier (phases only; applies to every agent), Model (required, passed as typed), Effort (optional), Save, Cancel, Reset to tier. There is no model catalog check.
-- **Compaction:** enabled (default on), window tokens (default 400,000), trigger percent (default 70; the trigger must be at least 200,000 tokens), per-phase overrides.
-- **Project:** project name and store path, "Open config.yaml"; spec source local or linear (default local); Gradle wrapper (repo-relative, no `.` or `..` segments, blank means the repository's `./gradlew`); phase instruction files in `<repo>/.skill-bill/phases/<phase-id>.md` (committed with the repository, 16 KiB cap, unknown phase ids are skipped); review context budget with defaults from `ReviewContextBudgetPolicy` (byte limits must be positive).
+- **Compaction:** enabled (default on), window tokens (default 400,000), trigger percent (default 70; the trigger must be at least 200,000 tokens), per-phase overrides. Enabled, window and trigger keep inline controls (toggle, input, range); the "Compact at N%" range and its error hint sit side by side in `.sb-sr-ctl`. Each per-phase override row (value "`<window>` tokens · `<pct>`%") expands the same inline editor as the model rows: Context window, Trigger percent, Save, Cancel, Remove override.
+- **Project:** project name and store path, "Open config.yaml"; spec source local or linear (default local); Gradle wrapper (repo-relative, no `.` or `..` segments, blank means the repository's `./gradlew`); phase instruction files in `<repo>/.skill-bill/phases/<phase-id>.md` (committed with the repository, 16 KiB cap, unknown phase ids are skipped); review context budget with defaults from `ReviewContextBudgetPolicy` (byte limits must be positive). Spec source and Gradle wrapper keep inline controls. Each budget row expands the inline editor (one field, Save, Cancel); the group header counts changed values ("n changed").
 - **Telemetry and agents:** level off, anonymous, full (default anonymous); proxy URL (blank uses the default endpoint); batch size (default 50); detected agents (read-only); files `.config/skill-bill/config.json` and `.skill-bill/install-selection.json` under the user's home directory.
 - **Edge states:** an unreadable config file shows the runtime's error with its key path and never overwrites the file; a file changed on disk while a row is open asks to reload or keep editing; YAML comments do not survive a rewrite, so ask once per file before the first save.
 
@@ -506,6 +534,8 @@ Interaction patterns come from Linear; they only trigger the actions above.
 | / | Focus the filter |
 | J / K or arrows | Next / previous row; in detail, next / previous item |
 | Enter | Open the focused row |
+| ↑ / ↓ (Subtasks list focused) | Move the subtask selection; the inspector follows. J / K still move between work items |
+| Enter (Subtasks list focused) | Open the selected subtask's spec file (nothing for Goal finish) |
 | P | Pause after subtask |
 | Shift+P | Pause now |
 | R | Resume / Run again |
@@ -516,6 +546,7 @@ Interaction patterns come from Linear; they only trigger the actions above.
 
 - Single-key shortcuts are off while a text field or the terminal has focus.
 - Command menu groups: the current item's actions (Open, Pause after subtask, Pause now, Resume, Cancel, Copy reason, Open terminal in `<repo>`), Navigation (Work, each Board section, History, Settings), Panes (Specs, Terminal, New terminal tab, Refresh), every work item by key and title, Config (Models, Compaction, Keyboard shortcuts). Arrow keys move, Enter runs, Esc closes.
+- Opening a popover menu moves keyboard focus to its first item. In the command menu, hovering a row moves the highlight to it.
 - Destructive actions confirm only where the app already does: Purge (dialog), Specs Cancel (inline), Recover (preview dialog). Pause and Cancel in the detail act immediately, as today.
 - Feedback appears as a toast for five seconds (desktop: the window feedback popup) and never claims more than the runtime reported.
 

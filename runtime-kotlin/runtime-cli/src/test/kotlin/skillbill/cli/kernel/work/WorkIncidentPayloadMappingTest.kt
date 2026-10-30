@@ -58,6 +58,7 @@ class WorkIncidentPayloadMappingTest {
             updatedAt = projection.observedAt,
             freshness = IdeStatusFreshness.FRESH,
             summary = projection.summary,
+            title = "SKILL-1",
           ),
         recoveryWorkId = "SKILL-435",
         repositoryRoot = "/fixture",

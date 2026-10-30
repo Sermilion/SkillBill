@@ -1,13 +1,20 @@
 package skillbill.infrastructure.sqlite.idestatus
 
 import skillbill.contracts.persistence.WorkBoardReadModelKeys
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkBoardReadModelPageQuery
+import skillbill.ports.idestatus.model.WorkBoardReadModelRow
 import java.nio.file.Files
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class WorkBoardReadModelStoreTest {
   @Test
@@ -40,5 +47,36 @@ class WorkBoardReadModelStoreTest {
 
       assertEquals(listOf("match"), page.entries.map { it.workId })
     }
+  }
+
+  @Test
+  fun `a row keeps its title and a row written before titles existed is undecodable`() {
+    val at = Instant.parse("2026-10-28T10:00:00Z")
+    val row =
+      WorkBoardReadModelRow(
+        "plan-1",
+        WorkBoardItem(
+          IdeStatusSnapshot(
+            repositoryIdentity = "repo",
+            lifecycleState = IdeStatusLifecycleState.BLOCKED,
+            currentStep = IdeStatusStep("plan", "plan"),
+            updatedAt = at,
+            freshness = IdeStatusFreshness.FRESH,
+            summary = "The plan is blocked: the spec names no acceptance criteria.",
+            title = "plan SKILL-452",
+          ),
+          repositoryRoot = "/repo",
+        ),
+        at,
+        "plan",
+        null,
+        at,
+        null,
+      )
+    val metadata = WorkBoardRowMetadata(row.workId, at, row.searchText, null, at, null)
+    val payload = WorkBoardReadModelPayloadCodec.encode(row)
+
+    assertEquals("plan SKILL-452", WorkBoardReadModelPayloadCodec.decode(payload, metadata)?.item?.snapshot?.title)
+    assertNull(WorkBoardReadModelPayloadCodec.decode(payload.replace("\"title\":\"plan SKILL-452\",", ""), metadata))
   }
 }

@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,7 +34,6 @@ import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbLabel
 import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
-import dev.skillbill.desktop.core.designsystem.component.rememberHoverColor
 import dev.skillbill.desktop.core.designsystem.composite.Edge
 import dev.skillbill.desktop.core.designsystem.composite.expandSemantics
 import dev.skillbill.desktop.core.designsystem.composite.hairline
@@ -72,9 +73,11 @@ fun ConfigRow(
   val mono = type.mono.fontFamily
   val interaction = remember { MutableInteractionSource() }
   val hovered = enabled && interaction.collectIsHoveredAsState().value
-  val fill = rememberHoverColor(hovered, if (expanded) colors.bgActive else Color.Transparent, if (expanded) colors.bgActive else colors.bgHover).value
+  // `.sb-cfg` declares no transition, so the hover fill switches instantly.
+  val fill = when { expanded -> colors.bgActive; hovered -> colors.bgHover; else -> Color.Transparent }
   val interactive = if (enabled) {
     Modifier.hoverable(interaction)
+      .pointerHoverIcon(PointerIcon.Hand)
       .clickable(interaction, indication = null, onClickLabel = "Edit ${label ?: key}", role = Role.Button, onClick = onToggle)
       .expandSemantics(expanded)
   } else Modifier
@@ -131,7 +134,8 @@ fun ConfigRow(
     }
     if (expanded && editor != null) {
       Column(
-        Modifier.fillMaxWidth().background(colors.bgRaised).hairline(Edge.Top, colors.borderSubtle).padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp),
+        // `.sb-cfg-ed` pads 14px below its 1px border-top; the hairline does not inset content.
+        Modifier.fillMaxWidth().background(colors.bgRaised).hairline(Edge.Top, colors.borderSubtle).padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         content = editor,
       )

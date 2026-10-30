@@ -1,9 +1,8 @@
 package dev.skillbill.desktop.core.designsystem.detail
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -50,8 +48,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -73,6 +73,7 @@ import dev.skillbill.desktop.core.designsystem.composite.verticalResizePointerIc
 import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
+import kotlin.time.TimeSource
 
 private val terminalBarHeight = 34.dp
 private val terminalGripHeight = 6.dp
@@ -111,24 +112,29 @@ fun TerminalPaneChrome(
   Box(modifier.fillMaxWidth().heightIn(min = SkillBillSize.terminalMin).height(height).background(colors.bgInset).hairline(Edge.Top, colors.border)) {
     // `.sb-term`'s 1 px top border sits outside its content, so the bar starts below the hairline.
     Column(Modifier.padding(top = 1.dp)) {
+      // `.sb-term-bar` is 34 px including its 1 px bottom border, so its items center in the 33 px above the border.
       Row(
-        Modifier.fillMaxWidth().height(terminalBarHeight).hairline(Edge.Bottom, colors.borderSubtle).padding(start = 12.dp, end = 6.dp),
+        Modifier.fillMaxWidth().height(terminalBarHeight).hairline(Edge.Bottom, colors.borderSubtle).padding(start = 12.dp, end = 6.dp, bottom = 1.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         CompositionLocalProvider(LocalContentColor provides colors.fgFaint) {
-          SbIcon(LucideIcons.terminal, SbIconSize.Sm)
-          Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-            tabs.forEach { tab ->
-              TerminalTab(
-                tab, active = tab.id == activeId, renaming = tab.id == renamingId,
-                onSelect = { onSelectTab(tab.id) }, onStartRename = { onStartRename(tab.id) },
-                onRename = { onRename(tab.id, it) }, onCancelRename = onCancelRename, renameFieldGate = renameFieldGate, onClose = { onCloseTab(tab.id) },
-              )
+          // `.sb-term-tabs` keeps its content width and only shrinks (then scrolls) when the bar runs out of room; `.l-grow`
+          // takes the rest. A second weight would cap the strip at half the free space, so the left group fills the row
+          // instead, and its 6 px end padding stands for the gap on the far side of the empty `.l-grow`.
+          Row(Modifier.weight(1f).padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            SbIcon(LucideIcons.terminal, SbIconSize.Sm)
+            Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+              tabs.forEach { tab ->
+                TerminalTab(
+                  tab, active = tab.id == activeId, renaming = tab.id == renamingId,
+                  onSelect = { onSelectTab(tab.id) }, onStartRename = { onStartRename(tab.id) },
+                  onRename = { onRename(tab.id, it) }, onCancelRename = onCancelRename, renameFieldGate = renameFieldGate, onClose = { onCloseTab(tab.id) },
+                )
+              }
             }
+            SbIconButton(LucideIcons.plus, "New terminal tab", onNewTab, size = SbControlSize.Small, shortcut = "⌃ ⇧ `")
           }
-          SbIconButton(LucideIcons.plus, "New terminal tab", onNewTab, size = SbControlSize.Small, shortcut = "⌃ ⇧ `")
-          Spacer(Modifier.weight(1f))
           SbIconButton(LucideIcons.chevronUp, "Make terminal taller", { onResizeBy(terminalStep) }, size = SbControlSize.Small)
           SbIconButton(LucideIcons.chevronDown, "Make terminal shorter", { onResizeBy(-terminalStep) }, size = SbControlSize.Small)
           SbIconButton(LucideIcons.x, "Close terminal", onClose, size = SbControlSize.Small, shortcut = "⌃ `")
@@ -137,7 +143,8 @@ fun TerminalPaneChrome(
       Box(Modifier.fillMaxWidth().weight(1f), content = content)
     }
     Box(
-      Modifier.fillMaxWidth().height(terminalGripHeight).offset(y = -terminalGripHeight / 2)
+      // `top: -3px` is measured from the padding box, which starts below the 1 px top border.
+      Modifier.fillMaxWidth().height(terminalGripHeight).offset(y = 1.dp - terminalGripHeight / 2)
         .pointerHoverIcon(verticalResizePointerIcon)
         .draggable(drag, Orientation.Vertical)
         .semantics { contentDescription = "Resize terminal" },
@@ -145,7 +152,6 @@ fun TerminalPaneChrome(
   }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TerminalTab(
   tab: TerminalTabChrome,
@@ -165,9 +171,23 @@ private fun TerminalTab(
   // `.sb-ttab` has no transition, so the hover fill switches at once.
   val fill = if (active) colors.bgActive else if (hovered) colors.bgHover else Color.Transparent
   val textColor = if (active || hovered) colors.fg else colors.fgMuted
+  // main.js handles `click` and `dblclick` separately: the first click selects the tab at once and the second starts the
+  // rename. combinedClickable would hold every single click back for the double-click timeout.
+  val doubleTapMillis = LocalViewConfiguration.current.doubleTapTimeoutMillis
+  var lastClick by remember { mutableStateOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
   Row(
     Modifier.height(24.dp).background(fill, shape).hoverable(interaction)
-      .combinedClickable(interaction, indication = null, role = Role.Button, onDoubleClick = onStartRename, onClick = onSelect)
+      .clickable(interaction, indication = null, role = Role.Button) {
+        onSelect()
+        val previous = lastClick
+        if (previous != null && previous.elapsedNow().inWholeMilliseconds <= doubleTapMillis) {
+          lastClick = null
+          onStartRename()
+        } else {
+          lastClick = TimeSource.Monotonic.markNow()
+        }
+      }
+      .pointerHoverIcon(PointerIcon.Hand)
       .semantics { selected = active }
       .padding(start = 9.dp, end = 2.dp),
     horizontalArrangement = Arrangement.spacedBy(2.dp),

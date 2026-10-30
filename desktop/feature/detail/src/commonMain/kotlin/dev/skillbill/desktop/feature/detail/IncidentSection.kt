@@ -21,8 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.Callout
+import dev.skillbill.desktop.core.designsystem.component.ExpandableText
 import dev.skillbill.desktop.core.designsystem.component.FeedbackTone
-import dev.skillbill.desktop.core.designsystem.component.FindingRow
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbCheckbox
@@ -35,6 +35,27 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.Incident
 import dev.skillbill.desktop.core.domain.model.IncidentProgress
 import dev.skillbill.desktop.core.domain.model.IncidentRecoveryEligibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import dev.skillbill.desktop.core.designsystem.LocalContentColor
+import dev.skillbill.desktop.core.designsystem.SkillBillRadius
+import dev.skillbill.desktop.core.designsystem.component.sbFocusRing
+import dev.skillbill.desktop.core.designsystem.detail.SectionCollapse
+import dev.skillbill.desktop.core.designsystem.icon.SbIcon
+import dev.skillbill.desktop.core.domain.model.IncidentEvidence
+import dev.skillbill.desktop.core.designsystem.component.ShortId
 
 /**
  * HANDOFF 9.2 item 7: the current incident, its prerequisites, the [decision] slot, evidence and report, as screens.js
@@ -46,31 +67,39 @@ internal fun IncidentSection(
   view: RunActionsView,
   decision: @Composable () -> Unit,
   onAction: (ControlsAction) -> Unit,
+  collapse: SectionCollapse,
+  onCopy: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val colors = SkillBillTheme.colors
   val type = SkillBillTheme.type
   val labelColor = incidentLabelColor(incident)
-  Section(title = "Incident", modifier = modifier, actions = { SbLabel(incident.progress.label(), SbLabelStyle.Dot(labelColor)) }) {
+  Section(
+    title = "Incident",
+    modifier = modifier,
+    actions = { SbLabel(incident.progress.label(), SbLabelStyle.Dot(labelColor)) },
+    collapsed = collapse.isCollapsed(INCIDENT_KEY),
+    onToggle = { collapse.toggle(INCIDENT_KEY) },
+  ) {
     // The callout body (screens.js incidentPanel): an `.l-col g-1` of faint-led Cause and Next lines and the `--t-xs`
     // certainty line, then the prerequisite checklist 8 below it, inside the callout.
     val bodyStyle = type.tSm.copy(color = colors.fgMuted, lineHeight = 1.5.em)
     val checklist = view.checklist
     Callout(incident.tone(), incident.progress.label(), modifier = Modifier.fillMaxWidth()) {
       Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        BasicText(
+        ExpandableText(
           buildAnnotatedString {
             withStyle(SpanStyle(color = colors.fgFaint)) { append("Cause:") }
             append(" ${incident.cause ?: "Unknown"}")
           },
-          style = bodyStyle,
+          bodyStyle,
         )
-        BasicText(
+        ExpandableText(
           buildAnnotatedString {
             withStyle(SpanStyle(color = colors.fgFaint)) { append("Next:") }
             append(" ${incident.nextAction}")
           },
-          style = bodyStyle,
+          bodyStyle,
         )
         BasicText(
           "certainty ${incident.certainty}" + (unavailableText(incident)?.let { " · recovery unavailable: $it" } ?: ""),
@@ -78,7 +107,9 @@ internal fun IncidentSection(
         )
       }
       // `.sb-checklist`: rows 6 apart, checkbox and text 10 apart, top-aligned with the box 2 down.
-      if (checklist != null || incident.prerequisites.isNotEmpty()) {
+      // screens.js drops the prerequisites once recovery runs.
+      val recovered = incident.progress == IncidentProgress.Recovering || incident.progress == IncidentProgress.Resumed
+      if (checklist != null || (incident.prerequisites.isNotEmpty() && !recovered)) {
         Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           val rowStyle = type.tSm.copy(color = colors.fg2, lineHeight = 1.45.em)
           if (checklist != null) {
@@ -96,17 +127,70 @@ internal fun IncidentSection(
     }
     decision()
     if (incident.evidence.isNotEmpty()) {
-      // `.l-col g-2`: the faint `--t-xs` caption, then the evidence rows in one box.
+      // Evidence starts folded: its rows are long runtime records, read only when the summary above isn't enough.
+      val folded = collapse.isCollapsed(EVIDENCE_KEY, default = true)
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        BasicText("Evidence", style = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal))
-        SbBox {
-          incident.evidence.forEachIndexed { index, evidence ->
-            FindingRow(title = evidence.summary, ref = evidence.referenceId, meta = evidence.kind, showDivider = index > 0)
+        EvidenceToggle(incident.evidence.size, folded) { collapse.toggle(EVIDENCE_KEY, default = true) }
+        if (!folded) {
+          SbBox {
+            incident.evidence.forEachIndexed { index, evidence -> EvidenceRow(evidence, showDivider = index > 0, onCopy = onCopy) }
           }
         }
       }
     }
     ReportRow(incident)
+  }
+}
+
+private const val INCIDENT_KEY = "incident"
+private const val EVIDENCE_KEY = "incident-evidence"
+
+/** The faint `--t-xs` Evidence caption as a toggle: caption, count and a chevron. */
+@Composable
+private fun EvidenceToggle(count: Int, folded: Boolean, onToggle: () -> Unit) {
+  val colors = SkillBillTheme.colors
+  val interaction = remember { MutableInteractionSource() }
+  val hovered by interaction.collectIsHoveredAsState()
+  val color = if (hovered) colors.fgMuted else colors.fgFaint
+  Row(
+    Modifier.sbFocusRing(interaction, RoundedCornerShape(SkillBillRadius.xs))
+      .pointerHoverIcon(PointerIcon.Hand)
+      .clickable(interaction, indication = null, role = Role.Button, onClick = onToggle)
+      .semantics { stateDescription = if (folded) "Collapsed" else "Expanded" },
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    BasicText("Evidence · $count", style = SkillBillTheme.type.tXs.copy(color = color, fontWeight = FontWeight.Normal, lineHeight = 1.em))
+    CompositionLocalProvider(LocalContentColor provides color) {
+      SbIcon(if (folded) LucideIcons.chevronRight else LucideIcons.chevronDown, 12.dp)
+    }
+  }
+}
+
+/**
+ * One evidence record, stacked so a long reference never squeezes the text: the reference shortened on its own line (its kind
+ * prefix dropped, since the kind shows below; full value in the tooltip and the copy button), the summary at full width, then
+ * the kind.
+ */
+@Composable
+private fun EvidenceRow(evidence: IncidentEvidence, showDivider: Boolean, onCopy: (String) -> Unit) {
+  val colors = SkillBillTheme.colors
+  val type = SkillBillTheme.type
+  val divider = colors.borderSubtle
+  Column(
+    Modifier.fillMaxWidth()
+      .drawBehind {
+        if (showDivider) {
+          val stroke = 1.dp.toPx()
+          drawLine(divider, Offset(0f, stroke / 2), Offset(size.width, stroke / 2), stroke)
+        }
+      }
+      .padding(start = 12.dp, end = 12.dp, top = if (showDivider) 10.dp else 9.dp, bottom = 9.dp),
+    verticalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    ShortId(evidence.referenceId, onCopy, label = "reference", shown = evidence.referenceId.removePrefix("${evidence.kind}:"))
+    ExpandableText(evidence.summary, type.tSm.copy(color = colors.fg2, lineHeight = 1.45.em))
+    BasicText(evidence.kind, style = type.tXs.copy(color = colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em))
   }
 }
 

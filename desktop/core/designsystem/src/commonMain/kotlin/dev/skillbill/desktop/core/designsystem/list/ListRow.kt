@@ -22,8 +22,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -53,10 +58,6 @@ import dev.skillbill.desktop.core.designsystem.SkillBillRadius
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.IdTag
-import dev.skillbill.desktop.core.designsystem.composite.Edge
-import dev.skillbill.desktop.core.designsystem.composite.focusBar
-import dev.skillbill.desktop.core.designsystem.composite.hairline
-import dev.skillbill.desktop.core.designsystem.composite.rowFill
 import dev.skillbill.desktop.core.designsystem.tabular
 
 private val idColumnWidth = 74.dp
@@ -94,7 +95,6 @@ fun ListRow(
   val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
   var rowSize by remember { mutableStateOf(IntSize.Zero) }
   val shape = if (compact) Modifier.clip(RoundedCornerShape(SkillBillRadius.sm)) else Modifier
-  val line = if (!compact && divider) Modifier.hairline(Edge.Bottom, colors.borderSubtle) else Modifier
   val menu = if (onContextMenu == null) Modifier else Modifier
     .pointerInput(onContextMenu) {
       awaitPointerEventScope {
@@ -115,11 +115,12 @@ fun ListRow(
     // `.sb-row.faded` is element opacity, so it fades the fill, the focus bar and the hairline too, not only the content.
     modifier.then(if (faded) Modifier.alpha(0.6f) else Modifier)
       .fillMaxWidth().height(if (compact) SkillBillSize.compactRow else SkillBillSize.row)
-      .then(shape).rowFill(hovered, focused, selected).focusBar(focused).then(line)
+      .then(shape).rowSurface(hovered, focused, selected, line = !compact && divider)
       .onSizeChanged { rowSize = it }.hoverable(interaction).then(menu)
-      .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
+      .pointerHoverIcon(PointerIcon.Hand).clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
       .semantics(mergeDescendants = true) { this.selected = selected }
-      .padding(start = if (compact) 12.dp else if (narrow) 16.dp else 20.dp, end = if (compact || narrow) 12.dp else 16.dp),
+      // A bottom border takes 1px of the row height, so the content centers in the space above it.
+      .padding(start = if (compact) 12.dp else if (narrow) 16.dp else 20.dp, end = if (compact || narrow) 12.dp else 16.dp, bottom = if (!compact && divider) 1.dp else 0.dp),
     horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -138,6 +139,34 @@ fun ListRow(
         if (timeContent == null) BasicText(time.orEmpty(), style = type.tSm.tabular().copy(color = colors.fgFaint, textAlign = TextAlign.End), maxLines = 1)
       }
     }
+  }
+}
+
+/**
+ * The row's fill, focus bar and bottom hairline. `.sb-row` declares no transition, so the fill switches instantly; the focus bar
+ * (`::before`, top 0 to bottom 0 of the padding box) stops above the bottom border.
+ */
+@Composable
+private fun Modifier.rowSurface(hovered: Boolean, focused: Boolean, selected: Boolean, line: Boolean): Modifier {
+  val colors = SkillBillTheme.colors
+  val fill = when {
+    selected -> colors.bgSelected
+    focused -> colors.bgActive
+    hovered -> colors.bgHover
+    else -> Color.Transparent
+  }
+  val accent = colors.accent
+  val border = colors.borderSubtle
+  return drawBehind {
+    if (fill != Color.Transparent) drawRect(fill)
+    val stroke = 1.dp.toPx()
+    val inner = if (line) size.height - stroke else size.height
+    if (focused) {
+      val bar = 2.dp.toPx()
+      val x = if (layoutDirection == LayoutDirection.Rtl) size.width - bar else 0f
+      drawRect(accent, topLeft = Offset(x, 0f), size = Size(bar, inner))
+    }
+    if (line) drawRect(border, topLeft = Offset(0f, inner), size = Size(size.width, stroke))
   }
 }
 

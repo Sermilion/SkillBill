@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillSize
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
@@ -19,11 +20,14 @@ data class ShellLayout(val showDetailsPane: Boolean, val drawerMode: Boolean)
 
 val LocalShellLayout = compositionLocalOf { ShellLayout(showDetailsPane = true, drawerMode = false) }
 
-/** The detail view's details pane: a 272 dp column with a left hairline, shown only while the layout has room for it. */
+/**
+ * The detail view's details pane: a [width] column (272 dp, or [SkillBillSize.detailsPaneWide] while it holds the subtask
+ * inspector) with a left hairline, shown only while the layout has room for it.
+ */
 @Composable
-fun DetailsPaneSlot(content: @Composable ColumnScope.() -> Unit) {
+fun DetailsPaneSlot(width: Dp = SkillBillSize.detailsPane, content: @Composable ColumnScope.() -> Unit) {
   if (!LocalShellLayout.current.showDetailsPane) return
-  Row(Modifier.width(SkillBillSize.detailsPane).fillMaxHeight()) {
+  Row(Modifier.width(width).fillMaxHeight()) {
     Box(Modifier.width(1.dp).fillMaxHeight().background(SkillBillTheme.colors.borderSubtle))
     Column(Modifier.weight(1f).fillMaxHeight(), content = content)
   }

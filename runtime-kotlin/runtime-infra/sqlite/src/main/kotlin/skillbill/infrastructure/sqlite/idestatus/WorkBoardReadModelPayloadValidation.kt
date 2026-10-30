@@ -347,6 +347,7 @@ internal object WorkBoardReadModelPayloadValidation {
     fun invalidFieldGroup8(fields: Map<String, Any?>): Boolean =
       !requiredEnum(fields, WorkBoardReadModelPayloadKeys.FRESHNESS, IdeStatusFreshness.entries.map { it.wireValue }) ||
         !requiredNonBlankText(fields, WorkBoardReadModelPayloadKeys.SUMMARY) ||
+        !requiredNonBlankText(fields, WorkBoardReadModelPayloadKeys.TITLE) ||
         !optionalText(fields, WorkBoardReadModelPayloadKeys.ISSUE_KEY)
 
     fun invalidFieldGroup9(fields: Map<String, Any?>): Boolean =
