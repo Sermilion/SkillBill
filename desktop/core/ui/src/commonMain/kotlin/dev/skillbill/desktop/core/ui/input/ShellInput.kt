@@ -31,6 +31,7 @@ class ShellInput {
 
   val textInputFocused: Boolean get() = focusedSources.any { it != TERMINAL_SOURCE }
   val terminalFocused: Boolean get() = TERMINAL_SOURCE in focusedSources
+  val specsTreeFocused: Boolean get() = SPECS_TREE_SOURCE in focusedSources
   val layerOpen: Boolean get() = layers.isNotEmpty()
   val editOpen: Boolean get() = edits.isNotEmpty()
 
@@ -69,6 +70,7 @@ class ShellInput {
 
   companion object {
     const val TERMINAL_SOURCE = "terminal"
+    const val SPECS_TREE_SOURCE = "specs-tree"
   }
 }
 

@@ -693,14 +693,11 @@ internal object WorkBoardReadModelRead {
     request: ScanRequest,
   ): BoardPage {
     val indexed = mutableListOf<ProjectedBoardItem>()
-    var indexedAfter =
-      after?.let {
-        WorkBoardReadModelKey(it.displayPriority, formatReadModelInstant(it.updatedAt), it.workId)
-      }
+    var indexedAfter: WorkBoardReadModelKey? = null
     var examined = 0
     var moreRows = true
-    val limit = pageSize + 1
-    while (indexed.size <= pageSize && moreRows) {
+    val limit = maxOf(pageSize + 1, WORK_BOARD_CANDIDATE_BATCH_SIZE)
+    while (moreRows) {
       val entries =
         unitOfWork.workBoardReadModel.page(
           WorkBoardReadModelPageQuery(request.finishedFrom, request.filter, indexedAfter, limit),
@@ -710,7 +707,9 @@ internal object WorkBoardReadModelRead {
       entries.mapNotNullTo(indexed) { entry -> indexedItem(projection, unitOfWork, entry, request) }
       indexedAfter = entries.lastOrNull()?.key ?: break
     }
-    return BoardPage(indexed.take(pageSize), indexed.size > pageSize, examined)
+    val ordered = indexed.sortedWith { left, right -> PROJECTED_ORDER.compare(left.position, right.position) }
+    val eligible = ordered.filter { after == null || PROJECTED_ORDER.compare(it.position, after) > 0 }
+    return BoardPage(eligible.take(pageSize), eligible.size > pageSize, examined)
   }
 
   private fun indexedItem(
@@ -745,16 +744,10 @@ internal object WorkBoardReadModelRead {
     ) {
       return null
     }
-    val updatedAt =
-      try {
-        Instant.parse(entry.key.updatedAtText)
-      } catch (_: DateTimeParseException) {
-        null
-      }
     return ProjectedBoardItem(
       item,
       projectedId,
-      updatedAt?.let { ProjectedBoardPosition(entry.key.displayPriority, it, entry.workId) },
+      ProjectedBoardPosition(item.displayPriority, item.snapshot.updatedAt, entry.workId),
     )
   }
 

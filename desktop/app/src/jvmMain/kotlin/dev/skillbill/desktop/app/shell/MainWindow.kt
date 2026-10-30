@@ -59,7 +59,9 @@ fun ApplicationScope.MainWindow(window: WindowComponent, reducedMotion: Boolean,
         ShellKey.Up, ShellKey.Down, ShellKey.Enter -> true
         else -> false
       }
-      if (window.panes.specsOpen && treeKey) false
+      val specsNavigationKey = treeKey && press?.let { !it.ctrl && !it.meta && !it.shift && !it.alt } == true
+      if (window.panes.specsOpen && specsNavigationKey && window.input.specsTreeFocused)
+        false
       else press?.let(keyboard::onKey) ?: false
     },
   ) {

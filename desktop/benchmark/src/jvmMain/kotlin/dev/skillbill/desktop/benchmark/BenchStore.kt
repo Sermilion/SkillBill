@@ -14,6 +14,9 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.idestatus.model.WorktreeEditSource
+import skillbill.idestatus.model.WorktreeEditTick
+import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -105,13 +108,22 @@ fun registerLive(writer: RuntimeComponent, count: Int, root: Path, namespace: St
 }
 
 fun replayActivity(writer: RuntimeComponent, live: List<LiveRecord>): List<LiveRecord> {
-  val updated = live.map { liveRecord ->
+  val updated = live.mapIndexed { index, liveRecord ->
     writer.databaseSession.transaction { unit ->
       val now = Instant.now()
       val worker = liveRecord.worker.copy(heartbeatAt = now.toString(), expiresAt = now.plusSeconds(3600).toString())
       check(unit.workflowStates.heartbeatFeatureTaskRuntimeWorker(worker)) {
         "Benchmark heartbeat for '${liveRecord.record.invocationId}' was rejected."
       }
+      unit.worktreeEditJournal.append(
+        checkNotNull(liveRecord.record.workflowId),
+        WorktreeEditTick(
+          recordedAt = now,
+          phaseId = "review",
+          source = WorktreeEditSource.WORKTREE_PROBE,
+          entries = listOf(GoalObservabilityFileDiffStat("src/bench/${liveRecord.record.invocationId}.kt", index + 1, index)),
+        ),
+      )
       worker
     }
   }

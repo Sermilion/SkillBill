@@ -220,7 +220,7 @@ object IdeStatusPolicy {
     return IdeStatusWorkPolicy(
       liveSection = liveSection,
       controlEligible = controlEligible,
-      pauseEligible = controlEligible && !facts.pauseRequested,
+      pauseEligible = controlEligible,
       requiresAttention =
         facts.lifecycle in setOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED) ||
           facts.awaitingOperatorDecision ||

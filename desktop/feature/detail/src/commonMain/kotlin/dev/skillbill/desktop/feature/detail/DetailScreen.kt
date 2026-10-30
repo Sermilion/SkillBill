@@ -31,6 +31,7 @@ import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.designsystem.navigation.Crumb
 import dev.skillbill.desktop.core.designsystem.navigation.Pager
 import dev.skillbill.desktop.core.designsystem.navigation.ViewHeader
+import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.WorkLiveSection
 import dev.skillbill.desktop.core.ui.feedback.StaleIndicator
 import dev.skillbill.desktop.core.ui.feedback.readProblemText
@@ -143,8 +144,9 @@ private fun LazyListScope.document(state: DetailUiState, onAction: (DetailAction
       pipelineSection(item, detail)
       dependencySection(detail, state, onAction)
       activitySection(item.kind, detail, state.renderedAt)
-      validationSection(detail, state, onAction)
-      phaseResultsSection(detail, state, onAction)
+      validationSection(detail)
+      phaseResultsSection(detail)
+      pageFooter(DetailList.Validation, state, onAction)
       goalQaSection(detail)
       goalAssessmentSection(detail)
       qaReportSection(item, detail, onAction)

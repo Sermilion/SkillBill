@@ -104,7 +104,10 @@ internal fun DetailSections.Loaded.withList(list: DetailList, page: Detail, curs
   val merged = when (list) {
     DetailList.Subtasks -> detail.copy(subtasks = merge(detail.subtasks, page.subtasks))
     DetailList.Phases -> detail.copy(phases = merge(detail.phases, page.phases))
-    DetailList.Validation -> detail.copy(validation = merge(detail.validation, page.validation))
+    DetailList.Validation -> detail.copy(
+      validation = merge(detail.validation, page.validation),
+      phaseResults = merge(detail.phaseResults, page.phaseResults),
+    )
     DetailList.Executions -> detail.copy(executionHistory = merge(detail.executionHistory, page.executionHistory))
     DetailList.Dependencies -> detail.copy(dependencies = merge(detail.dependencies, page.dependencies))
   }

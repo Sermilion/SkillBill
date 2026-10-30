@@ -17,7 +17,6 @@ import dev.skillbill.desktop.core.designsystem.detail.PropertyRow
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.designsystem.detail.section
 import dev.skillbill.desktop.core.domain.model.Detail
-import dev.skillbill.desktop.core.domain.model.DetailList
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentFindingState
 import dev.skillbill.desktop.core.domain.model.GoalAssessmentState
 import dev.skillbill.desktop.core.domain.model.WorkKind
@@ -55,7 +54,7 @@ internal fun LazyListScope.activitySection(kind: WorkKind?, detail: Detail, now:
 }
 
 /** HANDOFF 9.2 item 13: one row per subtask's validation. */
-internal fun LazyListScope.validationSection(detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
+internal fun LazyListScope.validationSection(detail: Detail) {
   if (detail.validation.isEmpty()) return
   section("validation", "Validation", count = detail.validation.size) {
     items(detail.validation, key = { "validation-${it.subtaskId}" }) { record ->
@@ -68,12 +67,11 @@ internal fun LazyListScope.validationSection(detail: Detail, state: DetailUiStat
         stateColor = when (record.passed) { true -> colors.stDone; false -> colors.stFailed; null -> null },
       )
     }
-    pageFooter(DetailList.Validation, state, onAction)
   }
 }
 
 /** HANDOFF 9.2 item 14: review passes with their findings, then the audit conclusion, per subtask. */
-internal fun LazyListScope.phaseResultsSection(detail: Detail, state: DetailUiState, onAction: (DetailAction) -> Unit) {
+internal fun LazyListScope.phaseResultsSection(detail: Detail) {
   if (detail.phaseResults.isEmpty()) return
   section("phase-results", "Phase results") {
     detail.phaseResults.forEach { results ->
@@ -110,7 +108,6 @@ internal fun LazyListScope.phaseResultsSection(detail: Detail, state: DetailUiSt
         }
       }
     }
-    pageFooter(DetailList.Validation, state, onAction)
   }
 }
 

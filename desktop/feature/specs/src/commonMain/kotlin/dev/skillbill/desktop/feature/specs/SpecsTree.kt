@@ -35,10 +35,16 @@ import dev.skillbill.desktop.core.designsystem.status.StatusKind
 import dev.skillbill.desktop.core.domain.model.SpecFileKind
 import dev.skillbill.desktop.core.domain.model.SpecNode
 import dev.skillbill.desktop.core.domain.model.SpecStatus
+import dev.skillbill.desktop.core.ui.input.LocalShellInput
+import dev.skillbill.desktop.core.ui.input.ShellInput
 import kotlinx.coroutines.launch
 
 @Composable
 internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, modifier: Modifier = Modifier) {
+  val shellInput = LocalShellInput.current
+  DisposableEffect(shellInput) {
+    onDispose { shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, false) }
+  }
   var focusedPath by remember { mutableStateOf<String?>(null) }
   val listState = rememberLazyListState()
   val scope = rememberCoroutineScope()
@@ -96,7 +102,10 @@ internal fun SpecsTree(state: SpecsUiState, onAction: (SpecsAction) -> Unit, mod
         lead = { SpecLead(row.node) },
         id = (row.node as? SpecNode.Bundle)?.issueKey,
         meta = { SpecMeta(row.node) },
-        modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged { if (it.isFocused) focusedPath = row.node.path }.focusable(),
+        modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged {
+          shellInput.setFocusSource(ShellInput.SPECS_TREE_SOURCE, it.hasFocus)
+          if (it.isFocused) focusedPath = row.node.path
+        }.focusable(),
       )
     }
   }

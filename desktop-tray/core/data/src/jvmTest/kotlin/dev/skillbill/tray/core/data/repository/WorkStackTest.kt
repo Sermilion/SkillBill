@@ -493,7 +493,7 @@ class WorkStackTest {
         assertIs<Outcome.Failure>(source.pause(target))
         val current = value(source.board(WorkSection.GOALS, Retention.SIX_HOURS)).items.single()
         assertEquals(Outcome.Value(ControlConfirmation.INTENT_RECORDED), source.pause(current))
-        assertIs<Outcome.Failure>(source.pause(current))
+        assertEquals(Outcome.Value(ControlConfirmation.INTENT_RECORDED), source.pause(current))
         assertIs<Outcome.Failure>(source.stop(current))
         assertFalse(factory.read { it.goalRunnerControls.controlState("older-goal").goalCompletedAt != null })
         val history = value(source.board(WorkSection.HISTORY, Retention.DAY, filter = "branch-4999"))

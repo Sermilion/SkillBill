@@ -7,10 +7,8 @@ import dev.skillbill.desktop.core.data.di.DatabaseSessionScope
 import dev.skillbill.desktop.core.data.session.SessionSelectionHolder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.Job
 import me.tatarka.inject.annotations.Inject
 import skillbill.di.core.RuntimeComponent
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
@@ -19,10 +17,6 @@ import kotlin.time.TimeSource
 /** Thrown when a read reaches a session that has closed; callers treat it as a stale session, not as a cancellation. */
 internal class SessionClosedException(cause: Throwable? = null) : IllegalStateException("The database session closed.", cause)
 
-/**
- * The one way to call the session's runtime. Calls run on the database dispatcher as caller children; session cancellation also
- * cancels them before releasing the graph.
- */
 @Inject
 @SingleIn(DatabaseSessionScope::class)
 class RuntimeReads(
@@ -41,15 +35,12 @@ class RuntimeReads(
     if (!scope.isActive) throw SessionClosedException()
     val start = if (switch.enabled) TimeSource.Monotonic.markNow() else null
     try {
-      return coroutineScope {
-        val call = async(dispatcher.dispatcher) { block(runtime) }
-        val sessionJob = scope.coroutineContext[Job]
-        val sessionCancellation = sessionJob?.invokeOnCompletion { if (!scope.isActive) call.cancel() }
-        try {
-          call.await()
-        } finally {
-          sessionCancellation?.dispose()
-        }
+      val call = scope.async(dispatcher.dispatcher) { block(runtime) }
+      val callerContext = currentCoroutineContext()
+      try {
+        return call.await()
+      } finally {
+        if (!callerContext.isActive) call.cancel()
       }
     } catch (failure: CancellationException) {
       // The session ended under a caller that is still running: report a stale session instead of cancelling the caller.
