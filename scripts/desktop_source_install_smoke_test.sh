@@ -25,6 +25,8 @@ desktop_app_install_root() { printf '%s' "$task_dir/install"; }
 desktop_app_legacy_target_path() { printf '%s/SkillBill.app' "$2"; }
 install_desktop_app_launcher() { ln -sf "$3" "$task_dir/bin/skillbill-desktop"; }
 launch_desktop_app() { printf '%s\n' "$3" >> "$task_dir/launched"; }
+init_prebuilt_work_dir() { mkdir -p "$task_dir/staging"; }
+prebuilt_work_dir() { printf '%s' "$task_dir/staging"; }
 
 cat > "$task_dir/checkout/desktop/gradlew" <<'BUILD'
 #!/usr/bin/env bash
@@ -39,6 +41,7 @@ fi
 mkdir -p 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS'
 printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
 chmod +x 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
+printf 'commit=1111111111111111111111111111111111111111\n' > 'app/build/compose/binaries/main/app/Skill Bill.app/Contents/build-identity.properties'
 BUILD
 chmod +x "$task_dir/checkout/desktop/gradlew"
 
@@ -51,6 +54,13 @@ if [[ -e "$task_dir/launched" ]]; then
   err 'Installer launched a desktop app that was not running.'
   exit 1
 fi
+
+stage_selected_desktop_app
+printf 'commit=2222222222222222222222222222222222222222\n' > "$BUILT_DESKTOP_APP_SOURCE/Contents/build-identity.properties"
+printf '#!/usr/bin/env bash\nprintf "replaced desktop build\\n"\n' > "$BUILT_DESKTOP_APP_SOURCE/Contents/MacOS/Skill Bill"
+activate_staged_desktop_app
+[[ "$(cat "$task_dir/install/Skill Bill.app/Contents/build-identity.properties")" == 'commit=1111111111111111111111111111111111111111' ]]
+[[ "$("$app")" == 'source desktop app' ]]
 
 (exec -a "$app" sleep 60) &
 running_app=$!

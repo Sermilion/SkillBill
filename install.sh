@@ -2011,7 +2011,17 @@ stage_selected_desktop_app() {
   os="$(host_os)"
   if [[ "$INSTALL_SOURCE" == "source" ]]; then
     build_source_desktop_app "$os" || return 1
-    app_source="$BUILT_DESKTOP_APP_SOURCE"
+    init_prebuilt_work_dir || return 1
+    work_dir="$(prebuilt_work_dir)"
+    if [[ -z "$work_dir" ]] || ! work_dir="$(mktemp -d "$work_dir/desktop-source.XXXXXX")"; then
+      err "Could not create a private desktop staging directory."
+      return 1
+    fi
+    app_source="$(desktop_app_target_path "$os" "$work_dir")"
+    if ! cp -R "$BUILT_DESKTOP_APP_SOURCE" "$app_source"; then
+      err "Could not snapshot the desktop build before checking runtime parity."
+      return 1
+    fi
   else
     if ! token="$(host_token)"; then
       err "No desktop app release target is supported for this host."
