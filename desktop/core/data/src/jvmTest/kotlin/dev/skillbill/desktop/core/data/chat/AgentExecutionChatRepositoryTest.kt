@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.data.chat
 
+import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
@@ -11,8 +12,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import java.lang.reflect.Proxy
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Clock
 
 class AgentExecutionChatRepositoryTest {
   // An unsupported agent must not silently fall through to the Claude process.
@@ -31,7 +34,7 @@ class AgentExecutionChatRepositoryTest {
       error("unused")
     } as RuntimeConfigRepository
     val diagnostics = RecordingDiagnostics()
-    val repository = AgentExecutionChatRepository(setOf(claude), unusedConfig, diagnostics)
+    val repository = AgentExecutionChatRepository(setOf(claude), unusedConfig, ChatStore(HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), ""), diagnostics, Clock.System), diagnostics)
 
     val events = repository.send(chatRequest(agent = ChatAgent("codex", null, null))).toList()
 

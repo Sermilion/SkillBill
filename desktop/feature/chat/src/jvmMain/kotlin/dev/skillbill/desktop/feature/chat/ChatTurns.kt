@@ -3,6 +3,7 @@ package dev.skillbill.desktop.feature.chat
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatScope
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
@@ -17,6 +18,7 @@ import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.WorkDetailRepository
 import kotlinx.coroutines.flow.firstOrNull
+import kotlin.time.Clock
 
 internal const val GONE_NOTICE = "This execution is no longer in the open database."
 internal const val UNREADABLE_NOTICE = "Execution detail could not be read; the agent sees the summary only."
@@ -44,7 +46,11 @@ internal fun ControlOutcome.problemDetail(): String? = when (this) {
 }
 
 /** Reads, snapshots and streams the turns of [ChatWorkspace]; every call runs inside a session job. */
-internal class ChatTurns(private val chat: ExecutionChatRepository, private val details: WorkDetailRepository) {
+internal class ChatTurns(
+  private val chat: ExecutionChatRepository,
+  private val details: WorkDetailRepository,
+  private val clock: Clock,
+) {
   /** The first settled read; a flow that ends without one counts as unreadable. */
   suspend fun freshRead(item: WorkItem): DetailState? = details.observe(item).firstOrNull { it.sections !is DetailSections.Pending }
 
@@ -87,7 +93,8 @@ internal class ChatTurns(private val chat: ExecutionChatRepository, private val 
       session.agentSupportedState.value = chat.supports(it.agentId)
     }
 
-  // The snapshot counts as delivered, and the CLI session as created, only once the turn produced output.
+  // The snapshot counts as delivered, and the CLI session as created, only once the turn produced output. A turn that ends
+  // without cancellation saves the chat, so a later window can resume it.
   private suspend fun stream(
     session: ChatSession,
     agent: ChatAgent,
@@ -126,6 +133,9 @@ internal class ChatTurns(private val chat: ExecutionChatRepository, private val 
       }
     } finally {
       session.endStreaming()
+    }
+    if (session.started) {
+      chat.saveChat(ChatHistoryEntry(session.sessionId, session.item.id, agent, clock.now(), session.historyLines()))
     }
   }
 }

@@ -2,6 +2,9 @@ package dev.skillbill.desktop.feature.chat
 
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatToolCall
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
@@ -13,10 +16,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
 
+internal const val SAVED_LINES = 10
+
 /**
  * One execution's chat. [sessionId] names the agent CLI session and changes when the operator switches agents; [job] parents
- * every turn, so cancelling it ends the turn's process. [delivered] is the snapshot the agent last received and the base of
- * the next diff.
+ * every turn, so cancelling it ends the turn's process; [turnJob] is the turn that owns [busy] now. [delivered] is the snapshot
+ * the agent last received and the base of the next diff.
  */
 class ChatSession internal constructor(
   initial: WorkItem,
@@ -40,12 +45,20 @@ class ChatSession internal constructor(
 
   internal var delivered: ExecutionSnapshot? = null
   internal var started: Boolean = false
+  internal var turnJob: Job? = null
 
   /** The next turn opens [newSessionId] and sends the full snapshot, as a first turn does. */
   internal fun restart(newSessionId: String) {
     sessionId = newSessionId
     delivered = null
     started = false
+  }
+
+  /** The next turn continues the saved agent session [savedSessionId] and sends the full snapshot, since what it last saw is unknown. */
+  internal fun resumeFrom(savedSessionId: String) {
+    sessionId = savedSessionId
+    delivered = null
+    started = true
   }
 
   private val messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -66,7 +79,24 @@ class ChatSession internal constructor(
   internal val goneState = MutableStateFlow(false)
   val gone: StateFlow<Boolean> = goneState.asStateFlow()
 
+  /** The saved chats `/resume` offers; null while the picker is closed. */
+  internal val resumeChoicesState = MutableStateFlow<List<ChatHistoryEntry>?>(null)
+  val resumeChoices: StateFlow<List<ChatHistoryEntry>?> = resumeChoicesState.asStateFlow()
+
   internal fun append(message: ChatMessage) = messages.update { it + message }
+
+  internal fun replaceTranscript(transcript: List<ChatMessage>) {
+    messages.value = transcript
+  }
+
+  /** The latest operator messages and finished agent replies with text, as a resumed chat shows them again. */
+  internal fun historyLines(): List<ChatHistoryLine> = messages.value.mapNotNull { message ->
+    when {
+      message is ChatMessage.Operator -> ChatHistoryLine(ChatHistoryRole.Operator, message.text)
+      message is ChatMessage.Agent && !message.streaming && message.text.isNotBlank() -> ChatHistoryLine(ChatHistoryRole.Agent, message.text)
+      else -> null
+    }
+  }.takeLast(SAVED_LINES)
 
   internal fun appendDelta(text: String) = updateStreaming { it.copy(text = it.text + text) }
 

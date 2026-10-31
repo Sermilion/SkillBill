@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.domain.repository
 
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
@@ -23,4 +24,10 @@ interface ExecutionChatRepository {
 
   /** A cold flow that runs one turn per collection and never throws to its collector; cancelling the collection ends the turn. */
   fun send(request: ChatTurnRequest): Flow<ChatEvent>
+
+  /** The saved chats of [executionId] that hold an operator message, newest first; an unreadable store gives none. */
+  suspend fun savedChats(executionId: String): List<ChatHistoryEntry>
+
+  /** Saves [entry] over any earlier save of its session. */
+  suspend fun saveChat(entry: ChatHistoryEntry)
 }

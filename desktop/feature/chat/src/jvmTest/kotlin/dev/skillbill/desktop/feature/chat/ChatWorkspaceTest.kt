@@ -4,6 +4,8 @@ import androidx.compose.runtime.snapshots.Snapshot
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -424,5 +426,67 @@ class ChatWorkspaceTest {
     assertTrue(next.sessionId != opening.sessionId && next.sessionId == session.sessionId)
     assertEquals(opening.prompt.removeSuffix(openingInstruction(classify(item))) + "what failed?", next.prompt)
     assertTrue(session.transcript.value.any { it is ChatMessage.Notice && "codex · gpt-5 · high" in it.text })
+  }
+
+  // A chat that is not saved, or a resume that starts a new agent session, loses what the operator was doing; a resume that
+  // leaves the opening turn running would stream its reply into the restored chat.
+  @Test
+  fun `a finished turn saves the chat, and resuming it in a new window ends the running turn and continues the saved session`() = runTest {
+    val item = workItem("SKILL-1")
+    details.details = mapOf(item.id to flowOf(loaded(item)))
+    chat.events = { request ->
+      flowOf(ChatEvent.TextDelta(if (request.firstTurn) "Blocked on CI." else "The lint job failed."), ChatEvent.Completed)
+    }
+    val first = workspace()
+    first.open(item)
+    runCurrent()
+    first.send(item.id, "why blocked?")
+    runCurrent()
+    val savedSession = first.session(item.id)!!.sessionId
+    val saved = chat.saved.getValue(savedSession)
+    assertEquals(
+      listOf(
+        ChatHistoryLine(ChatHistoryRole.Agent, "Blocked on CI."),
+        ChatHistoryLine(ChatHistoryRole.Operator, "why blocked?"),
+        ChatHistoryLine(ChatHistoryRole.Agent, "The lint job failed."),
+      ),
+      saved.lines,
+    )
+    first.closeAll()
+
+    chat.agent = ChatAgent("codex", null, null)
+    val cancelled = mutableListOf<String>()
+    chat.events = { request ->
+      if (request.sessionId == savedSession) flowOf(ChatEvent.TextDelta("Rerun it."), ChatEvent.Completed)
+      else flow { try { awaitCancellation() } finally { cancelled += request.sessionId } }
+    }
+    val second = workspace()
+    second.open(item)
+    runCurrent()
+    val session = second.session(item.id)!!
+    second.showResumable(item.id)
+    runCurrent()
+    assertEquals(listOf(saved), session.resumeChoices.value)
+
+    second.resume(item.id, saved)
+    runCurrent()
+
+    assertEquals(1, cancelled.size)
+    assertNull(session.resumeChoices.value)
+    assertFalse(session.busy.value)
+    assertEquals(ChatAgent("claude", null, null), session.agent.value)
+    assertEquals(
+      listOf("Blocked on CI.", "why blocked?", "The lint job failed."),
+      session.transcript.value.mapNotNull { (it as? ChatMessage.Agent)?.text ?: (it as? ChatMessage.Operator)?.text },
+    )
+
+    second.send(item.id, "what next?")
+    runCurrent()
+
+    val resumed = chat.requests.last()
+    assertEquals(savedSession, resumed.sessionId)
+    assertFalse(resumed.firstTurn)
+    assertEquals("claude", resumed.agent.agentId)
+    assertTrue("execution.title" in resumed.prompt && resumed.prompt.endsWith("what next?"))
   }
 }

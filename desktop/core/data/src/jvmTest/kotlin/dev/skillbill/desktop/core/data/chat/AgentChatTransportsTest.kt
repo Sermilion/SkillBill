@@ -9,12 +9,15 @@ import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 
 class AgentChatTransportsTest {
-  private val host = HostEnvironment(emptyMap(), "/home/operator", "")
+  private val host = HostEnvironment(emptyMap(), createTempDirectory("chat-home").toString(), "")
+  private val store = ChatStore(host, RecordingDiagnostics(), Clock.System)
 
   /** Answers each turn with the next script of stdout lines and records its command. */
   private class ScriptedLauncher(private val scripts: List<List<ChatProcessOutput>>) : ChatProcessLauncher {
@@ -25,9 +28,9 @@ class AgentChatTransportsTest {
 
   private fun lines(vararg text: String, code: Int = 0) = text.map { ChatProcessOutput.Line(it) } + ChatProcessOutput.Exited(code, "")
 
-  // Codex names its own thread; losing it would start every later turn without the conversation.
+  // Codex names its own thread; losing it, even across an app restart, would start every later turn without the conversation.
   @Test
-  fun `codex runs unsandboxed, maps items to events and resumes the reported thread`() = runTest {
+  fun `codex runs unsandboxed, maps items to events and resumes the reported thread after a restart`() = runTest {
     val launcher = ScriptedLauncher(
       listOf(
         lines(
@@ -40,9 +43,7 @@ class AgentChatTransportsTest {
         lines("""{"type":"error","message":"stream disconnected"}""", code = 1),
       ),
     )
-    val transport = CodexChatTransport(host, launcher, RecordingDiagnostics())
-
-    val first = transport.run(chatRequest(agent = ChatAgent("codex", "gpt-5", "high"))).toList()
+    val first = CodexChatTransport(host, launcher, store, RecordingDiagnostics()).run(chatRequest(agent = ChatAgent("codex", "gpt-5", "high"))).toList()
 
     val call = ChatToolCall("i1", "shell", "git status", "git status")
     assertEquals(
@@ -54,7 +55,8 @@ class AgentChatTransportsTest {
     assertEquals("model_reasoning_effort=high", firstArgs[firstArgs.indexOf("gpt-5") + 2])
     assertTrue(launcher.commands[0].stdin.endsWith("operator prompt") && "Execution id: wf-1" in launcher.commands[0].stdin)
 
-    val second = transport.run(chatRequest(agent = ChatAgent("codex", null, null), firstTurn = false)).toList()
+    val restarted = CodexChatTransport(host, launcher, ChatStore(host, RecordingDiagnostics(), Clock.System), RecordingDiagnostics())
+    val second = restarted.run(chatRequest(agent = ChatAgent("codex", null, null), firstTurn = false)).toList()
 
     assertEquals(listOf("resume", "t-1", "-"), launcher.commands[1].argv.takeLast(3))
     assertEquals("operator prompt", launcher.commands[1].stdin)
@@ -76,7 +78,7 @@ class AgentChatTransportsTest {
         lines("""{"type":"result","subtype":"success","is_error":false,"result":""}"""),
       ),
     )
-    val transport = CursorChatTransport(host, launcher, RecordingDiagnostics())
+    val transport = CursorChatTransport(host, launcher, store, RecordingDiagnostics())
 
     val events = transport.run(chatRequest(agent = ChatAgent("cursor", "gpt-5", "high"))).toList()
 
@@ -92,18 +94,18 @@ class AgentChatTransportsTest {
     assertEquals(listOf("--resume", "c-1"), launcher.commands[1].argv.takeLast(2))
   }
 
-  // Junie text output has no session id, so the earlier exchange must travel in the next prompt.
+  // Junie text output has no session id, so the earlier exchange must travel in the next prompt, even after a restart.
   @Test
-  fun `junie streams text and carries earlier turns into the next prompt`() = runTest {
+  fun `junie streams text and carries earlier turns into the next prompt after a restart`() = runTest {
     val launcher = ScriptedLauncher(listOf(lines("First answer"), lines("Second answer")))
-    val transport = JunieChatTransport(host, launcher, RecordingDiagnostics())
 
-    val first = transport.run(chatRequest(agent = ChatAgent("junie", null, "high"))).toList()
+    val first = JunieChatTransport(host, launcher, store, RecordingDiagnostics()).run(chatRequest(agent = ChatAgent("junie", null, "high"))).toList()
 
     assertEquals(listOf(ChatEvent.TextDelta("First answer\n"), ChatEvent.Completed), first)
     assertTrue("--effort" !in launcher.commands[0].argv)
 
-    transport.run(chatRequest(agent = ChatAgent("junie", null, null), firstTurn = false)).toList()
+    val restarted = JunieChatTransport(host, launcher, ChatStore(host, RecordingDiagnostics(), Clock.System), RecordingDiagnostics())
+    restarted.run(chatRequest(agent = ChatAgent("junie", null, null), firstTurn = false)).toList()
 
     val prompt = launcher.commands[1].argv.last()
     assertTrue("Operator:\noperator prompt\n\nYou:\nFirst answer" in prompt)

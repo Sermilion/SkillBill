@@ -12,25 +12,23 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Runs each turn as one `codex exec --json` process with approvals and the sandbox bypassed, as executions run. Codex names
- * its own thread, so later turns resume the thread the first turn reported.
+ * its own thread, so later turns resume the thread the first turn reported, which [ChatStore] keeps across windows.
  */
 @Inject
 @SingleIn(AppScope::class)
 class CodexChatTransport(
   private val host: HostEnvironment,
   private val launcher: ChatProcessLauncher,
+  private val store: ChatStore,
   private val diagnostics: Diagnostics,
 ) : ChatTransport {
   override val agentId = "codex"
 
-  private val threads = ConcurrentHashMap<String, String>()
-
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
-    val thread = if (request.firstTurn) null else threads[request.sessionId]
+    val thread = if (request.firstTurn) null else store.agentSession(request.sessionId)
     if (!request.firstTurn && thread == null) diagnostics.record("chat.codex_thread_missing")
     val prompt = if (thread == null) withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt) else request.prompt
     val command = ChatCommand(
@@ -39,7 +37,7 @@ class CodexChatTransport(
       environment = host.variables,
       stdin = prompt,
     )
-    return runChatTurn(launcher, diagnostics, command, CodexStreamDecoder { threads[request.sessionId] = it })
+    return runChatTurn(launcher, diagnostics, command, CodexStreamDecoder { store.saveAgentSession(request.sessionId, it) })
   }
 }
 

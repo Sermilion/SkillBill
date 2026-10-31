@@ -2,6 +2,9 @@ package dev.skillbill.desktop.feature.chat
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryLine
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.domain.model.ChatSuggestedAction
 import dev.skillbill.desktop.core.domain.model.ControlOutcome
@@ -15,8 +18,10 @@ import dev.skillbill.desktop.core.ui.di.WindowScope
 import dev.skillbill.desktop.core.ui.navigation.WindowCoroutineScope
 import dev.skillbill.desktop.core.ui.pane.ChatCommands
 import dev.skillbill.desktop.core.ui.shell.ShellPanes
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,7 +51,8 @@ internal const val PAUSE_TIMEOUT_NOTICE =
     "If it pauses later, resume it from the detail controls."
 
 /**
- * The window's chats, one per execution id, held in memory only. It is window-scoped: every coroutine is a child of the window
+ * The window's chats, one per execution id. Each finished turn saves the chat's latest lines through [ExecutionChatRepository],
+ * and `/resume` swaps a chat for a saved one of the same execution. It is window-scoped: every coroutine is a child of the window
  * scope, and the window ends every chat through [closeAll]. Calls come from the UI thread. It mirrors [paneOpen] into
  * [ShellPanes.chatOpen], and hides itself when opening Specs clears that flag; hiding ends no chat.
  */
@@ -62,7 +68,7 @@ class ChatWorkspace(
   private val panes: ShellPanes,
 ) : ChatCommands {
   private val scope = windowScope.scope
-  private val turns = ChatTurns(chat, details)
+  private val turns = ChatTurns(chat, details, clock)
   private val sessions = LinkedHashMap<String, ChatSession>()
   private val resumeJobs = LinkedHashSet<Job>()
   private var observer: Job? = null
@@ -88,6 +94,8 @@ class ChatWorkspace(
 
   fun session(id: String): ChatSession? = sessions[id]
 
+  internal fun now() = clock.now()
+
   override fun toggleChat(item: WorkItem?) {
     val shown = shownId(paneState.value && panes.chatOpen, tabState.value)
     when {
@@ -109,13 +117,9 @@ class ChatWorkspace(
       sessions[item.id] = session
       session.append(stateCard(item))
       session.busyState.value = true
-      scope.launch(session.job) {
-        try {
-          val read = turns.accept(session, turns.freshRead(item)) ?: return@launch
-          turns.turn(session, read, modeFor(read.header), openingInstruction(classify(read.header)))
-        } finally {
-          session.busyState.value = false
-        }
+      launchTurn(session) {
+        val read = turns.accept(session, turns.freshRead(item)) ?: return@launchTurn
+        turns.turn(session, read, modeFor(read.header), openingInstruction(classify(read.header)))
       }
     }
     tabState.update { it.withTab(ChatTab(item.id, item.issueKey ?: item.title, item.kind)) }
@@ -240,6 +244,41 @@ class ChatWorkspace(
     }
   }
 
+  /** Lists the saved chats of [id]'s execution, except the one it shows, for the composer's `/resume` picker. */
+  fun showResumable(id: String) {
+    val session = sessions[id] ?: return
+    scope.launch(session.job) {
+      session.resumeChoicesState.value = chat.savedChats(id).filter { it.sessionId != session.sessionId }
+    }
+  }
+
+  fun dismissResume(id: String) {
+    sessions[id]?.resumeChoicesState?.value = null
+  }
+
+  /**
+   * Swaps [id]'s chat for the saved [entry] of the same execution: a running turn ends, the transcript shows the saved lines,
+   * and the next turn continues the saved agent session with the full snapshot. Ignored once the execution left the database.
+   */
+  fun resume(id: String, entry: ChatHistoryEntry) {
+    val session = sessions[id] ?: return
+    session.resumeChoicesState.value = null
+    if (session.goneState.value || entry.executionId != id) return
+    val running = session.turnJob
+    session.busyState.value = true
+    launchTurn(session) {
+      running?.cancelAndJoin()
+      session.resumeFrom(entry.sessionId)
+      session.agentState.value = entry.agent
+      session.agentSupportedState.value = chat.supports(entry.agent.agentId)
+      val notice = ChatMessage.Notice(
+        "Resumed the ${chipText(entry.agent)} chat from ${savedAgo(entry.updatedAt, clock.now())}, showing its last " +
+          "${entry.lines.size} messages. The next turn continues it with the current execution state.",
+      )
+      session.replaceTranscript(listOf(stateCard(session.item), notice) + entry.lines.map(::restored))
+    }
+  }
+
   // Ignores a call while a turn runs or after the execution left the database; otherwise marks the session busy at once.
   private fun accept(id: String, text: String, action: ChatSuggestedAction?): ChatSession? {
     val session = sessions[id] ?: return null
@@ -249,14 +288,20 @@ class ChatWorkspace(
     return session
   }
 
+  // Only the session's current turn clears busy, so a turn that a resume cancelled cannot unlock the composer mid-swap.
   private fun launchTurn(session: ChatSession, block: suspend () -> Unit) {
-    scope.launch(session.job) {
+    val turn = scope.launch(session.job, start = CoroutineStart.LAZY) {
       try {
         block()
       } finally {
-        session.busyState.value = false
+        if (session.turnJob === coroutineContext.job) {
+          session.turnJob = null
+          session.busyState.value = false
+        }
       }
     }
+    session.turnJob = turn
+    turn.start()
   }
 
   // A window-scope job, so closing the tab does not cancel it; only closeAll does. It re-reads the execution after the turn,
@@ -317,4 +362,9 @@ class ChatWorkspace(
       }
     }
   }
+}
+
+private fun restored(line: ChatHistoryLine): ChatMessage = when (line.role) {
+  ChatHistoryRole.Operator -> ChatMessage.Operator(line.text)
+  ChatHistoryRole.Agent -> ChatMessage.Agent(line.text, streaming = false, tools = emptyList())
 }

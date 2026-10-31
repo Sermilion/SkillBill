@@ -2,6 +2,8 @@ package dev.skillbill.desktop.core.testing
 
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
+import dev.skillbill.desktop.core.domain.model.ChatHistoryRole
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
@@ -41,5 +43,16 @@ class FakeExecutionChatRepository(
   override fun send(request: ChatTurnRequest): Flow<ChatEvent> {
     requests += request
     return events(request)
+  }
+
+  /** Saved chats by session id, as the store keeps them. */
+  val saved: MutableMap<String, ChatHistoryEntry> = Collections.synchronizedMap(linkedMapOf())
+
+  override suspend fun savedChats(executionId: String): List<ChatHistoryEntry> =
+    saved.values.filter { entry -> entry.executionId == executionId && entry.lines.any { it.role == ChatHistoryRole.Operator } }
+      .sortedByDescending { it.updatedAt }
+
+  override suspend fun saveChat(entry: ChatHistoryEntry) {
+    saved[entry.sessionId] = entry
   }
 }

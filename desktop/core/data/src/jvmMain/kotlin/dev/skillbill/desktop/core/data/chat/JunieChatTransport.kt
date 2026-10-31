@@ -9,29 +9,26 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
-import java.util.concurrent.ConcurrentHashMap
 
 /** The prompt is one argv entry, and Linux caps a single argument at 128 KiB. */
 private const val PROMPT_LIMIT = 120_000
 
 /**
  * Runs each turn as one `junie` text-output process, as executions run. Junie's text output carries no session id, so each
- * turn sends the earlier turns of this chat with the new message instead of resuming a session.
+ * turn sends the earlier turns of this chat, kept in [ChatStore], with the new message instead of resuming a session.
  */
 @Inject
 @SingleIn(AppScope::class)
 class JunieChatTransport(
   private val host: HostEnvironment,
   private val launcher: ChatProcessLauncher,
+  private val store: ChatStore,
   private val diagnostics: Diagnostics,
 ) : ChatTransport {
   override val agentId = "junie"
 
-  private val histories = ConcurrentHashMap<String, List<JunieExchange>>()
-
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
-    if (request.firstTurn) histories.remove(request.sessionId)
-    val history = histories[request.sessionId].orEmpty()
+    val history = if (request.firstTurn) emptyList() else store.exchanges(request.sessionId)
     val prompt = juniePrompt(scopeSystemPrompt(request.scope, request.mode), history, request.prompt)
     val command = ChatCommand(
       argv = agentCommand("junie", junieArguments(request, prompt), host.variables["SHELL"]),
@@ -43,14 +40,12 @@ class JunieChatTransport(
     return runChatTurn(launcher, diagnostics, command, JunieTextDecoder).onEach { event ->
       when (event) {
         is ChatEvent.TextDelta -> reply.append(event.text)
-        ChatEvent.Completed -> histories[request.sessionId] = history + JunieExchange(request.prompt, reply.toString().trim())
+        ChatEvent.Completed -> store.saveExchanges(request.sessionId, history + ChatExchange(request.prompt, reply.toString().trim()))
         else -> Unit
       }
     }
   }
 }
-
-internal data class JunieExchange(val operator: String, val agent: String)
 
 internal fun junieArguments(request: ChatTurnRequest, prompt: String): List<String> = buildList {
   addAll(listOf("--project", request.scope.repositoryRoot, "--output-format", "text", "--skip-update-check"))
@@ -61,7 +56,7 @@ internal fun junieArguments(request: ChatTurnRequest, prompt: String): List<Stri
 }
 
 /** The scope, then as many of the latest exchanges as fit, then the new message. */
-internal fun juniePrompt(scope: String, history: List<JunieExchange>, prompt: String): String {
+internal fun juniePrompt(scope: String, history: List<ChatExchange>, prompt: String): String {
   val fixed = withScope(scope, prompt)
   var budget = PROMPT_LIMIT - fixed.length
   val kept = history.asReversed().takeWhile { exchange ->

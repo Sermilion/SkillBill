@@ -41,7 +41,7 @@ sealed interface ChatMessage {
 /** One chat tab, keyed by the execution's `WorkItem.id`. */
 data class ChatTab(val executionId: String, val title: String, val kind: WorkKind?)
 
-/** The window's chat tabs in opening order. It lives in memory only; no chat survives the window. */
+/** The window's chat tabs in opening order. Tabs live in memory; a chat outlives the window only as a save `/resume` can restore. */
 data class ChatTabsState(val tabs: List<ChatTab> = emptyList(), val activeId: String? = null)
 
 /** Appends and activates [tab]; an id that already has a tab is only activated. */

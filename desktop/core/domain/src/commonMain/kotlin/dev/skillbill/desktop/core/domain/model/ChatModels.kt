@@ -1,5 +1,7 @@
 package dev.skillbill.desktop.core.domain.model
 
+import kotlin.time.Instant
+
 /** The agent a chat turn runs on; a null [model] or [effort] leaves the agent CLI's own default. */
 data class ChatAgent(val agentId: String, val model: String?, val effort: String?)
 
@@ -46,3 +48,16 @@ sealed interface ChatEvent {
 
 /** Why a turn ended without an answer. */
 enum class ChatFailure { AgentUnsupported, BinaryMissing, ProcessFailed, StreamMalformed }
+
+enum class ChatHistoryRole { Operator, Agent }
+
+data class ChatHistoryLine(val role: ChatHistoryRole, val text: String)
+
+/** A saved chat a later window can resume: [sessionId] names its agent session and [lines] are its latest messages. */
+data class ChatHistoryEntry(
+  val sessionId: String,
+  val executionId: String,
+  val agent: ChatAgent,
+  val updatedAt: Instant,
+  val lines: List<ChatHistoryLine>,
+)

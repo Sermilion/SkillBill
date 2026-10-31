@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
+import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbInput
@@ -34,6 +35,7 @@ import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
 /**
  * The active chat's input. Enter sends and Shift+Enter starts a new line; "Pause and act" shows only while the execution runs.
  * The input stays editable while a turn runs so it keeps focus; both buttons are off while a turn runs, without a supported agent, or once the execution left the database.
+ * A draft of `/resume` is a command: it shows highlighted, and submitting it opens the saved-chat picker even while a turn runs.
  */
 @Composable
 internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
@@ -42,29 +44,43 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
   val supported by session.agentSupported.collectAsState()
   val gone by session.gone.collectAsState()
   val mode by session.mode.collectAsState()
+  val choices by session.resumeChoices.collectAsState()
   val id = session.item.id
   val text = workspace.drafts[id].orEmpty()
-  val ready = !busy && agent != null && supported && !gone && text.isNotBlank()
+  val command = text.trim() == RESUME_COMMAND
+  val ready = command || (!busy && agent != null && supported && !gone && text.isNotBlank())
+  fun openResume() {
+    workspace.drafts.remove(id)
+    workspace.showResumable(id)
+  }
   fun submit(action: (String, String) -> Unit) {
     if (!ready) return
+    if (command) return openResume()
     action(id, text)
     workspace.drafts.remove(id)
   }
   Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    SbInput(
-      text, { workspace.drafts[id] = it },
-      modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
-      placeholder = "Ask about this execution",
-      enabled = !gone,
-      onSubmit = { submit(workspace::send) },
-      multiline = true,
-    )
+    if (!command && commandTokenLength(text) == text.length) ResumeHint(::openResume)
+    Box(Modifier.fillMaxWidth()) {
+      SbInput(
+        text, { workspace.drafts[id] = it },
+        modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
+        placeholder = "Ask about this execution, or type $RESUME_COMMAND",
+        enabled = !gone,
+        onSubmit = { submit(workspace::send) },
+        multiline = true,
+        visualTransformation = CommandHighlight(SkillBillTheme.colors),
+      )
+      choices?.let { saved ->
+        ResumePicker(saved, workspace.now(), { workspace.resume(id, it) }, { workspace.dismissResume(id) })
+      }
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       ModeBadge(mode)
       AgentPicker(agent, workspace.agents, enabled = !busy && !gone) { workspace.switchAgent(id, it) }
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
         if (mode == ChatPermissionMode.ReadOnly) {
-          SbButton("Pause and act", { submit(workspace::pauseAndAct) }, size = SbControlSize.Small, enabled = ready, tooltip = "Pauses the execution, runs this in act mode, then resumes it")
+          SbButton("Pause and act", { submit(workspace::pauseAndAct) }, size = SbControlSize.Small, enabled = ready && !command, tooltip = "Pauses the execution, runs this in act mode, then resumes it")
         }
         SbButton("Send", { submit(workspace::send) }, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
       }

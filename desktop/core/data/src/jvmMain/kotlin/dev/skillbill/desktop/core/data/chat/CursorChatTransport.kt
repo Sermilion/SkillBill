@@ -14,25 +14,23 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Runs each turn as one Cursor `agent --print` stream-json process with `--force`, as executions run. Cursor names its own
- * chat, so later turns resume the chat id the first turn reported.
+ * chat, so later turns resume the chat id the first turn reported, which [ChatStore] keeps across windows.
  */
 @Inject
 @SingleIn(AppScope::class)
 class CursorChatTransport(
   private val host: HostEnvironment,
   private val launcher: ChatProcessLauncher,
+  private val store: ChatStore,
   private val diagnostics: Diagnostics,
 ) : ChatTransport {
   override val agentId = "cursor"
 
-  private val chats = ConcurrentHashMap<String, String>()
-
   override fun run(request: ChatTurnRequest): Flow<ChatEvent> {
-    val chat = if (request.firstTurn) null else chats[request.sessionId]
+    val chat = if (request.firstTurn) null else store.agentSession(request.sessionId)
     if (!request.firstTurn && chat == null) diagnostics.record("chat.cursor_chat_missing")
     val prompt = if (chat == null) withScope(scopeSystemPrompt(request.scope, request.mode), request.prompt) else request.prompt
     val command = ChatCommand(
@@ -41,7 +39,7 @@ class CursorChatTransport(
       environment = host.variables,
       stdin = prompt,
     )
-    return runChatTurn(launcher, diagnostics, command, CursorStreamDecoder { chats[request.sessionId] = it })
+    return runChatTurn(launcher, diagnostics, command, CursorStreamDecoder { store.saveAgentSession(request.sessionId, it) })
   }
 }
 

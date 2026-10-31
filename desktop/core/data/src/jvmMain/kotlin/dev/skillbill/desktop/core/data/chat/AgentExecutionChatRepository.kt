@@ -5,26 +5,31 @@ import dev.skillbill.desktop.core.common.di.AppScope
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatEvent
 import dev.skillbill.desktop.core.domain.model.ChatFailure
+import dev.skillbill.desktop.core.domain.model.ChatHistoryEntry
 import dev.skillbill.desktop.core.domain.model.ChatTurnRequest
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.RunOptions
 import dev.skillbill.desktop.core.domain.model.WorkItem
 import dev.skillbill.desktop.core.domain.repository.ExecutionChatRepository
 import dev.skillbill.desktop.core.domain.repository.RuntimeConfigRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
-/** Sends each turn to the transport registered for the turn's agent. */
+/** Sends each turn to the transport registered for the turn's agent, off the UI thread, and keeps saved chats in [store]. */
 @Inject
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
 class AgentExecutionChatRepository(
   private val transports: Set<ChatTransport>,
   runtimeConfig: RuntimeConfigRepository,
+  private val store: ChatStore,
   private val diagnostics: Diagnostics,
 ) : ExecutionChatRepository {
   private val resolver = ChatAgentResolver(runtimeConfig::machineConfig, diagnostics)
@@ -46,5 +51,10 @@ class AgentExecutionChatRepository(
     } else {
       emitAll(transport.run(request))
     }
-  }
+  }.flowOn(Dispatchers.IO)
+
+  override suspend fun savedChats(executionId: String): List<ChatHistoryEntry> =
+    withContext(Dispatchers.IO) { store.savedChats(executionId) }
+
+  override suspend fun saveChat(entry: ChatHistoryEntry) = withContext(Dispatchers.IO) { store.saveChat(entry) }
 }
