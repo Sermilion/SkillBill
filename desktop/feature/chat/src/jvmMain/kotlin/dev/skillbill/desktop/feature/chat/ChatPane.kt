@@ -44,6 +44,7 @@ fun ChatPane(workspace: ChatWorkspace) {
       } else {
         key(session) {
           Column(Modifier.fillMaxSize()) {
+            ChatHeader(session)
             ChatTranscript(session, Modifier.weight(1f)) { reply, action -> workspace.executeAction(session.item.id, reply, action) }
             ChatComposer(session, workspace)
           }

@@ -97,9 +97,9 @@ class ChatWorkspace(
   fun open(item: WorkItem) {
     setPaneOpen(true)
     if (item.id !in sessions) {
-      val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]))
+      val session = ChatSession(item, UUID.randomUUID().toString(), SupervisorJob(scope.coroutineContext[Job]), clock)
       sessions[item.id] = session
-      session.append(ChatMessage.StateLine(stateLine(item)))
+      session.append(stateCard(item))
       session.busyState.value = true
       scope.launch(session.job) {
         try {
@@ -155,14 +155,16 @@ class ChatWorkspace(
     if (session.transcript.value.lastOrNull() !== reply) return
     if (reply.streaming || action !in reply.actions || !session.agentSupportedState.value || session.agentState.value == null) return
     when (action.mode) {
-      ChatPermissionMode.ReadOnly -> send(id, action.instruction)
-      ChatPermissionMode.Act -> pauseAndAct(id, action.instruction)
+      ChatPermissionMode.ReadOnly -> send(id, action.instruction, action)
+      ChatPermissionMode.Act -> pauseAndAct(id, action.instruction, action)
     }
   }
 
   /** Asks the agent about the execution, in the mode its state allows now; it never changes the execution. */
-  fun send(id: String, text: String) {
-    val session = accept(id, text) ?: return
+  fun send(id: String, text: String) = send(id, text, null)
+
+  private fun send(id: String, text: String, action: ChatSuggestedAction?) {
+    val session = accept(id, text, action) ?: return
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       turns.turn(session, read, modeFor(read.header), text)
@@ -174,8 +176,10 @@ class ChatWorkspace(
    * or its tab closes. The relaunch is skipped when, after the turn, the execution is already running, finished or gone.
    * On an execution that is not running it is a plain [send].
    */
-  fun pauseAndAct(id: String, text: String) {
-    val session = accept(id, text) ?: return
+  fun pauseAndAct(id: String, text: String) = pauseAndAct(id, text, null)
+
+  private fun pauseAndAct(id: String, text: String, action: ChatSuggestedAction?) {
+    val session = accept(id, text, action) ?: return
     launchTurn(session) {
       val read = turns.accept(session, turns.freshRead(session.item)) ?: return@launchTurn
       if (modeFor(read.header) == ChatPermissionMode.Act) {
@@ -212,11 +216,11 @@ class ChatWorkspace(
   }
 
   // Ignores a call while a turn runs or after the execution left the database; otherwise marks the session busy at once.
-  private fun accept(id: String, text: String): ChatSession? {
+  private fun accept(id: String, text: String, action: ChatSuggestedAction?): ChatSession? {
     val session = sessions[id] ?: return null
     if (session.busyState.value || session.goneState.value) return null
     session.busyState.value = true
-    session.append(ChatMessage.Operator(text))
+    session.append(ChatMessage.Operator(text, action))
     return session
   }
 

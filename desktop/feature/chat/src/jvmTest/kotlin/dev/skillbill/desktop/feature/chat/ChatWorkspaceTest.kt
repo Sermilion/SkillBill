@@ -166,7 +166,7 @@ class ChatWorkspaceTest {
     assertEquals(2, chat.requests.size)
     assertTrue(chat.requests.last().prompt.endsWith(action.instruction))
     assertEquals(ChatPermissionMode.ReadOnly, chat.requests.last().mode)
-    assertEquals(listOf(ChatMessage.Operator(action.instruction)), session.transcript.value.filterIsInstance<ChatMessage.Operator>())
+    assertEquals(listOf(ChatMessage.Operator(action.instruction, action)), session.transcript.value.filterIsInstance<ChatMessage.Operator>())
     assertTrue(controls.calls.isEmpty())
   }
 

@@ -29,6 +29,19 @@ fun stateLine(item: WorkItem): String {
   }
 }
 
+/** [stateLine] split into the parts the state card shows. */
+fun stateCard(item: WorkItem): ChatMessage.StateLine {
+  val state = classify(item)
+  val reason = item.reason ?: item.exactPauseReason
+  val detail = when (state) {
+    ExecutionState.Blocked, ExecutionState.Failed, ExecutionState.Stopped -> reason
+    ExecutionState.Stalled -> "No progress since ${item.stalledSince}"
+    ExecutionState.Running -> item.progress?.let { "Progress ${it.done}/${it.total}" }
+    ExecutionState.Done -> null
+  }
+  return ChatMessage.StateLine(stateLine(item), state, item.phaseExecution?.phaseId ?: item.stepLabel, detail)
+}
+
 fun openingInstruction(state: ExecutionState): String =
   "Keep your opening reply to 2 short sentences and at most 60 words. No headings, lists or detailed recap. " +
     when (state) {

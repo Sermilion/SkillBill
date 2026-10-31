@@ -17,7 +17,8 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
 import dev.skillbill.desktop.core.designsystem.component.SbInput
-import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbControlSize
+import dev.skillbill.desktop.core.designsystem.icon.LucideIcons
 import dev.skillbill.desktop.core.domain.model.ChatAgent
 import dev.skillbill.desktop.core.domain.model.ChatPermissionMode
 import dev.skillbill.desktop.core.ui.input.gatesShortcutsWhileFocused
@@ -41,7 +42,7 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
     action(id, text)
     workspace.drafts.remove(id)
   }
-  Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+  Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     SbInput(
       text, { workspace.drafts[id] = it },
       modifier = Modifier.fillMaxWidth().gatesShortcutsWhileFocused(),
@@ -51,10 +52,13 @@ internal fun ChatComposer(session: ChatSession, workspace: ChatWorkspace) {
       multiline = true,
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-      SbLabel(chipText(agent))
+      ModeBadge(mode)
+      ChatPill(chipText(agent), mono = true, icon = LucideIcons.cpu, maxWidth = 220.dp)
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
-        if (mode == ChatPermissionMode.ReadOnly) SbButton("Pause and act", { submit(workspace::pauseAndAct) }, enabled = ready)
-        SbButton("Send", { submit(workspace::send) }, variant = SbButtonVariant.Primary, enabled = ready)
+        if (mode == ChatPermissionMode.ReadOnly) {
+          SbButton("Pause and act", { submit(workspace::pauseAndAct) }, size = SbControlSize.Small, enabled = ready, tooltip = "Pauses the execution, runs this in act mode, then resumes it")
+        }
+        SbButton("Send", { submit(workspace::send) }, variant = SbButtonVariant.Primary, size = SbControlSize.Small, enabled = ready, shortcut = "↵")
       }
     }
   }

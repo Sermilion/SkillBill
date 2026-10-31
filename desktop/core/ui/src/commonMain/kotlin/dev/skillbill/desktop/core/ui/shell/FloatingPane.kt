@@ -5,6 +5,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
@@ -28,6 +33,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -36,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
+import dev.skillbill.desktop.core.designsystem.composite.horizontalResizePointerIcon
 import dev.skillbill.desktop.core.designsystem.menuSpec
 import dev.skillbill.desktop.core.ui.input.ShellLayer
 
@@ -62,12 +69,17 @@ fun FloatingPane(open: Boolean, title: String, wide: Boolean = false, onDismiss:
           .pointerInput(Unit) { detectTapGestures { } }
           .semantics { paneTitle = title },
       ) {
+        val grip = remember { MutableInteractionSource() }
+        val active = grip.collectIsHoveredAsState().value || grip.collectIsDraggedAsState().value || grip.collectIsFocusedAsState().value
         Box(
-          Modifier.width(5.dp).fillMaxHeight().background(colors.borderSubtle)
+          Modifier.width(7.dp).fillMaxHeight()
             .semantics { contentDescription = "Resize ${title.lowercase()} panel" }
+            .then(if (compact) Modifier else Modifier.pointerHoverIcon(horizontalResizePointerIcon))
+            .hoverable(grip, enabled = !compact)
             .draggable(
               orientation = Orientation.Horizontal,
               enabled = !compact,
+              interactionSource = grip,
               state = rememberDraggableState { delta ->
                 requestedWidth = ((requestedWidth ?: width).coerceIn(minimum, maximum) - with(density) { delta.toDp() }).coerceIn(minimum, maximum)
               },
@@ -78,8 +90,13 @@ fun FloatingPane(open: Boolean, title: String, wide: Boolean = false, onDismiss:
                 Key.DirectionRight -> { requestedWidth = (width - 32.dp).coerceAtLeast(minimum); true }
                 else -> false
               }
-            }.focusable(enabled = !compact),
-        )
+            }.focusable(enabled = !compact, interactionSource = grip),
+        ) {
+          Box(
+            Modifier.align(Alignment.CenterStart).width(if (active && !compact) 2.dp else 1.dp).fillMaxHeight()
+              .background(if (active && !compact) colors.accentRing else colors.border),
+          )
+        }
         Box(Modifier.weight(1f).fillMaxHeight()) { content() }
       }
     }
