@@ -454,6 +454,7 @@ class PhaseRunEntry(
           completedOutputs = completedOutputs(report.completedPhaseIds, records),
           acceptedOutput = report.completedPhaseIds.lastOrNull()?.let { records.acceptedOutputs[it] },
           identifiedCompletedOutputs = records.identifiedCompletedOutputs(report.completedPhaseIds),
+          reviewRunId = state.reviewRunId,
         )
       is FeatureTaskRuntimeRunReport.Blocked ->
         blocked(state, report.completedPhaseIds, report.lastIncompletePhase, report.blockedReason, records)

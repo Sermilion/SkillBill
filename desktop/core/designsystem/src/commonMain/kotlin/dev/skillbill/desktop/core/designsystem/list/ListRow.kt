@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.designsystem.list
 
+import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -127,7 +128,7 @@ fun ListRow(
     if (id != null) Box(if (compact || narrow) Modifier else Modifier.width(idColumnWidth)) { IdTag(id) }
     status?.invoke()
     TitleSummary(
-      title = { BasicText(title, style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+      title = { BasicText(rememberRuntimeText(title), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis) },
       summary = summary?.let { { BasicText(it, style = type.tSm.copy(color = colors.fgFaint), maxLines = 1, overflow = TextOverflow.Ellipsis) } },
       modifier = Modifier.weight(1f),
     )

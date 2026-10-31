@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.application.review.governed.stubGovernedReviewEvidenceEndpointBinder
+import skillbill.application.review.model.InlineReviewRubricPlan
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewRequest
@@ -85,6 +86,7 @@ import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ReviewFindingVerdict
+import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.model.ReviewPassClaimSnapshot
 import skillbill.review.model.ReviewRunLane
 import skillbill.review.model.ReviewSpecProjectionReference
@@ -1196,6 +1198,33 @@ class ParallelCodeReviewRunnerFailureTest {
     launcher.requests.forEach { request ->
       assertContains(request.skillRunRequest.promptOverride.orEmpty(), "horizontal base rubric")
     }
+  }
+
+  @Test
+  fun `an inline review plan carries its planned lanes and records them for its review run`() {
+    val database = RecordingReviewDatabase()
+    val runner =
+      createRunner(
+        ParallelSubtaskLauncher(),
+        RunnerFixtureConfig(
+          catalogGateway = stubCatalogGateway(listOf(platformManifest("kotlin", listOf("*.kt")))),
+          diffResolver = RecordingDiffResolver(default = diffFor("src/Main.kt")),
+          database = database,
+        ),
+      )
+
+    val plan =
+      assertNotNull(
+        assertIs<ParallelCodeReviewPlanned.Ready<InlineReviewRubricPlan?>>(
+          runner.planInlineReviewRubrics(baseRequest(scope = ParallelReviewScope.STAGED)),
+        ).value,
+      )
+    runner.recordInlineReviewLanes("rvw-inline", plan.lanes)
+
+    assertTrue(plan.lanes.isNotEmpty(), "An inline plan must name the lanes its rubrics came from.")
+    assertTrue(plan.lanes.all { it.laneSkillName in plan.rubrics && it.packSlug == "kotlin" && it.area.isNotBlank() })
+    assertTrue(plan.lanes.all { it.reviewDisposition == ReviewLaneReviewDisposition.INCOMPLETE })
+    assertEquals("rvw-inline" to plan.lanes, database.laneWrites.single())
   }
 
   @Test

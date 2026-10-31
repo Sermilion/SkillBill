@@ -7,11 +7,13 @@ import kotlin.test.assertNull
 
 class StandaloneReviewReportReaderTest {
   @Test
-  fun `a prose report keeps its summary and lists each lane finding with its location`() {
+  fun `a prose report keeps its summary, lists each finding with its location, and names every applied lane`() {
     val report =
       StandaloneReviewReportReader.read(
         """
         The review is done. I found two minor issues and nothing blocking.
+
+        **Lanes applied:** `bill-kmp-code-review-architecture` and `bill-kotlin-code-review-testing`. I ran them myself.
 
         **Findings:**
 
@@ -24,6 +26,14 @@ class StandaloneReviewReportReaderTest {
 
     assertEquals("approved", report.verdict)
     assertEquals("The review is done. I found two minor issues and nothing blocking.", report.summary)
+    assertEquals(
+      listOf(
+        "bill-kmp-code-review-architecture",
+        "bill-kotlin-code-review-testing",
+        "bill-kmp-code-review-code-quality",
+      ),
+      report.lanes,
+    )
     assertEquals(
       listOf(
         StandaloneReviewReportFinding(

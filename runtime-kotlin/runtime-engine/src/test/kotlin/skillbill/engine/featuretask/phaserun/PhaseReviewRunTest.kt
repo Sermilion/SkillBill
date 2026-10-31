@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.application.review.model.InlineReviewRubricPlan
 import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
+import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.review.ReviewInvocation
@@ -45,6 +47,9 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewSeverity
+import skillbill.review.model.ReviewLaneResolutionState
+import skillbill.review.model.ReviewLaneReviewDisposition
+import skillbill.review.model.ReviewRunLane
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
@@ -179,6 +184,47 @@ class PhaseReviewRunTest {
     assertTrue("do not replace or narrow it" in section && "responsible for every review area" in section)
     assertTrue("apply only to delegated review" in section)
   }
+
+  @Test
+  fun `a completed standalone inline review records the lanes it applied as complete`() {
+    val recorded = mutableListOf<Pair<String, List<ReviewRunLane>>>()
+
+    standaloneInlineDirective(laneRecordingResolver(recorded))
+
+    val (reviewRunId, lanes) = recorded.single()
+    assertTrue(reviewRunId.isNotBlank())
+    assertEquals(listOf(PLANNED_LANE.copy(reviewDisposition = ReviewLaneReviewDisposition.COMPLETE)), lanes)
+  }
+
+  @Test
+  fun `a rejected standalone inline report records its lanes as incomplete`() {
+    val recorded = mutableListOf<Pair<String, List<ReviewRunLane>>>()
+
+    standaloneInlineDirective(laneRecordingResolver(recorded), reviewOutput = "")
+
+    assertEquals(
+      listOf(PLANNED_LANE.copy(reviewDisposition = ReviewLaneReviewDisposition.INCOMPLETE)),
+      recorded.single().second,
+    )
+  }
+
+  private fun laneRecordingResolver(recorded: MutableList<Pair<String, List<ReviewRunLane>>>) =
+    object : InlineReviewRubricResolver {
+      override fun resolve(request: ParallelCodeReviewRequest) =
+        ParallelCodeReviewPlanned.Ready<String?>("Prefer focused tests.")
+
+      override fun plan(request: ParallelCodeReviewRequest) =
+        ParallelCodeReviewPlanned.Ready<InlineReviewRubricPlan?>(
+          InlineReviewRubricPlan("Prefer focused tests.", listOf(PLANNED_LANE)),
+        )
+
+      override fun recordLanes(
+        reviewRunId: String,
+        lanes: List<ReviewRunLane>,
+      ) {
+        recorded += reviewRunId to lanes
+      }
+    }
 
   @Test
   fun `a failed rubric resolution does not block standalone inline review and records a warning`() {
@@ -372,6 +418,7 @@ class PhaseReviewRunTest {
   private fun standaloneInlineDirective(
     resolver: InlineReviewRubricResolver,
     diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+    reviewOutput: String = APPROVED_REVIEW,
   ): String {
     val directives = mutableListOf<String>()
     val harness =
@@ -381,7 +428,7 @@ class PhaseReviewRunTest {
             branchSetup = BranchSetupTestConfig(gitOperations = git),
             repoRoot = repoRoot,
             launcher = fixLauncher(),
-            reviewRunner = directiveRecordingReviewRunner(directives),
+            reviewRunner = directiveRecordingReviewRunner(directives, reviewOutput),
             inlineRubricResolver = resolver,
             seedDurableWorkflow = false,
           ),
@@ -399,7 +446,7 @@ class PhaseReviewRunTest {
         .entry()
         .run(reviewRequest(CodeReviewExecutionMode.INLINE))
 
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    if (reviewOutput == APPROVED_REVIEW) assertIs<PhaseRunResult.Completed>(result, result.toString())
     return directives.single()
   }
 
@@ -419,14 +466,17 @@ class PhaseReviewRunTest {
     ) = Unit
   }
 
-  private fun directiveRecordingReviewRunner(directives: MutableList<String>): PhaseRunner =
+  private fun directiveRecordingReviewRunner(
+    directives: MutableList<String>,
+    output: String = APPROVED_REVIEW,
+  ): PhaseRunner =
     object : PhaseRunner {
       override fun run(
         input: PhaseStepInput,
         state: PhaseLaunchState,
       ): PhaseStepOutput {
         directives += input.directive
-        return reviewStepOutput(APPROVED_REVIEW)
+        return reviewStepOutput(output)
       }
     }
 
@@ -545,3 +595,16 @@ class PhaseReviewRunTest {
     const val HEAD_OPENING_LINE = "Review commit `HEAD` against its first parent `HEAD^`."
   }
 }
+
+private val PLANNED_LANE =
+  ReviewRunLane(
+    laneSkillName = "bill-kotlin-code-review-testing",
+    packSlug = "kotlin",
+    area = "testing",
+    depth = 0,
+    required = false,
+    orderIndex = 0,
+    originLayerChain = listOf("kotlin"),
+    resolutionState = ReviewLaneResolutionState.RESOLVED,
+    reviewDisposition = ReviewLaneReviewDisposition.INCOMPLETE,
+  )

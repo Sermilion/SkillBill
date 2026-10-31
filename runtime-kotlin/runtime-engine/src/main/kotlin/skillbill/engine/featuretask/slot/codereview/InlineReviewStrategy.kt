@@ -96,7 +96,8 @@ internal class InlineReviewPass(
     runner: PhaseRunner,
     state: PhaseReviewStepBinding,
   ): ParallelCodeReviewRunOutcome {
-    val laneRubrics =
+    val diagnostics = state.reviewExecutionContext().diagnostics
+    val lanePlan =
       rubricResolver.resolveInlineRubrics(
         delegatedReviewRequest(
           run.resolvedAgent.resolvedAgentId,
@@ -105,7 +106,7 @@ internal class InlineReviewPass(
           run.reviewTarget,
           input,
         ),
-        state.reviewExecutionContext().diagnostics,
+        diagnostics,
       )
     val composed =
       InlineReviewDirective.compose(
@@ -113,15 +114,16 @@ internal class InlineReviewPass(
         revisions = input.reviewBaseSha to input.currentHeadSha,
         specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
-        laneRubrics = laneRubrics,
+        laneRubrics = lanePlan?.rubrics,
       )
     val supplement = state.modelDirectiveSupplements.directiveFor(run, state.acceptedOwner)
     val directive = if (supplement == null) composed else "$composed\n\n$supplement"
     val output = runner.run(reviewStepInput(run, directive), state.launchState)
-    return ParallelCodeReviewRunOutcome.Reviewed(
+    val result =
       InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
-        .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId),
-    )
+        .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId)
+    rubricResolver.recordInlineLanes(reviewRunId, lanePlan, result.lane1.success, diagnostics)
+    return ParallelCodeReviewRunOutcome.Reviewed(result)
   }
 }
 

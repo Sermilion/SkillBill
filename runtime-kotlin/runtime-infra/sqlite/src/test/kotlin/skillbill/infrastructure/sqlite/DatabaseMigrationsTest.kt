@@ -2488,4 +2488,6 @@ private val expectedMigrationDefinitions =
     91 to "correct-worktree-edit-journal-prune-chronological-order",
     92 to "rebuild-work-board-executing-agent",
     93 to "rebuild-work-board-titles",
+    94 to "rebuild-work-board-readable-phase-titles",
+    95 to "record-standalone-review-run-id",
   )

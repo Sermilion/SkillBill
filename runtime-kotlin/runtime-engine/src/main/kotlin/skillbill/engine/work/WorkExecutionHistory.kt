@@ -11,6 +11,7 @@ import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
+import skillbill.ports.idestatus.model.StandaloneReviewReport
 import skillbill.ports.idestatus.model.WorkExecutionInstance
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -111,7 +112,15 @@ internal fun workExecutionHistory(
           it.qaReportText,
           it.planReport,
           reviewReport =
-            if (it.phaseId == SkeletonDefinition.REVIEW.id) StandaloneReviewReportReader.read(reason.text) else null,
+            if (it.phaseId == SkeletonDefinition.REVIEW.id) {
+              reviewReport(
+                it,
+                reason.text,
+                unitOfWork,
+              )
+            } else {
+              null
+            },
         )
       }
   } else {
@@ -130,6 +139,21 @@ internal fun workExecutionHistory(
         )
       }
   }
+}
+
+internal fun reviewReport(
+  record: StandalonePhaseStatusRecord,
+  text: String?,
+  unitOfWork: UnitOfWork,
+): StandaloneReviewReport? {
+  val report = StandaloneReviewReportReader.read(text) ?: return null
+  val recorded =
+    record.reviewRunId
+      ?.let(unitOfWork.reviews::fetchReviewRunLanes)
+      .orEmpty()
+      .sortedBy { it.orderIndex }
+      .map { it.laneSkillName }
+  return if (recorded.isEmpty()) report else report.copy(lanes = recorded)
 }
 
 internal data class ResolvedExecutionReason(

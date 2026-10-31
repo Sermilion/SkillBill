@@ -10,6 +10,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,15 +51,17 @@ fun FindingRow(title: String, severity: String? = null, ref: String? = null, loc
     severity?.let { SeverityText(it, FINDING_SEVERITY_WIDTH) }
     // A long machine id passes [refContent] (a ShortId) in place of the plain ref tag.
     if (refContent != null) refContent() else ref?.let { IdTag(it, Modifier.padding(top = 2.dp)) }
-    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-      ExpandableText(title, SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.45.em))
-      if (location != null || meta != null) {
-        val text = buildAnnotatedString {
-          if (location != null) withStyle(SpanStyle(fontFamily = locationFontFamily)) { append(location) }
-          if (location != null && meta != null) append(" · ")
-          meta?.let(::append)
+    SelectionContainer(Modifier.weight(1f)) {
+      Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        ExpandableText(title, SkillBillTheme.type.tSmMedium.copy(color = SkillBillTheme.colors.fg, lineHeight = 1.45.em))
+        if (location != null || meta != null) {
+          val text = buildAnnotatedString {
+            if (location != null) withStyle(SpanStyle(fontFamily = locationFontFamily)) { append(location) }
+            if (location != null && meta != null) append(" · ")
+            meta?.let(::append)
+          }
+          ExpandableText(text, SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em))
         }
-        ExpandableText(text, SkillBillTheme.type.tXs.copy(color = SkillBillTheme.colors.fgFaint, fontWeight = FontWeight.Normal, lineHeight = 1.45.em))
       }
     }
     state?.let { SbLabel(it, SbLabelStyle.Dot(stateColor ?: SkillBillTheme.colors.fgFaint)) }
@@ -76,15 +79,17 @@ fun CompactFindingRow(title: String, severity: String?, location: String?) {
   val type = SkillBillTheme.type
   Row(Modifier.padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
     severity?.let { SeverityText(it, COMPACT_SEVERITY_WIDTH) }
-    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-      ExpandableText(title, type.tSm.copy(color = colors.fg2, lineHeight = 1.45.em))
-      location?.takeIf { it.isNotBlank() }?.let { path ->
-        SbTooltip(path) {
-          BasicText(
-            shortPath(path),
-            style = type.monoSm.copy(color = colors.fgFaint, fontSize = type.tXs.fontSize, lineHeight = 1.45.em),
-            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
-          )
+    SelectionContainer(Modifier.weight(1f)) {
+      Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        ExpandableText(title, type.tSm.copy(color = colors.fg2, lineHeight = 1.45.em))
+        location?.takeIf { it.isNotBlank() }?.let { path ->
+          SbTooltip(path) {
+            BasicText(
+              shortPath(path),
+              style = type.monoSm.copy(color = colors.fgFaint, fontSize = type.tXs.fontSize, lineHeight = 1.45.em),
+              maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+            )
+          }
         }
       }
     }

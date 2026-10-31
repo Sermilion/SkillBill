@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.core.designsystem.detail
 
+import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -38,7 +39,7 @@ fun DocHeader(
     eyebrow?.let {
       FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically, content = it)
     }
-    BasicText(title, Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
+    BasicText(rememberRuntimeText(title), Modifier.semantics { heading() }, style = type.t2xl.copy(color = colors.fg))
     when {
       sub != null -> CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { sub() }
       subtitle != null -> BasicText(subtitle, style = type.tBase.copy(color = colors.fgMuted, lineHeight = 1.55.em))

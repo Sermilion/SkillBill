@@ -2,6 +2,8 @@ package dev.skillbill.desktop.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicText
@@ -11,11 +13,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbButton
 import dev.skillbill.desktop.core.designsystem.component.SbButtonVariant
+import dev.skillbill.desktop.core.designsystem.component.SbLabel
+import dev.skillbill.desktop.core.designsystem.component.SbLabelStyle
 import dev.skillbill.desktop.core.designsystem.detail.SbBox
 import dev.skillbill.desktop.core.domain.model.Detail
 import dev.skillbill.desktop.core.domain.model.ExecutionInstance
@@ -30,6 +35,13 @@ private val SETTLED_STATES = setOf("terminal", "completed", "complete")
 
 /** The runtime's verdict token as the section words it: `changes_requested` reads "Changes requested". */
 internal fun reviewVerdictLabel(verdict: String): String = verdict.replace('_', ' ').replaceFirstChar(Char::uppercase)
+
+/** A lane as its chip reads: `bill-kmp-code-review-ui` becomes "kmp · ui"; a name off the convention stays whole. */
+internal fun laneChipLabel(lane: String): String {
+  val name = lane.removePrefix("bill-")
+  val platform = name.substringBefore("-code-review-", missingDelimiterValue = "")
+  return if (platform.isEmpty()) lane else "$platform · ${name.substringAfter("-code-review-")}"
+}
 
 /** "Approved · 3 findings", or just the count when the report declared no verdict. */
 internal fun reviewReportCaption(report: ReviewReport): String {
@@ -65,7 +77,10 @@ private fun DetailSections.reviewResultSection(run: ExecutionInstance, report: R
         "changes_requested" -> colors.stBlocked
         else -> colors.fgFaint
       }
-      BasicText(reviewReportCaption(report), Modifier.padding(bottom = 12.dp), style = SkillBillTheme.type.tSm.copy(color = verdictColor))
+      Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        BasicText(reviewReportCaption(report), style = SkillBillTheme.type.tSm.copy(color = verdictColor))
+        if (report.lanes.isNotEmpty()) ReviewLanes(report)
+      }
     }
     itemsIndexed(report.findings, key = { index, finding -> "review-finding-$index-${finding.ref}" }) { index, finding ->
       BoxedFindingRow(
@@ -87,19 +102,49 @@ private fun DetailSections.reviewResultSection(run: ExecutionInstance, report: R
   }
 }
 
+/**
+ * The lanes the review applied, one chip each: a green dot for a lane that came back clean, an amber dot and its finding count
+ * for one that raised findings. The tooltip carries the full rubric name.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReviewLanes(report: ReviewReport) {
+  val colors = SkillBillTheme.colors
+  val counts = remember(report) { report.findings.groupingBy { it.specialist }.eachCount() }
+  FlowRow(
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
+    verticalArrangement = Arrangement.spacedBy(6.dp),
+    itemVerticalAlignment = Alignment.CenterVertically,
+  ) {
+    BasicText("Lanes", style = SkillBillTheme.type.tSmMedium.copy(color = colors.fgMuted))
+    report.lanes.forEach { lane ->
+      val count = counts[lane] ?: 0
+      val label = laneChipLabel(lane)
+      SbLabel(
+        if (count > 0) "$label · $count" else label,
+        SbLabelStyle.Dot(if (count > 0) colors.stBlocked else colors.stDone),
+        tooltip = if (count > 0) "$lane · $count ${if (count == 1) "finding" else "findings"}" else "$lane · clean",
+      )
+    }
+  }
+}
+
 private fun DetailSections.resultSection(run: ExecutionInstance) {
   val text = run.result?.takeIf { it.isNotBlank() } ?: return
   if (run.finishedAt == null || run.lifecycleState.lowercase() !in SETTLED_STATES) return
   section("phase-result", "Result") {
-    item(key = "phase-result-${run.invocationId}") { FoldedReport(text) }
+    item(key = "phase-result-${run.invocationId}") { FoldedReport(text, openByDefault = true) }
   }
 }
 
-/** A report in a box, folded to its first block when it has more; the toggle shows only when there is more to show. */
+/**
+ * A report in a box. With more than one block it carries a fold toggle, starting folded to the first block unless [openByDefault];
+ * a phase's own result opens in full, a review's summary sits folded under its findings.
+ */
 @Composable
-private fun FoldedReport(text: String, modifier: Modifier = Modifier) {
+private fun FoldedReport(text: String, modifier: Modifier = Modifier, openByDefault: Boolean = false) {
   val blocks = remember(text) { reportBlocks(text) }
-  var open by rememberSaveable(text) { mutableStateOf(false) }
+  var open by rememberSaveable(text) { mutableStateOf(openByDefault) }
   val folds = blocks.size > FOLDED_REPORT_BLOCKS
   SbBox(modifier) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -229,7 +229,9 @@ private fun IdeStatusWorkflowQaOutcome.toDomain(): WorkQaOutcome? =
   runCatching { Instant.parse(recordedAt) }.getOrNull()?.let { WorkQaOutcome(outcome.toDomain(), reason, failureKind, it) }
 
 private fun StandaloneReviewReport.toDomain(): ReviewReport =
-  ReviewReport(verdict, summary, findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description) })
+  ReviewReport(
+    verdict, summary, findings.map { ReviewReportFinding(it.ref, it.severity, it.confidence, it.specialist, it.location, it.description) }, lanes,
+  )
 
 private fun StandalonePlanReport.toDomain(): PlanRunReport =
   PlanRunReport(featureName, parentSpecPath, subtasks.map { PlannedSubtask(it.id, it.name, it.specPath, it.dependsOn) }, bundleFiles)

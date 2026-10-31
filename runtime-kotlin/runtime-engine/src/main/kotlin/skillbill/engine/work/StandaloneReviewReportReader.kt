@@ -10,6 +10,8 @@ internal object StandaloneReviewReportReader {
   private val verdictLine = Regex("""^verdict:\s*(\S+)\s*$""", RegexOption.IGNORE_CASE)
   private val findingsHeading = Regex("""^[#*_\s]*findings[:*_\s]*$""", RegexOption.IGNORE_CASE)
   private val excessBlankLines = Regex("""\n{3,}""")
+  private val lanesLabel = Regex("""^[#*_\s]*lanes(?:\s+applied)?\s*[:*_]""", RegexOption.IGNORE_CASE)
+  private val laneToken = Regex("""[a-z0-9]+(?:-[a-z0-9]+)*-code-review-[a-z0-9]+(?:-[a-z0-9]+)*""")
   private const val NO_FINDINGS = "NO_FINDINGS"
   private const val REF_WIDTH = 3
   private const val ID_GROUP = 1
@@ -21,19 +23,31 @@ internal object StandaloneReviewReportReader {
     var verdict: String? = null
     val findings = mutableListOf<StandaloneReviewReportFinding>()
     val summary = mutableListOf<String>()
+    val declaredLanes = mutableListOf<String>()
     text.lines().forEach { raw ->
       val line = raw.trim().replace(bulletPrefix, "")
       val verdictMatch = verdictLine.matchEntire(line)
       val finding = parseFinding(line, findings.size)
+      val lanes =
+        if (lanesLabel.containsMatchIn(
+            line,
+          )
+        ) {
+          laneToken.findAll(line).map { it.value }.toList()
+        } else {
+          emptyList()
+        }
       when {
         verdictMatch != null -> verdict = verdictMatch.groupValues[1].lowercase()
         finding != null -> findings += finding
+        lanes.isNotEmpty() -> declaredLanes += lanes
         line == NO_FINDINGS || findingsHeading.matches(line) -> Unit
         else -> summary += raw.trimEnd()
       }
     }
     val summaryText = summary.joinToString("\n").replace(excessBlankLines, "\n\n").trim().takeIf(String::isNotBlank)
-    return StandaloneReviewReport(verdict, summaryText, findings)
+    val lanes = (declaredLanes + findings.mapNotNull { it.specialist }).distinct()
+    return StandaloneReviewReport(verdict, summaryText, findings, lanes)
   }
 
   private fun parseFinding(

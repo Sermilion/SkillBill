@@ -12,6 +12,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TAR
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.PLAN_REPORT_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_OUTCOME_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.QA_REPORT_TEXT_ASSIGNMENT
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.REVIEW_RUN_ID_ASSIGNMENT
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.columnValue
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.columnValues
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorCleanup
@@ -19,6 +20,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitor
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readPlanReport
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readQaReportText
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readReviewRunId
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
@@ -374,7 +376,7 @@ internal class StandalonePhaseStatusStore(
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
           terminal_result = ?, accepted_result = ?,
           $MONITOR_CLEANUP_ASSIGNMENTS, $QA_OUTCOME_ASSIGNMENT, $QA_REPORT_TEXT_ASSIGNMENT,
-          $PLAN_REPORT_ASSIGNMENT
+          $PLAN_REPORT_ASSIGNMENT, $REVIEW_RUN_ID_ASSIGNMENT
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -396,6 +398,7 @@ internal class StandalonePhaseStatusStore(
               request.qaOutcome?.wireValue,
               request.qaReportText,
               request.planReport.columnValue(),
+              request.reviewRunId,
               request.executionId,
               request.expectedRevision,
               request.leaseOwner,
@@ -737,6 +740,7 @@ internal class StandalonePhaseStatusStore(
       qaOutcome = readQaOutcome("standalone-status"),
       qaReportText = readQaReportText(),
       planReport = readPlanReport("standalone-status"),
+      reviewRunId = readReviewRunId(),
     )
   }
 

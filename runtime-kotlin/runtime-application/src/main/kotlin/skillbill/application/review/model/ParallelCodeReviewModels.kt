@@ -13,6 +13,7 @@ import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewCoverageReport
 import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
+import skillbill.review.model.ReviewRunLane
 import skillbill.review.model.ReviewStage
 import skillbill.review.model.ReviewStageDegradationReason
 import skillbill.review.model.ReviewStageResumeReport
@@ -183,4 +184,9 @@ internal data class ReviewLaneIntegrationInput(
   val launch: ReviewSpecialistLaunchRequest,
   val completion: ReviewLaneCompletionState,
   val findingCount: Int,
+)
+
+data class InlineReviewRubricPlan(
+  val rubrics: String,
+  val lanes: List<ReviewRunLane>,
 )

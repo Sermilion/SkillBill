@@ -1,5 +1,6 @@
 package dev.skillbill.desktop.feature.chat
 
+import dev.skillbill.desktop.core.designsystem.component.rememberRuntimeText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -35,7 +36,7 @@ internal fun ChatHeader(session: ChatSession) {
   ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
       item.issueKey?.let { BasicText(it, style = type.monoSm.copy(color = colors.fgMuted)) }
-      BasicText(item.title, Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
+      BasicText(rememberRuntimeText(item.title), Modifier.weight(1f), style = type.tBaseMedium.copy(color = colors.fg), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       ChatPill(state.name, tone = stateTone(state, colors), dot = true)

@@ -126,6 +126,7 @@ data class StandaloneReviewReport(
   val verdict: String?,
   val summary: String?,
   val findings: List<StandaloneReviewReportFinding>,
+  val lanes: List<String> = emptyList(),
 )
 
 data class StandaloneReviewReportFinding(

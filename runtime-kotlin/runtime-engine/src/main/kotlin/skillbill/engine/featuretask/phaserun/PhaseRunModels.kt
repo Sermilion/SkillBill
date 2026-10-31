@@ -90,6 +90,7 @@ sealed interface PhaseRunResult {
     val qaOutcome: StandaloneQaOutcome? = null,
     val qaReportText: String? = null,
     override val identifiedCompletedOutputs: List<PhaseRunCompletedOutput> = emptyList(),
+    val reviewRunId: String? = null,
   ) : PhaseRunResult
 
   data class Blocked(

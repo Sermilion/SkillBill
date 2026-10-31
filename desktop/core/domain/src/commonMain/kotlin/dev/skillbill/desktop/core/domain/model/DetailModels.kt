@@ -219,8 +219,11 @@ data class ExecutionInstance(
   val reviewReport: ReviewReport? = null,
 )
 
-/** A standalone review's report as the runtime read it: the canonical verdict token, the prose around the findings, and the findings. */
-data class ReviewReport(val verdict: String?, val summary: String?, val findings: List<ReviewReportFinding>)
+/**
+ * A standalone review's report as the runtime read it: the canonical verdict token, the prose around the findings, the findings,
+ * and the review lanes (rubric skill names) it applied, in the order it named them.
+ */
+data class ReviewReport(val verdict: String?, val summary: String?, val findings: List<ReviewReportFinding>, val lanes: List<String> = emptyList())
 
 /** One reported finding; [specialist] is the review lane that raised it, [location] a `path:line` when the report gave one. */
 data class ReviewReportFinding(
