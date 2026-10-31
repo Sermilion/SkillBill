@@ -124,8 +124,9 @@ private class TreePresentation(
     local.value = local.value.copy(rows = rows(roots()))
   }
 
-  fun isExpanded(path: String) = local.value.rows.firstOrNull { it.node.path == path }?.expanded
-    ?: path in expansions[local.value.project?.projectId].orEmpty()
+  // `?:` binds tighter than `in`, so the fallback needs its parentheses.
+  fun isExpanded(path: String): Boolean = local.value.rows.firstOrNull { it.node.path == path }?.expanded
+    ?: (path in expansions[local.value.project?.projectId].orEmpty())
 }
 
 @Inject

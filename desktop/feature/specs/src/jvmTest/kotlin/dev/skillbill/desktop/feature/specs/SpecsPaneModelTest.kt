@@ -129,6 +129,24 @@ class SpecsPaneModelTest {
     assertEquals("claude", controls.calls.single().agentId)
   }
 
+  @Test
+  fun `a second click on a bundle collapses what the first click expanded`() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(dispatcher)
+    val model = model(dispatcher)
+    model.open()
+    advanceUntilIdle()
+    fun paths() = model.state.value.rows.map { it.node.path }
+
+    model.onAction(SpecsAction.Click("SKILL-1"))
+    advanceUntilIdle()
+    assertEquals(listOf("SKILL-1", "SKILL-1/spec.md"), paths())
+
+    model.onAction(SpecsAction.Click("SKILL-1"))
+    advanceUntilIdle()
+    assertEquals(listOf("SKILL-1"), paths())
+  }
+
   private fun model(dispatcher: TestDispatcher) = SpecsPaneModel(
     specs,
     controls,
