@@ -40,6 +40,11 @@ import kotlin.time.Duration.Companion.minutes
 // How long pause-and-act waits for a running execution to stop, control call included.
 private val PAUSE_WAIT = 5.minutes
 
+// The pause request is already sent when the wait runs out, so the execution may still pause later.
+internal const val PAUSE_TIMEOUT_NOTICE =
+  "The app asked the execution to pause, but it did not stop within 5 minutes, so this turn did not run. " +
+    "If it pauses later, resume it from the detail controls."
+
 /**
  * The window's chats, one per execution id, held in memory only. It is window-scoped: every coroutine is a child of the window
  * scope, and the window ends every chat through [closeAll]. Calls come from the UI thread. It mirrors [paneOpen] into
@@ -209,7 +214,7 @@ class ChatWorkspace(
         }
       }
       if (stopped == null) {
-        session.append(ChatMessage.Notice("The execution did not stop within 5 minutes; nothing was changed."))
+        session.append(ChatMessage.Notice(PAUSE_TIMEOUT_NOTICE))
         return@launchTurn
       }
       val stoppedRead = turns.accept(session, stopped) ?: return@launchTurn

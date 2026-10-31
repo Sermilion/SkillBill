@@ -9,9 +9,7 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.overlay.ShortcutEntry
 import dev.skillbill.desktop.core.designsystem.overlay.ShortcutGrid
 import dev.skillbill.desktop.core.ui.pane.CHAT_SHORTCUT
-
-/** The Cmd key's label on macOS and the Ctrl key's elsewhere. */
-val MOD_KEY: String = if (System.getProperty("os.name").orEmpty().startsWith("Mac")) "⌘" else "Ctrl"
+import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 
 private val SHORTCUTS = listOf(
   ShortcutEntry("Command menu", "$MOD_KEY K"),

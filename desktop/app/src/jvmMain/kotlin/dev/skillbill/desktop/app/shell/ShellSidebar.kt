@@ -5,7 +5,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import dev.skillbill.desktop.app.keyboard.MOD_KEY
 import dev.skillbill.desktop.core.designsystem.SkillBillTheme
 import dev.skillbill.desktop.core.designsystem.component.SbControlSize
 import dev.skillbill.desktop.core.designsystem.component.SbIconButton
@@ -15,6 +14,7 @@ import dev.skillbill.desktop.core.designsystem.navigation.SidebarItem
 import dev.skillbill.desktop.core.designsystem.navigation.SidebarSection
 import dev.skillbill.desktop.core.designsystem.navigation.WorkspaceSwitcher
 import dev.skillbill.desktop.core.designsystem.status.StatusIcon
+import dev.skillbill.desktop.core.ui.pane.MOD_KEY
 import dev.skillbill.desktop.core.ui.status.boardSectionLead
 import dev.skillbill.desktop.core.ui.status.boardSectionLeadFill
 import dev.skillbill.desktop.core.domain.model.BoardSectionKind

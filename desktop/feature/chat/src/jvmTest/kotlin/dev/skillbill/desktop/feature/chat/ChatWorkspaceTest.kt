@@ -351,9 +351,30 @@ class ChatWorkspaceTest {
     runCurrent()
 
     assertEquals(
-      ChatMessage.Notice("The execution did not stop within 5 minutes; nothing was changed."),
+      ChatMessage.Notice(PAUSE_TIMEOUT_NOTICE),
       workspace.session(item.id)!!.transcript.value.last(),
     )
+    assertEquals(1, chat.requests.size)
+    assertEquals(listOf("pauseNow"), controls.calls.map { it.control })
+  }
+
+  @Test
+  fun `pause and act on an execution removed while it waits for the stop neither acts nor relaunches`() = runTest {
+    val item = workItem("SKILL-1")
+    val header = MutableStateFlow(loaded(item))
+    details.details = mapOf(item.id to header)
+    val workspace = workspace()
+    workspace.open(item)
+    runCurrent()
+
+    workspace.pauseAndAct(item.id, "fix the test")
+    runCurrent()
+    header.value = DetailState(item, DetailSections.Gone)
+    runCurrent()
+
+    val session = workspace.session(item.id)!!
+    assertTrue(session.gone.value)
+    assertEquals(ChatMessage.Notice(GONE_NOTICE), session.transcript.value.last())
     assertEquals(1, chat.requests.size)
     assertEquals(listOf("pauseNow"), controls.calls.map { it.control })
   }

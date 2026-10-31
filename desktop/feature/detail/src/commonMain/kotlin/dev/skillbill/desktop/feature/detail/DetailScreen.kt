@@ -122,7 +122,7 @@ internal fun DetailScreen(state: DetailUiState, host: DetailScreenHost, onAction
         SbIconButton(LucideIcons.refresh, "Refresh", { onAction(DetailAction.Retry) })
         SbIconButton(LucideIcons.fileText, if (host.specsOpen) "Close specs pane" else "Specs", host.onToggleSpecs, shortcut = "G S", selected = host.specsOpen)
         SbIconButton(LucideIcons.terminal, if (host.terminalOpen) "Close terminal" else "Terminal", host.onToggleTerminal, shortcut = "⌃ `", selected = host.terminalOpen)
-        SbIconButton(LucideIcons.bot, "Chat", host.onToggleChat, shortcut = host.chatShortcut, selected = host.chatOpen)
+        SbIconButton(LucideIcons.bot, if (host.chatOpen) "Close chat" else "Chat", host.onToggleChat, shortcut = host.chatShortcut, selected = host.chatOpen)
         SbIconButton(LucideIcons.panelRight, "Toggle details", host.onToggleDetails, shortcut = host.detailsShortcut, selected = host.detailsPaneOpen)
       },
     )

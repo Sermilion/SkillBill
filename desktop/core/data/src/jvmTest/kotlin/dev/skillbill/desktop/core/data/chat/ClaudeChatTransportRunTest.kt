@@ -2,6 +2,7 @@ package dev.skillbill.desktop.core.data.chat
 
 import dev.skillbill.desktop.core.common.HostEnvironment
 import dev.skillbill.desktop.core.domain.model.ChatEvent
+import dev.skillbill.desktop.core.domain.model.ChatFailure
 import dev.skillbill.desktop.core.testing.FakeAppSettingsRepository
 import dev.skillbill.desktop.core.testing.RecordingDiagnostics
 import kotlinx.coroutines.flow.flowOf
@@ -35,5 +36,17 @@ class ClaudeChatTransportRunTest {
     assertEquals(listOf("chat.login_output_skipped"), diagnostics.categories)
     assertEquals("operator prompt", command?.stdin)
     assertEquals("/work/skill-bill", command?.workingDirectory)
+  }
+
+  // Through a login shell a missing agent binary exits 127; a process that never started points at the worktree or the shell.
+  @Test
+  fun `a process that never started fails the turn as a process failure, not a missing binary`() = runTest {
+    val launcher = ChatProcessLauncher { flowOf(ChatProcessOutput.StartFailed("The working directory /gone does not exist.")) }
+    val host = HostEnvironment(mapOf("SHELL" to "/bin/bash"), "/home/operator", "")
+    val transport = ClaudeChatTransport(host, FakeAppSettingsRepository(), launcher, RecordingDiagnostics())
+
+    val events = transport.run(chatRequest()).toList()
+
+    assertEquals(listOf(ChatEvent.Failed(ChatFailure.ProcessFailed, "The working directory /gone does not exist.")), events)
   }
 }

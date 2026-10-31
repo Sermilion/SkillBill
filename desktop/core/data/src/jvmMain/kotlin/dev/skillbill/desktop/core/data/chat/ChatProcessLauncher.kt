@@ -45,6 +45,10 @@ fun interface ChatProcessLauncher {
 @ContributesBinding(AppScope::class)
 class ProcessChatLauncher : ChatProcessLauncher {
   override fun run(command: ChatCommand): Flow<ChatProcessOutput> = flow {
+    if (!File(command.workingDirectory).isDirectory) {
+      emit(ChatProcessOutput.StartFailed("The working directory ${command.workingDirectory} does not exist."))
+      return@flow
+    }
     val builder = ProcessBuilder(command.argv).directory(File(command.workingDirectory))
     builder.environment().clear()
     builder.environment().putAll(command.environment)
