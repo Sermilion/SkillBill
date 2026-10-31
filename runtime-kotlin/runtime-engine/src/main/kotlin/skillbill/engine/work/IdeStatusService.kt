@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.work.changes.workChangeBaseline
 import skillbill.engine.work.control.workControlEligible
 import skillbill.engine.work.control.workDisplayGroup
 import skillbill.engine.work.control.workDisplayPriority
@@ -417,6 +418,7 @@ class IdeStatusService(
         controlLease = context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
         incident = incidentSet.incident,
         incidentHistory = incidentSet.incidentHistory,
+        changeBaseline = workChangeBaseline(standalone, goalStatus, item, context, diagnostics),
       )
     return ProjectedDetailItem(
       detailItem,

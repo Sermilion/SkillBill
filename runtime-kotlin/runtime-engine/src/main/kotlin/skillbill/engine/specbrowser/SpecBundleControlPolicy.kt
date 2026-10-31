@@ -12,7 +12,6 @@ private val RUNNING_STATES = setOf(SpecBundleRunState.RUNNING, SpecBundleRunStat
 
 internal fun SpecBundleRunState.isLive(): Boolean = this in RUNNING_STATES
 
-/** Whether [goal] holds a runner, by the same verdict that disables Purge. */
 internal fun holdsRunner(goal: LiveGoal?): Boolean =
   goal != null && lifecycleRunState(goal.lifecycle, goal.pauseRequested).isLive()
 

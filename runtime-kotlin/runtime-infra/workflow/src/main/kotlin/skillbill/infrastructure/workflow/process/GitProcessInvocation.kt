@@ -70,7 +70,7 @@ internal fun invokeGitProcessWithBoundedLines(
   )
 }
 
-private fun gitArgv(
+internal fun gitArgv(
   repoRoot: Path,
   args: List<String>,
 ): List<String> =

@@ -725,6 +725,7 @@ object PrincipleEnforcementInventory {
       "telemetryLevelMutator",
       "telemetryService",
       "unaddressedFindingsLedgerService",
+      "workChangesPort",
       "workControlService",
       "workObservationService",
       "workListService",
