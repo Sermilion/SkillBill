@@ -179,3 +179,9 @@ Reason: The snapshot includes WAL changes without writing the source; the tempor
 Context: `DatabaseDispatcher` capped runtime reads and writes at two. Cancelled reads keep their slot until they finish, so a burst of spec tree reads after a delete held up the refresh behind them.
 Decision: Run runtime calls on `Dispatchers.IO` without a separate cap.
 Reason: The IO pool already bounds blocking threads. SQLite in WAL mode runs concurrent readers beside one writer, and no caller relies on the cap for mutual exclusion.
+
+## [2026-10-31] Share one git lock and an immutable committed-change cache across change scopes
+Context: Several change scopes can be open for one execution, and multiple windows can request the same committed ranges.
+Decision: `GitReadLock` owns the AppScope mutex shared by `RuntimeWorkChangesRepository` and `RuntimeWorkChangeScopesRepository`. Each port call holds the mutex only for that call. `CommittedChangeCache` uses separate 512-entry LRUs for committed lists and patches and stores only listed, shown, binary, and too-large results. Outside lists are read again because they depend on the current HEAD and target branch.
+Reason: Scope reads now share the existing single-git-read limit, while repeat reads across windows and session switches reuse completed commit-to-commit results. Working-tree results and failures stay out of the app cache.
+Revisit when stats loads for runs with 100 or more subtasks measurably delay the running scope refresh.
