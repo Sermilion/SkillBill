@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
@@ -44,6 +45,9 @@ import dev.skillbill.desktop.core.designsystem.icon.SbIcon
 import dev.skillbill.desktop.core.designsystem.icon.SbIconSize
 
 private val OUTPUT_MAX_HEIGHT = 240.dp
+
+/** How many of a group's tool calls show before "Show N earlier"; the newest ones, so a streaming turn shows its live work. */
+internal const val VISIBLE_TOOL_ROWS = 5
 
 /** A turn's tool calls under one header; open while the turn streams, folded once it ends, until the operator toggles it. */
 @Composable
@@ -73,8 +77,28 @@ internal fun ChatToolGroup(tools: List<ChatToolEntry>, streaming: Boolean) {
       GroupStatus(tools)
     }
     if (open) {
-      tools.forEach { tool -> key(tool.call.id) { ChatToolRow(tool) } }
+      var showAll by rememberSaveable { mutableStateOf(false) }
+      val hidden = if (showAll) 0 else (tools.size - VISIBLE_TOOL_ROWS).coerceAtLeast(0)
+      if (hidden > 0) FoldToggle("Show $hidden earlier", LucideIcons.chevronDown) { showAll = true }
+      tools.drop(hidden).forEach { tool -> key(tool.call.id) { ChatToolRow(tool) } }
+      if (showAll && tools.size > VISIBLE_TOOL_ROWS) FoldToggle("Show less", LucideIcons.chevronUp) { showAll = false }
     }
+  }
+}
+
+@Composable
+private fun FoldToggle(label: String, icon: ImageVector, onClick: () -> Unit) {
+  val colors = SkillBillTheme.colors
+  Row(
+    Modifier.fillMaxWidth().dividerAbove(colors.borderSubtle)
+      .clickable(role = Role.Button, onClick = onClick)
+      .pointerHoverIcon(PointerIcon.Hand)
+      .padding(horizontal = 10.dp, vertical = 6.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    CompositionLocalProvider(LocalContentColor provides colors.fgMuted) { SbIcon(icon, SbIconSize.Xs) }
+    BasicText(label, style = SkillBillTheme.type.tSm.copy(color = colors.fgMuted))
   }
 }
 

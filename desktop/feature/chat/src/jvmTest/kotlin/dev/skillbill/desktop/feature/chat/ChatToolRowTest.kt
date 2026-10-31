@@ -44,6 +44,24 @@ class ChatToolRowTest {
   }
 
   @Test
+  fun `a long group shows its newest five calls until expanded, then folds back from the bottom`() = runComposeUiTest {
+    val tools = (1..7).map { n ->
+      val call = ChatToolCall("bash-$n", "Bash", "echo $n", "Command $n")
+      ChatToolEntry(call, ChatEvent.ToolResult(call.id, "$n", false), start, start + 1.seconds)
+    }
+    setContent { SkillBillTheme(reducedMotion = true) { ChatToolGroup(tools, streaming = true) } }
+
+    onNodeWithText("Command 2").assertDoesNotExist()
+    onNodeWithText("Command 3").assertExists()
+    onNodeWithText("Command 7").assertExists()
+    onNodeWithText("Show 2 earlier").performClick()
+    onNodeWithText("Command 1").assertExists()
+    onNodeWithText("Show less").performClick()
+    onNodeWithText("Command 1").assertDoesNotExist()
+    onNodeWithText("Show 2 earlier").assertExists()
+  }
+
+  @Test
   fun `durations read as tenths under ten seconds, then seconds, then minutes`() {
     assertEquals("0.4s", durationLabel(400.milliseconds))
     assertEquals("9.2s", durationLabel(9_249.milliseconds))
