@@ -39,7 +39,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejec
 import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejectionViolationClassOf
 import java.time.Clock
 
-private fun SkillBillRuntimeException.degradableFailureClass(): FeatureTaskRuntimeDiagnosticFailureClass? =
+public fun SkillBillRuntimeException.degradableFailureClass(): FeatureTaskRuntimeDiagnosticFailureClass? =
   when (code as? RejectedOutputDiagnosticFailureCode) {
     RejectedOutputDiagnosticFailureCode.CONFLICT -> FeatureTaskRuntimeDiagnosticFailureClass.CONFLICT
     RejectedOutputDiagnosticFailureCode.PERMISSION -> FeatureTaskRuntimeDiagnosticFailureClass.PERMISSION
@@ -59,7 +59,7 @@ private fun conflictFailure(identity: String): SkillBillRuntimeException =
     rejectedOutputDiagnosticConflictMessage(identity),
   )
 
-private fun invalidRequestFailure(reason: String): SkillBillRuntimeException =
+public fun invalidRequestFailure(reason: String): SkillBillRuntimeException =
   SkillBillRuntimeException(
     RejectedOutputDiagnosticFailureCode.INVALID_REQUEST,
     rejectedOutputDiagnosticInvalidRequestMessage(reason),

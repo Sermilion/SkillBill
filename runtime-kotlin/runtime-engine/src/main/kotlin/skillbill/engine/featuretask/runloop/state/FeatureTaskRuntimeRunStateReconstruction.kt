@@ -19,7 +19,7 @@ import skillbill.workflow.taskruntime.model.qa.QaRepairAttempt
 import skillbill.workflow.taskruntime.model.qa.QaRepairAttemptOutcome
 import skillbill.workflow.taskruntime.model.qa.QaRepairState
 
-internal data class FeatureTaskRuntimeStatelessAuditInputs(
+public data class FeatureTaskRuntimeStatelessAuditInputs(
   val records: Map<String, FeatureTaskRuntimePhaseRecord>,
   val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
 )

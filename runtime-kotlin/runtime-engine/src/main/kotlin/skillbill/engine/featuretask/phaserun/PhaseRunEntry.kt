@@ -38,7 +38,7 @@ import java.util.UUID
 import java.util.concurrent.CancellationException
 
 @Inject
-class PhaseRunEntry(
+public class PhaseRunEntry(
   private val strategies: PhaseStrategyLookup,
   private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
   private val lifecycleTelemetry: LifecycleTelemetryService,
@@ -50,7 +50,7 @@ class PhaseRunEntry(
   private val standaloneRunners: StandalonePhaseRunners,
   private val plans: PhaseRunPlanResolver,
 ) {
-  fun run(request: PhaseRunRequest): PhaseRunResult {
+  public fun run(request: PhaseRunRequest): PhaseRunResult {
     if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
     val invocationId = newInvocationId()
     return withStatus(request, invocationId, request.definitionId) { statusRequest ->
@@ -126,13 +126,13 @@ class PhaseRunEntry(
     }
   }
 
-  fun runForGoal(
+  internal fun runForGoal(
     request: PhaseRunRequest,
     parentWorkflowId: String,
     expectedBranch: String,
   ): PhaseRunResult = runInternal(request, parentWorkflowId, parentWorkflowId, expectedBranch)
 
-  fun runForGoalQuality(
+  internal fun runForGoalQuality(
     request: PhaseRunRequest,
     parentWorkflowId: String,
     invocationId: String,

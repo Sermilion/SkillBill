@@ -35,7 +35,7 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFindi
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
-internal class FeatureTaskRuntimeRunState(
+public class FeatureTaskRuntimeRunState(
   initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   transitions: FeatureTaskRuntimeTransitionDeclaration,
   private val durableInitialLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
@@ -61,7 +61,7 @@ internal class FeatureTaskRuntimeRunState(
   private var transitionOwnership:
     Pair<FeatureTaskRuntimeRunLoopSession, FeatureTaskRuntimeRunTransitionOwner>? = null
 
-  fun transitionOwnerFor(session: FeatureTaskRuntimeRunLoopSession): FeatureTaskRuntimeRunTransitionOwner {
+  public fun transitionOwnerFor(session: FeatureTaskRuntimeRunLoopSession): FeatureTaskRuntimeRunTransitionOwner {
     val existing = transitionOwnership
     if (existing != null) {
       check(existing.first === session) { "Run progress cannot be paired with a different session." }
@@ -115,7 +115,7 @@ internal class FeatureTaskRuntimeRunState(
     completedReviewPassNumber = source.completedReviewPassNumber
   }
 
-  val progressSnapshot: FeatureTaskRuntimeProgressSnapshotAccess
+  public val progressSnapshot: FeatureTaskRuntimeProgressSnapshotAccess
     get() =
       detachedProgressObservations(FeatureTaskRuntimeRunState(this))
 

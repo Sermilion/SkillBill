@@ -4,7 +4,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 import skillbill.ports.workflow.gitops.WorkflowGitRemoteOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
-fun FeatureTaskRuntimeSubtaskFinalisation.push(
+public fun FeatureTaskRuntimeSubtaskFinalisation.push(
   branch: String,
   identity: FeatureTaskRuntimeSubtaskCommitIdentity,
   commitSha: String,
@@ -15,7 +15,7 @@ fun FeatureTaskRuntimeSubtaskFinalisation.push(
   return pushWithLease(branch, identity, commitSha)
 }
 
-private fun FeatureTaskRuntimeSubtaskFinalisation.pushDirect(
+public fun FeatureTaskRuntimeSubtaskFinalisation.pushDirect(
   branch: String,
   commitSha: String,
 ): String? {
@@ -24,7 +24,7 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.pushDirect(
   return "the finalised subtask commit '$commitSha' could not be pushed (${pushed.error})"
 }
 
-private fun FeatureTaskRuntimeSubtaskFinalisation.pushWithLease(
+public fun FeatureTaskRuntimeSubtaskFinalisation.pushWithLease(
   branch: String,
   identity: FeatureTaskRuntimeSubtaskCommitIdentity,
   commitSha: String,
@@ -36,7 +36,7 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.pushWithLease(
   return "the reopened subtask's amended commit '$commitSha' could not be pushed ($secondError)"
 }
 
-private fun FeatureTaskRuntimeSubtaskFinalisation.attemptLeasedPush(
+public fun FeatureTaskRuntimeSubtaskFinalisation.attemptLeasedPush(
   branch: String,
   identity: FeatureTaskRuntimeSubtaskCommitIdentity,
   commitSha: String,
@@ -49,7 +49,7 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.attemptLeasedPush(
   return pushed.error
 }
 
-private fun FeatureTaskRuntimeSubtaskFinalisation.pushAmended(
+public fun FeatureTaskRuntimeSubtaskFinalisation.pushAmended(
   branch: String,
   commitSha: String,
 ): String? {
@@ -58,11 +58,11 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.pushAmended(
   return "the reopened subtask's amended commit '$commitSha' could not be pushed (${pushed.error})"
 }
 
-private fun WorkflowGitOperationResult.namesAbsentRemote(): Boolean =
+public fun WorkflowGitOperationResult.namesAbsentRemote(): Boolean =
   this is WorkflowGitOperationResult.Ok &&
     value.trim() == WorkflowGitRemoteOperations.ABSENT_REMOTE_BRANCH
 
-private fun FeatureTaskRuntimeSubtaskFinalisation.refreshRemote(
+public fun FeatureTaskRuntimeSubtaskFinalisation.refreshRemote(
   identity: FeatureTaskRuntimeSubtaskCommitIdentity,
   branch: String,
 ): WorkflowGitOperationResult {

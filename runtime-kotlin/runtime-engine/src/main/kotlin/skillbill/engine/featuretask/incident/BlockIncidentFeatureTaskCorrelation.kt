@@ -22,15 +22,15 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOrigin
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-internal class BlockIncidentFeatureTaskCorrelation private constructor(
-  private val workflowId: String?,
-  private val phaseId: String?,
-  private val parentWorkflowId: String?,
-  private val invocationId: String?,
-  private val generation: Long?,
+public class BlockIncidentFeatureTaskCorrelation private constructor(
+  public val workflowId: String?,
+  public val phaseId: String?,
+  public val parentWorkflowId: String?,
+  public val invocationId: String?,
+  public val generation: Long?,
   private val unavailableFields: Map<BlockIncidentCorrelatedField, BlockIncidentFieldAvailability>,
 ) {
-  fun acceptedPhaseBlock(
+  internal fun acceptedPhaseBlock(
     attempt: Int,
     blockedReason: String?,
     failureDisposition: String?,
@@ -75,8 +75,8 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
     )
   }
 
-  companion object {
-    fun persistAcceptedIdentity(
+  internal companion object {
+    internal fun persistAcceptedIdentity(
       states: WorkflowStateRepository,
       observation: BlockIncidentObservation,
     ) {
@@ -120,7 +120,7 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
       )
     }
 
-    fun acceptedPhaseIncidentToken(
+    internal fun acceptedPhaseIncidentToken(
       states: WorkflowStateRepository,
       workflowId: String,
       phaseId: String,
@@ -155,7 +155,7 @@ internal class BlockIncidentFeatureTaskCorrelation private constructor(
         BlockIncidentCorrelatedField.WORKTREE_PATH,
       )
 
-    fun resolve(
+    internal fun resolve(
       states: WorkflowStateRepository,
       workflowId: String,
       phaseId: String,

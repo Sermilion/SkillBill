@@ -9,21 +9,21 @@ import skillbill.ports.idestatus.model.StandaloneQaOutcome
 import java.time.Clock
 
 @Inject
-class FeatureTaskQaOutcomeRecorder(
+public class FeatureTaskQaOutcomeRecorder(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
 ) {
-  fun find(workflowId: String): FeatureTaskQaOutcome? =
+  internal fun find(workflowId: String): FeatureTaskQaOutcome? =
     database.read { unitOfWork -> unitOfWork.featureTaskQaOutcomes.find(workflowId) }
 
-  fun recordAttempted(workflowId: String) {
+  internal fun recordAttempted(workflowId: String) {
     database.transaction { unitOfWork ->
       val outcomes = unitOfWork.featureTaskQaOutcomes
       outcomes.upsert(FeatureTaskQaOutcomeRecords.attempted(workflowId, outcomes.find(workflowId), clock.instant()))
     }
   }
 
-  fun recordSettled(
+  internal fun recordSettled(
     workflowId: String,
     verdict: QaVerdict,
     reason: String?,
@@ -56,7 +56,7 @@ class FeatureTaskQaOutcomeRecorder(
     }
   }
 
-  fun recordRepairAttempts(
+  internal fun recordRepairAttempts(
     workflowId: String,
     qaFixAttempts: Int,
   ) {
@@ -68,7 +68,7 @@ class FeatureTaskQaOutcomeRecorder(
     }
   }
 
-  fun recordWarning(
+  internal fun recordWarning(
     workflowId: String,
     warning: String,
   ) {
@@ -85,7 +85,7 @@ class FeatureTaskQaOutcomeRecorder(
     }
   }
 
-  fun recordContainedFailure(
+  internal fun recordContainedFailure(
     workflowId: String,
     kind: FeatureTaskQaFailureKind,
     reason: String,
@@ -126,11 +126,11 @@ class FeatureTaskQaOutcomeRecorder(
     if (existing?.contains(addition) == true) existing else listOfNotNull(existing, addition).joinToString("; ")
 }
 
-data class QaSettledRun(
-  val treeIdentity: String?,
-  val verdict: QaVerdict = QaVerdict.INCOMPLETE,
-  val report: QaReport? = null,
-  val reportPath: String? = null,
-  val legacyFindings: List<FeatureTaskQaFinding> = emptyList(),
-  val failureKind: FeatureTaskQaFailureKind? = null,
+public data class QaSettledRun(
+  public val treeIdentity: String?,
+  public val verdict: QaVerdict = QaVerdict.INCOMPLETE,
+  public val report: QaReport? = null,
+  public val reportPath: String? = null,
+  internal val legacyFindings: List<FeatureTaskQaFinding> = emptyList(),
+  public val failureKind: FeatureTaskQaFailureKind? = null,
 )

@@ -49,13 +49,13 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
 
 @Inject
-class FeatureTaskRuntimeExecutionAdmission(
+public class FeatureTaskRuntimeExecutionAdmission(
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
   private val phaseOutputMigration: FeatureTaskRuntimePhaseOutputMigration,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
 ) {
-  fun admit(
+  internal fun admit(
     states: WorkflowStateRepository,
     workflowId: String,
     inputs: EffectiveGatePolicyInputs,
@@ -64,7 +64,7 @@ class FeatureTaskRuntimeExecutionAdmission(
   ): AdmittedFeatureTaskRuntimeExecution =
     admitStored(states, AdmissionRequest(workflowId, inputs, expectedIdentity, requestedReviewSelection))
 
-  fun admit(
+  internal fun admit(
     session: GoalRunnerPersistenceSession,
     workflowId: String,
     inputs: EffectiveGatePolicyInputs,
@@ -388,7 +388,7 @@ class FeatureTaskRuntimeExecutionAdmission(
     val receipt: RuntimeMigrationReceipt?,
   )
 
-  fun requireCompatibleDescriptor(
+  internal fun requireCompatibleDescriptor(
     states: WorkflowStateRepository,
     workflowId: String,
     expected: ValidatedFeatureTaskRuntimeExecutionPlan?,
@@ -408,7 +408,7 @@ class FeatureTaskRuntimeExecutionAdmission(
       throw error
     }
 
-  fun recordTransactionOutcome(
+  internal fun recordTransactionOutcome(
     receipt: RuntimeMigrationReceipt,
     committed: Boolean,
   ) {

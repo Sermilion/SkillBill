@@ -26,7 +26,7 @@ import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewRevision
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 
-class FeatureTaskRuntimeGoalReviewPassRecorder(
+internal class FeatureTaskRuntimeGoalReviewPassRecorder(
   private val database: DatabaseSessionFactory,
   private val patcher: FeatureTaskRuntimeGoalContinuationArtifactPatcher,
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,

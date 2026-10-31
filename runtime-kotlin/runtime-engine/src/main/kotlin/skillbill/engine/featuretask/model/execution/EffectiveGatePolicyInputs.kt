@@ -10,15 +10,15 @@ import java.util.Collections
 
 private const val PACK_IDENTITY_LENGTH_LIMIT = 128
 
-data class EffectiveGatePolicyInputs(
-  val commandFamily: ValidationGateCommandFamily,
-  val packSlug: String?,
-  val declaration: ValidationGateDeclaration?,
-  val gradleWrapper: String?,
-  val validationDepth: ValidationDepth,
-  val phaseTimeoutMillis: Long?,
+public data class EffectiveGatePolicyInputs(
+  public val commandFamily: ValidationGateCommandFamily,
+  public val packSlug: String?,
+  public val declaration: ValidationGateDeclaration?,
+  public val gradleWrapper: String?,
+  public val validationDepth: ValidationDepth,
+  public val phaseTimeoutMillis: Long?,
 ) {
-  fun frozen(): EffectiveGatePolicyInputs =
+  public fun frozen(): EffectiveGatePolicyInputs =
     copy(
       declaration =
         declaration?.let { gate ->
@@ -35,7 +35,7 @@ data class EffectiveGatePolicyInputs(
         },
     )
 
-  fun commandArgv(role: ValidationGateCyclePhase): List<String>? =
+  public fun commandArgv(role: ValidationGateCyclePhase): List<String>? =
     declaration?.let { gate ->
       val argv =
         when (commandFamily) {

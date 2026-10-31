@@ -28,15 +28,15 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import java.security.MessageDigest
 import java.util.HexFormat
 
-data class BlockIncidentCollectedEvidence(
+public data class BlockIncidentCollectedEvidence(
   val items: List<BlockIncidentDiagnosisEvidence>,
   val degradations: Set<BlockIncidentDegradation>,
   val recordedAgentId: String?,
 )
 
 @Inject
-class BlockIncidentEvidenceCollector(private val runtimeVersion: RuntimeVersion) {
-  fun collect(
+public class BlockIncidentEvidenceCollector(private val runtimeVersion: RuntimeVersion) {
+  public fun collect(
     unitOfWork: UnitOfWork,
     incident: BlockIncident,
   ): BlockIncidentCollectedEvidence {
@@ -450,7 +450,7 @@ class BlockIncidentEvidenceCollector(private val runtimeVersion: RuntimeVersion)
       "retained reference ${reference.retainedReferenceId ?: reference.reference ?: NONE_LABEL}, " +
       "digest ${reference.digest ?: NONE_LABEL}; exact read returned $payloadBytes payload bytes."
 
-  private fun FeatureTaskRuntimePhaseLedgerEntry.text(includeReason: Boolean): String =
+  public fun FeatureTaskRuntimePhaseLedgerEntry.text(includeReason: Boolean): String =
     "#$sequenceNumber ${action.wireValue} phase $phaseId attempt $attemptCount at $timestamp" +
       " agent ${resolvedAgentId ?: NONE_LABEL}" +
       if (includeReason && blockedReason != null) " blocked: $blockedReason" else ""

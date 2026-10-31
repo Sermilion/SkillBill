@@ -17,22 +17,22 @@ internal object PlanBundleSpecText {
   private val IMPLEMENTATION_HEADING = Regex("""^##\s+implementation\b.*$""", RegexOption.IGNORE_CASE)
   private val SECOND_LEVEL_HEADING = Regex("""^##\s+\S.*$""")
 
-  fun scopeOf(specText: String): String {
+  internal fun scopeOf(specText: String): String {
     val lines = specText.lines()
     val section = detailsRange(lines) ?: return specText.trimEnd()
     return (lines.take(section.first) + lines.drop(section.last + 1)).joinToString("\n").trimEnd()
   }
 
-  fun detailsOf(specText: String): String? {
+  internal fun detailsOf(specText: String): String? {
     val lines = specText.lines()
     val section = detailsRange(lines) ?: return null
     return lines.subList(section.first + 1, section.last + 1).joinToString("\n").trim().takeIf(String::isNotBlank)
   }
 
-  fun governedSubSpecReady(specText: String): Boolean =
+  internal fun governedSubSpecReady(specText: String): Boolean =
     acceptanceCriteriaOf(specText).isNotEmpty() && detailsOf(specText) != null
 
-  fun acceptanceCriteriaOf(specText: String): List<String> =
+  internal fun acceptanceCriteriaOf(specText: String): List<String> =
     GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }
 
   private fun detailsRange(lines: List<String>): IntRange? {
@@ -43,14 +43,14 @@ internal object PlanBundleSpecText {
   }
 }
 
-internal sealed interface PlanUnitSettlement {
-  data class Planned(val bundle: FeatureTaskRuntimePlanBundle) : PlanUnitSettlement
+public sealed interface PlanUnitSettlement {
+  public data class Planned(val bundle: FeatureTaskRuntimePlanBundle) : PlanUnitSettlement
 
-  data class Rejected(val reason: String) : PlanUnitSettlement
+  public data class Rejected(val reason: String) : PlanUnitSettlement
 }
 
-internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecompositionPlanner) {
-  fun capture(
+public class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecompositionPlanner) {
+  public fun capture(
     repoRoot: Path,
     written: FeatureSpecWriteResult,
     origin: FeatureTaskRuntimePlanBundleOrigin,
@@ -69,7 +69,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     )
   }
 
-  fun unitComplete(
+  public fun unitComplete(
     repoRoot: Path,
     subtask: FeatureTaskRuntimePlanBundleSubtask,
     unitRecord: FeatureTaskRuntimePhaseRecord?,
@@ -86,7 +86,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
       PlanBundleSpecText.detailsOf(text)?.let(::sha256HexUtf8) == recorded
   }
 
-  fun drift(
+  public fun drift(
     repoRoot: Path,
     issueKey: String,
     bundle: FeatureTaskRuntimePlanBundle,
@@ -109,7 +109,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     }
   }
 
-  fun rebase(
+  public fun rebase(
     repoRoot: Path,
     issueKey: String,
     bundle: FeatureTaskRuntimePlanBundle,
@@ -125,7 +125,7 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     )
   }
 
-  fun settleUnit(
+  public fun settleUnit(
     repoRoot: Path,
     issueKey: String,
     bundle: FeatureTaskRuntimePlanBundle,

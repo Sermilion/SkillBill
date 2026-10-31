@@ -14,7 +14,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
-fun executeFeatureTaskContinuationLookup(
+internal fun executeFeatureTaskContinuationLookup(
   query: FeatureTaskContinuationLookupQuery,
   unitOfWork: UnitOfWork,
   project: (

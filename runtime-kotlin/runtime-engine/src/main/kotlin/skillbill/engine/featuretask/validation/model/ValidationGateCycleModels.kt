@@ -14,82 +14,82 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateTriageDisposition
 import java.nio.file.Path
 
-sealed interface ValidationGateResolution {
-  data class Declared(
-    val packSlug: String,
-    val declaration: ValidationGateDeclaration,
+public sealed interface ValidationGateResolution {
+  public data class Declared(
+    public val packSlug: String,
+    public val declaration: ValidationGateDeclaration,
   ) : ValidationGateResolution
 
-  data class Absent(val routedPackSlug: String?) : ValidationGateResolution
+  public data class Absent(val routedPackSlug: String?) : ValidationGateResolution
 
-  data class Incompatible(val reason: String) : ValidationGateResolution
+  public data class Incompatible(val reason: String) : ValidationGateResolution
 }
 
-const val UNPARSEABLE_GATE_FAILURE_RULE_ID: String = "unparseable_gate_failure"
+public const val UNPARSEABLE_GATE_FAILURE_RULE_ID: String = "unparseable_gate_failure"
 
-fun requiresUnparseableGateTriage(findings: List<ValidationGateFinding>): Boolean =
+public fun requiresUnparseableGateTriage(findings: List<ValidationGateFinding>): Boolean =
   findings.size == 1 && findings.single().ruleOrTestId == UNPARSEABLE_GATE_FAILURE_RULE_ID
 
-fun interface ValidationGateAgentTriageLauncher {
-  fun launch(findings: ValidationFindingSetProjection): ValidationGateTriageResult
+public fun interface ValidationGateAgentTriageLauncher {
+  public fun launch(findings: ValidationFindingSetProjection): ValidationGateTriageResult
 }
 
-sealed interface ValidationGateTriageResult {
-  data class Captured(val validationRepairPlan: String) : ValidationGateTriageResult
+public sealed interface ValidationGateTriageResult {
+  public data class Captured(val validationRepairPlan: String) : ValidationGateTriageResult
 
-  data class Stopped(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateTriageResult
+  public data class Stopped(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateTriageResult
 
-  data object Empty : ValidationGateTriageResult
+  public data object Empty : ValidationGateTriageResult
 }
 
-fun interface ValidationGateAgentRepairLauncher {
-  fun launch(
+public fun interface ValidationGateAgentRepairLauncher {
+  public fun launch(
     findings: ValidationFindingSetProjection,
     repairIteration: Int,
     triagePlan: String?,
   ): ValidationGateAgentRepairResult
 }
 
-sealed interface ValidationGateAgentRepairResult {
-  data class Paused(val reason: String) : ValidationGateAgentRepairResult
+public sealed interface ValidationGateAgentRepairResult {
+  public data class Paused(val reason: String) : ValidationGateAgentRepairResult
 
-  data class Completed(val output: FeatureTaskRuntimePhaseOutput) : ValidationGateAgentRepairResult
+  public data class Completed(val output: FeatureTaskRuntimePhaseOutput) : ValidationGateAgentRepairResult
 
-  data class Blocked(
-    val reason: String,
-    val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
-    val failureCode: String? = null,
+  public data class Blocked(
+    public val reason: String,
+    public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+    public val failureCode: String? = null,
   ) : ValidationGateAgentRepairResult
 }
 
-sealed interface ValidationGateCycleResult {
-  data class Terminal(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateCycleResult
+public sealed interface ValidationGateCycleResult {
+  public data class Terminal(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateCycleResult
 }
 
-sealed interface ValidationGateCycleTerminalOutcome {
-  data class Paused(val reason: String) : ValidationGateCycleTerminalOutcome
+public sealed interface ValidationGateCycleTerminalOutcome {
+  public data class Paused(val reason: String) : ValidationGateCycleTerminalOutcome
 
-  data class Completed(val output: FeatureTaskRuntimePhaseOutput) : ValidationGateCycleTerminalOutcome
+  public data class Completed(val output: FeatureTaskRuntimePhaseOutput) : ValidationGateCycleTerminalOutcome
 
-  data class Blocked(
-    val reason: String,
-    val remainingFindings: ValidationFindingSetProjection? = null,
-    val measurements: List<FeatureTaskRuntimeValidationGateRunRecord> = emptyList(),
-    val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
-    val failureCode: String? = null,
+  public data class Blocked(
+    public val reason: String,
+    public val remainingFindings: ValidationFindingSetProjection? = null,
+    public val measurements: List<FeatureTaskRuntimeValidationGateRunRecord> = emptyList(),
+    public val failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
+    public val failureCode: String? = null,
   ) : ValidationGateCycleTerminalOutcome
 }
 
-interface ValidationGateProgressStore {
-  fun persist(
+public interface ValidationGateProgressStore {
+  public fun persist(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   )
 
-  fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress?
+  public fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress?
 }
 
-data class ValidationGateProgressWrite(
+internal data class ValidationGateProgressWrite(
   val repairWindowPhase: FeatureTaskRuntimeValidationGateRepairWindowPhase,
   val remainingFindings: ValidationFindingSetProjection?,
   val completeFindings: List<ValidationGateFinding>,
@@ -116,21 +116,21 @@ data class ValidationGateProgressWrite(
   }
 }
 
-data class ValidationGateCycleRequest(
-  val repoRoot: Path,
-  val request: FeatureTaskRuntimeRunFacts,
-  val phaseId: String,
-  val validationDepth: ValidationDepth,
-  val changedPaths: List<String>,
-  val repositoryCheckpoint: String,
-  val agentRepairLauncher: ValidationGateAgentRepairLauncher,
-  val progressStore: ValidationGateProgressStore,
-  val agentTriageLauncher: ValidationGateAgentTriageLauncher =
+public data class ValidationGateCycleRequest(
+  public val repoRoot: Path,
+  public val request: FeatureTaskRuntimeRunFacts,
+  public val phaseId: String,
+  public val validationDepth: ValidationDepth,
+  public val changedPaths: List<String>,
+  public val repositoryCheckpoint: String,
+  public val agentRepairLauncher: ValidationGateAgentRepairLauncher,
+  public val progressStore: ValidationGateProgressStore,
+  public val agentTriageLauncher: ValidationGateAgentTriageLauncher =
     ValidationGateAgentTriageLauncher {
       ValidationGateTriageResult.Empty
     },
-  val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
-  val repositoryCheckpointProvider: () -> String? = { repositoryCheckpoint },
-  val preserveConsumedRepairTurns: Boolean = false,
-  val progressKey: String = request.workflowId,
+  public val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
+  public val repositoryCheckpointProvider: () -> String? = { repositoryCheckpoint },
+  internal val preserveConsumedRepairTurns: Boolean = false,
+  internal val progressKey: String = request.workflowId,
 )

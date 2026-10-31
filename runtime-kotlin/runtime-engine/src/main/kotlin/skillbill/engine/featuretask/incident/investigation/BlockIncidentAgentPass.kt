@@ -28,13 +28,13 @@ import java.time.Duration
 import kotlin.time.toKotlinDuration
 
 @Inject
-class BlockIncidentAgentPass(
+public class BlockIncidentAgentPass(
   private val launcher: AgentRunLauncher,
   private val repositoryRoot: RepositoryRoot,
   private val clock: Clock,
   private val projectStore: ProjectStorePort,
 ) {
-  fun enrich(
+  public fun enrich(
     incident: BlockIncident,
     evidence: BlockIncidentCollectedEvidence,
     draft: BlockIncidentDiagnosisRecord,
@@ -183,8 +183,8 @@ private object AgentPromptKeys {
   const val COMPLETED_AT = "completed_at"
 }
 
-internal object BlockIncidentAgentOutputParser {
-  fun parse(
+public object BlockIncidentAgentOutputParser {
+  public fun parse(
     stdout: String,
     knownReferences: Set<String>,
   ): String? {
@@ -200,6 +200,6 @@ internal object BlockIncidentAgentOutputParser {
     return cause.takeIf { valid }
   }
 
-  private val EXPECTED_FIELDS =
+  public val EXPECTED_FIELDS: Set<String> =
     setOf(BlockIncidentDiagnosisKeys.AGENT_SUSPECTED_CAUSE, BlockIncidentDiagnosisKeys.AGENT_EVIDENCE_REFS)
 }

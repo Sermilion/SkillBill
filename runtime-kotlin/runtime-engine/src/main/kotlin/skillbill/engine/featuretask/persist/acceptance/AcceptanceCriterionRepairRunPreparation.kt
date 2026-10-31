@@ -11,21 +11,21 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteRe
 import java.nio.file.Path
 
 @Inject
-class AcceptanceCriterionRepairRunPreparation(
+public class AcceptanceCriterionRepairRunPreparation(
   private val repairPersistence: AcceptanceCriterionRepairPersistence,
   private val versionRecovery: AcceptanceCriterionRepairVersionRecovery,
 ) {
-  sealed interface Prepared {
+  internal sealed interface Prepared {
     data class Ready(val runState: AcceptanceCriterionRepairRunState) : Prepared
 
     data class Refused(val reason: AcceptanceCriterionRepairRefusal) : Prepared
   }
 
-  fun recoverSupersededVersion(
+  internal fun recoverSupersededVersion(
     worker: AcquiredFeatureTaskRuntimeWorker,
   ): AcceptanceCriterionRepairVersionRecoveryResult = versionRecovery.recoverSupersededVersion(worker)
 
-  fun prepare(
+  internal fun prepare(
     worker: AcquiredFeatureTaskRuntimeWorker,
     criteria: List<String>,
     specDigest: String?,

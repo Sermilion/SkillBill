@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.phase.prompt.directives
 
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 
-fun minimalSettlementContract(
+internal fun minimalSettlementContract(
   stepName: String,
   target: FeatureTaskRuntimePhaseSettlementTarget?,
   valueContent: String,

@@ -4,12 +4,12 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
-data class WorktreeBaseline(
+public data class WorktreeBaseline(
   val status: String,
   val head: String,
 )
 
-inline fun WorkflowGitOperations.worktreeBaseline(
+public inline fun WorkflowGitOperations.worktreeBaseline(
   repoRoot: Path,
   unreadable: (anchor: String, error: String) -> Nothing,
 ): WorktreeBaseline {
@@ -26,5 +26,5 @@ inline fun WorkflowGitOperations.worktreeBaseline(
   return WorktreeBaseline(status, head)
 }
 
-const val WORKTREE_BASELINE_STATUS_ANCHOR = "worktree status"
-const val WORKTREE_BASELINE_HEAD_ANCHOR = "HEAD"
+public const val WORKTREE_BASELINE_STATUS_ANCHOR: String = "worktree status"
+public const val WORKTREE_BASELINE_HEAD_ANCHOR: String = "HEAD"

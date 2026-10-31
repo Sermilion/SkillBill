@@ -6,13 +6,13 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.time.Clock
 
-data class CompletedUpstreamRepairRequest(
-  val phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
-  val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-  val featureSize: FeatureTaskRuntimeFeatureSize,
-  val resumePhaseId: String,
-  val reason: String,
-  val clock: Clock,
-  val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection =
+public data class CompletedUpstreamRepairRequest(
+  public val phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
+  public val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+  public val featureSize: FeatureTaskRuntimeFeatureSize,
+  public val resumePhaseId: String,
+  public val reason: String,
+  public val clock: Clock,
+  public val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection =
     FeatureTaskRuntimeQualityGateSelection.VALIDATE,
 )

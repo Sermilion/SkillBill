@@ -9,13 +9,13 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
-internal data class FeatureTaskRuntimeCurrentPhaseExecutionContext(
-  val currentPhaseId: String?,
-  val records: Map<String, FeatureTaskRuntimePhaseRecord>,
-  val phases: List<FeatureTaskRuntimePhaseStatus>,
-  val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-  val gateRunCount: Int?,
-  val acceptanceCriterionRepair: AcceptanceCriterionRepairState? = null,
+public data class FeatureTaskRuntimeCurrentPhaseExecutionContext(
+  public val currentPhaseId: String?,
+  public val records: Map<String, FeatureTaskRuntimePhaseRecord>,
+  public val phases: List<FeatureTaskRuntimePhaseStatus>,
+  public val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+  public val gateRunCount: Int?,
+  public val acceptanceCriterionRepair: AcceptanceCriterionRepairState? = null,
 )
 
 internal fun defaultPhaseExecution(

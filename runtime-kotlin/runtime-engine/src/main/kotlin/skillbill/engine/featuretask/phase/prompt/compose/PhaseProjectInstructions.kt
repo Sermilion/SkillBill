@@ -10,16 +10,16 @@ import java.nio.file.DirectoryIteratorException
 import java.nio.file.Path
 import java.security.MessageDigest
 
-sealed interface PhaseProjectInstructionsResolution {
-  data class Injected(
-    val relativePath: String,
-    val content: String,
-    val sha256: String,
+public sealed interface PhaseProjectInstructionsResolution {
+  public data class Injected(
+    public val relativePath: String,
+    public val content: String,
+    public val sha256: String,
   ) : PhaseProjectInstructionsResolution
 
-  data class Skipped(
-    val relativePath: String,
-    val reason: String,
+  public data class Skipped(
+    public val relativePath: String,
+    public val reason: String,
   ) : PhaseProjectInstructionsResolution
 }
 
@@ -31,20 +31,20 @@ internal object AbsentPhaseInstructionFileSource : PhaseInstructionFileSource {
   override fun readBytes(file: Path): ByteArray = ByteArray(0)
 }
 
-data class PhaseProjectInstructionsOutcome(
-  val injected: PhaseProjectInstructionsResolution.Injected? = null,
-  val skipped: List<PhaseProjectInstructionsResolution.Skipped> = emptyList(),
+public data class PhaseProjectInstructionsOutcome(
+  public val injected: PhaseProjectInstructionsResolution.Injected? = null,
+  public val skipped: List<PhaseProjectInstructionsResolution.Skipped> = emptyList(),
 )
 
-object PhaseProjectInstructions {
-  const val MAX_BYTES: Int = 16 * 1024
-  const val PHASES_DIR: String = ".skill-bill/phases"
-  private const val MARKDOWN_SUFFIX = ".md"
+public object PhaseProjectInstructions {
+  public const val MAX_BYTES: Int = 16 * 1024
+  public const val PHASES_DIR: String = ".skill-bill/phases"
+  public const val MARKDOWN_SUFFIX: String = ".md"
   private const val KIB_BYTES = 1024
-  private val ALIASES: Map<String, String> = PhaseSlot.stepAliases
+  public val ALIASES: Map<String, String> = PhaseSlot.stepAliases
   private val knownPhaseIds: Set<String> = PhaseSlot.entries.flatMap(PhaseSlot::steps).toSet()
 
-  fun resolve(
+  public fun resolve(
     source: PhaseInstructionFileSource,
     repoRoot: Path,
     phaseId: String,
@@ -125,7 +125,7 @@ object PhaseProjectInstructions {
     }
   }
 
-  private fun sha256Hex(bytes: ByteArray): String =
+  public fun sha256Hex(bytes: ByteArray): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
   private fun skippedEntry(
@@ -138,5 +138,5 @@ object PhaseProjectInstructions {
       skipped = listOf(PhaseProjectInstructionsResolution.Skipped(PHASES_DIR, "unreadable: ${error.describe()}")),
     )
 
-  private fun Exception.describe(): String = message ?: this::class.simpleName.orEmpty()
+  public fun Exception.describe(): String = message ?: this::class.simpleName.orEmpty()
 }

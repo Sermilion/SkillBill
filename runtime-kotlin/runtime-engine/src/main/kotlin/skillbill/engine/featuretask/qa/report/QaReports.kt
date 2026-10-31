@@ -2,19 +2,19 @@ package skillbill.engine.featuretask.qa.report
 
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 
-internal object QaReports {
-  fun skipped(
+public object QaReports {
+  public fun skipped(
     reason: QaSkipReason,
     detail: String,
   ): QaReport = QaReport(detail, QaVerdict.SKIPPED, reason.wireValue, emptyList(), null)
 
-  fun incomplete(sentence: String): QaReport =
+  public fun incomplete(sentence: String): QaReport =
     QaReport(sentence, QaVerdict.INCOMPLETE, null, emptyList(), null, listOf(sentence))
 
-  fun missing(sentence: String): QaReport =
+  public fun missing(sentence: String): QaReport =
     QaReport(null, QaVerdict.INCOMPLETE, null, emptyList(), null, listOf(sentence))
 
-  fun withRetainedResources(
+  internal fun withRetainedResources(
     report: QaReport,
     resources: List<QaRetainedResource>,
     guidance: String,

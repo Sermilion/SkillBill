@@ -4,13 +4,13 @@ import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 
-internal object FeatureTaskRuntimeResumeLaunchAssignment {
-  fun recordedForAgent(
+public object FeatureTaskRuntimeResumeLaunchAssignment {
+  public fun recordedForAgent(
     recorded: StepLaunchAssignment?,
     resolvedAgentId: String,
   ): StepLaunchAssignment? = recorded?.takeIf { it.agentId == resolvedAgentId }
 
-  fun modelDirective(
+  public fun modelDirective(
     recorded: StepLaunchAssignment?,
     resolvedAgentId: String,
     phaseId: String,
@@ -23,7 +23,7 @@ internal object FeatureTaskRuntimeResumeLaunchAssignment {
     return FeatureTaskRuntimeModelResolver.resolve(phaseId, resolvedAgentId, assignment)
   }
 
-  fun usedAssignments(
+  public fun usedAssignments(
     recorded: Map<String, StepLaunchAssignment>,
     current: Map<String, StepLaunchAssignment>,
     resolvedAgentIdForStep: (String) -> String,

@@ -34,13 +34,13 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.retainPhaseLedgerEvidence
 import java.time.Clock
 
-class FeatureTaskRuntimePhaseEvidenceRecorder(
+internal class FeatureTaskRuntimePhaseEvidenceRecorder(
   val database: DatabaseSessionFactory,
   val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   val quarantineValidator: FeatureTaskRuntimeWireArtifactValidator,
   val clock: Clock,
 ) {
-  fun appendOwnedLedgerEntry(
+  internal fun appendOwnedLedgerEntry(
     request: FeatureTaskRuntimePhaseLedgerRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
@@ -58,7 +58,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       appendLedgerEntryInTransaction(unitOfWork, record, request)
     }
 
-  fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean =
+  public fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
@@ -99,7 +99,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     return true
   }
 
-  fun appendOwnedCheckpointIdentity(
+  public fun appendOwnedCheckpointIdentity(
     args: AppendCheckpointIdentityArgs,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean =
@@ -117,7 +117,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       appendCheckpointIdentityInTransaction(unitOfWork, record, args)
     }
 
-  fun appendOwnedQuarantineEntry(
+  internal fun appendOwnedQuarantineEntry(
     workflowId: String,
     entry: FeatureTaskRuntimeQuarantineEntry,
     admitted: AdmittedFeatureTaskRuntimeExecution,
@@ -129,7 +129,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       appendQuarantineEntryInTransaction(unitOfWork, workflowId, entry)
     }
 
-  fun appendQuarantineEntry(
+  public fun appendQuarantineEntry(
     workflowId: String,
     entry: FeatureTaskRuntimeQuarantineEntry,
   ): Boolean =
@@ -150,7 +150,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     return true
   }
 
-  fun loadQuarantinedRecords(workflowId: String): List<FeatureTaskRuntimeQuarantineEntry>? =
+  public fun loadQuarantinedRecords(workflowId: String): List<FeatureTaskRuntimeQuarantineEntry>? =
     database.read { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
@@ -158,7 +158,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       quarantineEntriesFrom(record.artifacts)
     }
 
-  fun recordOwnedResolvedBranch(
+  internal fun recordOwnedResolvedBranch(
     workflowId: String,
     resolvedBranch: FeatureTaskRuntimeResolvedBranch,
     admitted: AdmittedFeatureTaskRuntimeExecution,
@@ -186,7 +186,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       true
     }
 
-  fun recordResolvedBranch(
+  public fun recordResolvedBranch(
     workflowId: String,
     resolvedBranch: FeatureTaskRuntimeResolvedBranch,
   ): Boolean =
@@ -210,7 +210,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       true
     }
 
-  fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch? =
+  public fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch? =
     database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
@@ -221,7 +221,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       resolvedBranchFromWorkflowArtifacts(artifacts)
     }
 
-  fun loadGoalStartResolvedBranch(parentWorkflowId: String): FeatureTaskRuntimeResolvedBranch? =
+  public fun loadGoalStartResolvedBranch(parentWorkflowId: String): FeatureTaskRuntimeResolvedBranch? =
     database.read { unitOfWork ->
       unitOfWork.workflowStates.listGoalChildWorkflowIdsByParent(parentWorkflowId)
         .firstNotNullOfOrNull { childWorkflowId ->
@@ -230,7 +230,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
         }
     }
 
-  fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean =
+  public fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, args.workflowId)
@@ -275,7 +275,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     return true
   }
 
-  fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>? =
+  public fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>? =
     database.read { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
@@ -283,7 +283,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       checkpointIdentitiesFrom(record.artifacts)
     }
 
-  fun recordOwnedWorkflowOwnedPaths(
+  internal fun recordOwnedWorkflowOwnedPaths(
     workflowId: String,
     ownedPaths: List<String>,
     admitted: AdmittedFeatureTaskRuntimeExecution,
@@ -295,7 +295,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       recordWorkflowOwnedPathsInTransaction(unitOfWork, workflowId, ownedPaths)
     }
 
-  fun recordWorkflowOwnedPaths(
+  public fun recordWorkflowOwnedPaths(
     workflowId: String,
     ownedPaths: List<String>,
   ): Boolean =
@@ -328,7 +328,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
   }
 }
 
-fun FeatureTaskRuntimePhaseEvidenceRecorder.quarantineEntriesFrom(
+internal fun FeatureTaskRuntimePhaseEvidenceRecorder.quarantineEntriesFrom(
   artifacts: Map<String, Any?>,
 ): List<FeatureTaskRuntimeQuarantineEntry> = decodeQuarantineEntries(artifacts, quarantineValidator)
 
@@ -388,7 +388,7 @@ private fun decodeQuarantineEntries(
   return decodeQuarantineEntriesFromArtifact(raw)
 }
 
-fun FeatureTaskRuntimePhaseEvidenceRecorder.checkpointIdentitiesFrom(
+internal fun FeatureTaskRuntimePhaseEvidenceRecorder.checkpointIdentitiesFrom(
   artifacts: Map<String, Any?>,
 ): List<FeatureTaskRuntimeCheckpointIdentity> =
   decodeCheckpointIdentitiesFromArtifact(

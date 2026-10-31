@@ -14,12 +14,12 @@ import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
 @Inject
-class SpecSourceResolver(
+public class SpecSourceResolver(
   private val fileStore: DecompositionManifestStore,
   private val validator: DecompositionManifestValidator,
   private val projectStore: ProjectStorePort,
 ) {
-  fun resolve(
+  internal fun resolve(
     repoRoot: Path,
     specReference: String,
     isGoalContinuation: Boolean,

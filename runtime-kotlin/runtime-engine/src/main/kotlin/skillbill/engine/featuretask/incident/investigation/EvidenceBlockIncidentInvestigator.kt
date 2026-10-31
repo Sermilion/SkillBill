@@ -14,7 +14,7 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentDiagnosis
 import java.time.Clock
 
 @Inject
-class EvidenceBlockIncidentInvestigator(
+public class EvidenceBlockIncidentInvestigator(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val collector: BlockIncidentEvidenceCollector,

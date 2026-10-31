@@ -23,14 +23,14 @@ import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import java.nio.file.Path
 
 @Inject
-class FeatureTaskRuntimeExecutionEntry(
+public class FeatureTaskRuntimeExecutionEntry(
   private val database: DatabaseSessionFactory,
   private val admission: FeatureTaskRuntimeExecutionAdmission,
   private val resolver: FeatureTaskRuntimeExecutionPlanResolver,
   private val repositories: RepositoryEnclosingRootPort,
   private val identities: FeatureTaskExecutionIdentityResolver,
 ) {
-  fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution {
+  internal fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution {
     val root = repositories.canonicalPath(request.repoRoot)
     val expected =
       identities.expected(
@@ -88,7 +88,7 @@ class FeatureTaskRuntimeExecutionEntry(
   private fun CodeReviewExecutionMode.toRuntimeSelection() = RuntimeReviewSelection.valueOf(name)
 }
 
-internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
+public fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
   projectStore: ProjectStorePort,
   workflowId: String,
   repoRoot: Path,
@@ -113,19 +113,19 @@ internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
   }
 
 @Inject
-class FeatureTaskExecutionIdentityResolver(
+public class FeatureTaskExecutionIdentityResolver(
   private val repositories: RepositoryEnclosingRootPort,
   private val projectStore: ProjectStorePort,
 ) {
-  fun repositoryIdentity(repoRoot: Path): String = repositories.repositoryIdentity(repoRoot)
+  internal fun repositoryIdentity(repoRoot: Path): String = repositories.repositoryIdentity(repoRoot)
 
-  fun governedSpecPath(
+  internal fun governedSpecPath(
     workflowId: String,
     repoRoot: Path,
     specPath: Path,
   ): String = repositories.governedFeatureTaskSpecPath(projectStore, workflowId, repoRoot, specPath)
 
-  fun expected(
+  internal fun expected(
     workflowId: String,
     issueKey: String,
     repoRoot: Path,

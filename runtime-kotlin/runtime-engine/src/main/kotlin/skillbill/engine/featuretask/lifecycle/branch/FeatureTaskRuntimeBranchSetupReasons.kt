@@ -2,11 +2,11 @@ package skillbill.engine.featuretask.lifecycle.branch
 
 import skillbill.application.decomposition.baseBranch
 
-fun branchSetupBlockedReason(error: String): String =
+internal fun branchSetupBlockedReason(error: String): String =
   "Feature-task-runtime could not establish a feature branch: reading the current branch failed" +
     error.detailSuffix() + " Refusing to run file-mutating phases on the default branch."
 
-fun branchSetupCreateBlockedReason(
+internal fun branchSetupCreateBlockedReason(
   branch: String,
   baseBranch: String,
   error: String,
@@ -14,7 +14,7 @@ fun branchSetupCreateBlockedReason(
   "Feature-task-runtime could not create/switch to feature branch '$branch' from '$baseBranch'" +
     error.detailSuffix() + " Refusing to run file-mutating phases on the default branch."
 
-fun branchSetupReattachBlockedReason(
+internal fun branchSetupReattachBlockedReason(
   branch: String,
   currentBranch: String,
   error: String,
@@ -23,7 +23,7 @@ fun branchSetupReattachBlockedReason(
     "'$currentBranch'" + error.detailSuffix() +
     " Refusing to run file-mutating phases on the default branch."
 
-fun branchSetupReattachMissingReason(
+internal fun branchSetupReattachMissingReason(
   branch: String,
   currentBranch: String,
 ): String =
@@ -32,7 +32,7 @@ fun branchSetupReattachMissingReason(
     "divergent branch in its place or run file-mutating phases on the default branch; restore " +
     "or recreate '$branch' before resuming."
 
-fun branchSetupReattachExistenceUnreadableReason(
+internal fun branchSetupReattachExistenceUnreadableReason(
   branch: String,
   currentBranch: String,
   error: String,
@@ -41,17 +41,17 @@ fun branchSetupReattachExistenceUnreadableReason(
     "exists (HEAD is on '$currentBranch')" + error.detailSuffix() +
     " Refusing to re-attach or run file-mutating phases until existence can be confirmed."
 
-fun branchSetupReattachProtectedReason(branch: String): String =
+internal fun branchSetupReattachProtectedReason(branch: String): String =
   "Feature-task-runtime resolved persisted branch '$branch' is a protected branch. Refusing to " +
     "run file-mutating phases on a protected branch."
 
-fun branchSetupNotPersistedBlockedReason(branch: String): String =
+internal fun branchSetupNotPersistedBlockedReason(branch: String): String =
   "Feature-task-runtime could not durably record the resolved feature branch '$branch' " +
     "(the workflow row is absent), so a resume could not re-attach to it. Refusing to run " +
     "file-mutating phases on the default branch."
 
-fun branchSetupDeriveBlockedReason(reason: String): String =
+internal fun branchSetupDeriveBlockedReason(reason: String): String =
   "Feature-task-runtime could not establish a feature branch: $reason Refusing to run " +
     "file-mutating phases on the default branch."
 
-private fun String.detailSuffix(): String = if (isBlank()) "." else " ($this)."
+public fun String.detailSuffix(): String = if (isBlank()) "." else " ($this)."

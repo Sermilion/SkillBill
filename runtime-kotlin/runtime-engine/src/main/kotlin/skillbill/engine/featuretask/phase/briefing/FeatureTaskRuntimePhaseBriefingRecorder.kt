@@ -32,7 +32,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProje
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 
-class FeatureTaskRuntimePhaseBriefingRecorder(
+internal class FeatureTaskRuntimePhaseBriefingRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
@@ -238,7 +238,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     }
 }
 
-fun FeatureTaskRuntimePhaseBriefingRecorder.nextDeliveredProjectionRecord(
+internal fun FeatureTaskRuntimePhaseBriefingRecorder.nextDeliveredProjectionRecord(
   workflowId: String,
   briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   deliveredHistory: Map<String, FeatureTaskRuntimeDeliveredProjectionRecord>,
@@ -255,7 +255,7 @@ fun FeatureTaskRuntimePhaseBriefingRecorder.nextDeliveredProjectionRecord(
   )
 }
 
-fun FeatureTaskRuntimePhaseBriefingRecorder.recordProjectionMeasurements(
+internal fun FeatureTaskRuntimePhaseBriefingRecorder.recordProjectionMeasurements(
   unitOfWork: UnitOfWork,
   workflowId: String,
   briefing: FeatureTaskRuntimePhaseLaunchBriefing,
@@ -293,7 +293,7 @@ fun FeatureTaskRuntimePhaseBriefingRecorder.recordProjectionMeasurements(
   }
 }
 
-fun FeatureTaskRuntimePhaseBriefingRecorder.recordSharedEvidenceMeasurement(
+internal fun FeatureTaskRuntimePhaseBriefingRecorder.recordSharedEvidenceMeasurement(
   unitOfWork: UnitOfWork,
   measurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
 ) {
@@ -309,7 +309,7 @@ fun FeatureTaskRuntimePhaseBriefingRecorder.recordSharedEvidenceMeasurement(
   }
 }
 
-fun deliveredProjectionKey(delivered: FeatureTaskRuntimeDeliveredProjectionRecord): String =
+internal fun deliveredProjectionKey(delivered: FeatureTaskRuntimeDeliveredProjectionRecord): String =
   listOf(
     delivered.workflowId,
     delivered.consumerPhaseId,
@@ -357,14 +357,14 @@ internal fun FeatureTaskRuntimePhaseBriefingRecorder.recordProjectionRejectionMe
   return true
 }
 
-internal fun FeatureTaskRuntimeWireArtifactValidator.validateEnvelopeWire(envelope: Map<String, Any?>) =
+public fun FeatureTaskRuntimeWireArtifactValidator.validateEnvelopeWire(envelope: Map<String, Any?>): Unit =
   validate(
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE,
     FeatureTaskRuntimeWorkflowArtifactMap.from(envelope),
     "handoff-envelope",
   )
 
-internal fun FeatureTaskRuntimeWireArtifactValidator.validatePersistenceWire(record: Map<String, Any?>) =
+public fun FeatureTaskRuntimeWireArtifactValidator.validatePersistenceWire(record: Map<String, Any?>): String? =
   violation(
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD,
     FeatureTaskRuntimeWorkflowArtifactMap.from(record),

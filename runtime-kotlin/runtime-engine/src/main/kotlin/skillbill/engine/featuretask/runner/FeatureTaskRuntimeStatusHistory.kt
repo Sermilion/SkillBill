@@ -8,7 +8,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal fun statusPhaseHistory(
+public fun statusPhaseHistory(
   query: FeatureTaskRuntimePhaseQuery,
   workflowId: String,
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
@@ -37,7 +37,7 @@ internal fun statusPhaseHistory(
     .sortedBy { it.sequenceNumber }
 }
 
-private fun <K> MutableMap<K, FeatureTaskRuntimePhaseLedgerEntry>.retainLatest(
+public fun <K> MutableMap<K, FeatureTaskRuntimePhaseLedgerEntry>.retainLatest(
   key: K,
   entry: FeatureTaskRuntimePhaseLedgerEntry,
 ) {

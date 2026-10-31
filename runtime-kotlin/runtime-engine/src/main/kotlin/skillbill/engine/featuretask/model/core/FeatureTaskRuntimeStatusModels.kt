@@ -3,46 +3,46 @@ package skillbill.engine.featuretask.model.core
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
-data class FeatureTaskRuntimeStatusRequest(
-  val workflowId: String,
+public data class FeatureTaskRuntimeStatusRequest(
+  public val workflowId: String,
 ) {
   init {
     require(workflowId.isNotBlank()) { "FeatureTaskRuntimeStatusRequest.workflowId is required." }
   }
 }
 
-data class FeatureTaskRuntimePhaseStatus(
-  val phaseId: String,
-  val status: String,
-  val attemptCount: Int,
-  val resolvedAgentId: String?,
-  val finished: Boolean,
-  val executionOrigin: String? = null,
-  val continuationKind: String? = null,
-  val launchedModel: String? = null,
-  val launchedEffort: String? = null,
+public data class FeatureTaskRuntimePhaseStatus(
+  public val phaseId: String,
+  public val status: String,
+  public val attemptCount: Int,
+  public val resolvedAgentId: String?,
+  public val finished: Boolean,
+  public val executionOrigin: String? = null,
+  public val continuationKind: String? = null,
+  public val launchedModel: String? = null,
+  public val launchedEffort: String? = null,
 )
 
-data class FeatureTaskRuntimeStatusProjection(
-  val workflowId: String,
-  val featureSize: String?,
-  val phases: List<FeatureTaskRuntimePhaseStatus>,
-  val completeCount: Int,
-  val pendingCount: Int,
-  val blockedCount: Int,
-  val currentPhaseId: String?,
-  val resolvedBranch: String? = null,
-  val finalizingAgentId: String? = null,
-  val decomposeTerminal: FeatureTaskRuntimeDecomposeTerminalStatus? = null,
-  val gateRunCount: Int? = null,
-  val validationGateExecutionEvidence: FeatureTaskRuntimeValidationGateExecutionEvidence? = null,
-  val currentPhaseExecution: IdeStatusCurrentPhaseExecution? = null,
-  val degradedDiagnostic: FeatureTaskRuntimeDegradedDiagnosticStatus? = null,
-  val operatorDecisionPause: FeatureTaskRuntimeOperatorDecisionPause? = null,
-  val criterionExplanation: String? = null,
+public data class FeatureTaskRuntimeStatusProjection(
+  public val workflowId: String,
+  public val featureSize: String?,
+  public val phases: List<FeatureTaskRuntimePhaseStatus>,
+  public val completeCount: Int,
+  public val pendingCount: Int,
+  public val blockedCount: Int,
+  public val currentPhaseId: String?,
+  public val resolvedBranch: String? = null,
+  public val finalizingAgentId: String? = null,
+  public val decomposeTerminal: FeatureTaskRuntimeDecomposeTerminalStatus? = null,
+  public val gateRunCount: Int? = null,
+  public val validationGateExecutionEvidence: FeatureTaskRuntimeValidationGateExecutionEvidence? = null,
+  public val currentPhaseExecution: IdeStatusCurrentPhaseExecution? = null,
+  public val degradedDiagnostic: FeatureTaskRuntimeDegradedDiagnosticStatus? = null,
+  public val operatorDecisionPause: FeatureTaskRuntimeOperatorDecisionPause? = null,
+  public val criterionExplanation: String? = null,
 )
 
-data class FeatureTaskRuntimeOperatorDecisionPause(
+public data class FeatureTaskRuntimeOperatorDecisionPause(
   val phaseId: String,
   val reason: String? = null,
 ) {
@@ -54,7 +54,7 @@ data class FeatureTaskRuntimeOperatorDecisionPause(
   }
 }
 
-data class FeatureTaskRuntimeDegradedDiagnosticStatus(
+public data class FeatureTaskRuntimeDegradedDiagnosticStatus(
   val count: Int,
   val failureClass: String,
   val phaseId: String,
@@ -70,11 +70,11 @@ data class FeatureTaskRuntimeDegradedDiagnosticStatus(
   }
 }
 
-data class FeatureTaskRuntimeDecomposeTerminalStatus(
+public data class FeatureTaskRuntimeDecomposeTerminalStatus(
   val reason: String,
   val parentSpecPath: String,
   val decompositionManifestPath: String,
   val subtaskSpecPaths: List<String>,
 ) {
-  val subtaskCount: Int get() = subtaskSpecPaths.size
+  public val subtaskCount: Int get() = subtaskSpecPaths.size
 }

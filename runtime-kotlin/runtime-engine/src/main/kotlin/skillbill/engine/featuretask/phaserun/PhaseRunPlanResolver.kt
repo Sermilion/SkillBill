@@ -30,7 +30,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
-class PhaseRunPlanResolver(
+public class PhaseRunPlanResolver(
   private val strategies: PhaseStrategyLookup,
   private val gitOperations: WorkflowGitOperations,
   private val agentRunLauncher: AgentRunLauncher,
@@ -39,7 +39,7 @@ class PhaseRunPlanResolver(
   private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  fun resolveGoalQualityExecutionPlan(
+  internal fun resolveGoalQualityExecutionPlan(
     request: PhaseRunRequest,
     workflowId: String,
   ): String =
@@ -63,7 +63,7 @@ class PhaseRunPlanResolver(
       )
     }
 
-  fun validateGoalQualityExecutionPlan(
+  internal fun validateGoalQualityExecutionPlan(
     encoded: String,
     expectedDefinitionId: String,
     expectedAgentId: String,

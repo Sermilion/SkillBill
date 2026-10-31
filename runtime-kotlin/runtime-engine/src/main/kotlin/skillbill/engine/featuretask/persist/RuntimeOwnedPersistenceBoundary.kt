@@ -12,19 +12,19 @@ import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 
-private fun Throwable.isOwnedFactUnavailable(): Boolean =
+public fun Throwable.isOwnedFactUnavailable(): Boolean =
   (this as? SkillBillRuntimeException)?.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE
 
 @Inject
-class RuntimeOwnedPersistenceBoundary(
+public class RuntimeOwnedPersistenceBoundary(
   private val database: DatabaseSessionFactory,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun <T> read(block: (UnitOfWork) -> T): T = database.read { unitOfWork -> block(unitOfWork) }
+  internal fun <T> read(block: (UnitOfWork) -> T): T = database.read { unitOfWork -> block(unitOfWork) }
 
-  fun <T> transaction(block: (UnitOfWork) -> T): T = database.transaction { unitOfWork -> block(unitOfWork) }
+  internal fun <T> transaction(block: (UnitOfWork) -> T): T = database.transaction { unitOfWork -> block(unitOfWork) }
 
-  fun <T> requiredRead(
+  internal fun <T> requiredRead(
     seam: String,
     expected: String,
     block: (UnitOfWork) -> T,
@@ -33,7 +33,7 @@ class RuntimeOwnedPersistenceBoundary(
       read(block)
     }
 
-  fun <T> requiredWrite(
+  internal fun <T> requiredWrite(
     seam: String,
     expected: String,
     block: (UnitOfWork) -> T,
@@ -42,7 +42,7 @@ class RuntimeOwnedPersistenceBoundary(
       transaction(block)
     }
 
-  fun <T> optionalRead(
+  internal fun <T> optionalRead(
     seam: String,
     expected: String,
     fallback: T,
@@ -55,7 +55,7 @@ class RuntimeOwnedPersistenceBoundary(
       read(block)
     }
 
-  fun <T> optionalWrite(
+  internal fun <T> optionalWrite(
     seam: String,
     expected: String,
     fallback: T,
@@ -80,7 +80,7 @@ class RuntimeOwnedPersistenceBoundary(
     throw error
   }
 
-  fun <T> requiredOwningWrite(
+  internal fun <T> requiredOwningWrite(
     seam: String,
     expected: String,
     block: (UnitOfWork) -> T,

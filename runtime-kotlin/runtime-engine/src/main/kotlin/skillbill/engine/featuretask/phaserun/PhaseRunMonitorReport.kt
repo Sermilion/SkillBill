@@ -23,7 +23,7 @@ internal fun earlySetupReport(
   settlement: MonitorSettlement?,
 ): List<String> = earlyReport(selector, pullRequest) + listOfNotNull(settlement?.let { "Cleanup: ${cleanupLine(it)}" })
 
-internal fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOutcome =
+public fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOutcome =
   outcome.fold(
     onSuccess = { result ->
       when (result) {
@@ -39,7 +39,7 @@ internal fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOu
     },
   )
 
-internal fun monitorRunFailure(
+public fun monitorRunFailure(
   failure: Throwable,
   context: MonitorExecutionContext,
   settlement: MonitorSettlement?,
@@ -56,7 +56,7 @@ internal fun monitorRunFailure(
   )
 }
 
-internal fun MonitorSettlement.toStatusCleanup(): StandaloneMonitorCleanup =
+public fun MonitorSettlement.toStatusCleanup(): StandaloneMonitorCleanup =
   when (this) {
     MonitorSettlement.Released -> StandaloneMonitorCleanup.Released
     is MonitorSettlement.Retained ->
@@ -73,7 +73,7 @@ internal fun MonitorSettlement.toStatusCleanup(): StandaloneMonitorCleanup =
       )
   }
 
-internal fun PhaseRunResult.withTargetReport(
+public fun PhaseRunResult.withTargetReport(
   context: MonitorExecutionContext,
   settlement: MonitorSettlement?,
 ): PhaseRunResult {

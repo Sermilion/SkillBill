@@ -18,13 +18,13 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
-internal class MonitorRepairProducerEvidence(
-  private val steps: MonitorRepairStepRoles,
-  private val producerOutput: (ProducerOutputQueryArgs) -> FeatureTaskRuntimeProducerOutputRead,
-  private val findEnvelope: (String, String, Int) -> FeatureTaskPhaseSettlementEnvelope?,
-  private val diagnostics: RuntimeDiagnostics,
+public class MonitorRepairProducerEvidence(
+  public val steps: MonitorRepairStepRoles,
+  public val producerOutput: (ProducerOutputQueryArgs) -> FeatureTaskRuntimeProducerOutputRead,
+  public val findEnvelope: (String, String, Int) -> FeatureTaskPhaseSettlementEnvelope?,
+  public val diagnostics: RuntimeDiagnostics,
 ) {
-  fun matchingStart(
+  internal fun matchingStart(
     completion: FeatureTaskRuntimePhaseLedgerEntry,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   ): FeatureTaskRuntimePhaseLedgerEntry? =
@@ -33,7 +33,7 @@ internal class MonitorRepairProducerEvidence(
         it.sequenceNumber < completion.sequenceNumber && it.action == FeatureTaskRuntimePhaseLedgerAction.START
     }
 
-  fun recordMatches(
+  internal fun recordMatches(
     record: FeatureTaskRuntimePhaseRecord?,
     completion: FeatureTaskRuntimePhaseLedgerEntry,
   ): Boolean =
@@ -42,12 +42,12 @@ internal class MonitorRepairProducerEvidence(
         it.status == WorkflowStepStatus.COMPLETED
     } ?: true
 
-  fun isCompletedEnvelope(
+  internal fun isCompletedEnvelope(
     output: NormalizedFeatureTaskRuntimePhaseOutput?,
     phaseId: String,
   ): Boolean = output != null && output.phaseId == phaseId && output.status == WorkflowStepStatus.COMPLETED.wireValue
 
-  fun producerOutputMatches(
+  internal fun producerOutputMatches(
     workflowId: String,
     start: FeatureTaskRuntimePhaseLedgerEntry,
     completion: FeatureTaskRuntimePhaseLedgerEntry,
@@ -104,7 +104,7 @@ internal class MonitorRepairProducerEvidence(
     return false
   }
 
-  fun commitPushSha(output: FeatureTaskRuntimePhaseOutput): String? =
+  internal fun commitPushSha(output: FeatureTaskRuntimePhaseOutput): String? =
     output.normalizedOutput
       ?.envelopeWireMap()
       ?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)
@@ -115,7 +115,7 @@ internal class MonitorRepairProducerEvidence(
       ?.toString()
       ?.takeIf(String::isNotBlank)
 
-  fun completedPushedCommitOutput(
+  internal fun completedPushedCommitOutput(
     outputs: List<FeatureTaskRuntimePhaseOutput>,
     attempt: Int,
   ): FeatureTaskRuntimePhaseOutput? {
@@ -134,7 +134,7 @@ internal class MonitorRepairProducerEvidence(
     }
   }
 
-  fun readRepairCompletion(
+  internal fun readRepairCompletion(
     workflowId: String,
     completion: FeatureTaskRuntimePhaseLedgerEntry,
     record: FeatureTaskRuntimePhaseRecord?,
@@ -148,7 +148,7 @@ internal class MonitorRepairProducerEvidence(
     return readEnvelope(completion, text)
   }
 
-  private fun readEnvelope(
+  public fun readEnvelope(
     completion: FeatureTaskRuntimePhaseLedgerEntry,
     text: String?,
   ): NormalizedFeatureTaskRuntimePhaseOutput? =
@@ -161,7 +161,7 @@ internal class MonitorRepairProducerEvidence(
       }
     }
 
-  fun completedOutput(
+  public fun completedOutput(
     workflowId: String,
     completion: FeatureTaskRuntimePhaseLedgerEntry,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,

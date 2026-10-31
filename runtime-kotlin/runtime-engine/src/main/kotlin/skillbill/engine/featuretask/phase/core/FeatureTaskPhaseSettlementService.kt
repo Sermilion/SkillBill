@@ -33,14 +33,16 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.time.Clock
 
 @Inject
-class FeatureTaskPhaseSettlementService(
+public class FeatureTaskPhaseSettlementService(
   private val repository: FeatureTaskPhaseSettlementRepository,
   private val clock: Clock,
   private val database: DatabaseSessionFactory,
   private val blockIncidentCapture: BlockIncidentCapture,
   private val strategies: PhaseStrategyRegistry,
 ) {
-  fun completeFromAgent(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment {
+  public fun completeFromAgent(
+    request: FeatureTaskPhaseSettlementCompleteRequest,
+  ): FeatureTaskPhaseSettlementAcknowledgment {
     val refusal =
       strategies.strategies.asSequence()
         .filter { request.phaseId in it.steps }
@@ -71,10 +73,10 @@ class FeatureTaskPhaseSettlementService(
     return complete(request)
   }
 
-  fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment =
+  public fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment =
     complete(request, repository)
 
-  internal fun complete(
+  public fun complete(
     request: FeatureTaskPhaseSettlementCompleteRequest,
     transactionRepository: FeatureTaskPhaseSettlementRepository,
   ): FeatureTaskPhaseSettlementAcknowledgment {
@@ -102,7 +104,7 @@ class FeatureTaskPhaseSettlementService(
     )
   }
 
-  fun persistAcceptedOutput(
+  internal fun persistAcceptedOutput(
     workflowId: String,
     phaseId: String,
     attempt: Int,
@@ -123,7 +125,7 @@ class FeatureTaskPhaseSettlementService(
     return result.status == FeatureTaskPhaseSettlementAckStatus.OK
   }
 
-  fun block(request: FeatureTaskPhaseSettlementBlockRequest): FeatureTaskPhaseSettlementAcknowledgment {
+  public fun block(request: FeatureTaskPhaseSettlementBlockRequest): FeatureTaskPhaseSettlementAcknowledgment {
     require(isSettleablePhase(request.phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
     require(request.failureDisposition.any { !it.isWhitespace() }) {
       "feature_task_phase_block requires a non-blank failure_disposition."
@@ -184,7 +186,7 @@ class FeatureTaskPhaseSettlementService(
     return acknowledgment
   }
 
-  fun findEnvelope(
+  public fun findEnvelope(
     workflowId: String,
     phaseId: String,
     attempt: Int,
@@ -208,7 +210,7 @@ class FeatureTaskPhaseSettlementService(
     return FeatureTaskPhaseSettlementEnvelope(envelope = wire)
   }
 
-  fun clear(
+  public fun clear(
     workflowId: String,
     phaseId: String,
     attempt: Int,
@@ -252,7 +254,7 @@ class FeatureTaskPhaseSettlementService(
     )
   }
 
-  private fun FeatureTaskRuntimeWorkflowArtifactMap.withNoChangeClaim(
+  public fun FeatureTaskRuntimeWorkflowArtifactMap.withNoChangeClaim(
     claim: Map<String, Any?>?,
   ): FeatureTaskRuntimeWorkflowArtifactMap {
     if (claim == null) return this
@@ -282,9 +284,9 @@ class FeatureTaskPhaseSettlementService(
     fun envelopeAsMap(): Map<String, Any?> = envelope
   }
 
-  companion object {
-    val KIND_COMPLETE: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Complete
-    val KIND_BLOCK: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Block
+  public companion object {
+    public val KIND_COMPLETE: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Complete
+    public val KIND_BLOCK: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Block
     private const val SETTLEABLE_PHASE_REQUIREMENT: String =
       "phase_id must be an agent-run feature-task phase step " +
         "(every workflow step except intake, commit_push and monitor)."
@@ -293,7 +295,7 @@ class FeatureTaskPhaseSettlementService(
     private const val SUMMARY_MAX_CHARS: Int = 240
     private const val SUMMARY_ELLIPSIS_PREFIX: Int = 237
 
-    fun isSettleablePhase(phaseId: String): Boolean =
+    public fun isSettleablePhase(phaseId: String): Boolean =
       phaseId in FeatureTaskRuntimePhaseWorkflowDefinition.agentSettledPhaseIds
   }
 }

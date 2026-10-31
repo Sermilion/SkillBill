@@ -44,7 +44,7 @@ internal fun qualityGateSelectionFromArtifacts(
     ?: FeatureTaskRuntimeQualityGateSelection.VALIDATE
 }
 
-fun diagnoseUnsettledCompletedUpstreamPhaseId(
+public fun diagnoseUnsettledCompletedUpstreamPhaseId(
   phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   featureSize: FeatureTaskRuntimeFeatureSize,
   qualityGateSelection: FeatureTaskRuntimeQualityGateSelection =
@@ -78,7 +78,7 @@ fun diagnoseUnsettledCompletedUpstreamPhaseId(
   return null
 }
 
-fun buildCompletedUpstreamMissingOutputRepair(request: CompletedUpstreamRepairRequest): WorkflowUpdateInput {
+internal fun buildCompletedUpstreamMissingOutputRepair(request: CompletedUpstreamRepairRequest): WorkflowUpdateInput {
   val recordedOutputs = settledPhaseOutputs(request.phaseRecords)
   val phasesToReopen = phasesToReopenForCompletedUpstreamRepair(request, recordedOutputs)
   val reopenedRecords = LinkedHashMap(request.phaseRecords)

@@ -3,20 +3,20 @@ package skillbill.engine.featuretask.qa.report
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.qa.QaOutcomePayloadKeys
 
-internal object QaPhaseOutputKeys {
-  const val VERDICT = "qa_verdict"
-  const val REASON = "qa_reason"
-  const val FAILURE_KIND = "failure_kind"
-  const val REPORT_TEXT = "qa_report_text"
-  const val REPORT_REF = "qa_report_ref"
-  const val HEAD_REVISION = "qa_head_revision"
-  const val TREE_IDENTITY = "qa_tree_identity"
-  const val EVIDENCE_PREFIX = "qa_evidence_prefix"
-  const val OPEN_FINDINGS = "qa_open_findings"
-  const val WARNINGS = "qa_warnings"
-  const val REPAIRS_EXHAUSTED = "qa_repairs_exhausted"
-  const val LEGACY_RECEIPT = "qa_receipt"
-  const val LEGACY_RECEIPT_REF = "qa_receipt_ref"
+public object QaPhaseOutputKeys {
+  public const val VERDICT: String = "qa_verdict"
+  public const val REASON: String = "qa_reason"
+  public const val FAILURE_KIND: String = "failure_kind"
+  public const val REPORT_TEXT: String = "qa_report_text"
+  public const val REPORT_REF: String = "qa_report_ref"
+  internal const val HEAD_REVISION = "qa_head_revision"
+  public const val TREE_IDENTITY: String = "qa_tree_identity"
+  public const val EVIDENCE_PREFIX: String = "qa_evidence_prefix"
+  public const val OPEN_FINDINGS: String = "qa_open_findings"
+  public const val WARNINGS: String = "qa_warnings"
+  internal const val REPAIRS_EXHAUSTED = "qa_repairs_exhausted"
+  public const val LEGACY_RECEIPT: String = "qa_receipt"
+  public const val LEGACY_RECEIPT_REF: String = "qa_receipt_ref"
 }
 
 internal fun hasQaOutput(produced: Map<String, Any?>?): Boolean =
@@ -30,7 +30,7 @@ internal fun qaVerdictOf(produced: Map<String, Any?>): QaVerdict? =
 internal fun qaReportRef(produced: Map<String, Any?>): String? =
   produced[QaPhaseOutputKeys.REPORT_REF] as? String ?: produced[QaPhaseOutputKeys.LEGACY_RECEIPT_REF] as? String
 
-internal fun qaOutcomeReason(
+public fun qaOutcomeReason(
   verdict: QaVerdict,
   produced: Map<String, Any?>,
 ): String? {
@@ -51,7 +51,7 @@ internal fun qaOutcomeReason(
 private fun legacyReceipt(produced: Map<String, Any?>): Map<String, Any?>? =
   JsonCodec.anyToStringAnyMap(produced[QaPhaseOutputKeys.LEGACY_RECEIPT])
 
-private fun legacyReason(produced: Map<String, Any?>): String? {
+public fun legacyReason(produced: Map<String, Any?>): String? {
   val receipt = legacyReceipt(produced) ?: return null
   return listOfNotNull(
     (receipt[QaOutcomePayloadKeys.SKIP_REASON] ?: receipt[QaOutcomePayloadKeys.INCOMPLETE_REASON]) as? String,

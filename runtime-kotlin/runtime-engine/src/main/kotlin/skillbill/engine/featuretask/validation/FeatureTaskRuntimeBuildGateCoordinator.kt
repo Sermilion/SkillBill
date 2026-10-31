@@ -71,14 +71,14 @@ private data class BuildGateCycleState(
 )
 
 @Inject
-class FeatureTaskRuntimeBuildGateCoordinator(
+public class FeatureTaskRuntimeBuildGateCoordinator(
   private val resolver: ValidationGateResolver,
   private val runner: ValidationGateRunner,
   private val repoLocalConfig: RepoLocalConfigPort,
   private val diagnostics: RuntimeDiagnostics,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  fun execute(
+  internal fun execute(
     cycle: ValidationGateCycleRequest,
     onGateRunCount: (Int) -> Unit = {},
   ): ValidationGateCycleResult {
@@ -766,13 +766,13 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       reason,
     )
 
-  companion object {
+  internal companion object {
     const val MAX_REPAIR_TURNS: Int = 3
 
     private fun operatorResumeRepairTurns(repairsUsed: Int): Int =
       if (repairsUsed >= MAX_REPAIR_TURNS) 0 else repairsUsed
 
-    fun runtimeOwnedBuildOutput(
+    internal fun runtimeOwnedBuildOutput(
       phaseId: String,
       repositoryCheckpoint: String,
       measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
@@ -877,7 +877,7 @@ private fun gateArgv(
   }
 
 private data class BuildGateRepairTurn(
-  val checkpoint: String? = null,
-  val result: ValidationGateAgentRepairResult? = null,
-  val terminal: ValidationGateCycleResult? = null,
+  public val checkpoint: String? = null,
+  public val result: ValidationGateAgentRepairResult? = null,
+  public val terminal: ValidationGateCycleResult? = null,
 )

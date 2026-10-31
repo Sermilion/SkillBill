@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
-const val MATERIALITY_RULE: String =
+public const val MATERIALITY_RULE: String =
   "Count a gap or defect only when it is material: a realistic user, operator, or runtime action reaches " +
     "it in normal use, and it causes a visible failure, wrong behavior, or loss of data someone relies on. " +
     "Read absolute wording such as never, every, or always as its practical intent, not as a mandate to " +

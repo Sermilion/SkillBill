@@ -43,7 +43,7 @@ private const val PRE_CONTRACT_REPAIR_EXPLANATION =
   "Acceptance repair state predates per-criterion repair and cannot resume; abandon this run or reset its subtask"
 
 @Inject
-class FeatureTaskRuntimeStatusService(
+public class FeatureTaskRuntimeStatusService(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
@@ -51,7 +51,7 @@ class FeatureTaskRuntimeStatusService(
 ) {
   internal val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
 
-  fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
+  public fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
     val records = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords() ?: return null
     val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
     val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
@@ -59,14 +59,14 @@ class FeatureTaskRuntimeStatusService(
     return buildStatusProjection(request, records, decomposeTerminal, ledger, workflowCurrentStepId)
   }
 
-  fun phaseBriefingTexts(workflowId: String): Map<String, String> =
+  internal fun phaseBriefingTexts(workflowId: String): Map<String, String> =
     try {
       recorder.loadPhaseBriefings(workflowId)?.mapValues { it.value.briefingText }.orEmpty()
     } catch (_: SkillBillRuntimeException) {
       emptyMap()
     }
 
-  fun phasePage(
+  public fun phasePage(
     workflowId: String,
     afterPhaseId: String?,
     limit: Int,
@@ -88,7 +88,7 @@ class FeatureTaskRuntimeStatusService(
     )
   }
 
-  fun ledgerBlockedPhaseIds(
+  internal fun ledgerBlockedPhaseIds(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     durableBlockedPhaseIds: Set<String>,
   ): Set<String> =
@@ -100,7 +100,7 @@ class FeatureTaskRuntimeStatusService(
       }
       .keys
 
-  fun buildStatusProjection(
+  internal fun buildStatusProjection(
     request: FeatureTaskRuntimeStatusRequest,
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
     decomposeTerminal: FeatureTaskRuntimeDecomposeTerminal?,
@@ -291,7 +291,7 @@ class FeatureTaskRuntimeStatusService(
     }
   }
 
-  fun degradedDiagnosticStatus(workflowId: String): FeatureTaskRuntimeDegradedDiagnosticStatus? {
+  public fun degradedDiagnosticStatus(workflowId: String): FeatureTaskRuntimeDegradedDiagnosticStatus? {
     val diagnosticSignals = recorder.loadDiagnosticSignals(workflowId)
     val latest = diagnosticSignals.lastOrNull() ?: return null
     return FeatureTaskRuntimeDegradedDiagnosticStatus(
@@ -302,7 +302,7 @@ class FeatureTaskRuntimeStatusService(
     )
   }
 
-  fun decomposeTerminalStatus(
+  public fun decomposeTerminalStatus(
     terminal: FeatureTaskRuntimeDecomposeTerminal?,
   ): FeatureTaskRuntimeDecomposeTerminalStatus? =
     terminal?.let {
@@ -315,7 +315,7 @@ class FeatureTaskRuntimeStatusService(
     }
 }
 
-data class FeatureTaskRuntimePhasePage(
+public data class FeatureTaskRuntimePhasePage(
   val status: FeatureTaskRuntimeStatusProjection,
   val phaseIds: List<String>,
   val hasMore: Boolean,
@@ -332,7 +332,7 @@ private data class StatusProjectionParts(
   val decomposeTerminal: FeatureTaskRuntimeDecomposeTerminal?,
 )
 
-internal fun validationGateExecutionEvidence(
+public fun validationGateExecutionEvidence(
   validationRecord: FeatureTaskRuntimePhaseRecord,
 ): FeatureTaskRuntimeValidationGateExecutionEvidence? =
   validationRecord.outputArtifact

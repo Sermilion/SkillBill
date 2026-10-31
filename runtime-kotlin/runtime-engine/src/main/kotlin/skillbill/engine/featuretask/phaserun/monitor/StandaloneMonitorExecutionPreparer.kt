@@ -27,7 +27,7 @@ import java.util.UUID
 import java.util.concurrent.CancellationException
 
 @Inject
-class StandaloneMonitorExecutionPreparer(
+public class StandaloneMonitorExecutionPreparer(
   private val resolver: MonitorTargetResolver,
   private val resources: StandaloneMonitorResources,
   private val diagnostics: RuntimeDiagnostics,

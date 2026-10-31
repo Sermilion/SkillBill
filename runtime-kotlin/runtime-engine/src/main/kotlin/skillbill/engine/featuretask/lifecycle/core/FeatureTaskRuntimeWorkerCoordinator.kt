@@ -34,7 +34,7 @@ import java.util.UUID
 
 @RuntimeSingleton
 @Inject
-class FeatureTaskRuntimeWorkerCoordinator(
+public class FeatureTaskRuntimeWorkerCoordinator(
   private val database: DatabaseSessionFactory,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val clock: Clock,
@@ -42,7 +42,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
   private val diagnostics: RuntimeDiagnostics,
   private val checkpoint: DatabaseCheckpoint,
 ) {
-  fun <T> runOwned(
+  internal fun <T> runOwned(
     workflowId: String,
     effectiveInputs: EffectiveGatePolicyInputs,
     expectedIdentity: FeatureTaskExecutionIdentity,

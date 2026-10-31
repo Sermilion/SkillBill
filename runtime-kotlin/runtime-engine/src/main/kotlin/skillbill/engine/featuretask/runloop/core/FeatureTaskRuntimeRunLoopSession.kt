@@ -18,7 +18,7 @@ internal sealed class FeatureTaskRuntimeRunTerminalOutcome {
   ) : FeatureTaskRuntimeRunTerminalOutcome()
 }
 
-internal class FeatureTaskRuntimeRunLoopSession(
+public class FeatureTaskRuntimeRunLoopSession(
   override val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry?,
   initialPendingReentry: PendingReentry?,
 ) : FeatureTaskRuntimeRunSessionObservations {
@@ -31,7 +31,7 @@ internal class FeatureTaskRuntimeRunLoopSession(
   private var activeReentryStorage: PendingReentry? = initialPendingReentry
   private var recordRejectionSettlementPendingStorage: Boolean = false
 
-  fun sessionSnapshot(): FeatureTaskRuntimeRunSessionObservations =
+  public fun sessionSnapshot(): FeatureTaskRuntimeRunSessionObservations =
     detachedSessionObservations(
       FeatureTaskRuntimeRunLoopSession(operatorBlockRetry, pendingReentry).also { captured ->
         captured.phaseContentIdentitiesStorage.putAll(

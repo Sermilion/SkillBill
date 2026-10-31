@@ -7,18 +7,18 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
-class AdmittedFeatureTaskRuntimeExecution internal constructor(
-  val identity: FeatureTaskExecutionIdentity,
-  val plan: ResolvedPhaseExecutionPlan,
-  val effectiveInputs: EffectiveGatePolicyInputs,
+public class AdmittedFeatureTaskRuntimeExecution internal constructor(
+  public val identity: FeatureTaskExecutionIdentity,
+  public val plan: ResolvedPhaseExecutionPlan,
+  internal val effectiveInputs: EffectiveGatePolicyInputs,
   descriptor: Any,
-  internal val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
+  public val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
   internal val migrationReceipt: RuntimeMigrationReceipt,
-  val workerOwnership: FeatureTaskRuntimeWorkerOwnership? = null,
+  public val workerOwnership: FeatureTaskRuntimeWorkerOwnership? = null,
 ) {
   private val descriptorValue = descriptor
 
-  val reviewMode: CodeReviewExecutionMode?
+  internal val reviewMode: CodeReviewExecutionMode?
     get() = plan.reviewSelection?.let { CodeReviewExecutionMode.valueOf(it.name) }
 
   internal val descriptorJson = JsonCodec.valueToJsonString(descriptor)

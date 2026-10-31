@@ -3,9 +3,9 @@ package skillbill.engine.featuretask.model.core
 import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.PhaseModelDirective
 
-data class FeatureTaskRuntimeModelAssignment(
-  val perPhaseDirectives: Map<String, PhaseModelDirective> = emptyMap(),
-  val matrix: ExecutionMatrix? = null,
+public data class FeatureTaskRuntimeModelAssignment(
+  public val perPhaseDirectives: Map<String, PhaseModelDirective> = emptyMap(),
+  public val matrix: ExecutionMatrix? = null,
 ) {
   init {
     perPhaseDirectives.forEach { (phaseId, directive) ->

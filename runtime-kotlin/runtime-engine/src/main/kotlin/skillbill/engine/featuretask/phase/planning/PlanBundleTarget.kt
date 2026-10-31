@@ -7,17 +7,17 @@ import java.nio.file.Path
  * written in place; a [Staged] bundle is for a provider that cannot write the store, and the runtime promotes it into
  * its `storeDirectory`.
  */
-sealed interface PlanBundleTarget {
+public sealed interface PlanBundleTarget {
   /** The absolute directory the agent writes the bundle in. */
-  val directory: Path
+  public val directory: Path
 
-  data class Store(override val directory: Path) : PlanBundleTarget
+  public data class Store(override val directory: Path) : PlanBundleTarget
 
-  data class Legacy(override val directory: Path) : PlanBundleTarget
+  public data class Legacy(override val directory: Path) : PlanBundleTarget
 
-  data class Staged(
-    val stagingRoot: Path,
-    override val directory: Path,
-    val storeDirectory: Path,
+  public data class Staged(
+    public val stagingRoot: Path,
+    public override val directory: Path,
+    public val storeDirectory: Path,
   ) : PlanBundleTarget
 }

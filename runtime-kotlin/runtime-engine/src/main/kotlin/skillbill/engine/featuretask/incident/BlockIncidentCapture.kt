@@ -20,7 +20,7 @@ import java.time.Clock
 import java.time.Instant
 
 @Inject
-class BlockIncidentCapture(
+public class BlockIncidentCapture(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val spool: BlockIncidentSpool,
@@ -125,10 +125,10 @@ class BlockIncidentCapture(
   }
 }
 
-internal sealed interface BlockIncidentCaptureOutcome {
-  data class Captured(val occurrenceToken: String) : BlockIncidentCaptureOutcome
+public sealed interface BlockIncidentCaptureOutcome {
+  public data class Captured(val occurrenceToken: String) : BlockIncidentCaptureOutcome
 
-  data class Spooled(val occurrenceToken: String) : BlockIncidentCaptureOutcome
+  public data class Spooled(val occurrenceToken: String) : BlockIncidentCaptureOutcome
 
-  data object Unsaved : BlockIncidentCaptureOutcome
+  public data object Unsaved : BlockIncidentCaptureOutcome
 }

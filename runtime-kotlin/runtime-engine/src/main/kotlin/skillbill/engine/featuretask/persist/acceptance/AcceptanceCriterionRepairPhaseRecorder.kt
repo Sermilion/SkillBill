@@ -57,7 +57,7 @@ import java.nio.file.Path
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 @Inject
-class AcceptanceCriterionRepairPhaseRecorder(
+public class AcceptanceCriterionRepairPhaseRecorder(
   private val persistence: AcceptanceCriterionRepairPersistence,
   private val gitOperations: WorkflowGitOperations,
   private val workflows: FeatureTaskRuntimeWorkflowPersistence,

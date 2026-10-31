@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
-fun nonValidatePhaseValidationOwnershipDirective(runsValidationGate: Boolean): String {
+internal fun nonValidatePhaseValidationOwnershipDirective(runsValidationGate: Boolean): String {
   if (runsValidationGate) {
     return ""
   }
@@ -16,7 +16,7 @@ fun nonValidatePhaseValidationOwnershipDirective(runsValidationGate: Boolean): S
     """.trimIndent()
 }
 
-fun nonBuildPhaseBuildOwnershipDirective(runsBuildGate: Boolean): String {
+internal fun nonBuildPhaseBuildOwnershipDirective(runsBuildGate: Boolean): String {
   if (runsBuildGate) {
     return ""
   }

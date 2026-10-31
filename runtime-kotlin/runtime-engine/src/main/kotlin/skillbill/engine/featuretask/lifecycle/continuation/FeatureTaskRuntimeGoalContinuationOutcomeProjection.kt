@@ -20,13 +20,13 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import java.time.Instant
 
-const val BRANCH_SETUP_AGENT_SENTINEL = "branch-setup"
-const val GOAL_PLANNING_IMPORT_AGENT_SENTINEL = "goal-planning-import"
+internal const val BRANCH_SETUP_AGENT_SENTINEL = "branch-setup"
+internal const val GOAL_PLANNING_IMPORT_AGENT_SENTINEL = "goal-planning-import"
 
-internal fun String.isRuntimeAgentId(): Boolean =
+public fun String.isRuntimeAgentId(): Boolean =
   isNotBlank() && this != BRANCH_SETUP_AGENT_SENTINEL && this != GOAL_PLANNING_IMPORT_AGENT_SENTINEL
 
-fun completedGoalContinuationOutcome(
+internal fun completedGoalContinuationOutcome(
   recorder: FeatureTaskRuntimePhaseRecorder,
   gitOperations: WorkflowGitOperations,
   request: FeatureTaskRuntimeRunFacts,
@@ -56,7 +56,7 @@ fun completedGoalContinuationOutcome(
   }
 }
 
-fun completeSubtaskOutcome(
+internal fun completeSubtaskOutcome(
   request: FeatureTaskRuntimeRunFacts,
   context: FeatureTaskRuntimeGoalContinuationContext,
   commitSha: String?,
@@ -72,7 +72,7 @@ fun completeSubtaskOutcome(
     lastResumableStep = commitStepId,
   )
 
-fun measuredHeadSha(
+internal fun measuredHeadSha(
   gitOperations: WorkflowGitOperations,
   request: FeatureTaskRuntimeRunFacts,
 ): String? {
@@ -80,7 +80,7 @@ fun measuredHeadSha(
   return result.value.trim().takeIf { result is WorkflowGitOperationResult.Ok && it.isNotBlank() }
 }
 
-internal data class SubtaskAgentAttribution(
+public data class SubtaskAgentAttribution(
   val finalizingAgentId: String?,
   val participatingAgentIds: List<String>,
 )
@@ -94,7 +94,7 @@ internal fun runningPhaseAgentId(
     .maxByOrNull { it.startedAt }
     ?.resolvedAgentId
 
-internal fun agentAttributionFromPhaseState(
+public fun agentAttributionFromPhaseState(
   phaseQuery: FeatureTaskRuntimePhaseQuery,
   workflowId: String,
   includeParticipatingAgents: Boolean = true,
@@ -142,7 +142,7 @@ private fun terminalRecordAgentId(records: Map<String, FeatureTaskRuntimePhaseRe
     ?.resolvedAgentId
 }
 
-fun commitShaFromPhaseRecords(
+internal fun commitShaFromPhaseRecords(
   recorder: FeatureTaskRuntimePhaseRecorder,
   request: FeatureTaskRuntimeRunFacts,
   commitStepId: String,
@@ -159,7 +159,7 @@ fun commitShaFromPhaseRecords(
   return payload?.commitShaFromPhasePayload()
 }
 
-fun Map<String, Any?>.commitShaFromPhasePayload(): String? {
+public fun Map<String, Any?>.commitShaFromPhasePayload(): String? {
   val producedOutputs = JsonCodec.anyToStringAnyMap(this[SharedPayloadKeys.PRODUCED_OUTPUTS])
   return (
     this["commit_push_result"] as? Map<
@@ -178,7 +178,7 @@ fun Map<String, Any?>.commitShaFromPhasePayload(): String? {
     ?: (this[DecompositionManifestPayloadKeys.COMMIT_SHA]?.toString()?.takeIf(String::isNotBlank))
 }
 
-fun remediationBaseCoherenceBlockedReport(
+internal fun remediationBaseCoherenceBlockedReport(
   request: FeatureTaskRuntimeRunFacts,
   operatorGuidance: String,
   firstStepId: String,

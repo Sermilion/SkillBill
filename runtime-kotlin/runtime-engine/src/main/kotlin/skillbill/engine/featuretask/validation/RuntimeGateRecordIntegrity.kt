@@ -14,8 +14,8 @@ import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
-internal object RuntimeGateRecordIntegrity {
-  fun requireIntact(
+public object RuntimeGateRecordIntegrity {
+  public fun requireIntact(
     normalized: NormalizedFeatureTaskRuntimePhaseOutput,
     phaseId: String,
   ) {

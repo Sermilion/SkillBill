@@ -8,58 +8,58 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationProgress
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
-internal interface FeatureTaskRuntimePhaseStatePort {
-  fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite
+public interface FeatureTaskRuntimePhaseStatePort {
+  public fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite
 
-  fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean
+  public fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
-  fun recordOwnedPhaseState(
+  public fun recordOwnedPhaseState(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean
 
-  fun recordOwnedRequiredPhaseStart(
+  public fun recordOwnedRequiredPhaseStart(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): RequiredPhaseWrite
 
-  fun bindOwnedPhaseCoordinates(
+  public fun bindOwnedPhaseCoordinates(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean
 
-  fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean
+  public fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
-  fun recordOwnedCompletedPhase(
+  public fun recordOwnedCompletedPhase(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean
 
-  fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean
+  public fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
-  fun recordOwnedIncompleteImplementationAttempt(
+  public fun recordOwnedIncompleteImplementationAttempt(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean
 }
 
-internal interface FeatureTaskRuntimePhaseStateQueries {
-  fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>?
+public interface FeatureTaskRuntimePhaseStateQueries {
+  public fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>?
 
-  fun clearBackwardEdgeContext(
+  public fun clearBackwardEdgeContext(
     workflowId: String,
     phaseIds: Collection<String>,
   ): Boolean
 
-  fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry?
+  public fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry?
 }
 
-internal interface FeatureTaskRuntimeImplementationProgressPort {
-  fun loadImplementationProgress(workflowId: String): FeatureTaskRuntimeImplementationProgress?
+public interface FeatureTaskRuntimeImplementationProgressPort {
+  public fun loadImplementationProgress(workflowId: String): FeatureTaskRuntimeImplementationProgress?
 
-  fun recordImplementationTurn(write: FeatureTaskRuntimeImplementationTurnWrite): RequiredPhaseWrite
+  public fun recordImplementationTurn(write: FeatureTaskRuntimeImplementationTurnWrite): RequiredPhaseWrite
 
-  fun recordOwnedImplementationTurn(
+  public fun recordOwnedImplementationTurn(
     write: FeatureTaskRuntimeImplementationTurnWrite,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): RequiredPhaseWrite

@@ -1,11 +1,11 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
-fun composePhasePrompt(
+public fun composePhasePrompt(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   source: PhaseStepPromptSource,
 ): String = phasePromptSections(inputs, source).filter(String::isNotBlank).joinToString(separator = "\n\n")
 
-fun phasePromptSections(
+internal fun phasePromptSections(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   source: PhaseStepPromptSource,
 ): List<String> {

@@ -15,13 +15,13 @@ import skillbill.workflow.decomposition.model.SpecSource
 import java.nio.file.Path
 
 @Inject
-class FeatureTaskRuntimeSpecGate(
+public class FeatureTaskRuntimeSpecGate(
   private val specScratchStore: SpecScratchStore,
   private val specStatusWriter: FeatureTaskRuntimeSpecStatusWriter,
   private val diagnostics: RuntimeDiagnostics,
   private val projectStore: ProjectStorePort,
 ) {
-  fun finalizeSingleSpecOnTerminal(
+  internal fun finalizeSingleSpecOnTerminal(
     request: FeatureTaskRuntimeRunRequest,
     report: FeatureTaskRuntimeRunReport,
     specSource: SpecSource,

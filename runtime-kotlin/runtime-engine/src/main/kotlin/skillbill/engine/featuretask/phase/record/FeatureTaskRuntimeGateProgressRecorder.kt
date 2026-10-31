@@ -18,32 +18,32 @@ import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifac
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
-interface FeatureTaskRuntimeReadinessEvidencePort {
-  fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence?
+public interface FeatureTaskRuntimeReadinessEvidencePort {
+  public fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence?
 
-  fun persistReadinessEvidence(
+  public fun persistReadinessEvidence(
     workflowId: String,
     evidence: FeatureTaskRuntimeReadinessEvidence,
   )
 }
 
-interface FeatureTaskRuntimeNoChangePausePort {
+public interface FeatureTaskRuntimeNoChangePausePort {
   /** The no-change pause a confirmed no-change claim left on [workflowId], if any. */
-  fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause?
+  public fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause?
 
   /** Persists the no-change pause of a confirmed no-change claim. */
-  fun persistNoChangePause(
+  public fun persistNoChangePause(
     workflowId: String,
     pause: FeatureTaskRuntimeNoChangePause,
   )
 }
 
-class FeatureTaskRuntimeGateProgressRecorder(
-  private val database: DatabaseSessionFactory,
-  private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+public class FeatureTaskRuntimeGateProgressRecorder(
+  public val database: DatabaseSessionFactory,
+  public val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
 ) : FeatureTaskRuntimeReadinessEvidencePort,
   FeatureTaskRuntimeNoChangePausePort {
-  fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
+  public fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
@@ -55,7 +55,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       decodeValidationGateProgressFromArtifact(artifact)
     }
 
-  fun persistOwnedValidationGateProgress(
+  internal fun persistOwnedValidationGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
     admitted: AdmittedFeatureTaskRuntimeExecution,
@@ -68,7 +68,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       true
     }
 
-  fun persistValidationGateProgress(
+  public fun persistValidationGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
@@ -98,7 +98,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
     )
   }
 
-  fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
+  public fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
@@ -110,7 +110,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       decodeValidationGateProgressFromArtifact(artifact)
     }
 
-  fun loadGoalContinuation(workflowId: String): FeatureTaskRuntimeGoalContinuationArtifact? =
+  internal fun loadGoalContinuation(workflowId: String): FeatureTaskRuntimeGoalContinuationArtifact? =
     database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
@@ -120,7 +120,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       GoalSubtaskReviewArtifactDecoder.decodeContinuationOnly(artifacts)
     }
 
-  override fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence? =
+  public override fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence? =
     database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
@@ -133,7 +133,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       decodeReadinessEvidenceFromArtifact(artifact, family.label())
     }
 
-  override fun persistReadinessEvidence(
+  public override fun persistReadinessEvidence(
     workflowId: String,
     evidence: FeatureTaskRuntimeReadinessEvidence,
   ) {
@@ -155,7 +155,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
     }
   }
 
-  override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
+  public override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
     database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
@@ -167,7 +167,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       )
     }
 
-  fun persistOwnedNoChangePause(
+  internal fun persistOwnedNoChangePause(
     workflowId: String,
     pause: FeatureTaskRuntimeNoChangePause,
     admitted: AdmittedFeatureTaskRuntimeExecution,
@@ -180,7 +180,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       true
     }
 
-  override fun persistNoChangePause(
+  public override fun persistNoChangePause(
     workflowId: String,
     pause: FeatureTaskRuntimeNoChangePause,
   ) {
@@ -208,7 +208,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
     )
   }
 
-  fun persistOwnedBuildGateProgress(
+  internal fun persistOwnedBuildGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
     admitted: AdmittedFeatureTaskRuntimeExecution,
@@ -221,7 +221,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       true
     }
 
-  fun persistBuildGateProgress(
+  public fun persistBuildGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {

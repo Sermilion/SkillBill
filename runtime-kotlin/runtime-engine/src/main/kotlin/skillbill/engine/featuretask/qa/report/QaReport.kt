@@ -3,49 +3,49 @@ package skillbill.engine.featuretask.qa.report
 import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.scaffold.model.QaTargetKind
 
-enum class QaVerdict(val wireValue: String) {
+public enum class QaVerdict(internal val wireValue: String) {
   PASSED("passed"),
   FINDINGS_OPEN("findings_open"),
   SKIPPED("skipped"),
   INCOMPLETE("incomplete"),
   ;
 
-  companion object {
-    fun fromWire(value: String?): QaVerdict? = entries.firstOrNull { it.wireValue == value }
+  internal companion object {
+    internal fun fromWire(value: String?): QaVerdict? = entries.firstOrNull { it.wireValue == value }
   }
 }
 
-data class QaRetainedResource(
-  val kind: String,
-  val identity: String,
+public data class QaRetainedResource(
+  public val kind: String,
+  public val identity: String,
 )
 
-data class QaReportFinding(
+public data class QaReportFinding(
   val id: String,
   val title: String,
   val section: String,
   val evidencePaths: List<String>,
 )
 
-enum class QaBackendAttribution(val wireValue: String) {
+public enum class QaBackendAttribution(internal val wireValue: String) {
   REAL("real"),
   MOCKED("mocked"),
   NONE("none"),
   ;
 
-  companion object {
-    fun fromWire(value: String?): QaBackendAttribution? = entries.firstOrNull { it.wireValue == value }
+  internal companion object {
+    internal fun fromWire(value: String?): QaBackendAttribution? = entries.firstOrNull { it.wireValue == value }
   }
 }
 
-data class QaTargetCoverage(
+public data class QaTargetCoverage(
   val kind: QaTargetKind,
   val verdict: QaVerdict,
   val reason: String?,
   val backend: QaBackendAttribution?,
 )
 
-data class QaReport(
+public data class QaReport(
   val text: String?,
   val verdict: QaVerdict,
   val reason: String?,
@@ -63,9 +63,9 @@ data class QaReport(
     }
   }
 
-  val openFindingIds: List<String>
+  internal val openFindingIds: List<String>
     get() = findings.map(QaReportFinding::id).takeIf { verdict == QaVerdict.FINDINGS_OPEN }.orEmpty()
 
-  val retestsFindings: Boolean
+  internal val retestsFindings: Boolean
     get() = verdict == QaVerdict.FINDINGS_OPEN || (verdict == QaVerdict.PASSED && assertionsReported)
 }

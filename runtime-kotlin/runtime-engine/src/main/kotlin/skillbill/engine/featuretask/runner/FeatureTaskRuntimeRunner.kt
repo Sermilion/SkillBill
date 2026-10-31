@@ -12,14 +12,14 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 
 @Inject
-class FeatureTaskRuntimeRunner(
+public class FeatureTaskRuntimeRunner(
   private val startup: FeatureTaskRuntimeRunStartup,
   private val preparation: FeatureTaskRuntimeRunPreparation,
   private val execute: FeatureTaskRuntimeRunnerExecute,
 ) {
-  fun intakeCompleted(workflowId: String): Boolean = execute.intakeCompleted(workflowId)
+  internal fun intakeCompleted(workflowId: String): Boolean = execute.intakeCompleted(workflowId)
 
-  fun run(
+  internal fun run(
     request: FeatureTaskRuntimeRunRequest,
     repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,
   ): FeatureTaskRuntimeRunReport {

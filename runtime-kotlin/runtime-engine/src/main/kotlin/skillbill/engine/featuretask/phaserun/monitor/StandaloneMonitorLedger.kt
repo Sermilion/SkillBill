@@ -3,12 +3,12 @@ package skillbill.engine.featuretask.phaserun.monitor
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import java.time.Instant
 
-internal data class StandalonePendingRepair(
-  val evidence: String,
-  val baselineSha: String,
-  val completed: Boolean = false,
-  val pullRequestFieldsDigest: String? = null,
-  val startedAt: Instant? = null,
+public data class StandalonePendingRepair(
+  public val evidence: String,
+  public val baselineSha: String,
+  public val completed: Boolean = false,
+  public val pullRequestFieldsDigest: String? = null,
+  public val startedAt: Instant? = null,
 )
 
 internal data class StandalonePublishedRepair(
@@ -22,13 +22,13 @@ internal data class StandalonePublishedRepair(
 internal data class StandalonePullRequestEdit(val repairNumber: Int, val refreshAfter: Instant?)
 
 /** Run records that carry the invocation's monitor ledger; only the prepared standalone entry supplies one. */
-internal interface StandaloneMonitorRunRecords {
-  val standaloneMonitorLedger: StandaloneMonitorLedger?
+public interface StandaloneMonitorRunRecords {
+  public val standaloneMonitorLedger: StandaloneMonitorLedger?
 }
 
 public class StandaloneMonitorLedger internal constructor(
-  internal val execution: MonitorExecutionContext,
-  private val cleanup: MonitorCleanupOwnership,
+  public val execution: MonitorExecutionContext,
+  public val cleanup: MonitorCleanupOwnership,
 ) {
   private val receipts = mutableListOf<StandalonePublishedRepair>()
   private val heads = mutableListOf(execution.target.head.tip.sha)

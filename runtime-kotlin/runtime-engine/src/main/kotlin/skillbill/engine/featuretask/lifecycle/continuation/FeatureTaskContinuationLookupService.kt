@@ -42,13 +42,13 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
 
 @Inject
-class FeatureTaskContinuationLookupService(
+public class FeatureTaskContinuationLookupService(
   private val database: DatabaseSessionFactory,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val executionCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun claim(
+  internal fun claim(
     candidate: FeatureTaskContinuationCandidate,
     effectiveInputs: EffectiveGatePolicyInputs,
     expectedOwnership: FeatureTaskRuntimeWorkerOwnership? = null,
@@ -142,7 +142,7 @@ class FeatureTaskContinuationLookupService(
     }
   }
 
-  fun lookup(
+  public fun lookup(
     issueKey: String,
     repositoryIdentity: String,
     workflowId: String? = null,
@@ -157,7 +157,7 @@ class FeatureTaskContinuationLookupService(
       ),
     )
 
-  fun lookupGoalChild(
+  public fun lookupGoalChild(
     issueKey: String,
     repositoryIdentity: String,
     workflowId: String,
@@ -172,7 +172,7 @@ class FeatureTaskContinuationLookupService(
       ),
     )
 
-  fun lookupPlan(
+  internal fun lookupPlan(
     issueKey: String,
     repositoryIdentity: String,
     workflowId: String? = null,
@@ -187,7 +187,7 @@ class FeatureTaskContinuationLookupService(
       ),
     )
 
-  fun lookupIfPresent(
+  internal fun lookupIfPresent(
     issueKey: String,
     repositoryIdentity: String,
     workflowId: String? = null,
@@ -203,7 +203,7 @@ class FeatureTaskContinuationLookupService(
       ),
     )
 
-  private fun lookup(query: FeatureTaskContinuationLookupQuery): FeatureTaskContinuationLookupResult {
+  public fun lookup(query: FeatureTaskContinuationLookupQuery): FeatureTaskContinuationLookupResult {
     val lookup = { unitOfWork: UnitOfWork ->
       executeFeatureTaskContinuationLookup(
         query = query,

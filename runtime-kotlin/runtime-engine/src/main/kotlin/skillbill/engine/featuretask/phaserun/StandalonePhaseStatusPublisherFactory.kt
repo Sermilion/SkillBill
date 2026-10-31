@@ -13,20 +13,20 @@ import java.nio.file.Path
 import java.time.Clock
 import java.util.UUID
 
-data class StandalonePhaseLaunch(
-  val agentId: String? = null,
-  val arguments: List<String>? = null,
-  val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+public data class StandalonePhaseLaunch(
+  public val agentId: String? = null,
+  public val arguments: List<String>? = null,
+  public val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
-class StandalonePhaseStatusPublisherFactory(
-  private val database: DatabaseSessionFactory,
-  private val registrations: StandalonePhaseRegistrationFactory,
-  private val clock: Clock,
-  private val diagnostics: RuntimeDiagnostics,
-  private val blockIncidentCapture: BlockIncidentCapture,
+public class StandalonePhaseStatusPublisherFactory(
+  public val database: DatabaseSessionFactory,
+  public val registrations: StandalonePhaseRegistrationFactory,
+  public val clock: Clock,
+  public val diagnostics: RuntimeDiagnostics,
+  public val blockIncidentCapture: BlockIncidentCapture,
 ) {
-  fun forPhase(
+  public fun forPhase(
     repoRoot: Path,
     phaseId: String,
     invocationId: String,
@@ -58,7 +58,7 @@ class StandalonePhaseStatusPublisherFactory(
     )
   }
 
-  fun forPlan(
+  public fun forPlan(
     repoRoot: Path,
     issueKey: String,
     phaseId: String,
@@ -77,7 +77,7 @@ class StandalonePhaseStatusPublisherFactory(
     )
   }
 
-  fun registerWorkflow(
+  internal fun registerWorkflow(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,
@@ -91,7 +91,7 @@ class StandalonePhaseStatusPublisherFactory(
     }
   }
 
-  fun compose(
+  public fun compose(
     stdout: (FeatureTaskRuntimeRunEvent) -> Unit,
     status: StandalonePhaseStatusEventSink,
   ): FeatureTaskRuntimeRunEventSink =

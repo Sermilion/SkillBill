@@ -21,13 +21,13 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.time.Clock
 
 @Inject
-class FeatureTaskRuntimeDecomposeTerminalRecorder(
+public class FeatureTaskRuntimeDecomposeTerminalRecorder(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
 ) {
-  private val engine: WorkflowEngine = WorkflowEngine()
+  public val engine: WorkflowEngine = WorkflowEngine()
 
-  fun recordOwnedDecomposeTerminal(
+  internal fun recordOwnedDecomposeTerminal(
     workflowId: String,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
@@ -40,7 +40,7 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
       recordDecomposeTerminalInTransaction(unitOfWork, workflowId, terminal, planStepId)
     }
 
-  fun recordDecomposeTerminal(
+  public fun recordDecomposeTerminal(
     workflowId: String,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
@@ -82,12 +82,12 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
     return true
   }
 
-  fun recordPlanBundle(
+  public fun recordPlanBundle(
     workflowId: String,
     bundle: FeatureTaskRuntimePlanBundle,
   ): Boolean = recordPlanBundleWithUnits(workflowId, bundle, emptyMap())
 
-  fun recordPlanBundleWithUnits(
+  public fun recordPlanBundleWithUnits(
     workflowId: String,
     bundle: FeatureTaskRuntimePlanBundle,
     unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
@@ -131,7 +131,7 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
       true
     }
 
-  fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
+  internal fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
     database.read { unitOfWork ->
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
         ?.artifacts
@@ -140,7 +140,7 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
         ?.let(::decodePlanBundleFromArtifact)
     }
 
-  fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
+  public fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
     database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(

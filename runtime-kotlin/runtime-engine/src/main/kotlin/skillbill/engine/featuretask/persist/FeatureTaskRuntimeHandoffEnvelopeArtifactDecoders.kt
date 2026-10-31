@@ -34,7 +34,7 @@ private fun handoffEnvelopeWireMap(briefingMap: Map<String, Any?>): Map<String, 
         "'handoff_envelope' object.",
     )
 
-internal fun deliveredProjectionsFrom(
+public fun deliveredProjectionsFrom(
   artifacts: Map<String, Any?>,
   validateEnvelope: (Map<String, Any?>) -> Unit = {},
   validatePersistenceRecord: (Map<String, Any?>) -> String? = { null },

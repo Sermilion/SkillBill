@@ -3,8 +3,8 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 
-object FeatureTaskRuntimeAgentResolver {
-  fun resolve(
+public object FeatureTaskRuntimeAgentResolver {
+  public fun resolve(
     phaseId: String,
     assignment: FeatureTaskRuntimeAgentAssignment,
     invokedAgentId: String,

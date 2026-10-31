@@ -18,7 +18,7 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.time.Clock
 
-class FeatureTaskRuntimeGoalContinuationStateRecorder(
+internal class FeatureTaskRuntimeGoalContinuationStateRecorder(
   private val database: DatabaseSessionFactory,
   private val engine: WorkflowEngine,
   private val clock: Clock,

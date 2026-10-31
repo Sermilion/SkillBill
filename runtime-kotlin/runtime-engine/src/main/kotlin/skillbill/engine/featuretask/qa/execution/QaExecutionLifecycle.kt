@@ -34,7 +34,7 @@ import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
 
 @Inject
-class QaExecutionLifecycle(
+public class QaExecutionLifecycle(
   private val workspaces: QaWorkspacePort,
   private val leases: QaDeviceLeasePort,
   private val capabilities: QaCapabilityResolver,
@@ -320,8 +320,8 @@ class QaExecutionLifecycle(
 }
 
 internal data class QaExecutionResult<T>(
-  val value: T,
-  val retainedResources: List<QaRetainedResource>,
-  val expected: QaExpectedIdentity,
-  val warnings: List<String> = emptyList(),
+  public val value: T,
+  public val retainedResources: List<QaRetainedResource>,
+  public val expected: QaExpectedIdentity,
+  public val warnings: List<String> = emptyList(),
 )

@@ -13,8 +13,8 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import java.time.Instant
 
-internal object FeatureTaskQaOutcomeRecords {
-  fun attempted(
+public object FeatureTaskQaOutcomeRecords {
+  public fun attempted(
     workflowId: String,
     previous: FeatureTaskQaOutcome?,
     recordedAt: Instant,
@@ -31,7 +31,7 @@ internal object FeatureTaskQaOutcomeRecords {
       failureKind = null,
     )
 
-  fun settled(
+  public fun settled(
     request: FeatureTaskRuntimePhaseStateRequest,
     recordedAt: Instant,
     previous: FeatureTaskQaOutcome?,
@@ -60,19 +60,19 @@ internal object FeatureTaskQaOutcomeRecords {
     )
   }
 
-  fun retestsFindings(
+  public fun retestsFindings(
     report: QaReport?,
     verdict: QaVerdict,
   ): Boolean = report?.retestsFindings ?: (verdict == QaVerdict.PASSED || verdict == QaVerdict.FINDINGS_OPEN)
 
-  fun reportFrom(produced: Map<String, Any?>): QaReport? {
+  public fun reportFrom(produced: Map<String, Any?>): QaReport? {
     val text = produced[QaPhaseOutputKeys.REPORT_TEXT] as? String
     return text?.let { report ->
       QaReportParser.parse(report, produced[QaPhaseOutputKeys.EVIDENCE_PREFIX] as? String ?: "")
     }
   }
 
-  fun legacyFindingsFrom(
+  internal fun legacyFindingsFrom(
     produced: Map<String, Any?>,
     verdict: QaVerdict,
   ): List<FeatureTaskQaFinding> {
@@ -89,7 +89,7 @@ internal object FeatureTaskQaOutcomeRecords {
     }
   }
 
-  fun legacyDiagnosticsFrom(
+  internal fun legacyDiagnosticsFrom(
     produced: Map<String, Any?>,
     verdict: QaVerdict,
   ): List<String> {
@@ -97,7 +97,7 @@ internal object FeatureTaskQaOutcomeRecords {
     return QaLegacyReportAdapter.fromReceipt(receipt, verdict)?.diagnostics.orEmpty()
   }
 
-  fun mergedFindings(
+  public fun mergedFindings(
     previous: List<FeatureTaskQaFinding>,
     retestsFindings: Boolean,
     reported: List<FeatureTaskQaFinding>,
@@ -112,7 +112,7 @@ internal object FeatureTaskQaOutcomeRecords {
     return carried + byId.values.filterNot { it.id in previousIds }
   }
 
-  fun reportedFindings(
+  internal fun reportedFindings(
     verdict: QaVerdict,
     report: QaReport,
     reportPath: String?,
@@ -127,7 +127,7 @@ internal object FeatureTaskQaOutcomeRecords {
       )
     }
 
-  fun outcome(verdict: QaVerdict): StandaloneQaOutcome =
+  public fun outcome(verdict: QaVerdict): StandaloneQaOutcome =
     when (verdict) {
       QaVerdict.PASSED -> StandaloneQaOutcome.PASSED
       QaVerdict.FINDINGS_OPEN -> StandaloneQaOutcome.FINDINGS

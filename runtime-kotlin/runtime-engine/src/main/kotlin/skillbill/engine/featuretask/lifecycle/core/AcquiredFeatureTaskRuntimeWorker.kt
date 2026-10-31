@@ -13,10 +13,10 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
-class AcquiredFeatureTaskRuntimeWorker internal constructor(
-  private val ownership: FeatureTaskRuntimeWorkerOwnership,
-  private val execution: AdmittedFeatureTaskRuntimeExecution,
-  private val original: WorkflowStateSnapshot,
+public class AcquiredFeatureTaskRuntimeWorker internal constructor(
+  public val ownership: FeatureTaskRuntimeWorkerOwnership,
+  public val execution: AdmittedFeatureTaskRuntimeExecution,
+  public val original: WorkflowStateSnapshot,
   internal val previousOwnerGeneration: Long,
   internal val previousOwnerStopped: Boolean,
   internal val effectiveInputs: EffectiveGatePolicyInputs,
@@ -25,8 +25,8 @@ class AcquiredFeatureTaskRuntimeWorker internal constructor(
   @Volatile private var active = true
 
   internal val currentStepId: String get() = admittedSnapshot.currentStepId
-  val workflowId: String get() = ownership.workflowId
-  val generation: Long get() = ownership.generation
+  internal val workflowId: String get() = ownership.workflowId
+  internal val generation: Long get() = ownership.generation
   internal val identity: FeatureTaskExecutionIdentity get() = execution.identity
   internal val governedSpecPath: String get() = execution.identity.governedSpecPath
   internal val normalizedIssueKey: String get() = execution.identity.normalizedIssueKey

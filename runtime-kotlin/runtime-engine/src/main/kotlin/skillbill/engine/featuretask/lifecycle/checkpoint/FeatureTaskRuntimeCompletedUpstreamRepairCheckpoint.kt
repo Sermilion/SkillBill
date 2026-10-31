@@ -30,7 +30,7 @@ private const val COMPLETED_UPSTREAM_MISSING_OUTPUT_BLOCK_REASON = "completed_up
 internal fun qualityGateOmittedStepIds(selection: FeatureTaskRuntimeQualityGateSelection): Set<String> =
   selection.omittedStepIds
 
-fun phasesToReopenForCompletedUpstreamRepair(
+internal fun phasesToReopenForCompletedUpstreamRepair(
   request: CompletedUpstreamRepairRequest,
   recordedOutputs: List<FeatureTaskRuntimePhaseOutput>,
 ): List<String> {
@@ -58,7 +58,7 @@ fun phasesToReopenForCompletedUpstreamRepair(
   }
 }
 
-fun completedUpstreamRepairWorkflowUpdate(
+public fun completedUpstreamRepairWorkflowUpdate(
   request: CompletedUpstreamRepairRequest,
   phasesToReopen: List<String>,
   reopenedRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
@@ -104,7 +104,9 @@ fun completedUpstreamRepairWorkflowUpdate(
     acceptedSnapshotMutation = true,
   )
 
-fun completedUpstreamRepairRetryEntry(request: CompletedUpstreamRepairRequest): FeatureTaskRuntimePhaseLedgerEntry =
+internal fun completedUpstreamRepairRetryEntry(
+  request: CompletedUpstreamRepairRequest,
+): FeatureTaskRuntimePhaseLedgerEntry =
   FeatureTaskRuntimePhaseLedgerEntry(
     action = FeatureTaskRuntimePhaseLedgerAction.RETRY,
     sequenceNumber = (request.ledger.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
@@ -114,7 +116,7 @@ fun completedUpstreamRepairRetryEntry(request: CompletedUpstreamRepairRequest): 
     resolvedAgentId = requireNotNull(request.phaseRecords[request.resumePhaseId]).resolvedAgentId,
   )
 
-fun settledPhaseOutputs(
+internal fun settledPhaseOutputs(
   phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
 ): List<FeatureTaskRuntimePhaseOutput> =
   phaseRecords.withoutPlanSubtaskUnitRecords().values.mapNotNull { record ->

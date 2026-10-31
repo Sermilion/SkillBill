@@ -60,7 +60,7 @@ private sealed interface RepairInspection {
 private const val INTAKE_PASS_CRITERION = "Intake writes or keeps the parent spec before run invariants are read."
 
 @Inject
-class FeatureTaskRuntimeRunEntry(
+public class FeatureTaskRuntimeRunEntry(
   private val workflowService: WorkflowService,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val workerCoordinator: FeatureTaskRuntimeWorkerCoordinator,
@@ -77,7 +77,7 @@ class FeatureTaskRuntimeRunEntry(
     const val MAX_DIAGNOSTIC_ID = 128
   }
 
-  fun run(
+  public fun run(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
   ): FeatureTaskRuntimeRunReport =
@@ -521,7 +521,7 @@ class FeatureTaskRuntimeRunEntry(
     if (goalChild) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE
 }
 
-private fun FeatureTaskRuntimeRunInvariantsRead.requireInvariants() =
+public fun FeatureTaskRuntimeRunInvariantsRead.requireInvariants(): FeatureTaskRuntimeRunInvariants =
   when (this) {
     is FeatureTaskRuntimeRunInvariantsRead.Read -> invariants
     is FeatureTaskRuntimeRunInvariantsRead.Rejected -> throw IllegalArgumentException(reason)

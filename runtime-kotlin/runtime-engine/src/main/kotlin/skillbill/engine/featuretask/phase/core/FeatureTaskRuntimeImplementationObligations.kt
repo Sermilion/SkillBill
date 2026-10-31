@@ -4,14 +4,14 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationC
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationTurnMarker
 
-internal data class FeatureTaskRuntimeImplementationObligations(
-  val plannedTaskIds: List<String>,
-  val carriedRepairItemIds: List<String>,
-  val loopId: String?,
-  val edgeIteration: Int? = null,
+public data class FeatureTaskRuntimeImplementationObligations(
+  public val plannedTaskIds: List<String>,
+  public val carriedRepairItemIds: List<String>,
+  public val loopId: String?,
+  public val edgeIteration: Int? = null,
 )
 
-internal fun featureTaskRuntimeImplementationContinuationFrom(
+public fun featureTaskRuntimeImplementationContinuationFrom(
   phaseId: String,
   attempts: List<FeatureTaskRuntimeImplementationAttempt>,
   obligations: FeatureTaskRuntimeImplementationObligations,

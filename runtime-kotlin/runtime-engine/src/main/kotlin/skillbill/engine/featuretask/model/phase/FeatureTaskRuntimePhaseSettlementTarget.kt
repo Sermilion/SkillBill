@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.model.phase
 
-data class FeatureTaskRuntimePhaseSettlementTarget(
-  val workflowId: String,
-  val attempt: Int,
+public data class FeatureTaskRuntimePhaseSettlementTarget(
+  public val workflowId: String,
+  public val attempt: Int,
 )

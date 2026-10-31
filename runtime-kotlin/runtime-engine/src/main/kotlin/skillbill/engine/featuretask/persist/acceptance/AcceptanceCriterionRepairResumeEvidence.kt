@@ -15,7 +15,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
-internal fun FeatureTaskPhaseSettlementService.restoreAcceptanceRepairResumeEvidence(
+public fun FeatureTaskPhaseSettlementService.restoreAcceptanceRepairResumeEvidence(
   request: FeatureTaskRuntimeRunRequest,
   steps: AcceptanceCriterionRepairStepRoles?,
   records: Map<String, FeatureTaskRuntimePhaseRecord>,

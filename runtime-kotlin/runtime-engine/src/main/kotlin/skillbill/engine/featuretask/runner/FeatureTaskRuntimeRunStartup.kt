@@ -8,11 +8,12 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 
 @Inject
-class FeatureTaskRuntimeRunStartup(
+public class FeatureTaskRuntimeRunStartup(
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
   private val executionEntry: FeatureTaskRuntimeExecutionEntry,
 ) {
-  fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution = executionEntry.admit(request)
+  internal fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution =
+    executionEntry.admit(request)
 
-  fun reconcile(): FeatureTaskRuntimeCrashReconciliationResult = crashReconciler.reconcile()
+  public fun reconcile(): FeatureTaskRuntimeCrashReconciliationResult = crashReconciler.reconcile()
 }

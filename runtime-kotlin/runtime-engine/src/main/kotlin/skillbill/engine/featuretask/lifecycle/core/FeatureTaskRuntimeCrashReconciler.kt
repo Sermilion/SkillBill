@@ -33,7 +33,7 @@ import java.time.Clock
 import java.time.Instant
 
 @Inject
-class FeatureTaskRuntimeCrashReconciler(
+public class FeatureTaskRuntimeCrashReconciler(
   private val database: DatabaseSessionFactory,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
@@ -41,7 +41,7 @@ class FeatureTaskRuntimeCrashReconciler(
   private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  fun reconcile(workflowId: String? = null): FeatureTaskRuntimeCrashReconciliationResult {
+  public fun reconcile(workflowId: String? = null): FeatureTaskRuntimeCrashReconciliationResult {
     val now = clock.instant()
     val candidates =
       try {

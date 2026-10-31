@@ -17,18 +17,18 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrenc
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
 
-data class BlockIncidentLaunchFacts(
+public data class BlockIncidentLaunchFacts(
   val providerId: String?,
   val phaseStrategyId: String?,
   val modelId: String?,
 )
 
 @Inject
-class BlockIncidentLaunchFactsReader(
+public class BlockIncidentLaunchFactsReader(
   private val executionPlanCodec: FeatureTaskRuntimeExecutionPlanCodec,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun read(
+  public fun read(
     unit: UnitOfWork,
     occurrence: BlockIncidentOccurrence,
   ): BlockIncidentLaunchFacts {

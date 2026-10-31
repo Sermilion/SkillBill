@@ -25,9 +25,9 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION as AUDIT_RESULT_VERSION
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
-internal object AcceptanceCriterionInteractionTraceRound {
+public object AcceptanceCriterionInteractionTraceRound {
   private const val SCOPE_KEY_LENGTH = 16
-  internal const val LINE_GRAMMAR =
+  public const val LINE_GRAMMAR: String =
     "Answer with exactly one line per listed scenario, in the form " +
       "`Interaction <ref>: holds trace <path:line citations>`, " +
       "`Interaction <ref>: broken owner AC-NNN trace <path:line citations>` or " +
@@ -38,7 +38,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
       "`Recheck AC-NNN: holds evidence <path:line, path:line>` or " +
       "`Recheck AC-NNN: regressed evidence <path:line, path:line>`."
 
-  fun scopeKey(state: AcceptanceCriterionRepairState): String =
+  public fun scopeKey(state: AcceptanceCriterionRepairState): String =
     sha256Hex(
       listOf(
         state.specDigest,
@@ -49,12 +49,12 @@ internal object AcceptanceCriterionInteractionTraceRound {
       ).joinToString("|"),
     ).take(SCOPE_KEY_LENGTH)
 
-  fun grammar(
+  public fun grammar(
     scenarios: Boolean,
     rechecks: Boolean,
   ): String = listOfNotNull(LINE_GRAMMAR.takeIf { scenarios }, RECHECK_GRAMMAR.takeIf { rechecks }).joinToString(" ")
 
-  fun rejection(
+  public fun rejection(
     malformed: AcceptanceCriterionInteractionTraceParse.Malformed,
     state: AcceptanceCriterionRepairState,
   ): String =
@@ -64,10 +64,10 @@ internal object AcceptanceCriterionInteractionTraceRound {
         state.interactionTrace.pendingRechecks.isNotEmpty(),
       )
 
-  fun active(scope: AcceptanceCriterionRepairRunState): Boolean =
+  public fun active(scope: AcceptanceCriterionRepairRunState): Boolean =
     scope.snapshot?.stage == AcceptanceCriterionRepairStage.INTERACTION_TRACE_REQUIRED
 
-  fun promptScope(scope: AcceptanceCriterionRepairRunState): AcceptanceAuditInteractionTraceScope? {
+  internal fun promptScope(scope: AcceptanceCriterionRepairRunState): AcceptanceAuditInteractionTraceScope? {
     if (!active(scope)) return null
     val state = checkNotNull(scope.snapshot)
     val binding = checkNotNull(scope.binding) { "Interaction trace stage requires the bound scenario catalog." }
@@ -88,7 +88,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
     )
   }
 
-  fun unknownContext(scope: AcceptanceCriterionRepairRunState): List<UnknownInteractionScenarioContext> {
+  internal fun unknownContext(scope: AcceptanceCriterionRepairRunState): List<UnknownInteractionScenarioContext> {
     val state = scope.snapshot ?: return emptyList()
     val scenarios = scope.binding?.interactionScenarios.orEmpty().associateBy { it.scenarioRef }
     return state.unknownScenarios().mapNotNull { unknown ->
@@ -98,7 +98,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
     }
   }
 
-  fun reaskRejection(
+  internal fun reaskRejection(
     scope: AcceptanceCriterionRepairRunState,
     prose: String,
   ): String? {
@@ -112,7 +112,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
     return rejection(parsed, state)
   }
 
-  fun recheckUpdate(
+  internal fun recheckUpdate(
     previous: AcceptanceCriterionRepairState?,
     raw: AcceptanceCriterionRepairState?,
     changedPaths: List<String>,
@@ -122,7 +122,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
     return previous.recheckUpdateAfter(changedPaths, UnitTestPathClassifier::isUnitTest)
   }
 
-  fun scheduleRechecks(
+  internal fun scheduleRechecks(
     raw: AcceptanceCriterionRepairState?,
     update: AcceptanceCriterionRecheckUpdate?,
     binding: AcceptanceCriterionRepairBinding,
@@ -131,7 +131,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
     return scheduled?.let { AcceptanceCriterionInteractionTargets.prepare(it, binding) }
   }
 
-  fun annotateRechecks(
+  internal fun annotateRechecks(
     result: AcceptanceCriterionRepairWriteResult,
     update: AcceptanceCriterionRecheckUpdate?,
   ): AcceptanceCriterionRepairWriteResult =
@@ -141,7 +141,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
       result
     }
 
-  fun evidence(
+  public fun evidence(
     settlement: AcceptanceCriterionInteractionTraceSettlement,
     predicted: AcceptanceCriterionRepairState,
   ): FeatureTaskRuntimeWorkflowArtifactMap =
@@ -183,7 +183,7 @@ internal object AcceptanceCriterionInteractionTraceRound {
       ),
     )
 
-  private fun criterionFact(criterion: AcceptanceCriterionRepairCriterion): Map<String, Any?> =
+  public fun criterionFact(criterion: AcceptanceCriterionRepairCriterion): Map<String, Any?> =
     mapOf(
       Keys.CANONICAL_REF to criterion.canonicalRef,
       Keys.SOURCE_DISPOSITION to criterion.sourceDisposition.wireValue,

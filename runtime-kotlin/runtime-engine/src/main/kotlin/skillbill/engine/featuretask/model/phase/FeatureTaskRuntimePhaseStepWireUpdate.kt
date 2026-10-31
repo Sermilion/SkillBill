@@ -2,12 +2,12 @@ package skillbill.engine.featuretask.model.phase
 
 import skillbill.contracts.SharedPayloadKeys
 
-internal data class FeatureTaskRuntimePhaseStepWireUpdate(
-  val stepId: String,
-  val status: String,
-  val attemptCount: Int,
+public data class FeatureTaskRuntimePhaseStepWireUpdate(
+  public val stepId: String,
+  public val status: String,
+  public val attemptCount: Int,
 ) {
-  fun toWireMap(): Map<String, Any?> =
+  public fun toWireMap(): Map<String, Any?> =
     linkedMapOf(
       SharedPayloadKeys.STEP_ID to stepId,
       SharedPayloadKeys.STATUS to status,

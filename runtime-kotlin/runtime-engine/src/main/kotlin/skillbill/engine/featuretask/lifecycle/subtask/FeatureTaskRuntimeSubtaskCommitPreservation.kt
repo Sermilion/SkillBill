@@ -7,7 +7,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
 import java.nio.file.Path
 
-internal fun WorkflowGitOperations.writeSubtaskCommitPreservingHistory(
+public fun WorkflowGitOperations.writeSubtaskCommitPreservingHistory(
   request: SubtaskCommitPreservationRequest,
 ): WorkflowGitOperationResult {
   if (request.decision !is FeatureTaskRuntimeSubtaskCommitAmend) {

@@ -16,8 +16,8 @@ import java.security.MessageDigest
 
 private const val EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT = 65536
 
-internal object FeatureTaskRuntimeEffectivePolicies {
-  fun resolve(
+public object FeatureTaskRuntimeEffectivePolicies {
+  public fun resolve(
     plan: ResolvedPhaseExecutionPlan,
     gate: EffectiveGatePolicyInputs,
   ): List<ResolvedExecutionPolicy> =
@@ -54,7 +54,7 @@ internal object FeatureTaskRuntimeEffectivePolicies {
       policy("finalization", listOf("runtime-owned-commit-push", "retain-uncertain-effects", "terminal-refusal")),
     )
 
-  fun mapStepIdentityPolicies(
+  internal fun mapStepIdentityPolicies(
     recorded: ResolvedPhaseExecutionPlan,
     mapped: ResolvedPhaseExecutionPlan,
   ): List<ResolvedExecutionPolicy> {
@@ -90,13 +90,13 @@ internal object FeatureTaskRuntimeEffectivePolicies {
       plan.resumeInterpretationIdentities.toSortedMap(),
     )
 
-  private fun policy(
+  public fun policy(
     id: String,
     inputs: Any?,
   ): ResolvedExecutionPolicy = ResolvedExecutionPolicy(id, 1, effectivePolicyDigest(inputs))
 }
 
-internal fun effectivePolicyDigest(inputs: Any?): String {
+public fun effectivePolicyDigest(inputs: Any?): String {
   val encoded = JsonCodec.valueToJsonString(inputs).toByteArray(Charsets.UTF_8)
   if (encoded.size > EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT) {
     throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(

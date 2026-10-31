@@ -15,16 +15,16 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewVerdi
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationVerdict
 
-object FeatureTaskRuntimeOutputVerification {
-  internal val reviewVerdictRule: FeatureTaskRuntimeStepVerdictRule =
+public object FeatureTaskRuntimeOutputVerification {
+  public val reviewVerdictRule: FeatureTaskRuntimeStepVerdictRule =
     FeatureTaskRuntimeStepVerdictRule { wireVerdict, outputObject -> reviewVerdict(outputObject, wireVerdict) }
 
-  internal val findingVerificationVerdictRule: FeatureTaskRuntimeStepVerdictRule =
+  public val findingVerificationVerdictRule: FeatureTaskRuntimeStepVerdictRule =
     FeatureTaskRuntimeStepVerdictRule { wireVerdict, outputObject ->
       findingVerificationVerdict(wireVerdict, outputObject)
     }
 
-  internal fun verdictFor(
+  public fun verdictFor(
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
     stepRule: FeatureTaskRuntimeStepVerdictRule? = null,
   ): FeatureTaskRuntimeVerdict {
@@ -40,7 +40,7 @@ object FeatureTaskRuntimeOutputVerification {
       ?.let(JsonCodec::anyToStringAnyMap)
       ?.containsKey(FeatureTaskRuntimeVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS) == true
 
-  internal fun dispositionsFrom(
+  public fun dispositionsFrom(
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
   ): List<FeatureTaskRuntimeFindingVerificationDisposition> =
     findingVerificationVerdictFrom(outputObject)?.dispositions.orEmpty()
@@ -55,7 +55,7 @@ object FeatureTaskRuntimeOutputVerification {
   ): List<FeatureTaskRuntimeFindingVerificationDisposition> =
     findingVerificationVerdictFrom(outputObject)?.rejectedDispositions.orEmpty()
 
-  internal fun unresolvedReviewFindings(
+  public fun unresolvedReviewFindings(
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
   ): List<FeatureTaskRuntimeReviewFinding> = reviewVerdictFrom(outputObject)?.unresolvedFindings.orEmpty()
 }

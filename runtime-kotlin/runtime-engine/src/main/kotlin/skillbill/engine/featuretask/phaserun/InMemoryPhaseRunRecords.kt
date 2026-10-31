@@ -52,11 +52,11 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
-internal class InMemoryPhaseRunRecords private constructor(
-  private val clock: Clock,
-  private val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
-  private val phaseRecords: LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>,
-  override val standaloneMonitorLedger: StandaloneMonitorLedger?,
+public class InMemoryPhaseRunRecords private constructor(
+  public val clock: Clock,
+  public val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
+  public val phaseRecords: LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>,
+  public override val standaloneMonitorLedger: StandaloneMonitorLedger?,
   private val acceptedGoalRepairOutput: ((String, Int, String) -> Unit)?,
   private val goalQualityProgressSink: ((GoalQualityPhaseProgress) -> Boolean)?,
   private val initialGoalQualityProgress: GoalQualityPhaseProgress?,
@@ -67,7 +67,7 @@ internal class InMemoryPhaseRunRecords private constructor(
   PhasePlanRecords by InMemoryPhasePlanRecords(phaseRecords),
   FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses(),
   PhaseImplementationProgressRecords by InMemoryImplementationProgressRecords(clock, phaseRecords) {
-  constructor(
+  internal constructor(
     clock: Clock,
     resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
     standaloneMonitorLedger: StandaloneMonitorLedger? = null,
@@ -104,7 +104,7 @@ internal class InMemoryPhaseRunRecords private constructor(
     }
   }
 
-  val acceptedOutputs = mutableMapOf<String, String>()
+  internal val acceptedOutputs: MutableMap<String, String> = mutableMapOf()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
   private val phaseLedger = mutableListOf<FeatureTaskRuntimePhaseLedgerEntry>()
   private val validationGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
@@ -216,7 +216,7 @@ internal class InMemoryPhaseRunRecords private constructor(
   override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord> =
     phaseRecords.mapValues { (_, record) -> record.detached() }.toMap()
 
-  fun identifiedCompletedOutputs(stepIds: List<String>): List<PhaseRunCompletedOutput> =
+  public fun identifiedCompletedOutputs(stepIds: List<String>): List<PhaseRunCompletedOutput> =
     if (goalQualityProgressSink != null) {
       acceptedOccurrences.map { PhaseRunCompletedOutput(it.phaseId, it.occurrence, it.output) }
         .filter { it.phaseId in stepIds }
@@ -339,13 +339,13 @@ internal class InMemoryPhaseRunRecords private constructor(
     return true
   }
 
-  fun loadAcceptedEnvelope(
+  internal fun loadAcceptedEnvelope(
     phaseId: String,
     attempt: Int,
   ): FeatureTaskRuntimeWorkflowArtifactMap? =
     acceptedEnvelopes.lastOrNull { it.phaseId == phaseId && it.attempt == attempt }?.envelope
 
-  fun recordAcceptedEnvelope(
+  internal fun recordAcceptedEnvelope(
     phaseId: String,
     attempt: Int,
     envelope: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -356,7 +356,7 @@ internal class InMemoryPhaseRunRecords private constructor(
     return persistGoalQualityProgress()
   }
 
-  fun clearAcceptedEnvelope(
+  internal fun clearAcceptedEnvelope(
     phaseId: String,
     attempt: Int,
   ): Boolean {
@@ -364,7 +364,7 @@ internal class InMemoryPhaseRunRecords private constructor(
     return !removed || persistGoalQualityProgress()
   }
 
-  fun goalQualityProgress(
+  internal fun goalQualityProgress(
     terminalBlockedStep: String? = null,
     terminalBlockedReason: String? = null,
     terminalCompleted: Boolean = false,
@@ -506,7 +506,7 @@ private class InMemoryImplementationProgressRecords(
   }
 }
 
-private fun ProducerOutputEvidence.detached(): ProducerOutputEvidence = copy(payload = payload?.copyOf())
+public fun ProducerOutputEvidence.detached(): ProducerOutputEvidence = copy(payload = payload?.copyOf())
 
 private class InMemoryNoChangePauses : FeatureTaskRuntimeNoChangePausePort {
   private val pauses = mutableMapOf<String, FeatureTaskRuntimeNoChangePause>()
@@ -521,20 +521,22 @@ private class InMemoryNoChangePauses : FeatureTaskRuntimeNoChangePausePort {
   }
 }
 
-private fun FeatureTaskRuntimePhaseRecord.detached(): FeatureTaskRuntimePhaseRecord =
+public fun FeatureTaskRuntimePhaseRecord.detached(): FeatureTaskRuntimePhaseRecord =
   copy(
     fileManifestBefore = fileManifestBefore.toList(),
     fileManifestAfter = fileManifestAfter.toList(),
     fileManifestIntroduced = fileManifestIntroduced.toList(),
   )
 
-private fun List<FeatureTaskRuntimeFindingVerificationDisposition>.detachedDispositions() =
+public fun List<FeatureTaskRuntimeFindingVerificationDisposition>.detachedDispositions():
+  List<FeatureTaskRuntimeFindingVerificationDisposition> =
   map { disposition -> disposition.copy(selectedBoundaryHeadings = disposition.selectedBoundaryHeadings.toList()) }
 
-private fun Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>.detachedBoundary() =
+public fun Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>.detachedBoundary():
+  Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>> =
   mapValues { (_, headings) -> headings.toList() }
 
-private fun FeatureTaskRuntimeValidationGateProgress.detached() =
+public fun FeatureTaskRuntimeValidationGateProgress.detached(): FeatureTaskRuntimeValidationGateProgress =
   copy(
     gateRuns = gateRuns.map { run -> run.copy(executedChecks = run.executedChecks.toList()) },
     remainingFindings = remainingFindings.map { it.toMap() },

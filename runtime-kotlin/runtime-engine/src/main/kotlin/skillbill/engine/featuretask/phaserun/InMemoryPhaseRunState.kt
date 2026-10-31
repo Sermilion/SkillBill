@@ -54,18 +54,18 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 
-internal class InMemoryPhaseRunState(
-  private val facts: InMemoryPhaseRunFacts,
-  private val executionPlan: ResolvedPhaseExecutionPlan,
-  override val progress: FeatureTaskRuntimeRunState,
-  override val records: InMemoryPhaseRunRecords,
-  override val telemetry: FeatureTaskRuntimeRunObservability,
-  val invocationId: String,
-  private val strategies: PhaseStrategyLookup,
-  private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
-  private val lifecycleTelemetry: LifecycleTelemetryService,
-  override val clock: Clock,
-  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
+public class InMemoryPhaseRunState(
+  public val facts: InMemoryPhaseRunFacts,
+  public val executionPlan: ResolvedPhaseExecutionPlan,
+  public override val progress: FeatureTaskRuntimeRunState,
+  public override val records: InMemoryPhaseRunRecords,
+  public override val telemetry: FeatureTaskRuntimeRunObservability,
+  public val invocationId: String,
+  public val strategies: PhaseStrategyLookup,
+  public val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
+  public val lifecycleTelemetry: LifecycleTelemetryService,
+  public override val clock: Clock,
+  public val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
   override val settlements: PhaseRunSettlements =
     GoalQualityPhaseRunSettlements(records)
@@ -84,7 +84,7 @@ internal class InMemoryPhaseRunState(
     get() = progress.transitions
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
 
-  var reviewResult: ParallelCodeReviewResult? = null
+  internal var reviewResult: ParallelCodeReviewResult? = null
     private set
 
   private var qualityCheck: QualityCheckSession? = null
@@ -335,7 +335,7 @@ private enum class QualityCheckResult(
   FAIL("fail"),
 }
 
-private const val QUALITY_CHECK_ROUTED_SKILL = "bill-code-check"
+public const val QUALITY_CHECK_ROUTED_SKILL: String = "bill-code-check"
 private const val QUALITY_CHECK_SCOPE_TYPE = "working_tree"
 private const val ACTIVITY_REFRESH_SECONDS = 30L
 private val ACTIVITY_REFRESH_INTERVAL = Duration.ofSeconds(ACTIVITY_REFRESH_SECONDS)

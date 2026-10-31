@@ -7,32 +7,23 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-internal data class FeatureTaskRuntimePhaseFileManifest(
-  val before: List<String>,
-  val after: List<String>,
-  val reeditedPaths: List<String> = emptyList(),
+public data class FeatureTaskRuntimePhaseFileManifest(
+  public val before: List<String>,
+  public val after: List<String>,
+  public val reeditedPaths: List<String> = emptyList(),
 ) {
-  val introduced: List<String> = ((after.toSet() - before.toSet()) + reeditedPaths).distinct().sorted()
+  public val introduced: List<String> = ((after.toSet() - before.toSet()) + reeditedPaths).distinct().sorted()
 }
 
-object FeatureTaskRuntimePhaseSafetyPolicy {
-  fun lineSeparatedPaths(raw: String): List<String> =
-    raw
-      .lineSequence()
-      .map(String::trim)
-      .filter(String::isNotEmpty)
-      .distinct()
-      .sorted()
-      .toList()
-
-  fun changedPaths(status: String): List<String> =
+public object FeatureTaskRuntimePhaseSafetyPolicy {
+  public fun changedPaths(status: String): List<String> =
     porcelainEntries(status)
       .mapNotNull(PorcelainEntry::retainedPath)
       .filterNot(::isRuntimePrivatePath)
       .distinct()
       .sorted()
 
-  fun deletedPaths(status: String): List<String> =
+  public fun deletedPaths(status: String): List<String> =
     porcelainEntries(status)
       .mapNotNull(PorcelainEntry::removedPath)
       .filterNot(::isRuntimePrivatePath)
@@ -83,8 +74,8 @@ object FeatureTaskRuntimePhaseSafetyPolicy {
   }
 
   private data class PorcelainEntry(
-    val retainedPath: String?,
-    val removedPath: String?,
+    public val retainedPath: String?,
+    internal val removedPath: String?,
   )
 
   private const val PORCELAIN_PATH_OFFSET: Int = 3

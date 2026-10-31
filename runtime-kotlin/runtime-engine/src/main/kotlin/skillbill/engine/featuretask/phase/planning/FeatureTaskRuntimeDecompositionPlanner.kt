@@ -26,24 +26,24 @@ import java.nio.file.Path
 import java.time.Instant
 
 @Inject
-class FeatureTaskRuntimeDecompositionPlanner(
+public class FeatureTaskRuntimeDecompositionPlanner(
   private val preparationRuntime: FeatureSpecPreparationRuntime,
   private val preparationWriter: FeatureSpecPreparationWriter,
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val projectStore: ProjectStorePort,
   private val fileStore: DecompositionManifestStore,
 ) {
-  fun bundlePath(
+  public fun bundlePath(
     repoRoot: Path,
     value: String,
   ): Path = resolvedParentSpecPath(repoRoot, Path.of(value), projectStore.resolve(repoRoot))
 
-  fun bundleLabel(
+  internal fun bundleLabel(
     repoRoot: Path,
     path: Path,
   ): String = repoRelativePath(repoRoot, projectStore.resolve(repoRoot), path)
 
-  fun existingParentSpec(
+  internal fun existingParentSpec(
     repoRoot: Path,
     issueKey: String,
   ): Path? =
@@ -55,7 +55,7 @@ class FeatureTaskRuntimeDecompositionPlanner(
       -> null
     }
 
-  fun verifyAuthoredBundle(
+  internal fun verifyAuthoredBundle(
     repoRoot: Path,
     issueKey: String,
     runInvariants: FeatureTaskRuntimeRunInvariants,
@@ -85,10 +85,10 @@ class FeatureTaskRuntimeDecompositionPlanner(
     }
   }
 
-  fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
+  internal fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
     preparationWriter.authoredSubtasks(parentSpecPath)
 
-  fun planBundleTarget(
+  public fun planBundleTarget(
     repoRoot: Path,
     issueKey: String,
     workflowId: String,
@@ -115,29 +115,29 @@ class FeatureTaskRuntimeDecompositionPlanner(
     }
   }
 
-  fun specsRoot(repoRoot: Path): Path = projectStore.resolve(repoRoot).specsRoot
+  public fun specsRoot(repoRoot: Path): Path = projectStore.resolve(repoRoot).specsRoot
 
-  fun planStagingRoot(checkout: Path): Path =
+  public fun planStagingRoot(checkout: Path): Path =
     checkout.resolve(LegacyProjectStatePaths.RUNTIME_STATE_DIRECTORY).resolve(LegacyProjectStatePaths.STAGING_DIRECTORY)
 
-  fun bundleTree(directory: Path): List<Path> = fileStore.listTree(directory)
+  internal fun bundleTree(directory: Path): List<Path> = fileStore.listTree(directory)
 
-  fun writeBundleFile(
+  internal fun writeBundleFile(
     target: Path,
     content: String,
   ) = fileStore.writeTextAtomically(target, content)
 
-  fun deleteBundlePath(target: Path) = fileStore.deleteIfExists(target)
+  internal fun deleteBundlePath(target: Path) = fileStore.deleteIfExists(target)
 
-  fun isBundleFile(path: Path): Boolean = fileStore.isRegularFile(path)
+  internal fun isBundleFile(path: Path): Boolean = fileStore.isRegularFile(path)
 
-  fun bundleChildDirectories(directory: Path): List<Path> = fileStore.listDirectChildDirectories(directory)
+  internal fun bundleChildDirectories(directory: Path): List<Path> = fileStore.listDirectChildDirectories(directory)
 
-  fun bundleLastModified(path: Path): Instant = fileStore.lastModified(path)
+  internal fun bundleLastModified(path: Path): Instant = fileStore.lastModified(path)
 
-  fun specText(specPath: Path): String = fileStore.readText(specPath)
+  public fun specText(specPath: Path): String = fileStore.readText(specPath)
 
-  fun existingManifest(
+  internal fun existingManifest(
     repoRoot: Path,
     issueKey: String,
   ): Path? =
@@ -145,7 +145,7 @@ class FeatureTaskRuntimeDecompositionPlanner(
       ?.resolveSibling(DECOMPOSITION_MANIFEST_FILENAME)
       ?.takeIf(fileStore::isRegularFile)
 
-  companion object {
-    const val AUTHORED_BUNDLE_REASON = "Plan authored a governed spec bundle."
+  internal companion object {
+    internal const val AUTHORED_BUNDLE_REASON: String = "Plan authored a governed spec bundle."
   }
 }

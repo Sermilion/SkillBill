@@ -31,12 +31,12 @@ import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifac
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
-class FeatureTaskRuntimeReviewGenerationRecorder(
-  private val database: DatabaseSessionFactory,
-  private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-  private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
+public class FeatureTaskRuntimeReviewGenerationRecorder(
+  public val database: DatabaseSessionFactory,
+  public val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+  public val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
 ) {
-  fun persistOwnedReviewGenerationInvalidation(
+  internal fun persistOwnedReviewGenerationInvalidation(
     workflowId: String,
     reviewStepId: String,
     admitted: AdmittedFeatureTaskRuntimeExecution,
@@ -48,7 +48,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
       persistReviewGenerationInvalidationInTransaction(unitOfWork, workflowId, reviewStepId)
     }
 
-  fun persistReviewGenerationInvalidation(
+  internal fun persistReviewGenerationInvalidation(
     workflowId: String,
     reviewStepId: String,
   ): Int? =
@@ -116,7 +116,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     return nextGeneration
   }
 
-  fun reconcileReviewGeneration(workflowId: String): Int =
+  internal fun reconcileReviewGeneration(workflowId: String): Int =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
@@ -134,7 +134,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
       1
     }
 
-  fun invalidateQuarantinedProducerRecord(
+  internal fun invalidateQuarantinedProducerRecord(
     workflowId: String,
     producerPhaseId: String,
     loopId: String,
@@ -237,7 +237,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     return LinkedHashMap(existing).apply { put(previous.phaseId, invalidated) }
   }
 
-  fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> {
+  internal fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> {
     val reviewRunId = GoalSubtaskReviewSummaryReducer.reviewRunIdOf(output) ?: return emptyList()
     return runtimeOwnedPersistence.requiredRead(
       seam = "FeatureTaskRuntimePhaseRecorder.recordedFindingVerdicts",
@@ -247,12 +247,12 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     }
   }
 
-  fun fetchUnaddressedLedger(workflowId: String): List<UnaddressedFinding> =
+  internal fun fetchUnaddressedLedger(workflowId: String): List<UnaddressedFinding> =
     database.transaction { unitOfWork ->
       unitOfWork.unaddressedFindings.fetchWorkflowLedger(workflowId)
     }
 
-  fun appendRejectedVerificationFindings(
+  internal fun appendRejectedVerificationFindings(
     workflowId: String,
     passNumber: Int,
     rejected: List<UnaddressedFinding>,

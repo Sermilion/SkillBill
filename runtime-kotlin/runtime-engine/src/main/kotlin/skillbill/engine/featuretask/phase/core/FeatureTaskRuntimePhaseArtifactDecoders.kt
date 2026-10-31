@@ -15,18 +15,18 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
-internal fun decodePhaseRecords(artifacts: Map<String, Any?>): Map<String, FeatureTaskRuntimePhaseRecord> =
+public fun decodePhaseRecords(artifacts: Map<String, Any?>): Map<String, FeatureTaskRuntimePhaseRecord> =
   DurableWorkflowArtifacts.fromMap(artifacts).phaseRecords()
 
-internal fun resolvedBranchFromWorkflowArtifacts(artifacts: Map<String, Any?>): FeatureTaskRuntimeResolvedBranch? {
+public fun resolvedBranchFromWorkflowArtifacts(artifacts: Map<String, Any?>): FeatureTaskRuntimeResolvedBranch? {
   return DurableWorkflowArtifacts.fromMap(artifacts).resolvedBranch()
 }
 
-internal fun reviewGenerationFrom(artifacts: Map<String, Any?>): Int {
+public fun reviewGenerationFrom(artifacts: Map<String, Any?>): Int {
   return DurableWorkflowArtifacts.fromMap(artifacts).reviewGeneration()
 }
 
-internal fun operatorBlockRetryFromWorkflowArtifacts(
+public fun operatorBlockRetryFromWorkflowArtifacts(
   artifacts: Map<String, Any?>,
 ): FeatureTaskRuntimeOperatorBlockRetry? {
   return DurableWorkflowArtifacts.fromMap(artifacts).operatorBlockRetry()
@@ -38,12 +38,10 @@ internal fun goalContinuationFieldAdoptionFromWorkflowArtifacts(
   return DurableWorkflowArtifacts.fromMap(artifacts).goalContinuationFieldAdoption()
 }
 
-internal fun decomposeTerminalFromWorkflowArtifacts(
-  artifacts: Map<String, Any?>,
-): FeatureTaskRuntimeDecomposeTerminal? {
+public fun decomposeTerminalFromWorkflowArtifacts(artifacts: Map<String, Any?>): FeatureTaskRuntimeDecomposeTerminal? {
   return DurableWorkflowArtifacts.fromMap(artifacts).decomposeTerminal()
 }
 
-internal fun decodePhaseLedger(artifacts: Map<String, Any?>): List<FeatureTaskRuntimePhaseLedgerEntry> {
+public fun decodePhaseLedger(artifacts: Map<String, Any?>): List<FeatureTaskRuntimePhaseLedgerEntry> {
   return DurableWorkflowArtifacts.fromMap(artifacts).phaseLedger()
 }

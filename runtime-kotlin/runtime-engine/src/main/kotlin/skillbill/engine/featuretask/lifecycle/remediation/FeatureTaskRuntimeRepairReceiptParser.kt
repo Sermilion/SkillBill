@@ -10,7 +10,7 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.featureTaskRuntimeRemediationRoundNumber
 
 private const val MAX_REPORT_ENTRIES = 50
-private const val MAX_REASON_CHARS = 300
+public const val MAX_REASON_CHARS: Int = 300
 
 private val SEGMENT_BREAK = Regex("""\R|;|(?<=[.!?])\s""")
 private val UNRESOLVED_CUE =
@@ -26,7 +26,7 @@ private val NO_EDIT_CUE =
     RegexOption.IGNORE_CASE,
   )
 
-fun featureTaskRuntimeProseMentions(
+internal fun featureTaskRuntimeProseMentions(
   prose: String,
   findingId: String,
 ): List<String> {
@@ -34,7 +34,7 @@ fun featureTaskRuntimeProseMentions(
   return prose.split(SEGMENT_BREAK).map(String::trim).filter { it.isNotEmpty() && mention.containsMatchIn(it) }
 }
 
-fun featureTaskRuntimeRepairReceiptFromProse(
+public fun featureTaskRuntimeRepairReceiptFromProse(
   prose: String,
   carriedFindings: List<GoalSubtaskReviewCompactFinding>,
   remediationBaseSha: String,
@@ -54,7 +54,7 @@ fun featureTaskRuntimeRepairReceiptFromProse(
   )
 }
 
-private fun repairEntry(
+public fun repairEntry(
   findingId: String,
   mentions: List<String>,
 ): FeatureTaskRuntimeRepairReceiptEntry {
@@ -76,7 +76,7 @@ private fun repairEntry(
   }
 }
 
-fun featureTaskRuntimeRemediationRoundNumberOrNull(reviewState: GoalSubtaskReviewState): Int? =
+internal fun featureTaskRuntimeRemediationRoundNumberOrNull(reviewState: GoalSubtaskReviewState): Int? =
   try {
     featureTaskRuntimeRemediationRoundNumber(reviewState.completedPassCount)
   } catch (error: SkillBillRuntimeException) {

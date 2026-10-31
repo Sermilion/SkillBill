@@ -29,7 +29,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 
-class StandalonePhaseStatusEventSink(
+public class StandalonePhaseStatusEventSink(
   private val database: DatabaseSessionFactory,
   private val registrationForWorkflow: (String?) -> StandalonePhaseStatusRegistration,
   private val clock: Clock,
@@ -49,11 +49,11 @@ class StandalonePhaseStatusEventSink(
   private var qaReportText: String? = null
   private var planReport: StandalonePlanReport? = null
 
-  fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
+  internal fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
     monitorCleanup = cleanup
   }
 
-  fun recordQaOutcome(outcome: StandaloneQaOutcome) {
+  internal fun recordQaOutcome(outcome: StandaloneQaOutcome) {
     qaOutcome = outcome
   }
 
@@ -73,7 +73,7 @@ class StandalonePhaseStatusEventSink(
     }
   }
 
-  fun publishActivity(
+  internal fun publishActivity(
     stepName: String,
     activity: String,
   ) {
@@ -87,7 +87,7 @@ class StandalonePhaseStatusEventSink(
     }
   }
 
-  fun settle(result: PhaseRunResult) {
+  internal fun settle(result: PhaseRunResult) {
     catchingNonCancellation {
       ensureRegistered(null)
       when (result) {
@@ -115,7 +115,7 @@ class StandalonePhaseStatusEventSink(
     }
   }
 
-  fun settlePlan(
+  internal fun settlePlan(
     result: String,
     workflowId: String? = null,
     report: StandalonePlanReport? = null,
@@ -133,7 +133,7 @@ class StandalonePhaseStatusEventSink(
     }
   }
 
-  fun publishPlanReport(report: () -> StandalonePlanReport?) {
+  internal fun publishPlanReport(report: () -> StandalonePlanReport?) {
     catchingNonCancellation {
       val built = report() ?: return@catchingNonCancellation
       ensureRegistered(null)
@@ -144,7 +144,7 @@ class StandalonePhaseStatusEventSink(
     }
   }
 
-  fun settleBlocked(
+  internal fun settleBlocked(
     reason: String,
     workflowId: String? = null,
     stepId: String? = null,
@@ -221,7 +221,7 @@ class StandalonePhaseStatusEventSink(
       }
     }
 
-  fun settleFailure(
+  internal fun settleFailure(
     error: Throwable,
     workflowId: String? = null,
   ) {

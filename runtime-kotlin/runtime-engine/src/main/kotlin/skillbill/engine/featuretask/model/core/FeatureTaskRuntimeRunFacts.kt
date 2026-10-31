@@ -22,96 +22,96 @@ import kotlin.time.Duration
  * [FeatureTaskRuntimeRunRequest] supplies them; the loop never sees the session or operator-decision fields that
  * only the durable entry consumes.
  */
-interface FeatureTaskRuntimeRunFacts {
-  val admittedExecution: AdmittedFeatureTaskRuntimeExecution?
+public interface FeatureTaskRuntimeRunFacts {
+  public val admittedExecution: AdmittedFeatureTaskRuntimeExecution?
 
   /** The caller's explicit in-memory QA selection; null when the caller supplies none. */
-  val qaSelection: FeatureTaskRuntimeQaSelection?
+  public val qaSelection: FeatureTaskRuntimeQaSelection?
 
   /** The issue the run works on. */
-  val issueKey: String
+  public val issueKey: String
 
   /** The identity the run's state is keyed by. */
-  val workflowId: String
+  public val workflowId: String
 
   /** The invariants frozen when the run first opened. */
-  val runInvariants: FeatureTaskRuntimeRunInvariants
+  public val runInvariants: FeatureTaskRuntimeRunInvariants
 
   /** The documented default agent. */
-  val invokedAgentId: String
+  public val invokedAgentId: String
 
   /** The per-step agent assignment. */
-  val agentAssignment: FeatureTaskRuntimeAgentAssignment
+  public val agentAssignment: FeatureTaskRuntimeAgentAssignment
 
   /** The per-step model assignment. */
-  val modelAssignment: FeatureTaskRuntimeModelAssignment
+  public val modelAssignment: FeatureTaskRuntimeModelAssignment
 
   /** The compaction settings launched agents inherit. */
-  val compactionSettings: CompactionSettings
+  public val compactionSettings: CompactionSettings
 
   /** The environment launched agents inherit. */
-  val environment: Map<String, String>
+  public val environment: Map<String, String>
 
   /** The repository the run changes. */
-  val repoRoot: Path
+  public val repoRoot: Path
 
   /** The per-launch timeout, when one was requested. */
-  val timeout: Duration?
+  public val timeout: Duration?
 
   /** The code review mode the caller requested, when one was requested. */
-  val requestedCodeReviewMode: CodeReviewExecutionMode?
+  public val requestedCodeReviewMode: CodeReviewExecutionMode?
 
   /** The goal-continuation context of a goal child run, null for a standalone run. */
-  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?
+  public val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?
 
   /** The parent goal receiving activity from a planning run, without goal-child execution policy. */
-  val activityParentWorkflowId: String?
+  public val activityParentWorkflowId: String?
 
   /** The agent add-ons selected for the run. */
-  val agentAddonSelection: HydratedAgentAddonSelection
+  public val agentAddonSelection: HydratedAgentAddonSelection
 
   /** The sink run events are emitted to. */
-  val eventSink: FeatureTaskRuntimeRunEventSink
+  public val eventSink: FeatureTaskRuntimeRunEventSink
 
   /** The transitions that replace the definition's declaration, when a caller overrides them. */
-  val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration?
+  public val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration?
 
   /** The skeleton a phase run drives; null lets the run derive the standalone or goal-child skeleton. */
-  val skeletonDefinition: SkeletonDefinition?
+  public val skeletonDefinition: SkeletonDefinition?
 
   /** The caller-supplied review target and review identity of a phase run; null for a full run. */
-  val reviewInvocation: ReviewInvocation?
+  public val reviewInvocation: ReviewInvocation?
 
   /** The operator instructions a phase run adds to its step prompts; null for a full run. */
-  val phaseInstructions: PhaseInstructions?
+  public val phaseInstructions: PhaseInstructions?
 
   /** The hash of an operator-authored `spec.md` the plan must leave untouched; null when the plan may rewrite it. */
-  val protectedSpecSha256: String?
+  public val protectedSpecSha256: String?
 
   /** The operator's plan intake text the `intake` step resolves the parent spec from; null when none was supplied. */
-  val planIntake: String?
+  public val planIntake: String?
 
   /** Whether this pass ends once the `intake` step settles, before run invariants can be read from the spec. */
-  val stopAfterIntake: Boolean
+  public val stopAfterIntake: Boolean
 
   /** The pinned pull request target and owned worktree of a prepared standalone monitor; null for every other run. */
-  val monitorExecution: MonitorExecutionContext?
+  public val monitorExecution: MonitorExecutionContext?
 
   /** The workspace, expected identity, and pack guidance of a standalone QA run; null for every other run. */
-  val qaExecution: QaExecutionContext?
+  public val qaExecution: QaExecutionContext?
 
-  val goalHistoryWriterInput: GoalHistoryWriterInput?
+  public val goalHistoryWriterInput: GoalHistoryWriterInput?
 
-  val goalQualityAutomaticRecovery: Boolean
+  public val goalQualityAutomaticRecovery: Boolean
 
-  val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan?
+  public val acceptedGoalQualityExecutionPlan: ResolvedPhaseExecutionPlan?
 
-  val qaOutcomeWorkflowId: String get() = workflowId
+  public val qaOutcomeWorkflowId: String get() = workflowId
 }
 
-data class PhaseInstructions(
+public data class PhaseInstructions(
   val text: String,
   val stepIds: Set<String> = emptySet(),
 ) {
-  fun forStep(stepId: String): String? = text.takeIf { stepIds.isEmpty() || stepId in stepIds }
+  internal fun forStep(stepId: String): String? = text.takeIf { stepIds.isEmpty() || stepId in stepIds }
 }

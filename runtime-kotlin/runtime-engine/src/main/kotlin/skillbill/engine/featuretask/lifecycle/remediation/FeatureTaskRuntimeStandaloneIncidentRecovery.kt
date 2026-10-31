@@ -38,7 +38,7 @@ import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry as operat
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry as phaseArtifactEntry
 
 @Inject
-class FeatureTaskRuntimeStandaloneIncidentRecovery(
+public class FeatureTaskRuntimeStandaloneIncidentRecovery(
   private val clock: Clock,
 ) {
   private val engine = WorkflowEngine()
@@ -176,10 +176,10 @@ class FeatureTaskRuntimeStandaloneIncidentRecovery(
 }
 
 internal data class StandaloneIncidentRecoveryRequest(
-  val invocationId: String,
-  val phaseId: String,
-  val reason: String,
-  val admittedAttempt: BlockIncidentRecoveryAttempt,
-  val expectedIdentity: FeatureTaskExecutionIdentity,
-  val expectedPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+  public val invocationId: String,
+  public val phaseId: String,
+  public val reason: String,
+  internal val admittedAttempt: BlockIncidentRecoveryAttempt,
+  public val expectedIdentity: FeatureTaskExecutionIdentity,
+  public val expectedPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
 )

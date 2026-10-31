@@ -11,7 +11,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-fun goalContinuationConflict(
+public fun goalContinuationConflict(
   request: FeatureTaskRuntimeRunFacts,
   durable: FeatureTaskRuntimeGoalContinuationArtifact,
   baseline: GoalSubtaskReviewBaseline,
@@ -76,7 +76,7 @@ private fun suppliedIdentityMatchesDurable(
     supplied.suppressPr == durable.suppressPr &&
     supplied.parentWorkflowId == durable.parentWorkflowId
 
-fun newGoalContinuationConflict(
+internal fun newGoalContinuationConflict(
   request: FeatureTaskRuntimeRunFacts,
   selectedReviewMode: CodeReviewExecutionMode,
 ): String? {
@@ -86,7 +86,7 @@ fun newGoalContinuationConflict(
   }
 }
 
-fun goalContinuationPolicyBlockedReport(
+internal fun goalContinuationPolicyBlockedReport(
   request: FeatureTaskRuntimeRunFacts,
   runInvariants: FeatureTaskRuntimeRunInvariants,
   reason: String,

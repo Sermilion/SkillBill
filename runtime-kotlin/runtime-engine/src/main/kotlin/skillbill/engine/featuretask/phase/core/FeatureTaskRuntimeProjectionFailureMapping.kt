@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.phase.core
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
 
-fun FeatureTaskRuntimeHandoffProjectionFailureKind.toMeasurementFailureClassification():
+public fun FeatureTaskRuntimeHandoffProjectionFailureKind.toMeasurementFailureClassification():
   FeatureTaskRuntimeProjectionFailureClassification =
   when (this) {
     FeatureTaskRuntimeHandoffProjectionFailureKind.UNSUPPORTED_CONTRACT_VERSION ->

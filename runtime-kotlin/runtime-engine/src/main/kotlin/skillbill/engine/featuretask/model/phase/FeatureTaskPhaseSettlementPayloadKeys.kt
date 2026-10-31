@@ -1,5 +1,5 @@
 package skillbill.engine.featuretask.model.phase
 
-object FeatureTaskPhaseSettlementPayloadKeys {
-  const val KIND: String = "kind"
+public object FeatureTaskPhaseSettlementPayloadKeys {
+  public const val KIND: String = "kind"
 }

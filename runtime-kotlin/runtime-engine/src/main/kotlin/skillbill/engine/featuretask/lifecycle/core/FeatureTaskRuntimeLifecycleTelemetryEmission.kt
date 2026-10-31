@@ -21,7 +21,7 @@ import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 
-internal fun emitFeatureTaskRuntimeFinished(
+public fun emitFeatureTaskRuntimeFinished(
   lifecycleTelemetryService: LifecycleTelemetryService,
   diagnostics: RuntimeDiagnostics,
   report: FeatureTaskRuntimeRunReport,
@@ -58,7 +58,7 @@ internal fun emitFeatureTaskRuntimeFinished(
   )
 }
 
-internal fun emitFeatureTaskRuntimeFinishedError(
+public fun emitFeatureTaskRuntimeFinishedError(
   lifecycleTelemetryService: LifecycleTelemetryService,
   diagnostics: RuntimeDiagnostics,
   context: FeatureTaskRuntimeFinishedTelemetryContext,
@@ -102,7 +102,7 @@ internal fun emitFeatureTaskRuntimeFinishedError(
   )
 }
 
-private fun Throwable.terminalFailureClass(): String =
+public fun Throwable.terminalFailureClass(): String =
   failureCodeLabel()
     ?: (this::class.simpleName ?: "Throwable")
       .let { name -> if (name.endsWith("Exception") || name.endsWith("Error")) name else "$name exception" }
@@ -174,7 +174,7 @@ internal fun resolvedFeatureTaskRuntimeTelemetryPayload(
   )
 }
 
-private fun <T> measured(
+public fun <T> measured(
   diagnostics: RuntimeDiagnostics,
   name: String,
   fallback: T,
@@ -199,7 +199,7 @@ internal fun completionStatusOf(report: FeatureTaskRuntimeRunReport): String =
     is FeatureTaskRuntimeRunReport.Decomposed -> "decomposed_at_planning"
   }
 
-fun completedPhaseIdsOf(report: FeatureTaskRuntimeRunReport): List<String> =
+internal fun completedPhaseIdsOf(report: FeatureTaskRuntimeRunReport): List<String> =
   when (report) {
     is FeatureTaskRuntimeRunReport.Completed -> report.completedPhaseIds
     is FeatureTaskRuntimeRunReport.Blocked -> report.completedPhaseIds
@@ -207,7 +207,7 @@ fun completedPhaseIdsOf(report: FeatureTaskRuntimeRunReport): List<String> =
     is FeatureTaskRuntimeRunReport.Decomposed -> report.completedPhaseIds
   }
 
-fun lastIncompletePhaseOf(
+internal fun lastIncompletePhaseOf(
   report: FeatureTaskRuntimeRunReport,
   outcomes: Map<String, String>,
 ): String =
@@ -219,11 +219,11 @@ fun lastIncompletePhaseOf(
       report.lastIncompletePhase.takeIf(String::isNotBlank) ?: outcomes.firstIncompletePhase()
   }
 
-fun Map<String, String>.firstIncompletePhase(): String =
+public fun Map<String, String>.firstIncompletePhase(): String =
   entries.firstOrNull { it.value.workflowStepStatus() != WorkflowStepStatus.COMPLETED }?.key?.takeIf(String::isNotBlank)
     ?: "unknown"
 
-fun blockedReasonOf(report: FeatureTaskRuntimeRunReport): String =
+public fun blockedReasonOf(report: FeatureTaskRuntimeRunReport): String =
   when (report) {
     is FeatureTaskRuntimeRunReport.Blocked ->
       normalizedBlockedReason(

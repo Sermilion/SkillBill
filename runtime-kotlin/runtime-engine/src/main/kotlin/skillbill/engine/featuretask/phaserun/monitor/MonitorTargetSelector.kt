@@ -6,30 +6,30 @@ import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import java.net.URI
 import java.net.URISyntaxException
 
-sealed interface MonitorTargetSelector {
-  data class Url(val url: String) : MonitorTargetSelector
+public sealed interface MonitorTargetSelector {
+  public data class Url(val url: String) : MonitorTargetSelector
 
-  data class IssueKey(val key: String) : MonitorTargetSelector
+  public data class IssueKey(val key: String) : MonitorTargetSelector
 
-  data class CurrentBranch(val branch: String) : MonitorTargetSelector
+  public data class CurrentBranch(val branch: String) : MonitorTargetSelector
 }
 
-sealed interface MonitorIntakeParse {
-  data class Selected(val selector: MonitorTargetSelector) : MonitorIntakeParse
+public sealed interface MonitorIntakeParse {
+  public data class Selected(val selector: MonitorTargetSelector) : MonitorIntakeParse
 
-  data class Refused(
-    val reason: MonitorTargetRefusal,
-    val detail: String,
+  public data class Refused(
+    public val reason: MonitorTargetRefusal,
+    public val detail: String,
   ) : MonitorIntakeParse
 }
 
 private val ISSUE_KEY_TOKEN = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
-private val WHITESPACE = Regex("\\s+")
+public val WHITESPACE: Regex = Regex("\\s+")
 private const val URL_SCHEME_SEPARATOR = "://"
 private const val PULL_SEGMENT = "pull"
 private const val PULL_URL_SEGMENTS = 4
 
-internal fun parseMonitorIntake(
+public fun parseMonitorIntake(
   intake: String?,
   currentBranch: String?,
 ): MonitorIntakeParse {
@@ -59,13 +59,13 @@ internal fun parseMonitorIntake(
   }
 }
 
-internal sealed interface MonitorUrlParse {
-  data class Parsed(val identity: MonitorPullRequestIdentity) : MonitorUrlParse
+public sealed interface MonitorUrlParse {
+  public data class Parsed(val identity: MonitorPullRequestIdentity) : MonitorUrlParse
 
-  data class Rejected(val detail: String) : MonitorUrlParse
+  public data class Rejected(val detail: String) : MonitorUrlParse
 }
 
-internal fun parseMonitorPullRequestUrl(raw: String): MonitorUrlParse {
+public fun parseMonitorPullRequestUrl(raw: String): MonitorUrlParse {
   val uri =
     try {
       URI(raw)

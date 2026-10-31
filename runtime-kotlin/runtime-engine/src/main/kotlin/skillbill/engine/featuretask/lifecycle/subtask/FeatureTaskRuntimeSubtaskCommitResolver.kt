@@ -5,23 +5,23 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 
 public sealed interface FeatureTaskRuntimeSubtaskCommitDecision
 
-data object FeatureTaskRuntimeSubtaskCommitCreate : FeatureTaskRuntimeSubtaskCommitDecision
+public data object FeatureTaskRuntimeSubtaskCommitCreate : FeatureTaskRuntimeSubtaskCommitDecision
 
-internal data class FeatureTaskRuntimeSubtaskCommitAmend(
-  val ownedHeadSha: String,
-  val sequenceNumber: Int,
-  val recoveredFromTrailer: Boolean,
-  val rewritesPublishedHistory: Boolean,
+public data class FeatureTaskRuntimeSubtaskCommitAmend(
+  public val ownedHeadSha: String,
+  public val sequenceNumber: Int,
+  public val recoveredFromTrailer: Boolean,
+  public val rewritesPublishedHistory: Boolean,
 ) : FeatureTaskRuntimeSubtaskCommitDecision
 
-internal data class FeatureTaskRuntimeSubtaskCommitHeadState(
-  val sha: String?,
-  val commitMessage: String?,
-  val isUnpushed: Boolean,
+public data class FeatureTaskRuntimeSubtaskCommitHeadState(
+  public val sha: String?,
+  public val commitMessage: String?,
+  public val isUnpushed: Boolean,
 )
 
-object FeatureTaskRuntimeSubtaskCommitResolver {
-  internal fun decide(
+public object FeatureTaskRuntimeSubtaskCommitResolver {
+  public fun decide(
     identity: FeatureTaskRuntimeSubtaskCommitIdentity,
     durableCommitSha: String?,
     head: FeatureTaskRuntimeSubtaskCommitHeadState,
@@ -80,7 +80,7 @@ object FeatureTaskRuntimeSubtaskCommitResolver {
     }
   }
 
-  fun trailerFallbackRecord(
+  internal fun trailerFallbackRecord(
     identity: FeatureTaskRuntimeSubtaskCommitIdentity,
     headSha: String,
   ): String =
@@ -89,7 +89,7 @@ object FeatureTaskRuntimeSubtaskCommitResolver {
       "cause=durable checkpoint identity was absent or stale, so the amend target was recovered from the " +
       "Skill-Bill-Subtask trailer on HEAD"
 
-  fun publishedHistoryRewriteRecord(
+  internal fun publishedHistoryRewriteRecord(
     identity: FeatureTaskRuntimeSubtaskCommitIdentity,
     headSha: String,
   ): String =

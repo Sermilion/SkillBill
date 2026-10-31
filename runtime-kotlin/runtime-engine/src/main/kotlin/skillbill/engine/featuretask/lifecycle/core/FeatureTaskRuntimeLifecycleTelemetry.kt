@@ -13,11 +13,11 @@ import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
 @Inject
-class FeatureTaskRuntimeLifecycleTelemetry(
+public class FeatureTaskRuntimeLifecycleTelemetry(
   private val lifecycleTelemetryService: LifecycleTelemetryService,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun started(request: FeatureTaskRuntimeRunRequest): String =
+  internal fun started(request: FeatureTaskRuntimeRunRequest): String =
     isolate("started", "") {
       lifecycleTelemetryService.featureTaskRuntimeStarted(
         FeatureTaskRuntimeStartedRequest(
@@ -76,7 +76,7 @@ class FeatureTaskRuntimeLifecycleTelemetry(
     }
   }
 
-  fun prDescriptionGenerated(request: PrDescriptionGeneratedRequest) {
+  internal fun prDescriptionGenerated(request: PrDescriptionGeneratedRequest) {
     isolate("prDescriptionGenerated", Unit) {
       lifecycleTelemetryService.prDescriptionGenerated(request)
     }

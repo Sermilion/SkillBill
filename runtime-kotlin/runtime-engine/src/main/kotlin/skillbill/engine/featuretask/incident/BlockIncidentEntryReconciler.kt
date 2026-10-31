@@ -22,7 +22,7 @@ import java.time.Clock
 import java.time.Instant
 
 @Inject
-class BlockIncidentEntryReconciler(
+public class BlockIncidentEntryReconciler(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
@@ -32,7 +32,7 @@ class BlockIncidentEntryReconciler(
   private val interruptedRecoveries: BlockIncidentRecoveryInterruptedReconciliation,
   private val productReportDelivery: ProductReportDelivery?,
 ) {
-  fun reconcileOnEntry(dispatchProductReports: Boolean = true) {
+  internal fun reconcileOnEntry(dispatchProductReports: Boolean = true) {
     val databaseAvailable =
       diagnostics.bestEffort("Block incident database availability check failed; continuing the run.", false) {
         database.databaseExists()
@@ -61,7 +61,7 @@ class BlockIncidentEntryReconciler(
     if (dispatchProductReports) dispatchReports()
   }
 
-  fun <T> guardEntry(
+  internal fun <T> guardEntry(
     blocked: (T) -> Boolean,
     run: () -> T,
   ): T {
@@ -73,7 +73,7 @@ class BlockIncidentEntryReconciler(
     return result
   }
 
-  fun investigateAfterEntry(
+  internal fun investigateAfterEntry(
     entryStartedAt: Instant,
     dispatchReports: Boolean = true,
   ) {

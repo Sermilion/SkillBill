@@ -37,7 +37,7 @@ private sealed interface RemediationSnapshotRead {
   data object Absent : RemediationSnapshotRead
 }
 
-class FeatureTaskRuntimeRemediationBaseReconciler(
+internal class FeatureTaskRuntimeRemediationBaseReconciler(
   val database: DatabaseSessionFactory,
   val patcher: FeatureTaskRuntimeGoalContinuationArtifactPatcher,
   val clock: Clock,

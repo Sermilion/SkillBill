@@ -13,72 +13,72 @@ import skillbill.workflow.taskruntime.model.audit.interaction.AcceptanceCriterio
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 
-data class AcceptanceCriterionRepairBinding(
-  val catalogId: String,
-  val executionId: String,
-  val specDigest: String,
-  val authoredCriteria: List<String>,
-  val auditStepIds: Set<String> = emptySet(),
-  val interactionScenarios: List<InteractionScenario> = emptyList(),
+public data class AcceptanceCriterionRepairBinding(
+  public val catalogId: String,
+  public val executionId: String,
+  public val specDigest: String,
+  public val authoredCriteria: List<String>,
+  internal val auditStepIds: Set<String> = emptySet(),
+  public val interactionScenarios: List<InteractionScenario> = emptyList(),
 )
 
-data class AcceptanceCriterionRepairStepRoles(
-  val audit: String,
-  val planning: String,
-  val repair: String,
-  val repairLoopId: String,
+public data class AcceptanceCriterionRepairStepRoles(
+  public val audit: String,
+  public val planning: String,
+  public val repair: String,
+  internal val repairLoopId: String,
 )
 
-data class ExpectedAcceptanceCriterionRepairState(
-  val revision: Long?,
-  val currentCriterionRef: String?,
-  val reservationId: String?,
+public data class ExpectedAcceptanceCriterionRepairState(
+  public val revision: Long?,
+  public val currentCriterionRef: String?,
+  public val reservationId: String?,
 )
 
-data class AcceptanceCriterionRepairCommit(
-  val expected: ExpectedAcceptanceCriterionRepairState,
-  val mutation: AcceptanceCriterionRepairMutation,
-  val phase: FeatureTaskRuntimePhaseStateRequest,
-  val evidence: AcceptanceCriterionRepairAuditEvidence?,
-  val attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
-  val nextSteps: Map<AcceptanceCriterionRepairStage, String> = emptyMap(),
-  val additionalPhaseId: String? = null,
-  val additionalAttemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
-  val repairChangedPaths: List<String> = emptyList(),
+public data class AcceptanceCriterionRepairCommit(
+  public val expected: ExpectedAcceptanceCriterionRepairState,
+  public val mutation: AcceptanceCriterionRepairMutation,
+  public val phase: FeatureTaskRuntimePhaseStateRequest,
+  public val evidence: AcceptanceCriterionRepairAuditEvidence?,
+  internal val attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
+  internal val nextSteps: Map<AcceptanceCriterionRepairStage, String> = emptyMap(),
+  internal val additionalPhaseId: String? = null,
+  internal val additionalAttemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
+  internal val repairChangedPaths: List<String> = emptyList(),
 )
 
-sealed interface AcceptanceCriterionRepairMutation {
-  data class Discover(
-    val admission: AcceptanceCriterionRepairAdmission,
+public sealed interface AcceptanceCriterionRepairMutation {
+  public data class Discover(
+    public val admission: AcceptanceCriterionRepairAdmission,
   ) : AcceptanceCriterionRepairMutation
 
-  data class ProseAudit(val audit: AcceptanceCriterionProseAudit) : AcceptanceCriterionRepairMutation
+  public data class ProseAudit(val audit: AcceptanceCriterionProseAudit) : AcceptanceCriterionRepairMutation
 
-  data object KeepProgress : AcceptanceCriterionRepairMutation
+  public data object KeepProgress : AcceptanceCriterionRepairMutation
 
-  data class QaReaudit(val criterionRefs: List<String>) : AcceptanceCriterionRepairMutation
+  public data class QaReaudit(val criterionRefs: List<String>) : AcceptanceCriterionRepairMutation
 
-  data class Clarification(val question: String) : AcceptanceCriterionRepairMutation
+  public data class Clarification(val question: String) : AcceptanceCriterionRepairMutation
 
-  data class Reserve(val reservationId: String) : AcceptanceCriterionRepairMutation
+  public data class Reserve(val reservationId: String) : AcceptanceCriterionRepairMutation
 
-  data class RepairCompleted(
+  public data class RepairCompleted(
     val reservationId: String,
     val evidenceRef: String,
     val treeDigest: String,
     val checkpointId: String,
   ) : AcceptanceCriterionRepairMutation
 
-  data class Outcome(val outcome: AcceptanceCriterionRepairOutcome) : AcceptanceCriterionRepairMutation
+  public data class Outcome(val outcome: AcceptanceCriterionRepairOutcome) : AcceptanceCriterionRepairMutation
 
-  data class InteractionTrace(
+  public data class InteractionTrace(
     val settlement: AcceptanceCriterionInteractionTraceSettlement,
   ) : AcceptanceCriterionRepairMutation
 
-  data object PrepareInteractionTrace : AcceptanceCriterionRepairMutation
+  public data object PrepareInteractionTrace : AcceptanceCriterionRepairMutation
 }
 
-enum class AcceptanceCriterionRepairRefusal(val wireValue: String) {
+public enum class AcceptanceCriterionRepairRefusal(public val wireValue: String) {
   OWNER_CHANGED("owner_changed"),
   EXPECTED_STATE_CHANGED("expected_state_changed"),
   IDENTITY_CHANGED("identity_changed"),
@@ -93,13 +93,13 @@ enum class AcceptanceCriterionRepairRefusal(val wireValue: String) {
   SUPERSEDED_VERSION_CHANGED("superseded_version_changed"),
 }
 
-internal fun OwningTransactionResult.Refusal.toRepairRefusal(): AcceptanceCriterionRepairRefusal =
+public fun OwningTransactionResult.Refusal.toRepairRefusal(): AcceptanceCriterionRepairRefusal =
   when (this) {
     OwningTransactionResult.Refusal.ACTIVE_SESSION -> AcceptanceCriterionRepairRefusal.ACTIVE_SESSION
     OwningTransactionResult.Refusal.UNSUPPORTED -> AcceptanceCriterionRepairRefusal.OWNING_SESSION_UNAVAILABLE
   }
 
-sealed interface AcceptanceCriterionRepairVersionPlan {
+internal sealed interface AcceptanceCriterionRepairVersionPlan {
   data object NotSuperseded : AcceptanceCriterionRepairVersionPlan
 
   data class Unrecoverable(val family: String, val version: String) : AcceptanceCriterionRepairVersionPlan
@@ -112,22 +112,26 @@ sealed interface AcceptanceCriterionRepairVersionPlan {
   ) : AcceptanceCriterionRepairVersionPlan
 }
 
-sealed interface AcceptanceCriterionRepairVersionRecoveryResult {
-  data object Unchanged : AcceptanceCriterionRepairVersionRecoveryResult
+public sealed interface AcceptanceCriterionRepairVersionRecoveryResult {
+  public data object Unchanged : AcceptanceCriterionRepairVersionRecoveryResult
 
-  data class Recovered(val families: List<String>) : AcceptanceCriterionRepairVersionRecoveryResult
+  public data class Recovered(
+    val families: List<String>,
+  ) : AcceptanceCriterionRepairVersionRecoveryResult
 
-  data class Refused(val reason: AcceptanceCriterionRepairRefusal) : AcceptanceCriterionRepairVersionRecoveryResult
+  public data class Refused(
+    val reason: AcceptanceCriterionRepairRefusal,
+  ) : AcceptanceCriterionRepairVersionRecoveryResult
 }
 
-sealed interface AcceptanceCriterionRepairHydration {
-  data class Present(val state: AcceptanceCriterionRepairState) : AcceptanceCriterionRepairHydration
+public sealed interface AcceptanceCriterionRepairHydration {
+  public data class Present(val state: AcceptanceCriterionRepairState) : AcceptanceCriterionRepairHydration
 
-  data object FreshDiscoveryRequired : AcceptanceCriterionRepairHydration
+  public data object FreshDiscoveryRequired : AcceptanceCriterionRepairHydration
 
-  data object LegacyAdoptionRequired : AcceptanceCriterionRepairHydration
+  public data object LegacyAdoptionRequired : AcceptanceCriterionRepairHydration
 
-  data object HistoricalAttributionUnavailable : AcceptanceCriterionRepairHydration
+  public data object HistoricalAttributionUnavailable : AcceptanceCriterionRepairHydration
 }
 
 internal data class AcceptanceCriterionRepairInvocation(
@@ -136,7 +140,7 @@ internal data class AcceptanceCriterionRepairInvocation(
   val accounting: AcceptanceCriterionRepairState,
 )
 
-class AcceptanceCriterionRepairRunState internal constructor(
+public class AcceptanceCriterionRepairRunState internal constructor(
   hydration: AcceptanceCriterionRepairHydration,
   internal val binding: AcceptanceCriterionRepairBinding? = null,
 ) {
@@ -165,11 +169,12 @@ class AcceptanceCriterionRepairRunState internal constructor(
   internal val auditsNoChangeClaim: Boolean
     get() = snapshot?.mode == null || snapshot?.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
 
-  fun historicalAttributionUnavailable(): Boolean =
+  internal fun historicalAttributionUnavailable(): Boolean =
     accounting == AcceptanceCriterionRepairHydration.HistoricalAttributionUnavailable ||
       accounting == AcceptanceCriterionRepairHydration.LegacyAdoptionRequired
 
-  fun freshDiscoveryRequired(): Boolean = accounting == AcceptanceCriterionRepairHydration.FreshDiscoveryRequired
+  internal fun freshDiscoveryRequired(): Boolean =
+    accounting == AcceptanceCriterionRepairHydration.FreshDiscoveryRequired
 
   internal fun acknowledgeCommitted(state: AcceptanceCriterionRepairState) {
     accounting = AcceptanceCriterionRepairHydration.Present(state)
@@ -204,7 +209,7 @@ class AcceptanceCriterionRepairRunState internal constructor(
       }.trimEnd()
     }
 
-  val currentCriterionContext: String?
+  internal val currentCriterionContext: String?
     get() {
       val state = snapshot ?: return null
       val current = state.currentCriterionRef
@@ -245,41 +250,43 @@ class AcceptanceCriterionRepairRunState internal constructor(
     }
 }
 
-sealed interface AcceptanceCriterionRepairStatusRead {
-  data class Current(val state: AcceptanceCriterionRepairState) : AcceptanceCriterionRepairStatusRead
+public sealed interface AcceptanceCriterionRepairStatusRead {
+  public data class Current(val state: AcceptanceCriterionRepairState) : AcceptanceCriterionRepairStatusRead
 
   /** Unversioned state from before the serial repair contract; status shows it, resume refuses it. */
-  data object PreContract : AcceptanceCriterionRepairStatusRead
+  public data object PreContract : AcceptanceCriterionRepairStatusRead
 
-  data class SupersededVersion(val version: String) : AcceptanceCriterionRepairStatusRead
+  public data class SupersededVersion(val version: String) : AcceptanceCriterionRepairStatusRead
 }
 
-sealed interface AcceptanceCriterionRepairWriteResult {
-  data class Committed(
-    val state: AcceptanceCriterionRepairState,
-    val replayed: Boolean,
-    val interactionTraceSkipped: Boolean = false,
-    val newAnyChangeRechecks: List<String> = emptyList(),
-    val droppedRechecks: List<String> = emptyList(),
+public sealed interface AcceptanceCriterionRepairWriteResult {
+  public data class Committed(
+    public val state: AcceptanceCriterionRepairState,
+    public val replayed: Boolean,
+    internal val interactionTraceSkipped: Boolean = false,
+    internal val newAnyChangeRechecks: List<String> = emptyList(),
+    internal val droppedRechecks: List<String> = emptyList(),
   ) : AcceptanceCriterionRepairWriteResult
 
-  data class CommittedWithProjectionFailure(
-    val state: AcceptanceCriterionRepairState,
+  public data class CommittedWithProjectionFailure(
+    public val state: AcceptanceCriterionRepairState,
   ) : AcceptanceCriterionRepairWriteResult
 
-  data class Refused(val reason: AcceptanceCriterionRepairRefusal) : AcceptanceCriterionRepairWriteResult
+  public data class Refused(val reason: AcceptanceCriterionRepairRefusal) : AcceptanceCriterionRepairWriteResult
 }
 
-data class AcceptanceCriterionRepairAuditEvidence(val payload: FeatureTaskRuntimeWorkflowArtifactMap)
+public data class AcceptanceCriterionRepairAuditEvidence(val payload: FeatureTaskRuntimeWorkflowArtifactMap)
 
-sealed interface AcceptanceCriterionRepairAdoptionResult {
-  data class Adopted(val receipt: FeatureTaskRuntimeWorkflowArtifactMap) : AcceptanceCriterionRepairAdoptionResult
+public sealed interface AcceptanceCriterionRepairAdoptionResult {
+  public data class Adopted(
+    val receipt: FeatureTaskRuntimeWorkflowArtifactMap,
+  ) : AcceptanceCriterionRepairAdoptionResult
 
-  data class Refused(val reason: AcceptanceCriterionRepairRefusal) : AcceptanceCriterionRepairAdoptionResult
+  public data class Refused(val reason: AcceptanceCriterionRepairRefusal) : AcceptanceCriterionRepairAdoptionResult
 }
 
-data class AcceptanceCriterionRepairLegacyProof(
-  val treeDigest: String,
-  val checkpointId: String,
-  val stoppedGeneration: Long = 0,
+public data class AcceptanceCriterionRepairLegacyProof(
+  public val treeDigest: String,
+  public val checkpointId: String,
+  internal val stoppedGeneration: Long = 0,
 )

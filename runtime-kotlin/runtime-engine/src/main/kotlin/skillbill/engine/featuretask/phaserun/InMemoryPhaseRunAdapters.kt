@@ -27,23 +27,23 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import java.nio.file.Path
 
-internal object InMemoryPhaseRunGoal : PhaseRunGoal {
-  override fun saveGoalChildHistoryDraft(draft: GoalChildHistoryDraft): GoalChildHistoryDraftSaveResult =
+public object InMemoryPhaseRunGoal : PhaseRunGoal {
+  public override fun saveGoalChildHistoryDraft(draft: GoalChildHistoryDraft): GoalChildHistoryDraftSaveResult =
     error("In-memory phases cannot persist goal-child history drafts.")
 
-  override fun recordGoalContinuationState(request: GoalContinuationStateRecordRequest): Boolean = false
+  public override fun recordGoalContinuationState(request: GoalContinuationStateRecordRequest): Boolean = false
 
-  override fun reserveGoalReviewPass(workflowId: String): GoalSubtaskReviewPassReservation =
+  public override fun reserveGoalReviewPass(workflowId: String): GoalSubtaskReviewPassReservation =
     GoalSubtaskReviewPassReservation.MissingState
 
-  override fun updateReviewState(
+  public override fun updateReviewState(
     workflowId: String,
     transform: (GoalSubtaskReviewState) -> GoalSubtaskReviewState,
   ): GoalSubtaskReviewState? = null
 
-  override fun completeGoalReviewPass(request: GoalReviewPassCompletionRequest): GoalSubtaskReviewState? = null
+  public override fun completeGoalReviewPass(request: GoalReviewPassCompletionRequest): GoalSubtaskReviewState? = null
 
-  override fun buildGoalReviewInput(
+  public override fun buildGoalReviewInput(
     workflowId: String,
     gitOperations: WorkflowGitOperations,
     repoRoot: Path,
@@ -51,14 +51,14 @@ internal object InMemoryPhaseRunGoal : PhaseRunGoal {
     ownedPathspec: List<String>,
   ): GoalSubtaskReviewInputPreparation = GoalSubtaskReviewInputPreparation.MissingState
 
-  override fun reviewState(workflowId: String): GoalSubtaskReviewState? = null
+  public override fun reviewState(workflowId: String): GoalSubtaskReviewState? = null
 
-  override fun lastGoalReviewResult(workflowId: String): String? = null
+  public override fun lastGoalReviewResult(workflowId: String): String? = null
 
-  override fun appendRemediationRollbackDegradationEvidence(
+  public override fun appendRemediationRollbackDegradationEvidence(
     workflowId: String,
     signal: RemediationDegradationSignal,
-  ) = Unit
+  ): Unit = Unit
 }
 
 internal object InMemoryPhaseRunSettlements : PhaseRunSettlements {

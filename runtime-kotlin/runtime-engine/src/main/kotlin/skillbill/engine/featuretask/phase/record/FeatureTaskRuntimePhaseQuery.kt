@@ -16,17 +16,17 @@ import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
-class FeatureTaskRuntimePhaseQuery
+public class FeatureTaskRuntimePhaseQuery
   @Inject
   constructor(
     private val database: DatabaseSessionFactory,
   ) {
-    fun existingWorkflowMode(workflowId: String): FeatureTaskWorkflowMode? =
+    internal fun existingWorkflowMode(workflowId: String): FeatureTaskWorkflowMode? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.readFeatureTaskWorkflowHeader(workflowId)?.mode
       }
 
-    fun currentStepId(workflowId: String): String? =
+    public fun currentStepId(workflowId: String): String? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.readFeatureTaskWorkflowHeader(workflowId)?.currentStepId
       }
@@ -37,12 +37,12 @@ class FeatureTaskRuntimePhaseQuery
           ?.takeIf { it.workflowStatus.workflowStatus() in WorkflowStatus.terminalStatuses }
       }
 
-    fun workerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
+    public fun workerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
       }
 
-    fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>? =
+    public fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
           workflowId,
@@ -50,7 +50,7 @@ class FeatureTaskRuntimePhaseQuery
         )?.phaseRecords()
       }
 
-    fun loadPhaseResultArtifacts(workflowId: String): DurableWorkflowArtifacts? =
+    internal fun loadPhaseResultArtifacts(workflowId: String): DurableWorkflowArtifacts? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
           workflowId,
@@ -63,7 +63,7 @@ class FeatureTaskRuntimePhaseQuery
         )
       }
 
-    fun visitPhaseLedger(
+    internal fun visitPhaseLedger(
       workflowId: String,
       consume: (FeatureTaskRuntimePhaseLedgerEntry) -> Unit,
     ): Boolean =
@@ -82,7 +82,7 @@ class FeatureTaskRuntimePhaseQuery
         true
       }
 
-    fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry>? =
+    public fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry>? =
       database.read { unitOfWork ->
         val record =
           unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)

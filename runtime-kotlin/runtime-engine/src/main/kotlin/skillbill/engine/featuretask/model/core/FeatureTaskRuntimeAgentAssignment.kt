@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.model.core
 
-data class FeatureTaskRuntimeAgentAssignment(
-  val perPhaseAgentIds: Map<String, String> = emptyMap(),
-  val override: String? = null,
+public data class FeatureTaskRuntimeAgentAssignment(
+  public val perPhaseAgentIds: Map<String, String> = emptyMap(),
+  public val override: String? = null,
 ) {
   init {
     perPhaseAgentIds.forEach { (phaseId, agentId) ->
@@ -21,12 +21,12 @@ data class FeatureTaskRuntimeAgentAssignment(
   }
 }
 
-data class FeatureTaskRuntimeResolvedPhaseAgent(
-  val phaseId: String,
-  val invokedAgentId: String,
-  val configuredAgentOverrideId: String?,
+public data class FeatureTaskRuntimeResolvedPhaseAgent(
+  public val phaseId: String,
+  public val invokedAgentId: String,
+  public val configuredAgentOverrideId: String?,
 ) {
-  val resolvedAgentId: String = configuredAgentOverrideId ?: invokedAgentId
+  public val resolvedAgentId: String = configuredAgentOverrideId ?: invokedAgentId
 
   init {
     require(phaseId.isNotBlank()) { "FeatureTaskRuntimeResolvedPhaseAgent.phaseId must be non-blank." }

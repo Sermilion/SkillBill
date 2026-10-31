@@ -58,7 +58,7 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as RepairKeys
 
 @Inject
-class AcceptanceCriterionRepairLegacyAdoption(
+public class AcceptanceCriterionRepairLegacyAdoption(
   private val codec: FeatureTaskRuntimeExecutionPlanCodec,
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val phaseOutputs: FeatureTaskRuntimePhaseOutputMigration,

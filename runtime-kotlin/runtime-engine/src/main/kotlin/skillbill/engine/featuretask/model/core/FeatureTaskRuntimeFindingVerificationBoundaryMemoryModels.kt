@@ -2,12 +2,12 @@ package skillbill.engine.featuretask.model.core
 
 import skillbill.ports.goalrunner.verification.model.GoalVerificationBoundaryDiscovery
 
-data class FeatureTaskRuntimeFindingBoundaryMemoryRequest(
-  val findingId: String,
-  val findingPaths: List<String>,
+public data class FeatureTaskRuntimeFindingBoundaryMemoryRequest(
+  public val findingId: String,
+  public val findingPaths: List<String>,
 )
 
-data class FeatureTaskRuntimeFindingBoundaryMemorySection(
-  val findingId: String,
-  val discovery: GoalVerificationBoundaryDiscovery,
+public data class FeatureTaskRuntimeFindingBoundaryMemorySection(
+  public val findingId: String,
+  public val discovery: GoalVerificationBoundaryDiscovery,
 )

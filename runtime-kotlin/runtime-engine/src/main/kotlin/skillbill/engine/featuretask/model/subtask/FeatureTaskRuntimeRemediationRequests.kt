@@ -7,55 +7,55 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckp
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Path
 
-data class RemediationReconciliationApplyRequest(
-  val reconciliation: RemediationReconciliationDecision,
-  val snapshot: RemediationReconcileSnapshot,
-  val workflowId: String,
-  val gitOperations: WorkflowGitOperations,
-  val repoRoot: Path,
-  val latestRemediationResolved: ResolvedReviewFixCheckpoint?,
-  val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+internal data class RemediationReconciliationApplyRequest(
+  public val reconciliation: RemediationReconciliationDecision,
+  public val snapshot: RemediationReconcileSnapshot,
+  public val workflowId: String,
+  public val gitOperations: WorkflowGitOperations,
+  public val repoRoot: Path,
+  internal val latestRemediationResolved: ResolvedReviewFixCheckpoint?,
+  public val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 )
 
-data class RemediationBaseHealRequest(
-  val target: String,
-  val stored: String?,
-  val storedResolves: Boolean,
-  val state: GoalSubtaskReviewState,
-  val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
-  val workflowId: String,
-  val gitOperations: WorkflowGitOperations,
-  val repoRoot: Path,
-  val latestRemediationResolved: ResolvedReviewFixCheckpoint?,
-  val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+internal data class RemediationBaseHealRequest(
+  public val target: String,
+  public val stored: String?,
+  internal val storedResolves: Boolean,
+  public val state: GoalSubtaskReviewState,
+  public val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
+  public val workflowId: String,
+  public val gitOperations: WorkflowGitOperations,
+  public val repoRoot: Path,
+  internal val latestRemediationResolved: ResolvedReviewFixCheckpoint?,
+  public val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 )
 
-data class PersistHealedRemediationBaseRequest(
-  val workflowId: String,
-  val target: String,
-  val stored: String?,
-  val reason: String,
-  val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
-  val gitOperations: WorkflowGitOperations,
-  val repoRoot: Path,
-  val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+internal data class PersistHealedRemediationBaseRequest(
+  public val workflowId: String,
+  public val target: String,
+  public val stored: String?,
+  public val reason: String,
+  public val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
+  public val gitOperations: WorkflowGitOperations,
+  public val repoRoot: Path,
+  public val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 )
 
-data class RemediationReconcileSnapshot(
-  val state: GoalSubtaskReviewState,
-  val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
-  val checkpoints: List<FeatureTaskRuntimeCheckpointIdentity>,
+internal data class RemediationReconcileSnapshot(
+  public val state: GoalSubtaskReviewState,
+  public val continuation: FeatureTaskRuntimeGoalContinuationArtifact,
+  public val checkpoints: List<FeatureTaskRuntimeCheckpointIdentity>,
 )
 
-sealed interface RemediationReconciliationDecision
+internal sealed interface RemediationReconciliationDecision
 
-data object RemediationReconciliationCoherent : RemediationReconciliationDecision
+internal data object RemediationReconciliationCoherent : RemediationReconciliationDecision
 
-data object RemediationReconciliationBlocked : RemediationReconciliationDecision
+internal data object RemediationReconciliationBlocked : RemediationReconciliationDecision
 
-data class RemediationReconciliationHeal(val sha: String) : RemediationReconciliationDecision
+internal data class RemediationReconciliationHeal(val sha: String) : RemediationReconciliationDecision
 
-data class ResolvedReviewFixCheckpoint(
-  val identity: FeatureTaskRuntimeCheckpointIdentity,
-  val sha: String,
+internal data class ResolvedReviewFixCheckpoint(
+  public val identity: FeatureTaskRuntimeCheckpointIdentity,
+  public val sha: String,
 )

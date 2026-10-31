@@ -6,10 +6,10 @@ import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.workflow.gitops.ProtectedBranches
 import java.nio.file.Path
 
-object FeatureTaskRuntimeBranchSetup {
+public object FeatureTaskRuntimeBranchSetup {
   private const val DEFAULT_BASE_BRANCH: String = "main"
 
-  internal fun targetBranch(
+  public fun targetBranch(
     issueKey: String,
     specReference: String,
   ): FeatureTaskRuntimeTargetBranch {
@@ -32,7 +32,7 @@ object FeatureTaskRuntimeBranchSetup {
     }
   }
 
-  internal fun decide(
+  public fun decide(
     issueKey: String,
     specReference: String,
     currentBranch: String,
@@ -76,56 +76,57 @@ object FeatureTaskRuntimeBranchSetup {
   }
 }
 
-internal sealed interface FeatureTaskRuntimeTargetBranch {
-  val resolvedBranch: String?
-  val invalidReason: String?
+public sealed interface FeatureTaskRuntimeTargetBranch {
+  public val resolvedBranch: String?
+  public val invalidReason: String?
 
-  companion object {
-    fun resolved(branch: String): FeatureTaskRuntimeTargetBranch = FeatureTaskRuntimeTargetBranchResolved(branch)
+  public companion object {
+    public fun resolved(branch: String): FeatureTaskRuntimeTargetBranch = FeatureTaskRuntimeTargetBranchResolved(branch)
 
-    fun invalid(reason: String): FeatureTaskRuntimeTargetBranch = FeatureTaskRuntimeTargetBranchInvalid(reason)
+    public fun invalid(reason: String): FeatureTaskRuntimeTargetBranch = FeatureTaskRuntimeTargetBranchInvalid(reason)
   }
 }
 
-internal data class FeatureTaskRuntimeTargetBranchResolved(val branch: String) : FeatureTaskRuntimeTargetBranch {
-  override val resolvedBranch: String get() = branch
-  override val invalidReason: String? get() = null
+public data class FeatureTaskRuntimeTargetBranchResolved(val branch: String) : FeatureTaskRuntimeTargetBranch {
+  public override val resolvedBranch: String get() = branch
+  public override val invalidReason: String? get() = null
 }
 
-internal data class FeatureTaskRuntimeTargetBranchInvalid(val reason: String) : FeatureTaskRuntimeTargetBranch {
-  override val resolvedBranch: String? get() = null
-  override val invalidReason: String get() = reason
+public data class FeatureTaskRuntimeTargetBranchInvalid(val reason: String) : FeatureTaskRuntimeTargetBranch {
+  public override val resolvedBranch: String? get() = null
+  public override val invalidReason: String get() = reason
 }
 
-internal sealed interface FeatureTaskRuntimeBranchDecision {
-  val invalidReason: String?
+public sealed interface FeatureTaskRuntimeBranchDecision {
+  public val invalidReason: String?
 
-  companion object {
-    fun resolved(
+  public companion object {
+    public fun resolved(
       branch: String,
       baseBranch: String?,
       create: Boolean,
     ): FeatureTaskRuntimeBranchDecision = FeatureTaskRuntimeBranchDecisionResolved(branch, baseBranch, create)
 
-    fun invalid(reason: String): FeatureTaskRuntimeBranchDecision = FeatureTaskRuntimeBranchDecisionInvalid(reason)
+    public fun invalid(reason: String): FeatureTaskRuntimeBranchDecision =
+      FeatureTaskRuntimeBranchDecisionInvalid(reason)
   }
 }
 
-internal data class FeatureTaskRuntimeBranchDecisionResolved(
-  val branch: String,
-  val baseBranch: String?,
-  val create: Boolean,
+public data class FeatureTaskRuntimeBranchDecisionResolved(
+  public val branch: String,
+  public val baseBranch: String?,
+  public val create: Boolean,
 ) : FeatureTaskRuntimeBranchDecision {
   override val invalidReason: String? get() = null
 }
 
-internal data class FeatureTaskRuntimeBranchDecisionInvalid(val reason: String) : FeatureTaskRuntimeBranchDecision {
-  override val invalidReason: String get() = reason
+public data class FeatureTaskRuntimeBranchDecisionInvalid(val reason: String) : FeatureTaskRuntimeBranchDecision {
+  public override val invalidReason: String get() = reason
 }
 
 private val PROTECTED_GOAL_BRANCHES: Set<String> = ProtectedBranches.names
 
-fun protectedBranchName(branch: String?): String? =
+public fun protectedBranchName(branch: String?): String? =
   branch
     ?.trim()
     ?.takeIf(String::isNotBlank)

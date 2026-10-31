@@ -18,10 +18,10 @@ import java.security.MessageDigest
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 @Inject
-class FeatureTaskRuntimeExecutionPlanCodec(
+public class FeatureTaskRuntimeExecutionPlanCodec(
   private val validator: FeatureTaskRuntimeExecutionPlanValidator,
 ) {
-  fun encodeExecution(
+  public fun encodeExecution(
     plan: ResolvedPhaseExecutionPlan,
     effectiveInputs: EffectiveGatePolicyInputs,
   ): ByteArray {
@@ -38,9 +38,9 @@ class FeatureTaskRuntimeExecutionPlanCodec(
     )
   }
 
-  fun encode(plan: ResolvedPhaseExecutionPlan): ByteArray = encode(plan, null)
+  internal fun encode(plan: ResolvedPhaseExecutionPlan): ByteArray = encode(plan, null)
 
-  private fun encode(
+  internal fun encode(
     plan: ResolvedPhaseExecutionPlan,
     effectiveInputs: EffectiveGatePolicyInputs?,
   ): ByteArray =
@@ -114,7 +114,7 @@ class FeatureTaskRuntimeExecutionPlanCodec(
       SOURCE,
     )
 
-  fun decode(encoded: ByteArray): ResolvedPhaseExecutionPlan {
+  internal fun decode(encoded: ByteArray): ResolvedPhaseExecutionPlan {
     val payload =
       requireNotNull(
         JsonCodec.anyToStringAnyMap(
@@ -155,7 +155,7 @@ class FeatureTaskRuntimeExecutionPlanCodec(
   }
 }
 
-internal fun executionPolicyDigest(identity: String): String =
+public fun executionPolicyDigest(identity: String): String =
   MessageDigest.getInstance("SHA-256")
     .digest(JsonCodec.valueToJsonString(identity).toByteArray(Charsets.UTF_8))
     .joinToString("") { "%02x".format(it) }

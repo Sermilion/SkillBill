@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHa
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoffResult
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoffValid
 
-object FeatureTaskRuntimeSubtaskFinalisationHandoff {
+internal object FeatureTaskRuntimeSubtaskFinalisationHandoff {
   internal fun readHandoff(envelope: Map<String, Any?>): FeatureTaskRuntimeCommitPushHandoffResult {
     val result =
       commitPushResult(envelope)

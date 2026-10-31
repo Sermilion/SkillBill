@@ -28,7 +28,7 @@ import java.nio.file.Path
 import java.time.Clock
 
 @Inject
-class FeatureTaskRuntimeGoalContinuationRecorder(
+public class FeatureTaskRuntimeGoalContinuationRecorder(
   private val database: DatabaseSessionFactory,
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
@@ -36,8 +36,9 @@ class FeatureTaskRuntimeGoalContinuationRecorder(
   private val engine: WorkflowEngine = WorkflowEngine()
   private val patcher = FeatureTaskRuntimeGoalContinuationArtifactPatcher(engine)
   private val runtimeOwnedPersistence = RuntimeOwnedPersistenceBoundary(database, diagnostics)
-  val reviewStateRecorder = FeatureTaskRuntimeGoalContinuationStateRecorder(database, engine, clock)
-  val reviewPassRecorder =
+  internal val reviewStateRecorder: FeatureTaskRuntimeGoalContinuationStateRecorder =
+    FeatureTaskRuntimeGoalContinuationStateRecorder(database, engine, clock)
+  internal val reviewPassRecorder: FeatureTaskRuntimeGoalReviewPassRecorder =
     FeatureTaskRuntimeGoalReviewPassRecorder(database, patcher, runtimeOwnedPersistence)
   private val inputBuilder =
     FeatureTaskRuntimeGoalReviewInputBuilder(
@@ -45,25 +46,26 @@ class FeatureTaskRuntimeGoalContinuationRecorder(
       patcher,
       reviewPassRecorder::persistGoalReviewInput,
     )
-  val remediationReconciler = FeatureTaskRuntimeRemediationBaseReconciler(database, patcher, clock)
+  internal val remediationReconciler: FeatureTaskRuntimeRemediationBaseReconciler =
+    FeatureTaskRuntimeRemediationBaseReconciler(database, patcher, clock)
 
   internal fun recordGoalContinuationState(
     request: GoalContinuationStateRecordRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): Boolean = reviewStateRecorder.recordGoalContinuationState(request, admitted)
 
-  fun reserveGoalReviewPass(
+  public fun reserveGoalReviewPass(
     workflowId: String,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): GoalSubtaskReviewPassReservation = reviewPassRecorder.reserveGoalReviewPass(workflowId, admitted)
 
-  fun persistGoalReviewInput(
+  public fun persistGoalReviewInput(
     workflowId: String,
     input: GoalSubtaskReviewInput,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): GoalSubtaskReviewState? = reviewPassRecorder.persistGoalReviewInput(workflowId, input, admitted)
 
-  fun updateReviewState(
+  public fun updateReviewState(
     workflowId: String,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
     transform: (GoalSubtaskReviewState) -> GoalSubtaskReviewState,
@@ -74,12 +76,12 @@ class FeatureTaskRuntimeGoalContinuationRecorder(
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): GoalSubtaskReviewState? = reviewPassRecorder.completeGoalReviewPass(request, admitted)
 
-  class GoalReviewInputScope(
-    val scopedUntrackedExclusions: List<String>? = null,
-    val ownedPathspec: List<String> = emptyList(),
+  public class GoalReviewInputScope(
+    public val scopedUntrackedExclusions: List<String>? = null,
+    public val ownedPathspec: List<String> = emptyList(),
   )
 
-  fun buildGoalReviewInput(
+  public fun buildGoalReviewInput(
     workflowId: String,
     gitOperations: WorkflowGitOperations,
     repoRoot: Path,
@@ -90,42 +92,42 @@ class FeatureTaskRuntimeGoalContinuationRecorder(
 }
 
 public data class GoalContinuationStateRecordRequest(
-  val workflowId: String,
-  val continuation: FeatureTaskRuntimeGoalContinuationArtifact? = null,
-  val reviewBaseline: GoalSubtaskReviewBaseline? = null,
-  val outcome: FeatureTaskRuntimeGoalContinuationOutcome? = null,
-  val fieldAdoption: FeatureTaskRuntimeGoalContinuationFieldAdoption? = null,
-  val workflowStatus: String? = null,
+  public val workflowId: String,
+  public val continuation: FeatureTaskRuntimeGoalContinuationArtifact? = null,
+  public val reviewBaseline: GoalSubtaskReviewBaseline? = null,
+  public val outcome: FeatureTaskRuntimeGoalContinuationOutcome? = null,
+  internal val fieldAdoption: FeatureTaskRuntimeGoalContinuationFieldAdoption? = null,
+  public val workflowStatus: String? = null,
 )
 
 public data class GoalReviewPassCompletionRequest(
-  val workflowId: String,
-  val verdict: FeatureTaskRuntimeVerdict,
-  val unresolvedFindingCount: Int,
-  val findings: List<GoalSubtaskReviewCompactFinding>,
-  val rawReviewResult: String,
-  val normalizedOutput: Map<String, Any?>,
-  val blockerDispositions: List<GoalSubtaskBlockerDisposition> = emptyList(),
-  val commitFocusedAccounting: GoalSubtaskCommitFocusedAccounting? = null,
+  public val workflowId: String,
+  public val verdict: FeatureTaskRuntimeVerdict,
+  public val unresolvedFindingCount: Int,
+  public val findings: List<GoalSubtaskReviewCompactFinding>,
+  public val rawReviewResult: String,
+  public val normalizedOutput: Map<String, Any?>,
+  public val blockerDispositions: List<GoalSubtaskBlockerDisposition> = emptyList(),
+  public val commitFocusedAccounting: GoalSubtaskCommitFocusedAccounting? = null,
 )
 
-fun FeatureTaskRuntimeGoalContinuationRecorder.reviewState(workflowId: String): GoalSubtaskReviewState? =
+public fun FeatureTaskRuntimeGoalContinuationRecorder.reviewState(workflowId: String): GoalSubtaskReviewState? =
   reviewStateRecorder.reviewState(workflowId)
 
-fun FeatureTaskRuntimeGoalContinuationRecorder.continuation(
+public fun FeatureTaskRuntimeGoalContinuationRecorder.continuation(
   workflowId: String,
 ): FeatureTaskRuntimeGoalContinuationArtifact? = reviewStateRecorder.continuation(workflowId)
 
-fun FeatureTaskRuntimeGoalContinuationRecorder.lastGoalReviewResult(workflowId: String): String? =
+public fun FeatureTaskRuntimeGoalContinuationRecorder.lastGoalReviewResult(workflowId: String): String? =
   reviewPassRecorder.lastGoalReviewResult(workflowId)
 
-internal fun FeatureTaskRuntimeGoalContinuationRecorder.appendRemediationRollbackDegradationEvidence(
+public fun FeatureTaskRuntimeGoalContinuationRecorder.appendRemediationRollbackDegradationEvidence(
   workflowId: String,
   signal: RemediationDegradationSignal,
   admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-) = remediationReconciler.appendRemediationRollbackDegradationEvidence(workflowId, signal, admitted)
+): Unit = remediationReconciler.appendRemediationRollbackDegradationEvidence(workflowId, signal, admitted)
 
-fun FeatureTaskRuntimeGoalContinuationRecorder.reconcileRemediationBaseCoherence(
+public fun FeatureTaskRuntimeGoalContinuationRecorder.reconcileRemediationBaseCoherence(
   workflowId: String,
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,

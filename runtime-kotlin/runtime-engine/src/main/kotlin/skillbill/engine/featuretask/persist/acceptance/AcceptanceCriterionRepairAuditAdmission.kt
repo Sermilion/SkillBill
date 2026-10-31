@@ -16,8 +16,8 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 @Inject
-class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTaskRuntimeWireArtifactValidator) {
-  internal fun matches(
+public class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTaskRuntimeWireArtifactValidator) {
+  public fun matches(
     next: AcceptanceCriterionRepairState,
     mutation: AcceptanceCriterionRepairMutation,
     evidence: AcceptanceCriterionRepairAuditEvidence?,
@@ -175,6 +175,6 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
       fact[Keys.VALIDATION_OBLIGATION] == criterion.validationObligation.wireValue &&
       fact[Keys.VALIDATION_OWNER_AVAILABLE] == criterion.validationOwnerAvailable
 
-  private fun facts(wire: FeatureTaskRuntimeWorkflowArtifactMap): List<FeatureTaskRuntimeWorkflowArtifactMap> =
+  public fun facts(wire: FeatureTaskRuntimeWorkflowArtifactMap): List<FeatureTaskRuntimeWorkflowArtifactMap> =
     (wire[Keys.CRITERIA] as List<*>).map { FeatureTaskRuntimeWorkflowArtifactMap.from(it) }
 }

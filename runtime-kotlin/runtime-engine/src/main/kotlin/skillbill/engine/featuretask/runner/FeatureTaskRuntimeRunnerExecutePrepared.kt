@@ -31,7 +31,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 @Inject
-class FeatureTaskRuntimeRunnerExecutePrepared(
+public class FeatureTaskRuntimeRunnerExecutePrepared(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val strategies: PhaseStrategyLookup,

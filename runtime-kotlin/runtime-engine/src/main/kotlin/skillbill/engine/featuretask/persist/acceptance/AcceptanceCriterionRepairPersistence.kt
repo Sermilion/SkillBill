@@ -56,7 +56,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 @Inject
-class AcceptanceCriterionRepairPersistence(
+public class AcceptanceCriterionRepairPersistence(
   private val boundary: RuntimeOwnedPersistenceBoundary,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val phases: FeatureTaskRuntimePhaseStateRecorder,
@@ -67,7 +67,7 @@ class AcceptanceCriterionRepairPersistence(
   private val adoption: AcceptanceCriterionRepairLegacyAdoption,
   private val admission: AcceptanceCriterionRepairAuditAdmission,
 ) {
-  fun inspectExisting(
+  internal fun inspectExisting(
     worker: AcquiredFeatureTaskRuntimeWorker,
     authoredCriteria: List<String>,
     specDigest: String?,
@@ -105,7 +105,7 @@ class AcceptanceCriterionRepairPersistence(
       }
     }
 
-  fun adoptLegacy(
+  internal fun adoptLegacy(
     worker: AcquiredFeatureTaskRuntimeWorker,
     binding: AcceptanceCriterionRepairBinding,
     treeDigest: String,
@@ -240,7 +240,7 @@ class AcceptanceCriterionRepairPersistence(
     return AcceptanceCriterionRepairAdoptionResult.Refused(reason)
   }
 
-  fun hydrate(
+  internal fun hydrate(
     workflowId: String,
     binding: AcceptanceCriterionRepairBinding,
   ): AcceptanceCriterionRepairHydration =
@@ -260,7 +260,7 @@ class AcceptanceCriterionRepairPersistence(
       }
     }
 
-  fun write(
+  internal fun write(
     worker: AcquiredFeatureTaskRuntimeWorker,
     binding: AcceptanceCriterionRepairBinding,
     request: AcceptanceCriterionRepairCommit,
@@ -306,7 +306,7 @@ class AcceptanceCriterionRepairPersistence(
     return project(repositoryRoot, worker.workflowId, committed)
   }
 
-  fun prepareBoundInteractionTrace(
+  internal fun prepareBoundInteractionTrace(
     worker: AcquiredFeatureTaskRuntimeWorker,
     binding: AcceptanceCriterionRepairBinding,
     repositoryRoot: Path,
@@ -615,7 +615,7 @@ class AcceptanceCriterionRepairPersistence(
     )
   }
 
-  fun recoverProjection(
+  internal fun recoverProjection(
     repositoryRoot: Path,
     workflowId: String,
     binding: AcceptanceCriterionRepairBinding,

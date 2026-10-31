@@ -20,7 +20,7 @@ import java.time.Duration
 import java.util.UUID
 
 @Inject
-class StandalonePhaseRegistrationFactory(
+public class StandalonePhaseRegistrationFactory(
   private val repositories: RepositoryEnclosingRootPort,
   private val branchSource: CheckedOutBranchSource,
   private val clock: Clock,
@@ -28,7 +28,7 @@ class StandalonePhaseRegistrationFactory(
   private val diagnostics: RuntimeDiagnostics,
   private val environment: EnvironmentContext,
 ) {
-  fun workflowRegistration(
+  internal fun workflowRegistration(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,
@@ -48,7 +48,7 @@ class StandalonePhaseRegistrationFactory(
     )
   }
 
-  fun phaseRegistration(
+  internal fun phaseRegistration(
     repoRoot: Path,
     phaseId: String,
     invocationId: String,

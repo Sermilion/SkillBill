@@ -43,7 +43,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.util.concurrent.CancellationException
 
 @Inject
-class FeatureTaskRuntimeRunnerExecute(
+public class FeatureTaskRuntimeRunnerExecute(
   private val specSourceResolver: SpecSourceResolver,
   private val diagnostics: RuntimeDiagnostics,
   private val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
@@ -54,12 +54,12 @@ class FeatureTaskRuntimeRunnerExecute(
   private val agentContextTelemetry: FeatureTaskRuntimeAgentContextTelemetry,
   private val acceptanceRecorder: AcceptanceCriterionRepairPhaseRecorder,
 ) {
-  fun intakeCompleted(workflowId: String): Boolean {
+  internal fun intakeCompleted(workflowId: String): Boolean {
     val records = recorder.loadPhaseRecords(workflowId).orEmpty()
     return PhaseSlot.INTAKE.steps.all { stepId -> records[stepId]?.status == WorkflowStepStatus.COMPLETED }
   }
 
-  fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
+  internal fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
     val existingMode = recorder.phaseQuery.existingWorkflowMode(request.workflowId)
     if (existingMode == null || existingMode == FeatureTaskWorkflowMode.RUNTIME) {
       return null
@@ -79,7 +79,7 @@ class FeatureTaskRuntimeRunnerExecute(
     )
   }
 
-  fun terminalWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
+  internal fun terminalWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
     val terminal = recorder.phaseQuery.terminalWorkflow(request.workflowId) ?: return null
     return FeatureTaskRuntimeRunReport.Blocked(
       issueKey = request.issueKey,
@@ -92,7 +92,7 @@ class FeatureTaskRuntimeRunnerExecute(
     )
   }
 
-  fun executePreparedRun(
+  public fun executePreparedRun(
     runRequest: FeatureTaskRuntimeRunRequest,
     reconciliation: FeatureTaskRuntimeCrashReconciliationResult,
     repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,

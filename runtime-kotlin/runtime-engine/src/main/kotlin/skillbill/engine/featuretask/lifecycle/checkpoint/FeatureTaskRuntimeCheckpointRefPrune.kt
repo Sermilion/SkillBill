@@ -8,7 +8,7 @@ import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_CHE
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID
 import java.nio.file.Path
 
-fun subtaskCommitReachableOnRemote(
+internal fun subtaskCommitReachableOnRemote(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   featureBranch: String,
@@ -27,7 +27,7 @@ fun subtaskCommitReachableOnRemote(
     reachable.value.orEmpty().trim().equals("true", ignoreCase = true)
 }
 
-fun subtaskCommitSupersededOnPublishedBranch(
+internal fun subtaskCommitSupersededOnPublishedBranch(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   featureBranch: String,
@@ -43,18 +43,18 @@ fun subtaskCommitSupersededOnPublishedBranch(
   return recordedCommit is WorkflowGitOperationResult.Ok && recordedCommit.value.orEmpty().trim().isNotBlank()
 }
 
-internal data class FeatureTaskRuntimeCheckpointRefPruneResult(
+public data class FeatureTaskRuntimeCheckpointRefPruneResult(
   val attempted: Boolean,
   val deletedRefCount: Int,
   val skippedReason: String? = null,
 )
 
-fun featureTaskRuntimeSubtaskCheckpointRefPrefix(
+public fun featureTaskRuntimeSubtaskCheckpointRefPrefix(
   issueKey: String,
   subtaskId: String,
 ): String = "${FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE}/${issueKey.trim()}/$subtaskId/"
 
-internal fun WorkflowGitOperations.pruneSubtaskCheckpointRefs(
+public fun WorkflowGitOperations.pruneSubtaskCheckpointRefs(
   repoRoot: Path,
   request: FeatureTaskRuntimeCheckpointRefPruneRequest,
   record: (String) -> Unit,
@@ -79,7 +79,7 @@ internal fun WorkflowGitOperations.pruneSubtaskCheckpointRefs(
   )
 }
 
-private fun WorkflowGitOperations.pruneEligibilityResult(
+public fun WorkflowGitOperations.pruneEligibilityResult(
   repoRoot: Path,
   request: FeatureTaskRuntimeCheckpointRefPruneRequest,
   record: (String) -> Unit,
@@ -119,7 +119,7 @@ private fun WorkflowGitOperations.pruneEligibilityResult(
   return null
 }
 
-private fun WorkflowGitOperations.pruneListedCheckpointRefs(
+public fun WorkflowGitOperations.pruneListedCheckpointRefs(
   repoRoot: Path,
   issueKey: String,
   subtaskId: String,
@@ -150,7 +150,7 @@ private fun WorkflowGitOperations.pruneListedCheckpointRefs(
   return deleteListedCheckpointRefs(repoRoot, prefix, refs, record)
 }
 
-private fun WorkflowGitOperations.deleteListedCheckpointRefs(
+public fun WorkflowGitOperations.deleteListedCheckpointRefs(
   repoRoot: Path,
   prefix: String,
   refs: List<String>,
@@ -185,7 +185,7 @@ internal fun pruneCompletedSubtaskCheckpointRefs(
   record: (String) -> Unit,
 ): FeatureTaskRuntimeCheckpointRefPruneResult = gitOperations.pruneSubtaskCheckpointRefs(repoRoot, request, record)
 
-fun pruneGoalPurgeCheckpointRefs(
+internal fun pruneGoalPurgeCheckpointRefs(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   issueKey: String,
@@ -217,7 +217,7 @@ fun pruneGoalPurgeCheckpointRefs(
   return gitOperations.deleteListedCheckpointRefsForPurge(repoRoot, refs, record)
 }
 
-private fun WorkflowGitOperations.deleteListedCheckpointRefsForPurge(
+public fun WorkflowGitOperations.deleteListedCheckpointRefsForPurge(
   repoRoot: Path,
   refs: List<String>,
   record: (String) -> Unit,
@@ -244,7 +244,7 @@ private fun WorkflowGitOperations.deleteListedCheckpointRefsForPurge(
   return deleted
 }
 
-fun pruneResetSubtaskCheckpointRefs(
+public fun pruneResetSubtaskCheckpointRefs(
   gitOperations: WorkflowGitOperations,
   repoRoot: Path,
   issueKey: String,

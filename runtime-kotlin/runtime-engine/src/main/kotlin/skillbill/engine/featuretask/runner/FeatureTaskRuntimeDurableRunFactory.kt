@@ -21,7 +21,7 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.time.Clock
 
 @Inject
-class FeatureTaskRuntimeDurableRunFactory(
+public class FeatureTaskRuntimeDurableRunFactory(
   private val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val strategies: PhaseStrategyLookup,
   private val clock: Clock,

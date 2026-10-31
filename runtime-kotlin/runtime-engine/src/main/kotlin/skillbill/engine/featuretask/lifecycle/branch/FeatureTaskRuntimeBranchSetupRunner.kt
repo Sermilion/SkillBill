@@ -13,7 +13,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 
 @Inject
-class FeatureTaskRuntimeBranchSetupRunner(
+public class FeatureTaskRuntimeBranchSetupRunner(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val gitOperations: WorkflowGitOperations,
 ) {
@@ -246,9 +246,9 @@ public sealed interface FeatureTaskRuntimeBranchSetupOutcome {
   }
 }
 
-private data object Unchanged : FeatureTaskRuntimeBranchSetupOutcome {
-  override val establishedBranch: String? get() = null
-  override val blockedReason: String? get() = null
+public data object Unchanged : FeatureTaskRuntimeBranchSetupOutcome {
+  public override val establishedBranch: String? get() = null
+  public override val blockedReason: String? get() = null
 }
 
 private data class Established(val branch: String) : FeatureTaskRuntimeBranchSetupOutcome {
@@ -256,7 +256,7 @@ private data class Established(val branch: String) : FeatureTaskRuntimeBranchSet
   override val blockedReason: String? get() = null
 }
 
-internal data class Blocked(val reason: String) : FeatureTaskRuntimeBranchSetupOutcome {
-  override val establishedBranch: String? get() = null
-  override val blockedReason: String get() = reason
+public data class Blocked(val reason: String) : FeatureTaskRuntimeBranchSetupOutcome {
+  public override val establishedBranch: String? get() = null
+  public override val blockedReason: String get() = reason
 }

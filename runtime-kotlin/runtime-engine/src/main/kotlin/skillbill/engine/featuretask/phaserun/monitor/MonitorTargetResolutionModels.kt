@@ -4,7 +4,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorPullRequestSummary
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 
-enum class MonitorTargetRefusal {
+public enum class MonitorTargetRefusal {
   MALFORMED_INTAKE,
   AMBIGUOUS_INTAKE,
   NO_CURRENT_BRANCH,
@@ -17,28 +17,28 @@ enum class MonitorTargetRefusal {
   NOT_WRITABLE,
 }
 
-sealed interface MonitorTargetResolution {
-  data class Open(val target: MonitorResolvedTarget) : MonitorTargetResolution
+public sealed interface MonitorTargetResolution {
+  public data class Open(val target: MonitorResolvedTarget) : MonitorTargetResolution
 
-  data class Merged(val pullRequest: MonitorPullRequestIdentity) : MonitorTargetResolution
+  public data class Merged(val pullRequest: MonitorPullRequestIdentity) : MonitorTargetResolution
 
-  data class ClosedUnmerged(val pullRequest: MonitorPullRequestIdentity) : MonitorTargetResolution
+  public data class ClosedUnmerged(val pullRequest: MonitorPullRequestIdentity) : MonitorTargetResolution
 
-  data object NoOpenPullRequest : MonitorTargetResolution
+  public data object NoOpenPullRequest : MonitorTargetResolution
 
-  data class Refused(
-    val reason: MonitorTargetRefusal,
-    val detail: String,
-    val candidateUrls: List<String> = emptyList(),
+  public data class Refused(
+    public val reason: MonitorTargetRefusal,
+    public val detail: String,
+    public val candidateUrls: List<String> = emptyList(),
   ) : MonitorTargetResolution
 
-  data class Failed(val reason: String) : MonitorTargetResolution
+  public data class Failed(val reason: String) : MonitorTargetResolution
 }
 
-internal sealed interface MonitorCandidateSelection {
-  data class Unique(val summary: MonitorPullRequestSummary) : MonitorCandidateSelection
+public sealed interface MonitorCandidateSelection {
+  public data class Unique(val summary: MonitorPullRequestSummary) : MonitorCandidateSelection
 
-  data class Ambiguous(val candidateUrls: List<String>) : MonitorCandidateSelection
+  public data class Ambiguous(val candidateUrls: List<String>) : MonitorCandidateSelection
 
-  data object Absent : MonitorCandidateSelection
+  public data object Absent : MonitorCandidateSelection
 }

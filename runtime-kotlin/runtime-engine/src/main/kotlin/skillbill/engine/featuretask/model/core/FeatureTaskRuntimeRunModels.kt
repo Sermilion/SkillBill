@@ -28,31 +28,31 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
 
-data class FeatureTaskRuntimeRunRequest(
-  override val issueKey: String,
-  override val workflowId: String,
-  val sessionId: String,
-  override val runInvariants: FeatureTaskRuntimeRunInvariants,
-  override val invokedAgentId: String,
-  override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
-  override val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
-  override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT,
-  override val environment: Map<String, String> = emptyMap(),
-  override val repoRoot: Path,
-  override val timeout: Duration? = null,
-  override val requestedCodeReviewMode: CodeReviewExecutionMode? = null,
-  override val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null,
-  val operatorDecision: GoalSubtaskOperatorDecision? = null,
-  override val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
-  override val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
-  override val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null,
-  override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null,
-  override val skeletonDefinition: SkeletonDefinition? = null,
-  override val protectedSpecSha256: String? = null,
-  override val planIntake: String? = null,
-  override val stopAfterIntake: Boolean = false,
-  val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
-  override val activityParentWorkflowId: String? = null,
+public data class FeatureTaskRuntimeRunRequest(
+  public override val issueKey: String,
+  public override val workflowId: String,
+  public val sessionId: String,
+  public override val runInvariants: FeatureTaskRuntimeRunInvariants,
+  public override val invokedAgentId: String,
+  public override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
+  public override val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  public override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT,
+  public override val environment: Map<String, String> = emptyMap(),
+  public override val repoRoot: Path,
+  public override val timeout: Duration? = null,
+  public override val requestedCodeReviewMode: CodeReviewExecutionMode? = null,
+  public override val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null,
+  public val operatorDecision: GoalSubtaskOperatorDecision? = null,
+  public override val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
+  public override val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
+  public override val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null,
+  public override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null,
+  public override val skeletonDefinition: SkeletonDefinition? = null,
+  public override val protectedSpecSha256: String? = null,
+  public override val planIntake: String? = null,
+  public override val stopAfterIntake: Boolean = false,
+  public val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
+  public override val activityParentWorkflowId: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val qaSelection: FeatureTaskRuntimeQaSelection? = null
   override val reviewInvocation: ReviewInvocation? = null
@@ -72,45 +72,46 @@ data class FeatureTaskRuntimeRunRequest(
   }
 }
 
-data class FeatureTaskRuntimeRunInput(
-  val issueKey: String,
-  val specPath: String,
-  val repoRoot: Path,
-  val explicitWorkflowId: String?,
-  val invokedAgentId: String,
-  val agentAssignment: FeatureTaskRuntimeAgentAssignment,
-  val modelAssignment: FeatureTaskRuntimeModelAssignment,
-  val compactionSettings: CompactionSettings,
-  val environment: Map<String, String>,
-  val timeout: Duration?,
-  val requestedCodeReviewMode: CodeReviewExecutionMode?,
-  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
-  val operatorDecision: GoalSubtaskOperatorDecision?,
-  val agentAddonSelection: HydratedAgentAddonSelection,
-  val eventSink: FeatureTaskRuntimeRunEventSink,
-  val definition: SkeletonDefinition? = null,
-  val protectedSpecSha256: String? = null,
-  val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
-  val planIntake: String? = null,
-  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
-  val inheritRecordedPlanningTimeout: Boolean = false,
-  val activityParentWorkflowId: String? = null,
+public data class FeatureTaskRuntimeRunInput(
+  public val issueKey: String,
+  public val specPath: String,
+  public val repoRoot: Path,
+  public val explicitWorkflowId: String?,
+  public val invokedAgentId: String,
+  public val agentAssignment: FeatureTaskRuntimeAgentAssignment,
+  public val modelAssignment: FeatureTaskRuntimeModelAssignment,
+  public val compactionSettings: CompactionSettings,
+  public val environment: Map<String, String>,
+  public val timeout: Duration?,
+  public val requestedCodeReviewMode: CodeReviewExecutionMode?,
+  public val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
+  public val operatorDecision: GoalSubtaskOperatorDecision?,
+  public val agentAddonSelection: HydratedAgentAddonSelection,
+  public val eventSink: FeatureTaskRuntimeRunEventSink,
+  public val definition: SkeletonDefinition? = null,
+  internal val protectedSpecSha256: String? = null,
+  internal val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
+  public val planIntake: String? = null,
+  public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  internal val inheritRecordedPlanningTimeout: Boolean = false,
+  public val activityParentWorkflowId: String? = null,
 )
 
-data class FeatureTaskRuntimeGoalContinuationContext(
-  val parentIssueKey: String,
-  val subtaskId: Int,
-  val goalBranch: String,
-  val suppressPr: Boolean,
-  val parentWorkflowId: String? = null,
-  val lastResumableStep: String? = null,
-  val codeReviewMode: CodeReviewExecutionMode? = null,
-  val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
-  val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
-  val subtaskName: String? = null,
-  val reviewBaseline: GoalSubtaskReviewBaseline? = null,
-  val agentAddonSelection: AgentAddonSelection =
+public data class FeatureTaskRuntimeGoalContinuationContext(
+  public val parentIssueKey: String,
+  public val subtaskId: Int,
+  public val goalBranch: String,
+  public val suppressPr: Boolean,
+  public val parentWorkflowId: String? = null,
+  public val lastResumableStep: String? = null,
+  public val codeReviewMode: CodeReviewExecutionMode? = null,
+  public val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
+  public val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection =
+    FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+  public val qaSelection: FeatureTaskRuntimeQaSelection? = null,
+  public val subtaskName: String? = null,
+  public val reviewBaseline: GoalSubtaskReviewBaseline? = null,
+  public val agentAddonSelection: AgentAddonSelection =
     AgentAddonSelection(),
 ) {
   init {
@@ -126,32 +127,32 @@ data class FeatureTaskRuntimeGoalContinuationContext(
   }
 }
 
-sealed interface FeatureTaskRuntimeRunReport {
-  val issueKey: String
-  val workflowId: String
-  val featureSize: String
+public sealed interface FeatureTaskRuntimeRunReport {
+  public val issueKey: String
+  public val workflowId: String
+  public val featureSize: String
 
   /** The non-default feature branch the run was pinned to, or null when not yet resolved. */
-  val resolvedBranch: String?
+  public val resolvedBranch: String?
 
-  data class Completed(
-    override val issueKey: String,
-    override val workflowId: String,
-    override val featureSize: String,
-    val completedPhaseIds: List<String>,
-    override val resolvedBranch: String?,
-    val subtaskOutcome: FeatureTaskRuntimeSubtaskOutcome? = null,
+  public data class Completed(
+    public override val issueKey: String,
+    public override val workflowId: String,
+    public override val featureSize: String,
+    public val completedPhaseIds: List<String>,
+    public override val resolvedBranch: String?,
+    public val subtaskOutcome: FeatureTaskRuntimeSubtaskOutcome? = null,
   ) : FeatureTaskRuntimeRunReport
 
-  data class Blocked(
-    override val issueKey: String,
-    override val workflowId: String,
-    override val featureSize: String,
-    val lastIncompletePhase: String,
-    val blockedReason: String,
-    val completedPhaseIds: List<String>,
-    override val resolvedBranch: String?,
-    val subtaskOutcome: FeatureTaskRuntimeSubtaskOutcome? = null,
+  public data class Blocked(
+    public override val issueKey: String,
+    public override val workflowId: String,
+    public override val featureSize: String,
+    public val lastIncompletePhase: String,
+    public val blockedReason: String,
+    public val completedPhaseIds: List<String>,
+    public override val resolvedBranch: String?,
+    public val subtaskOutcome: FeatureTaskRuntimeSubtaskOutcome? = null,
   ) : FeatureTaskRuntimeRunReport {
     init {
       require(lastIncompletePhase.isNotBlank()) {
@@ -169,16 +170,16 @@ sealed interface FeatureTaskRuntimeRunReport {
    * review state, `review_base_sha`, baseline untracked inventory, and consumed pass count survive
    * intact, so resume never re-reserves a consumed pass.
    */
-  data class Paused(
-    override val issueKey: String,
-    override val workflowId: String,
-    override val featureSize: String,
-    val pausedPhase: String,
-    val pauseReason: String,
-    val resumableStep: String,
-    val completedPhaseIds: List<String>,
-    override val resolvedBranch: String?,
-    val subtaskOutcome: FeatureTaskRuntimeSubtaskOutcome? = null,
+  public data class Paused(
+    public override val issueKey: String,
+    public override val workflowId: String,
+    public override val featureSize: String,
+    public val pausedPhase: String,
+    public val pauseReason: String,
+    public val resumableStep: String,
+    public val completedPhaseIds: List<String>,
+    public override val resolvedBranch: String?,
+    public val subtaskOutcome: FeatureTaskRuntimeSubtaskOutcome? = null,
   ) : FeatureTaskRuntimeRunReport {
     init {
       require(pausedPhase.isNotBlank()) { "FeatureTaskRuntimeRunReport.Paused.pausedPhase must be non-blank." }
@@ -187,16 +188,16 @@ sealed interface FeatureTaskRuntimeRunReport {
     }
   }
 
-  data class Decomposed(
-    override val issueKey: String,
-    override val workflowId: String,
-    override val featureSize: String,
-    val reason: String,
-    val completedPhaseIds: List<String>,
-    val parentSpecPath: String,
-    val decompositionManifestPath: String,
-    val subtaskSpecPaths: List<String>,
-    override val resolvedBranch: String?,
+  public data class Decomposed(
+    public override val issueKey: String,
+    public override val workflowId: String,
+    public override val featureSize: String,
+    public val reason: String,
+    public val completedPhaseIds: List<String>,
+    public val parentSpecPath: String,
+    public val decompositionManifestPath: String,
+    public val subtaskSpecPaths: List<String>,
+    public override val resolvedBranch: String?,
   ) : FeatureTaskRuntimeRunReport {
     init {
       require(reason.isNotBlank()) { "FeatureTaskRuntimeRunReport.Decomposed.reason must be non-blank." }
@@ -213,16 +214,16 @@ sealed interface FeatureTaskRuntimeRunReport {
   }
 }
 
-data class FeatureTaskRuntimeSubtaskOutcome(
-  val issueKey: String,
-  val subtaskId: Int,
-  val status: GoalRunnerTerminalStatus,
-  val commitSha: String?,
-  val workflowId: String,
-  val blockedReason: String?,
-  val lastResumableStep: String,
-  val finalizingAgentId: String? = null,
-  val participatingAgentIds: List<String> = emptyList(),
+public data class FeatureTaskRuntimeSubtaskOutcome(
+  public val issueKey: String,
+  public val subtaskId: Int,
+  public val status: GoalRunnerTerminalStatus,
+  public val commitSha: String?,
+  public val workflowId: String,
+  public val blockedReason: String?,
+  public val lastResumableStep: String,
+  public val finalizingAgentId: String? = null,
+  public val participatingAgentIds: List<String> = emptyList(),
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
@@ -233,7 +234,7 @@ data class FeatureTaskRuntimeSubtaskOutcome(
   }
 }
 
-sealed interface FeatureTaskRuntimePlanningStopDecision {
+internal sealed interface FeatureTaskRuntimePlanningStopDecision {
   data object Proceed : FeatureTaskRuntimePlanningStopDecision
 
   data class Decomposed(
@@ -243,13 +244,13 @@ sealed interface FeatureTaskRuntimePlanningStopDecision {
   data class Blocked(val reason: String) : FeatureTaskRuntimePlanningStopDecision
 }
 
-sealed interface FeatureTaskRuntimeRunEvent {
-  val workflowId: String
-  val phaseId: String
+public sealed interface FeatureTaskRuntimeRunEvent {
+  public val workflowId: String
+  public val phaseId: String
 
-  data class RunStarted(
-    override val workflowId: String,
-    val featureSize: String,
+  public data class RunStarted(
+    public override val workflowId: String,
+    public val featureSize: String,
   ) : FeatureTaskRuntimeRunEvent {
     override val phaseId: String = "run"
   }
@@ -259,12 +260,12 @@ sealed interface FeatureTaskRuntimeRunEvent {
    * file-mutating phase. [created] is true when the runtime created and switched to the branch,
    * false when it reused an already-checked-out non-default branch (including a resume re-attach).
    */
-  data class BranchResolved(
-    override val workflowId: String,
-    override val phaseId: String,
-    val branch: String,
-    val created: Boolean,
-    val reused: Boolean,
+  public data class BranchResolved(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val branch: String,
+    public val created: Boolean,
+    public val reused: Boolean,
   ) : FeatureTaskRuntimeRunEvent
 
   /**
@@ -274,21 +275,21 @@ sealed interface FeatureTaskRuntimeRunEvent {
    * [PhaseBlocked]: the same block is also persisted as a durable blocked record and a ledger entry
    * so the failure is visible to status queries and the audit trail, not only the event stream.
    */
-  data class BranchSetupBlocked(
-    override val workflowId: String,
-    override val phaseId: String,
-    val blockedReason: String,
+  public data class BranchSetupBlocked(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val blockedReason: String,
   ) : FeatureTaskRuntimeRunEvent
 
-  data class PhaseStarted(
-    override val workflowId: String,
-    override val phaseId: String,
-    val resolvedAgentId: String,
-    val attemptCount: Int,
-    val resumed: Boolean,
-    val model: String? = null,
-    val effort: String? = null,
-    val continuationKind: String? = null,
+  public data class PhaseStarted(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val resolvedAgentId: String,
+    public val attemptCount: Int,
+    public val resumed: Boolean,
+    public val model: String? = null,
+    public val effort: String? = null,
+    public val continuationKind: String? = null,
   ) : FeatureTaskRuntimeRunEvent
 
   /**
@@ -298,55 +299,55 @@ sealed interface FeatureTaskRuntimeRunEvent {
    * projection reports. Previously the loop edge appended a ledger entry but emitted no event, so a
    * telemetry consumer saw the re-entered phase simply start again with no stated cause.
    */
-  data class PhaseLoopEdge(
-    override val workflowId: String,
-    override val phaseId: String,
-    val loopId: String,
-    val edgeIteration: Int,
-    val drivingVerdict: String,
-    val continuationKind: String,
+  public data class PhaseLoopEdge(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val loopId: String,
+    public val edgeIteration: Int,
+    public val drivingVerdict: String,
+    public val continuationKind: String,
   ) : FeatureTaskRuntimeRunEvent
 
-  data class PhaseFixLoopIteration(
-    override val workflowId: String,
-    override val phaseId: String,
-    val resolvedAgentId: String,
-    val attemptCount: Int,
-    val fixLoopIteration: Int,
-    val continuationKind: String? = null,
+  public data class PhaseFixLoopIteration(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val resolvedAgentId: String,
+    public val attemptCount: Int,
+    public val fixLoopIteration: Int,
+    public val continuationKind: String? = null,
   ) : FeatureTaskRuntimeRunEvent
 
   /** Runtime-owned validation gate progress while validate is running. */
-  data class ValidationGateProgress(
-    override val workflowId: String,
-    override val phaseId: String,
-    val gateRunCount: Int,
+  public data class ValidationGateProgress(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val gateRunCount: Int,
   ) : FeatureTaskRuntimeRunEvent
 
   /**
    * Pull request checks are pending or have not yet been reported. Emitted so run and IDE progress stays fresh
    * while CI registration or checks wait, without changing the verdict.
    */
-  data class CiStillRunning(
-    override val workflowId: String,
-    override val phaseId: String,
-    val pullRequestUrl: String,
-    val pendingChecks: List<PullRequestCheck>,
+  public data class CiStillRunning(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val pullRequestUrl: String,
+    public val pendingChecks: List<PullRequestCheck>,
   ) : FeatureTaskRuntimeRunEvent
 
-  data class PhaseCompleted(
-    override val workflowId: String,
-    override val phaseId: String,
-    val resolvedAgentId: String,
-    val attemptCount: Int,
+  public data class PhaseCompleted(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val resolvedAgentId: String,
+    public val attemptCount: Int,
   ) : FeatureTaskRuntimeRunEvent
 
-  data class PhaseBlocked(
-    override val workflowId: String,
-    override val phaseId: String,
-    val resolvedAgentId: String,
-    val attemptCount: Int,
-    val blockedReason: String,
+  public data class PhaseBlocked(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val resolvedAgentId: String,
+    public val attemptCount: Int,
+    public val blockedReason: String,
   ) : FeatureTaskRuntimeRunEvent
 
   /**
@@ -355,41 +356,41 @@ sealed interface FeatureTaskRuntimeRunEvent {
    * that counts blocks would otherwise read a self-healing wait as a terminal failure, and the run is
    * resumable from exactly this phase.
    */
-  data class PhasePaused(
-    override val workflowId: String,
-    override val phaseId: String,
-    val resolvedAgentId: String,
-    val attemptCount: Int,
-    val pauseReason: String,
+  public data class PhasePaused(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val resolvedAgentId: String,
+    public val attemptCount: Int,
+    public val pauseReason: String,
   ) : FeatureTaskRuntimeRunEvent
 
-  data class DecomposedAtPlanning(
-    override val workflowId: String,
-    override val phaseId: String,
-    val reason: String,
-    val subtaskCount: Int,
-    val parentSpecPath: String,
-    val decompositionManifestPath: String,
+  public data class DecomposedAtPlanning(
+    public override val workflowId: String,
+    public override val phaseId: String,
+    public val reason: String,
+    public val subtaskCount: Int,
+    public val parentSpecPath: String,
+    public val decompositionManifestPath: String,
   ) : FeatureTaskRuntimeRunEvent
 }
 
-fun interface FeatureTaskRuntimeRunEventSink {
-  fun emit(event: FeatureTaskRuntimeRunEvent)
+public fun interface FeatureTaskRuntimeRunEventSink {
+  public fun emit(event: FeatureTaskRuntimeRunEvent): Unit
 
-  companion object {
-    val NONE: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink {}
+  public companion object {
+    public val NONE: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink {}
   }
 }
 
-data class FeatureTaskRuntimeImplementationContinuation(
-  val phaseId: String,
-  val segmentNumber: Int,
-  val priorValueSegments: List<String>,
-  val latestPrompt: String?,
-  val failureDisposition: String?,
+public data class FeatureTaskRuntimeImplementationContinuation(
+  public val phaseId: String,
+  public val segmentNumber: Int,
+  public val priorValueSegments: List<String>,
+  public val latestPrompt: String?,
+  public val failureDisposition: String?,
 )
 
-data class FeatureTaskRuntimeImplementationTurn(
+public data class FeatureTaskRuntimeImplementationTurn(
   val role: FeatureTaskRuntimeImplementationTurnRole,
   val criterionId: String,
   val criterion: String,
@@ -401,5 +402,5 @@ data class FeatureTaskRuntimeImplementationTurn(
     require(role.launch) { "An implementation turn is a worker or a check launch, was ${role.wireValue}." }
   }
 
-  val check: Boolean get() = role == FeatureTaskRuntimeImplementationTurnRole.CHECK_LAUNCH
+  internal val check: Boolean get() = role == FeatureTaskRuntimeImplementationTurnRole.CHECK_LAUNCH
 }

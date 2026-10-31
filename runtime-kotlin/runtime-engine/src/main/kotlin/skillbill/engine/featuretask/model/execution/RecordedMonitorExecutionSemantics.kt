@@ -6,13 +6,13 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 
-internal class RecordedMonitorExecutionSemantics private constructor(
-  val monitorSelection: ResolvedPhaseStrategyIdentity?,
-  val dispatchOwners: Map<String, ResolvedPhaseStrategyDispatch>,
-  val traversal: FeatureTaskRuntimeTransitionDeclaration,
+public class RecordedMonitorExecutionSemantics private constructor(
+  internal val monitorSelection: ResolvedPhaseStrategyIdentity?,
+  internal val dispatchOwners: Map<String, ResolvedPhaseStrategyDispatch>,
+  public val traversal: FeatureTaskRuntimeTransitionDeclaration,
 ) {
-  companion object {
-    fun from(plan: ResolvedPhaseExecutionPlan): RecordedMonitorExecutionSemantics {
+  public companion object {
+    public fun from(plan: ResolvedPhaseExecutionPlan): RecordedMonitorExecutionSemantics {
       val selection = plan.selectedStrategies.singleOrNull { it.slot == PhaseSlot.MONITOR }
       val monitorSteps = (selection?.steps.orEmpty() + PhaseSlot.COMMIT_PUSH.steps).distinct()
       val owners =

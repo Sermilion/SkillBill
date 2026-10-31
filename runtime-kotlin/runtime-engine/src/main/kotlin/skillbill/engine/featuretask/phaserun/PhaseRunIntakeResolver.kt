@@ -15,23 +15,23 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
 /** Finds the replan intake for a launch on a legacy `.feature-specs/` spec; the intake slot implements it. */
-interface LegacySpecReplanSource {
+public interface LegacySpecReplanSource {
   /** The replan intake for [specPath], or null when the ordinary intake rules apply. */
-  fun replanIntake(
+  public fun replanIntake(
     specPath: Path,
     issueKey: String,
     repoRoot: Path,
   ): String?
 
   /** The replan intake for the spec the issue-key lookup finds, or null when the ordinary intake rules apply. */
-  fun replanIntakeForIssueKey(
+  public fun replanIntakeForIssueKey(
     issueKey: String,
     repoRoot: Path,
   ): String?
 }
 
 @Inject
-class PhaseRunIntakeResolver(
+public class PhaseRunIntakeResolver(
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val projectStore: ProjectStorePort,
@@ -121,7 +121,7 @@ class PhaseRunIntakeResolver(
   }
 }
 
-internal data class PhaseRunIntake(
-  val issueKey: String,
-  val runInvariants: FeatureTaskRuntimeRunInvariants,
+public data class PhaseRunIntake(
+  public val issueKey: String,
+  public val runInvariants: FeatureTaskRuntimeRunInvariants,
 )

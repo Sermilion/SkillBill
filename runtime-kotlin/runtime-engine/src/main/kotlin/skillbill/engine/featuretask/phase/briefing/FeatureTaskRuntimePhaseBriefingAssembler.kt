@@ -16,7 +16,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
 
-object FeatureTaskRuntimeRunInvariantPromptAllowlist {
+internal object FeatureTaskRuntimeRunInvariantPromptAllowlist {
   val IDENTITY_CEREMONY_AND_POLICY: Set<FeatureTaskRuntimeRunInvariantPromptField> =
     setOf(
       FeatureTaskRuntimeRunInvariantPromptField.SPEC_REFERENCE,
@@ -32,14 +32,14 @@ object FeatureTaskRuntimeRunInvariantPromptAllowlist {
     IDENTITY_CEREMONY_AND_POLICY + FeatureTaskRuntimeRunInvariantPromptField.FINALIZATION_CONTEXT
 }
 
-data class FeatureTaskRuntimeBriefingScope(
-  val sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference? = null,
-  val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField> =
+public data class FeatureTaskRuntimeBriefingScope(
+  public val sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference? = null,
+  public val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField> =
     FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES,
 )
 
-object FeatureTaskRuntimePhaseBriefingAssembler {
-  fun assemble(
+public object FeatureTaskRuntimePhaseBriefingAssembler {
+  public fun assemble(
     handoff: FeatureTaskRuntimePhaseHandoff,
     workflowId: String? = null,
     agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
@@ -137,12 +137,12 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
     }
 }
 
-sealed interface FeatureTaskRuntimePhaseBriefingAssemblyResult {
-  data class Accepted(
-    val briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+public sealed interface FeatureTaskRuntimePhaseBriefingAssemblyResult {
+  public data class Accepted(
+    public val briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   ) : FeatureTaskRuntimePhaseBriefingAssemblyResult
 
-  data class Rejected(
-    val context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
+  public data class Rejected(
+    public val context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
   ) : FeatureTaskRuntimePhaseBriefingAssemblyResult
 }

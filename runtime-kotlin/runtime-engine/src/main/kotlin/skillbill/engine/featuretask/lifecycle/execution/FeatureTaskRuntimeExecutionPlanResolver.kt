@@ -36,7 +36,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 @Inject
-class FeatureTaskRuntimeExecutionPlanResolver(
+public class FeatureTaskRuntimeExecutionPlanResolver(
   private val strategies: PhaseStrategyLookup,
   private val codec: FeatureTaskRuntimeExecutionPlanCodec,
   private val validator: FeatureTaskRuntimeExecutionPlanValidator,
@@ -47,7 +47,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun resolveCreation(
+  internal fun resolveCreation(
     request: FeatureTaskRuntimeExecutionPlanCreationRequest,
   ): ValidatedFeatureTaskRuntimeExecutionPlan {
     val repoRoot = request.repoRoot
@@ -88,7 +88,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encodeExecution(plan, inputs), validator)
   }
 
-  fun creationQualityGate(
+  internal fun creationQualityGate(
     repoRoot: Path,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
   ): FeatureTaskRuntimeQualityGateSelection? {
@@ -98,7 +98,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     return qualityGate
   }
 
-  fun resolveInputs(
+  internal fun resolveInputs(
     repoRoot: Path,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
     validationDepth: ValidationDepth,
@@ -138,7 +138,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     ).also { it.canonicalInputs() }
   }
 
-  fun resolveRecordedInputs(
+  internal fun resolveRecordedInputs(
     repoRoot: Path,
     plan: ResolvedPhaseExecutionPlan,
   ): EffectiveGatePolicyInputs {

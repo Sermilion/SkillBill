@@ -4,7 +4,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundary
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 
-internal fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.validateDeliveredWithPersisted(
+public fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.validateDeliveredWithPersisted(
   sections: List<FeatureTaskRuntimeFindingBoundaryMemorySection>,
   dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
   persisted: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,

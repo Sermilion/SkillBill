@@ -5,17 +5,16 @@ import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
-const val STATUS_RUNNING = "running"
-const val STATUS_COMPLETED = "completed"
-const val STATUS_BLOCKED = "blocked"
+internal const val STATUS_RUNNING = "running"
+internal const val STATUS_COMPLETED = "completed"
+internal const val STATUS_BLOCKED = "blocked"
 
-const val STATUS_PAUSED = "paused"
+internal const val STATUS_PAUSED = "paused"
 
-const val STATUS_ABANDONED = "abandoned"
-const val BRANCH_SETUP_AGENT_ID = "branch-setup"
-const val SCHEMA_GATE_DETAIL_MAX_CHARS = 500
+public const val BRANCH_SETUP_AGENT_ID: String = "branch-setup"
+internal const val SCHEMA_GATE_DETAIL_MAX_CHARS = 500
 
-fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, Int?> {
+public fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, Int?> {
   if (accumulator.isEmpty()) return null to null
   val breakdown =
     accumulator.mapValues { (_, pair) ->
@@ -25,10 +24,10 @@ fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, 
   return JsonCodec.mapToJsonString(breakdown) to total
 }
 
-fun skeletonDefinitionFor(request: FeatureTaskRuntimeRunFacts): SkeletonDefinition =
+internal fun skeletonDefinitionFor(request: FeatureTaskRuntimeRunFacts): SkeletonDefinition =
   resolveRunDefinition(request.skeletonDefinition, isGoalContinuationRun(request))
 
-fun resolveRunDefinition(
+internal fun resolveRunDefinition(
   explicit: SkeletonDefinition?,
   goalContinuation: Boolean,
 ): SkeletonDefinition =
@@ -39,18 +38,18 @@ fun resolveRunDefinition(
     SkeletonDefinition.GOAL_CHILD_REVISION_5
   }
 
-fun boundedSchemaGateDetail(validationReason: String): String =
+internal fun boundedSchemaGateDetail(validationReason: String): String =
   if (validationReason.length <= SCHEMA_GATE_DETAIL_MAX_CHARS) {
     validationReason
   } else {
     validationReason.take(SCHEMA_GATE_DETAIL_MAX_CHARS) + "… [truncated]"
   }
 
-fun withSchemaGateDetail(
+internal fun withSchemaGateDetail(
   policyReason: String,
   validationReason: String,
 ): String = "$policyReason Last schema-gate failure: ${boundedSchemaGateDetail(validationReason)}"
 
-fun nonRetryingPhaseSchemaBlockReason(phaseId: String): String =
+internal fun nonRetryingPhaseSchemaBlockReason(phaseId: String): String =
   "Phase '$phaseId' produced schema-invalid output and does not participate in a fix loop; " +
     "the run blocks rather than advancing on invalid output."

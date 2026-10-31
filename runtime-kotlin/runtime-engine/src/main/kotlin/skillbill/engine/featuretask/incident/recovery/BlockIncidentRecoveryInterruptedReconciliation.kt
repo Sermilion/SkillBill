@@ -25,7 +25,7 @@ import java.time.Clock
 import java.time.Instant
 
 @Inject
-class BlockIncidentRecoveryInterruptedReconciliation(
+public class BlockIncidentRecoveryInterruptedReconciliation(
   private val database: DatabaseSessionFactory,
   private val clock: Clock,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -33,7 +33,7 @@ class BlockIncidentRecoveryInterruptedReconciliation(
   private val reportDelivery: ProductReportDelivery?,
   private val telemetry: BlockIncidentTelemetryPort?,
 ) {
-  fun reconcile(limit: Int = RECONCILE_BATCH): Int {
+  internal fun reconcile(limit: Int = RECONCILE_BATCH): Int {
     val batch = limit.coerceIn(1, MAX_BATCH)
     val interrupted =
       catchingNonCancellation {

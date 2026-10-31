@@ -35,13 +35,13 @@ import java.nio.file.Path
 import java.security.MessageDigest
 
 @Inject
-class FeatureSpecPreparationWriter(
+public class FeatureSpecPreparationWriter(
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val fileStore: DecompositionManifestStore,
   private val decompositionManifestWriter: DecompositionManifestWriter,
   private val projectStore: ProjectStorePort,
 ) {
-  fun write(
+  public fun write(
     repoRoot: Path,
     request: FeatureSpecWriteRequest,
     existingParentSpecPath: Path? = null,
@@ -62,14 +62,14 @@ class FeatureSpecPreparationWriter(
     )
   }
 
-  fun plannedParentSpecPath(
+  internal fun plannedParentSpecPath(
     repoRoot: Path,
     issueKey: String,
     featureName: String,
   ): Path =
     projectStore.resolve(repoRoot).specsRoot.resolve(parentDirectoryName(issueKey, featureName)).resolve(SPEC_FILE)
 
-  fun writeParentSpecOnly(
+  internal fun writeParentSpecOnly(
     repoRoot: Path,
     decision: FeatureSpecPreparationDecision,
     featureName: String,
@@ -97,7 +97,7 @@ class FeatureSpecPreparationWriter(
     return parentSpecPath
   }
 
-  fun verifyAuthored(
+  internal fun verifyAuthored(
     repoRoot: Path,
     parentSpecPath: Path,
     parentRewritable: Boolean,
@@ -138,7 +138,7 @@ class FeatureSpecPreparationWriter(
     )
   }
 
-  fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
+  internal fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
     loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest.subtasks
 
   private fun authoredText(
@@ -532,7 +532,7 @@ private const val HASH_HEX_CHARACTERS = 16
 private const val UNSIGNED_BYTE_MASK = 0xff
 private const val HASH_SUFFIX_BYTES = HASH_HEX_CHARACTERS + 1
 
-private fun invalidRequest(
+public fun invalidRequest(
   fieldPath: String,
   reason: String,
 ): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = fieldPath, reason = reason)

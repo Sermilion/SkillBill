@@ -9,12 +9,12 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import java.nio.file.Path
 
-internal class AcceptanceCriterionRepairSession(
-  val accounting: AcceptanceCriterionRepairRunState,
-  val worker: AcquiredFeatureTaskRuntimeWorker,
-  val root: Path,
-  val steps: AcceptanceCriterionRepairStepRoles,
-  private val recorder: AcceptanceCriterionRepairPhaseRecorder,
+public class AcceptanceCriterionRepairSession(
+  public val accounting: AcceptanceCriterionRepairRunState,
+  public val worker: AcquiredFeatureTaskRuntimeWorker,
+  public val root: Path,
+  public val steps: AcceptanceCriterionRepairStepRoles,
+  public val recorder: AcceptanceCriterionRepairPhaseRecorder,
 ) : AcceptanceCriterionRepairCycleRecords {
   init {
     accounting.bindSteps(steps)
@@ -24,9 +24,10 @@ internal class AcceptanceCriterionRepairSession(
 
   override fun isRepairStep(phaseId: String): Boolean = phaseId == steps.repair
 
-  fun start(phase: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite? = recorder.start(this, phase)
+  internal fun start(phase: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite? = recorder.start(this, phase)
 
-  fun complete(phase: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite? = recorder.complete(this, phase)
+  internal fun complete(phase: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite? =
+    recorder.complete(this, phase)
 
   override fun settleUnsuccessfulRepair(
     phase: FeatureTaskRuntimePhaseStateRequest,

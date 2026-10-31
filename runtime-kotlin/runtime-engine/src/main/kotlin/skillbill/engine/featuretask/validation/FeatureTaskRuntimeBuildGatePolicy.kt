@@ -4,7 +4,7 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.error.shellcontent.invalidValidationGateDeclaration
 import skillbill.scaffold.model.ValidationGateDeclaration
 
-internal fun buildGateArgv(
+public fun buildGateArgv(
   declaration: ValidationGateDeclaration,
   cyclePhase: ValidationGateCyclePhase,
 ): List<String> {

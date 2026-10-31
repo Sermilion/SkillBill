@@ -26,12 +26,12 @@ internal fun monitorOutcomeDetail(
   fallback: String,
 ): String = redactedMonitorDetail(text?.trim()?.takeIf(String::isNotEmpty) ?: fallback)
 
-class MonitorCleanupOwnership internal constructor(
-  private val fence: MonitorFence,
-  private val resources: StandaloneMonitorResources,
-  private val diagnostics: RuntimeDiagnostics,
+public class MonitorCleanupOwnership internal constructor(
+  public val fence: MonitorFence,
+  public val resources: StandaloneMonitorResources,
+  public val diagnostics: RuntimeDiagnostics,
   shutdownHooks: ShutdownHookPort,
-  private val childDrain: AgentRunChildDrain,
+  public val childDrain: AgentRunChildDrain,
 ) {
   private var settlement: MonitorSettlement? = null
   private var listener: ((MonitorSettlement) -> Unit)? = null
@@ -39,21 +39,21 @@ class MonitorCleanupOwnership internal constructor(
   @Volatile private var knownPath: Path = fence.directory
   private val exitHook: ShutdownHookRegistration = shutdownHooks.register { settleOnShutdown() }
 
-  fun <T> exclusive(block: () -> T): T = synchronized(this, block)
+  internal fun <T> exclusive(block: () -> T): T = synchronized(this, block)
 
-  fun recordWorktree(path: Path) {
+  internal fun recordWorktree(path: Path) {
     knownPath = path
   }
 
-  fun adoptHead(headSha: String): String? = resources.adoptHead(fence, headSha)
+  internal fun adoptHead(headSha: String): String? = resources.adoptHead(fence, headSha)
 
   @Synchronized
-  fun onSettled(listener: (MonitorSettlement) -> Unit) {
+  internal fun onSettled(listener: (MonitorSettlement) -> Unit) {
     this.listener = listener
   }
 
   @Synchronized
-  fun settle(
+  internal fun settle(
     outcome: MonitorPrimaryOutcome,
     removalAllowed: Boolean = true,
   ): MonitorSettlement {

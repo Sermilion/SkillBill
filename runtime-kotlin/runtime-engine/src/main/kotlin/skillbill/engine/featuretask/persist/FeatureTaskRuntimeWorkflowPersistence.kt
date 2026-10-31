@@ -61,7 +61,7 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 
-const val GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY: String = "goal_child_repair_evidence"
+public const val GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY: String = "goal_child_repair_evidence"
 
 internal data class WorkflowRowAdvance(
   val currentStepId: String,
@@ -75,7 +75,7 @@ internal data class WorkflowRowAdvance(
   }
 }
 
-class FeatureTaskRuntimeWorkflowPersistence
+public class FeatureTaskRuntimeWorkflowPersistence
   @Inject
   constructor(
     private val database: DatabaseSessionFactory,
@@ -84,7 +84,7 @@ class FeatureTaskRuntimeWorkflowPersistence
   ) {
     private val engine: WorkflowEngine = WorkflowEngine()
 
-    fun ensureWorkflowOpen(
+    internal fun ensureWorkflowOpen(
       workflowId: String,
       sessionId: String,
       issueKey: String? = null,
@@ -156,7 +156,7 @@ class FeatureTaskRuntimeWorkflowPersistence
         true
       }
 
-    fun readArtifacts(workflowId: String): DurableWorkflowArtifacts? =
+    internal fun readArtifacts(workflowId: String): DurableWorkflowArtifacts? =
       database.read { unitOfWork ->
         val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
         workflowSnapshotValidator.validate(record, record.workflowName)
@@ -164,7 +164,7 @@ class FeatureTaskRuntimeWorkflowPersistence
         record.artifacts
       }
 
-    fun readQaRepairState(workflowId: String): QaRepairState? {
+    internal fun readQaRepairState(workflowId: String): QaRepairState? {
       val artifacts =
         readArtifacts(workflowId)
           ?: throw invalidWorkflowStateSchemaError("Workflow '$workflowId' is missing its QA state.")
@@ -185,7 +185,7 @@ class FeatureTaskRuntimeWorkflowPersistence
       return FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts)).toQaRepairState()
     }
 
-    fun readAcceptanceCriterionRepairState(
+    internal fun readAcceptanceCriterionRepairState(
       workflowId: String,
       expectedCatalogId: String,
       expectedExecutionId: String,
@@ -215,7 +215,7 @@ class FeatureTaskRuntimeWorkflowPersistence
         state
       }
 
-    fun readAcceptanceCriterionRepairStatus(workflowId: String): AcceptanceCriterionRepairStatusRead? =
+    internal fun readAcceptanceCriterionRepairStatus(workflowId: String): AcceptanceCriterionRepairStatusRead? =
       database.read { unitOfWork ->
         val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
         workflowSnapshotValidator.validate(record, record.workflowName)
@@ -476,7 +476,7 @@ internal object FeatureTaskRuntimeWorkflowArtifactPatches {
     mapOf(GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY to entries)
 }
 
-internal fun stepUpdatesFrom(
+public fun stepUpdatesFrom(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
 ): List<FeatureTaskRuntimePhaseStepWireUpdate> {
   fun stepStatusFor(record: FeatureTaskRuntimePhaseRecord): String =
@@ -500,7 +500,7 @@ internal fun stepUpdatesFrom(
   }
 }
 
-fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
+public fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
   when {
     request.status.workflowStepStatus() == WorkflowStepStatus.PAUSED -> "paused"
     request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED -> "blocked"
@@ -509,7 +509,7 @@ fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
     else -> "running"
   }
 
-private fun FeatureTaskRuntimePhaseStateRequest.reentersWorkflow(): Boolean {
+public fun FeatureTaskRuntimePhaseStateRequest.reentersWorkflow(): Boolean {
   val transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
   return phaseId in transitions.loopOnlyPhaseIds ||
     transitions.backwardEdges.any { edge ->
@@ -517,21 +517,21 @@ private fun FeatureTaskRuntimePhaseStateRequest.reentersWorkflow(): Boolean {
     }
 }
 
-fun attemptStatusFor(request: FeatureTaskRuntimePhaseStateRequest): FeatureTaskRuntimeImplementationAttemptStatus =
+internal fun attemptStatusFor(
+  request: FeatureTaskRuntimePhaseStateRequest,
+): FeatureTaskRuntimeImplementationAttemptStatus =
   when (request.status.workflowStepStatus()) {
     WorkflowStepStatus.COMPLETED -> FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED
     WorkflowStepStatus.BLOCKED -> FeatureTaskRuntimeImplementationAttemptStatus.BLOCKED
     else -> FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE
   }
 
-fun durationMillis(
+public fun durationMillis(
   startedAt: Instant,
   finishedAt: Instant,
 ): Long = Duration.between(startedAt, finishedAt).toMillis().coerceAtLeast(0)
 
-fun sha256Hex(value: String): String =
+public fun sha256Hex(value: String): String =
   MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray())
     .joinToString("") { "%02x".format(it) }
-
-const val PHASE_RECORDER_STATUS_RUNNING = "running"
