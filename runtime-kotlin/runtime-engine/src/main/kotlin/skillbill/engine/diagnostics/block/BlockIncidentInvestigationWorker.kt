@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
 import skillbill.engine.diagnostics.block.report.ProductReportScheduler
+import skillbill.engine.diagnostics.containableUnlessInterrupted
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -22,7 +24,6 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentTransitio
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Produces a diagnosis for one claimed block incident without changing its observation. */
@@ -240,10 +241,10 @@ class BlockIncidentInvestigationWorker(
           "Settled block incident diagnosis could not be read; report scheduling was skipped.",
         )
       } else {
-        runCatching {
+        catchingNonCancellation {
           reportScheduler?.schedule(settlement.occurrence, diagnosis, settlement.recoveryHistory)
         }.getOrElse { error ->
-          error.rethrowIfInterrupted()
+          containableUnlessInterrupted(error)
           RuntimeDiagnosticsBestEffortWarning.record(
             diagnostics,
             "Product report scheduling failed after diagnosis settlement.",
@@ -252,24 +253,15 @@ class BlockIncidentInvestigationWorker(
         }
       }
     }
-    runCatching {
+    catchingNonCancellation {
       telemetry?.diagnosed(settlement.occurrence, settlement.status, settlement.diagnosis)
     }.getOrElse { error ->
-      error.rethrowIfInterrupted()
+      containableUnlessInterrupted(error)
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "Block incident telemetry failed after diagnosis settlement.",
         error,
       )
-    }
-  }
-
-  private fun Throwable.rethrowIfInterrupted() {
-    if (this !is Exception) throw this
-    if (this is CancellationException || this is InterruptedException ||
-      Thread.currentThread().isInterrupted
-    ) {
-      throw this
     }
   }
 

@@ -17,6 +17,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.net.URI
+import java.net.URISyntaxException
 import java.time.Clock
 
 internal const val CI_WAITING_OPERATION_PREFIX: String = "Waiting for CI"
@@ -185,7 +186,7 @@ class DefaultGoalRunnerCiMonitor(
   }
 
   private fun safeHttpLink(value: String): String =
-    runCatching {
+    try {
       val uri = URI(value)
       val scheme = uri.scheme?.takeIf { it == "http" || it == "https" }
       val host = uri.host?.takeIf(String::isNotBlank)
@@ -194,7 +195,9 @@ class DefaultGoalRunnerCiMonitor(
       } else {
         URI(scheme, null, host, uri.port, uri.path, null, null).toASCIIString().take(MAX_PROGRESS_LINK_LENGTH)
       }
-    }.getOrDefault("")
+    } catch (_: URISyntaxException) {
+      ""
+    }
 }
 
 const val GOAL_FINALIZATION_OPERATION_KIND: String = "goal_finalization"

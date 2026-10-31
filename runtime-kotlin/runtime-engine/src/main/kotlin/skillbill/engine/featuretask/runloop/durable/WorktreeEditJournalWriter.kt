@@ -1,8 +1,6 @@
 package skillbill.engine.featuretask.runloop.durable
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.getOrElseUnlessCooperative
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.projectstore.LegacyProjectStatePaths
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
@@ -53,14 +51,13 @@ class WorktreeEditJournalWriter(
             error,
           )
         }
-        .getOrElseUnlessCooperative { null }
+        .getOrElse { null }
         ?.takeIf(String::isNotBlank)
         ?: return
     val error =
       catchingNonCancellation {
         persistMeasuredTick(workflowId, repoRoot, resolvePhaseId)
       }.exceptionOrNull() ?: return
-    error.rethrowIfCooperativeCancellationOrInterruption()
     val cause =
       (error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty())
         .take(MAX_DIAGNOSTIC_CAUSE_LENGTH)
@@ -101,7 +98,7 @@ class WorktreeEditJournalWriter(
             error,
           )
         }
-        .getOrElseUnlessCooperative { null }
+        .getOrElse { null }
     val truncatedRows = entries.size - persistEntries.size
     val tick =
       WorktreeEditTick(

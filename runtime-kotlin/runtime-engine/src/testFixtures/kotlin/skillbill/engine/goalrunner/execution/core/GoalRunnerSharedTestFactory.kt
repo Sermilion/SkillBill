@@ -171,6 +171,7 @@ fun testGoalRunnerStatusService(
         repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
         goalStateFiles = ports.goalStateFiles,
         projectStore = ports.projectStore,
+        diagnostics = ports.diagnostics,
       ),
     freshQualityCoordinator =
       GoalRunnerFreshQualityCoordinator(

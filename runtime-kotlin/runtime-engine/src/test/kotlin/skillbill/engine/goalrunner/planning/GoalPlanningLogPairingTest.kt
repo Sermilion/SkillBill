@@ -13,6 +13,7 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -88,6 +89,7 @@ class GoalPlanningLogPairingTest {
       database = UnreadableDatabase,
       diagnosticMetadataValidator = RejectedOutputDiagnosticMetadataValidator { },
       clock = testHarnessClock,
+      diagnostics = NoopRuntimeDiagnostics,
     ).log(GoalPlanningLogRequest(issueKey = ISSUE_KEY))
 
   private fun started(timestamp: String): GoalProgressEvent =

@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.model.GoalAssessmentDisposition
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
@@ -45,7 +46,7 @@ internal class GoalAssessmentRunServices(
     record: GoalAssessmentRecord,
   ): Boolean {
     val stored =
-      runCatching { outcomeStore.recordGoalAssessmentRecord(state.parentWorkflowId, record) }
+      catchingNonCancellation { outcomeStore.recordGoalAssessmentRecord(state.parentWorkflowId, record) }
         .getOrElse { failure ->
           warn("the assessment record could not be persisted.", containableFailure(failure))
           return false
@@ -314,7 +315,7 @@ internal class GoalAssessmentRoundRun(
       )
     val branch = services.branchOf(state)
     val result =
-      runCatching { services.phaseRunEntry.runForGoal(phaseRequest, state.parentWorkflowId, branch) }
+      catchingNonCancellation { services.phaseRunEntry.runForGoal(phaseRequest, state.parentWorkflowId, branch) }
         .getOrElse { failure ->
           val contained = containableFailure(failure)
           warn("$label failed: ${contained.javaClass.simpleName}: ${contained.message}", contained)

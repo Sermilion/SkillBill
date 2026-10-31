@@ -11,7 +11,6 @@ import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.install.symlink.InstallSymlinkException
 import skillbill.infrastructure.skills.nativeagent.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
-import skillbill.infrastructure.skills.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
@@ -23,6 +22,8 @@ import skillbill.install.model.NativeAgentProviderId
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
+import java.io.InterruptedIOException
+import java.nio.channels.ClosedByInterruptException
 import java.nio.file.Path
 
 internal fun applyNativeAgents(
@@ -69,7 +70,10 @@ private fun applyNativeAgentProvider(
   }.fold(
     onSuccess = { outcome -> nativeAgentProviderOutcomes(installer, outcome) },
     onFailure = { error ->
-      error.rethrowIfCooperativeCancellationOrInterruption()
+      if (error is InterruptedIOException || error is ClosedByInterruptException) {
+        Thread.currentThread().interrupt()
+        throw error
+      }
       listOf(
         failedNativeAgentOutcome(installer, error).also { nativeOutcome ->
           nativeOutcome.issue?.let(context.failures::add)

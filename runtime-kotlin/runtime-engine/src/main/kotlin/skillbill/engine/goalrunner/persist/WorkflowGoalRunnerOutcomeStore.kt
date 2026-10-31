@@ -45,6 +45,7 @@ import skillbill.goalrunner.model.history.GoalHistoryWriterEntry
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.validatedGoalReviewPasses
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskQaOutcome
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -104,6 +105,7 @@ class WorkflowGoalRunnerOutcomeStore
     crashReconciler: FeatureTaskRuntimeCrashReconciler,
     clock: Clock,
     private val blockIncidentCapture: BlockIncidentCapture,
+    private val diagnostics: RuntimeDiagnostics,
   ) : GoalRunnerWorkflowOutcomeStore,
     GoalRunnerAttemptLedgerStore,
     GoalRunnerQualityExecutionStore by goalQualityExecution,
@@ -117,6 +119,7 @@ class WorkflowGoalRunnerOutcomeStore
         workflowSnapshotValidator,
         wireArtifactValidator,
         historyEvidence,
+        diagnostics,
       )
     private val terminalPersistence =
       WorkflowGoalRunnerOutcomeTerminalPersistence(
@@ -134,6 +137,7 @@ class WorkflowGoalRunnerOutcomeStore
         terminalPersistence,
         progressRecording,
         clock,
+        diagnostics,
       )
     private val assessmentRecording = WorkflowGoalRunnerAssessmentRecording(database, engine, wireArtifactValidator)
     private val terminal =

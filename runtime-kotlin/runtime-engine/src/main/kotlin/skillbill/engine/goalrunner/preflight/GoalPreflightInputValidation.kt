@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.preflight
 
 import skillbill.contracts.issuekey.normalizeIssueKey
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
@@ -34,7 +35,7 @@ object GoalPreflightInputValidation {
     repoRoot: Path,
     repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   ): Path =
-    runCatching {
+    catchingNonCancellation {
       repositoryEnclosingRootPort.canonicalPath(repoRoot.toAbsolutePath().normalize())
     }.getOrElse {
       throw invalidFeatureTaskExecutionIdentitySchema(

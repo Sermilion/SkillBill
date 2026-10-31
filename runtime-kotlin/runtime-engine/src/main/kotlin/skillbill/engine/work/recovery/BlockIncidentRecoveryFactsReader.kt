@@ -3,6 +3,7 @@ package skillbill.engine.work.recovery
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.persistence.UnitOfWork
@@ -70,7 +71,7 @@ internal object BlockIncidentRecoveryFactsReader {
     artifacts: Map<String, Any?>,
   ): BlockIncidentRecoveryFactsRead {
     val owners =
-      runCatching { TypedOwners.decode(artifacts) }.getOrElse {
+      catchingNonCancellation { TypedOwners.decode(artifacts) }.getOrElse {
         return BlockIncidentRecoveryFactsRead.Unavailable("a typed policy owner record is malformed")
       }
     val unavailable =
@@ -85,7 +86,7 @@ internal object BlockIncidentRecoveryFactsReader {
       }
     if (unavailable != null) return BlockIncidentRecoveryFactsRead.Unavailable(unavailable)
     val identityFailureCode =
-      runCatching { BlockIncidentIdentity.fromArtifacts(artifacts)?.failureCode }.getOrElse {
+      catchingNonCancellation { BlockIncidentIdentity.fromArtifacts(artifacts)?.failureCode }.getOrElse {
         return BlockIncidentRecoveryFactsRead.Unavailable("the accepted block identity record is malformed")
       }
     val failureCode = incident.occurrence.failureCode

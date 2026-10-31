@@ -221,8 +221,7 @@ object PrincipleEnforcementInventory {
         InlineFqnArchitectureTest::class,
       ),
       EnforcedRule(
-        "runCatching ban: every catalog main source root outside the single pending-root list has no " +
-          "runCatching call, and every pending root still contains one.",
+        "runCatching ban: every catalog main source root has no runCatching call.",
         RunCatchingBanArchitectureTest::class,
       ),
       EnforcedRule(

@@ -26,6 +26,7 @@ import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.featuretask.qa.isQaFailure
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.history.GoalFinalRepairContext
@@ -77,7 +78,7 @@ class DefaultGoalRunnerQaGate(
     request: GoalRunnerRunRequest,
   ): GoalQaGateResult {
     var invocationId: String? = null
-    return runCatching { runQa(state, request) { invocationId = it } }.getOrElse { failure ->
+    return catchingNonCancellation { runQa(state, request) { invocationId = it } }.getOrElse { failure ->
       if ((failure as? SkillBillRuntimeException)?.code in
         setOf(
           WorkflowFailureCode.INVALID_GOAL_FINALIZATION_HISTORY,
@@ -158,7 +159,7 @@ class DefaultGoalRunnerQaGate(
     state: GoalRunnerManifestState,
     record: () -> Unit,
   ) {
-    runCatching(record).onFailure { recordingFailure ->
+    catchingNonCancellation(record).onFailure { recordingFailure ->
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "goal_qa_gate: could not record the QA warning for '${state.parentWorkflowId}'.",

@@ -3,7 +3,9 @@ package skillbill.engine.featuretask.incident.recovery
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
+import skillbill.engine.diagnostics.containableUnlessInterrupted
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
 import skillbill.ports.db.DatabaseSessionFactory
@@ -21,7 +23,6 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryFailure
 import java.time.Clock
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
 @Inject
 class BlockIncidentRecoveryInterruptedReconciliation(
@@ -35,10 +36,10 @@ class BlockIncidentRecoveryInterruptedReconciliation(
   fun reconcile(limit: Int = RECONCILE_BATCH): Int {
     val batch = limit.coerceIn(1, MAX_BATCH)
     val interrupted =
-      runCatching {
+      catchingNonCancellation {
         database.read { it.blockIncidentRecoveries.interrupted(clock.instant(), batch) }
       }.getOrElse { failure ->
-        failure.rethrowIfInterrupted()
+        containableUnlessInterrupted(failure)
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,
           "Interrupted block incident recovery scan failed; continuing the run.",
@@ -48,10 +49,10 @@ class BlockIncidentRecoveryInterruptedReconciliation(
       }
     return interrupted.count { attempt ->
       val settled =
-        runCatching {
+        catchingNonCancellation {
           database.transaction { unit -> settle(unit, attempt, clock.instant()) }
         }.getOrElse { failure ->
-          failure.rethrowIfInterrupted()
+          containableUnlessInterrupted(failure)
           RuntimeDiagnosticsBestEffortWarning.record(
             diagnostics,
             "Interrupted recovery attempt '${attempt.attemptId}' could not be settled; continuing the run.",
@@ -60,7 +61,7 @@ class BlockIncidentRecoveryInterruptedReconciliation(
           null
         }
       if (settled != null) {
-        runCatching {
+        catchingNonCancellation {
           val occurrence = database.read { unit -> unit.blockIncidents.find(settled.occurrenceToken)?.occurrence }
           if (occurrence == null) {
             RuntimeDiagnosticsBestEffortWarning.record(
@@ -71,21 +72,17 @@ class BlockIncidentRecoveryInterruptedReconciliation(
             telemetry?.recovery(occurrence, settled)
           }
         }.getOrElse { failure ->
-          failure.rethrowIfInterrupted()
+          containableUnlessInterrupted(failure)
           RuntimeDiagnosticsBestEffortWarning.record(
             diagnostics,
             "Interrupted recovery telemetry failed for '${settled.attemptId}'; continuing the run.",
             failure,
           )
         }
-        runCatching {
+        catchingNonCancellation {
           reportDelivery?.recoverySettled(settled, dispatch = false)
         }.getOrElse { failure ->
-          if (failure is CancellationException || failure is InterruptedException ||
-            Thread.currentThread().isInterrupted
-          ) {
-            throw failure
-          }
+          containableUnlessInterrupted(failure)
           RuntimeDiagnosticsBestEffortWarning.record(
             diagnostics,
             "Interrupted recovery report notification failed for '${settled.attemptId}'; continuing the run.",
@@ -94,13 +91,6 @@ class BlockIncidentRecoveryInterruptedReconciliation(
         }
       }
       settled != null
-    }
-  }
-
-  private fun Throwable.rethrowIfInterrupted() {
-    if (this !is Exception) throw this
-    if (this is CancellationException || this is InterruptedException || Thread.currentThread().isInterrupted) {
-      throw this
     }
   }
 

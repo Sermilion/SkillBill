@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.BlockIncidentObservation
 import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
 import skillbill.engine.goalrunner.execution.support.selectAuthoritativeCandidate
@@ -11,6 +12,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.engine.goalrunner.model.StaleRunningCandidatesBlockRequest
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.STALENESS_EVIDENCE_WINDOW
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
@@ -18,6 +21,7 @@ import skillbill.goalrunner.model.GoalContinuation
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.terminalOutcomeFor
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -57,6 +61,7 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
   private val terminalPersistence: WorkflowGoalRunnerOutcomeTerminalPersistence,
   private val progressRecording: WorkflowGoalRunnerProgressRecording,
   private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun reconcileAuthoritativeOutcomesInTransaction(
     unitOfWork: UnitOfWork,
@@ -444,13 +449,20 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
   }
 
   private fun candidateIsStale(candidate: GoalContinuationCandidate): Boolean =
-    runCatching {
-      candidate.outcome?.status?.let { return@runCatching it != GoalRunnerTerminalStatus.COMPLETE }
+    catchingNonCancellation {
+      candidate.outcome?.status?.let { return@catchingNonCancellation it != GoalRunnerTerminalStatus.COMPLETE }
       val now = clock.instant()
       val window = STALENESS_EVIDENCE_WINDOW
       val liveness = candidateLivenessInstants(candidate)
       val recent = liveness.any { signal -> Duration.between(signal, now).let { !it.isNegative && it <= window } }
       liveness.isNotEmpty() && !recent
+    }.onFailure { failure ->
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=goal_continuation_staleness value_expected=classified value_used=not_stale " +
+          "failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+        failure,
+      )
     }.getOrDefault(false)
 
   private fun candidateLivenessInstants(candidate: GoalContinuationCandidate): List<Instant> {

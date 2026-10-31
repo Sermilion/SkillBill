@@ -7,6 +7,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
@@ -105,6 +106,7 @@ class RuntimeArchitectureProbeTest {
       hooks,
       daemon,
       IdentifierGeneratorPort { "owner" },
+      NoopRuntimeDiagnostics,
     )
   }
 

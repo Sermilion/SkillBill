@@ -2,6 +2,8 @@ package skillbill.engine.diagnostics.block.report
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.diagnostics.containableUnlessInterrupted
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.ProductIssueCredentialPort
 import skillbill.ports.blockincident.ProductIssueTrackerPort
@@ -30,7 +32,6 @@ import skillbill.workflow.taskruntime.model.blockincident.report.ProductReportSt
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
 @Inject
 class ProductReportDelivery(
@@ -46,30 +47,30 @@ class ProductReportDelivery(
   fun deliver(limit: Int = BATCH_LIMIT) {
     val batchSize = limit.coerceIn(1, BATCH_LIMIT)
     val candidates =
-      runCatching {
+      catchingNonCancellation {
         database.read { unit ->
           CandidateBatch(unit.productReports.dueIds(clock.instant(), batchSize), unit.databaseFileObservation)
         }
       }.getOrElse { failure ->
-        failure.rethrowIfCancellation()
+        containableUnlessInterrupted(failure)
         warn("Product report delivery scan failed.", failure)
         return
       }
     if (candidates.ids.isEmpty()) return
     val observation = candidates.observation ?: return
     val token =
-      runCatching {
+      catchingNonCancellation {
         credential.token()
       }.getOrElse { failure ->
-        failure.rethrowIfCancellation()
+        containableUnlessInterrupted(failure)
         warn("Product issue credential lookup failed.", failure)
         return
       }
     candidates.ids.forEach { id ->
-      runCatching {
+      catchingNonCancellation {
         deliverOne(id, token, observation)
       }.getOrElse { failure ->
-        failure.rethrowIfCancellation()
+        containableUnlessInterrupted(failure)
         warn("Product report delivery failed for $id.", failure)
       }
     }
@@ -498,7 +499,7 @@ class ProductReportDelivery(
   ) {
     val issue = report.issue ?: return
     report.links.forEach { staleLink ->
-      runCatching {
+      catchingNonCancellation {
         val facts = commentFacts(staleLink.occurrenceToken) ?: return@forEach
         val prepared = preparePendingComment(report.reportId, issue, staleLink.occurrenceToken, facts, observation)
         val target =
@@ -514,7 +515,7 @@ class ProductReportDelivery(
             }
         postComment(report, CommentDispatch(staleLink.occurrenceToken, target.target), facts, observation, token)
       }.getOrElse { failure ->
-        failure.rethrowIfCancellation()
+        containableUnlessInterrupted(failure)
         warn("Product report comment failed for ${report.reportId}.", failure)
       }
     }
@@ -695,7 +696,7 @@ class ProductReportDelivery(
     dispatch: Boolean = true,
   ) {
     val reference =
-      runCatching {
+      catchingNonCancellation {
         database.read { unit ->
           ReportReference(
             unit.productReports.reportIdForIncident(attempt.occurrenceToken),
@@ -703,13 +704,13 @@ class ProductReportDelivery(
           )
         }
       }.getOrElse { failure ->
-        failure.rethrowIfCancellation()
+        containableUnlessInterrupted(failure)
         warn("Product report recovery lookup failed for ${attempt.attemptId}.", failure)
         return
       }
     val reportId = reference.reportId ?: return
     val expectedObservation = reference.observation ?: return
-    runCatching {
+    catchingNonCancellation {
       ownership.acquire(database.resolveDbPath(), reportId).useOwnership { lock ->
         when (lock) {
           ProductReportDeliveryOwnership.Contended -> return@useOwnership
@@ -730,23 +731,23 @@ class ProductReportDelivery(
         }
       }
     }.onFailure { failure ->
-      failure.rethrowIfCancellation()
+      containableUnlessInterrupted(failure)
       warn("Product report recovery eligibility could not be stored for ${attempt.attemptId}.", failure)
     }
     if (!dispatch) return
-    runCatching { deliver() }.onFailure { failure ->
-      failure.rethrowIfCancellation()
+    catchingNonCancellation { deliver() }.onFailure { failure ->
+      containableUnlessInterrupted(failure)
       warn("Product report recovery delivery failed for ${attempt.attemptId}.", failure)
     }
   }
 
   private fun emitReported(report: ProductReportRecord) {
     report.links.forEach { link ->
-      runCatching {
+      catchingNonCancellation {
         val incident = database.read { unit -> unit.blockIncidents.find(link.occurrenceToken)?.occurrence }
         incident?.let { telemetry.reported(it, report) }
       }.onFailure { failure ->
-        failure.rethrowIfCancellation()
+        containableUnlessInterrupted(failure)
         warn("Product report telemetry lookup failed for ${report.reportId}.", failure)
       }
     }
@@ -787,13 +788,6 @@ class ProductReportDelivery(
       block(this)
     } finally {
       (this as? ProductReportDeliveryOwnership.Held)?.close()
-    }
-  }
-
-  private fun Throwable.rethrowIfCancellation() {
-    if (this !is Exception) throw this
-    if (this is CancellationException || this is InterruptedException || Thread.currentThread().isInterrupted) {
-      throw this
     }
   }
 

@@ -10,6 +10,7 @@ import skillbill.engine.work.recovery.BlockIncidentRecoveryRequest
 import skillbill.engine.work.recovery.BlockIncidentRecoveryResult
 import skillbill.engine.work.recovery.BlockIncidentRecoveryResumeClaim
 import skillbill.engine.work.recovery.BlockIncidentRecoveryService
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkIncidentRecoveryOutcome
@@ -19,7 +20,6 @@ import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryA
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttempt
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentRecoveryAttemptStatus
 import java.nio.file.Path
-import java.util.concurrent.CancellationException
 
 @Inject
 class WorkControlRecovery(
@@ -214,8 +214,7 @@ class WorkControlRecovery(
         item.snapshot.updatedAt,
         requested.databaseFileObservation,
       )
-    return runCatching { runs.launch(resumed, agentId) }.getOrElse { failure ->
-      if (failure is CancellationException) throw failure
+    return catchingNonCancellation { runs.launch(resumed, agentId) }.getOrElse { failure ->
       WorkControlResult.LaunchFailed(failure.message ?: failure::class.simpleName.orEmpty())
     }
   }

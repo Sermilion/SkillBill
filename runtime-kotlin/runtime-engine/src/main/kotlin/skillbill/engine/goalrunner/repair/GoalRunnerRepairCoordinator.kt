@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
@@ -406,14 +407,19 @@ class GoalRunnerRepairCoordinator(
   private fun childWorkerLeaseLive(workflowId: String): Boolean {
     val tracker = GoalRunnerStatusDurableReadTracker(diagnostics)
     val ownership =
-      runCatching { phaseQuery.workerOwnership(workflowId) }.getOrElse { error ->
-        tracker.recordDegradedRead(
-          seam = "goal-repair.child_worker_ownership",
-          expected = "ownership_row",
-          used = "degraded",
-          error = error,
-        )
-        return false
+      try {
+        catchingNonCancellation { phaseQuery.workerOwnership(workflowId) }.getOrElse { error ->
+          tracker.recordDegradedRead(
+            seam = "goal-repair.child_worker_ownership",
+            expected = "ownership_row",
+            used = "degraded",
+            error = error,
+          )
+          return false
+        }
+      } catch (interrupted: InterruptedException) {
+        Thread.currentThread().interrupt()
+        throw interrupted
       } ?: return false
     return workerLeaseLive(ownership)
   }

@@ -17,6 +17,7 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.DatabasePathProtectionResult
 import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.projectstore.ProjectStorePort
@@ -43,10 +44,11 @@ class GoalRunnerPurgeCoordinator(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val goalStateFiles: GoalRuntimeStateFileStore,
   private val projectStore: ProjectStorePort,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   private val changedSummary = "Database file changed during purge; remaining steps were stopped."
   private val specBundleReset =
-    GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator, projectStore)
+    GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator, projectStore, diagnostics)
 
   fun purge(
     request: GoalRunnerPurgeRequest,

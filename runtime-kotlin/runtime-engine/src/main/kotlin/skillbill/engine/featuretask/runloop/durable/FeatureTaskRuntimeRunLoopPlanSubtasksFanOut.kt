@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.durable
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
@@ -45,6 +44,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.core.isCooperativeCancellation
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.PhaseInstructionFileSource
@@ -122,7 +122,7 @@ internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   ): PhaseOutcome? {
     val outcome =
       result.getOrElse { error ->
-        error.rethrowIfCooperativeCancellationOrInterruption()
+        if (error.isCooperativeCancellation()) throw error
         return PhaseOutcome.blocked("Planning subtask $unitId failed unexpectedly: ${error.message.orEmpty()}")
       }
     if (outcome !is PhaseOutcome.Completed) return outcome

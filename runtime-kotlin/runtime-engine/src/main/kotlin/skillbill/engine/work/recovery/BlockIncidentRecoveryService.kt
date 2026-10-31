@@ -4,11 +4,13 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.diagnostics.block.report.ProductReportDelivery
+import skillbill.engine.diagnostics.containableUnlessInterrupted
 import skillbill.engine.featuretask.incident.recovery.recordBlockIncidentRecoveryOutcome
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.status.releaseExecutionLeaseIfExpired
 import skillbill.engine.work.observation.workerOwnership
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.blockincident.BlockIncidentTelemetryPort
 import skillbill.ports.blockincident.model.BlockIncidentRecoveryTransition
@@ -56,7 +58,6 @@ import skillbill.workflow.taskruntime.model.blockincident.StandalonePhaseInciden
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
 internal sealed interface BlockIncidentProjectionAssessment {
   data class Evaluated(
@@ -166,12 +167,11 @@ class BlockIncidentRecoveryService(
       )
     var dispatched: BlockIncidentRecoveryAttempt? = null
     val result =
-      runCatching {
+      catchingNonCancellation {
         database.transactionFenced(request.databaseFileObservation) { unit ->
           applyInTransaction(unit, request, key, clock.instant()) { dispatched = it }
         }
       }.getOrElse { failure ->
-        if (failure is CancellationException) throw failure
         val admitted = dispatched ?: throw failure
         return settleActionException(request, admitted, failure).also(::emitTerminalTelemetry)
       }
@@ -332,29 +332,22 @@ class BlockIncidentRecoveryService(
     ) {
       return
     }
-    runCatching {
+    catchingNonCancellation {
       val occurrence = database.read { unit -> unit.blockIncidents.find(attempt.occurrenceToken)?.occurrence }
       occurrence?.let { telemetry?.recovery(it, attempt) }
     }.onFailure { error ->
-      error.rethrowIfInterrupted()
+      containableUnlessInterrupted(error)
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Block incident recovery telemetry lookup failed.", error)
     }
-    runCatching {
+    catchingNonCancellation {
       reportDelivery?.recoverySettled(attempt)
     }.getOrElse { error ->
-      error.rethrowIfInterrupted()
+      containableUnlessInterrupted(error)
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "Block incident recovery report delivery request failed.",
         error,
       )
-    }
-  }
-
-  private fun Throwable.rethrowIfInterrupted() {
-    if (this !is Exception) throw this
-    if (this is CancellationException || this is InterruptedException || Thread.currentThread().isInterrupted) {
-      throw this
     }
   }
 

@@ -219,6 +219,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     crashReconciler = crashReconciler,
     blockIncidentCapture = testBlockIncidentCapture(database, clock),
     clock = clock,
+    diagnostics = NoopRuntimeDiagnostics,
   )
 
 fun testWorkflowGoalRunnerQualityExecutionStore(

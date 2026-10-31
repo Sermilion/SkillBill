@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.launch
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
@@ -32,10 +33,13 @@ import skillbill.engine.goalrunner.planning.recovery.goalPlanningChildImportConf
 import skillbill.engine.goalrunner.reset.reviewBaselineBlockedReason
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.status.stopped
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.projectstore.ProjectStorePort
@@ -75,6 +79,7 @@ class GoalRunnerSubtaskLaunchPrepare(
   private val strategies: PhaseStrategyLookup,
   private val agentRunLauncher: AgentRunLauncher,
   private val projectStore: ProjectStorePort,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun goalReviewBaseline(
     state: GoalRunnerManifestState,
@@ -83,7 +88,7 @@ class GoalRunnerSubtaskLaunchPrepare(
   ): GoalSubtaskReviewBaselineResult {
     val existingWorkflowId = state.manifest.workflowIdFor(subtaskId)
     if (existingWorkflowId != null) {
-      return runCatching {
+      return catchingNonCancellation {
         outcomeStore.goalSubtaskReviewState(existingWorkflowId)
           ?.let { reviewState ->
             GoalSubtaskReviewBaselineResult(
@@ -165,9 +170,16 @@ class GoalRunnerSubtaskLaunchPrepare(
     val reason = goalPlanningChildImportConflictBlockedReason(state.manifest.issueKey, targetSubtaskId, conflict)
     val acceptedBlock =
       state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
-        runCatching {
+        catchingNonCancellation {
           outcomeStore.markBlocked(
             GoalRunnerBlockRequest(workflowId = workflowId, blockedReason = reason, lastResumableStep = "preplan"),
+          )
+        }.onFailure { failure ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "seam=goal_planning_conflict_block value_expected=accepted_block value_used=unrecorded " +
+              "workflow_id=$workflowId failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+            failure,
           )
         }.getOrNull()
       }

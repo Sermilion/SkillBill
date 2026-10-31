@@ -39,11 +39,12 @@ class WorkObservationService(
       }
         ?: throw databaseMissing(database.resolveDbPath().toString(), DatabaseAccessOperation.READ)
     val registrations = mutableListOf<AutoCloseable>()
-    runCatching {
+    var registered = false
+    try {
       owners.forEach { exits.observe(it, onExit)?.let(registrations::add) }
-    }.onFailure { failure ->
-      registrations.forEach { it.close() }
-      throw failure
+      registered = true
+    } finally {
+      if (!registered) registrations.forEach { it.close() }
     }
     return WorkObservationRegistration(deadlines.filter { it > observedAt }.minOrNull(), registrations)
   }

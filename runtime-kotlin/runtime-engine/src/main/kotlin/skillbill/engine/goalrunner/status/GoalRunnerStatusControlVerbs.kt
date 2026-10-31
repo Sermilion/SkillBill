@@ -13,6 +13,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.db.DatabaseSessionFactory
@@ -28,7 +29,6 @@ import skillbill.workflow.decomposition.isAtUnlaunchedBoundary
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.CancellationException
 
 private const val GRACEFUL_TERMINATION_WAIT_MILLIS: Long = 5_000
 
@@ -117,26 +117,30 @@ class GoalRunnerStatusControlVerbs(
     val noLiveLease = reservation.noLiveLeaseStatus()
     if (lease == null) return outcome(noLiveLease)
     val ownership = lease.asWorkerOwnership(reservation.parentWorkflowId)
-    return runCatching {
-      ownership.stopInspected(
-        lease,
-        reservation.parentWorkflowId,
-        noLiveLease,
-        databaseFileObservation,
-        ::outcome,
-      )
-    }.getOrElse { failure ->
-      rethrowCooperativeTerminationFailure(failure)
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "seam=goal-control.stop outcome=termination_incomplete cause=${failure.javaClass.simpleName}",
-        null,
-      )
-      outcome(
-        GoalRunnerStopStatus.TERMINATION_INCOMPLETE,
-        terminationAttempted = true,
-        terminationFailureCode = "termination_failed",
-      )
+    return try {
+      catchingNonCancellation {
+        ownership.stopInspected(
+          lease,
+          reservation.parentWorkflowId,
+          noLiveLease,
+          databaseFileObservation,
+          ::outcome,
+        )
+      }.getOrElse { failure ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "seam=goal-control.stop outcome=termination_incomplete cause=${failure.javaClass.simpleName}",
+          null,
+        )
+        outcome(
+          GoalRunnerStopStatus.TERMINATION_INCOMPLETE,
+          terminationAttempted = true,
+          terminationFailureCode = "termination_failed",
+        )
+      }
+    } catch (interrupted: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw interrupted
     }
   }
 
@@ -169,16 +173,6 @@ class GoalRunnerStatusControlVerbs(
             outcome(GoalRunnerStopStatus.TERMINATION_INCOMPLETE, true, "owner_still_live")
         }
     }
-
-  private fun rethrowCooperativeTerminationFailure(failure: Throwable) {
-    when (failure) {
-      is CancellationException -> throw failure
-      is InterruptedException -> {
-        Thread.currentThread().interrupt()
-        throw failure
-      }
-    }
-  }
 
   private fun releaseStoppedLease(
     parentWorkflowId: String,

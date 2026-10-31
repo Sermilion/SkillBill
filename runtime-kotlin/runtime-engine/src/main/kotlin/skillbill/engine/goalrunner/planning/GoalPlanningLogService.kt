@@ -3,15 +3,18 @@ package skillbill.engine.goalrunner.planning
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
-import skillbill.application.getOrElseUnlessCooperative
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningAttemptOutcome
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogAttempt
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogRequest
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -34,6 +37,7 @@ class GoalPlanningLogService(
   private val database: DatabaseSessionFactory,
   private val diagnosticMetadataValidator: RejectedOutputDiagnosticMetadataValidator,
   private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun log(request: GoalPlanningLogRequest): GoalPlanningLog {
     val parentWorkflowId =
@@ -60,7 +64,7 @@ class GoalPlanningLogService(
   }
 
   private fun readRejections(parentWorkflowId: String): Map<String, RejectedOutputDiagnostic> =
-    runCatching {
+    catchingNonCancellation {
       database.transaction { unitOfWork ->
         RejectedOutputDiagnosticService(
           unitOfWork.rejectedOutputDiagnostics,
@@ -71,7 +75,15 @@ class GoalPlanningLogService(
           .inspect(RejectedOutputDiagnosticSelector(workflowId = parentWorkflowId))
       }
     }
-      .getOrElseUnlessCooperative { RejectedOutputDiagnosticSelection.Selected(emptyList()) }
+      .onFailure { failure ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "seam=goal_planning_log_rejections value_expected=rejection_metadata value_used=empty " +
+            "workflow_id=$parentWorkflowId failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+          failure,
+        )
+      }
+      .getOrElse { RejectedOutputDiagnosticSelection.Selected(emptyList()) }
       .let { selection ->
         when (selection) {
           is RejectedOutputDiagnosticSelection.Selected -> selection.diagnostics

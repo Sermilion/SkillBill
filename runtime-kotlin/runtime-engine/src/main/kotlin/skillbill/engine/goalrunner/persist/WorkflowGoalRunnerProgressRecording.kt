@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.workflow.identity.status.WorkStatusArtifactKeys
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.goalrunner.execution.support.maxHistorySequence
@@ -18,6 +19,8 @@ import skillbill.engine.goalrunner.persist.quality.GoalFinalizationHistoryMigrat
 import skillbill.engine.goalrunner.persist.quality.fromPersistenceWire
 import skillbill.engine.workflow.support.workflowFamilyFor
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT
@@ -47,6 +50,7 @@ import skillbill.goalrunner.model.quality.GoalQualityExecutionRecord
 import skillbill.goalrunner.model.quality.GoalQualityExecutionStatus
 import skillbill.goalrunner.toPersistenceWire
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -137,6 +141,7 @@ internal class WorkflowGoalRunnerProgressRecording(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val historyEvidence: GoalChildHistoryEvidenceStore,
+  private val diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerWorkflowProgressStore,
   GoalRunnerWorkflowLedgerWriteStore,
   GoalRunnerGoalChildHistoryDraftStore,
@@ -163,8 +168,15 @@ internal class WorkflowGoalRunnerProgressRecording(
     val progressEvent = progressEventFrom(artifacts)
     val declaredProgressEvent = declaredProgressEventFrom(artifacts)
     val observabilityEvent =
-      runCatching {
+      catchingNonCancellation {
         goalObservabilityLatestEventFromArtifacts(artifacts)
+      }.onFailure { failure ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "seam=goal_progress_recording value_expected=latest_observability_event value_used=unavailable " +
+            "workflow_id=$workflowId failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+          failure,
+        )
       }.getOrNull()
     val progress =
       GoalRunnerWorkflowProgress(
@@ -177,8 +189,15 @@ internal class WorkflowGoalRunnerProgressRecording(
         latestDeclaredProgressEvent = declaredProgressEvent,
         lastSnapshotUpdatedAt = record.updatedAt?.toString(),
         currentStepEnteredAt =
-          runCatching {
+          catchingNonCancellation {
             DurableWorkflowArtifacts.fromMap(artifacts).goalProgressCurrentStepEnteredAt()
+          }.onFailure { failure ->
+            RuntimeDiagnosticsBestEffortWarning.record(
+              diagnostics,
+              "seam=goal_progress_recording value_expected=current_step_entered_at value_used=unavailable " +
+                "workflow_id=$workflowId failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+              failure,
+            )
           }.getOrNull(),
       )
     return progress.copy(latestLivenessSignal = progress.resolvedLivenessSignal())

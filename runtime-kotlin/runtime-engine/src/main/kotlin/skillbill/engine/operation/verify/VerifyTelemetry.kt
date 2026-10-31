@@ -6,6 +6,7 @@ import skillbill.application.telemetry.model.FeatureVerifyFinishedRequest
 import skillbill.application.telemetry.model.FeatureVerifyStartedRequest
 import skillbill.application.telemetry.service.TelemetryService
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 
 /** The verify run's telemetry, under the `bill-feature-verify` labels; no method may fail the run. */
@@ -55,7 +56,7 @@ class ServiceVerifyTelemetry(
     fallback: T,
     block: () -> T,
   ): T =
-    runCatching(block)
+    catchingNonCancellation(block)
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,

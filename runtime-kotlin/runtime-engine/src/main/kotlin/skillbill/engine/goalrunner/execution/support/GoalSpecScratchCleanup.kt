@@ -5,6 +5,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.specscratch.SpecScratchStore
@@ -28,7 +29,7 @@ class GoalSpecScratchCleanup(
       manifest.subtasks.firstOrNull { it.id == subtaskId }?.specPath?.takeIf(String::isNotBlank)
         ?: return
     val resolved = resolvedParentSpecPath(repoRoot, Path.of(specPath), projectStore.resolve(repoRoot))
-    runCatching { specScratchStore.deleteFileIfExists(resolved) }
+    catchingNonCancellation { specScratchStore.deleteFileIfExists(resolved) }
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,
@@ -46,7 +47,7 @@ class GoalSpecScratchCleanup(
     if (manifest.specSource != SpecSource.LINEAR) return
     val parentSpec = resolvedParentSpecPath(repoRoot, Path.of(manifest.parentSpecPath), projectStore.resolve(repoRoot))
     val specDir = parentSpec.parent ?: return
-    runCatching { specScratchStore.deleteDirectoryIfExists(specDir) }
+    catchingNonCancellation { specScratchStore.deleteDirectoryIfExists(specDir) }
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,

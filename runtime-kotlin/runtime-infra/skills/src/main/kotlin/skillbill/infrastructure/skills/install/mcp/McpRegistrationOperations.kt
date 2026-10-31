@@ -5,13 +5,14 @@ import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
-import skillbill.infrastructure.skills.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpProfileOutcome
 import skillbill.install.model.McpRegistrationOutcome
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.install.mcp.model.InstallMcpProfileEnvironment
 import skillbill.ports.repository.toFileLocation
+import java.io.InterruptedIOException
+import java.nio.channels.ClosedByInterruptException
 import java.nio.file.Path
 
 object McpRegistrationOperations {
@@ -162,7 +163,10 @@ object McpRegistrationOperations {
     profilePaths.forEach { perProfilePath ->
       val result =
         catchingNonCancellation { mutate(perProfilePath) }.getOrElse { error ->
-          error.rethrowIfCooperativeCancellationOrInterruption()
+          if (error is InterruptedIOException || error is ClosedByInterruptException) {
+            Thread.currentThread().interrupt()
+            throw error
+          }
           failures.add(perProfilePath to error)
           return@forEach
         }

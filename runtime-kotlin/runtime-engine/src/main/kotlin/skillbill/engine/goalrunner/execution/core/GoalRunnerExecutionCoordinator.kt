@@ -2,10 +2,13 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.asWorkerOwnership
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
@@ -19,6 +22,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.time.Clock
 import java.time.Duration
+import java.util.concurrent.CancellationException
 
 interface GoalRunnerExecutionCoordinator {
   fun <T> runOwned(
@@ -75,6 +79,7 @@ class DefaultGoalRunnerExecutionCoordinator(
   private val shutdownHookPort: ShutdownHookPort,
   private val daemonThreadPort: DaemonThreadPort,
   private val identifierGeneratorPort: IdentifierGeneratorPort,
+  private val diagnostics: RuntimeDiagnostics,
 ) : GoalRunnerExecutionCoordinator {
   override fun <T> runOwned(
     parentWorkflowId: String,
@@ -164,8 +169,7 @@ class DefaultGoalRunnerExecutionCoordinator(
     return completeRun(parentWorkflowId, bodyResult, teardownFailure, heartbeat)
   }
 
-  private fun <T> executeBody(block: () -> T): Result<T> =
-    runCatching(block).also { it.exceptionOrNull()?.let(::preserveInterruption) }
+  private fun <T> executeBody(block: () -> T): Result<T> = captureForTeardown(block)
 
   private fun teardown(
     parentWorkflowId: String,
@@ -216,7 +220,7 @@ class DefaultGoalRunnerExecutionCoordinator(
     lease: GoalRunnerExecutionLease,
     plan: FeatureTaskRuntimeHeartbeatPlan,
   ): FeatureTaskRuntimeHeartbeat {
-    return runCatching {
+    return captureForTeardown {
       supervisor.startHeartbeat(plan) {
         val now = clock.instant()
         val updated = lease.copy(heartbeatAt = now, expiresAt = now.plus(LEASE_DURATION))
@@ -229,11 +233,9 @@ class DefaultGoalRunnerExecutionCoordinator(
         }
       }
     }.getOrElse { failure ->
-      preserveInterruption(failure)
-      runCatching {
+      captureForTeardown {
         releaseExecutionLease(parentWorkflowId, lease)
       }.onFailure { cleanupFailure ->
-        preserveInterruption(cleanupFailure)
         addSuppressedIfDistinct(failure, cleanupFailure)
       }
       throw failure
@@ -245,17 +247,15 @@ class DefaultGoalRunnerExecutionCoordinator(
     lease: GoalRunnerExecutionLease,
     heartbeat: FeatureTaskRuntimeHeartbeat,
   ): ShutdownHookRegistration {
-    return runCatching {
+    return captureForTeardown {
       shutdownHookPort.register {
         recordInterruption(parentWorkflowId)
       }
     }.getOrElse { failure ->
-      preserveInterruption(failure)
       cleanupFailure { heartbeat.stop() }?.let { failure.addSuppressed(it) }
-      runCatching {
+      captureForTeardown {
         releaseExecutionLease(parentWorkflowId, lease)
       }.onFailure { cleanupFailure ->
-        preserveInterruption(cleanupFailure)
         addSuppressedIfDistinct(failure, cleanupFailure)
       }
       throw failure
@@ -267,15 +267,13 @@ class DefaultGoalRunnerExecutionCoordinator(
     lease: GoalRunnerExecutionLease,
   ) {
     val failure =
-      runCatching {
+      captureForTeardown {
         clearStaleRunnerInterruptedPause(parentWorkflowId)
       }.exceptionOrNull()
     if (failure != null) {
-      preserveInterruption(failure)
-      runCatching {
+      captureForTeardown {
         releaseExecutionLease(parentWorkflowId, lease)
       }.onFailure { cleanupFailure ->
-        preserveInterruption(cleanupFailure)
         addSuppressedIfDistinct(failure, cleanupFailure)
       }
       throw failure
@@ -291,14 +289,7 @@ class DefaultGoalRunnerExecutionCoordinator(
     }
   }
 
-  private fun cleanupFailure(action: () -> Unit): Throwable? =
-    runCatching(action).exceptionOrNull()?.also(::preserveInterruption)
-
-  private fun preserveInterruption(failure: Throwable) {
-    if (failure is InterruptedException) {
-      Thread.currentThread().interrupt()
-    }
-  }
+  private fun cleanupFailure(action: () -> Unit): Throwable? = captureForTeardown(action).exceptionOrNull()
 
   private fun addSuppressedIfDistinct(
     primary: Throwable,
@@ -312,12 +303,20 @@ class DefaultGoalRunnerExecutionCoordinator(
   fun recordInterruption(parentWorkflowId: String) {
     daemonThreadPort.runWithJoinBudget(
       action = {
-        runCatching {
-          manifestStore.pauseNow(
-            parentWorkflowId = parentWorkflowId,
-            reason = GOAL_PAUSE_REASON_RUNNER_INTERRUPTED,
-            pausedAt = clock.instant().toString(),
-            overwriteExistingReason = false,
+        val result =
+          catchingNonCancellation {
+            manifestStore.pauseNow(
+              parentWorkflowId = parentWorkflowId,
+              reason = GOAL_PAUSE_REASON_RUNNER_INTERRUPTED,
+              pausedAt = clock.instant().toString(),
+              overwriteExistingReason = false,
+            )
+          }
+        result.exceptionOrNull()?.let { failure ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "seam=goal_runner_shutdown_pause value_expected=paused value_used=unrecorded workflow_id=$parentWorkflowId",
+            failure,
           )
         }
       },
@@ -412,3 +411,13 @@ class DefaultGoalRunnerExecutionCoordinator(
     val SHUTDOWN_WRITE_BUDGET: Duration = Duration.ofSeconds(2)
   }
 }
+
+internal inline fun <T> captureForTeardown(block: () -> T): Result<T> =
+  try {
+    catchingNonCancellation(block)
+  } catch (cancelled: CancellationException) {
+    Result.failure(cancelled)
+  } catch (interrupted: InterruptedException) {
+    Thread.currentThread().interrupt()
+    Result.failure(interrupted)
+  }

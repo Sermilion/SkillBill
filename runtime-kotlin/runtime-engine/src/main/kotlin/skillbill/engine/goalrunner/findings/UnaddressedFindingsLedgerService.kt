@@ -2,8 +2,8 @@ package skillbill.engine.goalrunner.findings
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.goalrunner.telemetry.GoalRunnerBestEffortEmission
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_CATEGORIES
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_SEVERITIES
@@ -79,7 +79,7 @@ class UnaddressedFindingsLedgerService(
           else -> return@flatMap emptyList()
         }
       val raw = artifactFamily.value(artifacts) ?: return@flatMap emptyList()
-      runCatching {
+      catchingNonCancellation {
         FeatureTaskRuntimeFindingVerificationDisposition.parseList(
           raw,
           artifactFamily.label(),
@@ -101,10 +101,9 @@ class UnaddressedFindingsLedgerService(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: return@mapNotNull null
       val repairLedger =
-        GoalRunnerBestEffortEmission.runCancellable {
+        catchingNonCancellation {
           GoalSubtaskReviewArtifactDecoder.decodeReviewStateOnly(record.artifacts)?.repairLedger
         }.getOrElse { error ->
-          GoalRunnerBestEffortEmission.rethrowIfCancellation(error)
           val message =
             "Malformed goal subtask review state for issue '$issueKey' workflow '$workflowId'."
           RuntimeDiagnosticsBestEffortWarning.record(diagnostics, message, error)

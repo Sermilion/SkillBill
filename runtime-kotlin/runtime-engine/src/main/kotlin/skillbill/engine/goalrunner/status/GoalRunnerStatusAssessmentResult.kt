@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.status
 
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentFindingState
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
@@ -20,7 +21,7 @@ internal fun GoalRunnerWorkflowOutcomeStore.goalAssessmentResult(
   parentWorkflowId: String,
   durableRead: GoalRunnerStatusDurableReadTracker,
 ): GoalRunnerAssessmentResult? =
-  runCatching { readGoalAssessmentRecord(parentWorkflowId) }.fold(
+  catchingNonCancellation { readGoalAssessmentRecord(parentWorkflowId) }.fold(
     onSuccess = { read ->
       when (read) {
         GoalAssessmentRecordRead.Absent -> null

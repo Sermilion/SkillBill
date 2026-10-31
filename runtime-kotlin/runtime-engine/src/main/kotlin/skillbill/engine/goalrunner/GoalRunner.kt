@@ -10,6 +10,7 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerPauseBoundary
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPerRunLoopAssembler
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
+import skillbill.engine.goalrunner.execution.core.captureForTeardown
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerValidationQualityPendingState
@@ -277,7 +278,7 @@ class GoalRunner(
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
     val telemetryEmitter =
       GoalRunnerTelemetryEmitter(telemetry, completionRecorder.clock(), state, outcomeStore, diagnostics)
-    return runCatching {
+    return captureForTeardown {
       manifestStore.updateControlState(state.parentWorkflowId) { current ->
         current.copy(goalBlockedReason = null)
       }
@@ -285,7 +286,7 @@ class GoalRunner(
       pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
         val pausedReport = requireNotNull(paused.report)
         closeGoalTelemetrySegment(telemetryEmitter, state, pausedReport, emptyList())
-        return@runCatching pausedReport
+        return@captureForTeardown pausedReport
       }
       val sweepOutcome =
         if (GoalRunnerPlanner.selectNext(state.manifest) is GoalRunnerSelection.Done) {
@@ -294,7 +295,7 @@ class GoalRunner(
           goalPlanningSource.prepare(state, effectiveRequest)
         }
       if (sweepOutcome is GoalPlanningSweepOutcome.Stopped) {
-        return@runCatching planningStoppedReport(
+        return@captureForTeardown planningStoppedReport(
           effectiveRequest,
           state,
           telemetryEmitter,
@@ -327,10 +328,8 @@ class GoalRunner(
       emitCompletedGoalEvent(effectiveRequest, finalReport)
       finalReport.withParentWorkflowId(state.parentWorkflowId)
     }.getOrElse { failure ->
-      if (failure is InterruptedException) Thread.currentThread().interrupt()
-      runCatching { telemetryEmitter.goalFailed() }
+      captureForTeardown { telemetryEmitter.goalFailed() }
         .onFailure { cleanupFailure ->
-          if (cleanupFailure is InterruptedException) Thread.currentThread().interrupt()
           if (cleanupFailure !== failure) failure.addSuppressed(cleanupFailure)
         }
       throw failure

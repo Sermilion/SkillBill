@@ -370,6 +370,7 @@ private fun testGoalRunnerLoopAssembler(
       testPhaseStrategies(wiring.subtaskLauncher, wiring.gitOperations),
       testAgentRunLauncher(),
       testProjectStore,
+      wiring.diagnostics,
     )
   val iterationOutcome =
     GoalRunnerIterationOutcome(

@@ -3,8 +3,10 @@ package skillbill.engine.featuretask.incident.report
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.block.BlockIncidentIdentity
+import skillbill.engine.diagnostics.containableFailure
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.workflow.support.workflowFamilyFor
+import skillbill.error.core.catchingNonCancellation
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -14,7 +16,6 @@ import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.blockincident.BlockIncidentOccurrence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
-import java.util.concurrent.CancellationException
 
 data class BlockIncidentLaunchFacts(
   val providerId: String?,
@@ -31,7 +32,7 @@ class BlockIncidentLaunchFactsReader(
     unit: UnitOfWork,
     occurrence: BlockIncidentOccurrence,
   ): BlockIncidentLaunchFacts {
-    return runCatching {
+    return catchingNonCancellation {
       val snapshot = matchingWorkflow(unit, occurrence) ?: return EMPTY
       val phaseId = checkNotNull(occurrence.phaseId)
       val matchingRecord = phaseRecordsFromWorkflowArtifacts(snapshot.artifacts).getValue(phaseId)
@@ -48,10 +49,10 @@ class BlockIncidentLaunchFactsReader(
         modelId = matchingRecord.launchedModel,
       )
     }.getOrElse { failure ->
-      if (failure !is Exception || failure is CancellationException || failure is InterruptedException) throw failure
+      val exception = containableFailure(failure)
       diagnostics.warning(
         "Recorded block incident launch facts are unreadable; omitting provider, strategy, and model.",
-        failure,
+        exception,
       )
       EMPTY
     }

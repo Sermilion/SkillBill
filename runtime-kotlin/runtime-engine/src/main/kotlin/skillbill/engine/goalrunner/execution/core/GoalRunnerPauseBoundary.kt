@@ -8,34 +8,34 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.stopped
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
 class GoalRunnerProgressReader(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
 ) {
   internal fun read(workflowId: String): GoalRunnerChildProgressRead =
-    runCatching { GoalRunnerChildProgressRead.Present(outcomeStore.progress(workflowId)) }
-      .fold(
-        onSuccess = { it },
-        onFailure = { error ->
-          when {
-            error is CancellationException -> throw error
-            error is InterruptedException -> {
-              Thread.currentThread().interrupt()
-              throw error
+    try {
+      catchingNonCancellation { GoalRunnerChildProgressRead.Present(outcomeStore.progress(workflowId)) }
+        .fold(
+          onSuccess = { it },
+          onFailure = { error ->
+            when {
+              error.isShellContentContractFailure() -> throw error
+              else -> {
+                val exception = error as? Exception ?: throw error
+                GoalRunnerChildProgressRead.Failed(exception)
+              }
             }
-            error.isShellContentContractFailure() -> throw error
-            else -> {
-              val exception = error as? Exception ?: throw error
-              GoalRunnerChildProgressRead.Failed(exception)
-            }
-          }
-        },
-      )
+          },
+        )
+    } catch (interrupted: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw interrupted
+    }
 
   fun safeProgress(workflowId: String): GoalRunnerWorkflowProgress? =
     when (val read = read(workflowId)) {

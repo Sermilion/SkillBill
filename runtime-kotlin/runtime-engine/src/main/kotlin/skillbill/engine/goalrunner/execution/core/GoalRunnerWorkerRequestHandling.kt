@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.GoalRunnerWorkerSubtaskRequestParser
 import skillbill.goalrunner.GoalRunnerWorkerSubtaskScheduler
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
@@ -58,7 +59,7 @@ class GoalRunnerWorkerRequestHandler(
     val workflowId = state.manifest.workflowIdFor(subtaskId)
     val auditRecorded =
       workflowId?.let {
-        runCatching {
+        catchingNonCancellation {
           outcomeStore.recordWorkerSubtaskRequestOutcomes(
             workflowId = it,
             outcomes = scheduled.outcomes,

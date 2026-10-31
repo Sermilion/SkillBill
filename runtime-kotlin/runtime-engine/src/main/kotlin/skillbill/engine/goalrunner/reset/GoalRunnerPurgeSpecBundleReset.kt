@@ -4,8 +4,12 @@ import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecAction
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecActionKind
+import skillbill.error.core.catchingNonCancellation
+import skillbill.error.core.failureCodeLabel
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.projectstore.ProjectStorePort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -21,6 +25,7 @@ internal class GoalRunnerPurgeSpecBundleReset(
   private val manifestFileStore: DecompositionManifestStore,
   private val manifestValidator: DecompositionManifestValidator,
   private val projectStore: ProjectStorePort,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun reset(
     repoRoot: Path,
@@ -80,7 +85,16 @@ internal class GoalRunnerPurgeSpecBundleReset(
     source: DecompositionManifest,
     manifestPath: Path,
   ): List<String> {
-    val expected = runCatching { unlaunchedManifestYaml(source, manifestPath) }.getOrNull()
+    val expected =
+      catchingNonCancellation { unlaunchedManifestYaml(source, manifestPath) }
+        .onFailure { failure ->
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "seam=goal_purge_expected_manifest value_expected=encoded_manifest value_used=unavailable " +
+              "path=$manifestPath failure=${failure.failureCodeLabel() ?: failure::class.simpleName}",
+            failure,
+          )
+        }.getOrNull()
     val unreset =
       expected == null ||
         (manifestFileStore.isRegularFile(manifestPath) && manifestFileStore.readText(manifestPath) != expected)

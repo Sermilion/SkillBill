@@ -10,6 +10,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.qa.GoalPostChangeValidationResult
 import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.model.GoalAssessmentFinding
 import skillbill.goalrunner.assessment.model.GoalAssessmentFix
 import skillbill.goalrunner.assessment.model.GoalAssessmentFixStatus
@@ -84,7 +85,7 @@ internal class GoalAssessmentFixStep(
       )
     val branch = services.branchOf(run.state)
     val result =
-      runCatching { services.phaseRunEntry.runForGoal(phaseRequest, run.state.parentWorkflowId, branch) }
+      catchingNonCancellation { services.phaseRunEntry.runForGoal(phaseRequest, run.state.parentWorkflowId, branch) }
         .getOrElse { failure ->
           val contained = containableFailure(failure)
           services.warn("the fix agent failed: ${contained.javaClass.simpleName}: ${contained.message}", contained)
@@ -112,7 +113,7 @@ internal class GoalAssessmentFixStep(
     val phaseRequest = services.phaseRequest(run.state, run.request, SkeletonDefinition.VALIDATION, null)
     val branch = services.branchOf(run.state)
     val outcome =
-      runCatching { validation.run(phaseRequest, run.state.parentWorkflowId, branch) }
+      catchingNonCancellation { validation.run(phaseRequest, run.state.parentWorkflowId, branch) }
         .getOrElse { failure ->
           val contained = containableFailure(failure)
           services.warn("validation after the fix failed: ${contained.javaClass.simpleName}: ${contained.message}")

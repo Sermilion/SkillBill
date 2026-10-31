@@ -296,9 +296,15 @@ internal fun parseInstantOrNull(value: String?): Instant? {
   return try {
     Instant.parse(value)
   } catch (_: DateTimeParseException) {
-    runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull()
-      ?: runCatching { LocalDateTime.parse(value.trim(), SQLITE_TIMESTAMP_FORMATTER).toInstant(ZoneOffset.UTC) }
-        .getOrNull()
+    try {
+      OffsetDateTime.parse(value).toInstant()
+    } catch (_: DateTimeParseException) {
+      null
+    } ?: try {
+      LocalDateTime.parse(value.trim(), SQLITE_TIMESTAMP_FORMATTER).toInstant(ZoneOffset.UTC)
+    } catch (_: DateTimeParseException) {
+      null
+    }
   }
 }
 

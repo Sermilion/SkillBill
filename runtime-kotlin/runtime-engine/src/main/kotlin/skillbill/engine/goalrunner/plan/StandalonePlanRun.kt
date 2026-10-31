@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFacto
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.featuretask.slot.intake.FeatureTaskRuntimePlanSeedRecorder
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
+import skillbill.error.core.catchingNonCancellation
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -98,9 +99,9 @@ class StandalonePlanRun(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
         launch = StandalonePlanLaunch(replan.agentId, IdeStatusLaunchScope.GOAL).forPhase(issueKey),
       )
-    return runCatching {
+    return catchingNonCancellation {
       if (!reopening.reopenWithRebasedBundle(replan)) {
-        return@runCatching refused(
+        return@catchingNonCancellation refused(
           publisher,
           "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
           planWorkflowId,
@@ -109,7 +110,7 @@ class StandalonePlanRun(
       val identity = repositories.repositoryIdentity(repoRoot)
       val found = planLookup.lookup(issueKey, identity, planWorkflowId)
       if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
-        return@runCatching refused(
+        return@catchingNonCancellation refused(
           publisher,
           "Plan workflow '$planWorkflowId' for $issueKey could not be resumed after reopening `plan_subtasks`.",
           planWorkflowId,
@@ -158,7 +159,7 @@ class StandalonePlanRun(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
         launch = launch.forPhase(suppliedIntake ?: issueKey),
       )
-    return runCatching {
+    return catchingNonCancellation {
       runInternal(issueKey, suppliedIntake, repoRoot, publisher) { specPath ->
         val input = inputFor(specPath)
         withPublisher(
@@ -330,7 +331,7 @@ class StandalonePlanRun(
         input.copy(eventSink = withLivePlanReport(input.eventSink, publisher, input.issueKey, repoRoot))
       } ?: input
     val report =
-      runCatching {
+      catchingNonCancellation {
         entry.run(observed) { error("Could not run plan workflow: ${it.error}") }
       }.onFailure { error ->
         statusPublisher?.settleFailure(error, input.explicitWorkflowId)

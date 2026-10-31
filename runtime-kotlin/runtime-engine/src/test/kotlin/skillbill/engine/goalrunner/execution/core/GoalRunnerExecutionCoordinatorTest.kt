@@ -6,6 +6,7 @@ import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
@@ -364,6 +365,7 @@ class GoalRunnerExecutionCoordinatorTest {
         shutdownHookPort = FailingRegisterShutdownHookPort(failure),
         daemonThreadPort = FakeDaemonThreadPort,
         identifierGeneratorPort = FakeIdentifierGeneratorPort,
+        diagnostics = NoopRuntimeDiagnostics,
       )
     var bodyRan = false
 
@@ -395,6 +397,7 @@ class GoalRunnerExecutionCoordinatorTest {
         shutdownHookPort = FailingUnregisterShutdownHookPort(secondary),
         daemonThreadPort = FakeDaemonThreadPort,
         identifierGeneratorPort = FakeIdentifierGeneratorPort,
+        diagnostics = NoopRuntimeDiagnostics,
       )
 
     val thrown =
@@ -682,6 +685,7 @@ private fun testCoordinator(
   shutdownHookPort = FakeShutdownHookPort,
   daemonThreadPort = FakeDaemonThreadPort,
   identifierGeneratorPort = FakeIdentifierGeneratorPort,
+  diagnostics = NoopRuntimeDiagnostics,
 )
 
 private object FakeShutdownHookPort : ShutdownHookPort {

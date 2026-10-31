@@ -5,6 +5,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.telemetry.GoalRunnerBestEffortEmission
+import skillbill.error.core.catchingNonCancellation
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalAttemptLaunchOutcome
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
@@ -13,7 +14,6 @@ import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.time.Clock
-import kotlin.coroutines.cancellation.CancellationException
 
 class GoalRunnerLedgerRecorder(
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
@@ -51,14 +51,19 @@ class GoalRunnerLedgerRecorder(
     val launchFacts = details.launchOutcome as? AgentRunLaunchFacts
     val draft = buildLedgerEntryDraft(context, targetWorkflowId, details, launchFacts)
     val result =
-      runCatching {
-        outcomeStore.recordAttemptLedgerEntry(
-          GoalRunnerAttemptLedgerRecordRequest(
-            workflowId = targetWorkflowId,
-            issueKey = request.issueKey,
-            draft = draft,
-          ),
-        )
+      try {
+        catchingNonCancellation {
+          outcomeStore.recordAttemptLedgerEntry(
+            GoalRunnerAttemptLedgerRecordRequest(
+              workflowId = targetWorkflowId,
+              issueKey = request.issueKey,
+              draft = draft,
+            ),
+          )
+        }
+      } catch (interrupted: InterruptedException) {
+        Thread.currentThread().interrupt()
+        throw interrupted
       }
     when (val failure = result.exceptionOrNull()) {
       null ->
@@ -69,11 +74,6 @@ class GoalRunnerLedgerRecorder(
             context.subtaskId,
           )
         }
-      is CancellationException -> throw failure
-      is InterruptedException -> {
-        Thread.currentThread().interrupt()
-        throw failure
-      }
       else ->
         logBestEffortFailure(
           "attempt_ledger:${context.action.wireValue}",

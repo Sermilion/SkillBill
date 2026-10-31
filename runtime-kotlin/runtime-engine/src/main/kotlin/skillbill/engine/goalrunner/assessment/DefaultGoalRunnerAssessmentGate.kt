@@ -9,6 +9,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.assessment.GoalAssessmentRecordRead
 import skillbill.engine.goalrunner.qa.GoalRunnerPostChangeValidation
+import skillbill.error.core.catchingNonCancellation
 import skillbill.goalrunner.assessment.GoalAssessmentLoopRules
 import skillbill.goalrunner.assessment.model.GoalAssessmentExitReason
 import skillbill.goalrunner.assessment.model.GoalAssessmentRecord
@@ -47,14 +48,14 @@ class DefaultGoalRunnerAssessmentGate(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalAssessmentRecord =
-    runCatching { loop.run(state, request) }.getOrElse { failure ->
+    catchingNonCancellation { loop.run(state, request) }.getOrElse { failure ->
       warnContained("the assessment stage could not complete", failure)
       persistUnavailable(state)
     }
 
   private fun persistUnavailable(state: GoalRunnerManifestState): GoalAssessmentRecord {
     val fallback = emptyRecord(state, GoalAssessmentExitReason.ASSESSMENT_UNAVAILABLE)
-    return runCatching {
+    return catchingNonCancellation {
       val read = outcomeStore.readGoalAssessmentRecord(state.parentWorkflowId)
       val base = (read as? GoalAssessmentRecordRead.Recorded)?.record ?: fallback
       val exited =
@@ -71,7 +72,7 @@ class DefaultGoalRunnerAssessmentGate(
   }
 
   override fun skipNoChanges(state: GoalRunnerManifestState) {
-    runCatching { loop.skipNoChanges(state) }.onFailure { failure ->
+    catchingNonCancellation { loop.skipNoChanges(state) }.onFailure { failure ->
       warnContained("the no-change skip could not be recorded", failure)
     }
   }
@@ -89,7 +90,7 @@ class DefaultGoalRunnerAssessmentGate(
     request: GoalRunnerRunRequest,
     round: Int,
   ): GoalAssessmentRoundResult =
-    runCatching { assess(state, request, round) }.getOrElse { failure ->
+    catchingNonCancellation { assess(state, request, round) }.getOrElse { failure ->
       val contained = containableFailure(failure)
       val reason = "assessment could not complete: ${contained.javaClass.simpleName}: ${contained.message}"
       warn(reason, contained)
