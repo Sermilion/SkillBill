@@ -151,7 +151,6 @@ internal object VerifyFindingsEvidence {
     output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): NormalizedFeatureTaskRuntimePhaseOutput {
     val outputMap = output.envelopeWireMap()
-    if (FeatureTaskRuntimeOutputVerification.carriesFindingDispositions(outputMap)) return output
     val sections = boundarySections(run, context.findingEvidence(), state)
     val envelope = outputMap.toMutableMap()
     val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
@@ -220,11 +219,17 @@ internal object VerifyFindingsEvidence {
     sections: List<FeatureTaskRuntimeFindingBoundaryMemorySection>,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): List<FeatureTaskRuntimeFindingVerificationDisposition> {
+    val sectionByFindingId = sections.associateBy(FeatureTaskRuntimeFindingBoundaryMemorySection::findingId)
     if (FeatureTaskRuntimeOutputVerification.carriesFindingDispositions(outputMap)) {
-      return FeatureTaskRuntimeOutputVerification.dispositionsFrom(outputMap)
+      val reported = FeatureTaskRuntimeOutputVerification.dispositionsFrom(outputMap)
+      val reportedIds = reported.mapTo(mutableSetOf()) { it.findingId }
+      val omitted =
+        (reviewFindingIds(state) - reportedIds).sorted().map { findingId ->
+          proseDisposition(findingId, emptyList(), emptyList(), sectionByFindingId[findingId])
+        }
+      return reported + omitted
     }
     val prose = auditProseValue(outputMap).orEmpty()
-    val sectionByFindingId = sections.associateBy(FeatureTaskRuntimeFindingBoundaryMemorySection::findingId)
     return reviewFindingIds(state).sorted().map { findingId ->
       proseDisposition(
         findingId,

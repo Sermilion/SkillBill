@@ -45,7 +45,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
   }
 
   @Test
-  fun `findings_verified with every finding refuted launches implement_fix with nothing owed`() {
+  fun `findings_verified with every finding refuted skips implement_fix`() {
     val harness =
       goalCensusHarness(
         findings = listOf(blockerFinding(REVIEW_FIX_BLOCKER_FINDING_ID)),
@@ -61,12 +61,12 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     val launched = harness.launchedPromptPhaseOrder()
-    assertEquals(1, launched.count { it == "implement_fix" })
+    assertEquals(0, launched.count { it == "implement_fix" })
     assertTrue(launched.contains("validate"))
   }
 
   @Test
-  fun `no_findings_verified skips implement_fix even when the census has verified rows`() {
+  fun `no_findings_verified still repairs verified findings`() {
     val harness =
       seededVerifyHarness(
         verifyOutput =
@@ -81,7 +81,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
     assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     val launched = harness.launchedPromptPhaseOrder()
     assertEquals(1, launched.count { it == "verify_findings" })
-    assertFalse(launched.contains("implement_fix"))
+    assertEquals(1, launched.count { it == "implement_fix" })
     assertTrue(launched.contains("validate"))
   }
 
@@ -91,7 +91,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
       seededVerifyHarness(
         verifyOutput =
           verifyCensus(
-            verdict = "findings_verified",
+            verdict = "no_findings_verified",
             dispositions = emptyList(),
           ),
         implementFixOutput = censusFix(REVIEW_FIX_BLOCKER_FINDING_ID),
@@ -103,6 +103,46 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
       report is FeatureTaskRuntimeRunReport.Blocked && report.lastIncompletePhase == "verify_findings",
       report.toString(),
     )
+    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement_fix" })
+  }
+
+  @Test
+  fun `verified Minor and Nit findings require repair despite a no findings summary`() {
+    for (severity in listOf("Minor", "Nit")) {
+      val findingId = "F-001"
+      val harness =
+        goalCensusHarness(
+          findings = listOf("- [$findingId] $severity | High | Bar.kt:1 | $NIT_MESSAGE"),
+          verifyOutput =
+            verifyEnvelope(
+              "no_findings_verified",
+              "\"finding_dispositions\": [${disposition(findingId, "verified")}]",
+            ),
+          implementFixOutput = emptyCensusFix(),
+          retryImplementFixOutput = censusFix(findingId),
+        )
+
+      val report = runInline(harness)
+
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$severity: $report")
+      val launched = harness.launchedPromptPhaseOrder()
+      assertEquals(2, launched.count { it == "implement_fix" }, severity)
+      assertTrue(launched.indexOf("implement_fix") < launched.indexOf("validate"), severity)
+      assertContains(harness.launchedPrompts("implement_fix").last(), findingId)
+    }
+  }
+
+  @Test
+  fun `an omitted structured disposition cannot skip repair`() {
+    val harness =
+      seededVerifyHarness(
+        verifyOutput = verifyEnvelope("no_findings_verified", "\"finding_dispositions\": []"),
+        implementFixOutput = censusFix(REVIEW_FIX_BLOCKER_FINDING_ID),
+      )
+
+    val report = harness.runner.run(harness.request())
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement_fix" })
   }
 

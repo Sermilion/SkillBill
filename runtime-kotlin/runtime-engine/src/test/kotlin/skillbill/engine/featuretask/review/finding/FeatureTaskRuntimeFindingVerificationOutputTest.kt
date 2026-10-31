@@ -61,7 +61,7 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   }
 
   @Test
-  fun `verify_findings wire verdict findings_verified settles when census has zero verified rows`() {
+  fun `verify_findings rejected census overrides findings_verified`() {
     val verdict =
       FeatureTaskRuntimeOutputVerification.verdictFor(
         mapOf(
@@ -79,11 +79,11 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
         ).toWorkflowArtifactMap(),
         FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
-    assertEquals(FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, verdict)
+    assertEquals(FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED, verdict)
   }
 
   @Test
-  fun `verify_findings wire verdict no_findings_verified settles when census has verified rows`() {
+  fun `verify_findings verified census overrides no_findings_verified`() {
     val verdict =
       FeatureTaskRuntimeOutputVerification.verdictFor(
         mapOf(
@@ -101,7 +101,7 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
         ).toWorkflowArtifactMap(),
         FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
-    assertEquals(FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED, verdict)
+    assertEquals(FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, verdict)
   }
 
   @Test

@@ -88,7 +88,8 @@ internal object InlineReviewPromptSections {
       "rejected it. Reject a finding only when you can cite the file:line construct that shows it is not a " +
       "defect, or when it is not material: name the guard, caller, or reader that makes it unreachable or " +
       "behavior-neutral. $MATERIALITY_RULE A finding you do not address, or cannot settle, stays verified " +
-      "and is carried into repair."
+      "and is carried into repair. Severity never excludes a verified finding from repair. " +
+      "Report no_findings_verified only when every review finding is rejected."
 
   private const val IMPLEMENT_FIX_VALUE_CONTENT: String =
     "Name every carried finding by its finding id and say whether you fixed it, found that no edit was " +

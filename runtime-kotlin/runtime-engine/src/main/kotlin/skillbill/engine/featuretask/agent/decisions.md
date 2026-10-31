@@ -1,3 +1,9 @@
+## [2026-10-31] Verified findings control repair regardless of severity
+
+Context: A verification summary could say no_findings_verified while individual findings remained verified, skipping repair. Inline review also suggested leaving Minor and Nit findings unfixed.
+Decision: Derive repair routing from the normalized verification dispositions. Preserve omitted review findings as verified and carry every verified severity into repair. Use the summary verdict only when no disposition census is available.
+Reason: A summary cannot waive a verified defect. Refuted findings stay excluded, and the existing repair receipt and retry budget still prevent incomplete repair from advancing.
+
 ## [2026-10-25] Interaction-trace re-ask marker stays in memory
 Context: A malformed interaction-trace audit gets one re-ask before the trace degrades to unknown, and the runtime needs to remember that the re-ask was spent.
 Decision: Hold the marker on the run state (traceReaskScope) rather than a persisted pending-clarification marker.

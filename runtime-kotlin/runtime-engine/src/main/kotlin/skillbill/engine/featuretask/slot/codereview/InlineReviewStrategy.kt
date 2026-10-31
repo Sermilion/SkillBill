@@ -146,7 +146,10 @@ object InlineReviewDirective {
           "Do not launch `skill-bill phase review`, delegated review subagents, or an isolated review process.",
         )
         appendLine("Fix every Blocker and Major finding in this same session before you emit.")
-        appendLine("You may edit files. Leave Minor and Nit unfixed unless the edit is local and obvious.")
+        appendLine(
+          "You may edit files. Every remaining finding, including Minor and Nit, " +
+            "must go through verification and repair.",
+        )
         appendLine("Do not commit, amend, reset, or stage changes; the runtime owns the review checkpoint.")
         appendLine(
           "Criterion-gap detection remains exclusive to audit. Do not report unsatisfied acceptance criteria.",
